@@ -1286,9 +1286,9 @@ bool NetworkClient::IsReachable(const char* host, int port, int timeoutMs) {
     return MeasureLatency(host, port, timeoutMs) >= 0;
 }
 
-// GitHub server list URL — raw text file, format: "host:port Name" per line
+// Public server list hosted in this repo — same format as original frozen-bubble.org: "host port" per line
 #define GITHUB_SERVER_LIST_URL \
-    "https://raw.githubusercontent.com/dericchau/frozen-bubble-servers/main/servers.txt"
+    "https://raw.githubusercontent.com/dchau360/frozen-bubble-sdl2-vibecode/main/servers.txt"
 
 // Original Frozen Bubble master server list URL (format: "host port" per line)
 #define FB_MASTER_SERVER_URL \
@@ -1369,8 +1369,8 @@ std::vector<ServerInfo> NetworkClient::FetchPublicServers() {
     curlFetch(FB_MASTER_SERVER_URL, servers, true);
     SDL_Log("After master server: %d servers", (int)servers.size());
 
-    // 2. GitHub list
-    curlFetch(GITHUB_SERVER_LIST_URL, servers, false);
+    // 2. Community server list (same format as original: "host port")
+    curlFetch(GITHUB_SERVER_LIST_URL, servers, true);
     SDL_Log("After GitHub list: %d servers total", (int)servers.size());
 
     return servers;

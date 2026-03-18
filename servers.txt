@@ -1,0 +1,5 @@
+# Frozen Bubble SDL2 - Public Server List
+# Format: host port
+# Same format as the original frozen-bubble.org/servers/serverlist-1
+# Add your server below (one per line):
+
