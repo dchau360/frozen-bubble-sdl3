@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Frozen Bubble SDL2 - WebAssembly Port</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            color: #eee;
+        }
+        h1 {
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+        }
+        #status {
+            margin-bottom: 15px;
+            font-size: 14px;
+            color: #aaa;
+        }
+        #canvas-container {
+            box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        canvas {
+            display: block;
+        }
+        #loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+        }
+        .spinner {
+            width: 50px;
+            height: 50px;
+            border: 4px solid rgba(255,255,255,0.2);
+            border-top-color: #4fc3f7;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 15px;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        #controls {
+            margin-top: 20px;
+            text-align: center;
+            font-size: 13px;
+            color: #888;
+        }
+        #controls kbd {
+            background: #333;
+            padding: 2px 6px;
+            border-radius: 3px;
+            border: 1px solid #555;
+        }
+    </style>
+</head>
+<body>
+    <h1>Frozen Bubble SDL2</h1>
+    <div id="status">Loading WebAssembly module...</div>
+
+    <div id="canvas-container">
+        <div id="loading">
+            <div class="spinner"></div>
+            <div>Loading game assets...</div>
+        </div>
+        <canvas id="canvas" style="display:none;"></canvas>
+    </div>
+
+    <div id="controls">
+        <p><kbd>Arrow Keys</kbd> Move &nbsp;|&nbsp; <kbd>Space</kbd> Shoot &nbsp;|&nbsp; <kbd>ESC</kbd> Pause</p>
+    </div>
+
+    <script>
+        var statusElement = document.getElementById('status');
+        var loadingElement = document.getElementById('loading');
+        var canvasElement = document.getElementById('canvas');
+
+        var Module = {
+            preRun: [],
+            postRun: [],
+            canvas: (function() {
+                loadingElement.style.display = 'none';
+                canvasElement.style.display = 'block';
+                canvasElement.addEventListener("webglcontextlost", function(e) {
+                    alert('WebGL context lost. Please refresh the page.');
+                    e.preventDefault();
+                }, false);
+                return canvasElement;
+            })(),
+
+            setStatus: function(text) {
+                statusElement.textContent = text;
+                if (text === 'Running') {
+                    statusElement.textContent = 'Game loaded - Enjoy!';
+                }
+            },
+
+            totalDependencies: 0,
+
+            monitorRunDependencies: function(left) {
+                this.totalDependencies = Math.max(this.totalDependencies, left);
+                if (left) {
+                    Module.setStatus(left ? 'Loading... ' + left + ' files remaining' : 'Preparing...');
+                } else {
+                    if (left === 0) {
+                        // All done
+                    }
+                }
+            }
+        };
+
+        Module.setStatus('Downloading WebAssembly module...');
+
+        // Handle errors
+        window.onerror = function(message) {
+            Module.setStatus('Error: ' + message);
+            loadingElement.innerHTML = '<div style="color: #ff6b6b;">Failed to load game<br><small>' + message + '</small></div>';
+        };
+    </script>
+    <script src="frozen-bubble-sdl2.js"></script>
+</body>
+</html>

@@ -3,3 +3,24 @@ CMakeLists.txt.user
 /.vscode
 /.cache
 /result
+
+# Compiled binaries
+/frozen-bubble-sdl2
+
+# Log files
+*.log
+
+# Screenshots / scratch images
+2-player-names.png
+fb2-3-to-5-player.jpg
+weird-mini-bubble.png
+PHASE1_WALKTHROUGH.md
+
+# Android build output and cache
+android/app/build/
+android/app/.cxx/
+android/.gradle/
+android/local.properties
+# Embedded git repos in SDL2 dependencies
+android/app/jni/SDL2_mixer/external/ogg/
+android/app/jni/SDL2_mixer/external/vorbis/

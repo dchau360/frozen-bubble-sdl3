@@ -1,0 +1,69 @@
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace 'org.frozenbubble'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId "org.frozenbubble"
+        minSdk 21
+        targetSdk 34
+        ndkVersion "25.2.9519653"
+        versionCode 1
+        versionName "2.2.0"
+
+        externalNativeBuild {
+            cmake {
+                cppFlags "-std=c++17"
+                arguments "-DANDROID_STL=c++_shared"
+            }
+        }
+
+        ndk {
+            abiFilters 'arm64-v8a', 'x86_64'
+        }
+    }
+
+    externalNativeBuild {
+        cmake {
+            path "CMakeLists.txt"
+            version "3.22.1"
+        }
+    }
+
+    sourceSets {
+        main {
+            assets.srcDirs = ['../share']
+            java.srcDirs = ['src/main/java']
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt')
+        }
+        debug {
+            debuggable true
+            jniDebuggable true
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+
+    lintOptions {
+        abortOnError false
+    }
+}
+
+dependencies {
+    // Google AdMob
+    implementation 'com.google.android.gms:play-services-ads:23.3.0'
+    // Google Play Billing (for "Remove Ads" IAP)
+    implementation 'com.android.billingclient:billing:7.1.1'
+}
