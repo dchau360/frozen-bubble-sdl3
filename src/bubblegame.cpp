@@ -3768,7 +3768,7 @@ void BubbleGame::HandleInput(SDL_Event *e) {
                                 self.nick = netClientChat->GetPlayerNick();
                                 if (self.nick.empty()) self.nick = "Me";
                                 self.text = chatInputBuf;
-                                self.framesLeft = 300;
+                                self.framesLeft = 600;
                                 inGameChatMessages.push_back(self);
                                 if (inGameChatMessages.size() > 10)
                                     inGameChatMessages.erase(inGameChatMessages.begin());
@@ -4253,7 +4253,7 @@ void BubbleGame::ProcessNetworkMessages() {
                         chatMsg.nick = netClient->GetPlayerNickname(senderId);
                         if (chatMsg.nick.empty()) chatMsg.nick = "Player";
                         chatMsg.text = gameData + 1;
-                        chatMsg.framesLeft = 300;  // 5 seconds at 60 fps
+                        chatMsg.framesLeft = 600;  // 10 seconds at 60 fps
                         inGameChatMessages.push_back(chatMsg);
                         if (inGameChatMessages.size() > 10)
                             inGameChatMessages.erase(inGameChatMessages.begin());
