@@ -1856,7 +1856,7 @@ void MainMenu::NetPanelRender() {
                 for (int pi = 0; pi < numPlayers; pi++) {
                     char compText[80];
                     std::string pnick = (pi < (int)currentGame->players.size()) ? currentGame->players[pi].nick : std::to_string(pi + 1);
-                    snprintf(compText, sizeof(compText), "No compression %s: %s", pnick.c_str(), playerNoCompress[pi] ? "on" : "off");
+                    snprintf(compText, sizeof(compText), "Rows collapse %s: %s", pnick.c_str(), playerNoCompress[pi] ? "on" : "off");
                     actions.push_back(compText);
                 }
                 // Per-player aim guide toggle (indices 5+2N..5+3N-1)
@@ -1900,7 +1900,7 @@ void MainMenu::NetPanelRender() {
                 for (int pi = 0; pi < numPlayers; pi++) {
                     char compText[80];
                     std::string pnick = (pi < (int)currentGame->players.size()) ? currentGame->players[pi].nick : std::to_string(pi + 1);
-                    snprintf(compText, sizeof(compText), "No compression %s: %s", pnick.c_str(), playerNoCompress[pi] ? "on" : "off");
+                    snprintf(compText, sizeof(compText), "Rows collapse %s: %s", pnick.c_str(), playerNoCompress[pi] ? "on" : "off");
                     actions.push_back(compText);
                 }
                 for (int pi = 0; pi < numPlayers; pi++) {
