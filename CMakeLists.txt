@@ -110,6 +110,10 @@ target_link_libraries(frozen-bubble-sdl2 PRIVATE
     SDL2_ttf::SDL2_ttf
 )
 
+if(WIN32 OR MINGW)
+    target_link_libraries(frozen-bubble-sdl2 PRIVATE ws2_32)
+endif()
+
 # Installation configuration
 if(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
     if(APPLE)

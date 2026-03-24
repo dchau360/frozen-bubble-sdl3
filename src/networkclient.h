@@ -28,11 +28,7 @@
 
 #ifndef __WASM_PORT__
 // Raw sockets not available in WebAssembly
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <arpa/inet.h>
-#include <unistd.h>
-#include <fcntl.h>
+#include "socket_compat.h"
 #endif
 
 #define PROTO_MAJOR 1

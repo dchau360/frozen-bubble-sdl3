@@ -18,9 +18,12 @@
  */
 
 #include "networkclient.h"
+#include <algorithm>
 #include <cstring>
 #include <errno.h>
+#ifndef _WIN32
 #include <netdb.h>
+#endif
 #include <sstream>
 #include <stdio.h>
 #ifdef __ANDROID__
@@ -65,18 +68,19 @@ bool NetworkClient::Connect(const char* host, int port) {
         return false;
     }
 
+    socket_init();
+
     // Create socket
-    sockfd = socket(AF_INET, SOCK_STREAM, 0);
-    if (sockfd < 0) {
-        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to create socket: %s", strerror(errno));
+    sockfd = (int)socket(AF_INET, SOCK_STREAM, 0);
+    if (sockfd == (int)INVALID_SOCKET) {
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to create socket: %d", SOCK_ERRNO);
         return false;
     }
 
     // Increase socket receive buffer to handle bursts (like level sync)
-    // Default is often 8KB-64KB, we want more for the rapid message bursts
     int rcvbuf = 256 * 1024;  // 256 KB receive buffer
-    if (setsockopt(sockfd, SOL_SOCKET, SO_RCVBUF, &rcvbuf, sizeof(rcvbuf)) < 0) {
-        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "Failed to set SO_RCVBUF: %s", strerror(errno));
+    if (setsockopt(sockfd, SOL_SOCKET, SO_RCVBUF, SETSOCKOPT_OPTVAL(rcvbuf), sizeof(rcvbuf)) < 0) {
+        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "Failed to set SO_RCVBUF: %d", SOCK_ERRNO);
     } else {
         SDL_Log("Set socket receive buffer to %d bytes", rcvbuf);
     }
@@ -102,7 +106,7 @@ bool NetworkClient::Connect(const char* host, int port) {
     int result = connect(sockfd, (struct sockaddr*)&serverAddr, sizeof(serverAddr));
 
     if (result < 0) {
-        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to connect: %s", strerror(errno));
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to connect: %d", SOCK_ERRNO);
         close(sockfd);
         sockfd = -1;
         state = DISCONNECTED;
@@ -697,8 +701,9 @@ bool NetworkClient::ProcessIncomingData() {
     ssize_t received = recv(sockfd, tempBuffer, sizeof(tempBuffer) - 1, MSG_DONTWAIT);
 
     if (received < 0) {
-        if (errno != EAGAIN && errno != EWOULDBLOCK) {
-            SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Receive error: %s", strerror(errno));
+        int sockerr = SOCK_ERRNO;
+        if (!SOCK_WOULD_BLOCK(sockerr)) {
+            SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Receive error: %d", sockerr);
             Disconnect();
         }
         return false;  // No data available
@@ -1190,11 +1195,11 @@ std::vector<ServerInfo> NetworkClient::DiscoverLANServers() {
     return servers;
 #endif
 
-    int udpSock = socket(AF_INET, SOCK_DGRAM, 0);
-    if (udpSock < 0) return servers;
+    int udpSock = (int)socket(AF_INET, SOCK_DGRAM, 0);
+    if (udpSock == (int)INVALID_SOCKET) return servers;
 
     int broadcast = 1;
-    setsockopt(udpSock, SOL_SOCKET, SO_BROADCAST, &broadcast, sizeof(broadcast));
+    setsockopt(udpSock, SOL_SOCKET, SO_BROADCAST, SETSOCKOPT_OPTVAL(broadcast), sizeof(broadcast));
 
     struct sockaddr_in dest;
     memset(&dest, 0, sizeof(dest));
