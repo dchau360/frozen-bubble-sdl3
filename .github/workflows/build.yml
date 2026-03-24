@@ -1,60 +1,290 @@
-name: CMake
+name: Build and Release
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
+    tags: ['v*.*.*']
   pull_request:
-    branches: [ main ]
+    branches: [main]
 
 jobs:
-  Build:
-    name: ${{ matrix.platform.name }}
-    runs-on: ${{ matrix.platform.os }}
+  # ────────────────────────────────────────────────────────────────
+  # Linux → AppImage
+  # ────────────────────────────────────────────────────────────────
+  build-linux:
+    name: Linux (AppImage)
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
 
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libsdl2-dev libsdl2-image-dev libsdl2-mixer-dev libsdl2-ttf-dev \
+            libiniparser-dev libglib2.0-dev ninja-build \
+            libfuse2 file
+
+      - name: Configure & build
+        run: |
+          cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_INSTALL_PREFIX=/usr
+          cmake --build build --parallel
+
+      - name: Install into AppDir
+        run: |
+          DESTDIR=$PWD/AppDir cmake --install build
+          # Assets live in share/ — install them under the AppDir prefix
+          mkdir -p AppDir/usr/share/frozen-bubble
+          cp -r share/. AppDir/usr/share/frozen-bubble/
+          [ -f build/server/fb-server ] && \
+            cp build/server/fb-server AppDir/usr/bin/ || true
+
+      - name: Write .desktop and icon
+        run: |
+          cat > AppDir/usr/share/applications/frozen-bubble.desktop << 'EOF'
+          [Desktop Entry]
+          Name=Frozen Bubble
+          Comment=Frozen Bubble SDL2 port
+          Exec=frozen-bubble-sdl2
+          Icon=frozen-bubble
+          Type=Application
+          Categories=Game;ArcadeGame;
+          EOF
+          mkdir -p AppDir/usr/share/icons/hicolor/64x64/apps
+          cp share/icons/frozen-bubble-icon-64x64.png \
+             AppDir/usr/share/icons/hicolor/64x64/apps/frozen-bubble.png
+
+      - name: Build AppImage
+        run: |
+          wget -q \
+            https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage
+          chmod +x linuxdeploy-x86_64.AppImage
+          ./linuxdeploy-x86_64.AppImage \
+            --appdir AppDir \
+            --desktop-file AppDir/usr/share/applications/frozen-bubble.desktop \
+            --output appimage
+          mv Frozen_Bubble*.AppImage frozen-bubble-linux-x86_64.AppImage
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Linux
+          path: frozen-bubble-linux-x86_64.AppImage
+
+  # ────────────────────────────────────────────────────────────────
+  # macOS → DMG
+  # ────────────────────────────────────────────────────────────────
+  build-macos:
+    name: macOS (DMG)
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          brew install sdl2 sdl2_image sdl2_mixer sdl2_ttf iniparser glib \
+                       ninja dylibbundler create-dmg
+
+      - name: Configure & build
+        run: cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        run: cmake --build build --parallel
+
+      - name: Create .app bundle
+        run: |
+          APP="dist/FrozenBubble.app/Contents"
+          mkdir -p "$APP/MacOS" "$APP/Resources"
+
+          cp build/frozen-bubble-sdl2 "$APP/MacOS/frozen-bubble-sdl2"
+          cp -r share "$APP/Resources/share"
+
+          # Bundle shared dylibs so the app runs without Homebrew installed
+          dylibbundler -od -b \
+            -x "$APP/MacOS/frozen-bubble-sdl2" \
+            -d "$APP/Frameworks" \
+            -p @executable_path/../Frameworks/
+
+          cat > "$APP/Info.plist" << 'EOF'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+            "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0"><dict>
+            <key>CFBundleName</key><string>Frozen Bubble</string>
+            <key>CFBundleDisplayName</key><string>Frozen Bubble</string>
+            <key>CFBundleIdentifier</key><string>org.frozenbubble.sdl2</string>
+            <key>CFBundleVersion</key><string>2.2.0</string>
+            <key>CFBundleExecutable</key><string>frozen-bubble-sdl2</string>
+            <key>CFBundlePackageType</key><string>APPL</string>
+            <key>NSHighResolutionCapable</key><true/>
+          </dict></plist>
+          EOF
+
+      - name: Create DMG
+        run: |
+          create-dmg \
+            --volname "Frozen Bubble" \
+            --window-size 540 380 \
+            --icon-size 128 \
+            --icon "FrozenBubble.app" 140 190 \
+            --app-drop-link 400 190 \
+            --icon-file "share/icons/frozen-bubble-icon-64x64.png" \
+            "frozen-bubble-macos.dmg" \
+            "dist/"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macOS
+          path: frozen-bubble-macos.dmg
+
+  # ────────────────────────────────────────────────────────────────
+  # Windows → NSIS installer (.exe)
+  # ────────────────────────────────────────────────────────────────
+  build-windows:
+    name: Windows (installer)
+    runs-on: windows-latest
     defaults:
       run:
-        shell: ${{ matrix.platform.shell }}
-
-    strategy:
-      fail-fast: false
-      matrix:
-        platform:
-        - { name: Ubuntu,            os: ubuntu-latest,  shell: sh }
-        #- { name: macOS,             os: macos-latest,   shell: sh }
-        #- { name: Windows - mingw32, os: windows-latest, shell: 'msys2 {0}', msystem: mingw32, msys-env: mingw-w64-i686 }
-        #- { name: Windows - mingw64, os: windows-latest, shell: 'msys2 {0}', msystem: mingw64, msys-env: mingw-w64-x86_64 }
+        shell: msys2 {0}
     steps:
-    - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
-    - name: Setup GNU/Linux dependencies
-      if: runner.os == 'Linux'
-      run: |
-        sudo apt-get update
-        sudo apt-get install \
-            libsdl2-image-dev libsdl2-mixer-dev libsdl2-ttf-dev libsdl2-dev libiniparser-dev ninja-build
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: mingw64
+          install: >-
+            mingw-w64-x86_64-gcc
+            mingw-w64-x86_64-cmake
+            mingw-w64-x86_64-ninja
+            mingw-w64-x86_64-SDL2
+            mingw-w64-x86_64-SDL2_image
+            mingw-w64-x86_64-SDL2_mixer
+            mingw-w64-x86_64-SDL2_ttf
+            mingw-w64-x86_64-iniparser
 
-    - name: Setup macOS dependencies
-      if: runner.os == 'macOS'
-      run: |
-        brew install \
-            glib pkg-config sdl2_image sdl2_mixer sdl2_ttf sdl2 ninja iniparser gcc
+      - name: Configure & build
+        run: cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
 
-    - name: Set up Windows dependencies
-      if: matrix.platform.shell == 'msys2 {0}'
-      uses: msys2/setup-msys2@v2
-      with:
-        msystem: ${{ matrix.platform.msystem }}
-        install: >-
-          ${{ matrix.platform.msys-env }}-gcc
-          ${{ matrix.platform.msys-env }}-cmake
-          ${{ matrix.platform.msys-env }}-ninja
-          ${{ matrix.platform.msys-env }}-SDL2_image
-          ${{ matrix.platform.msys-env }}-SDL2_mixer
-          ${{ matrix.platform.msys-env }}-SDL2_ttf
-          ${{ matrix.platform.msys-env }}-SDL2
+      - name: Build
+        run: cmake --build build --parallel
 
-    - name: Configure CMake
-      run: cmake -B build -G Ninja
+      - name: Collect binary + DLLs
+        run: |
+          mkdir -p pkg
+          cp build/frozen-bubble-sdl2.exe pkg/
+          cp -r share pkg/
+          for dll in \
+            SDL2.dll SDL2_image.dll SDL2_mixer.dll SDL2_ttf.dll \
+            libgcc_s_seh-1.dll libstdc++-6.dll libwinpthread-1.dll \
+            libpng16-16.dll libogg-0.dll libvorbis-0.dll libvorbisfile-3.dll \
+            libfreetype-6.dll libbrotlicommon.dll libbrotlidec.dll \
+            libharfbuzz-0.dll libgraphite2.dll zlib1.dll; do
+              cp /mingw64/bin/$dll pkg/ 2>/dev/null || true
+          done
 
-    - name: Build
-      run: cmake --build build --config Debug --verbose --parallel
+      - name: Write NSIS script
+        run: |
+          cat > installer.nsi << 'EOF'
+          Unicode True
+          !define APPNAME "Frozen Bubble"
+          !define EXENAME "frozen-bubble-sdl2.exe"
+          !define VERSION "2.2.0"
+
+          Name "${APPNAME}"
+          OutFile "frozen-bubble-windows-setup.exe"
+          InstallDir "$PROGRAMFILES64\FrozenBubble"
+          InstallDirRegKey HKCU "Software\FrozenBubble" ""
+          RequestExecutionLevel admin
+          SetCompressor /SOLID lzma
+
+          Page directory
+          Page instfiles
+          UninstPage instfiles
+
+          Section "Install"
+            SetOutPath "$INSTDIR"
+            File /r "pkg\*.*"
+            WriteUninstaller "$INSTDIR\Uninstall.exe"
+            CreateShortcut "$DESKTOP\${APPNAME}.lnk" "$INSTDIR\${EXENAME}"
+            CreateDirectory "$SMPROGRAMS\${APPNAME}"
+            CreateShortcut "$SMPROGRAMS\${APPNAME}\${APPNAME}.lnk" \
+              "$INSTDIR\${EXENAME}"
+            CreateShortcut "$SMPROGRAMS\${APPNAME}\Uninstall.lnk" \
+              "$INSTDIR\Uninstall.exe"
+            WriteRegStr HKCU "Software\FrozenBubble" "" "$INSTDIR"
+          SectionEnd
+
+          Section "Uninstall"
+            RMDir /r "$INSTDIR"
+            Delete "$DESKTOP\${APPNAME}.lnk"
+            RMDir /r "$SMPROGRAMS\${APPNAME}"
+            DeleteRegKey HKCU "Software\FrozenBubble"
+          SectionEnd
+          EOF
+
+      - name: Build installer
+        shell: cmd
+        run: |
+          "C:\Program Files (x86)\NSIS\makensis.exe" installer.nsi
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Windows
+          path: frozen-bubble-windows-setup.exe
+
+  # ────────────────────────────────────────────────────────────────
+  # Android TV → APK
+  # ────────────────────────────────────────────────────────────────
+  build-android:
+    name: Android TV (APK)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Install NDK 25
+        run: |
+          $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager \
+            "ndk;25.2.9519653"
+
+      - name: Build debug APK
+        working-directory: android
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon
+
+      - name: Rename APK
+        run: |
+          mv android/app/build/outputs/apk/debug/app-debug.apk \
+             frozen-bubble-android-tv.apk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Android
+          path: frozen-bubble-android-tv.apk
+
+  # ────────────────────────────────────────────────────────────────
+  # Release — only on v*.*.* tag push
+  # ────────────────────────────────────────────────────────────────
+  release:
+    name: Create Release
+    needs: [build-linux, build-macos, build-windows, build-android]
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: |
+            Linux/frozen-bubble-linux-x86_64.AppImage
+            macOS/frozen-bubble-macos.dmg
+            Windows/frozen-bubble-windows-setup.exe
+            Android/frozen-bubble-android-tv.apk
