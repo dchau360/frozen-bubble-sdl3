@@ -26,9 +26,8 @@
 #include <time.h>
 #include <errno.h>
 
-#ifdef _WIN32
-#  include "win32_compat.h"
-#else
+#include "win32_compat.h"
+#ifndef _WIN32
 #  include <unistd.h>
 #  include <fcntl.h>
 #  include <syslog.h>

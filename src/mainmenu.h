@@ -166,6 +166,7 @@ private:
     bool continueWhenPlayersLeave = true;
     bool singlePlayerTargetting = true;
     int victoriesLimitIndex = 5; // 0=none, 1=1, 2=2, 3=3, 4=4, 5=5, etc.
+    int playerColorCounts[5] = {7, 7, 7, 7, 7};  // Per-player color count (5-8)
 
     // World map lobby graphics
     SDL_Texture *netGameBackground = nullptr;

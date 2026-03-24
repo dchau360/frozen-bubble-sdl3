@@ -401,15 +401,18 @@ bool NetworkClient::SendTalk(const char* message) {
     return SendCommand(cmd);
 }
 
-bool NetworkClient::SendOptions(bool chainReaction, bool continueWhenLeave, bool singleTarget, int victoriesLimit) {
+bool NetworkClient::SendOptions(bool chainReaction, bool continueWhenLeave, bool singleTarget, int victoriesLimit, const int playerColors[5]) {
     // Send game options using SETOPTIONS command (original line 4468-4474)
-    // Format: SETOPTIONS CHAINREACTION:0/1,CONTINUEGAMEWHENPLAYERSLEAVE:0/1,SINGLEPLAYERTARGETTING:0/1,VICTORIESLIMIT:num
-    char cmd[256];
-    snprintf(cmd, sizeof(cmd), "SETOPTIONS CHAINREACTION:%d,CONTINUEGAMEWHENPLAYERSLEAVE:%d,SINGLEPLAYERTARGETTING:%d,VICTORIESLIMIT:%d",
+    // Format: SETOPTIONS CHAINREACTION:0/1,...,NUMCOLORS_P1:N,...,NUMCOLORS_P5:N
+    char cmd[512];
+    snprintf(cmd, sizeof(cmd),
+             "SETOPTIONS CHAINREACTION:%d,CONTINUEGAMEWHENPLAYERSLEAVE:%d,SINGLEPLAYERTARGETTING:%d,VICTORIESLIMIT:%d"
+             ",NUMCOLORS_P1:%d,NUMCOLORS_P2:%d,NUMCOLORS_P3:%d,NUMCOLORS_P4:%d,NUMCOLORS_P5:%d",
              chainReaction ? 1 : 0,
              continueWhenLeave ? 1 : 0,
              singleTarget ? 1 : 0,
-             victoriesLimit);
+             victoriesLimit,
+             playerColors[0], playerColors[1], playerColors[2], playerColors[3], playerColors[4]);
     SDL_Log("Sending game options: %s", cmd);
     return SendCommand(cmd);
 }
@@ -899,6 +902,27 @@ void NetworkClient::HandlePushMessage(const std::string& pushMsg) {
     } else if (pushMsg.find("KICKED:") == 0) {
         std::string nick = pushMsg.substr(8);
         SDL_Log("Kicked: %s", nick.c_str());
+    } else if (pushMsg.find("SETOPTIONS ") == 0) {
+        // Host broadcast updated game settings
+        std::string opts = pushMsg.substr(11); // Skip "SETOPTIONS "
+        SDL_Log("Received SETOPTIONS: %s", opts.c_str());
+        // Parse key:value pairs separated by commas
+        auto parseVal = [&](const char* key, int def) -> int {
+            std::string search = std::string(key) + ":";
+            size_t p = opts.find(search);
+            if (p == std::string::npos) return def;
+            return std::stoi(opts.substr(p + search.size()));
+        };
+        rcvChainReaction = parseVal("CHAINREACTION", 1) != 0;
+        rcvContinueLeave = parseVal("CONTINUEGAMEWHENPLAYERSLEAVE", 1) != 0;
+        rcvSingleTarget  = parseVal("SINGLEPLAYERTARGETTING", 1) != 0;
+        rcvVictoriesLimit = parseVal("VICTORIESLIMIT", 5);
+        rcvPlayerColors[0] = parseVal("NUMCOLORS_P1", 7);
+        rcvPlayerColors[1] = parseVal("NUMCOLORS_P2", 7);
+        rcvPlayerColors[2] = parseVal("NUMCOLORS_P3", 7);
+        rcvPlayerColors[3] = parseVal("NUMCOLORS_P4", 7);
+        rcvPlayerColors[4] = parseVal("NUMCOLORS_P5", 7);
+        pendingOptions = true;
     } else if (pushMsg.find("GAME_CAN_START:") == 0) {
         // Game is ready to start - server sent player mappings
         // Format: {id byte}{nick},{id byte}{nick},...

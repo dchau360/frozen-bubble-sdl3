@@ -118,7 +118,23 @@ public:
     void AddStatusMessage(const std::string& message);
 
     // Send game options to other players (host only)
-    bool SendOptions(bool chainReaction, bool continueWhenLeave, bool singleTarget, int victoriesLimit);
+    bool SendOptions(bool chainReaction, bool continueWhenLeave, bool singleTarget, int victoriesLimit, const int playerColors[5]);
+
+    // Received options from host (updated when SETOPTIONS push arrives)
+    bool pendingOptions = false;
+    bool rcvChainReaction = true;
+    bool rcvContinueLeave = true;
+    bool rcvSingleTarget = true;
+    int rcvVictoriesLimit = 5;
+    int rcvPlayerColors[5] = {7, 7, 7, 7, 7};
+    // Returns true (and clears flag) if new options arrived since last call
+    bool GetAndClearPendingOptions(bool& cr, bool& cl, bool& st, int& vl, int pc[5]) {
+        if (!pendingOptions) return false;
+        pendingOptions = false;
+        cr = rcvChainReaction; cl = rcvContinueLeave; st = rcvSingleTarget; vl = rcvVictoriesLimit;
+        for (int i = 0; i < 5; i++) pc[i] = rcvPlayerColors[i];
+        return true;
+    }
 
     // Get nickname for a player ID (for multiplayer display)
     std::string GetPlayerNickname(int playerId) const {

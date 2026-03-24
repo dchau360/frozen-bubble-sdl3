@@ -240,6 +240,7 @@ struct SetupSettings {
     int startLevel = 1;
     bool mpTraining = false;  // 1P multiplayer training mode (timed, score-based)
     bool localMultiplayer = false;  // True for local controller-based multiplayer
+    int playerColors[5] = {7, 7, 7, 7, 7};  // Per-player color count (5-8)
 };
 
 struct BubbleArray {
@@ -258,6 +259,7 @@ struct BubbleArray {
     int lobbyPlayerId = -1;  // The lobby/network player ID (for mapping network messages to player arrays)
     std::string playerNickname = "";  // Player nickname for display
     int winCount = 0;  // Number of rounds won by this player
+    int numColors = 7;  // Number of bubble colors for this player (5-8)
 
     // Network game action flags (original: $actions{$player}{mp_fire} and {mp_stick})
     bool mpFirePending = false;  // Set to true when we receive 'f' message, cleared after firing

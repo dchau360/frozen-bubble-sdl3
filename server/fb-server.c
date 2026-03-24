@@ -19,11 +19,9 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include "win32_compat.h"
 #ifndef _WIN32
 #  include <signal.h>
-#endif
-#ifdef _WIN32
-#  include "win32_compat.h"
 #endif
 #include "net.h"
 #include "game.h"

@@ -497,7 +497,7 @@ void BubbleGame::RandomLevel(BubbleArray &bArray){
         int smallerSep = (i + r) % 2 == 0 ? 0 : bubbleSize / 2;
         for (int j = 0; j < size; j++)
         {
-            bubbleMap[i].push_back(Bubble{(int)i < untilend ? ranrange(0, 7) : -1, {(smallerSep + bubbleSize * ((int)j)) + offset.x, (rowSize * ((int)i)) + offset.y}});
+            bubbleMap[i].push_back(Bubble{(int)i < untilend ? ranrange(0, bArray.numColors - 1) : -1, {(smallerSep + bubbleSize * ((int)j)) + offset.x, (rowSize * ((int)i)) + offset.y}});
         }
     }
 
@@ -545,7 +545,7 @@ void BubbleGame::SyncNetworkLevel() {
 
             if (isLeader) {
                 // Leader generates and sends
-                bubbleId = ranrange(0, 7);  // Random bubble color (0-7)
+                bubbleId = ranrange(0, bubbleArrays[0].numColors - 1);  // Random bubble color
                 SDL_Log("Leader sending bubble: cx=%d cy=%d id=%d", cx, cy, bubbleId);
                 netClient->SendBubble(cx, cy, bubbleId);
             } else {
@@ -620,8 +620,8 @@ void BubbleGame::SyncNetworkLevel() {
 
     if (isLeader) {
         // Leader generates and sends
-        nextBubbleId = ranrange(0, 7);
-        tobeBubbleId = ranrange(0, 7);
+        nextBubbleId = ranrange(0, bubbleArrays[0].numColors - 1);
+        tobeBubbleId = ranrange(0, bubbleArrays[0].numColors - 1);
         SDL_Log("Leader sending next=%d tobe=%d", nextBubbleId, tobeBubbleId);
         netClient->SendNextBubble(nextBubbleId);
         netClient->SendTobeBubble(tobeBubbleId);
@@ -648,7 +648,7 @@ void BubbleGame::SyncNetworkLevel() {
         // Initialize nextColors queue (Perl: $pdata{$player}{nextcolors})
         // 8 upcoming colors, pre-generated for use when new root row is added
         bubbleArrays[i].nextColors.clear();
-        for (int k = 0; k < 8; k++) bubbleArrays[i].nextColors.push_back(ranrange(0, 7));
+        for (int k = 0; k < 8; k++) bubbleArrays[i].nextColors.push_back(ranrange(0, bubbleArrays[i].numColors - 1));
     }
 
     SDL_Log("SyncNetworkLevel: Complete! next=%d tobe=%d", nextBubbleId, tobeBubbleId);
@@ -731,7 +731,13 @@ void BubbleGame::NewGame(SetupSettings setup) {
     mpTrainStartTime = 0;
 
     winsP1 = winsP2 = 0;
-    for (int i = 0; i < 5; i++) bubbleArrays[i].winCount = 0;
+    for (int i = 0; i < 5; i++) {
+        bubbleArrays[i].winCount = 0;
+        // Apply per-player color count (5-8); default 7 for single player
+        int nc = (setup.playerCount >= 2) ? setup.playerColors[i] : 7;
+        nc = (nc < 5) ? 5 : (nc > 8) ? 8 : nc;
+        bubbleArrays[i].numColors = nc;
+    }
 
     // Initialize controllers for local multiplayer
     if (currentSettings.localMultiplayer) {
@@ -1597,7 +1603,7 @@ void BubbleGame::PickNextBubble(BubbleArray &bArray) {
     // Rotate nextColors queue: remove first (just used), append new random
     // Matches Perl: nextcolors is updated after each shot so all clients can compute future root rows
     if (!bArray.nextColors.empty()) bArray.nextColors.erase(bArray.nextColors.begin());
-    bArray.nextColors.push_back(ranrange(0, 7));
+    bArray.nextColors.push_back(ranrange(0, bArray.numColors - 1));
 }
 
 // Build the space-separated nextcolors string for 's' messages (Perl: "@{$pdata{$::p}{nextcolors}}")
@@ -2530,9 +2536,9 @@ void BubbleGame::ExpandNewLane(BubbleArray &bArray) {
         if (!bArray.nextColors.empty()) {
             colorId = bArray.nextColors.front();
             bArray.nextColors.erase(bArray.nextColors.begin());
-            bArray.nextColors.push_back(ranrange(0, 7));  // Replenish queue
+            bArray.nextColors.push_back(ranrange(0, bArray.numColors - 1));  // Replenish queue
         } else {
-            colorId = ranrange(0, 7);
+            colorId = ranrange(0, bArray.numColors - 1);
         }
         bArray.bubbleMap[0].push_back(Bubble{colorId, {(smallerSep + bubbleSize * ((int)j)) + offset.x, offset.y}});
     }
@@ -2721,7 +2727,7 @@ void BubbleGame::ProcessMalusQueue(BubbleArray &bArray, int currentFrame) {
         bArray.malusQueue.erase(bArray.malusQueue.begin());
 
         // Generate random bubble color (original: int(rand(@bubbles_images)) = 0..7)
-        int bubbleId = ranrange(0, 7);
+        int bubbleId = ranrange(0, bArray.numColors - 1);
 
         // Choose column (original line 2231-2240)
         int cx = ranrange(0, 7);  // Simplified - original has noinstantdeath logic

@@ -558,23 +558,22 @@ void MainMenu::HandleInput(SDL_Event *e){
 
             // Handle 2-player game setup menu navigation
             if (showing2PPanel && !awaitKp) {
+                // 0=CR, 1=Victories, 2=Colors P1, 3=Colors P2, 4=Start
                 if (e->key.keysym.sym == SDLK_UP) {
                     twoPlayerMenuIndex--;
-                    if (twoPlayerMenuIndex < 0) twoPlayerMenuIndex = 2;
+                    if (twoPlayerMenuIndex < 0) twoPlayerMenuIndex = 4;
                     AudioMixer::Instance()->PlaySFX("menu_change");
                     break;
                 } else if (e->key.keysym.sym == SDLK_DOWN) {
                     twoPlayerMenuIndex++;
-                    if (twoPlayerMenuIndex > 2) twoPlayerMenuIndex = 0;
+                    if (twoPlayerMenuIndex > 4) twoPlayerMenuIndex = 0;
                     AudioMixer::Instance()->PlaySFX("menu_change");
                     break;
                 } else if (e->key.keysym.sym == SDLK_LEFT || e->key.keysym.sym == SDLK_RIGHT) {
                     if (twoPlayerMenuIndex == 0) {
-                        // Toggle chain reaction
                         twoPlayerCR = !twoPlayerCR;
                         AudioMixer::Instance()->PlaySFX("menu_change");
                     } else if (twoPlayerMenuIndex == 1) {
-                        // Cycle victories limit
                         if (e->key.keysym.sym == SDLK_LEFT) {
                             twoPlayerVictoriesIndex--;
                             if (twoPlayerVictoriesIndex < 0) twoPlayerVictoriesIndex = 17;
@@ -583,19 +582,32 @@ void MainMenu::HandleInput(SDL_Event *e){
                             if (twoPlayerVictoriesIndex > 17) twoPlayerVictoriesIndex = 0;
                         }
                         AudioMixer::Instance()->PlaySFX("menu_change");
+                    } else if (twoPlayerMenuIndex == 2 || twoPlayerMenuIndex == 3) {
+                        int pi = twoPlayerMenuIndex - 2;
+                        if (e->key.keysym.sym == SDLK_LEFT) {
+                            playerColorCounts[pi]--;
+                            if (playerColorCounts[pi] < 5) playerColorCounts[pi] = 8;
+                        } else {
+                            playerColorCounts[pi]++;
+                            if (playerColorCounts[pi] > 8) playerColorCounts[pi] = 5;
+                        }
+                        AudioMixer::Instance()->PlaySFX("menu_change");
                     }
                     break;
                 } else if (e->key.keysym.sym == SDLK_RETURN) {
                     if (twoPlayerMenuIndex == 0) {
-                        // Toggle chain reaction
                         twoPlayerCR = !twoPlayerCR;
                         AudioMixer::Instance()->PlaySFX("menu_change");
                     } else if (twoPlayerMenuIndex == 1) {
-                        // Cycle victories limit
                         twoPlayerVictoriesIndex++;
                         if (twoPlayerVictoriesIndex > 17) twoPlayerVictoriesIndex = 0;
                         AudioMixer::Instance()->PlaySFX("menu_change");
-                    } else if (twoPlayerMenuIndex == 2) {
+                    } else if (twoPlayerMenuIndex == 2 || twoPlayerMenuIndex == 3) {
+                        int pi = twoPlayerMenuIndex - 2;
+                        playerColorCounts[pi]++;
+                        if (playerColorCounts[pi] > 8) playerColorCounts[pi] = 5;
+                        AudioMixer::Instance()->PlaySFX("menu_change");
+                    } else if (twoPlayerMenuIndex == 4) {
                         // Start game!
                         chainReaction = twoPlayerCR;
                         AudioMixer::Instance()->PlaySFX("menu_selected");
@@ -705,15 +717,19 @@ void MainMenu::HandleInput(SDL_Event *e){
                         GameRoom* currentGame = netClient->GetCurrentGame();
                         if (currentGame && currentGame->creator == netClient->GetPlayerNick()) {
                             // Only host can change settings
+                            bool settingChanged = false;
                             if (selectedActionIndex == 1) {
                                 chainReactionEnabled = !chainReactionEnabled;
                                 AudioMixer::Instance()->PlaySFX("menu_change");
+                                settingChanged = true;
                             } else if (selectedActionIndex == 2) {
                                 continueWhenPlayersLeave = !continueWhenPlayersLeave;
                                 AudioMixer::Instance()->PlaySFX("menu_change");
+                                settingChanged = true;
                             } else if (selectedActionIndex == 3) {
                                 singlePlayerTargetting = !singlePlayerTargetting;
                                 AudioMixer::Instance()->PlaySFX("menu_change");
+                                settingChanged = true;
                             } else if (selectedActionIndex == 4) {
                                 // LEFT/RIGHT cycle victories limit
                                 if (e->key.keysym.sym == SDLK_LEFT) {
@@ -724,6 +740,29 @@ void MainMenu::HandleInput(SDL_Event *e){
                                     if (victoriesLimitIndex > 17) victoriesLimitIndex = 0;
                                 }
                                 AudioMixer::Instance()->PlaySFX("menu_change");
+                                settingChanged = true;
+                            } else if (selectedActionIndex >= 5) {
+                                // Per-player color count entries (indices 5..5+N-1)
+                                int numPlayers = (int)currentGame->players.size();
+                                if (numPlayers < 1) numPlayers = 1;
+                                if (numPlayers > 5) numPlayers = 5;
+                                int pi = selectedActionIndex - 5;
+                                if (pi < numPlayers) {
+                                    if (e->key.keysym.sym == SDLK_LEFT) {
+                                        playerColorCounts[pi]--;
+                                        if (playerColorCounts[pi] < 5) playerColorCounts[pi] = 8;
+                                    } else {
+                                        playerColorCounts[pi]++;
+                                        if (playerColorCounts[pi] > 8) playerColorCounts[pi] = 5;
+                                    }
+                                    AudioMixer::Instance()->PlaySFX("menu_change");
+                                    settingChanged = true;
+                                }
+                            }
+                            if (settingChanged) {
+                                static const int vLimits[] = {0,1,2,3,4,5,6,7,8,9,10,11,12,15,20,30,50,100};
+                                netClient->SendOptions(chainReactionEnabled, continueWhenPlayersLeave,
+                                    singlePlayerTargetting, vLimits[victoriesLimitIndex], playerColorCounts);
                             }
                         }
                     }
@@ -809,29 +848,50 @@ void MainMenu::HandleInput(SDL_Event *e){
                                         AudioMixer::Instance()->PlaySFX("menu_selected");
                                     }
                                 } else if (isHost) {
-                                    // Host actions: 0=Chat, 1=CR, 2=Continue, 3=Target, 4=Victories, 5=Start(if >1), last=Part
+                                    // Host actions: 0=Chat, 1=CR, 2=Continue, 3=Target, 4=Victories, 5..5+N-1=Colors, last=Start
+                                    int numPlayers = currentGame ? (int)currentGame->players.size() : 1;
+                                    if (numPlayers < 1) numPlayers = 1;
+                                    if (numPlayers > 5) numPlayers = 5;
+                                    int startIdx = 5 + numPlayers; // Start game index
+                                    bool settingChanged = false;
                                     if (selectedActionIndex == 1) {
                                         // Toggle chain reaction
                                         chainReactionEnabled = !chainReactionEnabled;
                                         AudioMixer::Instance()->PlaySFX("menu_change");
+                                        settingChanged = true;
                                     } else if (selectedActionIndex == 2) {
                                         // Toggle continue when players leave
                                         continueWhenPlayersLeave = !continueWhenPlayersLeave;
                                         AudioMixer::Instance()->PlaySFX("menu_change");
+                                        settingChanged = true;
                                     } else if (selectedActionIndex == 3) {
                                         // Toggle single player targetting
                                         singlePlayerTargetting = !singlePlayerTargetting;
                                         AudioMixer::Instance()->PlaySFX("menu_change");
+                                        settingChanged = true;
                                     } else if (selectedActionIndex == 4) {
                                         // Cycle victories limit
                                         victoriesLimitIndex++;
                                         if (victoriesLimitIndex > 17) victoriesLimitIndex = 0; // 18 values total
                                         AudioMixer::Instance()->PlaySFX("menu_change");
-                                    } else if (selectedActionIndex == 5 && currentGame->players.size() > 1) {
+                                        settingChanged = true;
+                                    } else if (selectedActionIndex >= 5 && selectedActionIndex < 5 + numPlayers) {
+                                        // Cycle per-player color count (Enter increments)
+                                        int pi = selectedActionIndex - 5;
+                                        playerColorCounts[pi]++;
+                                        if (playerColorCounts[pi] > 8) playerColorCounts[pi] = 5;
+                                        AudioMixer::Instance()->PlaySFX("menu_change");
+                                        settingChanged = true;
+                                    } else if (selectedActionIndex == startIdx && currentGame && currentGame->players.size() > 1) {
                                         // Start game (only shown if >1 player)
                                         netClient->StartGame();
                                         netClient->AddStatusMessage("Starting game...");
                                         AudioMixer::Instance()->PlaySFX("menu_selected");
+                                    }
+                                    if (settingChanged) {
+                                        static const int vLimits[] = {0,1,2,3,4,5,6,7,8,9,10,11,12,15,20,30,50,100};
+                                        netClient->SendOptions(chainReactionEnabled, continueWhenPlayersLeave,
+                                            singlePlayerTargetting, vLimits[victoriesLimitIndex], playerColorCounts);
                                     }
                                 }
                                 // Non-host has no actions other than Chat (use ESC to leave)
@@ -1370,6 +1430,8 @@ void MainMenu::TPPanelRender() {
         "2-player game\n\n"
         "%s Chain-reaction: %s\n"
         "%s Victories limit: %s\n"
+        "%s Colors P1: %d\n"
+        "%s Colors P2: %d\n"
         "%s Start game!\n\n\n"
         "Use UP/DOWN to select\n"
         "LEFT/RIGHT or ENTER to change\n"
@@ -1378,7 +1440,11 @@ void MainMenu::TPPanelRender() {
         twoPlayerCR ? "enabled" : "disabled",
         twoPlayerMenuIndex == 1 ? ">" : " ",
         victoriesLimits[twoPlayerVictoriesIndex],
-        twoPlayerMenuIndex == 2 ? ">" : " ");
+        twoPlayerMenuIndex == 2 ? ">" : " ",
+        playerColorCounts[0],
+        twoPlayerMenuIndex == 3 ? ">" : " ",
+        playerColorCounts[1],
+        twoPlayerMenuIndex == 4 ? ">" : " ");
 
     panelText.UpdateText(const_cast<SDL_Renderer *>(renderer), pnltxt, 0);
     panelText.UpdatePosition({(640/2) - (panelText.Coords()->w / 2), (480/2) - 120});
@@ -1565,6 +1631,23 @@ void MainMenu::NetPanelRender() {
     if (netClient->IsConnected()) {
         netClient->Update();
 
+        // Apply any options broadcast by the host (joiners receive SETOPTIONS push)
+        {
+            bool cr, cl, st; int vl; int pc[5];
+            if (netClient->GetAndClearPendingOptions(cr, cl, st, vl, pc)) {
+                chainReactionEnabled = cr;
+                continueWhenPlayersLeave = cl;
+                singlePlayerTargetting = st;
+                // Map vl to victoriesLimitIndex
+                static const int vLimits[] = {0,1,2,3,4,5,6,7,8,9,10,11,12,15,20,30,50,100};
+                victoriesLimitIndex = 5; // default
+                for (int i = 0; i < 18; i++) { if (vLimits[i] == vl) { victoriesLimitIndex = i; break; } }
+                for (int i = 0; i < 5; i++) playerColorCounts[i] = pc[i];
+                SDL_Log("Applied host options: cr=%d cl=%d st=%d vl=%d colors=%d,%d,%d,%d,%d",
+                    cr,cl,st,vl,pc[0],pc[1],pc[2],pc[3],pc[4]);
+            }
+        }
+
         // Check if game is ready to start (state transitioned to IN_GAME)
         if (!networkGameStarting && netClient->GetState() == IN_GAME) {
             SDL_Log("Game starting - transitioning to network game");
@@ -1635,6 +1718,17 @@ void MainMenu::NetPanelRender() {
                 actions.push_back(targetText);
                 actions.push_back(victoriesText);
 
+                // Per-player color count entries (indices 5..5+N-1)
+                int numPlayers = (int)currentGame->players.size();
+                if (numPlayers < 1) numPlayers = 1;
+                if (numPlayers > 5) numPlayers = 5;
+                for (int pi = 0; pi < numPlayers; pi++) {
+                    char colorText[80];
+                    std::string pnick = (pi < (int)currentGame->players.size()) ? currentGame->players[pi].nick : std::to_string(pi + 1);
+                    snprintf(colorText, sizeof(colorText), "Colors %s: %d", pnick.c_str(), playerColorCounts[pi]);
+                    actions.push_back(colorText);
+                }
+
                 // Only show Start game if there are other players
                 if (currentGame->players.size() > 1) {
                     actions.push_back("Start game!");
@@ -1653,6 +1747,17 @@ void MainMenu::NetPanelRender() {
                 actions.push_back(continueText);
                 actions.push_back(targetText);
                 actions.push_back(victoriesText);
+
+                // Per-player color count (read-only for joiners)
+                int numPlayers = (int)currentGame->players.size();
+                if (numPlayers < 1) numPlayers = 1;
+                if (numPlayers > 5) numPlayers = 5;
+                for (int pi = 0; pi < numPlayers; pi++) {
+                    char colorText[80];
+                    std::string pnick = (pi < (int)currentGame->players.size()) ? currentGame->players[pi].nick : std::to_string(pi + 1);
+                    snprintf(colorText, sizeof(colorText), "Colors %s: %d", pnick.c_str(), playerColorCounts[pi]);
+                    actions.push_back(colorText);
+                }
             }
             // No "Part game" menu item - use ESC key to leave like original
         } else {
@@ -2285,9 +2390,15 @@ void MainMenu::SetupNewGame(int mode) {
         case 1:
             FrozenBubble::Instance()->bubbleGame()->NewGame({chainReaction, 1, false});
             break;
-        case 2:
-            FrozenBubble::Instance()->bubbleGame()->NewGame({chainReaction, 2, false, true});
+        case 2: {
+            SetupSettings ns2p;
+            ns2p.chainReaction = chainReaction;
+            ns2p.playerCount = 2;
+            ns2p.randomLevels = true;
+            for (int i = 0; i < 5; i++) ns2p.playerColors[i] = playerColorCounts[i];
+            FrozenBubble::Instance()->bubbleGame()->NewGame(ns2p);
             break;
+        }
         case 3:
             FrozenBubble::Instance()->bubbleGame()->NewGame({chainReaction, 1, false, true});
             break;
@@ -2308,7 +2419,16 @@ void MainMenu::SetupNewGame(int mode) {
             }
 
             SDL_Log("Calling NewGame with playerCount=%d, chainReaction=%s", playerCount, chainReaction ? "true" : "false");
-            FrozenBubble::Instance()->bubbleGame()->NewGame({chainReaction, playerCount, true, true, singlePlayerTargetting});
+            {
+                SetupSettings ns;
+                ns.chainReaction = chainReaction;
+                ns.playerCount = playerCount;
+                ns.networkGame = true;
+                ns.randomLevels = true;
+                ns.singlePlayerTargetting = singlePlayerTargetting;
+                for (int i = 0; i < 5; i++) ns.playerColors[i] = playerColorCounts[i];
+                FrozenBubble::Instance()->bubbleGame()->NewGame(ns);
+            }
             break;
         }
         case 5: // Pick start level

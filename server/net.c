@@ -33,9 +33,8 @@
 #include <sys/time.h>
 #include <signal.h>
 
-#ifdef _WIN32
-#  include "win32_compat.h"
-#else
+#include "win32_compat.h"
+#ifndef _WIN32
 #  include <unistd.h>
 #  include <sys/socket.h>
 #  include <netinet/in.h>
