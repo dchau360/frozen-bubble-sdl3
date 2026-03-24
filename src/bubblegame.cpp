@@ -3956,6 +3956,7 @@ void BubbleGame::HandleInput(SDL_Event *e) {
             case SDL_CONTROLLER_BUTTON_A:          fake.keysym.sym = SDLK_SPACE; break;
             case SDL_CONTROLLER_BUTTON_B:          fake.keysym.sym = SDLK_ESCAPE; break;
             case SDL_CONTROLLER_BUTTON_START:      fake.keysym.sym = SDLK_p; break;
+            case SDL_CONTROLLER_BUTTON_X:          fake.keysym.sym = SDLK_RETURN; break; // X=Chat
             default: return;
         }
         SDL_Event fakeEvent;

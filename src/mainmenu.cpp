@@ -245,6 +245,7 @@ void MainMenu::HandleInput(SDL_Event *e){
             case SDL_CONTROLLER_BUTTON_A:          fake.keysym.sym = SDLK_RETURN; break;
             case SDL_CONTROLLER_BUTTON_B:          fake.keysym.sym = SDLK_ESCAPE; break;
             case SDL_CONTROLLER_BUTTON_START:      fake.keysym.sym = SDLK_RETURN; break;
+            case SDL_CONTROLLER_BUTTON_X:          fake.keysym.sym = SDLK_t; break; // X=Chat
             case SDL_CONTROLLER_BUTTON_Y:          fake.keysym.sym = SDLK_r; break; // Y=Remove Ads (Android opts panel)
             default: return;
         }
@@ -756,15 +757,17 @@ void MainMenu::HandleInput(SDL_Event *e){
                                 settingChanged = true;
                             } else if (selectedActionIndex >= 5 && selectedActionIndex <= 7) {
                                 // Grid rows 5/6/7: Left/Right navigates player columns
+                                // col 0 = ALL, col 1..N = P1..PN
                                 int numPlayers = (int)currentGame->players.size();
                                 if (numPlayers < 1) numPlayers = 1;
                                 if (numPlayers > 5) numPlayers = 5;
+                                int totalCols = numPlayers + 1; // +1 for ALL
                                 if (e->key.keysym.sym == SDLK_LEFT) {
                                     currentPlayerCol--;
-                                    if (currentPlayerCol < 0) currentPlayerCol = numPlayers - 1;
+                                    if (currentPlayerCol < 0) currentPlayerCol = totalCols - 1;
                                 } else {
                                     currentPlayerCol++;
-                                    if (currentPlayerCol >= numPlayers) currentPlayerCol = 0;
+                                    if (currentPlayerCol >= totalCols) currentPlayerCol = 0;
                                 }
                                 AudioMixer::Instance()->PlaySFX("menu_change");
                             }
@@ -884,19 +887,37 @@ void MainMenu::HandleInput(SDL_Event *e){
                                         AudioMixer::Instance()->PlaySFX("menu_change");
                                         settingChanged = true;
                                     } else if (selectedActionIndex == 5) {
-                                        // Cycle per-player color count for focused column
-                                        playerColorCounts[currentPlayerCol]++;
-                                        if (playerColorCounts[currentPlayerCol] > 8) playerColorCounts[currentPlayerCol] = 5;
+                                        // Cycle per-player color count; col 0 = ALL
+                                        int np = (int)currentGame->players.size();
+                                        if (np < 1) np = 1; if (np > 5) np = 5;
+                                        int lo = (currentPlayerCol == 0) ? 0 : currentPlayerCol - 1;
+                                        int hi = (currentPlayerCol == 0) ? np : currentPlayerCol;
+                                        for (int i = lo; i < hi; i++) {
+                                            playerColorCounts[i]++;
+                                            if (playerColorCounts[i] > 8) playerColorCounts[i] = 5;
+                                        }
                                         AudioMixer::Instance()->PlaySFX("menu_change");
                                         settingChanged = true;
                                     } else if (selectedActionIndex == 6) {
-                                        // Toggle per-player compression for focused column
-                                        playerNoCompress[currentPlayerCol] = !playerNoCompress[currentPlayerCol];
+                                        // Toggle per-player compression; col 0 = ALL (set all to majority opposite)
+                                        int np = (int)currentGame->players.size();
+                                        if (np < 1) np = 1; if (np > 5) np = 5;
+                                        int lo = (currentPlayerCol == 0) ? 0 : currentPlayerCol - 1;
+                                        int hi = (currentPlayerCol == 0) ? np : currentPlayerCol;
+                                        bool allOn = true;
+                                        for (int i = lo; i < hi; i++) if (playerNoCompress[i]) allOn = false;
+                                        for (int i = lo; i < hi; i++) playerNoCompress[i] = allOn;
                                         AudioMixer::Instance()->PlaySFX("menu_change");
                                         settingChanged = true;
                                     } else if (selectedActionIndex == 7) {
-                                        // Toggle per-player aim guide for focused column
-                                        playerAimGuide[currentPlayerCol] = !playerAimGuide[currentPlayerCol];
+                                        // Toggle per-player aim guide; col 0 = ALL (set all to majority opposite)
+                                        int np = (int)currentGame->players.size();
+                                        if (np < 1) np = 1; if (np > 5) np = 5;
+                                        int lo = (currentPlayerCol == 0) ? 0 : currentPlayerCol - 1;
+                                        int hi = (currentPlayerCol == 0) ? np : currentPlayerCol;
+                                        bool allOn = true;
+                                        for (int i = lo; i < hi; i++) if (!playerAimGuide[i]) allOn = false;
+                                        for (int i = lo; i < hi; i++) playerAimGuide[i] = !allOn;
                                         AudioMixer::Instance()->PlaySFX("menu_change");
                                         settingChanged = true;
                                     } else if (selectedActionIndex == 8 && currentGame && currentGame->players.size() > 1) {
@@ -951,6 +972,7 @@ void MainMenu::HandleInput(SDL_Event *e){
                             AudioMixer::Instance()->PlaySFX("menu_selected");
                         }
                         networkInputMode = 0; // Back to lobby
+                        SDL_StopTextInput();
                         break;
                     } else if (showingNetPanel && networkInLobby && networkInputMode == 5) {
                         // Change username
@@ -963,6 +985,7 @@ void MainMenu::HandleInput(SDL_Event *e){
                             networkUsername[0] = '\0';
                         }
                         networkInputMode = 0; // Back to lobby
+                        SDL_StopTextInput();
                         break;
                     } else if (showingNetPanel && networkInLobby && networkInputMode == 4) {
                         // Send chat message
@@ -972,6 +995,7 @@ void MainMenu::HandleInput(SDL_Event *e){
                             networkChatInput[0] = '\0';
                         }
                         networkInputMode = 0; // Back to lobby
+                        SDL_StopTextInput();
                         break;
                     } else if (showingNetPanel && networkInLobby && networkInputMode == 3) {
                         // Join game with entered creator name
@@ -986,6 +1010,7 @@ void MainMenu::HandleInput(SDL_Event *e){
                     } else if (showingNetPanel && !networkInLobby && networkInputMode == 11) {
                         // Confirm pre-lobby nickname
                         networkInputMode = networkPreNickReturnMode;
+                        SDL_StopTextInput();
                         AudioMixer::Instance()->PlaySFX("menu_selected");
                         break;
                     } else if (showingNetPanel && !networkInLobby &&
@@ -1012,6 +1037,7 @@ void MainMenu::HandleInput(SDL_Event *e){
                                 // "Set Name" selected (last item)
                                 networkPreNickReturnMode = 7;
                                 networkInputMode = 11;
+                                SDL_StartTextInput();
                                 AudioMixer::Instance()->PlaySFX("menu_selected");
                                 break;
                             }
@@ -1029,6 +1055,7 @@ void MainMenu::HandleInput(SDL_Event *e){
                                 // "Set Name" selected (last item)
                                 networkPreNickReturnMode = 10;
                                 networkInputMode = 11;
+                                SDL_StartTextInput();
                                 AudioMixer::Instance()->PlaySFX("menu_selected");
                                 break;
                             }
@@ -1128,6 +1155,16 @@ void MainMenu::HandleInput(SDL_Event *e){
                         // Enter chat mode
                         networkInputMode = 4;
                         networkChatInput[0] = '\0';
+                        SDL_StartTextInput();
+                        AudioMixer::Instance()->PlaySFX("menu_selected");
+                    }
+                    break;
+                case SDLK_u:
+                    if (showingNetPanel && networkInLobby && networkInputMode == 0) {
+                        // Enter username change mode
+                        networkInputMode = 5;
+                        networkUsername[0] = '\0';
+                        SDL_StartTextInput();
                         AudioMixer::Instance()->PlaySFX("menu_selected");
                     }
                     break;
@@ -1169,6 +1206,7 @@ void MainMenu::HandleInput(SDL_Event *e){
                         if (networkInputMode == 11) {
                             // Cancel pre-lobby nickname editing
                             networkInputMode = networkPreNickReturnMode;
+                            SDL_StopTextInput();
                             break;
                         } else if (networkInputMode == 8 || networkInputMode == 9) {
                             // Back from manual entry to public server list
@@ -1186,6 +1224,7 @@ void MainMenu::HandleInput(SDL_Event *e){
                             // Cancel username input
                             networkInputMode = 0;
                             networkUsername[0] = '\0';
+                            SDL_StopTextInput();
                             break;
                         } else if (networkInputMode == 4) {
                             // Cancel chat input
@@ -1838,7 +1877,7 @@ void MainMenu::NetPanelRender() {
 
         // Grid offset: player header + grid rows are shifted down one line to make room for nick header
         const int gridStart = 5;       // First grid row index
-        const int gridYOffset = lineHeight; // Extra offset for nick header above grid
+        const int gridYOffset = lineHeight * 2; // Gap after Victories limit + space for nick header
 
         // Render actions with highlight
         for (size_t i = 0; i < actions.size() && i < 15; i++) {
@@ -1869,22 +1908,62 @@ void MainMenu::NetPanelRender() {
             bool isHost = currentGame->creator == netClient->GetPlayerNick();
 
             // Column layout
-            const int labelW = 52;   // Width of row label ("Colors:", "Rows:", "Aim:")
+            const int labelW = 90;   // Width of row label ("Colors:", "Row collapse:", "Aim guide:")
             const int colW   = 30;   // Width of each player column
 
             // Player number header row (non-selectable) — rendered just above the Colors row
+            // col 0 = ALL, col 1..N = P1..PN
             int headerY = actionStartY + gridStart * lineHeight; // y before gridYOffset
+
+            // Draw grid lines
+            {
+                SDL_Renderer* rend = const_cast<SDL_Renderer*>(renderer);
+                SDL_SetRenderDrawColor(rend, 180, 180, 200, 220);
+
+                int totalCols = numPlayers + 1; // ALL + P1..PN
+                int gridLeft  = actionStartX - 2;
+                int gridRight = actionStartX + labelW + totalCols * colW;
+                int gridTop   = headerY - 1;
+                int gridBot   = headerY + 4 * lineHeight; // header + 3 data rows
+
+                // Outer border
+                SDL_Rect border = {gridLeft, gridTop, gridRight - gridLeft, gridBot - gridTop};
+                SDL_RenderDrawRect(rend, &border);
+
+                // Horizontal lines: after header, after Colors, after Rows
+                for (int r = 1; r <= 3; r++) {
+                    int y = headerY + r * lineHeight;
+                    SDL_RenderDrawLine(rend, gridLeft, y, gridRight, y);
+                }
+
+                // Vertical line between label and ALL column
+                int xLabel = actionStartX + labelW;
+                SDL_RenderDrawLine(rend, xLabel, gridTop, xLabel, gridBot);
+
+                // Vertical lines between each column (ALL|P1, P1|P2, ...)
+                for (int c = 1; c <= totalCols - 1; c++) {
+                    int x = actionStartX + labelW + c * colW;
+                    SDL_RenderDrawLine(rend, x, gridTop, x, gridBot);
+                }
+            }
+            {
+                // ALL header
+                int allX = actionStartX + labelW;
+                panelText.UpdateText(const_cast<SDL_Renderer*>(renderer), "ALL", 0);
+                panelText.UpdatePosition({allX, headerY});
+                SDL_RenderCopy(const_cast<SDL_Renderer*>(renderer), panelText.Texture(), nullptr, panelText.Coords());
+            }
             for (int pi = 0; pi < numPlayers; pi++) {
                 char pnum[4];
                 snprintf(pnum, sizeof(pnum), "P%d", pi + 1);
-                int cellX = actionStartX + labelW + pi * colW;
+                int cellX = actionStartX + labelW + (pi + 1) * colW; // +1 to skip ALL column
                 panelText.UpdateText(const_cast<SDL_Renderer*>(renderer), pnum, 0);
                 panelText.UpdatePosition({cellX, headerY});
                 SDL_RenderCopy(const_cast<SDL_Renderer*>(renderer), panelText.Texture(), nullptr, panelText.Coords());
             }
 
             // Grid rows: Colors (5), Rows (6), Aim (7)
-            const char* rowLabels[] = {"Colors:", "Rows:", "Aim:"};
+            const char* rowLabels[] = {"Colors:", "Row collapse:", "Aim guide:"};
             for (int row = 0; row < 3; row++) {
                 int rowIdx = gridStart + row;
                 int rowY   = actionStartY + rowIdx * lineHeight + gridYOffset;
@@ -1900,10 +1979,40 @@ void MainMenu::NetPanelRender() {
                 panelText.UpdatePosition({actionStartX, rowY});
                 SDL_RenderCopy(const_cast<SDL_Renderer*>(renderer), panelText.Texture(), nullptr, panelText.Coords());
 
-                // Per-player cells
+                // ALL cell (col 0) — show value if all players match, else "-"
+                {
+                    int cellX = actionStartX + labelW;
+                    bool isFocusedAll = (selectedActionIndex == rowIdx && currentPlayerCol == 0);
+                    if (isFocusedAll && isHost && highlightServer) {
+                        SDL_Rect cellHl = {cellX - 2, rowY - 1, colW - 2, lineHeight};
+                        SDL_RenderCopy(const_cast<SDL_Renderer*>(renderer), highlightServer, nullptr, &cellHl);
+                    }
+                    char cellText[8];
+                    if (row == 0) {
+                        bool same = true;
+                        for (int i = 1; i < numPlayers; i++) if (playerColorCounts[i] != playerColorCounts[0]) { same = false; break; }
+                        if (same) snprintf(cellText, sizeof(cellText), "%d", playerColorCounts[0]);
+                        else snprintf(cellText, sizeof(cellText), "-");
+                    } else if (row == 1) {
+                        bool same = true;
+                        for (int i = 1; i < numPlayers; i++) if (playerNoCompress[i] != playerNoCompress[0]) { same = false; break; }
+                        if (same) snprintf(cellText, sizeof(cellText), "%s", playerNoCompress[0] ? "off" : "on");
+                        else snprintf(cellText, sizeof(cellText), "-");
+                    } else {
+                        bool same = true;
+                        for (int i = 1; i < numPlayers; i++) if (playerAimGuide[i] != playerAimGuide[0]) { same = false; break; }
+                        if (same) snprintf(cellText, sizeof(cellText), "%s", playerAimGuide[0] ? "on" : "off");
+                        else snprintf(cellText, sizeof(cellText), "-");
+                    }
+                    panelText.UpdateText(const_cast<SDL_Renderer*>(renderer), cellText, 0);
+                    panelText.UpdatePosition({cellX, rowY});
+                    SDL_RenderCopy(const_cast<SDL_Renderer*>(renderer), panelText.Texture(), nullptr, panelText.Coords());
+                }
+
+                // Per-player cells (P1..PN at col 1..N)
                 for (int pi = 0; pi < numPlayers; pi++) {
-                    int cellX = actionStartX + labelW + pi * colW;
-                    bool isFocusedCell = (selectedActionIndex == rowIdx && currentPlayerCol == pi);
+                    int cellX = actionStartX + labelW + (pi + 1) * colW; // +1 to skip ALL column
+                    bool isFocusedCell = (selectedActionIndex == rowIdx && currentPlayerCol == pi + 1);
 
                     // Cell highlight for focused cell (host only)
                     if (isFocusedCell && isHost && highlightServer) {
