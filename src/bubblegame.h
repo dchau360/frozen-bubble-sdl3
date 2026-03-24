@@ -422,6 +422,14 @@ private:
     TTFText inGameText, winsP1Text, winsP2Text, scoreText, comboText, finalScoreText, mpTrainText;
     TTFText playerNameWinText[5];  // "PlayerName: WinCount" for each player (3-5 player mode)
 
+    // In-game chat (network games only)
+    struct InGameChatMsg { std::string nick; std::string text; int framesLeft; };
+    std::vector<InGameChatMsg> inGameChatMessages;
+    bool chattingMode = false;
+    char chatInputBuf[256] = {};
+    TTFText chatLineText;       // Reused per message line
+    TTFText chatInputText;      // Input line ("Say: {text}_")
+
     std::vector<std::array<std::vector<int>, 10>> loadedLevels;
     BubbleArray bubbleArrays[5]; //5 custom arrays wtih different players
 

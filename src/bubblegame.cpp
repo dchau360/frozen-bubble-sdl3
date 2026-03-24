@@ -346,6 +346,12 @@ BubbleGame::BubbleGame(const SDL_Renderer *renderer)
         playerNameWinText[i].UpdateAlignment(TTF_WRAPPED_ALIGN_CENTER);
         playerNameWinText[i].UpdateColor({255, 255, 255, 255}, {0, 0, 0, 255});
     }
+
+    // In-game chat text (white on transparent — overlay drawn separately)
+    chatLineText.LoadFont(ASSET("/gfx/DroidSans.ttf").c_str(), 14);
+    chatLineText.UpdateColor({255, 255, 255, 255}, {0, 0, 0, 0});
+    chatInputText.LoadFont(ASSET("/gfx/DroidSans.ttf").c_str(), 14);
+    chatInputText.UpdateColor({255, 255, 100, 255}, {0, 0, 0, 0});  // Yellow for input
 }
 
 BubbleGame::~BubbleGame() {
@@ -3555,6 +3561,57 @@ void BubbleGame::Render() {
         }
     }
 
+    // In-game chat overlay (network games only)
+    if (currentSettings.networkGame) {
+        // Tick down message timers; remove expired
+        for (auto it = inGameChatMessages.begin(); it != inGameChatMessages.end(); ) {
+            if (--(it->framesLeft) <= 0) it = inGameChatMessages.erase(it);
+            else ++it;
+        }
+
+        if (!inGameChatMessages.empty() || chattingMode) {
+            const int lineH   = 18;
+            const int maxShow = 3;
+            const int chatX   = 5;
+            // Base Y: bottom of screen with room for maxShow lines
+            const int baseY   = 480 - maxShow * lineH - 2;
+
+            // Semi-transparent dark background
+            int bgY = baseY - 2;
+            int bgH = maxShow * lineH + 4;
+            if (chattingMode) { bgY -= lineH + 4; bgH += lineH + 4; }
+            SDL_SetRenderDrawBlendMode(rend, SDL_BLENDMODE_BLEND);
+            SDL_Rect chatBg = {0, bgY, 640, bgH};
+            SDL_SetRenderDrawColor(rend, 0, 0, 0, 170);
+            SDL_RenderFillRect(rend, &chatBg);
+            SDL_SetRenderDrawBlendMode(rend, SDL_BLENDMODE_NONE);
+
+            // Draw input line (yellow) above the message area
+            if (chattingMode) {
+                char inputLine[512];
+                snprintf(inputLine, sizeof(inputLine), "Say: %s_", chatInputBuf);
+                chatInputText.UpdateText(rend, inputLine, 630);
+                chatInputText.UpdatePosition({chatX, bgY + 2});
+                if (chatInputText.Texture())
+                    SDL_RenderCopy(rend, chatInputText.Texture(), nullptr, chatInputText.Coords());
+            }
+
+            // Draw last maxShow messages (white)
+            int count = (int)inGameChatMessages.size();
+            int start = count > maxShow ? count - maxShow : 0;
+            for (int i = start; i < count; i++) {
+                char lineBuf[512];
+                snprintf(lineBuf, sizeof(lineBuf), "%s: %s",
+                         inGameChatMessages[i].nick.c_str(),
+                         inGameChatMessages[i].text.c_str());
+                chatLineText.UpdateText(rend, lineBuf, 630);
+                chatLineText.UpdatePosition({chatX, baseY + (i - start) * lineH});
+                if (chatLineText.Texture())
+                    SDL_RenderCopy(rend, chatLineText.Texture(), nullptr, chatLineText.Coords());
+            }
+        }
+    }
+
     if (!firstRenderDone) {
         TransitionManager::Instance()->TakeSnipOut(rend);
         firstRenderDone = true;
@@ -3638,10 +3695,30 @@ void BubbleGame::HandleInput(SDL_Event *e) {
     }
 
     switch(e->type) {
+        case SDL_TEXTINPUT:
+            if (chattingMode) {
+                size_t curLen = strlen(chatInputBuf);
+                size_t addLen = strlen(e->text.text);
+                if (curLen + addLen < sizeof(chatInputBuf) - 1)
+                    strcat(chatInputBuf, e->text.text);
+            }
+            return;
         case SDL_KEYDOWN:
+            // Backspace: allow key-repeat so holding it deletes continuously
+            if (chattingMode && e->key.keysym.sym == SDLK_BACKSPACE) {
+                size_t len = strlen(chatInputBuf);
+                if (len > 0) chatInputBuf[len - 1] = '\0';
+                return;
+            }
             if(e->key.repeat) break;
             switch(e->key.keysym.sym) {
                 case SDLK_ESCAPE:
+                    if (chattingMode) {
+                        chattingMode = false;
+                        chatInputBuf[0] = '\0';
+                        SDL_StopTextInput();
+                        break;
+                    }
                     QuitToTitle();
                     break;
                 case SDLK_F11: // mute / unpause audio
@@ -3678,6 +3755,34 @@ void BubbleGame::HandleInput(SDL_Event *e) {
                     }
                     break;
                 case SDLK_RETURN:
+                    // Chat: during active network game, RETURN enters/sends chat
+                    if (currentSettings.networkGame && !gameFinish) {
+                        if (chattingMode) {
+                            if (strlen(chatInputBuf) > 0) {
+                                NetworkClient* netClientChat = NetworkClient::Instance();
+                                char talkMsg[258];
+                                snprintf(talkMsg, sizeof(talkMsg), "t%s", chatInputBuf);
+                                netClientChat->SendGameData(talkMsg);
+                                // Show our own message locally
+                                InGameChatMsg self;
+                                self.nick = netClientChat->GetPlayerNick();
+                                if (self.nick.empty()) self.nick = "Me";
+                                self.text = chatInputBuf;
+                                self.framesLeft = 300;
+                                inGameChatMessages.push_back(self);
+                                if (inGameChatMessages.size() > 10)
+                                    inGameChatMessages.erase(inGameChatMessages.begin());
+                            }
+                            chatInputBuf[0] = '\0';
+                            chattingMode = false;
+                            SDL_StopTextInput();
+                        } else {
+                            chattingMode = true;
+                            chatInputBuf[0] = '\0';
+                            SDL_StartTextInput();
+                        }
+                        break;
+                    }
                     if (!gameFinish || (gameFinish && singleBubbles.size() > 0)) break;
 
                     // In network game, synchronize new game with opponent
@@ -4143,8 +4248,16 @@ void BubbleGame::ProcessNetworkMessages() {
                         break;
                     }
                     case 't': {
-                        // Talk/chat during game
-                        SDL_Log("In-game chat: %s", gameData + 1);
+                        // In-game chat from remote player
+                        InGameChatMsg chatMsg;
+                        chatMsg.nick = netClient->GetPlayerNickname(senderId);
+                        if (chatMsg.nick.empty()) chatMsg.nick = "Player";
+                        chatMsg.text = gameData + 1;
+                        chatMsg.framesLeft = 300;  // 5 seconds at 60 fps
+                        inGameChatMessages.push_back(chatMsg);
+                        if (inGameChatMessages.size() > 10)
+                            inGameChatMessages.erase(inGameChatMessages.begin());
+                        audMixer->PlaySFX("chatted");
                         break;
                     }
                     case 'l': {
