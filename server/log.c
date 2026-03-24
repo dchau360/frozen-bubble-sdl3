@@ -18,7 +18,6 @@
  ******************************************************************************/
 
 #include <stdlib.h>
-#include <unistd.h>
 #include <stdio.h>
 #include <stdarg.h>
 #include <string.h>
@@ -26,8 +25,14 @@
 #include <sys/time.h>
 #include <time.h>
 #include <errno.h>
-#include <fcntl.h>
-#include <syslog.h>
+
+#ifdef _WIN32
+#  include "win32_compat.h"
+#else
+#  include <unistd.h>
+#  include <fcntl.h>
+#  include <syslog.h>
+#endif
 
 #include "tools.h"
 #include "log.h"

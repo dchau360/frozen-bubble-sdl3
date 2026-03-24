@@ -18,18 +18,23 @@
  ******************************************************************************/
 
 #include <stdlib.h>
-#include <unistd.h>
 #include <stdio.h>
 #include <stdarg.h>
 #include <string.h>
 #include <ctype.h>
 #include <errno.h>
 #include <sys/types.h>
-#include <sys/wait.h>
 #include <sys/stat.h>
-#include <fcntl.h>
 #include <glib.h>
-#include <pwd.h>
+
+#ifdef _WIN32
+#  include "win32_compat.h"
+#else
+#  include <unistd.h>
+#  include <sys/wait.h>
+#  include <fcntl.h>
+#  include <pwd.h>
+#endif
 
 #include "tools.h"
 #include "log.h"
@@ -180,12 +185,18 @@ void reregister_server_if_needed() {
                 return;
 
         // don't stack zombies, do minimal housework
+#ifndef _WIN32
         waitpid(-1, NULL, WNOHANG);
+#endif
 
         current_time = get_current_time();
         if ((current_time - last_server_register)/60 >= interval_reregister) {
                 l0(OUTPUT_TYPE_INFO, "Reregistering to master server");
                 last_server_register = current_time;
+#ifdef _WIN32
+                // No fork on Windows — register inline (master server re-test not supported)
+                register_server(1);
+#else
                 int pid = fork();
                 if (pid < 0) {
                         l1(OUTPUT_TYPE_ERROR, "Cannot fork: %s", strerror(errno));
@@ -196,10 +207,18 @@ void reregister_server_if_needed() {
                         register_server(1);
                         _exit(EXIT_SUCCESS);
                 }
+#endif /* !_WIN32 */
         }
 }
 
 void daemonize() {
+#ifdef _WIN32
+        // No daemon support on Windows — server runs in the foreground.
+        // Force debug_mode so logging goes to stderr rather than syslog.
+        debug_mode = TRUE;
+        l0(OUTPUT_TYPE_INFO, "Windows: daemonize() is a no-op, running in foreground.");
+        return;
+#else
         pid_t pid, sid;
         GList * retained_fds = NULL;
         int fd;
@@ -295,4 +314,5 @@ void daemonize() {
         }
 
         l0(OUTPUT_TYPE_INFO, "Entered daemon mode.");
+#endif /* !_WIN32 */
 }

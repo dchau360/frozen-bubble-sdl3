@@ -19,7 +19,12 @@
 
 #include <stdio.h>
 #include <stdlib.h>
-#include <signal.h>
+#ifndef _WIN32
+#  include <signal.h>
+#endif
+#ifdef _WIN32
+#  include "win32_compat.h"
+#endif
 #include "net.h"
 #include "game.h"
 #include "tools.h"
@@ -44,6 +49,7 @@ int main(int argc, char **argv)
         printf("warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.\n");
         printf("\n");
 
+        win32_socket_init();  // No-op on POSIX
         // Initialize stats system
         stats_init();
         setup_signal_handlers();

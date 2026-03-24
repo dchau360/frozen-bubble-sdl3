@@ -43,9 +43,7 @@ if(NOT SDL2_ttf_FOUND)
     message(FATAL_ERROR "SDL2_ttf not found")
 endif()
 
-if(UNIX OR APPLE)
-    add_subdirectory(server)
-endif()
+add_subdirectory(server)
 
 if(APPLE)
     include_directories("/opt/homebrew/include")

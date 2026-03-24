@@ -169,6 +169,7 @@ jobs:
             mingw-w64-x86_64-SDL2_image
             mingw-w64-x86_64-SDL2_mixer
             mingw-w64-x86_64-SDL2_ttf
+            mingw-w64-x86_64-glib2
 
       - name: Configure & build
         run: cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
@@ -180,13 +181,15 @@ jobs:
         run: |
           mkdir -p pkg
           cp build/frozen-bubble-sdl2.exe pkg/
+          cp build/server/fb-server.exe pkg/ 2>/dev/null || true
           cp -r share pkg/
           for dll in \
             SDL2.dll SDL2_image.dll SDL2_mixer.dll SDL2_ttf.dll \
             libgcc_s_seh-1.dll libstdc++-6.dll libwinpthread-1.dll \
             libpng16-16.dll libogg-0.dll libvorbis-0.dll libvorbisfile-3.dll \
             libfreetype-6.dll libbrotlicommon.dll libbrotlidec.dll \
-            libharfbuzz-0.dll libgraphite2.dll zlib1.dll; do
+            libharfbuzz-0.dll libgraphite2.dll zlib1.dll \
+            libglib-2.0-0.dll libintl-8.dll libiconv-2.dll libpcre2-8-0.dll; do
               cp /mingw64/bin/$dll pkg/ 2>/dev/null || true
           done
 

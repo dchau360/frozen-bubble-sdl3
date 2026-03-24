@@ -25,22 +25,27 @@
  */
 
 #include <stdlib.h>
-#include <unistd.h>
 #include <errno.h>
 #include <stdio.h>
 #include <stdarg.h>
 #include <string.h>
 #include <ctype.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <arpa/inet.h>
-#include <netdb.h>
-#include <poll.h>
-#include <sys/utsname.h>
 #include <sys/time.h>
-#include <pwd.h>
 #include <signal.h>
-#include <regex.h>
+
+#ifdef _WIN32
+#  include "win32_compat.h"
+#else
+#  include <unistd.h>
+#  include <sys/socket.h>
+#  include <netinet/in.h>
+#  include <arpa/inet.h>
+#  include <netdb.h>
+#  include <poll.h>
+#  include <sys/utsname.h>
+#  include <pwd.h>
+#  include <regex.h>
+#endif
 
 #include <glib.h>
 
@@ -184,7 +189,7 @@ void conn_terminated(int fd, char* reason)
 {
         if (g_list_find(new_conns, GINT_TO_POINTER(fd))) {  // we can be recursively called if two players disconnect at the exact same time
                 l2(OUTPUT_TYPE_CONNECT, "[%d] Closing connection: %s", fd, reason);
-                close(fd);
+                SOCKET_CLOSE(fd);
                 free(incoming_data_buffers[fd]);
                 if (nick[fd] != NULL) {
                         free(nick[fd]);
@@ -221,7 +226,7 @@ static void handle_incoming_data_generic(gpointer data, gpointer user_data, int 
                 incoming_data_buffers_count[fd] = 0;
                 memcpy(buf, incoming_data_buffers[fd], offset);
                 len = recv(fd, buf + offset, INCOMING_DATA_BUFSIZE - 1 - offset, MSG_DONTWAIT);
-                if (len == -1 && errno != EAGAIN) {
+                if (len == -1 && !SOCK_EAGAIN) {
                         l2(OUTPUT_TYPE_DEBUG, "[%d] System error on recv: %s", fd, strerror(errno));
                         conn_terminated(fd, "system error on recv");
                         return;
@@ -470,7 +475,7 @@ void connections_manager(void)
                                         send_line_log_push(fd, fl_server_full);
                                 }
                                 l1(OUTPUT_TYPE_INFO, "[%d] Closing connection (server full)", fd);
-                                close(fd);
+                                SOCKET_CLOSE(fd);
                                 continue;
                         }
 
@@ -479,7 +484,7 @@ void connections_manager(void)
                                 if (strstr(blacklisted_IPs, blacklist_search) != NULL) {
                                         send_line_log_push(fd, fl_client_blacklisted);
                                         l2(OUTPUT_TYPE_INFO, "[%d] Blacklisted client (%s)", fd, inet_ntoa(client_addr.sin_addr));
-                                        close(fd);
+                                        SOCKET_CLOSE(fd);
                                         free(blacklist_search);
                                         continue;
                                 }
@@ -498,7 +503,7 @@ void connections_manager(void)
                         if (rate > max_transmission_rate) {
                                 send_line_log_push(fd, fl_server_overloaded);
                                 l1(OUTPUT_TYPE_INFO, "[%d] Closing connection (maximum transmission rate reached)", fd);
-                                close(fd);
+                                SOCKET_CLOSE(fd);
                                 continue;
                         }
 
@@ -537,18 +542,18 @@ void add_prio(int fd)
         new_conns = g_list_remove(new_conns, GINT_TO_POINTER(fd));
         prio[fd] = 1;
         if (lan_game_mode && g_list_length(conns_prio) > 0 && udp_server_socket != -1) {
-                close(tcp_server_socket);
-                close(udp_server_socket);
+                SOCKET_CLOSE(tcp_server_socket);
+                SOCKET_CLOSE(udp_server_socket);
                 tcp_server_socket = udp_server_socket = -1;
         }
 }
 
 void close_server() {
         if (tcp_server_socket != -1) {
-                close(tcp_server_socket);
+                SOCKET_CLOSE(tcp_server_socket);
         }
         if (udp_server_socket != -1) {
-                close(udp_server_socket);
+                SOCKET_CLOSE(udp_server_socket);
         }
         tcp_server_socket = udp_server_socket = -1;
 }
@@ -982,7 +987,7 @@ static char * http_get(char * host, int port, char * path)
         destPort.sin_addr = serverAddress;
 
         if (connect(sock, (struct sockaddr *) &destPort, sizeof(destPort))) {
-                close(sock);
+                SOCKET_CLOSE(sock);
                 l2(OUTPUT_TYPE_ERROR, "HTTP_GET: cannot connect to %s:%d", host, port);
                 return NULL;
         }
@@ -991,8 +996,8 @@ static char * http_get(char * host, int port, char * path)
         user_agent = asprintf_("Frozen-Bubble server version %s (protocol version %d.%d) on %s/%s\n", VERSION, proto_major, proto_minor, uname_.sysname, uname_.machine);
         buf = asprintf_("GET %s HTTP/0.9\r\nHost: %s\r\nUser-Agent: %s\r\n\r\n", path, host, user_agent);
         free(user_agent);
-        if (write(sock, buf, strlen(buf)) != strlen(buf)) {
-                close(sock);
+        if (send(sock, buf, strlen(buf), 0) != (ssize_t)strlen(buf)) {
+                SOCKET_CLOSE(sock);
                 free(buf);
                 l2(OUTPUT_TYPE_ERROR, "HTTP_GET: cannot write to socket for connection to %s:%d", host, port);
                 return NULL;
@@ -1012,17 +1017,17 @@ static char * http_get(char * host, int port, char * path)
                 rc = poll(&polls, 1, 20*1000);
 
                 if (rc == 0) {
-                        close(sock);
+                        SOCKET_CLOSE(sock);
                         l3(OUTPUT_TYPE_ERROR, "HTTP_GET: timeout retrieving http://%s:%d%s", host, port, path);
                         return NULL;
                 } else if (rc < 0) {
-                        close(sock);
+                        SOCKET_CLOSE(sock);
                         l3(OUTPUT_TYPE_ERROR, "HTTP_GET: I/O error retrieving http://%s:%d%s", host, port, path);
                         return NULL;
                 }
 
-                if (read(sock, nextChar, 1) != 1) {
-                        close(sock);
+                if (recv(sock, nextChar, 1, 0) != 1) {
+                        SOCKET_CLOSE(sock);
                         l3(OUTPUT_TYPE_ERROR, "HTTP_GET: I/O error retrieving http://%s:%d%s", host, port, path);
                         return NULL;
                 }
@@ -1031,7 +1036,7 @@ static char * http_get(char * host, int port, char * path)
                 *nextChar = '\0';
 
                 if (nextChar + 1 - headers == sizeof(headers)) {
-                        close(sock);
+                        SOCKET_CLOSE(sock);
                         l3(OUTPUT_TYPE_ERROR, "HTTP_GET: I/O error retrieving http://%s:%d%s", host, port, path);
                         return NULL;
                 }
@@ -1044,7 +1049,7 @@ static char * http_get(char * host, int port, char * path)
                         while (!isspace(*start) && *start)
                                 start++;
                         if (!*start) {
-                                close(sock);
+                                SOCKET_CLOSE(sock);
                                 l3(OUTPUT_TYPE_ERROR, "HTTP_GET: I/O error retrieving http://%s:%d%s", host, port, path);
                                 return NULL;
                         }
@@ -1054,7 +1059,7 @@ static char * http_get(char * host, int port, char * path)
                         while (!isspace(*end) && *end)
                                 end++;
                         if (!*end) {
-                                close(sock);
+                                SOCKET_CLOSE(sock);
                                 l3(OUTPUT_TYPE_ERROR, "HTTP_GET: I/O error retrieving http://%s:%d%s", host, port, path);
                                 return NULL;
                         }
@@ -1062,7 +1067,7 @@ static char * http_get(char * host, int port, char * path)
                         *end = '\0';
                         l1(OUTPUT_TYPE_DEBUG, "HTTP_GET: server response '%s'", start);
                         if (strcmp(start, "200")) {
-                                close(sock);
+                                SOCKET_CLOSE(sock);
                                 l4(OUTPUT_TYPE_ERROR, "HTTP_GET: bad server response %s retrieving http://%s:%d%s", start, host, port, path);
                                 return NULL;
                         }
@@ -1082,17 +1087,17 @@ static char * http_get(char * host, int port, char * path)
         dlsize = 0;
         buf = ptr = malloc_(bufsize);
         while (1) {
-                bytes = read(sock, ptr, bufsize - (ptr - buf) - 1);
+                bytes = recv(sock, ptr, bufsize - (ptr - buf) - 1, 0);
                 if (bytes == -1) {
                         l1(OUTPUT_TYPE_ERROR, "HTTP_GET: read: %s", strerror(errno));
-                        close(sock);
+                        SOCKET_CLOSE(sock);
                         free(buf);
                         return NULL;
                 } else if (bytes == 0) {
                         // 0 == EOF
                         ptr[0] = '\0';
                         buf = realloc_(buf, dlsize + 1);
-                        close(sock);
+                        SOCKET_CLOSE(sock);
                         return buf;
                 } else {
                         l1(OUTPUT_TYPE_DEBUG, "HTTP_GET: read %zd bytes", bytes);
@@ -1101,7 +1106,7 @@ static char * http_get(char * host, int port, char * path)
                         if (size > -1 && dlsize == size) {
                                 ptr[0] = '\0';
                                 buf = realloc_(buf, dlsize + 1);
-                                close(sock);
+                                SOCKET_CLOSE(sock);
                                 return buf;
                         }
                         if (bufsize - (ptr - buf) - 1 < 2048) {
@@ -1110,7 +1115,7 @@ static char * http_get(char * host, int port, char * path)
                                         l0(OUTPUT_TYPE_ERROR, "HTTP_GET: maximum download size of 1024*1024*1024 reached");
                                         ptr[0] = '\0';
                                         buf = realloc_(buf, dlsize + 1);
-                                        close(sock);
+                                        SOCKET_CLOSE(sock);
                                         return buf;
                                 }
                                 buf = realloc_(buf, bufsize);

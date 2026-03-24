@@ -140,7 +140,6 @@ Or right-click the app → **Open** → **Open** to bypass Gatekeeper once.
 
 - **Single-player malus targeting** — Attack bubbles in single-player mode use a placeholder targeting strategy; not yet matched to original game behavior.
 - **Network lobby visuals** — Lobby room list and player list rendering has layout gaps (incomplete polish).
-- **Windows: no local server** — The built-in local server (`fb-server`) is only built on Linux/macOS. Windows players must connect to an external server.
 - **WebAssembly: public server list** — Fetching the public server list is not implemented in the Wasm build (requires `emscripten_fetch`).
 
 ---
@@ -149,7 +148,6 @@ Or right-click the app → **Open** → **Open** to bypass Gatekeeper once.
 
 - [ ] Implement single-player malus targeting to match original Perl behavior
 - [ ] Polish network lobby room/player list layout
-- [ ] Windows: add server binary (or document an alternative)
 - [ ] WebAssembly: implement public server fetch via `emscripten_fetch`
 - [ ] Sign macOS `.app` bundle for Gatekeeper compatibility
 - [ ] Sign Windows installer for SmartScreen compatibility
