@@ -261,21 +261,29 @@ void MainMenu::HandleInput(SDL_Event *e){
             // Handle virtual keyboard character input for host field (mode 8)
             if (showingNetPanel && !networkInLobby && networkInputMode == 8) {
                 size_t len = strlen(networkHost);
-                for (const char* p = e->text.text; *p && len < 255; p++, len++) {
+                for (const char* p = e->text.text; *p; p++) {
                     char c = *p;
-                    if ((c >= '0' && c <= '9') || (c >= 'a' && c <= 'z') ||
-                        (c >= 'A' && c <= 'Z') || c == '.' || c == '-' || c == ':') {
-                        networkHost[len] = c;
-                        networkHost[len + 1] = '\0';
+                    if (c == '\b') {
+                        // Android virtual keyboard sends backspace as '\b' in TEXTINPUT
+                        if (len > 0) { networkHost[--len] = '\0'; }
+                    } else if (len < 255 && ((c >= '0' && c <= '9') || (c >= 'a' && c <= 'z') ||
+                        (c >= 'A' && c <= 'Z') || c == '.' || c == '-' || c == ':')) {
+                        networkHost[len++] = c;
+                        networkHost[len] = '\0';
                     }
                 }
             }
             // Handle virtual keyboard character input for nickname field (mode 11)
             if (networkInputMode == 11) {
                 size_t len = strlen(networkPreNick);
-                for (const char* p = e->text.text; *p && len < 15; p++, len++) {
-                    networkPreNick[len] = *p;
-                    networkPreNick[len + 1] = '\0';
+                for (const char* p = e->text.text; *p; p++) {
+                    char c = *p;
+                    if (c == '\b') {
+                        if (len > 0) { networkPreNick[--len] = '\0'; }
+                    } else if (len < 15) {
+                        networkPreNick[len++] = c;
+                        networkPreNick[len] = '\0';
+                    }
                 }
             }
             break;
