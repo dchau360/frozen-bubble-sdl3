@@ -37,8 +37,10 @@ public class FrozenBubbleActivity extends SDLActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        // Initialize AdMob (no-op if ads already removed)
-        AdsManager.init(this);
+        // NOTE: AdMob init is intentionally deferred — calling MobileAds.initialize()
+        // in onCreate() spawns HWUI worker threads that conflict with SDL's EGL surface,
+        // causing a "pthread_mutex_lock on destroyed mutex" crash (HWUI CommonPool).
+        // Ads are loaded lazily when C++ sends MSG_SHOW_AD (0x8001).
 
         // Initialize billing client (restores prior purchases on connect)
         mBillingManager = new BillingManager(this);

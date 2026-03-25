@@ -31,6 +31,15 @@
             android:value="ca-app-pub-3940256099942544~3347511713"/>
         <!-- ^^^ Above is Google's test App ID — swap for production -->
 
+        <!-- Disable AdMob auto-init ContentProvider: MobileAds.initialize() called on SDL
+             surfaces conflicts with HWUI thread pool (CommonPool), causing a destroyed-mutex
+             crash in hwuiTask threads. Init is deferred until MSG_SHOW_AD is received. -->
+        <provider
+            android:name="com.google.android.gms.ads.MobileAdsInitProvider"
+            android:authorities="${applicationId}.mobileadsinitprovider"
+            android:enabled="false"
+            android:exported="false" />
+
         <!-- Main TV activity -->
         <activity
             android:name=".FrozenBubbleActivity"
