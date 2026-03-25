@@ -33,12 +33,13 @@ struct PlayerKeys {
 class GameSettings final
 {
 public:
+    void InitPrefPath();
     void ReadSettings();
     void SaveSettings();
     void SetValue(const char *option, const char *value);
     void GetValue();
 
-    const char *prefPath = SDL_GetPrefPath("", "frozen-bubble"); //do not place org name if you don't want duplicated folders!
+    const char *prefPath = nullptr; // Initialized lazily via InitPrefPath() after SDL is ready
     int gfxLevel() { return gfxQuality; }
     SDL_Point curResolution() { return {windowWidth, windowHeight}; }
     bool fullscreenMode() { return useFullscreen; }

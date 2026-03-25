@@ -23,7 +23,12 @@
 #include <cerrno>
 #include <cstring>
 
-GameSettings *GameSettings::ptrInstance = new GameSettings(); 
+GameSettings *GameSettings::ptrInstance = new GameSettings();
+
+void GameSettings::InitPrefPath() {
+    if (!prefPath)
+        prefPath = SDL_GetPrefPath("", "frozen-bubble");
+}
 
 GameSettings::~GameSettings() {
     iniparser_freedict(optDict);
@@ -71,6 +76,7 @@ bool EnsureDirectoryExists(const char* path) {
 
 void GameSettings::CreateDefaultSettings()
 {
+    InitPrefPath();
     // Ensure configuration directory exists
     if (!EnsureDirectoryExists(prefPath)) {
         SDL_LogError(1, "Cannot create configuration directory. Settings will not be saved.");
@@ -142,6 +148,7 @@ void GameSettings::CreateDefaultSettings()
 
 void GameSettings::ReadSettings()
 {
+    InitPrefPath();
     char setPath[256];
     snprintf(setPath, sizeof(setPath), "%ssettings.ini", prefPath);
 
@@ -234,6 +241,7 @@ void GameSettings::SaveKeys()
 
 void GameSettings::SaveSettings()
 {
+    InitPrefPath();
     FILE *setFile;
     char setPath[256];
     snprintf(setPath, sizeof(setPath), "%ssettings.ini", prefPath);
