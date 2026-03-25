@@ -45,17 +45,34 @@ static void extractAssets(const std::string& destDir) {
 }
 
 void InitDataDir() {
-    // Assets are extracted from the APK to internal storage by AssetExtractor.java
-    // (called in FrozenBubbleActivity.onCreate before SDL starts).
-    // SDL_AndroidGetInternalStoragePath() returns the same path as context.getFilesDir(),
-    // e.g. /data/user/0/org.frozenbubble/files — we append /share to match extraction dest.
-    const char* internalPath = SDL_AndroidGetInternalStoragePath();
-    if (internalPath) {
-        g_dataDir = std::string(internalPath) + "/share";
-    } else {
-        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
-                     "SDL_AndroidGetInternalStoragePath() returned null — using hardcoded fallback");
-        g_dataDir = "/data/data/org.frozenbubble/files/share";
+    // Assets are extracted from the APK to internal storage by AssetExtractor.java.
+    // We read the exact path Java used (FrozenBubbleActivity.sExtractedDataDir) via JNI
+    // to avoid mismatches between /data/data/... and /data/user/0/... on some devices.
+    JNIEnv* env = (JNIEnv*)SDL_AndroidGetJNIEnv();
+    jobject activity = (jobject)SDL_AndroidGetActivity();
+    if (env && activity) {
+        jclass clazz = env->GetObjectClass(activity);
+        jfieldID fid = env->GetStaticFieldID(clazz, "sExtractedDataDir", "Ljava/lang/String;");
+        if (fid) {
+            jstring jstr = (jstring)env->GetStaticObjectField(clazz, fid);
+            if (jstr) {
+                const char* cstr = env->GetStringUTFChars(jstr, nullptr);
+                if (cstr && cstr[0] != '\0') {
+                    g_dataDir = std::string(cstr);
+                }
+                env->ReleaseStringUTFChars(jstr, cstr);
+                env->DeleteLocalRef(jstr);
+            }
+        }
+        env->DeleteLocalRef(clazz);
+        env->DeleteLocalRef(activity);
+    }
+    // Fallback if JNI read failed
+    if (g_dataDir.empty()) {
+        const char* p = SDL_AndroidGetInternalStoragePath();
+        g_dataDir = p ? std::string(p) + "/share" : "/data/data/org.frozenbubble/files/share";
+        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
+                    "JNI read of sExtractedDataDir failed, using fallback: %s", g_dataDir.c_str());
     }
     SDL_Log("Android data dir: %s", g_dataDir.c_str());
 }

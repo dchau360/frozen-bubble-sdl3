@@ -31,6 +31,9 @@ public class FrozenBubbleActivity extends SDLActivity {
     private static final int MSG_SHOW_AD      = 0x8001;
     private static final int MSG_REMOVE_ADS   = 0x8002;
 
+    /** Extracted asset directory path — read by C++ InitDataDir() via JNI. */
+    public static String sExtractedDataDir = "";
+
     private BillingManager mBillingManager;
 
     @Override
@@ -39,7 +42,8 @@ public class FrozenBubbleActivity extends SDLActivity {
         // C++ code uses fopen() which cannot read APK assets directly — they
         // must be copied to the filesystem first. This is fast on subsequent
         // launches (version marker detected, extraction skipped).
-        AssetExtractor.extractAll(this);
+        // Store the result so C++ can read the exact same path via JNI.
+        sExtractedDataDir = AssetExtractor.extractAll(this);
 
         super.onCreate(savedInstanceState);
 
