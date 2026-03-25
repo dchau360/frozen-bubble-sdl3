@@ -62,7 +62,7 @@ public:
     BubbleGame* bubbleGame() { return mainGame; };
 private:
     int addictedTime = 0;
-    bool IsGameQuit, IsGamePause = false;
+    bool IsGameQuit = false, IsGamePause = false;
     SDL_Window *window;
     SDL_Renderer *renderer;
 
