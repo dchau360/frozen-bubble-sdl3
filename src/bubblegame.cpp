@@ -1574,6 +1574,12 @@ void BubbleGame::UpdatePenguin(BubbleArray &bArray) {
                     bArray.shooterCenter = SDL_GameControllerGetButton(ctrl, SDL_CONTROLLER_BUTTON_DPAD_UP)    != 0;
                     bArray.shooterAction = SDL_GameControllerGetButton(ctrl, SDL_CONTROLLER_BUTTON_A)          != 0
                                         || SDL_GameControllerGetButton(ctrl, SDL_CONTROLLER_BUTTON_DPAD_UP)   != 0;
+                    // On Android TV, d-pad events arrive as keyboard scancodes even when a
+                    // "controller" is registered — OR in keyboard state as fallback.
+                    bArray.shooterLeft   = bArray.shooterLeft   || SDL_GetKeyboardState(NULL)[keys.left]   != 0;
+                    bArray.shooterRight  = bArray.shooterRight  || SDL_GetKeyboardState(NULL)[keys.right]  != 0;
+                    bArray.shooterCenter = bArray.shooterCenter || SDL_GetKeyboardState(NULL)[keys.center] != 0;
+                    bArray.shooterAction = bArray.shooterAction || SDL_GetKeyboardState(NULL)[keys.fire]   != 0;
                 } else {
                     // Keyboard fallback for each player
                     bArray.shooterAction = SDL_GetKeyboardState(NULL)[keys.fire];

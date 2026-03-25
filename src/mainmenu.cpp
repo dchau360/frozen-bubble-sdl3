@@ -1318,7 +1318,13 @@ void MainMenu::HandleInput(SDL_Event *e){
                         awaitKp = false;
                         break;
                     }
+                    // On Android TV, pressing Back at the root menu should not
+                    // quit the game — the Fire TV launcher injects KEYCODE_BACK
+                    // during the launch transition, which would immediately kill
+                    // the app. Users navigate away via the Home button instead.
+#ifndef __ANDROID__
                     FrozenBubble::Instance()->CallGameQuit();
+#endif
                     break;
                 case SDLK_F11: // mute / unpause audio
                     if(AudioMixer::Instance()->IsHalted() == true) {
