@@ -138,13 +138,6 @@ Controller mapping:
 | B | Back |
 | Start | Pause |
 
-### Entering text (IP address, nickname, etc.)
-
-When a text input field is active, the on-screen keyboard appears. If the **Delete/Clear** key doesn't work immediately:
-
-1. Press any letter key first (e.g. **A**)
-2. The field is now active — press **Delete** to erase the letter, then continue deleting the existing text
-3. Type the new value and press **Enter** to confirm
 
 ---
 
