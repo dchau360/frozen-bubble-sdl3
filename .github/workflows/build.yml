@@ -269,6 +269,20 @@ jobs:
           $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager \
             "ndk;25.2.9519653"
 
+      - name: Generate app icons from source PNG
+        run: |
+          SRC="share/icons/frozen-bubble-icon-64x64.png"
+          RES="android/app/src/main/res"
+          declare -A SIZES=( [mipmap-mdpi]=48 [mipmap-hdpi]=72 [mipmap-xhdpi]=96 [mipmap-xxhdpi]=144 [mipmap-xxxhdpi]=192 )
+          for dir in "${!SIZES[@]}"; do
+            mkdir -p "$RES/$dir"
+            convert "$SRC" -resize "${SIZES[$dir]}x${SIZES[$dir]}" "$RES/$dir/ic_launcher.png"
+          done
+          # TV banner: 320x180 with padding
+          mkdir -p "$RES/drawable"
+          convert "$SRC" -resize 160x160 -background "#1A237E" \
+            -gravity center -extent 320x180 "$RES/drawable/tv_banner.png"
+
       - name: Generate release keystore
         run: |
           keytool -genkeypair -v \
