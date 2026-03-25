@@ -1048,6 +1048,7 @@ void MainMenu::HandleInput(SDL_Event *e){
                             if (netMenuIndex == 0) {
                                 // "Manual entry" selected — switch to host/port form
                                 networkInputMode = 8;
+                                SDL_StartTextInput();
                                 break;
                             }
                             int serverIdx = netMenuIndex - 1;
