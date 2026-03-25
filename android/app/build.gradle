@@ -35,7 +35,7 @@ android {
 
     sourceSets {
         main {
-            assets.srcDirs = ['../share']
+            assets.srcDirs = ['../../share']
             java.srcDirs = ['src/main/java']
         }
     }
