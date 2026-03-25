@@ -257,6 +257,28 @@ void MainMenu::HandleInput(SDL_Event *e){
     }
 
     switch(e->type) {
+        case SDL_TEXTINPUT:
+            // Handle virtual keyboard character input for host field (mode 8)
+            if (showingNetPanel && !networkInLobby && networkInputMode == 8) {
+                size_t len = strlen(networkHost);
+                for (const char* p = e->text.text; *p && len < 255; p++, len++) {
+                    char c = *p;
+                    if ((c >= '0' && c <= '9') || (c >= 'a' && c <= 'z') ||
+                        (c >= 'A' && c <= 'Z') || c == '.' || c == '-' || c == ':') {
+                        networkHost[len] = c;
+                        networkHost[len + 1] = '\0';
+                    }
+                }
+            }
+            // Handle virtual keyboard character input for nickname field (mode 11)
+            if (networkInputMode == 11) {
+                size_t len = strlen(networkPreNick);
+                for (const char* p = e->text.text; *p && len < 15; p++, len++) {
+                    networkPreNick[len] = *p;
+                    networkPreNick[len + 1] = '\0';
+                }
+            }
+            break;
         case SDL_KEYDOWN:
             if(e->key.repeat) break;
 
@@ -391,7 +413,7 @@ void MainMenu::HandleInput(SDL_Event *e){
                 } else if (e->key.keysym.sym == SDLK_MINUS) {
                     if (len < 255) { networkHost[len] = '-'; networkHost[len + 1] = '\0'; }
                     break;
-                } else if (e->key.keysym.sym == SDLK_BACKSPACE) {
+                } else if (e->key.keysym.sym == SDLK_BACKSPACE || e->key.keysym.sym == SDLK_DELETE) {
                     if (len > 0) networkHost[len - 1] = '\0';
                     break;
                 } else if (e->key.keysym.sym == SDLK_DOWN || e->key.keysym.sym == SDLK_UP) {
@@ -2289,7 +2311,7 @@ void MainMenu::NetPanelRender() {
             y += panelText.Coords()->h;
         };
 
-        int y = (480/2) - 120;
+        int y = 20;  // Render at top so it's visible above the virtual keyboard
         char lineBuf[280];
 
         snprintf(lineBuf, sizeof(lineBuf), "%s\n\n", titleStr);
