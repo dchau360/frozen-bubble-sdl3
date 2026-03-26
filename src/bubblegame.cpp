@@ -708,6 +708,7 @@ void SetupGameMetrics(BubbleArray *bArray, int playerCount, bool lowGfx, bool lo
 void BubbleGame::NewGame(SetupSettings setup) {
     // Clear any stale controller input state from previous session
     for (int i = 0; i < 5; i++) controllerInputs[i] = {};
+    memset(virtualKeyState, 0, sizeof(virtualKeyState));
     audMixer = AudioMixer::Instance();
     SDL_Renderer *rend = const_cast<SDL_Renderer*>(renderer);
     currentSettings = setup;
@@ -4146,6 +4147,7 @@ void BubbleGame::QuitToTitle() {
             gameFinish, gameWon, gameLost);
     // Clear shared controller input state so stale presses don't carry into menus
     for (int i = 0; i < 5; i++) controllerInputs[i] = {};
+    memset(virtualKeyState, 0, sizeof(virtualKeyState));
     if (currentSettings.localMultiplayer) {
         CloseControllers();
     }

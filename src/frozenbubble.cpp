@@ -269,12 +269,10 @@ void FrozenBubble::PushKey(SDL_Keycode key, bool down) {
 }
 
 void FrozenBubble::PushScancode(SDL_Scancode sc, bool down) {
-    // For virtual scancodes (controller bindings), update the shared virtual key state
-    // instead of pushing a synthetic event, since SDL_GetKeyboardState doesn't track
-    // synthesized events for out-of-range scancodes.
+    // For virtual scancodes, update virtualKeyState[] so IsKeyPressed() works during gameplay.
+    // We ALSO push the SDL event so the key-binding menu can capture the virtual scancode number.
     if (IsVirtualScancode(sc)) {
         virtualKeyState[sc - CTRL_SC_BASE] = down;
-        return;
     }
     SDL_Event ev{};
     ev.type = down ? SDL_KEYDOWN : SDL_KEYUP;
@@ -331,20 +329,16 @@ void FrozenBubble::HandleControllerEvent(SDL_Event *e) {
         }
 
         // Outside of an active game, always use standard nav keys so menus work.
-        // In-game: write directly to controllerInputs[] so bubblegame can poll it
-        // (SDL_GetKeyboardState does not reflect synthetic SDL_PushEvent KEYDOWN events).
+        // In-game: push virtual scancode into virtualKeyState[] so IsKeyPressed() works.
+        // controllerInputs[] approach was wrong: playerIdx (controller slot) != playerAssigned.
         bool inGame = (currentState == MainGame);
-        SDL_Log("CtrlBtn: player=%d btn=%d down=%d inGame=%d", playerIdx, e->cbutton.button, down, inGame);
         if (inGame) {
-            switch (e->cbutton.button) {
-                case SDL_CONTROLLER_BUTTON_DPAD_LEFT:  controllerInputs[playerIdx].left   = down; break;
-                case SDL_CONTROLLER_BUTTON_DPAD_RIGHT: controllerInputs[playerIdx].right  = down; break;
-                case SDL_CONTROLLER_BUTTON_DPAD_UP:    controllerInputs[playerIdx].fire   = down; break;
-                case SDL_CONTROLLER_BUTTON_DPAD_DOWN:  controllerInputs[playerIdx].center = down; break;
-                case SDL_CONTROLLER_BUTTON_A:          controllerInputs[playerIdx].fire   = down; break;
-                case SDL_CONTROLLER_BUTTON_B:          PushKey(SDLK_AC_BACK, down); break;
-                case SDL_CONTROLLER_BUTTON_START:      PushKey(SDLK_PAUSE,   down); break;
-                default: break;
+            int btn = e->cbutton.button;
+            if (btn == SDL_CONTROLLER_BUTTON_B)     { PushKey(SDLK_AC_BACK, down); }
+            else if (btn == SDL_CONTROLLER_BUTTON_START) { PushKey(SDLK_PAUSE, down); }
+            else {
+                SDL_Scancode vsc = (SDL_Scancode)(CTRL_SC_BASE + playerIdx * 20 + btn);
+                PushScancode(vsc, down);
             }
         } else {
             switch (e->cbutton.button) {
@@ -369,9 +363,10 @@ void FrozenBubble::HandleControllerEvent(SDL_Event *e) {
             bool wantLeft  = val < -DEAD;
             bool wantRight = val >  DEAD;
             if (inGame) {
-                // Write directly to controllerInputs — SDL_GetKeyboardState ignores synthetic events
-                if (wantLeft  != cs->axisLeftHeld)  { controllerInputs[playerIdx].left  = wantLeft;  cs->axisLeftHeld  = wantLeft;  }
-                if (wantRight != cs->axisRightHeld) { controllerInputs[playerIdx].right = wantRight; cs->axisRightHeld = wantRight; }
+                SDL_Scancode scLeft  = (SDL_Scancode)(CTRL_SC_BASE + playerIdx * 20 + SDL_CONTROLLER_BUTTON_DPAD_LEFT);
+                SDL_Scancode scRight = (SDL_Scancode)(CTRL_SC_BASE + playerIdx * 20 + SDL_CONTROLLER_BUTTON_DPAD_RIGHT);
+                if (wantLeft  != cs->axisLeftHeld)  { PushScancode(scLeft,  wantLeft);  cs->axisLeftHeld  = wantLeft;  }
+                if (wantRight != cs->axisRightHeld) { PushScancode(scRight, wantRight); cs->axisRightHeld = wantRight; }
             } else {
                 SDL_Scancode scLeft  = mainMenu->IsAwaitingKeyBind()
                     ? (SDL_Scancode)(300 + playerIdx * 20 + SDL_CONTROLLER_BUTTON_DPAD_LEFT)
@@ -389,8 +384,10 @@ void FrozenBubble::HandleControllerEvent(SDL_Event *e) {
             bool wantUp   = val < -DEAD;
             bool wantDown = val >  DEAD;
             if (inGame) {
-                if (wantUp   != cs->axisUpHeld)   { controllerInputs[playerIdx].fire   = wantUp;   cs->axisUpHeld   = wantUp;   }
-                if (wantDown != cs->axisDownHeld)  { controllerInputs[playerIdx].center = wantDown; cs->axisDownHeld = wantDown; }
+                SDL_Scancode scUp   = (SDL_Scancode)(CTRL_SC_BASE + playerIdx * 20 + SDL_CONTROLLER_BUTTON_DPAD_UP);
+                SDL_Scancode scDown = (SDL_Scancode)(CTRL_SC_BASE + playerIdx * 20 + SDL_CONTROLLER_BUTTON_DPAD_DOWN);
+                if (wantUp   != cs->axisUpHeld)   { PushScancode(scUp,   wantUp);   cs->axisUpHeld   = wantUp;   }
+                if (wantDown != cs->axisDownHeld)  { PushScancode(scDown, wantDown); cs->axisDownHeld = wantDown; }
             } else {
                 SDL_Scancode scUp   = mainMenu->IsAwaitingKeyBind()
                     ? (SDL_Scancode)(300 + playerIdx * 20 + SDL_CONTROLLER_BUTTON_DPAD_UP)
