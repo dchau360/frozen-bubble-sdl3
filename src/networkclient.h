@@ -118,6 +118,11 @@ public:
     // Add a local status message (for commands like /nick, /help)
     void AddStatusMessage(const std::string& message);
 
+    // Parse and enqueue a raw protocol message line (used by WASM WebSocket callback)
+    void ParseMessage(const char* message);
+    // Called by WASM open callback to transition state to CONNECTED
+    void SetConnected() { state = CONNECTED; }
+
     // Send game options to other players (host only)
     bool SendOptions(bool chainReaction, bool continueWhenLeave, bool singleTarget, int victoriesLimit, const int playerColors[5], const bool noCompress[5], const bool aimGuide[5]);
 
@@ -184,7 +189,6 @@ private:
     std::map<int, std::string> playerIdToNick;  // Map of player ID to nickname
 
     bool ProcessIncomingData();  // Returns true if data was read, false if EWOULDBLOCK
-    void ParseMessage(const char* message);
     void HandleServerResponse(const std::string& response);
     void ParseListResponse(const char* listData);
     void HandlePushMessage(const std::string& pushMsg);

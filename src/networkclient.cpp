@@ -21,7 +21,7 @@
 #include <algorithm>
 #include <cstring>
 #include <errno.h>
-#ifndef _WIN32
+#if !defined(_WIN32) && !defined(__WASM_PORT__)
 #include <netdb.h>
 #endif
 #include <sstream>
@@ -33,6 +33,7 @@
 
 NetworkClient* NetworkClient::ptrInstance = nullptr;
 
+#ifndef __WASM_PORT__
 NetworkClient::NetworkClient()
     : sockfd(-1), state(DISCONNECTED), currentGame(nullptr), recvBufferLen(0), myPlayerId(0) {
     SDL_Log("NetworkClient constructor called");
@@ -41,6 +42,7 @@ NetworkClient::NetworkClient()
 NetworkClient::~NetworkClient() {
     Disconnect();
 }
+#endif // __WASM_PORT__
 
 NetworkClient* NetworkClient::Instance(const char* host, int port) {
     if (ptrInstance == nullptr) {
@@ -62,6 +64,7 @@ void NetworkClient::Dispose() {
     }
 }
 
+#ifndef __WASM_PORT__
 bool NetworkClient::Connect(const char* host, int port) {
     if (state != DISCONNECTED) {
         SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "Already connected or connecting");
@@ -163,7 +166,9 @@ bool NetworkClient::Connect(const char* host, int port) {
     SDL_Log("Connected to server %s:%d", host, port);
     return true;
 }
+#endif // __WASM_PORT__ (Connect)
 
+#ifndef __WASM_PORT__
 void NetworkClient::Disconnect() {
     SDL_Log("!!! DISCONNECT CALLED - State was: %d, sockfd: %d", state, sockfd);
     if (sockfd >= 0) {
@@ -219,6 +224,7 @@ bool NetworkClient::SendCommand(const char* command) {
 
     return true;
 }
+#endif // __WASM_PORT__ (Disconnect, SendCommand)
 
 bool NetworkClient::SendNick(const char* nickname) {
     playerNick = nickname;
@@ -691,6 +697,7 @@ void NetworkClient::AddStatusMessage(const std::string& message) {
     }
 }
 
+#ifndef __WASM_PORT__
 void NetworkClient::Update() {
     if (state == DISCONNECTED || sockfd < 0) return;
 
@@ -808,6 +815,7 @@ bool NetworkClient::ProcessIncomingData() {
     }
     return true;  // Successfully read and processed data
 }
+#endif // __WASM_PORT__ (Update, ProcessIncomingData)
 
 void NetworkClient::ParseMessage(const char* message) {
     if (strlen(message) == 0) return;
@@ -1230,14 +1238,16 @@ void NetworkClient::PutBackMessage(const std::string& msg) {
     messageQueue.push_front(msg);
 }
 
+// NOTE: DiscoverLANServers, MeasureLatency, IsReachable, DetectGeoLocation,
+// FetchPublicServers, and curlFetch are each wrapped with #ifndef __WASM_PORT__
+// below. DetectGeoLocation and FetchPublicServers also contain inner
+// #ifdef __WASM_PORT__ early-return guards — those are dead code now that the
+// whole function is excluded by the outer guard, but they are left in place
+// to document the original intent.
+
+#ifndef __WASM_PORT__
 std::vector<ServerInfo> NetworkClient::DiscoverLANServers() {
     std::vector<ServerInfo> servers;
-
-#ifdef __WASM_PORT__
-    // WebAssembly cannot use UDP sockets for LAN discovery
-    SDL_Log("LAN discovery not available in WebAssembly port");
-    return servers;
-#endif
 
     int udpSock = (int)socket(AF_INET, SOCK_DGRAM, 0);
     if (udpSock == (int)INVALID_SOCKET) return servers;
@@ -1303,7 +1313,9 @@ std::vector<ServerInfo> NetworkClient::DiscoverLANServers() {
 
     return servers;
 }
+#endif // __WASM_PORT__ (DiscoverLANServers)
 
+#ifndef __WASM_PORT__
 int NetworkClient::MeasureLatency(const char* host, int port, int timeoutMs) {
     struct addrinfo hints{}, *res = nullptr;
     hints.ai_family = AF_UNSPEC;
@@ -1344,6 +1356,7 @@ int NetworkClient::MeasureLatency(const char* host, int port, int timeoutMs) {
 bool NetworkClient::IsReachable(const char* host, int port, int timeoutMs) {
     return MeasureLatency(host, port, timeoutMs) >= 0;
 }
+#endif // __WASM_PORT__ (MeasureLatency, IsReachable)
 
 // Public server list hosted in a dedicated repo — same name and format as original frozen-bubble.org
 #define GITHUB_SERVER_LIST_URL \
@@ -1357,6 +1370,7 @@ bool NetworkClient::IsReachable(const char* host, int port, int timeoutMs) {
 #define STR(s) #s
 #define PROTO_MAJOR_STR XSTR(PROTO_MAJOR)
 
+#ifndef __WASM_PORT__
 #ifdef __ANDROID__
 // Fetch a URL via JNI by calling FrozenBubbleActivity.fetchUrl(String) → String.
 // SDL2's SDL_AndroidGetJNIEnv() / SDL_AndroidGetActivity() give us the JNI context.
@@ -1548,3 +1562,4 @@ std::vector<ServerInfo> NetworkClient::FetchPublicServers() {
 
     return servers;
 }
+#endif // __WASM_PORT__ (androidFetchUrl, curlFetch, DetectGeoLocation, FetchPublicServers)

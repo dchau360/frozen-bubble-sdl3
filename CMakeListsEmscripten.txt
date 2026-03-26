@@ -55,6 +55,7 @@ add_executable(frozen-bubble-sdl2
     src/transitionmanager.cpp
     src/ttftext.cpp
     src/highscoremanager.cpp
+    src/networkclient.cpp
     src/networkclient_wasm.cpp
     src/logger.cpp
     src/platform.cpp
