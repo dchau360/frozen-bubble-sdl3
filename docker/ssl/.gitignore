@@ -1,0 +1,7 @@
+# The placeholder .pem files in this directory (containing only setup
+# instructions) are tracked by git so the directory structure is visible.
+#
+# DO NOT commit real certificates or private keys.
+# If you replace these files with real certs, add them to your local
+# .git/info/exclude or use `git update-index --assume-unchanged ssl/*.pem`
+# to prevent accidentally staging them.

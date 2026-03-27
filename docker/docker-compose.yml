@@ -1,0 +1,28 @@
+services:
+
+  # ── Frozen Bubble game server ───────────────────────────────────────────────
+  # Accepts both native TCP clients (desktop/Android) on port 1511 and
+  # browser WebSocket clients relayed through nginx on port 443.
+  fb-server:
+    build:
+      context: ..          # repo root — Dockerfile copies from server/
+      dockerfile: docker/Dockerfile
+    restart: unless-stopped
+    ports:
+      - "1511:1511"        # native TCP clients connect here directly
+
+  # ── nginx TLS termination ───────────────────────────────────────────────────
+  # Terminates SSL and proxies WebSocket connections to fb-server.
+  # Browser clients connect to wss://yourdomain.com:443
+  nginx:
+    image: nginx:alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"            # redirects to HTTPS
+      - "443:443"          # browser WebSocket clients connect here
+    volumes:
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./ssl/fullchain.pem:/etc/ssl/fb/fullchain.pem:ro
+      - ./ssl/privkey.pem:/etc/ssl/fb/privkey.pem:ro
+    depends_on:
+      - fb-server
