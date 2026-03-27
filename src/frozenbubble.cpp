@@ -169,8 +169,10 @@ FrozenBubble::FrozenBubble() {
     mainMenu = new MainMenu(renderer);
     mainGame = new BubbleGame(renderer);
 
-    // Initialize game controller support
-    SDL_InitSubSystem(SDL_INIT_GAMECONTROLLER);
+    // Initialize game controller support.
+    // SDL_INIT_JOYSTICK is needed explicitly on Emscripten (browser Gamepad API)
+    // before SDL_INIT_GAMECONTROLLER can detect devices.
+    SDL_InitSubSystem(SDL_INIT_JOYSTICK | SDL_INIT_GAMECONTROLLER);
     for (int i = 0; i < SDL_NumJoysticks(); i++) {
         if (SDL_IsGameController(i)) {
             SDL_GameController *gc = SDL_GameControllerOpen(i);
@@ -259,7 +261,8 @@ void FrozenBubble::RunOneFrame()
                 e.type, e.window.event, e.key.keysym.sym);
         }
         if (e.type == SDL_CONTROLLERBUTTONDOWN || e.type == SDL_CONTROLLERBUTTONUP ||
-            e.type == SDL_CONTROLLERAXISMOTION  || e.type == SDL_CONTROLLERDEVICEADDED) {
+            e.type == SDL_CONTROLLERAXISMOTION  || e.type == SDL_CONTROLLERDEVICEADDED ||
+            e.type == SDL_JOYDEVICEADDED) {
             HandleControllerEvent(&e);
             continue;
         }
@@ -317,9 +320,13 @@ void FrozenBubble::PushScancode(SDL_Scancode sc, bool down, bool skipEvent) {
 }
 
 void FrozenBubble::HandleControllerEvent(SDL_Event *e) {
-    // Hot-plug: open newly connected controllers and assign to next player slot
-    if (e->type == SDL_CONTROLLERDEVICEADDED) {
-        SDL_GameController *gc = SDL_GameControllerOpen(e->cdevice.which);
+    // Hot-plug: open newly connected controllers and assign to next player slot.
+    // SDL_JOYDEVICEADDED is a fallback for Emscripten/browser where the Gamepad API
+    // may fire the joystick event before the controller mapping is resolved.
+    if (e->type == SDL_CONTROLLERDEVICEADDED || e->type == SDL_JOYDEVICEADDED) {
+        int idx = (e->type == SDL_CONTROLLERDEVICEADDED) ? e->cdevice.which : e->jdevice.which;
+        if (!SDL_IsGameController(idx)) return;
+        SDL_GameController *gc = SDL_GameControllerOpen(idx);
         if (gc) {
             SDL_JoystickID id = SDL_JoystickInstanceID(SDL_GameControllerGetJoystick(gc));
             // Only add if not already tracked
