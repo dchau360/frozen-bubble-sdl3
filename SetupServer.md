@@ -104,8 +104,11 @@ sudo apt install certbot
 sudo certbot certonly --standalone -d yourdomain.com
 ```
 
-Certbot verifies ownership over port 80 and writes the certificate to
-`/etc/letsencrypt/live/yourdomain.com/`.
+On first run certbot will:
+1. Ask for an **email address** — used for expiry reminders and account recovery
+2. Ask you to agree to the **Let's Encrypt Terms of Service**
+3. Verify domain ownership over port 80
+4. Write the certificate to `/etc/letsencrypt/live/yourdomain.com/`
 
 ---
 
