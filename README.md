@@ -97,6 +97,31 @@ The server binary (`fb-server`) is built automatically on Linux and macOS alongs
 
 `start-server.sh` enables both TCP (direct connections) and UDP broadcast (LAN auto-discovery) by default.
 
+### Browser (WebAssembly) clients require WSS
+
+The browser version (itch.io / Netlify) connects via WebSocket. Browsers block plain `ws://` connections from HTTPS pages (mixed content). To accept connections from browser players your server must be reachable over **`wss://`** (WebSocket Secure).
+
+The simplest setup is a reverse proxy in front of `fb-server`:
+
+**nginx** (port 443 → fb-server on 1511):
+```nginx
+location /fb {
+    proxy_pass http://127.0.0.1:1511;
+    proxy_http_version 1.1;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection "upgrade";
+}
+```
+
+**Caddy** (automatic HTTPS, port 1511 → wss):
+```
+yourdomain.com {
+    reverse_proxy /fb localhost:1511
+}
+```
+
+Desktop clients (Linux / macOS / Windows / Android) connect over plain TCP and are unaffected.
+
 ---
 
 ## Network Play Quick Start
