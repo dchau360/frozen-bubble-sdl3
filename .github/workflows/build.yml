@@ -321,7 +321,7 @@ jobs:
           path: frozen-bubble-android-tv.apk
 
   # ────────────────────────────────────────────────────────────────
-  # WebAssembly — enabled in this multiplayer fork
+  # WebAssembly → Itch.io
   # ────────────────────────────────────────────────────────────────
   build-wasm:
     name: WebAssembly (Itch.io)

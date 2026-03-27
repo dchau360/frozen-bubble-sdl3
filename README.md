@@ -186,7 +186,6 @@ Or right-click the app → **Open** → **Open** to bypass Gatekeeper once.
 - [ ] Polish network lobby room/player list layout
 - [ ] Sign macOS `.app` bundle for Gatekeeper compatibility
 - [ ] Sign Windows installer for SmartScreen compatibility
-- [ ] Fork WebAssembly build into a dedicated web repo with its own WSS-capable server (browser clients require `wss://`; fb-server currently speaks plain TCP only)
 
 ---
 
