@@ -11,8 +11,8 @@ This guide walks through running a public server that supports both:
 
 | What | Why |
 |---|---|
+| A domain name pointing to your server | **Required for browser clients.** Browsers block unencrypted WebSocket connections (`ws://`) from HTTPS pages. You need a real domain so Let's Encrypt can issue a valid TLS certificate. A plain IP address will not work for browser players. |
 | A Linux VPS | Any provider (DigitalOcean, Linode, Hetzner, etc.) |
-| A domain name pointing to it | **Required for browser clients.** Browsers block unencrypted WebSocket connections (`ws://`) from HTTPS pages. You need a real domain so Let's Encrypt can issue a valid TLS certificate. A plain IP address will not work for browser players. |
 | Ports 80, 443, 1511 open | In your VPS firewall / security group |
 | Docker + Docker Compose installed | [Install Docker](https://docs.docker.com/engine/install/) |
 
