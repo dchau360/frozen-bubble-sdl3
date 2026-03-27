@@ -93,6 +93,13 @@
       Module.setStatus('Error: ' + msg);
       statusEl.style.color = '#f55';
     };
+
+    // Prevent browser from acting on navigation/game keys (Backspace = back,
+    // arrows = scroll, space = scroll, etc.) while the canvas is in use.
+    window.addEventListener('keydown', function(e) {
+      var nav = ['Backspace','Delete','ArrowLeft','ArrowRight','ArrowUp','ArrowDown',' '];
+      if (nav.indexOf(e.key) !== -1) e.preventDefault();
+    }, false);
   </script>
   {{{ SCRIPT }}}
 </body>
