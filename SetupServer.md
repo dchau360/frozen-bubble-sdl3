@@ -78,8 +78,13 @@ refers to `yourdomain.com`.
 ## Step 3 — Install Docker
 
 ```bash
+sudo apt install -y ca-certificates curl
+sudo install -m 0755 -d /etc/apt/keyrings
+curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo tee /etc/apt/keyrings/docker.asc >/dev/null
+sudo chmod a+r /etc/apt/keyrings/docker.asc
+echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo ${UBUNTU_CODENAME:-$VERSION_CODENAME}) stable" | sudo tee /etc/apt/sources.list.d/docker.list >/dev/null
 sudo apt update
-sudo apt install -y docker.io docker-compose-plugin
+sudo apt install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
 sudo systemctl enable docker --now
 sudo usermod -aG docker $USER   # lets you run docker without sudo (re-login after)
 ```
