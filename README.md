@@ -32,7 +32,7 @@ The host can configure the following settings in the game room — all joined pl
 | Continue when players leave | Keep the game going if a player disconnects |
 | Single player targeting | All malus attacks target one player instead of spreading |
 | Victories limit | Number of round wins needed to win the match (or unlimited) |
-| Colors per player | Number of bubble colors per player's board (5–8, default 7). The optional 8th color is orange. |
+| Max colors per player | Maximum number of bubble colors per player's board (5–8, default 7). The optional 8th color is orange. |
 | Rows collapse per player | Whether rows drop down periodically for a specific player (on by default; set to off to disable) |
 | Aim guide per player | Show a trajectory preview for a specific player's shots |
 
@@ -175,17 +175,25 @@ Or right-click the app → **Open** → **Open** to bypass Gatekeeper once.
 ## Known Issues
 
 - **Single-player malus targeting** — Attack bubbles in single-player mode use a placeholder targeting strategy; not yet matched to original game behavior.
-- **Network lobby visuals** — Lobby room list and player list rendering has layout gaps (incomplete polish).
-- **WebAssembly: public server list** — Fetching the public server list is not implemented in the Wasm build (requires `emscripten_fetch`).
 
 ---
 
 ## TODO
 
 - [ ] Implement single-player malus targeting to match original Perl behavior
-- [ ] Polish network lobby room/player list layout
 - [ ] Sign macOS `.app` bundle for Gatekeeper compatibility
 - [ ] Sign Windows installer for SmartScreen compatibility
+
+---
+
+## New in v2.4.4
+
+- **WebAssembly: public server list** — itch.io browser version now fetches and displays the public server list on the Net Game screen
+- **Net Game loads instantly** — server list fetch and latency probing moved to a background thread (desktop); browser opens the screen immediately
+- **WebAssembly: game creation fixed** — CREATE command now waits for server confirmation before entering the game room; automatically retries with a name suffix if the game name is already taken
+- **Max colors** — "Colors" option renamed to "Max colors" in all game setup panels (2P, local multiplayer, LAN, net game)
+- **Pause animation fix** — pause penguin animation now loads the correct frames (was off-by-one)
+- **Stick effect asset fix** — missing `stick_effect_7-mini.png` added; array bounds corrected
 
 ---
 
@@ -205,7 +213,7 @@ Or right-click the app → **Open** → **Open** to bypass Gatekeeper once.
 
 ## New in v2.3.0
 
-- **Per-player lobby settings grid** — Colors, Rows collapse, and Aim guide shown as a P1–P5 column grid; host navigates with arrow keys and Enter
+- **Per-player lobby settings grid** — Max colors, Rows collapse, and Aim guide shown as a P1–P5 column grid; host navigates with arrow keys and Enter
 - **Aim guide** — trajectory preview toggle per player
 - **Row compression toggle** per player — disable rows collapsing for specific players
 - **Local multiplayer** — 2–5 players on controllers
@@ -224,7 +232,7 @@ Features ported from the original Frozen Bubble 2 Perl source:
 | 2–5 player network multiplayer layouts | ✅ |
 | Network protocol (fb-server + client messages) | ✅ |
 | LAN auto-discovery (UDP broadcast) | ✅ |
-| Public server list (desktop; WebAssembly pending) | ✅ |
+| Public server list (desktop + WebAssembly) | ✅ |
 | In-game chat | ✅ |
 | Victories limit | ✅ |
 | Per-player color count (5–8 colors) | ✅ |
