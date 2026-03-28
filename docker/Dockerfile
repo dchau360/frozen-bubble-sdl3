@@ -23,7 +23,9 @@ COPY --from=builder /build/fb-server /usr/local/bin/fb-server
 
 EXPOSE 1511
 
+# -d  stay in foreground (required in Docker — without this fb-server daemonizes
+#     and the container exits immediately)
 # -q  don't register with frozen-bubble.org master (offline since ~2012)
 # -l  enable UDP broadcast for LAN auto-discovery
 # -z  no language preference
-CMD ["/usr/local/bin/fb-server", "-q", "-l", "-z"]
+CMD ["/usr/local/bin/fb-server", "-d", "-q", "-l", "-z"]
