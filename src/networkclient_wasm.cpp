@@ -231,8 +231,17 @@ std::vector<ServerInfo> NetworkClient::DiscoverLANServers() {
 }
 
 std::vector<ServerInfo> NetworkClient::FetchPublicServers() {
-    SDL_Log("Public server fetch not yet implemented in WebAssembly (requires emscripten_fetch)");
-    return {};
+    // Return the known public server as default.
+    // Browser clients must use WSS (port 443) — plain port 1511 is blocked as
+    // mixed-content when the page is served over HTTPS (itch.io).
+    std::vector<ServerInfo> servers;
+    ServerInfo s;
+    s.host = "fb.servequake.com";
+    s.port = 443;
+    s.name = "fb.servequake.com (browser)";
+    s.latencyMs = -1;
+    servers.push_back(s);
+    return servers;
 }
 
 std::string NetworkClient::DetectGeoLocation() {

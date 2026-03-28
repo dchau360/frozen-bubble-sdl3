@@ -1566,8 +1566,8 @@ std::vector<ServerInfo> NetworkClient::FetchPublicServers() {
     curlFetch(FB_MASTER_SERVER_URL, servers, true);
     SDL_Log("After master server: %d servers", (int)servers.size());
 
-    // 2. Community server list (same format as original: "host port")
-    curlFetch(GITHUB_SERVER_LIST_URL, servers, true);
+    // 2. Community server list (host:port Name format)
+    curlFetch(GITHUB_SERVER_LIST_URL, servers, false);
     SDL_Log("After GitHub list: %d servers total", (int)servers.size());
 
     return servers;
