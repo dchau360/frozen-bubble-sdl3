@@ -241,7 +241,7 @@ std::vector<ServerInfo> NetworkClient::FetchPublicServers() {
     s.host = "fb.servequake.com";
     s.port = 443;
     s.name = "fb.servequake.com (browser)";
-    s.latencyMs = -1;
+    s.latencyMs = 0;
     servers.push_back(s);
     return servers;
 }
@@ -251,11 +251,13 @@ std::string NetworkClient::DetectGeoLocation() {
 }
 
 int NetworkClient::MeasureLatency(const char* /*host*/, int /*port*/, int /*timeoutMs*/) {
-    return -1;
+    // TCP latency probing is not available in a browser — return 0 so the
+    // server list shows servers as available rather than "offline".
+    return 0;
 }
 
 bool NetworkClient::IsReachable(const char* /*host*/, int /*port*/, int /*timeoutMs*/) {
-    return false;
+    return true;
 }
 
 #endif // __WASM_PORT__
