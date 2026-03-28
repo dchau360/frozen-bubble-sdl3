@@ -187,7 +187,7 @@ void NetworkClient::Disconnect() {
 
 bool NetworkClient::SendCommand(const char* command) {
     WebSocketHandle* handle = (WebSocketHandle*)websocketSocket;
-    if (!handle || handle->socket <= 0 || state != CONNECTED) {
+    if (!handle || handle->socket <= 0 || state == DISCONNECTED || state == CONNECTING) {
         SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "Not connected, cannot send command");
         return false;
     }
