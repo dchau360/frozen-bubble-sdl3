@@ -7,7 +7,7 @@ A C++ / SDL2 port of the classic [Frozen Bubble 2](http://www.frozen-bubble.org/
 
 > **Note:** The original game was written in Perl. This is a full rewrite in C++. While core gameplay and network protocol are faithfully reproduced, there may be inconsistencies and bugs compared to the original — particularly in edge-case game mechanics. Bug reports are welcome via [GitHub Issues](https://github.com/dchau360/frozen-bubble-sdl2/issues).
 
-**Play in browser:** [stirring-melba-cad0f4.netlify.app](https://stirring-melba-cad0f4.netlify.app) · [dchau360.itch.io/frozenbubble2](https://dchau360.itch.io/frozenbubble2)
+**Play in browser:** [dchau360.itch.io/frozenbubble2](https://dchau360.itch.io/frozenbubble2)
 
 ---
 
