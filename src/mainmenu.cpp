@@ -1199,7 +1199,7 @@ void MainMenu::HandleInput(SDL_Event *e){
                                     networkInLobby = true;
                                     networkInputMode = 0;  // Switch to lobby mode so C/J/T/U keys work
                                     networkGameStarting = false;
-                                    networkGameStartDelay = false;
+                                    wasmSyncWaitStart = 0;
                                     netClient->RequestList();  // Immediate list on lobby entry
                                     lastListRequest = SDL_GetTicks();
 #ifdef __ANDROID__
@@ -1882,7 +1882,7 @@ void MainMenu::NetPanelRender() {
                 networkInLobby = true;
                 networkInputMode = 0;
                 networkGameStarting = false;
-                networkGameStartDelay = false;
+                wasmSyncWaitStart = 0;
                 netClient->RequestList();
                 lastListRequest = SDL_GetTicks();
 #ifdef __ANDROID__
@@ -1916,14 +1916,23 @@ void MainMenu::NetPanelRender() {
         // Check if game is ready to start (state transitioned to IN_GAME)
         if (!networkGameStarting && netClient->GetState() == IN_GAME) {
 #ifdef __WASM_PORT__
-            // WASM joiner: WaitForBubble cannot yield mid-frame (no Asyncify).
-            // Defer one animation frame so WebSocket callbacks can queue all
-            // sync messages (38 bubbles + N + T) before SyncNetworkLevel runs.
-            if (!netClient->IsLeader() && !networkGameStartDelay) {
-                networkGameStartDelay = true;
-                return;
+            // WASM joiner: WaitForBubble spins without yielding (no Asyncify),
+            // so WebSocket callbacks never fire during SyncNetworkLevel.
+            // Wait here (across animation frames) until all 40 sync messages
+            // (38 bubbles + N + T) are queued, then SetupNewGame will find
+            // them already in the queue and WaitForBubble returns immediately.
+            if (!netClient->IsLeader()) {
+                if (wasmSyncWaitStart == 0) wasmSyncWaitStart = SDL_GetTicks();
+                size_t qSize = netClient->MessageQueueSize();
+                bool timedOut = (SDL_GetTicks() - wasmSyncWaitStart > 5000);
+                SDL_Log("WASM joiner: waiting for sync msgs, queue=%d, waited=%dms",
+                        (int)qSize, (int)(SDL_GetTicks() - wasmSyncWaitStart));
+                if (qSize < 40 && !timedOut) {
+                    return;  // Come back next frame
+                }
+                SDL_Log("WASM joiner: proceeding with queue=%d timedOut=%d", (int)qSize, timedOut);
+                wasmSyncWaitStart = 0;
             }
-            networkGameStartDelay = false;
 #endif
             SDL_Log("Game starting - transitioning to network game");
             networkGameStarting = true;
@@ -3019,7 +3028,7 @@ void MainMenu::ReturnToNetLobby() {
     networkInLobby = true;
     networkInputMode = 0;
     networkGameStarting = false;
-    networkGameStartDelay = false;
+    wasmSyncWaitStart = 0;
     pendingLobbyConnect = false;
     SDL_StopTextInput();
 

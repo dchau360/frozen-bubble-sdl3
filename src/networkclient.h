@@ -122,6 +122,7 @@ public:
     void ParseMessage(const char* message);
     // Enqueue an already-formatted GAMEMSG (used by WASM prio message path)
     void QueueGameMessage(const std::string& msg) { messageQueue.push_back(msg); }
+    size_t MessageQueueSize() const { return messageQueue.size(); }
     // Called by WASM open callback to transition state to CONNECTED
     void SetConnected() { state = CONNECTED; }
     // True while waiting for async CREATE OK/rejection from server (WASM only)
