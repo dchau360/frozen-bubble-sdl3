@@ -188,6 +188,20 @@ Or right-click the app → **Open** → **Open** to bypass Gatekeeper once.
 
 ---
 
+## New in v2.4.12
+
+- **Game Speed setting** — adjustable in Settings → Keys; use LEFT/RIGHT on the "Game Speed" row to set 1.0–5.0×; saved per device to settings.ini
+- **Fire TV fixes** — A button now continues to next round after game ends; minimize/resume no longer causes persistent slow speed
+- **Malus bubble speed** — increased 25% and now frame-rate-independent
+
+---
+
+## New in v2.4.11
+
+- See v2.4.12 (combined release)
+
+---
+
 ## New in v2.4.10
 
 - **Speed tuned** — native clients (macOS, Linux, Windows, Android TV) run at 1.25× base speed; browser (WebAssembly) runs at 3.0× normalized across all frame rates

@@ -259,17 +259,15 @@ void FrozenBubble::RunOneFrame()
     deltaScale = (elapsed / (1000.0f / 60.0f)) * 3.0f;
     if (deltaScale < 0.1f) deltaScale = 0.1f;  // guard against stalled/zero-elapsed frames
     if (deltaScale > 6.0f) deltaScale = 6.0f;  // guard against tab-hidden resume spikes
-#elif defined(__ANDROID__)
-    // Android TV / Fire TV: 1.25x adaptive — adaptive so minimize/resume frame
-    // rate throttling self-corrects rather than leaving the game permanently slow.
-    deltaScale = (elapsed / (1000.0f / 60.0f)) * 1.25f;
-    if (deltaScale < 0.5f) deltaScale = 0.5f;
-    if (deltaScale > 6.0f) deltaScale = 6.0f;
 #else
-    // Desktop native (macOS, Linux, Windows): 2.0x adaptive.
-    deltaScale = (elapsed / (1000.0f / 60.0f)) * 2.0f;
-    if (deltaScale < 0.5f) deltaScale = 0.5f;
-    if (deltaScale > 6.0f) deltaScale = 6.0f;
+    // Native (macOS, Linux, Windows, Android): use per-device saved speed multiplier.
+    // Adaptive so minimize/resume frame-rate throttling self-corrects.
+    {
+        float mult = GameSettings::Instance()->speedMultiplier;
+        deltaScale = (elapsed / (1000.0f / 60.0f)) * mult;
+        if (deltaScale < 0.5f) deltaScale = 0.5f;
+        if (deltaScale > mult * 3.0f) deltaScale = mult * 3.0f;  // cap at 3x the base to prevent resume spike
+    }
 #endif
 
     // handle input

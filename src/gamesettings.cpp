@@ -116,6 +116,11 @@ void GameSettings::CreateDefaultSettings()
         EvalIniResult(rval, dict, "Sound:ClassicAF", "false");
 
         EvalIniResult(rval, dict, "Keys", NULL);
+#ifdef __ANDROID__
+        EvalIniResult(rval, dict, "Keys:SpeedMultiplier", "1.25");
+#else
+        EvalIniResult(rval, dict, "Keys:SpeedMultiplier", "2.0");
+#endif
         EvalIniResult(rval, dict, "Keys:P1Left", "80");      // SDL_SCANCODE_LEFT
         EvalIniResult(rval, dict, "Keys:P1Right", "79");     // SDL_SCANCODE_RIGHT
         EvalIniResult(rval, dict, "Keys:P1Fire", "82");      // SDL_SCANCODE_UP
@@ -177,6 +182,14 @@ void GameSettings::ReadSettings()
     playSfx = iniparser_getboolean(optDict, "Sound:EnableSFX", true);
     classicSound = iniparser_getboolean(optDict, "Sound:ClassicAF", false);
 
+#ifdef __ANDROID__
+    speedMultiplier = (float)iniparser_getdouble(optDict, "Keys:SpeedMultiplier", 1.25);
+#else
+    speedMultiplier = (float)iniparser_getdouble(optDict, "Keys:SpeedMultiplier", 2.0);
+#endif
+    if (speedMultiplier < 1.0f) speedMultiplier = 1.0f;
+    if (speedMultiplier > 5.0f) speedMultiplier = 5.0f;
+
     LoadDefaultKeys();
 }
 
@@ -213,6 +226,10 @@ void GameSettings::LoadDefaultKeys()
 
 void GameSettings::SaveKeys()
 {
+    char speedBuf[16];
+    snprintf(speedBuf, sizeof(speedBuf), "%.2f", speedMultiplier);
+    iniparser_set(optDict, "Keys:SpeedMultiplier", speedBuf);
+
     iniparser_set(optDict, "Keys:P1Left", std::to_string(player1Keys.left).c_str());
     iniparser_set(optDict, "Keys:P1Right", std::to_string(player1Keys.right).c_str());
     iniparser_set(optDict, "Keys:P1Fire", std::to_string(player1Keys.fire).c_str());

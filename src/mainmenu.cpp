@@ -503,20 +503,38 @@ void MainMenu::HandleInput(SDL_Event *e){
                 } else if (!awaitKp) {
                     // UP/DOWN: navigate keys within current player
                     if (e->key.keysym.sym == SDLK_UP) {
-                        keyConfigIndex = (keyConfigIndex == 0) ? 4 : keyConfigIndex - 1;
+                        keyConfigIndex = (keyConfigIndex == 0) ? 5 : keyConfigIndex - 1;
                         AudioMixer::Instance()->PlaySFX("menu_change");
                         break;
                     } else if (e->key.keysym.sym == SDLK_DOWN) {
-                        keyConfigIndex = (keyConfigIndex == 4) ? 0 : keyConfigIndex + 1;
+                        keyConfigIndex = (keyConfigIndex == 5) ? 0 : keyConfigIndex + 1;
                         AudioMixer::Instance()->PlaySFX("menu_change");
                         break;
                     } else if (e->key.keysym.sym == SDLK_LEFT) {
+                        if (keyConfigIndex == 5) {
+                            // Decrease game speed
+                            GameSettings* gs = GameSettings::Instance();
+                            gs->speedMultiplier -= 0.1f;
+                            if (gs->speedMultiplier < 1.0f) gs->speedMultiplier = 1.0f;
+                            gs->SaveKeys();
+                            AudioMixer::Instance()->PlaySFX("menu_change");
+                            break;
+                        }
                         // Previous player
                         keyConfigPlayer = (keyConfigPlayer == 1) ? 4 : keyConfigPlayer - 1;
                         keyConfigIndex = 0;
                         AudioMixer::Instance()->PlaySFX("menu_change");
                         break;
                     } else if (e->key.keysym.sym == SDLK_RIGHT) {
+                        if (keyConfigIndex == 5) {
+                            // Increase game speed
+                            GameSettings* gs = GameSettings::Instance();
+                            gs->speedMultiplier += 0.1f;
+                            if (gs->speedMultiplier > 5.0f) gs->speedMultiplier = 5.0f;
+                            gs->SaveKeys();
+                            AudioMixer::Instance()->PlaySFX("menu_change");
+                            break;
+                        }
                         // Next player
                         keyConfigPlayer = (keyConfigPlayer == 4) ? 1 : keyConfigPlayer + 1;
                         keyConfigIndex = 0;
@@ -1795,6 +1813,7 @@ void MainMenu::KeysPanelRender() {
 
     const char* indicator = awaitKp ? " <--" : " >";
 
+    float spd = GameSettings::Instance()->speedMultiplier;
     snprintf(keyText, sizeof(keyText),
         "Key config  Player %d/4\n"
         "LEFT/RIGHT to switch player\n\n"
@@ -1803,6 +1822,7 @@ void MainMenu::KeysPanelRender() {
         "%sfire?        %s\n"
         "%scenter?      %s\n\n"
         "%sReset ctrl defaults\n\n"
+        "%sGame Speed: %.1f  (L/R adjust)\n\n"
         "%s\n"
         "UP/DOWN select, ENTER change\n"
         "ESC when done",
@@ -1812,6 +1832,7 @@ void MainMenu::KeysPanelRender() {
         keyConfigIndex == 2 ? indicator : "  ", ControllerScancodeName(pk.fire).c_str(),
         keyConfigIndex == 3 ? indicator : "  ", ControllerScancodeName(pk.center).c_str(),
         keyConfigIndex == 4 ? indicator : "  ",
+        keyConfigIndex == 5 ? indicator : "  ", spd,
         awaitKp ? "Press button or key..." : "");
 
     panelText.UpdateText(const_cast<SDL_Renderer *>(renderer), keyText, 0);
