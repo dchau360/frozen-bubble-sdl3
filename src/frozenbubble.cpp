@@ -255,13 +255,13 @@ void FrozenBubble::RunOneFrame()
     // In WASM (iPhone/Android browsers) the frame rate can vary widely, so scale
     // all per-frame movement to keep game speed consistent regardless of FPS.
     // On native builds SDL_Delay already caps near 60 fps — no scaling needed.
-    // Normalize to 60 fps equivalent, then apply 2.0x speed boost for browsers
-    deltaScale = (elapsed / (1000.0f / 60.0f)) * 2.0f;
+    // Normalize to 60 fps equivalent, then apply 3.0x speed boost for browsers
+    deltaScale = (elapsed / (1000.0f / 60.0f)) * 3.0f;
     if (deltaScale < 0.1f) deltaScale = 0.1f;  // guard against stalled/zero-elapsed frames
     if (deltaScale > 6.0f) deltaScale = 6.0f;  // guard against tab-hidden resume spikes
 #else
-    // Native: 1.5x the original default speed
-    deltaScale = 1.5f;
+    // Native: 1.25x the original default speed
+    deltaScale = 1.25f;
 #endif
 
     // handle input

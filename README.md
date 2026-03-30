@@ -190,7 +190,7 @@ Or right-click the app → **Open** → **Open** to bypass Gatekeeper once.
 
 ## New in v2.4.10
 
-- **Browser speed tuned** — WebAssembly speed multiplier increased to 2.0× (normalized across all frame rates); matches the fast feel of 120 fps play
+- **Speed tuned** — native clients (macOS, Linux, Windows, Android TV) run at 1.25× base speed; browser (WebAssembly) runs at 3.0× normalized across all frame rates
 
 ---
 
