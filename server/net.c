@@ -31,6 +31,7 @@
 #include <string.h>
 #include <ctype.h>
 #include <sys/time.h>
+#include <time.h>
 #include <signal.h>
 
 #include "win32_compat.h"
@@ -202,6 +203,15 @@ void conn_terminated(int fd, char* reason)
                 ws_raw_frame_buf[fd] = NULL;
                 ws_raw_frame_len[fd] = 0;
                 if (nick[fd] != NULL) {
+                        FILE *jf = fopen("joiners.log", "a");
+                        if (jf) {
+                                time_t now = time(NULL);
+                                struct tm *tm_info = gmtime(&now);
+                                char tbuf[32];
+                                strftime(tbuf, sizeof(tbuf), "%Y-%m-%d %H:%M:%S UTC", tm_info);
+                                fprintf(jf, "%s  %-15s  %s  DISCONNECT\n", tbuf, IP[fd] ? IP[fd] : "unknown", nick[fd]);
+                                fclose(jf);
+                        }
                         free(nick[fd]);
                 }
                 if (geoloc[fd] != NULL) {

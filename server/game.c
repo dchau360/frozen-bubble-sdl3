@@ -437,17 +437,6 @@ void player_connects(int fd)
 void player_disconnects(int fd)
 {
         open_players = g_list_remove(open_players, GINT_TO_POINTER(fd));
-        if (nick[fd]) {
-                FILE *jf = fopen("joiners.log", "a");
-                if (jf) {
-                        time_t now = time(NULL);
-                        struct tm *tm_info = gmtime(&now);
-                        char tbuf[32];
-                        strftime(tbuf, sizeof(tbuf), "%Y-%m-%d %H:%M:%S UTC", tm_info);
-                        fprintf(jf, "%s  %-15s  %s  DISCONNECT\n", tbuf, IP[fd] ? IP[fd] : "unknown", nick[fd]);
-                        fclose(jf);
-                }
-        }
 }
 
 static void talk_serverwide_aux(gpointer data, gpointer user_data)
