@@ -20,7 +20,7 @@
 #ifndef TRANSITIONMANAGER_H
 #define TRANSITIONMANAGER_H
 
-#include <SDL2/SDL.h>
+#include <SDL3/SDL.h>
 #include <iostream>
 #include <string>
 

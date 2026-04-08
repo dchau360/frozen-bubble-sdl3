@@ -43,30 +43,67 @@ AudioMixer::AudioMixer()
 {
     gameSettings = GameSettings::Instance();
 
-    int freq = gameSettings->useClassicAudio() ? 22050 : MIX_DEFAULT_FREQUENCY;
-    int sampl = gameSettings->useClassicAudio() ? 1024 : 4096;
+    int freq = gameSettings->useClassicAudio() ? 22050 : 44100;
+    SDL_AudioSpec spec = {SDL_AUDIO_S16, 2, freq};
 
-    if (Mix_OpenAudio(freq, MIX_DEFAULT_FORMAT, 2, sampl) < 0) {
-        SDL_LogError(1, "Could not open audio mixer! Music will be disabled. (%s)", Mix_GetError());
+    mixer = MIX_CreateMixer(&spec);
+    if (!mixer) {
+        SDL_LogError(1, "Could not open audio mixer! Music will be disabled. (%s)", SDL_GetError());
         mixerEnabled = false;
+        return;
     }
+
+    musicTrack = MIX_CreateTrack(mixer);
 }
 
-Mix_Chunk* AudioMixer::GetSFX(const char *sfx){
-    if(sfxFiles[sfx] == nullptr) {
+MIX_Audio* AudioMixer::GetSFX(const char *sfx){
+    std::string key(sfx);
+    auto it = sfxFiles.find(key);
+    if(it == sfxFiles.end()) {
         char rel[128];
         snprintf(rel, sizeof(rel), "/snd/%s.ogg", sfx);
-        sfxFiles[sfx] = Mix_LoadWAV(ASSET(rel).c_str());
+        MIX_Audio* audio = MIX_LoadAudio(mixer, ASSET(rel).c_str(), true);
+        sfxFiles[key] = audio;
+        return audio;
     }
 
-    return sfxFiles[sfx];
+    return it->second;
 }
 
 AudioMixer::~AudioMixer(){
 }
 
 void AudioMixer::Dispose(){
-    Mix_Quit();
+    // Clean up SFX tracks
+    for (MIX_Track* t : sfxTracks) {
+        MIX_StopTrack(t, 0);
+        MIX_DestroyTrack(t);
+    }
+    sfxTracks.clear();
+
+    // Clean up cached SFX audio
+    for (auto& pair : sfxFiles) {
+        if (pair.second) MIX_DestroyAudio(pair.second);
+    }
+    sfxFiles.clear();
+
+    // Clean up music
+    if (musicTrack) {
+        MIX_StopTrack(musicTrack, 0);
+        MIX_DestroyTrack(musicTrack);
+        musicTrack = nullptr;
+    }
+    if (curMusicAudio) {
+        MIX_DestroyAudio(curMusicAudio);
+        curMusicAudio = nullptr;
+    }
+
+    if (mixer) {
+        MIX_DestroyMixer(mixer);
+        mixer = nullptr;
+    }
+
+    MIX_Quit();
     this->~AudioMixer();
 }
 
@@ -74,16 +111,24 @@ void AudioMixer::PlayMusic(const char *track)
 {
     if(mixerEnabled == false || !gameSettings->canPlayMusic() || haltedMixer == true) return;
 
+    // Stop current music
+    if (musicTrack) {
 #ifdef __WASM_PORT__
-    // Blocking wait loops hang the browser — just halt immediately
-    Mix_HaltMusic();
+        MIX_StopTrack(musicTrack, 0);
 #else
-    while (Mix_FadingMusic()) SDL_Delay(10);
-    if (Mix_PlayingMusic()) Mix_FadeOutMusic(500);
-    SDL_Delay(400);
-    while (Mix_PlayingMusic()) SDL_Delay(10);
+        if (MIX_TrackPlaying(musicTrack)) {
+            MIX_StopTrack(musicTrack, 500);
+            SDL_Delay(600);
+        }
 #endif
-    
+    }
+
+    // Free previous music audio
+    if (curMusicAudio) {
+        MIX_DestroyAudio(curMusicAudio);
+        curMusicAudio = nullptr;
+    }
+
     std::string path;
     for (const MusicFile &musFile: musicFiles)
     {
@@ -94,27 +139,57 @@ void AudioMixer::PlayMusic(const char *track)
         }
     }
 
-    //if(curMusic) curMusic = NULL;
-    curMusic = Mix_LoadMUS(path.c_str());
-    if(curMusic) Mix_PlayMusic(curMusic, -1);
+    curMusicAudio = MIX_LoadAudio(mixer, path.c_str(), false);
+    if(curMusicAudio && musicTrack) {
+        MIX_SetTrackAudio(musicTrack, curMusicAudio);
+        MIX_SetTrackLoops(musicTrack, -1);
+        MIX_PlayTrack(musicTrack, 0);
+    }
 }
 
 void AudioMixer::PlaySFX(const char *sfx)
 {
     if(mixerEnabled == false || gameSettings->canPlaySFX() == false || haltedMixer == true) return;
-    if (Mix_PlayChannel(-1, GetSFX(sfx), 0) < 0) SDL_LogError(1, "Could not play sound because of: %s", SDL_GetError());
+
+    MIX_Audio* audio = GetSFX(sfx);
+    if (!audio) {
+        SDL_LogError(1, "Could not load SFX '%s': %s", sfx, SDL_GetError());
+        return;
+    }
+
+    // Reuse a finished SFX track, or create a new one
+    MIX_Track* track = nullptr;
+    for (MIX_Track* t : sfxTracks) {
+        if (!MIX_TrackPlaying(t)) {
+            track = t;
+            break;
+        }
+    }
+    if (!track) {
+        track = MIX_CreateTrack(mixer);
+        if (!track) {
+            SDL_LogError(1, "Could not create SFX track: %s", SDL_GetError());
+            return;
+        }
+        sfxTracks.push_back(track);
+    }
+
+    MIX_SetTrackAudio(track, audio);
+    MIX_SetTrackLoops(track, 0);
+    MIX_PlayTrack(track, 0);
 }
 
 void AudioMixer::PauseMusic(bool enable){
-    if (enable == true) Mix_ResumeMusic();
-    else Mix_PauseMusic();
+    if (!musicTrack) return;
+    if (enable == true) MIX_ResumeTrack(musicTrack);
+    else MIX_PauseTrack(musicTrack);
 }
 
 void AudioMixer::MuteAll(bool enable){
-    if(enable == true) haltedMixer = false;
-    else {
-        Mix_HaltMusic();
-        Mix_HaltChannel(-1);
+    if(enable == true) {
+        haltedMixer = false;
+    } else {
+        if (mixer) MIX_StopAllTracks(mixer, 0);
         haltedMixer = true;
     }
 }

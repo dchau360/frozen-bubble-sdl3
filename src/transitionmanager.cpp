@@ -32,13 +32,13 @@ TransitionManager *TransitionManager::Instance()
 TransitionManager::TransitionManager()
 {
     gameSettings = GameSettings::Instance();
-    snapIn = SDL_CreateRGBSurfaceWithFormat(0, 640, 480, 32, SURF_FORMAT);
-    snapOut = SDL_CreateRGBSurfaceWithFormat(0, 640, 480, 32, SURF_FORMAT);
+    snapIn = SDL_CreateSurface(640, 480, SURF_FORMAT);
+    snapOut = SDL_CreateSurface(640, 480, SURF_FORMAT);
 }
 
 TransitionManager::~TransitionManager(){
-    SDL_FreeSurface(snapIn);
-    SDL_FreeSurface(snapOut);
+    SDL_DestroySurface(snapIn);
+    SDL_DestroySurface(snapOut);
 }
 
 void TransitionManager::Dispose(){
@@ -52,12 +52,11 @@ void TransitionManager::DoSnipIn(SDL_Renderer *rend)
 #endif
     if (gameSettings->gfxLevel() > 2) return;
     float w = 0, h = 0;
-    SDL_RenderGetScale(rend, &w, &h);
+    SDL_GetRenderScale(rend, &w, &h);
     SDL_Rect dstSize = {0, 0, 640, 480};
-    SDL_Surface *sfc = SDL_CreateRGBSurfaceWithFormat(0, 640 * w, 480 * h, 32, SURF_FORMAT);
-    SDL_RenderReadPixels(rend, NULL, SURF_FORMAT, sfc->pixels, sfc->pitch);
-    SDL_BlitScaled(sfc, NULL, snapIn, &dstSize);
-    SDL_FreeSurface(sfc);
+    SDL_Surface *sfc = SDL_RenderReadPixels(rend, NULL);
+    SDL_BlitSurfaceScaled(sfc, NULL, snapIn, &dstSize, SDL_SCALEMODE_LINEAR);
+    SDL_DestroySurface(sfc);
 }
 
 void TransitionManager::TakeSnipOut(SDL_Renderer *rend)
@@ -67,12 +66,11 @@ void TransitionManager::TakeSnipOut(SDL_Renderer *rend)
 #endif
     if (gameSettings->gfxLevel() > 2) return;
     float w = 0, h = 0;
-    SDL_RenderGetScale(rend, &w, &h);
+    SDL_GetRenderScale(rend, &w, &h);
     SDL_Rect dstSize = {0, 0, 640, 480};
-    SDL_Surface *sfc = SDL_CreateRGBSurfaceWithFormat(0, 640 * w, 480 * h, 32, SURF_FORMAT);
-    SDL_RenderReadPixels(rend, NULL, SURF_FORMAT, sfc->pixels, sfc->pitch);
-    SDL_BlitScaled(sfc, NULL, snapOut, &dstSize);
-    SDL_FreeSurface(sfc);
+    SDL_Surface *sfc = SDL_RenderReadPixels(rend, NULL);
+    SDL_BlitSurfaceScaled(sfc, NULL, snapOut, &dstSize, SDL_SCALEMODE_LINEAR);
+    SDL_DestroySurface(sfc);
     effect(snapIn, snapOut, rend, transitionTexture);
 }
 

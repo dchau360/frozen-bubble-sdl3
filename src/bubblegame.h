@@ -24,7 +24,8 @@
 #include "platform.h"
 #define PI 3.1415926535897932384626433832795028841972
 
-#include <SDL2/SDL.h>
+#include <SDL3/SDL.h>
+#include "sdl3_compat.h"
 #include "ttftext.h"
 #include "networkclient.h"
 
@@ -189,7 +190,7 @@ struct Penguin {
     }
 
     void Render() {
-        SDL_RenderCopy(rend, CurrentFrame(), nullptr, &rect);
+        SDL_FRect fr = ToFRect(rect); SDL_RenderTexture(rend, CurrentFrame(), nullptr, &fr);
     }
 };
 
@@ -203,23 +204,23 @@ struct Bubble {
 
     void MeasureRects(SDL_Texture *bubbleT, SDL_Texture *frozenT){
         SDL_Point size;
-        SDL_QueryTexture(bubbleT, NULL, NULL, &size.x, &size.y);
+        float fw, fh; SDL_GetTextureSize(bubbleT, &fw, &fh); size.x = (int)fw; size.y = (int)fh;
         coords = {pos.x, pos.y, size.x, size.y};
-        SDL_QueryTexture(frozenT, NULL, NULL, &size.x, &size.y);
+        SDL_GetTextureSize(frozenT, &fw, &fh); size.x = (int)fw; size.y = (int)fh;
         frozenCoords = {pos.x - 2, pos.y - 2, size.x, size.y};
     }
 
     void RenderFrozen(SDL_Renderer *rend, SDL_Texture *frozen) {
         if (bubbleId == -1) return;
-        SDL_RenderCopy(rend, frozen, nullptr, &frozenCoords);
+        { SDL_FRect fr = ToFRect(frozenCoords); SDL_RenderTexture(rend, frozen, nullptr, &fr); }
     }
 
     void Render(SDL_Renderer *rend, SDL_Texture *bubbles[], SDL_Texture *shinyTexture, SDL_Texture *frozenTexture) {
         if (bubbleId == -1) return;
         MeasureRects(bubbles[bubbleId], frozenTexture);
-        SDL_RenderCopy(rend, bubbles[bubbleId], nullptr, &coords);
+        { SDL_FRect fr = ToFRect(coords); SDL_RenderTexture(rend, bubbles[bubbleId], nullptr, &fr); }
         if (frozen) RenderFrozen(rend, frozenTexture);
-        if(shining) SDL_RenderCopy(rend, shinyTexture, nullptr, &coords);
+        if(shining) { SDL_FRect fr = ToFRect(coords); SDL_RenderTexture(rend, shinyTexture, nullptr, &fr); }
     };
 };
 
@@ -233,7 +234,7 @@ struct Shooter {
     void Render(bool /*lowGfx*/){
         // Always render the cannon with rotation regardless of gfx quality
         double degrees = -(((angle*CANON_ROTATIONS)/(PI/2.0f) + 0.5) - CANON_ROTATIONS);
-        SDL_RenderCopyEx(renderer, texture, nullptr, &rect, degrees, NULL, SDL_FLIP_NONE);
+        { SDL_FRect fr = ToFRect(rect); SDL_RenderTextureRotated(renderer, texture, nullptr, &fr, degrees, NULL, SDL_FLIP_NONE); }
     }
 };
 
@@ -484,7 +485,7 @@ private:
     void QuitToTitle();
 
     // Controllers for local multiplayer (up to 5 players)
-    SDL_GameController* controllers[5] = {nullptr, nullptr, nullptr, nullptr, nullptr};
+    SDL_Gamepad* controllers[5] = {nullptr, nullptr, nullptr, nullptr, nullptr};
     int numControllersOpen = 0;
 };
 

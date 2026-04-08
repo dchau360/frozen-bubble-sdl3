@@ -14,10 +14,10 @@ if (("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU") OR ("${CMAKE_CXX_COMPILER_ID}" MA
     add_compile_options(-Wall -Wextra -pedantic -Wno-pointer-arith)
 endif()
 
-find_package(SDL2 REQUIRED)
-find_package(SDL2_image REQUIRED)
-find_package(SDL2_mixer REQUIRED)
-find_package(SDL2_ttf REQUIRED)
+find_package(SDL3 REQUIRED)
+find_package(SDL3_image REQUIRED)
+find_package(SDL3_mixer REQUIRED)
+find_package(SDL3_ttf REQUIRED)
 
 find_package(iniparser QUIET COMPONENTS static)
 if(NOT iniparser_FOUND OR NOT TARGET iniparser-static)
@@ -31,17 +31,7 @@ if(NOT iniparser_FOUND OR NOT TARGET iniparser-static)
     )
 endif()
 
-if(NOT SDL2_image_FOUND)
-    message(FATAL_ERROR "SDL2_image not found")
-endif()
-
-if(NOT SDL2_mixer_FOUND)
-    message(FATAL_ERROR "SDL2_mixer not found")
-endif()
-
-if(NOT SDL2_ttf_FOUND)
-    message(FATAL_ERROR "SDL2_ttf not found")
-endif()
+# REQUIRED on find_package handles missing libraries
 
 if(NOT WIN32 AND NOT MINGW)
     add_subdirectory(server)
@@ -94,20 +84,14 @@ else()
     target_compile_definitions(frozen-bubble-sdl2 PRIVATE DATA_DIR=\"${ASSET_PATH}\")
 endif()
 
-target_include_directories(frozen-bubble-sdl2
-    SYSTEM
-    PRIVATE ${SDL2_INCLUDE_DIRS}
-    PRIVATE ${SDL2_IMAGE_INCLUDE_DIRS}
-    PRIVATE ${SDL2_MIXER_INCLUDE_DIRS}
-    PRIVATE ${SDL2_TTF_INCLUDE_DIRS}
-)
+# SDL3 uses modern cmake targets — include dirs come from target properties
 
 target_link_libraries(frozen-bubble-sdl2 PRIVATE
-    SDL2::SDL2
+    SDL3::SDL3
     iniparser-static
-    SDL2_image::SDL2_image
-    SDL2_mixer::SDL2_mixer
-    SDL2_ttf::SDL2_ttf
+    SDL3_image::SDL3_image
+    SDL3_mixer::SDL3_mixer
+    SDL3_ttf::SDL3_ttf
 )
 
 if(WIN32 OR MINGW)

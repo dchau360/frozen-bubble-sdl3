@@ -18,13 +18,13 @@
  */
 
 #include "platform.h"
-#include <SDL2/SDL.h>
+#include <SDL3/SDL.h>
 
 std::string g_dataDir;
 
 #ifdef __ANDROID__
 #include <jni.h>
-#include <SDL2/SDL_rwops.h>
+#include <SDL3/SDL_iostream.h>
 #include <sys/stat.h>
 
 // List of all asset files to extract from APK to writable storage.

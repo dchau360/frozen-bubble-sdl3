@@ -46,7 +46,7 @@ struct HighscoreData {
     void RefreshTextStatus(SDL_Renderer *rend, TTF_Font * /*fnt*/){
         layoutText.LoadFont(ASSET("/gfx/DroidSans.ttf").c_str(), 16);
         layoutText.UpdateColor({255, 255, 255, 255},  {0, 0, 0, 255});
-        layoutText.UpdateAlignment(TTF_WRAPPED_ALIGN_CENTER);
+        layoutText.UpdateAlignment(TTF_HORIZONTAL_ALIGN_CENTER);
         if (newHighscore) layoutText.UpdateStyle(TTF_STYLE_BOLD);
         std::string data = (name.size() > 12 ? name.substr(0, 9) + "..." : name) + "\n" + (level > 100 ? "won!" : "level " + std::to_string(level)) + "\n" + formatTime(); 
         layoutText.UpdateText(rend, data.c_str(), 0);
@@ -213,8 +213,8 @@ HighscoreManager::HighscoreManager(SDL_Renderer *renderer)
 
     panelText.LoadFont(ASSET("/gfx/DroidSans.ttf").c_str(), 15);
     nameInput.LoadFont(ASSET("/gfx/DroidSans.ttf").c_str(), 15);
-    panelText.UpdateAlignment(TTF_WRAPPED_ALIGN_CENTER);
-    nameInput.UpdateAlignment(TTF_WRAPPED_ALIGN_CENTER);
+    panelText.UpdateAlignment(TTF_HORIZONTAL_ALIGN_CENTER);
+    nameInput.UpdateAlignment(TTF_HORIZONTAL_ALIGN_CENTER);
     panelText.UpdateColor({255, 255, 255, 255}, {0, 0, 0, 255});
     nameInput.UpdateColor({255, 255, 255, 255}, {0, 0, 0, 255});
 
@@ -283,10 +283,10 @@ void HighscoreManager::CreateLevelImages() {
         SDL_Log("CreateLevelImages: slot=%d key=%d", slot, key);
         if (slot >= 10) break;
         if (smallBG[slot] != nullptr) { SDL_DestroyTexture(smallBG[slot]); smallBG[slot] = nullptr; }
-        SDL_Surface *bigOne = SDL_CreateRGBSurfaceWithFormat(0, 640, 480, 32, SDL_PIXELFORMAT_ARGB8888);
+        SDL_Surface *bigOne = SDL_CreateSurface(640, 480, SDL_PIXELFORMAT_ARGB8888);
         if (!bigOne) { SDL_Log("CreateLevelImages: bigOne null!"); slot++; continue; }
-        SDL_Surface *sfc = SDL_CreateRGBSurfaceWithFormat(0, highRect.w/4, highRect.h/4, 32, SDL_PIXELFORMAT_ARGB8888);
-        if (!sfc) { SDL_Log("CreateLevelImages: sfc null!"); SDL_FreeSurface(bigOne); slot++; continue; }
+        SDL_Surface *sfc = SDL_CreateSurface(highRect.w/4, highRect.h/4, SDL_PIXELFORMAT_ARGB8888);
+        if (!sfc) { SDL_Log("CreateLevelImages: sfc null!"); SDL_DestroySurface(bigOne); slot++; continue; }
         SDL_Log("CreateLevelImages: blitting background (backgroundSfc=%p)", (void*)backgroundSfc);
         if (backgroundSfc) SDL_BlitSurface(backgroundSfc, nullptr, bigOne, nullptr);
         SDL_Log("CreateLevelImages: blitting bubbles");
@@ -303,8 +303,8 @@ void HighscoreManager::CreateLevelImages() {
         shrink_(sfc, bigOne, 0, 0, &highRect, 4);
         SDL_Log("CreateLevelImages: creating texture");
         smallBG[slot] = SDL_CreateTextureFromSurface(rend, sfc);
-        SDL_FreeSurface(sfc);
-        SDL_FreeSurface(bigOne);
+        SDL_DestroySurface(sfc);
+        SDL_DestroySurface(bigOne);
         SDL_Log("CreateLevelImages: slot %d done", slot);
         slot++;
     }
@@ -326,17 +326,17 @@ void HighscoreManager::ShowScoreScreen(int ls) {
 }
 
 void HighscoreManager::RenderScoreScreen() {
-    SDL_RenderCopy(rend, highscoresBG, nullptr, nullptr);
+    SDL_RenderTexture(rend, highscoresBG, nullptr, nullptr);
 
     if (curMode == 0) { // 0 = Levelset
         for (size_t i = 0; i < levelsetScores.size(); i++) {
             int sx = 64, sy = 85;
-            if (smallBG[i]) SDL_QueryTexture(smallBG[i], nullptr, nullptr, &sx, &sy);
+            if (smallBG[i]) { float fw, fh; SDL_GetTextureSize(smallBG[i], &fw, &fh); sx = (int)fw; sy = (int)fh; }
             SDL_Rect bgPos = {85 * (int)(i > 5 ? (i - 5) + 1 : i + 1) + (20 * ((int)i % 6)), (80 * (((int)i + 1) >= 6 ? 1 : 0)) + (80 * (((int)i + 1) >= 6 ? 2 : 1)), sx, sy};
             SDL_Rect framePos = {bgPos.x - 7, bgPos.y - 7, 81, 100};
-            SDL_RenderCopy(rend, highscoreFrame, nullptr, &framePos);
-            if (smallBG[i]) SDL_RenderCopy(rend, smallBG[i], nullptr, &bgPos);
-            SDL_RenderCopy(rend, levelsetScores[i].layoutText.Texture(), nullptr, levelsetScores[i].layoutText.Coords());
+            { SDL_FRect fr = ToFRect(framePos); SDL_RenderTexture(rend, highscoreFrame, nullptr, &fr); }
+            if (smallBG[i]) { SDL_FRect fr = ToFRect(bgPos); SDL_RenderTexture(rend, smallBG[i], nullptr, &fr); }
+            { SDL_FRect fr = ToFRect(*levelsetScores[i].layoutText.Coords()); SDL_RenderTexture(rend, levelsetScores[i].layoutText.Texture(), nullptr, &fr); }
         }
     }
 
@@ -352,12 +352,12 @@ void HighscoreManager::ShowNewScorePanel(int mode) {
     newName.clear();
     panelText.UpdateText(rend, "Congratulations!\n\nYou got a high score!\n\nEnter name:            \n", 0);
     panelText.UpdatePosition({(640/2) - (panelText.Coords()->w / 2), (480/2) - 120});
-    SDL_StartTextInput();
+    SDL_StartTextInput(SDL_GetRenderWindow(rend));
 }
 
 void HighscoreManager::RenderPanel() {
-    SDL_RenderCopy(rend, voidPanelBG, nullptr, &voidPanelRct);
-    SDL_RenderCopy(rend, panelText.Texture(), nullptr, panelText.Coords());
+    { SDL_FRect fr = ToFRect(voidPanelRct); SDL_RenderTexture(rend, voidPanelBG, nullptr, &fr); }
+    { SDL_FRect fr = ToFRect(*panelText.Coords()); SDL_RenderTexture(rend, panelText.Texture(), nullptr, &fr); }
 
     if (textTickWait <= 0) {
         if (awaitKeyType) {
@@ -374,20 +374,20 @@ void HighscoreManager::RenderPanel() {
     }
     else textTickWait--;
 
-    SDL_RenderCopy(rend, nameInput.Texture(), nullptr, nameInput.Coords());
+    { SDL_FRect fr = ToFRect(*nameInput.Coords()); SDL_RenderTexture(rend, nameInput.Texture(), nullptr, &fr); }
 }
 
 void HighscoreManager::HandleInput(SDL_Event *e){
     switch(e->type) {
-        case SDL_KEYDOWN:
+        case SDL_EVENT_KEY_DOWN:
             if(e->key.repeat) break;
-            switch(e->key.keysym.sym) {
+            switch(e->key.key) {
                 case SDLK_ESCAPE:
                     if (awaitKeyType) {
                         // Cancel name entry - keep any previously entered name
                         awaitKeyType = false;
                         newName.clear();
-                        SDL_StopTextInput();
+                        SDL_StopTextInput(SDL_GetRenderWindow(rend));
                         SaveNewHighscores();
                     }
                     FrozenBubble::Instance()->currentState = TitleScreen;
@@ -407,7 +407,7 @@ void HighscoreManager::HandleInput(SDL_Event *e){
                         }
                         newName.clear();
                         awaitKeyType = false;
-                        SDL_StopTextInput();
+                        SDL_StopTextInput(SDL_GetRenderWindow(rend));
                         SaveNewHighscores();
                         break;
                     }
@@ -429,7 +429,7 @@ void HighscoreManager::HandleInput(SDL_Event *e){
                     break;
             }
             break;
-        case SDL_TEXTINPUT:
+        case SDL_EVENT_TEXT_INPUT:
             if (newName.size() < 11){
                 newName += e->text.text;
                 std::string nam = newName + "|";

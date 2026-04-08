@@ -20,8 +20,8 @@
 #ifndef AUDIOMIXER_H
 #define AUDIOMIXER_H
 
-#include <SDL2/SDL.h>
-#include <SDL2/SDL_mixer.h>
+#include <SDL3/SDL.h>
+#include <SDL3_mixer/SDL_mixer.h>
 #include <map>
 #include <string>
 #include <vector>
@@ -41,8 +41,8 @@ public:
     void Dispose();
     static AudioMixer* Instance();
 private:
-    std::map<const char *, Mix_Chunk *> sfxFiles;
-    Mix_Chunk* GetSFX(const char *);
+    std::map<std::string, MIX_Audio *> sfxFiles;
+    MIX_Audio* GetSFX(const char *);
 
     AudioMixer();
     ~AudioMixer();
@@ -50,7 +50,10 @@ private:
     GameSettings* gameSettings;
 
     bool mixerEnabled = true, haltedMixer = false;
-    Mix_Music* curMusic;
+    MIX_Mixer* mixer = nullptr;
+    MIX_Track* musicTrack = nullptr;
+    MIX_Audio* curMusicAudio = nullptr;
+    std::vector<MIX_Track*> sfxTracks;
 };
 
 #endif // AUDIOMIXER_H

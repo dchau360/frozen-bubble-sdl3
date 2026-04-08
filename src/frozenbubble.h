@@ -20,8 +20,8 @@
 #ifndef FROZENBUBBLE_H
 #define FROZENBUBBLE_H
 
-#include <SDL2/SDL.h>
-#include <SDL2/SDL_ttf.h>
+#include <SDL3/SDL.h>
+#include <SDL3_ttf/SDL_ttf.h>
 #include <stdint.h>
 #include <string>
 #include <iostream>

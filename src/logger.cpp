@@ -115,10 +115,10 @@ bool Logger::Initialize(const char* logFilePath) {
     fflush(logFile);
 
     // Set SDL log output function to use our callback
-    SDL_LogSetOutputFunction(LogOutputCallback, nullptr);
+    SDL_SetLogOutputFunction(LogOutputCallback, nullptr);
 
     // Set log priority to show all messages
-    SDL_LogSetAllPriority(SDL_LOG_PRIORITY_VERBOSE);
+    SDL_SetLogPriorities(SDL_LOG_PRIORITY_VERBOSE);
 
     initialized = true;
     SDL_Log("Logger initialized successfully. Logging to: %s", path);
@@ -151,7 +151,7 @@ void Logger::Shutdown() {
     }
 
     // Reset SDL log output to default
-    SDL_LogSetOutputFunction(nullptr, nullptr);
+    SDL_SetLogOutputFunction(nullptr, nullptr);
 
     initialized = false;
 }

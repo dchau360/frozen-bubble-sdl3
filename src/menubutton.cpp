@@ -18,6 +18,7 @@
  */
 
 #include "menubutton.h"
+#include "sdl3_compat.h"
 #include "frozenbubble.h"
 #include "gamesettings.h"
 #include "mainmenu.h"
@@ -145,9 +146,9 @@ void MenuButton::Render(const SDL_Renderer *renderer)
         if(fixedFrame < (int)icons.size() && icons[fixedFrame])
             SDL_SetTextureAlphaMod(icons[fixedFrame], 100);
     }
-    SDL_RenderCopy(const_cast<SDL_Renderer*>(renderer), isActive?backgroundActive:background, nullptr, &rect);
+    { SDL_FRect fr = ToFRect(rect); SDL_RenderTexture(const_cast<SDL_Renderer*>(renderer), isActive?backgroundActive:background, nullptr, &fr); }
     if(fixedFrame < (int)icons.size() && icons[fixedFrame])
-        SDL_RenderCopy(const_cast<SDL_Renderer*>(renderer), icons[fixedFrame], nullptr, &icon_rect);
+    { SDL_FRect fr = ToFRect(icon_rect); SDL_RenderTexture(const_cast<SDL_Renderer*>(renderer), icons[fixedFrame], nullptr, &fr); }
 }
 
 void MenuButton::Pressed(void *parent)

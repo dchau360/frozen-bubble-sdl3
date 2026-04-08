@@ -20,19 +20,11 @@
 #ifndef TTFTEXT_H
 #define TTFTEXT_H
 
-#include <SDL2/SDL.h>
-#include <SDL2/SDL_ttf.h>
+#include <SDL3/SDL.h>
+#include <SDL3_ttf/SDL_ttf.h>
 #include <iostream>
 #include <string>
-
-// TTF_WRAPPED_ALIGN_* and TTF_SetFontWrappedAlign were added in SDL2_ttf 2.20.
-// Provide no-op fallbacks for older distro packages (e.g. Ubuntu 22.04 ships 2.0.18).
-#if !SDL_TTF_VERSION_ATLEAST(2, 20, 0)
-#define TTF_WRAPPED_ALIGN_LEFT   0
-#define TTF_WRAPPED_ALIGN_CENTER 1
-#define TTF_WRAPPED_ALIGN_RIGHT  2
-inline void TTF_SetFontWrappedAlign(TTF_Font*, int) {}
-#endif
+#include "sdl3_compat.h"
 
 #define WINDOW_W 640
 #define WINDOW_H 480

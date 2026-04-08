@@ -26,7 +26,7 @@
 #ifdef __WASM_PORT__
 
 #include "networkclient.h"
-#include <SDL2/SDL.h>
+#include <SDL3/SDL.h>
 #include <emscripten/emscripten.h>
 #include <emscripten/websocket.h>
 #include <cstring>

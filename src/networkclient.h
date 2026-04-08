@@ -20,7 +20,7 @@
 #ifndef NETWORKCLIENT_H
 #define NETWORKCLIENT_H
 
-#include <SDL2/SDL.h>
+#include <SDL3/SDL.h>
 #include <string>
 #include <vector>
 #include <queue>

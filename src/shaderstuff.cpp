@@ -38,26 +38,23 @@ Uint32 to_wait;
 
 void set_pixel(SDL_Surface *s, int x, int y, Uint8 r, Uint8 g, Uint8 b, Uint8 a) // only 32bit surfaces yet
 {
-    ((Uint32 *)s->pixels)[x + y * s->w] = (((r >> s->format->Rloss) << s->format->Rshift) & s->format->Rmask) | 
-                                            (((g >> s->format->Gloss) << s->format->Gshift) & s->format->Gmask) | 
-                                            (((b >> s->format->Bloss) << s->format->Bshift) & s->format->Bmask) | 
-                                            (((a >> s->format->Aloss) << s->format->Ashift) & s->format->Amask);
+    const SDL_PixelFormatDetails *fmt = SDL_GetPixelFormatDetails(s->format);
+    ((Uint32 *)s->pixels)[x + y * s->w] = SDL_MapRGBA(fmt, NULL, r, g, b, a);
 }
 
 void get_pixel(SDL_Surface *s, int x, int y, Uint8 *r, Uint8 *g, Uint8 *b, Uint8 *a)
 {
-    SDL_GetRGBA(((Uint32 *)s->pixels)[CLAMP(x, 0, s->w) + CLAMP(y, 0, s->h) * s->w], s->format, r, g, b, a);
+    SDL_GetRGBA(((Uint32 *)s->pixels)[CLAMP(x, 0, s->w) + CLAMP(y, 0, s->h) * s->w], SDL_GetPixelFormatDetails(s->format), NULL, r, g, b, a);
 }
 
 void myLockSurface(SDL_Surface *s)
 {
-    while (SDL_MUSTLOCK(s) == 1 && SDL_LockSurface(s) < 0)
+    while (!SDL_LockSurface(s))
         SDL_Delay(10);
 }
 void myUnlockSurface(SDL_Surface *s)
 {
-    if (SDL_MUSTLOCK(s))
-        SDL_UnlockSurface(s);
+    SDL_UnlockSurface(s);
 }
 void synchro_before(SDL_Surface *s)
 {
@@ -70,7 +67,7 @@ void synchro_after(SDL_Surface *s, SDL_Renderer *rend, SDL_Texture *tex)
     SDL_RenderClear(rend);
     if (tex != nullptr) SDL_DestroyTexture(tex);
     tex = SDL_CreateTextureFromSurface(rend, s);
-    SDL_RenderCopy(rend, tex, nullptr, nullptr);
+    SDL_RenderTexture(rend, tex, nullptr, nullptr);
     SDL_RenderPresent(rend);
     to_wait = SDL_GetTicks() - ticks;
     if (to_wait < ANIM_SPEED)
@@ -109,7 +106,7 @@ void copy_line(int l, SDL_Surface *s, SDL_Surface *img)
 }
 void copy_column(int c, SDL_Surface *s, SDL_Surface *img)
 {
-    int bpp = img->format->BytesPerPixel;
+    int bpp = SDL_GetPixelFormatDetails(img->format)->bytes_per_pixel;
     for (y = 0; y < YRES; y++)
         memcpy((Uint8 *)s->pixels + y * img->pitch + c * bpp, (Uint8 *)img->pixels + y * img->pitch + c * bpp, bpp);
 }
@@ -168,7 +165,7 @@ void store_effect(SDL_Surface *s, SDL_Surface *img, SDL_Renderer *rend, SDL_Text
 
 void bars_effect(SDL_Surface *s, SDL_Surface *img, SDL_Renderer *rend, SDL_Texture *tex)
 {
-    int bpp = img->format->BytesPerPixel;
+    int bpp = SDL_GetPixelFormatDetails(img->format)->bytes_per_pixel;
     const int bars_max_steps = 40;
     const int bars_num = 16;
     for (i = 0; i < bars_max_steps; i++)
@@ -204,7 +201,7 @@ int fillrect(int i, int j, SDL_Surface *s, SDL_Surface *img, int bpp, const int 
 
 void squares_effect(SDL_Surface *s, SDL_Surface *img, SDL_Renderer *rend, SDL_Texture *tex)
 {
-    int bpp = img->format->BytesPerPixel;
+    int bpp = SDL_GetPixelFormatDetails(img->format)->bytes_per_pixel;
     const int squares_size = 32;
 
     int still_moving = 1;
@@ -252,7 +249,7 @@ void circle_init(void)
 void circle_effect(SDL_Surface *s, SDL_Surface *img, SDL_Renderer *rend, SDL_Texture *tex)
 {
     int step = circle_max_steps;
-    int bpp = img->format->BytesPerPixel;
+    int bpp = SDL_GetPixelFormatDetails(img->format)->bytes_per_pixel;
     int in_or_out = rand_(2);
 
     while (step >= 0)
@@ -344,11 +341,12 @@ void plasma_init(char *datapath)
 void plasma_effect(SDL_Surface *s, SDL_Surface *img, SDL_Renderer *rend, SDL_Texture *tex)
 {
     int step = 0;
-    int bpp = img->format->BytesPerPixel;
+    const SDL_PixelFormatDetails *fmt = SDL_GetPixelFormatDetails(img->format);
+    int bpp = fmt->bytes_per_pixel;
     int rnd_plasma = rand_(4);
 
     int plasma_type;
-    if (!img->format->palette)
+    if (!SDL_ISPIXELFORMAT_INDEXED(img->format))
     {
         plasma_type = rand_(3);
     }
@@ -367,9 +365,9 @@ void plasma_effect(SDL_Surface *s, SDL_Surface *img, SDL_Renderer *rend, SDL_Tex
                 Uint32 pixelvalue = 0;
                 float r, g, b;
                 memcpy(&pixelvalue, (Uint8 *)img->pixels + y * img->pitch + x * bpp, bpp);
-                r = ((float)((pixelvalue & img->format->Rmask) >> img->format->Rshift)) / (img->format->Rmask >> img->format->Rshift);
-                g = ((float)((pixelvalue & img->format->Gmask) >> img->format->Gshift)) / (img->format->Gmask >> img->format->Gshift);
-                b = ((float)((pixelvalue & img->format->Bmask) >> img->format->Bshift)) / (img->format->Bmask >> img->format->Bshift);
+                r = ((float)((pixelvalue & fmt->Rmask) >> fmt->Rshift)) / (fmt->Rmask >> fmt->Rshift);
+                g = ((float)((pixelvalue & fmt->Gmask) >> fmt->Gshift)) / (fmt->Gmask >> fmt->Gshift);
+                b = ((float)((pixelvalue & fmt->Bmask) >> fmt->Bshift)) / (fmt->Bmask >> fmt->Bshift);
                 plasma3[x + y * XRES] = 255 * (r * .299 + g * .587 + b * .114) * plasma_steps / 256;
                 if (int_or_out == 1)
                     plasma3[x + y * XRES] = plasma_steps - 1 - plasma3[x + y * XRES];
@@ -459,7 +457,7 @@ void shrink_(SDL_Surface *dest, SDL_Surface *orig, int xpos, int ypos, SDL_Rect 
     {
         for (y = ry; y < ry + rh; y++)
         {
-            if (!dest->format->palette)
+            if (!SDL_ISPIXELFORMAT_INDEXED(dest->format))
             {
                 /* there is no palette, it's cool, I can do (uber-slow) high-quality shrink */
                 int r = 0;
@@ -467,12 +465,13 @@ void shrink_(SDL_Surface *dest, SDL_Surface *orig, int xpos, int ypos, SDL_Rect 
                 int b = 0;
                 int a = 0;
                 Uint8 r_, g_, b_, a_;
+                const SDL_PixelFormatDetails *orig_fmt = SDL_GetPixelFormatDetails(orig->format);
                 for (i = 0; i < factor; i++)
                 {
                     for (j = 0; j < factor; j++)
                     {
                         SDL_GetRGBA(((Uint32 *)orig->pixels)[CLAMP(x * factor + i, 0, orig->w) + CLAMP(y * factor + j, 0, orig->h) * orig->w],
-                                    orig->format, &r_, &g_, &b_, &a_);
+                                    orig_fmt, NULL, &r_, &g_, &b_, &a_);
                         r += r_;
                         g += g_;
                         b += b_;
@@ -498,11 +497,13 @@ void shrink_(SDL_Surface *dest, SDL_Surface *orig, int xpos, int ypos, SDL_Rect 
 
 void rotate_nearest_(SDL_Surface *dest, SDL_Surface *orig, double angle)
 {
-    int bpp = dest->format->BytesPerPixel;
+    const SDL_PixelFormatDetails *dest_fmt = SDL_GetPixelFormatDetails(dest->format);
+    const SDL_PixelFormatDetails *orig_fmt = SDL_GetPixelFormatDetails(orig->format);
+    int bpp = dest_fmt->bytes_per_pixel;
     int x_, y_;
     double cosval = cos(angle);
     double sinval = sin(angle);
-    if (orig->format->BytesPerPixel != dest->format->BytesPerPixel)
+    if (orig_fmt->bytes_per_pixel != dest_fmt->bytes_per_pixel)
     {
         fprintf(stderr, "rotate_nearest: orig and dest surface must be of equal bpp\n");
         abort();
@@ -517,7 +518,7 @@ void rotate_nearest_(SDL_Surface *dest, SDL_Surface *orig, double angle)
             y_ = (y - dest->h / 2) * cosval + (x - dest->w / 2) * sinval + dest->h / 2;
             if (x_ < 0 || x_ > dest->w - 2 || y_ < 0 || y_ > dest->h - 2)
             {
-                *((Uint32 *)((Uint8 *)dest->pixels + x * bpp + y * dest->pitch)) = orig->format->Amask;
+                *((Uint32 *)((Uint8 *)dest->pixels + x * bpp + y * dest->pitch)) = orig_fmt->Amask;
                 continue;
             }
             memcpy((Uint8 *)dest->pixels + x * bpp + y * dest->pitch,
@@ -542,12 +543,12 @@ void rotate_bilinear_(SDL_Surface *dest, SDL_Surface *orig, double angle)
     double cosval = cos(angle);
     double sinval = sin(angle);
     Uint8 Ar, Ag, Ab, Aa, Br, Bg, Bb, Ba, Cr, Cg, Cb, Ca, Dr, Dg, Db, Da;
-    if (orig->format->BytesPerPixel == 1)
+    if (SDL_GetPixelFormatDetails(orig->format)->bytes_per_pixel == 1)
     {
         fprintf(stderr, "rotate_bilinear: orig surface must not have a palette\n");
         abort();
     }
-    if (dest->format->BytesPerPixel == 1)
+    if (SDL_GetPixelFormatDetails(dest->format)->bytes_per_pixel == 1)
     {
         fprintf(stderr, "rotate_bilinear: dest surface must not have a palette\n");
         abort();
@@ -610,17 +611,16 @@ void rotate_bilinear_(SDL_Surface *dest, SDL_Surface *orig, double angle)
 std::vector<int> autopseudocrop(SDL_Surface* orig) {
     int x_ = -1, y_ = -1, w = -1, h = -1;
     Uint8* ptr;
-    int Adec = orig->format->Ashift / 8; // Adec is non-standard from sdlpango_draw* output
+    const SDL_PixelFormatDetails *fmt = SDL_GetPixelFormatDetails(orig->format);
+    int Adec = fmt->Ashift / 8; // Adec is non-standard from sdlpango_draw* output
 
-    if (orig->format->BytesPerPixel != 4) {
+    if (fmt->bytes_per_pixel != 4) {
         SDL_LogError(1, "autocrop - orig surface must be 32bpp!");
         std::abort();
     }
 
     // Lock the surface (if needed)
-    if (SDL_MUSTLOCK(orig)) {
-        SDL_LockSurface(orig);
-    }
+    SDL_LockSurface(orig);
 
     // Find top boundary
     for (int y = 0; y < orig->h; ++y) {
@@ -674,10 +674,8 @@ std::vector<int> autopseudocrop(SDL_Surface* orig) {
         if (w != -1) break;
     }
 
-    // Unlock the surface (if it was locked)
-    if (SDL_MUSTLOCK(orig)) {
-        SDL_UnlockSurface(orig);
-    }
+    // Unlock the surface
+    SDL_UnlockSurface(orig);
 
     // Return the results as a vector
     return {x_, y_, w, h};
@@ -711,12 +709,13 @@ void rotate_bicubic_(SDL_Surface *dest, SDL_Surface *orig, double angle)
     double sinval = sin(angle);
     double a_val, a_recip;
     double dx, dy;
-    if (orig->format->BytesPerPixel == 1)
+    const SDL_PixelFormatDetails *orig_fmt = SDL_GetPixelFormatDetails(orig->format);
+    if (orig_fmt->bytes_per_pixel == 1)
     {
         fprintf(stderr, "rotate_bicubic: orig surface must not have a palette\n");
         abort();
     }
-    if (dest->format->BytesPerPixel == 1)
+    if (SDL_GetPixelFormatDetails(dest->format)->bytes_per_pixel == 1)
     {
         fprintf(stderr, "rotate_bicubic: orig surface must not have a palette\n");
         abort();
@@ -749,7 +748,7 @@ void rotate_bicubic_(SDL_Surface *dest, SDL_Surface *orig, double angle)
                     for (x___ = x_; x___ < x_ + 4; x___++)
                     {
                         SDL_GetRGBA(((Uint32 *)orig->pixels)[CLAMP(x___, 0, dest->w) + CLAMP(y___, 0, dest->h) * dest->w],
-                                    orig->format, &(r_[i]), &(g_[i]), &(b_[i]), &(a_[i]));
+                                    orig_fmt, NULL, &(r_[i]), &(g_[i]), &(b_[i]), &(a_[i]));
                         i++;
                     }
                 }
@@ -810,17 +809,17 @@ void rotate_bicubic_(SDL_Surface *dest, SDL_Surface *orig, double angle)
 
 void flipflop_(SDL_Surface *dest, SDL_Surface *orig, int offset)
 {
-    int Bpp = dest->format->BytesPerPixel;
+    int Bpp = SDL_GetPixelFormatDetails(dest->format)->bytes_per_pixel;
     int r, g, b;
     double a, dx;
 
-    if (orig->format->BytesPerPixel == 1)
+    if (SDL_GetPixelFormatDetails(orig->format)->bytes_per_pixel == 1)
     {
         fprintf(stderr, "flipflop: orig surface must not have a palette\n");
         abort();
     }
 
-    if (dest->format->BytesPerPixel == 1)
+    if (Bpp == 1)
     {
         fprintf(stderr, "flipflop: orig surface must not have a palette\n");
         abort();
@@ -883,18 +882,19 @@ void enlighten_(SDL_Surface *dest, SDL_Surface *orig, int offset)
     int lightx, lighty;
     double sqdistbase, sqdist, shading;
 
-    if (orig->format->BytesPerPixel == 1)
+    if (SDL_GetPixelFormatDetails(orig->format)->bytes_per_pixel == 1)
     {
         fprintf(stderr, "enlighten: orig surface must not have a palette\n");
         abort();
     }
 
-    if (dest->format->BytesPerPixel == 1)
+    if (SDL_GetPixelFormatDetails(dest->format)->bytes_per_pixel == 1)
     {
         fprintf(stderr, "enlighten: dest surface must not have a palette\n");
         abort();
     }
 
+    const SDL_PixelFormatDetails *orig_fmt = SDL_GetPixelFormatDetails(orig->format);
     myLockSurface(orig);
     myLockSurface(dest);
     lightx = dest->w / (2.5 + 0.3 * sin((double)offset / 500)) * sin((double)offset / 100) + dest->w / 2;
@@ -918,7 +918,7 @@ void enlighten_(SDL_Surface *dest, SDL_Surface *orig, int offset)
                           ? 50
                           : 1 + 20 / sqdist;
 
-            SDL_GetRGBA(((Uint32 *)orig->pixels)[x + y * dest->w], orig->format, &r, &g, &b, &a);
+            SDL_GetRGBA(((Uint32 *)orig->pixels)[x + y * dest->w], orig_fmt, NULL, &r, &g, &b, &a);
 
             if (shading > 1.02)
                 set_pixel(dest, x, y, CLAMP(r * shading, 0, 255), CLAMP(g * shading, 0, 255), CLAMP(b * shading, 0, 255), a);
@@ -938,18 +938,19 @@ void stretch_(SDL_Surface *dest, SDL_Surface *orig, int offset)
     double a, dx, dy;
     double sinval = sin(offset / 50.0) / 10 + 1;
 
-    if (orig->format->BytesPerPixel == 1)
+    if (SDL_GetPixelFormatDetails(orig->format)->bytes_per_pixel == 1)
     {
         fprintf(stderr, "stretch: orig surface must not have a palette\n");
         abort();
     }
 
-    if (dest->format->BytesPerPixel == 1)
+    if (SDL_GetPixelFormatDetails(dest->format)->bytes_per_pixel == 1)
     {
         fprintf(stderr, "stretch: dest surface must not have a palette\n");
         abort();
     }
 
+    const SDL_PixelFormatDetails *orig_fmt = SDL_GetPixelFormatDetails(orig->format);
     myLockSurface(orig);
     myLockSurface(dest);
     for (x = 0; x < dest->w; x++)
@@ -971,10 +972,10 @@ void stretch_(SDL_Surface *dest, SDL_Surface *orig, int offset)
             {
                 dx = x__ - x_;
                 dy = y__ - y_;
-                SDL_GetRGBA(((Uint32 *)orig->pixels)[x_ + y_ * dest->w], orig->format, &Ar, &Ag, &Ab, &Aa);
-                SDL_GetRGBA(((Uint32 *)orig->pixels)[x_ + 1 + y_ * dest->w], orig->format, &Br, &Bg, &Bb, &Ba);
-                SDL_GetRGBA(((Uint32 *)orig->pixels)[x_ + (y_ + 1) * dest->w], orig->format, &Cr, &Cg, &Cb, &Ca);
-                SDL_GetRGBA(((Uint32 *)orig->pixels)[x_ + 1 + (y_ + 1) * dest->w], orig->format, &Dr, &Dg, &Db, &Da);
+                SDL_GetRGBA(((Uint32 *)orig->pixels)[x_ + y_ * dest->w], orig_fmt, NULL, &Ar, &Ag, &Ab, &Aa);
+                SDL_GetRGBA(((Uint32 *)orig->pixels)[x_ + 1 + y_ * dest->w], orig_fmt, NULL, &Br, &Bg, &Bb, &Ba);
+                SDL_GetRGBA(((Uint32 *)orig->pixels)[x_ + (y_ + 1) * dest->w], orig_fmt, NULL, &Cr, &Cg, &Cb, &Ca);
+                SDL_GetRGBA(((Uint32 *)orig->pixels)[x_ + 1 + (y_ + 1) * dest->w], orig_fmt, NULL, &Dr, &Dg, &Db, &Da);
 
                 a = (Aa * (1 - dx) + Ba * dx) * (1 - dy) + (Ca * (1 - dx) + Da * dx) * dy;
                 if (a == 0)
@@ -1011,18 +1012,19 @@ void tilt_(SDL_Surface *dest, SDL_Surface *orig, int offset)
     Uint8 Ar, Ag, Ab, Aa, Br, Bg, Bb, Ba, Cr, Cg, Cb, Ca, Dr, Dg, Db, Da;
     double a, dx, dy;
     double shading;
-    if (orig->format->BytesPerPixel == 1)
+    if (SDL_GetPixelFormatDetails(orig->format)->bytes_per_pixel == 1)
     {
         fprintf(stderr, "tilt: orig surface must not have a palette\n");
         abort();
     }
 
-    if (dest->format->BytesPerPixel == 1)
+    if (SDL_GetPixelFormatDetails(dest->format)->bytes_per_pixel == 1)
     {
         fprintf(stderr, "tilt: orig surface must not have a palette\n");
         abort();
     }
 
+    const SDL_PixelFormatDetails *orig_fmt = SDL_GetPixelFormatDetails(orig->format);
     myLockSurface(orig);
     myLockSurface(dest);
     shading = 1 - sin(offset / 40.0) / 10; // shade as if a lightsource was on the left
@@ -1044,10 +1046,10 @@ void tilt_(SDL_Surface *dest, SDL_Surface *orig, int offset)
             {
                 dx = x__ - x_;
                 dy = y__ - y_;
-                SDL_GetRGBA(((Uint32 *)orig->pixels)[x_ + y_ * dest->w], orig->format, &Ar, &Ag, &Ab, &Aa);
-                SDL_GetRGBA(((Uint32 *)orig->pixels)[x_ + 1 + y_ * dest->w], orig->format, &Br, &Bg, &Bb, &Ba);
-                SDL_GetRGBA(((Uint32 *)orig->pixels)[x_ + (y_ + 1) * dest->w], orig->format, &Cr, &Cg, &Cb, &Ca);
-                SDL_GetRGBA(((Uint32 *)orig->pixels)[x_ + 1 + (y_ + 1) * dest->w], orig->format, &Dr, &Dg, &Db, &Da);
+                SDL_GetRGBA(((Uint32 *)orig->pixels)[x_ + y_ * dest->w], orig_fmt, NULL, &Ar, &Ag, &Ab, &Aa);
+                SDL_GetRGBA(((Uint32 *)orig->pixels)[x_ + 1 + y_ * dest->w], orig_fmt, NULL, &Br, &Bg, &Bb, &Ba);
+                SDL_GetRGBA(((Uint32 *)orig->pixels)[x_ + (y_ + 1) * dest->w], orig_fmt, NULL, &Cr, &Cg, &Cb, &Ca);
+                SDL_GetRGBA(((Uint32 *)orig->pixels)[x_ + 1 + (y_ + 1) * dest->w], orig_fmt, NULL, &Dr, &Dg, &Db, &Da);
 
                 a = (Aa * (1 - dx) + Ba * dx) * (1 - dy) + (Ca * (1 - dx) + Da * dx) * dy;
                 if (a == 0)
@@ -1097,21 +1099,23 @@ void points_(SDL_Surface *dest, SDL_Surface *orig, SDL_Surface *mask)
     static struct point *points = NULL;
     int i, amount = 200;
     Uint8 r, g, b, a;
-    if (orig->format->BytesPerPixel == 1)
+    if (SDL_GetPixelFormatDetails(orig->format)->bytes_per_pixel == 1)
     {
         fprintf(stderr, "points: orig surface must not have a palette\n");
         abort();
     }
-    if (dest->format->BytesPerPixel == 1)
+    if (SDL_GetPixelFormatDetails(dest->format)->bytes_per_pixel == 1)
     {
         fprintf(stderr, "points: dest surface must not have a palette\n");
         abort();
     }
-    if (mask->format->BytesPerPixel == 1)
+    if (SDL_GetPixelFormatDetails(mask->format)->bytes_per_pixel == 1)
     {
         fprintf(stderr, "points: mask surface must not have a palette\n");
         abort();
     }
+    const SDL_PixelFormatDetails *mask_fmt = SDL_GetPixelFormatDetails(mask->format);
+    const SDL_PixelFormatDetails *orig_fmt = SDL_GetPixelFormatDetails(orig->format);
     if (points == NULL)
     {
         points = (point *)malloc(sizeof(struct point) * amount);
@@ -1124,7 +1128,7 @@ void points_(SDL_Surface *dest, SDL_Surface *orig, SDL_Surface *mask)
                 points[i].x = rand_(dest->w / 2) + dest->w / 4;
                 points[i].y = rand_(dest->h / 2) + dest->h / 4;
                 SDL_GetRGBA(((Uint32 *)mask->pixels)[CLAMP((int)points[i].x, 0, mask->w) + CLAMP((int)points[i].y, 0, mask->h) * mask->w],
-                            mask->format, &r, &g, &b, &a);
+                            mask_fmt, NULL, &r, &g, &b, &a);
                 if (r == 255 && g == 255 && b == 255)
                     break;
             }
@@ -1138,7 +1142,7 @@ void points_(SDL_Surface *dest, SDL_Surface *orig, SDL_Surface *mask)
     {
         for (y = 0; y < dest->h; y++)
         {
-            SDL_GetRGBA(((Uint32 *)orig->pixels)[CLAMP(x, 0, orig->w) + CLAMP(y, 0, orig->h) * orig->w], orig->format, &r, &g, &b, &a);
+            SDL_GetRGBA(((Uint32 *)orig->pixels)[CLAMP(x, 0, orig->w) + CLAMP(y, 0, orig->h) * orig->w], orig_fmt, NULL, &r, &g, &b, &a);
             set_pixel(dest, x, y, r, g, b, a);
         }
     }
@@ -1149,7 +1153,7 @@ void points_(SDL_Surface *dest, SDL_Surface *orig, SDL_Surface *mask)
         points[i].x += cos(points[i].angle);
         points[i].y += sin(points[i].angle);
         SDL_GetRGBA(((Uint32 *)mask->pixels)[CLAMP((int)points[i].x, 0, mask->w) + CLAMP((int)points[i].y, 0, mask->h) * mask->w],
-                    mask->format, &r, &g, &b, &a);
+                    mask_fmt, NULL, &r, &g, &b, &a);
         if (r != 255 || g != 255 || b != 255)
         {
             // get back on track
@@ -1161,7 +1165,7 @@ void points_(SDL_Surface *dest, SDL_Surface *orig, SDL_Surface *mask)
                 points[i].x += cos(points[i].angle + angle_distance);
                 points[i].y += sin(points[i].angle + angle_distance);
                 SDL_GetRGBA(((Uint32 *)mask->pixels)[CLAMP((int)points[i].x, 0, mask->w) + CLAMP((int)points[i].y, 0, mask->h) * mask->w],
-                            mask->format, &r, &g, &b, &a);
+                            mask_fmt, NULL, &r, &g, &b, &a);
                 if (r == 255 && g == 255 && b == 255)
                 {
                     points[i].angle += angle_distance;
@@ -1172,7 +1176,7 @@ void points_(SDL_Surface *dest, SDL_Surface *orig, SDL_Surface *mask)
                 points[i].x += cos(points[i].angle - angle_distance);
                 points[i].y += sin(points[i].angle - angle_distance);
                 SDL_GetRGBA(((Uint32 *)mask->pixels)[CLAMP((int)points[i].x, 0, mask->w) + CLAMP((int)points[i].y, 0, mask->h) * mask->w],
-                            mask->format, &r, &g, &b, &a);
+                            mask_fmt, NULL, &r, &g, &b, &a);
                 if (r == 255 && g == 255 && b == 255)
                 {
                     points[i].angle -= angle_distance;
@@ -1196,13 +1200,13 @@ void waterize_(SDL_Surface *dest, SDL_Surface *orig, int offset)
     double a, dx, dy;
     static double *precalc_cos = NULL, *precalc_sin = NULL;
 
-    if (orig->format->BytesPerPixel != 4)
+    if (SDL_GetPixelFormatDetails(orig->format)->bytes_per_pixel != 4)
     {
         fprintf(stderr, "waterize: orig surface must be 32bpp\n");
         abort();
     }
 
-    if (dest->format->BytesPerPixel != 4)
+    if (SDL_GetPixelFormatDetails(dest->format)->bytes_per_pixel != 4)
     {
         fprintf(stderr, "waterize: dest surface must be 32bpp\n");
         abort();
@@ -1220,6 +1224,7 @@ void waterize_(SDL_Surface *dest, SDL_Surface *orig, int offset)
         }
     }
 
+    const SDL_PixelFormatDetails *orig_fmt = SDL_GetPixelFormatDetails(orig->format);
     myLockSurface(orig);
     myLockSurface(dest);
 
@@ -1241,10 +1246,10 @@ void waterize_(SDL_Surface *dest, SDL_Surface *orig, int offset)
             {
                 dx = x__ - x_;
                 dy = y__ - y_;
-                SDL_GetRGBA(((Uint32 *)orig->pixels)[x_ + y_ * dest->w], orig->format, &Ar, &Ag, &Ab, &Aa);
-                SDL_GetRGBA(((Uint32 *)orig->pixels)[x_ + 1 + y_ * dest->w], orig->format, &Br, &Bg, &Bb, &Ba);
-                SDL_GetRGBA(((Uint32 *)orig->pixels)[x_ + (y_ + 1) * dest->w], orig->format, &Cr, &Cg, &Cb, &Ca);
-                SDL_GetRGBA(((Uint32 *)orig->pixels)[x_ + 1 + (y_ + 1) * dest->w], orig->format, &Dr, &Dg, &Db, &Da);
+                SDL_GetRGBA(((Uint32 *)orig->pixels)[x_ + y_ * dest->w], orig_fmt, NULL, &Ar, &Ag, &Ab, &Aa);
+                SDL_GetRGBA(((Uint32 *)orig->pixels)[x_ + 1 + y_ * dest->w], orig_fmt, NULL, &Br, &Bg, &Bb, &Ba);
+                SDL_GetRGBA(((Uint32 *)orig->pixels)[x_ + (y_ + 1) * dest->w], orig_fmt, NULL, &Cr, &Cg, &Cb, &Ca);
+                SDL_GetRGBA(((Uint32 *)orig->pixels)[x_ + 1 + (y_ + 1) * dest->w], orig_fmt, NULL, &Dr, &Dg, &Db, &Da);
 
                 a = (Aa * (1 - dx) + Ba * dx) * (1 - dy) + (Ca * (1 - dx) + Da * dx) * dy;
                 if (a == 0)
@@ -1290,18 +1295,19 @@ void brokentv_(SDL_Surface *dest, SDL_Surface *orig, int offset)
         pixelize--;
     }
 
-    if (orig->format->palette)
+    if (SDL_ISPIXELFORMAT_INDEXED(orig->format))
     {
         fprintf(stderr, "brokentv: orig surface must not have a palette\n");
         abort();
     }
 
-    if (dest->format->palette)
+    if (SDL_ISPIXELFORMAT_INDEXED(dest->format))
     {
         fprintf(stderr, "brokentv: dest surface must not have a palette\n");
         abort();
     }
 
+    const SDL_PixelFormatDetails *orig_fmt = SDL_GetPixelFormatDetails(orig->format);
     myLockSurface(orig);
     myLockSurface(dest);
     for (y = 0; y < dest->h; y++)
@@ -1309,7 +1315,7 @@ void brokentv_(SDL_Surface *dest, SDL_Surface *orig, int offset)
         throughness = CLAMP(sin(y / (12.0 + 2 * sin(offset / 50.0)) + offset / 10.0 + sin(offset / 100.0) * 5) > 0 ? throughness_base : throughness_base + cos(offset / 30.0) * 0.2, 0, 1);
         for (x = 0; x < dest->w; x++)
         {
-            SDL_GetRGBA(((Uint32 *)orig->pixels)[x + y * orig->w], orig->format, &r, &g, &b, &a);
+            SDL_GetRGBA(((Uint32 *)orig->pixels)[x + y * orig->w], orig_fmt, NULL, &r, &g, &b, &a);
 
             if (pixelize)
                 throughness = 0.2 + rand_(100) / 100.0;
@@ -1353,16 +1359,17 @@ void brokentv_(SDL_Surface *dest, SDL_Surface *orig, int offset)
 
 void alphaize_(SDL_Surface *surf)
 {
+    const SDL_PixelFormatDetails *fmt = SDL_GetPixelFormatDetails(surf->format);
     myLockSurface(surf);
     for (y = 0; y < surf->h; y++)
         for (x = 0; x < surf->w; x++)
         {
             Uint32 pixelvalue = 0;
             int a;
-            memcpy(&pixelvalue, (Uint8 *)surf->pixels + y * surf->pitch + x * surf->format->BytesPerPixel, surf->format->BytesPerPixel);
-            a = ((pixelvalue & surf->format->Amask) >> surf->format->Ashift) / 2;
-            pixelvalue = (pixelvalue & (~surf->format->Amask)) + (a << surf->format->Ashift);
-            memcpy((Uint8 *)surf->pixels + y * surf->pitch + x * surf->format->BytesPerPixel, &pixelvalue, surf->format->BytesPerPixel);
+            memcpy(&pixelvalue, (Uint8 *)surf->pixels + y * surf->pitch + x * fmt->bytes_per_pixel, fmt->bytes_per_pixel);
+            a = ((pixelvalue & fmt->Amask) >> fmt->Ashift) / 2;
+            pixelvalue = (pixelvalue & (~fmt->Amask)) + (a << fmt->Ashift);
+            memcpy((Uint8 *)surf->pixels + y * surf->pitch + x * fmt->bytes_per_pixel, &pixelvalue, fmt->bytes_per_pixel);
         }
     myUnlockSurface(surf);
 }
@@ -1371,25 +1378,26 @@ void pixelize_(SDL_Surface *dest, SDL_Surface *orig)
 {
     Uint8 r, g, b, a;
 
-    if (orig->format->palette)
+    if (SDL_ISPIXELFORMAT_INDEXED(orig->format))
     {
         fprintf(stderr, "pixelize: orig surface must not have a palette\n");
         abort();
     }
 
-    if (dest->format->palette)
+    if (SDL_ISPIXELFORMAT_INDEXED(dest->format))
     {
         fprintf(stderr, "pixelize: orig surface must not have a palette\n");
         abort();
     }
 
+    const SDL_PixelFormatDetails *orig_fmt = SDL_GetPixelFormatDetails(orig->format);
     myLockSurface(orig);
     myLockSurface(dest);
     for (y = 0; y < dest->h; y++)
     {
         for (x = 0; x < dest->w; x++)
         {
-            SDL_GetRGBA(((Uint32 *)orig->pixels)[x + y * orig->w], orig->format, &r, &g, &b, &a);
+            SDL_GetRGBA(((Uint32 *)orig->pixels)[x + y * orig->w], orig_fmt, NULL, &r, &g, &b, &a);
             set_pixel(dest, x, y, r, g, b, a * (0.2 + rand_(100) / 100.0));
         }
     }
@@ -1402,17 +1410,18 @@ void blacken_(SDL_Surface *surf, int step)
     Uint32 pixelvalue; /* this should also be okay for 16-bit and 24-bit formats */
     // Uint8 r, g, b, a;
     int r, g, b;
-    if (surf->format->palette)
+    if (SDL_ISPIXELFORMAT_INDEXED(surf->format))
     {
         /* there is a palette... I don't care of the bloody oldskoolers who still use
            8-bit displays & al, they can suffer and die ;p */
         return;
     }
+    const SDL_PixelFormatDetails *fmt = SDL_GetPixelFormatDetails(surf->format);
     myLockSurface(surf);
     for (y = (step - 1) * surf->h / 70; y < step * surf->h / 70; y++)
     {
-        bzero((Uint8 *)surf->pixels + y * surf->pitch, surf->format->BytesPerPixel * XRES);
-        bzero((Uint8 *)surf->pixels + (YRES - 1 - y) * surf->pitch, surf->format->BytesPerPixel * XRES);
+        bzero((Uint8 *)surf->pixels + y * surf->pitch, fmt->bytes_per_pixel * XRES);
+        bzero((Uint8 *)surf->pixels + (YRES - 1 - y) * surf->pitch, fmt->bytes_per_pixel * XRES);
         // set_pixel(surf, x, y,           0, 0, 0, 0);
         // set_pixel(surf, x, surf->h - y, 0, 0, 0, 0);
     }
@@ -1426,26 +1435,26 @@ void blacken_(SDL_Surface *surf, int step)
             // SDL_GetRGBA(((Uint32 *)surf->pixels)[x + (surf->h-y-1) * surf->w], surf->format, &r, &g, &b, &a);
             // set_pixel(surf, x, (surf->h-y-1), r*3/4, g*3/4, b*3/4, a);
 
-            memcpy(&pixelvalue, (Uint8 *)surf->pixels + y * surf->pitch + x * surf->format->BytesPerPixel, surf->format->BytesPerPixel);
-            r = (((pixelvalue & surf->format->Rmask) >> surf->format->Rshift)) * 3 / 4;
-            g = (((pixelvalue & surf->format->Gmask) >> surf->format->Gshift)) * 3 / 4;
-            b = (((pixelvalue & surf->format->Bmask) >> surf->format->Bshift)) * 3 / 4;
-            pixelvalue = (r << surf->format->Rshift) + (g << surf->format->Gshift) + (b << surf->format->Bshift);
-            memcpy((Uint8 *)surf->pixels + y * surf->pitch + x * surf->format->BytesPerPixel, &pixelvalue, surf->format->BytesPerPixel);
+            memcpy(&pixelvalue, (Uint8 *)surf->pixels + y * surf->pitch + x * fmt->bytes_per_pixel, fmt->bytes_per_pixel);
+            r = (((pixelvalue & fmt->Rmask) >> fmt->Rshift)) * 3 / 4;
+            g = (((pixelvalue & fmt->Gmask) >> fmt->Gshift)) * 3 / 4;
+            b = (((pixelvalue & fmt->Bmask) >> fmt->Bshift)) * 3 / 4;
+            pixelvalue = (r << fmt->Rshift) + (g << fmt->Gshift) + (b << fmt->Bshift);
+            memcpy((Uint8 *)surf->pixels + y * surf->pitch + x * fmt->bytes_per_pixel, &pixelvalue, fmt->bytes_per_pixel);
 
-            memcpy(&pixelvalue, (Uint8 *)surf->pixels + (YRES - 1 - y) * surf->pitch + x * surf->format->BytesPerPixel, surf->format->BytesPerPixel);
-            r = (((pixelvalue & surf->format->Rmask) >> surf->format->Rshift)) * 3 / 4;
-            g = (((pixelvalue & surf->format->Gmask) >> surf->format->Gshift)) * 3 / 4;
-            b = (((pixelvalue & surf->format->Bmask) >> surf->format->Bshift)) * 3 / 4;
-            pixelvalue = (r << surf->format->Rshift) + (g << surf->format->Gshift) + (b << surf->format->Bshift);
-            memcpy((Uint8 *)surf->pixels + (YRES - 1 - y) * surf->pitch + x * surf->format->BytesPerPixel, &pixelvalue, surf->format->BytesPerPixel);
+            memcpy(&pixelvalue, (Uint8 *)surf->pixels + (YRES - 1 - y) * surf->pitch + x * fmt->bytes_per_pixel, fmt->bytes_per_pixel);
+            r = (((pixelvalue & fmt->Rmask) >> fmt->Rshift)) * 3 / 4;
+            g = (((pixelvalue & fmt->Gmask) >> fmt->Gshift)) * 3 / 4;
+            b = (((pixelvalue & fmt->Bmask) >> fmt->Bshift)) * 3 / 4;
+            pixelvalue = (r << fmt->Rshift) + (g << fmt->Gshift) + (b << fmt->Bshift);
+            memcpy((Uint8 *)surf->pixels + (YRES - 1 - y) * surf->pitch + x * fmt->bytes_per_pixel, &pixelvalue, fmt->bytes_per_pixel);
         }
     myUnlockSurface(surf);
 }
 
 void overlook_init_(SDL_Surface *surf)
 {
-    if (surf->format->BytesPerPixel != 4)
+    if (SDL_GetPixelFormatDetails(surf->format)->bytes_per_pixel != 4)
     {
         fprintf(stderr, "overlook_init: dest surface must be 32bpp\n");
         abort();
@@ -1470,12 +1479,12 @@ void overlook_(SDL_Surface *dest, SDL_Surface *orig, int step, int pivot)
     double dx, dy;
     Uint8 Ar, Ag, Ab, Aa, Br, Bg, Bb, Ba, Cr, Cg, Cb, Ca, Dr, Dg, Db, Da;
     Uint8 dr, dg, db, da;
-    if (orig->format->BytesPerPixel != 4)
+    if (SDL_GetPixelFormatDetails(orig->format)->bytes_per_pixel != 4)
     {
         fprintf(stderr, "overlook: orig surface must be 32bpp\n");
         abort();
     }
-    if (dest->format->BytesPerPixel != 4)
+    if (SDL_GetPixelFormatDetails(dest->format)->bytes_per_pixel != 4)
     {
         fprintf(stderr, "overlook: dest surface must be 32bpp\n");
         abort();
@@ -1554,12 +1563,12 @@ void snow_(SDL_Surface *dest, SDL_Surface *orig)
     double a, fore_a, x_flake, y_flake, dx, dy;
     int r, g, b, fore_r, fore_g, fore_b, x_, y_, y__;
     Uint8 r_, g_, b_, a_;
-    if (orig->format->BytesPerPixel == 1)
+    if (SDL_GetPixelFormatDetails(orig->format)->bytes_per_pixel == 1)
     {
         fprintf(stderr, "snow: orig surface must not have a palette\n");
         abort();
     }
-    if (dest->format->BytesPerPixel == 1)
+    if (SDL_GetPixelFormatDetails(dest->format)->bytes_per_pixel == 1)
     {
         fprintf(stderr, "snow: dest surface must not have a palette\n");
         abort();
@@ -1702,9 +1711,10 @@ void snow_(SDL_Surface *dest, SDL_Surface *orig)
 void draw_line_(SDL_Surface *surface, int x1, int y1, int x2, int y2, SDL_Color *color)
 {
     // simple Bresenham line drawing. should be antialiased for better output, but is not.
-    int bpp = surface->format->BytesPerPixel;
+    const SDL_PixelFormatDetails *fmt = SDL_GetPixelFormatDetails(surface->format);
+    int bpp = fmt->bytes_per_pixel;
     Uint8 *p;
-    int pix = SDL_MapRGB(surface->format, color->r, color->g, color->b);
+    int pix = SDL_MapRGB(fmt, NULL, color->r, color->g, color->b);
     double xacc, yacc, x, y;
     myLockSurface(surface);
     if (abs(x2 - x1) > abs(y2 - y1))

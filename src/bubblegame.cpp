@@ -209,7 +209,7 @@ struct SingleBubble {
         rect.x = pos.x;
         rect.y = pos.y;
         rect.w = rect.h = bubbleSize;
-        SDL_RenderCopy(rend, bubbles[bubbleId], nullptr, &rect);
+        { SDL_FRect fr = ToFRect(rect); SDL_RenderTexture(rend, bubbles[bubbleId], nullptr, &fr); }
     };
 };
 
@@ -230,7 +230,7 @@ struct MalusBubble {
         rect.y = pos.y;
         // Use appropriate size based on whether this is for a mini player
         rect.w = rect.h = useMini ? 16 : 32;
-        SDL_RenderCopy(rend, bubbles[bubbleId], nullptr, &rect);
+        { SDL_FRect fr = ToFRect(rect); SDL_RenderTexture(rend, bubbles[bubbleId], nullptr, &fr); }
     }
 };
 
@@ -314,27 +314,27 @@ BubbleGame::BubbleGame(const SDL_Renderer *renderer)
     pauseBackground = IMG_LoadTexture(rend, ASSET("/gfx/back_paused.png").c_str());
 
     inGameText.LoadFont(ASSET("/gfx/DroidSans.ttf").c_str(), 20);
-    inGameText.UpdateAlignment(TTF_WRAPPED_ALIGN_CENTER);
+    inGameText.UpdateAlignment(TTF_HORIZONTAL_ALIGN_CENTER);
     inGameText.UpdateColor({255, 255, 255, 255}, {0, 0, 0, 255});
 
     winsP1Text.LoadFont(ASSET("/gfx/DroidSans.ttf").c_str(), 20);
-    winsP1Text.UpdateAlignment(TTF_WRAPPED_ALIGN_CENTER);
+    winsP1Text.UpdateAlignment(TTF_HORIZONTAL_ALIGN_CENTER);
     winsP1Text.UpdateColor({255, 255, 255, 255}, {0, 0, 0, 255});
 
     winsP2Text.LoadFont(ASSET("/gfx/DroidSans.ttf").c_str(), 20);
-    winsP2Text.UpdateAlignment(TTF_WRAPPED_ALIGN_CENTER);
+    winsP2Text.UpdateAlignment(TTF_HORIZONTAL_ALIGN_CENTER);
     winsP2Text.UpdateColor({255, 255, 255, 255}, {0, 0, 0, 255});
 
     scoreText.LoadFont(ASSET("/gfx/DroidSans.ttf").c_str(), 24);
-    scoreText.UpdateAlignment(TTF_WRAPPED_ALIGN_LEFT);
+    scoreText.UpdateAlignment(TTF_HORIZONTAL_ALIGN_LEFT);
     scoreText.UpdateColor({255, 255, 255, 255}, {0, 0, 0, 255});
 
     comboText.LoadFont(ASSET("/gfx/DroidSans.ttf").c_str(), 32);
-    comboText.UpdateAlignment(TTF_WRAPPED_ALIGN_CENTER);
+    comboText.UpdateAlignment(TTF_HORIZONTAL_ALIGN_CENTER);
     comboText.UpdateColor({255, 255, 0, 255}, {0, 0, 0, 255}); // Yellow text
 
     finalScoreText.LoadFont(ASSET("/gfx/DroidSans.ttf").c_str(), 28);
-    finalScoreText.UpdateAlignment(TTF_WRAPPED_ALIGN_CENTER);
+    finalScoreText.UpdateAlignment(TTF_HORIZONTAL_ALIGN_CENTER);
     finalScoreText.UpdateColor({255, 255, 255, 255}, {0, 0, 0, 255});
 
     mpTrainText.LoadFont(ASSET("/gfx/DroidSans.ttf").c_str(), 16);
@@ -345,7 +345,7 @@ BubbleGame::BubbleGame(const SDL_Renderer *renderer)
     for (int i = 0; i < 5; i++) {
         int fontSize = (i == 0) ? 22 : 16;
         playerNameWinText[i].LoadFont(ASSET("/gfx/DroidSans.ttf").c_str(), fontSize);
-        playerNameWinText[i].UpdateAlignment(TTF_WRAPPED_ALIGN_CENTER);
+        playerNameWinText[i].UpdateAlignment(TTF_HORIZONTAL_ALIGN_CENTER);
         playerNameWinText[i].UpdateColor({255, 255, 255, 255}, {0, 0, 0, 255});
     }
 
@@ -371,17 +371,18 @@ BubbleGame::~BubbleGame() {
 void BubbleGame::InitControllers() {
     CloseControllers();
     numControllersOpen = 0;
-    int numJoysticks = SDL_NumJoysticks();
-    SDL_Log("InitControllers: %d joystick(s) detected", numJoysticks);
-    for (int i = 0; i < numJoysticks && numControllersOpen < 5; i++) {
-        if (SDL_IsGameController(i)) {
-            controllers[numControllersOpen] = SDL_GameControllerOpen(i);
-            if (controllers[numControllersOpen]) {
-                SDL_Log("Opened controller %d: %s", numControllersOpen,
-                        SDL_GameControllerName(controllers[numControllersOpen]));
-                numControllersOpen++;
+    int numIds = 0;
+    SDL_JoystickID *ids = SDL_GetGamepads(&numIds);
+    SDL_Log("InitControllers: %d gamepad(s) detected", numIds);
+    if (ids) {
+        for (int i = 0; i < numIds && numControllersOpen < 5; i++) {
+            SDL_Gamepad *gp = SDL_OpenGamepad(ids[i]);
+            if (gp) {
+                controllers[numControllersOpen++] = gp;
+                SDL_Log("Opened controller %d: %s", numControllersOpen, SDL_GetGamepadName(gp));
             }
         }
+        SDL_free(ids);
     }
     SDL_Log("InitControllers: opened %d controller(s)", numControllersOpen);
 }
@@ -389,7 +390,7 @@ void BubbleGame::InitControllers() {
 void BubbleGame::CloseControllers() {
     for (int i = 0; i < 5; i++) {
         if (controllers[i]) {
-            SDL_GameControllerClose(controllers[i]);
+            SDL_CloseGamepad(controllers[i]);
             controllers[i] = nullptr;
         }
     }
@@ -750,15 +751,14 @@ void BubbleGame::NewGame(SetupSettings setup) {
     }
 
     // Initialize controllers for local multiplayer
-    // On Android, opening a TV remote as SDL_GameController captures its d-pad events,
+    // On Android, opening a TV remote as SDL_Gamepad captures its d-pad events,
     // causing SDL_GetKeyboardState to stop seeing them. Use keyboard-only on Android.
     if (currentSettings.localMultiplayer) {
 #ifndef __ANDROID__
         InitControllers();
 #endif
-        int connected = SDL_NumJoysticks();
-        SDL_Log("Local multiplayer: %d controllers connected, need %d",
-                connected, currentSettings.playerCount);
+        SDL_Log("Local multiplayer: %d controllers opened, need %d",
+                numControllersOpen, currentSettings.playerCount);
     }
 
     // Local multiplayer 2x2 equal-size grid layout for 2-5 players
@@ -1575,7 +1575,7 @@ void BubbleGame::UpdatePenguin(BubbleArray &bArray) {
             if (currentSettings.localMultiplayer && bArray.playerAssigned >= 0 && bArray.playerAssigned < 5) {
                 // Local multiplayer: keyboard first (always works, matches 1P path),
                 // then OR with controller DPAD for real gamepads.
-                // Note: on Android TV, opening SDL_GameController can suppress d-pad
+                // Note: on Android TV, opening SDL_Gamepad can suppress d-pad
                 // keyboard events, so keyboard must be read unconditionally first.
                 int idx = bArray.playerAssigned;
                 // IsKeyPressed() handles real keyboard and virtual controller scancodes.
@@ -1586,12 +1586,12 @@ void BubbleGame::UpdatePenguin(BubbleArray &bArray) {
                 bArray.shooterCenter = IsKeyPressed(keys.center) || controllerInputs[idx].center;
                 bArray.shooterAction = IsKeyPressed(keys.fire)   || controllerInputs[idx].fire;
                 if (idx < numControllersOpen && controllers[idx]) {
-                    SDL_GameController* ctrl = controllers[idx];
-                    bArray.shooterLeft   = bArray.shooterLeft   || SDL_GameControllerGetButton(ctrl, SDL_CONTROLLER_BUTTON_DPAD_LEFT)  != 0;
-                    bArray.shooterRight  = bArray.shooterRight  || SDL_GameControllerGetButton(ctrl, SDL_CONTROLLER_BUTTON_DPAD_RIGHT) != 0;
-                    bArray.shooterCenter = bArray.shooterCenter || SDL_GameControllerGetButton(ctrl, SDL_CONTROLLER_BUTTON_DPAD_UP)    != 0;
-                    bArray.shooterAction = bArray.shooterAction || SDL_GameControllerGetButton(ctrl, SDL_CONTROLLER_BUTTON_A)          != 0
-                                        || SDL_GameControllerGetButton(ctrl, SDL_CONTROLLER_BUTTON_DPAD_UP)                            != 0;
+                    SDL_Gamepad* ctrl = controllers[idx];
+                    bArray.shooterLeft   = bArray.shooterLeft   || SDL_GetGamepadButton(ctrl, SDL_GAMEPAD_BUTTON_DPAD_LEFT)  != 0;
+                    bArray.shooterRight  = bArray.shooterRight  || SDL_GetGamepadButton(ctrl, SDL_GAMEPAD_BUTTON_DPAD_RIGHT) != 0;
+                    bArray.shooterCenter = bArray.shooterCenter || SDL_GetGamepadButton(ctrl, SDL_GAMEPAD_BUTTON_DPAD_UP)    != 0;
+                    bArray.shooterAction = bArray.shooterAction || SDL_GetGamepadButton(ctrl, SDL_GAMEPAD_BUTTON_SOUTH)      != 0
+                                        || SDL_GetGamepadButton(ctrl, SDL_GAMEPAD_BUTTON_DPAD_UP)                            != 0;
                 }
             } else if (bArray.playerAssigned == 0) {
                 bArray.shooterAction = IsKeyPressed(keys.fire);
@@ -1620,7 +1620,7 @@ void BubbleGame::UpdatePenguin(BubbleArray &bArray) {
             if (bArray.hurryTimer >= TIME_HURRY_WARN) {
                 if (bArray.warnTimer <= HURRY_WARN_FC / 2){
                     if(bArray.warnTimer == 0) audMixer->PlaySFX("hurry");
-                    SDL_RenderCopy(const_cast<SDL_Renderer*>(renderer), bArray.hurryTexture, nullptr, &bArray.hurryRct);
+                    { SDL_FRect fr = ToFRect(bArray.hurryRct); SDL_RenderTexture(const_cast<SDL_Renderer*>(renderer), bArray.hurryTexture, nullptr, &fr); }
                 }
                 bArray.warnTimer++;
                 if (bArray.warnTimer > HURRY_WARN_FC) {
@@ -1635,7 +1635,7 @@ void BubbleGame::UpdatePenguin(BubbleArray &bArray) {
             if (bArray.hurryTimer >= TIME_HURRY_WARN_MP) {
                 if (bArray.warnTimer <= HURRY_WARN_MP_FC / 2){
                     if(bArray.warnTimer == 0) audMixer->PlaySFX("hurry");
-                    SDL_RenderCopy(const_cast<SDL_Renderer*>(renderer), bArray.hurryTexture, nullptr, &bArray.hurryRct);
+                    { SDL_FRect fr = ToFRect(bArray.hurryRct); SDL_RenderTexture(const_cast<SDL_Renderer*>(renderer), bArray.hurryTexture, nullptr, &fr); }
                 }
                 bArray.warnTimer++;
                 if (bArray.warnTimer > HURRY_WARN_MP_FC) {
@@ -3128,7 +3128,7 @@ void BubbleGame::UpdateScoreText(BubbleArray &bArray) {
     scoreText.UpdatePosition(bArray.scorePos);
 
     // Render immediately (original: print_scores renders each player's score in the loop)
-    SDL_RenderCopy(const_cast<SDL_Renderer*>(renderer), scoreText.Texture(), nullptr, scoreText.Coords());
+    { SDL_FRect fr = ToFRect(*scoreText.Coords()); SDL_RenderTexture(const_cast<SDL_Renderer*>(renderer), scoreText.Texture(), nullptr, &fr); }
 }
 
 SDL_Texture** BubbleGame::GetBubbleTextures(bool mini) {
@@ -3427,7 +3427,7 @@ static void DrawAimGuide(SDL_Renderer* rend, const BubbleArray& bArray) {
             if (alpha < 30) alpha = 30;
             SDL_SetRenderDrawColor(rend, 255, 255, 255, (Uint8)alpha);
             SDL_Rect dot = {(int)px + BUBBLE_SIZE / 2 - 3, (int)py + BUBBLE_SIZE / 2 - 3, 6, 6};
-            SDL_RenderFillRect(rend, &dot);
+            { SDL_FRect fr = ToFRect(dot); SDL_RenderFillRect(rend, &fr); }
         }
     }
 
@@ -3436,7 +3436,7 @@ static void DrawAimGuide(SDL_Renderer* rend, const BubbleArray& bArray) {
 
 void BubbleGame::Render() {
     SDL_Renderer *rend = const_cast<SDL_Renderer*>(renderer);
-    SDL_RenderCopy(rend, background, nullptr, nullptr);
+    SDL_RenderTexture(rend, background, nullptr, nullptr);
 
     // Process network messages if this is a network game
     if (currentSettings.networkGame) {
@@ -3549,16 +3549,16 @@ void BubbleGame::Render() {
             rct.x = curArray.rightLimit;
             rct.y = 104 - (7 * i) - i;
             rct.w = rct.h = 7;
-            SDL_RenderCopy(rend, dotTexture[i == curArray.turnsToCompress ? 1 : 0], nullptr, &rct);
+            { SDL_FRect fr = ToFRect(rct); SDL_RenderTexture(rend, dotTexture[i == curArray.turnsToCompress ? 1 : 0], nullptr, &fr); }
         }
         for (int i = 0; i < curArray.numSeparators; i++) {
             rct.x = SCREEN_CENTER_X - 95;
             rct.y = (28 * i);
             rct.w = 188;
             rct.h = 28;
-            SDL_RenderCopy(rend, sepCompressorTexture, nullptr, &rct);
+            { SDL_FRect fr = ToFRect(rct); SDL_RenderTexture(rend, sepCompressorTexture, nullptr, &fr); }
         }
-        SDL_RenderCopy(rend, compressorTexture, nullptr, &curArray.compressorRct);
+        { SDL_FRect fr = ToFRect(curArray.compressorRct); SDL_RenderTexture(rend, compressorTexture, nullptr, &fr); }
 
         if (curArray.turnsToCompress <= 2) {
             DoPrelightAnimation(curArray, curArray.prelightTime);
@@ -3569,7 +3569,7 @@ void BubbleGame::Render() {
         // Stick effect animation (original: $sticking_bubble / sticking_step)
         if (curArray.stickAnimActive) {
             SDL_Rect sr = {curArray.stickAnimPos.x - 16, curArray.stickAnimPos.y - 16, 32, 32};
-            SDL_RenderCopy(rend, imgBubbleStick[curArray.stickAnimFrame], nullptr, &sr);
+            { SDL_FRect fr = ToFRect(sr); SDL_RenderTexture(rend, imgBubbleStick[curArray.stickAnimFrame], nullptr, &fr); }
             if (++curArray.stickAnimSlowdown >= 2) {
                 curArray.stickAnimSlowdown = 0;
                 if (++curArray.stickAnimFrame > BUBBLE_STICKFC) curArray.stickAnimActive = false;
@@ -3580,16 +3580,16 @@ void BubbleGame::Render() {
             if (!gameWon && !gameLost) DoFrozenAnimation(curArray, curArray.frozenWait);
 
             if (gameLost) {
-                SDL_RenderCopy(rend, soloStatePanels[0], nullptr, &panelRct);
+                { SDL_FRect fr = ToFRect(panelRct); SDL_RenderTexture(rend, soloStatePanels[0], nullptr, &fr); }
                 // Show final score on lose screen
                 char finalScore[64];
                 snprintf(finalScore, sizeof(finalScore), "Final Score: %d", curArray.score);
                 finalScoreText.UpdateText(renderer, finalScore, 0);
                 finalScoreText.UpdatePosition({SCREEN_CENTER_X - (finalScoreText.Coords()->w / 2), panelRct.y + panelRct.h - 40});
-                SDL_RenderCopy(rend, finalScoreText.Texture(), nullptr, finalScoreText.Coords());
+                { SDL_FRect fr = ToFRect(*finalScoreText.Coords()); SDL_RenderTexture(rend, finalScoreText.Texture(), nullptr, &fr); }
             }
             else if (gameWon) {
-                SDL_RenderCopy(rend, soloStatePanels[1], nullptr, &panelRct);
+                { SDL_FRect fr = ToFRect(panelRct); SDL_RenderTexture(rend, soloStatePanels[1], nullptr, &fr); }
                 // Show final score on win screen (training shows mp_train score, normal shows bubble score)
                 char finalScore[64];
                 if (currentSettings.mpTraining)
@@ -3598,7 +3598,7 @@ void BubbleGame::Render() {
                     snprintf(finalScore, sizeof(finalScore), "Final Score: %d", curArray.score);
                 finalScoreText.UpdateText(renderer, finalScore, 0);
                 finalScoreText.UpdatePosition({SCREEN_CENTER_X - (finalScoreText.Coords()->w / 2), panelRct.y + panelRct.h - 40});
-                SDL_RenderCopy(rend, finalScoreText.Texture(), nullptr, finalScoreText.Coords());
+                { SDL_FRect fr = ToFRect(*finalScoreText.Coords()); SDL_RenderTexture(rend, finalScoreText.Texture(), nullptr, &fr); }
             }
         }
 
@@ -3614,16 +3614,16 @@ void BubbleGame::Render() {
             }
         }
 
-        SDL_RenderCopy(rend, gameFinish && !gameWon ? imgBubbleFrozen : useBubbles[curArray.curLaunch], nullptr, &curArray.curLaunchRct);
-        SDL_RenderCopy(rend, useBubbles[curArray.nextBubble], nullptr, &curArray.nextBubbleRct);
-        SDL_RenderCopy(rend, onTopTexture, nullptr, &curArray.onTopRct);
-        if (gameFinish && !gameWon) SDL_RenderCopy(rend, imgBubbleFrozen, nullptr, &curArray.frozenBottomRct);
+        { SDL_FRect fr = ToFRect(curArray.curLaunchRct); SDL_RenderTexture(rend, gameFinish && !gameWon ? imgBubbleFrozen : useBubbles[curArray.curLaunch], nullptr, &fr); }
+        { SDL_FRect fr = ToFRect(curArray.nextBubbleRct); SDL_RenderTexture(rend, useBubbles[curArray.nextBubble], nullptr, &fr); }
+        { SDL_FRect fr = ToFRect(curArray.onTopRct); SDL_RenderTexture(rend, onTopTexture, nullptr, &fr); }
+        if (gameFinish && !gameWon) { SDL_FRect fr = ToFRect(curArray.frozenBottomRct); SDL_RenderTexture(rend, imgBubbleFrozen, nullptr, &fr); }
 
         UpdatePenguin(curArray);
         if(!lowGfx) curArray.penguinSprite.Render();
         curArray.shooterSprite.Render(lowGfx);
         if (curArray.aimGuideEnabled && !gameFinish) DrawAimGuide(rend, curArray);
-        SDL_RenderCopy(rend, inGameText.Texture(), nullptr, inGameText.Coords());
+        { SDL_FRect fr = ToFRect(*inGameText.Coords()); SDL_RenderTexture(rend, inGameText.Texture(), nullptr, &fr); }
 
         // Display score (UpdateScoreText now renders immediately)
         UpdateScoreText(curArray);
@@ -3639,12 +3639,12 @@ void BubbleGame::Render() {
             snprintf(trainBuf, sizeof(trainBuf), "%d'%02d\"  Score: %d", m, s, mpTrainScore);
             mpTrainText.UpdateText(renderer, trainBuf, 0);
             mpTrainText.UpdatePosition({32, 177});
-            SDL_RenderCopy(rend, mpTrainText.Texture(), nullptr, mpTrainText.Coords());
+            { SDL_FRect fr = ToFRect(*mpTrainText.Coords()); SDL_RenderTexture(rend, mpTrainText.Texture(), nullptr, &fr); }
         }
 
         // Display combo text if timer is active
         if (comboDisplayTimer > 0) {
-            SDL_RenderCopy(rend, comboText.Texture(), nullptr, comboText.Coords());
+            { SDL_FRect fr = ToFRect(*comboText.Coords()); SDL_RenderTexture(rend, comboText.Texture(), nullptr, &fr); }
             comboDisplayTimer--;
         }
     }
@@ -3661,7 +3661,7 @@ void BubbleGame::Render() {
                 rct.x = curArray.rightLimit;
                 rct.y = 104 - (7 * i) - i;
                 rct.w = rct.h = 7;
-                SDL_RenderCopy(rend, dotTexture[i == curArray.turnsToCompress ? 1 : 0], nullptr, &rct);
+                { SDL_FRect fr = ToFRect(rct); SDL_RenderTexture(rend, dotTexture[i == curArray.turnsToCompress ? 1 : 0], nullptr, &fr); }
             }
 
             // Use mini textures for remote players (playerAssigned >= 1) in 3-5 player games
@@ -3673,11 +3673,11 @@ void BubbleGame::Render() {
             // Don't render shooter bubbles for LOST players (prevents crashes from invalid bubble indices)
             // In network games, losing players become spectators and shouldn't have active bubbles
             if (curArray.playerState != BubbleArray::PlayerState::LOST) {
-                SDL_RenderCopy(rend, gameFinish && !curArray.mpWinner ? useFrozen : useBubbles[curArray.curLaunch], nullptr, &curArray.curLaunchRct);
-                SDL_RenderCopy(rend, useBubbles[curArray.nextBubble], nullptr, &curArray.nextBubbleRct);
-                SDL_RenderCopy(rend, onTopTexture, nullptr, &curArray.onTopRct);
+                { SDL_FRect fr = ToFRect(curArray.curLaunchRct); SDL_RenderTexture(rend, gameFinish && !curArray.mpWinner ? useFrozen : useBubbles[curArray.curLaunch], nullptr, &fr); }
+                { SDL_FRect fr = ToFRect(curArray.nextBubbleRct); SDL_RenderTexture(rend, useBubbles[curArray.nextBubble], nullptr, &fr); }
+                { SDL_FRect fr = ToFRect(curArray.onTopRct); SDL_RenderTexture(rend, onTopTexture, nullptr, &fr); }
             }
-            if (gameFinish && !curArray.mpWinner) SDL_RenderCopy(rend, useFrozen, nullptr, &curArray.frozenBottomRct);
+            if (gameFinish && !curArray.mpWinner) { SDL_FRect fr = ToFRect(curArray.frozenBottomRct); SDL_RenderTexture(rend, useFrozen, nullptr, &fr); }
 
             if (curArray.turnsToCompress <= 2) {
                 DoPrelightAnimation(curArray, curArray.prelightTime);
@@ -3689,7 +3689,7 @@ void BubbleGame::Render() {
                 SDL_Texture* stickTex = useMini ? imgMiniBubbleStick[curArray.stickAnimFrame] : imgBubbleStick[curArray.stickAnimFrame];
                 int sz = useMini ? 16 : 32;
                 SDL_Rect sr = {curArray.stickAnimPos.x - sz/2, curArray.stickAnimPos.y - sz/2, sz, sz};
-                SDL_RenderCopy(rend, stickTex, nullptr, &sr);
+                { SDL_FRect fr = ToFRect(sr); SDL_RenderTexture(rend, stickTex, nullptr, &fr); }
                 if (++curArray.stickAnimSlowdown >= 2) {
                     curArray.stickAnimSlowdown = 0;
                     if (++curArray.stickAnimFrame > BUBBLE_STICKFC) curArray.stickAnimActive = false;
@@ -3753,7 +3753,7 @@ void BubbleGame::Render() {
                 }
 
                 if (leftTexture) {
-                    SDL_RenderCopy(rend, leftTexture, nullptr, &leftRect);
+                    { SDL_FRect fr = ToFRect(leftRect); SDL_RenderTexture(rend, leftTexture, nullptr, &fr); }
                 }
             }
 
@@ -3766,10 +3766,10 @@ void BubbleGame::Render() {
                 int rpIdx = curArray.playerAssigned - 1;
                 if (imgAttack[rpIdx]) {
                     SDL_Rect attackRct;
-                    SDL_QueryTexture(imgAttack[rpIdx], nullptr, nullptr, &attackRct.w, &attackRct.h);
+                    { float fw, fh; SDL_GetTextureSize(imgAttack[rpIdx], &fw, &fh); attackRct.w = (int)fw; attackRct.h = (int)fh; }
                     attackRct.x = attackPos[rpIdx].x;
                     attackRct.y = attackPos[rpIdx].y;
-                    SDL_RenderCopy(rend, imgAttack[rpIdx], nullptr, &attackRct);
+                    { SDL_FRect fr = ToFRect(attackRct); SDL_RenderTexture(rend, imgAttack[rpIdx], nullptr, &fr); }
                 }
             }
 
@@ -3791,7 +3791,7 @@ void BubbleGame::Render() {
                         ty = curArray.shooterSprite.rect.y + curArray.shooterSprite.rect.h;
                     }
                     targetingText.UpdatePosition({tx, ty});
-                    SDL_RenderCopy(rend, targetingText.Texture(), nullptr, targetingText.Coords());
+                    { SDL_FRect fr = ToFRect(*targetingText.Coords()); SDL_RenderTexture(rend, targetingText.Texture(), nullptr, &fr); }
                 }
             }
         }
@@ -3806,10 +3806,10 @@ void BubbleGame::Render() {
                     int rpIdx = attackerArray - 1;
                     if (imgAttackMe[rpIdx]) {
                         SDL_Rect amRct;
-                        SDL_QueryTexture(imgAttackMe[rpIdx], nullptr, nullptr, &amRct.w, &amRct.h);
+                        { float fw, fh; SDL_GetTextureSize(imgAttackMe[rpIdx], &fw, &fh); amRct.w = (int)fw; amRct.h = (int)fh; }
                         amRct.x = 185 + ((int)k * 24);
                         amRct.y = 448;
-                        SDL_RenderCopy(rend, imgAttackMe[rpIdx], nullptr, &amRct);
+                        { SDL_FRect fr = ToFRect(amRct); SDL_RenderTexture(rend, imgAttackMe[rpIdx], nullptr, &fr); }
                     }
                 }
             }
@@ -3848,7 +3848,7 @@ void BubbleGame::Render() {
 
         if (gameFinish) {
             if (currentSettings.playerCount == 2) {
-                if (gameMpDone) SDL_RenderCopy(rend, multiStatePanels[idxMPWinner], nullptr, &panelRct);
+                if (gameMpDone) { SDL_FRect fr = ToFRect(panelRct); SDL_RenderTexture(rend, multiStatePanels[idxMPWinner], nullptr, &fr); }
                 else {
                     for (int i = 0; i < currentSettings.playerCount; i++) {
                         if (bubbleArrays[i].mpDone == false) {
@@ -3879,8 +3879,8 @@ void BubbleGame::Render() {
         // Render win counters and player names
         if (currentSettings.playerCount == 2) {
             // 2-player mode: show simple win counters
-            SDL_RenderCopy(rend, winsP1Text.Texture(), nullptr, winsP1Text.Coords());
-            SDL_RenderCopy(rend, winsP2Text.Texture(), nullptr, winsP2Text.Coords());
+            { SDL_FRect fr = ToFRect(*winsP1Text.Coords()); SDL_RenderTexture(rend, winsP1Text.Texture(), nullptr, &fr); }
+            { SDL_FRect fr = ToFRect(*winsP2Text.Coords()); SDL_RenderTexture(rend, winsP2Text.Texture(), nullptr, &fr); }
         } else if (currentSettings.playerCount >= 3) {
             // Update names every frame to pick up nicknames as they become available
             UpdatePlayerNameWinText();
@@ -3888,7 +3888,7 @@ void BubbleGame::Render() {
             // 3-5 player mode: show player name and win count
             for (int i = 0; i < currentSettings.playerCount; i++) {
                 if (playerNameWinText[i].Texture()) {
-                    SDL_RenderCopy(rend, playerNameWinText[i].Texture(), nullptr, playerNameWinText[i].Coords());
+                    { SDL_FRect fr = ToFRect(*playerNameWinText[i].Coords()); SDL_RenderTexture(rend, playerNameWinText[i].Texture(), nullptr, &fr); }
                 }
             }
         }
@@ -3910,7 +3910,7 @@ void BubbleGame::Render() {
             SDL_SetRenderDrawBlendMode(rend, SDL_BLENDMODE_BLEND);
             SDL_Rect chatBg = {0, bgY, 640, bgH};
             SDL_SetRenderDrawColor(rend, 0, 0, 0, 170);
-            SDL_RenderFillRect(rend, &chatBg);
+            { SDL_FRect fr = ToFRect(chatBg); SDL_RenderFillRect(rend, &fr); }
             SDL_SetRenderDrawBlendMode(rend, SDL_BLENDMODE_NONE);
 
             // Draw input line (yellow) above the message area
@@ -3920,7 +3920,7 @@ void BubbleGame::Render() {
                 chatInputText.UpdateText(rend, inputLine, 630);
                 chatInputText.UpdatePosition({chatX, bgY + 2});
                 if (chatInputText.Texture())
-                    SDL_RenderCopy(rend, chatInputText.Texture(), nullptr, chatInputText.Coords());
+                    { SDL_FRect fr = ToFRect(*chatInputText.Coords()); SDL_RenderTexture(rend, chatInputText.Texture(), nullptr, &fr); }
             }
 
             // Draw last maxShow messages (white)
@@ -3934,7 +3934,7 @@ void BubbleGame::Render() {
                 chatLineText.UpdateText(rend, lineBuf, 630);
                 chatLineText.UpdatePosition({chatX, baseY + (i - start) * lineH});
                 if (chatLineText.Texture())
-                    SDL_RenderCopy(rend, chatLineText.Texture(), nullptr, chatLineText.Coords());
+                    { SDL_FRect fr = ToFRect(*chatLineText.Coords()); SDL_RenderTexture(rend, chatLineText.Texture(), nullptr, &fr); }
             }
         }
     }
@@ -3956,17 +3956,14 @@ void BubbleGame::RenderPaused() {
 
         if(prePauseBackground != nullptr) SDL_DestroyTexture(prePauseBackground);
 
-        float w = 0, h = 0;
-        SDL_RenderGetScale(rend, &w, &h);
-        SDL_Surface *sfc = SDL_CreateRGBSurface(0, 640 * w, 480 * h, 32, 0, 0, 0, 0);
-        SDL_RenderReadPixels(rend, NULL, SURF_FORMAT, sfc->pixels, sfc->pitch);
+        SDL_Surface *sfc = SDL_RenderReadPixels(rend, NULL);
         prePauseBackground = SDL_CreateTextureFromSurface(rend, sfc);
-        SDL_FreeSurface(sfc);
+        SDL_DestroySurface(sfc);
     }
 
     SDL_RenderClear(rend);
-    SDL_RenderCopy(rend, prePauseBackground, nullptr, nullptr);
-    SDL_RenderCopy(rend, pauseBackground, nullptr, nullptr);
+    SDL_RenderTexture(rend, prePauseBackground, nullptr, nullptr);
+    SDL_RenderTexture(rend, pauseBackground, nullptr, nullptr);
 
     if (nextPauseUpd <= 0){
         pauseFrame++;
@@ -3978,56 +3975,56 @@ void BubbleGame::RenderPaused() {
     else nextPauseUpd--;
 
     SDL_Rect pauseRct = {SCREEN_CENTER_X - 95, SCREEN_CENTER_Y - 72, 190, 143};
-    SDL_RenderCopy(rend, pausePenguin[pauseFrame], nullptr, &pauseRct);
+    { SDL_FRect fr = ToFRect(pauseRct); SDL_RenderTexture(rend, pausePenguin[pauseFrame], nullptr, &fr); }
 
     timePaused = SDL_GetTicks();
 }
 
 void BubbleGame::HandleInput(SDL_Event *e) {
     // Map gamepad/D-pad to keyboard-equivalent actions
-    if (e->type == SDL_CONTROLLERBUTTONDOWN) {
+    if (e->type == SDL_EVENT_GAMEPAD_BUTTON_DOWN) {
         if (currentSettings.localMultiplayer) {
             // In local multiplayer, per-player movement is polled directly in UpdatePenguin.
             // Only handle global buttons (B=quit, START=pause) via fake key events.
             // A button also handled when game is finished so players can continue to next round.
             SDL_KeyboardEvent fake{};
-            fake.type = SDL_KEYDOWN;
-            fake.state = SDL_PRESSED;
-            switch (e->cbutton.button) {
-                case SDL_CONTROLLER_BUTTON_B:     fake.keysym.sym = SDLK_ESCAPE; break;
-                case SDL_CONTROLLER_BUTTON_START: fake.keysym.sym = SDLK_p; break;
-                case SDL_CONTROLLER_BUTTON_A:
-                    if (gameFinish) { fake.keysym.sym = SDLK_SPACE; break; }
+            fake.type = SDL_EVENT_KEY_DOWN;
+            fake.down = true;
+            switch (e->gbutton.button) {
+                case SDL_GAMEPAD_BUTTON_EAST:    fake.key = SDLK_ESCAPE; break;
+                case SDL_GAMEPAD_BUTTON_START:   fake.key = SDLK_P; break;
+                case SDL_GAMEPAD_BUTTON_SOUTH:
+                    if (gameFinish) { fake.key = SDLK_SPACE; break; }
                     return;
                 default: return;
             }
             SDL_Event fakeEvent;
-            fakeEvent.type = SDL_KEYDOWN;
+            fakeEvent.type = SDL_EVENT_KEY_DOWN;
             fakeEvent.key = fake;
             HandleInput(&fakeEvent);
             return;
         }
         SDL_KeyboardEvent fake{};
-        fake.type = SDL_KEYDOWN;
-        fake.state = SDL_PRESSED;
-        switch (e->cbutton.button) {
-            case SDL_CONTROLLER_BUTTON_DPAD_LEFT:  fake.keysym.sym = SDLK_LEFT; break;
-            case SDL_CONTROLLER_BUTTON_DPAD_RIGHT: fake.keysym.sym = SDLK_RIGHT; break;
-            case SDL_CONTROLLER_BUTTON_A:          fake.keysym.sym = SDLK_SPACE; break;
-            case SDL_CONTROLLER_BUTTON_B:          fake.keysym.sym = SDLK_ESCAPE; break;
-            case SDL_CONTROLLER_BUTTON_START:      fake.keysym.sym = SDLK_p; break;
-            case SDL_CONTROLLER_BUTTON_X:          fake.keysym.sym = SDLK_RETURN; break; // X=Chat
+        fake.type = SDL_EVENT_KEY_DOWN;
+        fake.down = true;
+        switch (e->gbutton.button) {
+            case SDL_GAMEPAD_BUTTON_DPAD_LEFT:  fake.key = SDLK_LEFT; break;
+            case SDL_GAMEPAD_BUTTON_DPAD_RIGHT: fake.key = SDLK_RIGHT; break;
+            case SDL_GAMEPAD_BUTTON_SOUTH:      fake.key = SDLK_SPACE; break;
+            case SDL_GAMEPAD_BUTTON_EAST:       fake.key = SDLK_ESCAPE; break;
+            case SDL_GAMEPAD_BUTTON_START:      fake.key = SDLK_P; break;
+            case SDL_GAMEPAD_BUTTON_WEST:       fake.key = SDLK_RETURN; break; // X=Chat
             default: return;
         }
         SDL_Event fakeEvent;
-        fakeEvent.type = SDL_KEYDOWN;
+        fakeEvent.type = SDL_EVENT_KEY_DOWN;
         fakeEvent.key = fake;
         HandleInput(&fakeEvent);
         return;
     }
 
     switch(e->type) {
-        case SDL_TEXTINPUT:
+        case SDL_EVENT_TEXT_INPUT:
             if (chattingMode) {
                 size_t curLen = strlen(chatInputBuf);
                 size_t addLen = strlen(e->text.text);
@@ -4035,21 +4032,21 @@ void BubbleGame::HandleInput(SDL_Event *e) {
                     strcat(chatInputBuf, e->text.text);
             }
             return;
-        case SDL_KEYDOWN:
+        case SDL_EVENT_KEY_DOWN:
             // Backspace: allow key-repeat so holding it deletes continuously
-            if (chattingMode && e->key.keysym.sym == SDLK_BACKSPACE) {
+            if (chattingMode && e->key.key == SDLK_BACKSPACE) {
                 size_t len = strlen(chatInputBuf);
                 if (len > 0) chatInputBuf[len - 1] = '\0';
                 return;
             }
             if(e->key.repeat) break;
-            switch(e->key.keysym.sym) {
+            switch(e->key.key) {
                 case SDLK_AC_BACK:
                 case SDLK_ESCAPE:
                     if (chattingMode) {
                         chattingMode = false;
                         chatInputBuf[0] = '\0';
-                        SDL_StopTextInput();
+                        SDL_StopTextInput(SDL_GetKeyboardFocus());
                         break;
                     }
                     QuitToTitle();
@@ -4061,7 +4058,7 @@ void BubbleGame::HandleInput(SDL_Event *e) {
                     }
                     else audMixer->MuteAll();
                     break;
-                case SDLK_c: // toggle colorblind mode
+                case SDLK_C: // toggle colorblind mode
                     {
                         GameSettings *settings = GameSettings::Instance();
                         bool currentMode = settings->colorBlind();
@@ -4079,10 +4076,10 @@ void BubbleGame::HandleInput(SDL_Event *e) {
                     if (currentSettings.networkGame && currentSettings.playerCount >= 3 &&
                         currentSettings.singlePlayerTargetting && !gameFinish) {
                         int target = -1;
-                        if (e->key.keysym.sym == SDLK_1) target = 1;
-                        else if (e->key.keysym.sym == SDLK_2 && currentSettings.playerCount >= 3) target = 2;
-                        else if (e->key.keysym.sym == SDLK_3 && currentSettings.playerCount >= 4) target = 3;
-                        else if (e->key.keysym.sym == SDLK_4 && currentSettings.playerCount >= 5) target = 4;
+                        if (e->key.key == SDLK_1) target = 1;
+                        else if (e->key.key == SDLK_2 && currentSettings.playerCount >= 3) target = 2;
+                        else if (e->key.key == SDLK_3 && currentSettings.playerCount >= 4) target = 3;
+                        else if (e->key.key == SDLK_4 && currentSettings.playerCount >= 5) target = 4;
                         // SDLK_0 stays -1 to clear targeting
                         SetSendMalusToOne(target);
                     }
@@ -4117,11 +4114,11 @@ void BubbleGame::HandleInput(SDL_Event *e) {
                             }
                             chatInputBuf[0] = '\0';
                             chattingMode = false;
-                            SDL_StopTextInput();
+                            SDL_StopTextInput(SDL_GetKeyboardFocus());
                         } else {
                             chattingMode = true;
                             chatInputBuf[0] = '\0';
-                            SDL_StartTextInput();
+                            SDL_StartTextInput(SDL_GetKeyboardFocus());
                         }
                         break;
                     }

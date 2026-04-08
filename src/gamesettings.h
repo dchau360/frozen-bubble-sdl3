@@ -20,7 +20,7 @@
 #ifndef GAMESETTINGS_H
 #define GAMESETTINGS_H
 
-#include <SDL2/SDL.h>
+#include <SDL3/SDL.h>
 #include <iniparser.h>
 #include <iostream>
 #include <mutex>

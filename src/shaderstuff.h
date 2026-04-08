@@ -31,9 +31,9 @@
 #include <unistd.h>
 #include <vector>
 
-#include <SDL2/SDL.h>
-#include <SDL2/SDL_mixer.h>
-#include <SDL2/SDL_image.h>
+#include <SDL3/SDL.h>
+#include <SDL3_mixer/SDL_mixer.h>
+#include <SDL3_image/SDL_image.h>
 
 struct TextureEx {
     SDL_Renderer *rend;
@@ -52,7 +52,7 @@ struct TextureEx {
 
     void LoadFromSurface(SDL_Surface *img, SDL_Renderer* renderer){
         rend = renderer;
-        sfc = SDL_CreateRGBSurface(0, img->w, img->h, 32, 0xFF000000, 0xFF0000, 0xFF00, 0xFF);
+        sfc = SDL_CreateSurface(img->w, img->h, SDL_PIXELFORMAT_ARGB8888);
         SDL_SetSurfaceBlendMode(sfc, SDL_BLENDMODE_BLEND);
         if(!sfc || !img) SDL_LogWarn(1, "Failed to init SDL_Surface");
         SDL_BlitSurface(img, NULL, sfc, NULL);
@@ -60,12 +60,12 @@ struct TextureEx {
 
     void LoadEmptyAndApply(SDL_Rect *sz, SDL_Renderer* renderer, const char* path){
         rend = renderer;
-        sfc = SDL_CreateRGBSurface(0, sz->w, sz->h, 32, 0xFF000000, 0xFF0000, 0xFF00, 0xFF);
+        sfc = SDL_CreateSurface(sz->w, sz->h, SDL_PIXELFORMAT_ARGB8888);
         SDL_SetSurfaceBlendMode(sfc, SDL_BLENDMODE_BLEND);
         SDL_Surface *img = IMG_Load(path); 
         if(!sfc || !img) SDL_LogWarn(1, "Failed to init SDL_Surface");
         SDL_BlitSurface(img, new SDL_Rect{0, 0, img->w, img->h}, sfc, new SDL_Rect{sz->x, sz->y, img->w, img->h});
-        SDL_FreeSurface(img);
+        SDL_DestroySurface(img);
     };
 
     SDL_Texture *OutputTexture() {

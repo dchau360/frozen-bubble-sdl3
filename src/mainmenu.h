@@ -20,7 +20,7 @@
 #ifndef MAINMENU_H
 #define MAINMENU_H
 
-#include <SDL2/SDL.h>
+#include <SDL3/SDL.h>
 #include <vector>
 #include <thread>
 #include <atomic>

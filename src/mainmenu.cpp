@@ -24,7 +24,7 @@
 #include "networkclient.h"
 #include "platform.h"
 
-#include <SDL2/SDL_image.h>
+#include <SDL3_image/SDL_image.h>
 #include <cstring>
 #include <cmath>
 #include <errno.h>
@@ -46,8 +46,8 @@
 #include <stdlib.h>
 #endif
 
-// Virtual scancodes for controller buttons: CTRL_SC_BASE + controllerSlot*20 + SDL_GameControllerButton
-static SDL_Scancode ControllerButtonScancode(int controllerSlot, SDL_GameControllerButton btn) {
+// Virtual scancodes for controller buttons: CTRL_SC_BASE + controllerSlot*20 + SDL_GamepadButton
+static SDL_Scancode ControllerButtonScancode(int controllerSlot, SDL_GamepadButton btn) {
     return (SDL_Scancode)(CTRL_SC_BASE + controllerSlot * 20 + (int)btn);
 }
 static std::string ControllerScancodeName(SDL_Scancode sc) {
@@ -99,9 +99,9 @@ struct ButtonId {
 };
 
 SDL_Point GetSize(SDL_Texture *texture){
-    SDL_Point size;
-    SDL_QueryTexture(texture, NULL, NULL, &size.x, &size.y);
-    return size;
+    float fw, fh;
+    SDL_GetTextureSize(texture, &fw, &fh);
+    return SDL_Point{(int)fw, (int)fh};
 }
 
 MainMenu::MainMenu(const SDL_Renderer *renderer)
@@ -176,11 +176,11 @@ MainMenu::MainMenu(const SDL_Renderer *renderer)
     buttons[active_button_index].Activate();
 
     panelText.LoadFont(ASSET("/gfx/DroidSans.ttf").c_str(), 15);
-    panelText.UpdateAlignment(TTF_WRAPPED_ALIGN_CENTER);
+    panelText.UpdateAlignment(TTF_HORIZONTAL_ALIGN_CENTER);
     panelText.UpdateColor({255, 255, 255, 255}, {0, 0, 0, 255});
 
     networkText.LoadFont(ASSET("/gfx/DroidSans.ttf").c_str(), 14);
-    networkText.UpdateAlignment(TTF_WRAPPED_ALIGN_LEFT);
+    networkText.UpdateAlignment(TTF_HORIZONTAL_ALIGN_LEFT);
     networkText.UpdateColor({255, 255, 255, 255}, {0, 0, 0, 255});
 
     // Load network lobby graphics
@@ -246,7 +246,7 @@ void MainMenu::InitCandy() {
         candy_fb_rect.y -= (int)(fb_logo_rect.h * 0.05);
         tmpRct = {(int)(fb_logo_rect.w * 0.05), (int)(fb_logo_rect.h * 0.05), (int)(fb_logo_rect.w * 1.1), (int)(fb_logo_rect.h * 1.1)};
         candyModif.LoadEmptyAndApply(&tmpRct, const_cast<SDL_Renderer*>(renderer), ASSET("/gfx/menu/fblogo.png").c_str());
-        SDL_FreeSurface(candyOrig.sfc);
+        SDL_DestroySurface(candyOrig.sfc);
         candyOrig.LoadFromSurface(candyModif.sfc, const_cast<SDL_Renderer*>(renderer));
         candy_fb_rect.w = candyOrig.sfc->w;
         candy_fb_rect.h = candyOrig.sfc->h;
@@ -256,7 +256,7 @@ void MainMenu::InitCandy() {
         candy_fb_rect.y -= (int)(fb_logo_rect.h * 0.025);
         tmpRct = {(int)(fb_logo_rect.w * 0.05), (int)(fb_logo_rect.h * 0.025), (int)(fb_logo_rect.w * 1.1), (int)(fb_logo_rect.h * 1.05)};
         candyModif.LoadEmptyAndApply(&tmpRct, const_cast<SDL_Renderer*>(renderer), ASSET("/gfx/menu/fblogo.png").c_str());
-        SDL_FreeSurface(candyOrig.sfc);
+        SDL_DestroySurface(candyOrig.sfc);
         candyOrig.LoadFromSurface(candyModif.sfc, const_cast<SDL_Renderer*>(renderer));
         candy_fb_rect.w = candyOrig.sfc->w;
         candy_fb_rect.h = candyOrig.sfc->h;
@@ -269,7 +269,7 @@ void MainMenu::InitCandy() {
         candy_fb_rect.x -= (int)(fb_logo_rect.w * 0.05);
         tmpRct = {(int)(fb_logo_rect.w * 0.05), candy_fb_rect.y, (int)(fb_logo_rect.w * 1.1), fb_logo_rect.h + candy_fb_rect.y};
         candyModif.LoadEmptyAndApply(&tmpRct, const_cast<SDL_Renderer*>(renderer), ASSET("/gfx/menu/fblogo.png").c_str());
-        SDL_FreeSurface(candyOrig.sfc);
+        SDL_DestroySurface(candyOrig.sfc);
         candyOrig.LoadFromSurface(candyModif.sfc, const_cast<SDL_Renderer*>(renderer));
         candy_fb_rect.y = 0;
         candy_fb_rect.w = candyOrig.sfc->w;
@@ -287,31 +287,31 @@ void MainMenu::RefreshCandy(){
 
 void MainMenu::HandleInput(SDL_Event *e){
     // Map gamepad/D-pad to keyboard-equivalent actions for TV remotes
-    if (e->type == SDL_CONTROLLERBUTTONDOWN) {
+    if (e->type == SDL_EVENT_GAMEPAD_BUTTON_DOWN) {
         SDL_KeyboardEvent fake{};
-        fake.type = SDL_KEYDOWN;
-        fake.state = SDL_PRESSED;
-        switch (e->cbutton.button) {
-            case SDL_CONTROLLER_BUTTON_DPAD_UP:    fake.keysym.sym = SDLK_UP; break;
-            case SDL_CONTROLLER_BUTTON_DPAD_DOWN:  fake.keysym.sym = SDLK_DOWN; break;
-            case SDL_CONTROLLER_BUTTON_DPAD_LEFT:  fake.keysym.sym = SDLK_LEFT; break;
-            case SDL_CONTROLLER_BUTTON_DPAD_RIGHT: fake.keysym.sym = SDLK_RIGHT; break;
-            case SDL_CONTROLLER_BUTTON_A:          fake.keysym.sym = SDLK_RETURN; break;
-            case SDL_CONTROLLER_BUTTON_B:          fake.keysym.sym = SDLK_ESCAPE; break;
-            case SDL_CONTROLLER_BUTTON_START:      fake.keysym.sym = SDLK_RETURN; break;
-            case SDL_CONTROLLER_BUTTON_X:          fake.keysym.sym = SDLK_t; break; // X=Chat
-            case SDL_CONTROLLER_BUTTON_Y:          fake.keysym.sym = SDLK_r; break; // Y=Remove Ads (Android opts panel)
+        fake.type = SDL_EVENT_KEY_DOWN;
+        fake.down = true;
+        switch (e->gbutton.button) {
+            case SDL_GAMEPAD_BUTTON_DPAD_UP:    fake.key = SDLK_UP; break;
+            case SDL_GAMEPAD_BUTTON_DPAD_DOWN:  fake.key = SDLK_DOWN; break;
+            case SDL_GAMEPAD_BUTTON_DPAD_LEFT:  fake.key = SDLK_LEFT; break;
+            case SDL_GAMEPAD_BUTTON_DPAD_RIGHT: fake.key = SDLK_RIGHT; break;
+            case SDL_GAMEPAD_BUTTON_SOUTH:          fake.key = SDLK_RETURN; break;
+            case SDL_GAMEPAD_BUTTON_EAST:          fake.key = SDLK_ESCAPE; break;
+            case SDL_GAMEPAD_BUTTON_START:      fake.key = SDLK_RETURN; break;
+            case SDL_GAMEPAD_BUTTON_WEST:          fake.key = SDLK_T; break; // X=Chat
+            case SDL_GAMEPAD_BUTTON_NORTH:          fake.key = SDLK_R; break; // Y=Remove Ads (Android opts panel)
             default: return;
         }
         SDL_Event fakeEvent;
-        fakeEvent.type = SDL_KEYDOWN;
+        fakeEvent.type = SDL_EVENT_KEY_DOWN;
         fakeEvent.key = fake;
         HandleInput(&fakeEvent);
         return;
     }
 
     switch(e->type) {
-        case SDL_TEXTINPUT:
+        case SDL_EVENT_TEXT_INPUT:
             // Handle virtual keyboard character input for host field (mode 8, only when actively editing)
             if (showingNetPanel && !networkInLobby && networkInputMode == 8 && networkFieldEditing) {
                 size_t len = strlen(networkHost);
@@ -367,10 +367,10 @@ void MainMenu::HandleInput(SDL_Event *e){
                 }
             }
             break;
-        case SDL_KEYDOWN:
+        case SDL_EVENT_KEY_DOWN:
             // Handle backspace/delete in text fields before the repeat filter,
             // because Android's IME may send backspace with repeat=1 on a single press.
-            if (e->key.keysym.sym == SDLK_BACKSPACE || e->key.keysym.sym == SDLK_DELETE) {
+            if (e->key.key == SDLK_BACKSPACE || e->key.key == SDLK_DELETE) {
                 if (showingNetPanel && !networkInLobby && networkInputMode == 8 && networkFieldEditing) {
                     size_t len = strlen(networkHost);
                     if (len > 0) networkHost[len - 1] = '\0';
@@ -387,40 +387,40 @@ void MainMenu::HandleInput(SDL_Event *e){
             // Handle network panel text input
             if (showingNetPanel && networkInLobby && networkInputMode == 3) {
                 // Join creator name input
-                if ((e->key.keysym.sym >= SDLK_a && e->key.keysym.sym <= SDLK_z) ||
-                    (e->key.keysym.sym >= SDLK_0 && e->key.keysym.sym <= SDLK_9)) {
+                if ((e->key.key >= SDLK_A && e->key.key <= SDLK_Z) ||
+                    (e->key.key >= SDLK_0 && e->key.key <= SDLK_9)) {
                     size_t len = strlen(networkJoinCreator);
                     if (len < 31) {
-                        if (e->key.keysym.sym >= SDLK_a && e->key.keysym.sym <= SDLK_z) {
-                            networkJoinCreator[len] = 'a' + (e->key.keysym.sym - SDLK_a);
+                        if (e->key.key >= SDLK_A && e->key.key <= SDLK_Z) {
+                            networkJoinCreator[len] = 'a' + (e->key.key - SDLK_A);
                         } else {
-                            networkJoinCreator[len] = '0' + (e->key.keysym.sym - SDLK_0);
+                            networkJoinCreator[len] = '0' + (e->key.key - SDLK_0);
                         }
                         networkJoinCreator[len + 1] = '\0';
                     }
                     break;
-                } else if (e->key.keysym.sym == SDLK_BACKSPACE) {
+                } else if (e->key.key == SDLK_BACKSPACE) {
                     size_t len = strlen(networkJoinCreator);
                     if (len > 0) networkJoinCreator[len - 1] = '\0';
                     break;
                 }
             } else if (showingNetPanel && networkInLobby && networkInputMode == 4) {
-                // Chat input - characters handled by SDL_TEXTINPUT
-                if (e->key.keysym.sym == SDLK_BACKSPACE) {
+                // Chat input - characters handled by SDL_EVENT_TEXT_INPUT
+                if (e->key.key == SDLK_BACKSPACE) {
                     size_t len = strlen(networkChatInput);
                     if (len > 0) networkChatInput[len - 1] = '\0';
                     break;
                 }
             } else if (showingNetPanel && networkInLobby && networkInputMode == 5) {
-                // Username input - characters handled by SDL_TEXTINPUT
-                if (e->key.keysym.sym == SDLK_BACKSPACE) {
+                // Username input - characters handled by SDL_EVENT_TEXT_INPUT
+                if (e->key.key == SDLK_BACKSPACE) {
                     size_t len = strlen(networkUsername);
                     if (len > 0) networkUsername[len - 1] = '\0';
                     break;
                 }
             } else if (showingNetPanel && !networkInLobby && networkInputMode == 11) {
-                // Pre-lobby nickname input - characters handled by SDL_TEXTINPUT
-                if (e->key.keysym.sym == SDLK_BACKSPACE) {
+                // Pre-lobby nickname input - characters handled by SDL_EVENT_TEXT_INPUT
+                if (e->key.key == SDLK_BACKSPACE) {
                     size_t len = strlen(networkPreNick);
                     if (len > 0) networkPreNick[len - 1] = '\0';
                     break;
@@ -429,7 +429,7 @@ void MainMenu::HandleInput(SDL_Event *e){
 
             // Handle backspace in level panel
             if (showingLevelPanel && !runDelay) {
-                if (e->key.keysym.sym == SDLK_BACKSPACE) {
+                if (e->key.key == SDLK_BACKSPACE) {
                     if (!levelInput.empty()) levelInput.pop_back();
                     break;
                 }
@@ -437,7 +437,7 @@ void MainMenu::HandleInput(SDL_Event *e){
 
             // Handle backspace in chat input when Chat is selected in lobby
             if (showingNetPanel && networkInLobby && networkInputMode == 0 && selectedActionIndex == 0) {
-                if (e->key.keysym.sym == SDLK_BACKSPACE) {
+                if (e->key.key == SDLK_BACKSPACE) {
                     size_t len = strlen(networkChatInput);
                     if (len > 0) networkChatInput[len - 1] = '\0';
                     break;
@@ -446,9 +446,9 @@ void MainMenu::HandleInput(SDL_Event *e){
 
             // Digit input for level selection panel
             if (showingLevelPanel && !runDelay) {
-                if (e->key.keysym.sym >= SDLK_0 && e->key.keysym.sym <= SDLK_9) {
+                if (e->key.key >= SDLK_0 && e->key.key <= SDLK_9) {
                     if (levelInput.size() < 3) {
-                        levelInput += (char)('0' + (e->key.keysym.sym - SDLK_0));
+                        levelInput += (char)('0' + (e->key.key - SDLK_0));
                     }
                     break;
                 }
@@ -462,28 +462,28 @@ void MainMenu::HandleInput(SDL_Event *e){
                         // Host field editing
                         connectErrorMsg.clear();
                         size_t len = strlen(networkHost);
-                        if (e->key.keysym.sym == SDLK_BACKSPACE || e->key.keysym.sym == SDLK_DELETE) {
+                        if (e->key.key == SDLK_BACKSPACE || e->key.key == SDLK_DELETE) {
                             if (len > 0) networkHost[len - 1] = '\0';
                             break;
                         }
                     } else if (networkManualFieldIndex == 1) {
                         // Port field editing
-                        if (e->key.keysym.sym >= SDLK_0 && e->key.keysym.sym <= SDLK_9) {
-                            if (networkPort < 6553) networkPort = networkPort * 10 + (e->key.keysym.sym - SDLK_0);
+                        if (e->key.key >= SDLK_0 && e->key.key <= SDLK_9) {
+                            if (networkPort < 6553) networkPort = networkPort * 10 + (e->key.key - SDLK_0);
                             break;
-                        } else if (e->key.keysym.sym == SDLK_BACKSPACE) {
+                        } else if (e->key.key == SDLK_BACKSPACE) {
                             networkPort /= 10;
                             break;
                         }
                     }
                 } else {
                     // Not editing: UP/DOWN cycles through host, port, connect
-                    if (e->key.keysym.sym == SDLK_DOWN) {
+                    if (e->key.key == SDLK_DOWN) {
                         networkManualFieldIndex = (networkManualFieldIndex + 1) % 3;
                         networkInputMode = (networkManualFieldIndex == 1) ? 9 : 8;
                         AudioMixer::Instance()->PlaySFX("menu_change");
                         break;
-                    } else if (e->key.keysym.sym == SDLK_UP) {
+                    } else if (e->key.key == SDLK_UP) {
                         networkManualFieldIndex = (networkManualFieldIndex + 2) % 3;
                         networkInputMode = (networkManualFieldIndex == 1) ? 9 : 8;
                         AudioMixer::Instance()->PlaySFX("menu_change");
@@ -495,22 +495,22 @@ void MainMenu::HandleInput(SDL_Event *e){
 #ifdef __ANDROID__
             // On Android: pressing 'R' in any options panel triggers "Remove Ads" IAP
             if (awaitKp && (showingOptPanel || showingNetSetupPanel) &&
-                e->key.keysym.sym == SDLK_r) {
+                e->key.key == SDLK_R) {
                 SDL_AndroidSendMessage(0x8002, 0); // launch Remove Ads purchase flow
                 break;
             }
 #endif
 
-            if (awaitKp && (showingOptPanel || showingNetSetupPanel) && e->key.keysym.sym != SDLK_ESCAPE) {
+            if (awaitKp && (showingOptPanel || showingNetSetupPanel) && e->key.key != SDLK_ESCAPE) {
                 AudioMixer::Instance()->PlaySFX("typewriter");
-                lastOptInput = e->key.keysym.sym;
+                lastOptInput = e->key.key;
                 awaitKp = false;
                 break;
             }
 
             // Keys configuration input handling
             if (showingKeysPanel) {
-                if (awaitKp && e->key.keysym.sym != SDLK_ESCAPE) {
+                if (awaitKp && e->key.key != SDLK_ESCAPE) {
                     // Set the key for the current player/index
                     GameSettings* gs = GameSettings::Instance();
                     PlayerKeys* allKeys[5] = {
@@ -519,25 +519,25 @@ void MainMenu::HandleInput(SDL_Event *e){
                     };
                     PlayerKeys& keys = *allKeys[keyConfigPlayer - 1];
                     switch (keyConfigIndex) {
-                        case 0: keys.left   = e->key.keysym.scancode; break;
-                        case 1: keys.right  = e->key.keysym.scancode; break;
-                        case 2: keys.fire   = e->key.keysym.scancode; break;
-                        case 3: keys.center = e->key.keysym.scancode; break;
+                        case 0: keys.left   = e->key.scancode; break;
+                        case 1: keys.right  = e->key.scancode; break;
+                        case 2: keys.fire   = e->key.scancode; break;
+                        case 3: keys.center = e->key.scancode; break;
                     }
                     awaitKp = false;
                     AudioMixer::Instance()->PlaySFX("typewriter");
                     break;
                 } else if (!awaitKp) {
                     // UP/DOWN: navigate keys within current player
-                    if (e->key.keysym.sym == SDLK_UP) {
+                    if (e->key.key == SDLK_UP) {
                         keyConfigIndex = (keyConfigIndex == 0) ? 6 : keyConfigIndex - 1;
                         AudioMixer::Instance()->PlaySFX("menu_change");
                         break;
-                    } else if (e->key.keysym.sym == SDLK_DOWN) {
+                    } else if (e->key.key == SDLK_DOWN) {
                         keyConfigIndex = (keyConfigIndex == 6) ? 0 : keyConfigIndex + 1;
                         AudioMixer::Instance()->PlaySFX("menu_change");
                         break;
-                    } else if (e->key.keysym.sym == SDLK_LEFT) {
+                    } else if (e->key.key == SDLK_LEFT) {
                         if (keyConfigIndex == 5) {
                             // Decrease game speed
                             GameSettings* gs = GameSettings::Instance();
@@ -552,7 +552,7 @@ void MainMenu::HandleInput(SDL_Event *e){
                         keyConfigIndex = 0;
                         AudioMixer::Instance()->PlaySFX("menu_change");
                         break;
-                    } else if (e->key.keysym.sym == SDLK_RIGHT) {
+                    } else if (e->key.key == SDLK_RIGHT) {
                         if (keyConfigIndex == 5) {
                             // Increase game speed
                             GameSettings* gs = GameSettings::Instance();
@@ -567,7 +567,7 @@ void MainMenu::HandleInput(SDL_Event *e){
                         keyConfigIndex = 0;
                         AudioMixer::Instance()->PlaySFX("menu_change");
                         break;
-                    } else if (e->key.keysym.sym == SDLK_RETURN) {
+                    } else if (e->key.key == SDLK_RETURN) {
                         if (keyConfigIndex == 4) {
                             // Reset current player to default controller bindings
                             GameSettings* gs = GameSettings::Instance();
@@ -577,10 +577,10 @@ void MainMenu::HandleInput(SDL_Event *e){
                             };
                             int slot = keyConfigPlayer - 1;
                             PlayerKeys& keys = *allKeys[slot];
-                            keys.left   = (SDL_Scancode)(CTRL_SC_BASE + slot * 20 + SDL_CONTROLLER_BUTTON_DPAD_LEFT);
-                            keys.right  = (SDL_Scancode)(CTRL_SC_BASE + slot * 20 + SDL_CONTROLLER_BUTTON_DPAD_RIGHT);
-                            keys.fire   = (SDL_Scancode)(CTRL_SC_BASE + slot * 20 + SDL_CONTROLLER_BUTTON_A);
-                            keys.center = (SDL_Scancode)(CTRL_SC_BASE + slot * 20 + SDL_CONTROLLER_BUTTON_DPAD_DOWN);
+                            keys.left   = (SDL_Scancode)(CTRL_SC_BASE + slot * 20 + SDL_GAMEPAD_BUTTON_DPAD_LEFT);
+                            keys.right  = (SDL_Scancode)(CTRL_SC_BASE + slot * 20 + SDL_GAMEPAD_BUTTON_DPAD_RIGHT);
+                            keys.fire   = (SDL_Scancode)(CTRL_SC_BASE + slot * 20 + SDL_GAMEPAD_BUTTON_SOUTH);
+                            keys.center = (SDL_Scancode)(CTRL_SC_BASE + slot * 20 + SDL_GAMEPAD_BUTTON_DPAD_DOWN);
                             gs->SaveKeys();
                             AudioMixer::Instance()->PlaySFX("typewriter");
                         } else if (keyConfigIndex == 5) {
@@ -610,18 +610,18 @@ void MainMenu::HandleInput(SDL_Event *e){
             // Handle text input for chat when Chat is selected in lobby
             if (showingNetPanel && networkInLobby && networkInputMode == 0 && selectedActionIndex == 0) {
                 // Handle printable characters for chat input
-                SDL_Keycode key = e->key.keysym.sym;
+                SDL_Keycode key = e->key.key;
                 size_t len = strlen(networkChatInput);
 
-                if ((key >= SDLK_a && key <= SDLK_z) || (key >= SDLK_0 && key <= SDLK_9) ||
+                if ((key >= SDLK_A && key <= SDLK_Z) || (key >= SDLK_0 && key <= SDLK_9) ||
                     key == SDLK_SPACE || key == SDLK_EXCLAIM || key == SDLK_QUESTION ||
-                    key == SDLK_COMMA || key == SDLK_PERIOD || key == SDLK_QUOTE ||
+                    key == SDLK_COMMA || key == SDLK_PERIOD || key == SDLK_APOSTROPHE ||
                     key == SDLK_MINUS || key == SDLK_UNDERSCORE || key == SDLK_SLASH) {
 
                     if (len < sizeof(networkChatInput) - 1) {
                         char ch = (char)key;
                         // Convert to uppercase if shift is held
-                        if (SDL_GetModState() & KMOD_SHIFT) {
+                        if (SDL_GetModState() & SDL_KMOD_SHIFT) {
                             if (ch >= 'a' && ch <= 'z') {
                                 ch = ch - 'a' + 'A';
                             }
@@ -637,19 +637,19 @@ void MainMenu::HandleInput(SDL_Event *e){
             if (showingLocalMPPanel && !runDelay) {
                 // 0=Players, 1=CR, 2=Row collapse, 3..3+N-1=Aim guide per player, 3+N..3+2N-1=Colors per player, 3+2N=Start
                 int localMaxIdx = 3 + 2 * localMPPlayerCount;
-                if (e->key.keysym.sym == SDLK_UP) {
+                if (e->key.key == SDLK_UP) {
                     localMPMenuIndex--;
                     if (localMPMenuIndex < 0) localMPMenuIndex = localMaxIdx;
                     AudioMixer::Instance()->PlaySFX("menu_change");
                     break;
-                } else if (e->key.keysym.sym == SDLK_DOWN) {
+                } else if (e->key.key == SDLK_DOWN) {
                     localMPMenuIndex++;
                     if (localMPMenuIndex > localMaxIdx) localMPMenuIndex = 0;
                     AudioMixer::Instance()->PlaySFX("menu_change");
                     break;
-                } else if (e->key.keysym.sym == SDLK_LEFT || e->key.keysym.sym == SDLK_RIGHT) {
+                } else if (e->key.key == SDLK_LEFT || e->key.key == SDLK_RIGHT) {
                     if (localMPMenuIndex == 0) {
-                        if (e->key.keysym.sym == SDLK_LEFT) {
+                        if (e->key.key == SDLK_LEFT) {
                             localMPPlayerCount--;
                             if (localMPPlayerCount < 2) localMPPlayerCount = 4;
                         } else {
@@ -669,7 +669,7 @@ void MainMenu::HandleInput(SDL_Event *e){
                         AudioMixer::Instance()->PlaySFX("menu_change");
                     } else if (localMPMenuIndex >= 3 + localMPPlayerCount && localMPMenuIndex < 3 + 2 * localMPPlayerCount) {
                         int pi = localMPMenuIndex - 3 - localMPPlayerCount;
-                        if (e->key.keysym.sym == SDLK_LEFT) {
+                        if (e->key.key == SDLK_LEFT) {
                             playerColorCounts[pi]--;
                             if (playerColorCounts[pi] < 5) playerColorCounts[pi] = 8;
                         } else {
@@ -679,7 +679,7 @@ void MainMenu::HandleInput(SDL_Event *e){
                         AudioMixer::Instance()->PlaySFX("menu_change");
                     }
                     break;
-                } else if (e->key.keysym.sym == SDLK_RETURN) {
+                } else if (e->key.key == SDLK_RETURN) {
                     if (localMPMenuIndex == 0) {
                         localMPPlayerCount++;
                         if (localMPPlayerCount > 4) localMPPlayerCount = 2;
@@ -707,7 +707,7 @@ void MainMenu::HandleInput(SDL_Event *e){
                         runDelay = true;
                     }
                     break;
-                } else if (e->key.keysym.sym == SDLK_ESCAPE) {
+                } else if (e->key.key == SDLK_ESCAPE) {
                     showingLocalMPPanel = false;
                     AudioMixer::Instance()->PlaySFX("menu_change");
                     break;
@@ -717,22 +717,22 @@ void MainMenu::HandleInput(SDL_Event *e){
             // Handle 2-player game setup menu navigation
             if (showing2PPanel && !awaitKp) {
                 // 0=CR, 1=Victories, 2=Colors P1, 3=Colors P2, 4=Start
-                if (e->key.keysym.sym == SDLK_UP) {
+                if (e->key.key == SDLK_UP) {
                     twoPlayerMenuIndex--;
                     if (twoPlayerMenuIndex < 0) twoPlayerMenuIndex = 4;
                     AudioMixer::Instance()->PlaySFX("menu_change");
                     break;
-                } else if (e->key.keysym.sym == SDLK_DOWN) {
+                } else if (e->key.key == SDLK_DOWN) {
                     twoPlayerMenuIndex++;
                     if (twoPlayerMenuIndex > 4) twoPlayerMenuIndex = 0;
                     AudioMixer::Instance()->PlaySFX("menu_change");
                     break;
-                } else if (e->key.keysym.sym == SDLK_LEFT || e->key.keysym.sym == SDLK_RIGHT) {
+                } else if (e->key.key == SDLK_LEFT || e->key.key == SDLK_RIGHT) {
                     if (twoPlayerMenuIndex == 0) {
                         twoPlayerCR = !twoPlayerCR;
                         AudioMixer::Instance()->PlaySFX("menu_change");
                     } else if (twoPlayerMenuIndex == 1) {
-                        if (e->key.keysym.sym == SDLK_LEFT) {
+                        if (e->key.key == SDLK_LEFT) {
                             twoPlayerVictoriesIndex--;
                             if (twoPlayerVictoriesIndex < 0) twoPlayerVictoriesIndex = 17;
                         } else {
@@ -742,7 +742,7 @@ void MainMenu::HandleInput(SDL_Event *e){
                         AudioMixer::Instance()->PlaySFX("menu_change");
                     } else if (twoPlayerMenuIndex == 2 || twoPlayerMenuIndex == 3) {
                         int pi = twoPlayerMenuIndex - 2;
-                        if (e->key.keysym.sym == SDLK_LEFT) {
+                        if (e->key.key == SDLK_LEFT) {
                             playerColorCounts[pi]--;
                             if (playerColorCounts[pi] < 5) playerColorCounts[pi] = 8;
                         } else {
@@ -752,7 +752,7 @@ void MainMenu::HandleInput(SDL_Event *e){
                         AudioMixer::Instance()->PlaySFX("menu_change");
                     }
                     break;
-                } else if (e->key.keysym.sym == SDLK_RETURN) {
+                } else if (e->key.key == SDLK_RETURN) {
                     if (twoPlayerMenuIndex == 0) {
                         twoPlayerCR = !twoPlayerCR;
                         AudioMixer::Instance()->PlaySFX("menu_change");
@@ -776,7 +776,7 @@ void MainMenu::HandleInput(SDL_Event *e){
                 }
             }
 
-            switch(e->key.keysym.sym) {
+            switch(e->key.key) {
                 case SDLK_UP:
                     // LAN menu navigation (0 = Set Name, 1 = Host, 2+ = servers)
                     if (showingNetPanel && !networkInLobby && networkInputMode == 7) {
@@ -888,7 +888,7 @@ void MainMenu::HandleInput(SDL_Event *e){
                                 settingChanged = true;
                             } else if (selectedActionIndex == 4) {
                                 // LEFT/RIGHT cycle victories limit
-                                if (e->key.keysym.sym == SDLK_LEFT) {
+                                if (e->key.key == SDLK_LEFT) {
                                     victoriesLimitIndex--;
                                     if (victoriesLimitIndex < 0) victoriesLimitIndex = 17;
                                 } else {
@@ -904,7 +904,7 @@ void MainMenu::HandleInput(SDL_Event *e){
                                 if (numPlayers < 1) numPlayers = 1;
                                 if (numPlayers > 5) numPlayers = 5;
                                 int totalCols = numPlayers + 1; // +1 for ALL
-                                if (e->key.keysym.sym == SDLK_LEFT) {
+                                if (e->key.key == SDLK_LEFT) {
                                     currentPlayerCol--;
                                     if (currentPlayerCol < 0) currentPlayerCol = totalCols - 1;
                                 } else {
@@ -1116,7 +1116,7 @@ void MainMenu::HandleInput(SDL_Event *e){
                             }
                         }
                         networkInputMode = 0; // Back to lobby
-                        SDL_StopTextInput();
+                        SDL_StopTextInput(SDL_GetKeyboardFocus());
                         break;
                     } else if (showingNetPanel && networkInLobby && networkInputMode == 5) {
                         // Change username
@@ -1129,7 +1129,7 @@ void MainMenu::HandleInput(SDL_Event *e){
                             networkUsername[0] = '\0';
                         }
                         networkInputMode = 0; // Back to lobby
-                        SDL_StopTextInput();
+                        SDL_StopTextInput(SDL_GetKeyboardFocus());
                         break;
                     } else if (showingNetPanel && networkInLobby && networkInputMode == 4) {
                         // Send chat message
@@ -1139,7 +1139,7 @@ void MainMenu::HandleInput(SDL_Event *e){
                             networkChatInput[0] = '\0';
                         }
                         networkInputMode = 0; // Back to lobby
-                        SDL_StopTextInput();
+                        SDL_StopTextInput(SDL_GetKeyboardFocus());
                         break;
                     } else if (showingNetPanel && networkInLobby && networkInputMode == 3) {
                         // Join game with entered creator name
@@ -1154,7 +1154,7 @@ void MainMenu::HandleInput(SDL_Event *e){
                     } else if (showingNetPanel && !networkInLobby && networkInputMode == 11) {
                         // Confirm pre-lobby nickname
                         networkInputMode = networkPreNickReturnMode;
-                        SDL_StopTextInput();
+                        SDL_StopTextInput(SDL_GetKeyboardFocus());
                         AudioMixer::Instance()->PlaySFX("menu_selected");
                         // Save the nick immediately so it persists even if user doesn't connect
                         if (networkPreNick[0] != '\0') {
@@ -1172,7 +1172,7 @@ void MainMenu::HandleInput(SDL_Event *e){
                         if (networkFieldEditing) {
                             // ENTER while keyboard open → close keyboard
                             networkFieldEditing = false;
-                            SDL_StopTextInput();
+                            SDL_StopTextInput(SDL_GetKeyboardFocus());
                             AudioMixer::Instance()->PlaySFX("menu_selected");
                             break;
                         } else if (networkManualFieldIndex == 2) {
@@ -1181,9 +1181,9 @@ void MainMenu::HandleInput(SDL_Event *e){
                         } else {
                             // ENTER on host/port field → open keyboard
                             networkFieldEditing = true;
-                            SDL_StopTextInput();
-                            SDL_StartTextInput();
-                            { SDL_Rect r = {160, 152, 320, 20}; SDL_SetTextInputRect(&r); }
+                            SDL_StopTextInput(SDL_GetKeyboardFocus());
+                            SDL_StartTextInput(SDL_GetKeyboardFocus());
+                            { SDL_Rect r = {160, 152, 320, 20}; SDL_SetTextInputArea(SDL_GetKeyboardFocus(), &r, 0); }
                             AudioMixer::Instance()->PlaySFX("menu_selected");
                             break;
                         }
@@ -1213,9 +1213,9 @@ void MainMenu::HandleInput(SDL_Event *e){
                                 networkPreNick[0] = '\0';
                                 networkPreNickReturnMode = 7;
                                 networkInputMode = 11;
-                                SDL_StopTextInput();
-                                SDL_StartTextInput();
-                                { SDL_Rect r = {160, 152, 320, 20}; SDL_SetTextInputRect(&r); }
+                                SDL_StopTextInput(SDL_GetKeyboardFocus());
+                                SDL_StartTextInput(SDL_GetKeyboardFocus());
+                                { SDL_Rect r = {160, 152, 320, 20}; SDL_SetTextInputArea(SDL_GetKeyboardFocus(), &r, 0); }
                                 AudioMixer::Instance()->PlaySFX("menu_selected");
                                 break;
                             }
@@ -1229,7 +1229,7 @@ void MainMenu::HandleInput(SDL_Event *e){
                                 networkInputMode = 8;
                                 networkFieldEditing = false;
                                 networkManualFieldIndex = 0;
-                                SDL_StopTextInput();
+                                SDL_StopTextInput(SDL_GetKeyboardFocus());
                                 break;
                             }
                             int serverIdx = netMenuIndex - 1;
@@ -1238,9 +1238,9 @@ void MainMenu::HandleInput(SDL_Event *e){
                                 networkPreNick[0] = '\0';
                                 networkPreNickReturnMode = 10;
                                 networkInputMode = 11;
-                                SDL_StopTextInput();
-                                SDL_StartTextInput();
-                                { SDL_Rect r = {160, 152, 320, 20}; SDL_SetTextInputRect(&r); }
+                                SDL_StopTextInput(SDL_GetKeyboardFocus());
+                                SDL_StartTextInput(SDL_GetKeyboardFocus());
+                                { SDL_Rect r = {160, 152, 320, 20}; SDL_SetTextInputArea(SDL_GetKeyboardFocus(), &r, 0); }
                                 AudioMixer::Instance()->PlaySFX("menu_selected");
                                 break;
                             }
@@ -1310,7 +1310,7 @@ void MainMenu::HandleInput(SDL_Event *e){
                         press();
                     }
                     break;
-                case SDLK_c:
+                case SDLK_C:
                     if (showingNetPanel && networkInLobby && networkInputMode == 0) {
                         NetworkClient* netClient = NetworkClient::Instance();
                         // Accept CONNECTED or IN_LOBBY — after returning from a game state is IN_LOBBY
@@ -1323,7 +1323,7 @@ void MainMenu::HandleInput(SDL_Event *e){
                         }
                     }
                     break;
-                case SDLK_r:
+                case SDLK_R:
                     if (showingNetPanel && !networkInLobby && networkInputMode == 7) {
                         connectErrorMsg.clear();
                         discoveredServers = NetworkClient::DiscoverLANServers();
@@ -1341,7 +1341,7 @@ void MainMenu::HandleInput(SDL_Event *e){
                         AudioMixer::Instance()->PlaySFX("menu_change");
                     }
                     break;
-                case SDLK_j:
+                case SDLK_J:
                     if (showingNetPanel && networkInLobby) {
                         NetworkClient* netClient = NetworkClient::Instance();
                         if (netClient->GetState() == CONNECTED) {
@@ -1361,29 +1361,29 @@ void MainMenu::HandleInput(SDL_Event *e){
                         }
                     }
                     break;
-                case SDLK_t:
+                case SDLK_T:
                     if (showingNetPanel && networkInLobby && networkInputMode == 0) {
                         // Enter chat mode
                         networkInputMode = 4;
                         networkChatInput[0] = '\0';
-                        SDL_StopTextInput();
-                        SDL_StartTextInput();
-                        { SDL_Rect r = {160, 152, 320, 20}; SDL_SetTextInputRect(&r); }
+                        SDL_StopTextInput(SDL_GetKeyboardFocus());
+                        SDL_StartTextInput(SDL_GetKeyboardFocus());
+                        { SDL_Rect r = {160, 152, 320, 20}; SDL_SetTextInputArea(SDL_GetKeyboardFocus(), &r, 0); }
                         AudioMixer::Instance()->PlaySFX("menu_selected");
                     }
                     break;
-                case SDLK_u:
+                case SDLK_U:
                     if (showingNetPanel && networkInLobby && networkInputMode == 0) {
                         // Enter username change mode
                         networkInputMode = 5;
                         networkUsername[0] = '\0';
-                        SDL_StopTextInput();
-                        SDL_StartTextInput();
-                        { SDL_Rect r = {160, 152, 320, 20}; SDL_SetTextInputRect(&r); }
+                        SDL_StopTextInput(SDL_GetKeyboardFocus());
+                        SDL_StartTextInput(SDL_GetKeyboardFocus());
+                        { SDL_Rect r = {160, 152, 320, 20}; SDL_SetTextInputArea(SDL_GetKeyboardFocus(), &r, 0); }
                         AudioMixer::Instance()->PlaySFX("menu_selected");
                     }
                     break;
-                case SDLK_s:
+                case SDLK_S:
                     if (showingNetPanel && networkInLobby) {
                         NetworkClient* netClient = NetworkClient::Instance();
                         GameRoom* currentGame = netClient->GetCurrentGame();
@@ -1397,7 +1397,7 @@ void MainMenu::HandleInput(SDL_Event *e){
                         }
                     }
                     break;
-                case SDLK_p:
+                case SDLK_P:
                     if (showingNetPanel && networkInLobby) {
                         NetworkClient* netClient = NetworkClient::Instance();
                         if (netClient->GetState() == IN_LOBBY) {
@@ -1407,8 +1407,8 @@ void MainMenu::HandleInput(SDL_Event *e){
                         }
                     }
                     break;
-                case SDLK_n:
-                    if(SDL_GetKeyboardState(NULL)[SDL_SCANCODE_LCTRL] == SDL_PRESSED) RefreshCandy();
+                case SDLK_N:
+                    if(SDL_GetKeyboardState(NULL)[SDL_SCANCODE_LCTRL]) RefreshCandy();
                     break;
                 case SDLK_AC_BACK:
                 case SDLK_ESCAPE:
@@ -1422,13 +1422,13 @@ void MainMenu::HandleInput(SDL_Event *e){
                         if (networkInputMode == 11) {
                             // Cancel pre-lobby nickname editing
                             networkInputMode = networkPreNickReturnMode;
-                            SDL_StopTextInput();
+                            SDL_StopTextInput(SDL_GetKeyboardFocus());
                             break;
                         } else if (networkInputMode == 8 || networkInputMode == 9) {
                             if (networkFieldEditing) {
                                 // ESC while keyboard is open: close keyboard, stay on form
                                 networkFieldEditing = false;
-                                SDL_StopTextInput();
+                                SDL_StopTextInput(SDL_GetKeyboardFocus());
                             } else {
                                 // ESC with no keyboard: back to public server list
                                 networkInputMode = 10;
@@ -1446,7 +1446,7 @@ void MainMenu::HandleInput(SDL_Event *e){
                             // Cancel username input
                             networkInputMode = 0;
                             networkUsername[0] = '\0';
-                            SDL_StopTextInput();
+                            SDL_StopTextInput(SDL_GetKeyboardFocus());
                             break;
                         } else if (networkInputMode == 4) {
                             // Cancel chat input
@@ -1492,7 +1492,7 @@ void MainMenu::HandleInput(SDL_Event *e){
                     if (showingLevelPanel) {
                         AudioMixer::Instance()->PlaySFX("cancel");
                         showingLevelPanel = false;
-                        SDL_StopTextInput();
+                        SDL_StopTextInput(SDL_GetKeyboardFocus());
                         runDelay = false;
                         break;
                     }
@@ -1539,7 +1539,7 @@ void MainMenu::HandleInput(SDL_Event *e){
 }
 
 void MainMenu::Render(void) {
-    SDL_RenderCopy(const_cast<SDL_Renderer*>(renderer), background, nullptr, nullptr);
+    SDL_RenderTexture(const_cast<SDL_Renderer*>(renderer), background, nullptr, nullptr);
 
     for (MenuButton &button : buttons) {
         button.Render(renderer);
@@ -1569,7 +1569,7 @@ void MainMenu::BannerRender() {
             SDL_Rect iRect = {-posX, 0, std::min(size.x + posX, BANNER_MAXX - BANNER_MINX), size.y};
             SDL_Rect dRect = {iRect.x < 0 ? BANNER_MAXX - (-posX > -iRect.w ? -posX + iRect.w : 0): BANNER_MINX, BANNER_Y, 
                               iRect.x < 0 ? iRect.w - (-posX > -iRect.w ? posX : 0): iRect.w, size.y};
-            SDL_RenderCopy(const_cast<SDL_Renderer*>(renderer), image, &iRect, &dRect);
+            { SDL_FRect fSrc = ToFRect(iRect); SDL_FRect fDst = ToFRect(dRect); SDL_RenderTexture(const_cast<SDL_Renderer*>(renderer), image, &fSrc, &fDst); }
         }
     }
 
@@ -1609,8 +1609,8 @@ void MainMenu::BlinkRender() {
     }
     else {
         waitGreen--;
-        SDL_RenderCopy(const_cast<SDL_Renderer*>(renderer), blinkGreenL, NULL, &blink_green_left);
-        SDL_RenderCopy(const_cast<SDL_Renderer*>(renderer), blinkGreenR, NULL, &blink_green_right);
+        { SDL_FRect fr = ToFRect(blink_green_left); SDL_RenderTexture(const_cast<SDL_Renderer*>(renderer), blinkGreenL, NULL, &fr); }
+        { SDL_FRect fr = ToFRect(blink_green_right); SDL_RenderTexture(const_cast<SDL_Renderer*>(renderer), blinkGreenR, NULL, &fr); }
     }
     
     if(waitPurple <= 0) {
@@ -1637,15 +1637,15 @@ void MainMenu::BlinkRender() {
     }
     else {
         waitPurple--;
-        SDL_RenderCopy(const_cast<SDL_Renderer*>(renderer), blinkPurpleL, NULL, &blink_purple_left);
-        SDL_RenderCopy(const_cast<SDL_Renderer*>(renderer), blinkPurpleR, NULL, &blink_purple_right);
+        { SDL_FRect fr = ToFRect(blink_purple_left); SDL_RenderTexture(const_cast<SDL_Renderer*>(renderer), blinkPurpleL, NULL, &fr); }
+        { SDL_FRect fr = ToFRect(blink_purple_right); SDL_RenderTexture(const_cast<SDL_Renderer*>(renderer), blinkPurpleR, NULL, &fr); }
     }
 
 }
 
 void MainMenu::CandyRender() {
     if (!candyInit || GameSettings::Instance()->gfxLevel() > 1) {
-        SDL_RenderCopy(const_cast<SDL_Renderer*>(renderer), fbLogo, nullptr, &fb_logo_rect);
+        { SDL_FRect fr = ToFRect(fb_logo_rect); SDL_RenderTexture(const_cast<SDL_Renderer*>(renderer), fbLogo, nullptr, &fr); }
         return;
     }
 
@@ -1659,7 +1659,7 @@ void MainMenu::CandyRender() {
     else if(candyMethod == 7)   brokentv_(candyModif.sfc, candyOrig.sfc, candyIndex);
     else if(candyMethod == 8)   snow_(candyModif.sfc, candyOrig.sfc);
 
-    SDL_RenderCopy(const_cast<SDL_Renderer*>(renderer), candyModif.OutputTexture(), nullptr, &candy_fb_rect);
+    { SDL_FRect fr = ToFRect(candy_fb_rect); SDL_RenderTexture(const_cast<SDL_Renderer*>(renderer), candyModif.OutputTexture(), nullptr, &fr); }
     candyIndex++;
 }
 
@@ -1673,17 +1673,17 @@ void MainMenu::SPPanelRender() {
     if (!showingSPPanel) return;
 
     if(overlookSfc == nullptr) {
-        overlookSfc = SDL_CreateRGBSurfaceWithFormat(0, activeSPButtons[0]->w, activeSPButtons[0]->h, 32, SURF_FORMAT);
+        overlookSfc = SDL_CreateSurface(activeSPButtons[0]->w, activeSPButtons[0]->h, SURF_FORMAT);
         overlook_init_(overlookSfc);
     }
 
     // SP panel needs extra height for SP_OPT items: first item at y=191, each 41px apart, 37px tall
     // For 5 items: last item bottom = 191 + (SP_OPT-1)*41 + 37 = 392 -> need panel bottom >= 400
     SDL_Rect spPanelRct = {(640/2) - (341/2), (480/2) - (320/2), 341, 320};
-    SDL_RenderCopy(const_cast<SDL_Renderer*>(renderer), singlePanelBG, nullptr, &spPanelRct);
+    { SDL_FRect fr = ToFRect(spPanelRct); SDL_RenderTexture(const_cast<SDL_Renderer*>(renderer), singlePanelBG, nullptr, &fr); }
     for (int i = 0; i < SP_OPT; i++){
         int w, h;
-        SDL_QueryTexture(idleSPButtons[i], nullptr, nullptr, &w, &h);
+        { float fw, fh; SDL_GetTextureSize(idleSPButtons[i], &fw, &fh); w = (int)fw; h = (int)fh; }
         SDL_Rect entryRct = {(640/2)-(298/2), ((480/2)-90)+(41 * (i + 1)), 298, 37};
         SDL_Rect subRct = {(640/2)-(298/2), ((480/2)-90)+(41 * (i + 1)), w, h};
         if(i == activeSPIdx) {
@@ -1692,20 +1692,20 @@ void MainMenu::SPPanelRender() {
                 SDL_Rect miniRct = {(640/2)-(298/2), ((480/2)-90)+(41 * (i + 1)), overlookSfc->w, overlookSfc->h};
                 SDL_Texture *miniOverlook = SDL_CreateTextureFromSurface(const_cast<SDL_Renderer*>(renderer), overlookSfc);
                 
-                SDL_RenderCopy(const_cast<SDL_Renderer*>(renderer), singleButtonAct, nullptr, &entryRct);
-                SDL_RenderCopy(const_cast<SDL_Renderer*>(renderer), miniOverlook, nullptr, &miniRct);
+                { SDL_FRect fr = ToFRect(entryRct); SDL_RenderTexture(const_cast<SDL_Renderer*>(renderer), singleButtonAct, nullptr, &fr); }
+                { SDL_FRect fr = ToFRect(miniRct); SDL_RenderTexture(const_cast<SDL_Renderer*>(renderer), miniOverlook, nullptr, &fr); }
                 SDL_DestroyTexture(miniOverlook);
 
                 overlookIndex++;
                 if (overlookIndex >= 70) overlookIndex = 0;
             }
-            else SDL_RenderCopy(const_cast<SDL_Renderer*>(renderer), singleButtonAct, nullptr, &entryRct);
+            else { SDL_FRect fr = ToFRect(entryRct); SDL_RenderTexture(const_cast<SDL_Renderer*>(renderer), singleButtonAct, nullptr, &fr); }
         }
-        else SDL_RenderCopy(const_cast<SDL_Renderer*>(renderer), singleButtonIdle, nullptr, &entryRct);
-        SDL_RenderCopy(const_cast<SDL_Renderer*>(renderer), idleSPButtons[i], nullptr, &subRct);
+        else { SDL_FRect fr = ToFRect(entryRct); SDL_RenderTexture(const_cast<SDL_Renderer*>(renderer), singleButtonIdle, nullptr, &fr); }
+        { SDL_FRect fr = ToFRect(subRct); SDL_RenderTexture(const_cast<SDL_Renderer*>(renderer), idleSPButtons[i], nullptr, &fr); }
     }
 
-    SDL_RenderCopy(const_cast<SDL_Renderer*>(renderer), panelText.Texture(), nullptr, panelText.Coords());
+    { SDL_FRect fr = ToFRect(*panelText.Coords()); SDL_RenderTexture(const_cast<SDL_Renderer*>(renderer), panelText.Texture(), nullptr, &fr); };
 }
 
 void MainMenu::TPPanelRender() {
@@ -1716,7 +1716,7 @@ void MainMenu::TPPanelRender() {
         else delayTime--;
     }
 
-    SDL_RenderCopy(const_cast<SDL_Renderer*>(renderer), voidPanelBG, nullptr, &voidPanelRct);
+    { SDL_FRect fr = ToFRect(voidPanelRct); SDL_RenderTexture(const_cast<SDL_Renderer*>(renderer), voidPanelBG, nullptr, &fr); };
 
     // Menu-based 2P setup like network lobby
     const char* victoriesLimits[] = {"none (unlimited)", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "15", "20", "30", "50", "100"};
@@ -1744,7 +1744,7 @@ void MainMenu::TPPanelRender() {
 
     panelText.UpdateText(const_cast<SDL_Renderer *>(renderer), pnltxt, 0);
     panelText.UpdatePosition({(640/2) - (panelText.Coords()->w / 2), (480/2) - 120});
-    SDL_RenderCopy(const_cast<SDL_Renderer*>(renderer), panelText.Texture(), nullptr, panelText.Coords());
+    { SDL_FRect fr = ToFRect(*panelText.Coords()); SDL_RenderTexture(const_cast<SDL_Renderer*>(renderer), panelText.Texture(), nullptr, &fr); };
 }
 
 void MainMenu::LocalMPPanelRender() {
@@ -1755,9 +1755,10 @@ void MainMenu::LocalMPPanelRender() {
         else delayTime--;
     }
 
-    SDL_RenderCopy(const_cast<SDL_Renderer*>(renderer), voidPanelBG, nullptr, &voidPanelRct);
+    { SDL_FRect fr = ToFRect(voidPanelRct); SDL_RenderTexture(const_cast<SDL_Renderer*>(renderer), voidPanelBG, nullptr, &fr); };
 
-    int connected = SDL_NumJoysticks();
+    int connected = 0;
+    { SDL_JoystickID *joys = SDL_GetJoysticks(&connected); SDL_free(joys); }
     char warningText[128] = "";
     if (connected < localMPPlayerCount) {
         snprintf(warningText, sizeof(warningText),
@@ -1803,7 +1804,7 @@ void MainMenu::LocalMPPanelRender() {
 
     panelText.UpdateText(const_cast<SDL_Renderer *>(renderer), pnltxt, 0);
     panelText.UpdatePosition({(640/2) - (panelText.Coords()->w / 2), (480/2) - 130});
-    SDL_RenderCopy(const_cast<SDL_Renderer*>(renderer), panelText.Texture(), nullptr, panelText.Coords());
+    { SDL_FRect fr = ToFRect(*panelText.Coords()); SDL_RenderTexture(const_cast<SDL_Renderer*>(renderer), panelText.Texture(), nullptr, &fr); };
 }
 
 void MainMenu::OptPanelRender() {
@@ -1817,7 +1818,7 @@ void MainMenu::OptPanelRender() {
 #endif
 
     if(awaitKp == false && lastOptInput != SDLK_UNKNOWN && !runDelay) { // we got our response
-        chainReaction = lastOptInput == SDLK_y ? true : false;
+        chainReaction = lastOptInput == SDLK_Y ? true : false;
 
         char pnltxt[256];
         snprintf(pnltxt, sizeof(pnltxt), "Random level\n\n\nEnable chain reaction?\n\n\nY or N?:        %s\n\n\n\n\nEnjoy the game!", SDL_GetKeyName(lastOptInput));
@@ -1833,8 +1834,8 @@ void MainMenu::OptPanelRender() {
         else delayTime--;
     }
 
-    SDL_RenderCopy(const_cast<SDL_Renderer*>(renderer), voidPanelBG, nullptr, &voidPanelRct);
-    SDL_RenderCopy(const_cast<SDL_Renderer*>(renderer), panelText.Texture(), nullptr, panelText.Coords());
+    { SDL_FRect fr = ToFRect(voidPanelRct); SDL_RenderTexture(const_cast<SDL_Renderer*>(renderer), voidPanelBG, nullptr, &fr); };
+    { SDL_FRect fr = ToFRect(*panelText.Coords()); SDL_RenderTexture(const_cast<SDL_Renderer*>(renderer), panelText.Texture(), nullptr, &fr); };
 }
 
 void MainMenu::LevelPanelRender() {
@@ -1850,13 +1851,13 @@ void MainMenu::LevelPanelRender() {
     panelText.UpdateText(const_cast<SDL_Renderer*>(renderer), txt, 0);
     panelText.UpdatePosition({(640/2) - (panelText.Coords()->w / 2), (480/2) - 80});
 
-    SDL_RenderCopy(const_cast<SDL_Renderer*>(renderer), voidPanelBG, nullptr, &voidPanelRct);
-    SDL_RenderCopy(const_cast<SDL_Renderer*>(renderer), panelText.Texture(), nullptr, panelText.Coords());
+    { SDL_FRect fr = ToFRect(voidPanelRct); SDL_RenderTexture(const_cast<SDL_Renderer*>(renderer), voidPanelBG, nullptr, &fr); };
+    { SDL_FRect fr = ToFRect(*panelText.Coords()); SDL_RenderTexture(const_cast<SDL_Renderer*>(renderer), panelText.Texture(), nullptr, &fr); };
 
     if (runDelay) {
         if (delayTime == 0) {
             showingLevelPanel = false;
-            SDL_StopTextInput();
+            SDL_StopTextInput(SDL_GetKeyboardFocus());
             SetupNewGame(5);  // mode 5 = pick_start_level
         } else {
             delayTime--;
@@ -1867,7 +1868,7 @@ void MainMenu::LevelPanelRender() {
 void MainMenu::KeysPanelRender() {
     if (!showingKeysPanel) return;
 
-    SDL_RenderCopy(const_cast<SDL_Renderer*>(renderer), voidPanelBG, nullptr, &voidPanelRct);
+    { SDL_FRect fr = ToFRect(voidPanelRct); SDL_RenderTexture(const_cast<SDL_Renderer*>(renderer), voidPanelBG, nullptr, &fr); };
 
     GameSettings* gs = GameSettings::Instance();
     PlayerKeys* allKeys[5] = {
@@ -1884,7 +1885,7 @@ void MainMenu::KeysPanelRender() {
         panelText.UpdateColor(fg, black);
         panelText.UpdateText(const_cast<SDL_Renderer*>(renderer), txt, 0);
         panelText.UpdatePosition({(640/2) - (panelText.Coords()->w / 2), y});
-        SDL_RenderCopy(const_cast<SDL_Renderer*>(renderer), panelText.Texture(), nullptr, panelText.Coords());
+        { SDL_FRect fr = ToFRect(*panelText.Coords()); SDL_RenderTexture(const_cast<SDL_Renderer*>(renderer), panelText.Texture(), nullptr, &fr); };
         y += panelText.Coords()->h;
     };
 
@@ -1952,7 +1953,7 @@ void MainMenu::NetSetupPanelRender() {
     if (!showingNetSetupPanel) return;
 
     if(awaitKp == false && lastOptInput != SDLK_UNKNOWN && !runDelay) { // we got our response
-        chainReaction = lastOptInput == SDLK_y ? true : false;
+        chainReaction = lastOptInput == SDLK_Y ? true : false;
 
         char pnltxt[256];
         snprintf(pnltxt, sizeof(pnltxt), "Network game\n\n\nEnable chain reaction?\n\n\nY or N?:        %s\n\n\n\n\nConnecting...", SDL_GetKeyName(lastOptInput));
@@ -1977,8 +1978,8 @@ void MainMenu::NetSetupPanelRender() {
         else delayTime--;
     }
 
-    SDL_RenderCopy(const_cast<SDL_Renderer*>(renderer), voidPanelBG, nullptr, &voidPanelRct);
-    SDL_RenderCopy(const_cast<SDL_Renderer*>(renderer), panelText.Texture(), nullptr, panelText.Coords());
+    { SDL_FRect fr = ToFRect(voidPanelRct); SDL_RenderTexture(const_cast<SDL_Renderer*>(renderer), voidPanelBG, nullptr, &fr); };
+    { SDL_FRect fr = ToFRect(*panelText.Coords()); SDL_RenderTexture(const_cast<SDL_Renderer*>(renderer), panelText.Texture(), nullptr, &fr); };
 }
 
 void MainMenu::NetPanelRender() {
@@ -2113,7 +2114,7 @@ void MainMenu::NetPanelRender() {
         }
 
         // Render world map background
-        SDL_RenderCopy(const_cast<SDL_Renderer*>(renderer), netGameBackground, nullptr, nullptr);
+        SDL_RenderTexture(const_cast<SDL_Renderer*>(renderer), netGameBackground, nullptr, nullptr);
 
         // Render geolocation spots on world map (original: print_spot / save_back_spot)
         // Coordinate formula matches original Perl get_spot_location() at line 4084
@@ -2127,13 +2128,13 @@ void MainMenu::NetPanelRender() {
         auto renderSpot = [&](SDL_Texture* tex, int x, int y, const char* nick) {
             if (!tex) return;
             int w = 0, h = 0;
-            SDL_QueryTexture(tex, nullptr, nullptr, &w, &h);
+            { float fw, fh; SDL_GetTextureSize(tex, &fw, &fh); w = (int)fw; h = (int)fh; }
             SDL_Rect r = {x - w / 2, y - h / 2, w, h};
-            SDL_RenderCopy(const_cast<SDL_Renderer*>(renderer), tex, nullptr, &r);
+            { SDL_FRect fr = ToFRect(r); SDL_RenderTexture(const_cast<SDL_Renderer*>(renderer), tex, nullptr, &fr); }
             if (nick && nick[0]) {
                 networkText.UpdateText(const_cast<SDL_Renderer*>(renderer), nick, 0);
                 networkText.UpdatePosition({x - networkText.Coords()->w / 2, y + h / 2 + 1});
-                SDL_RenderCopy(const_cast<SDL_Renderer*>(renderer), networkText.Texture(), nullptr, networkText.Coords());
+                { SDL_FRect fr = ToFRect(*networkText.Coords()); SDL_RenderTexture(const_cast<SDL_Renderer*>(renderer), networkText.Texture(), nullptr, &fr); };
             }
         };
 
@@ -2237,7 +2238,7 @@ void MainMenu::NetPanelRender() {
 
             if (i == (size_t)selectedActionIndex && highlightServer) {
                 SDL_Rect highlightRect = {actionStartX - 4, renderY - 1, 200, lineHeight};
-                SDL_RenderCopy(const_cast<SDL_Renderer*>(renderer), highlightServer, nullptr, &highlightRect);
+                { SDL_FRect fr = ToFRect(highlightRect); SDL_RenderTexture(const_cast<SDL_Renderer*>(renderer), highlightServer, nullptr, &fr); };
             }
 
             // For grid rows (5-7 in a game room), skip the label text here — rendered as table below
@@ -2249,7 +2250,7 @@ void MainMenu::NetPanelRender() {
             snprintf(actionText, sizeof(actionText), "%s", actions[i].c_str());
             panelText.UpdateText(const_cast<SDL_Renderer*>(renderer), actionText, 0);
             panelText.UpdatePosition({actionStartX, renderY});
-            SDL_RenderCopy(const_cast<SDL_Renderer*>(renderer), panelText.Texture(), nullptr, panelText.Coords());
+            { SDL_FRect fr = ToFRect(*panelText.Coords()); SDL_RenderTexture(const_cast<SDL_Renderer*>(renderer), panelText.Texture(), nullptr, &fr); };
         }
 
         // Render the per-player settings grid (only in a game room)
@@ -2280,24 +2281,24 @@ void MainMenu::NetPanelRender() {
 
                 // Outer border
                 SDL_Rect border = {gridLeft, gridTop, gridRight - gridLeft, gridBot - gridTop};
-                SDL_RenderDrawRect(rend, &border);
+                { SDL_FRect fr = ToFRect(border); SDL_RenderRect(rend, &fr); }
 
                 // Horizontal line after header row
-                SDL_RenderDrawLine(rend, gridLeft, firstDataRowY - 1, gridRight, firstDataRowY - 1);
+                SDL_RenderLine(rend, (float)gridLeft, (float)(firstDataRowY - 1), (float)gridRight, (float)(firstDataRowY - 1));
                 // Horizontal lines between data rows (after Colors, after Row collapse)
                 for (int r = 1; r <= 2; r++) {
                     int y = firstDataRowY + r * lineHeight;
-                    SDL_RenderDrawLine(rend, gridLeft, y, gridRight, y);
+                    SDL_RenderLine(rend, (float)gridLeft, (float)y, (float)gridRight, (float)y);
                 }
 
                 // Vertical line between label and ALL column
                 int xLabel = actionStartX + labelW;
-                SDL_RenderDrawLine(rend, xLabel, gridTop, xLabel, gridBot);
+                SDL_RenderLine(rend, (float)xLabel, (float)gridTop, (float)xLabel, (float)gridBot);
 
                 // Vertical lines between each column (ALL|P1, P1|P2, ...)
                 for (int c = 1; c <= totalCols - 1; c++) {
                     int x = actionStartX + labelW + c * colW;
-                    SDL_RenderDrawLine(rend, x, gridTop, x, gridBot);
+                    SDL_RenderLine(rend, (float)x, (float)gridTop, (float)x, (float)gridBot);
                 }
             }
             // Helper: render text centered within a column cell
@@ -2305,10 +2306,10 @@ void MainMenu::NetPanelRender() {
                 SDL_Renderer* rend2 = const_cast<SDL_Renderer*>(renderer);
                 panelText.UpdateText(rend2, txt, 0);
                 int tw = 0;
-                if (panelText.Texture()) SDL_QueryTexture(panelText.Texture(), nullptr, nullptr, &tw, nullptr);
+                if (panelText.Texture()) { float ftw; SDL_GetTextureSize(panelText.Texture(), &ftw, nullptr); tw = (int)ftw; }
                 int cx = colLeft + colW / 2 - tw / 2;
                 panelText.UpdatePosition({cx, y});
-                SDL_RenderCopy(rend2, panelText.Texture(), nullptr, panelText.Coords());
+                { SDL_FRect fr = ToFRect(*panelText.Coords()); SDL_RenderTexture(rend2, panelText.Texture(), nullptr, &fr); };
             };
 
             // ALL header
@@ -2329,13 +2330,13 @@ void MainMenu::NetPanelRender() {
                 // Highlight full row if selected
                 if (selectedActionIndex == rowIdx && highlightServer) {
                     SDL_Rect hlRect = {actionStartX - 4, rowY - 1, 200, lineHeight};
-                    SDL_RenderCopy(const_cast<SDL_Renderer*>(renderer), highlightServer, nullptr, &hlRect);
+                    { SDL_FRect fr = ToFRect(hlRect); SDL_RenderTexture(const_cast<SDL_Renderer*>(renderer), highlightServer, nullptr, &fr); };
                 }
 
                 // Row label
                 panelText.UpdateText(const_cast<SDL_Renderer*>(renderer), rowLabels[row], 0);
                 panelText.UpdatePosition({actionStartX, rowY});
-                SDL_RenderCopy(const_cast<SDL_Renderer*>(renderer), panelText.Texture(), nullptr, panelText.Coords());
+                { SDL_FRect fr = ToFRect(*panelText.Coords()); SDL_RenderTexture(const_cast<SDL_Renderer*>(renderer), panelText.Texture(), nullptr, &fr); };
 
                 // ALL cell (col 0) — show value if all players match, else "-"
                 {
@@ -2343,7 +2344,7 @@ void MainMenu::NetPanelRender() {
                     bool isFocusedAll = (selectedActionIndex == rowIdx && currentPlayerCol == 0);
                     if (isFocusedAll && isHost && highlightServer) {
                         SDL_Rect cellHl = {cellX - 2, rowY - 1, colW - 2, lineHeight};
-                        SDL_RenderCopy(const_cast<SDL_Renderer*>(renderer), highlightServer, nullptr, &cellHl);
+                        { SDL_FRect fr = ToFRect(cellHl); SDL_RenderTexture(const_cast<SDL_Renderer*>(renderer), highlightServer, nullptr, &fr); };
                     }
                     char cellText[8];
                     if (row == 0) {
@@ -2373,7 +2374,7 @@ void MainMenu::NetPanelRender() {
                     // Cell highlight for focused cell (host only)
                     if (isFocusedCell && isHost && highlightServer) {
                         SDL_Rect cellHl = {cellX - 2, rowY - 1, colW - 2, lineHeight};
-                        SDL_RenderCopy(const_cast<SDL_Renderer*>(renderer), highlightServer, nullptr, &cellHl);
+                        { SDL_FRect fr = ToFRect(cellHl); SDL_RenderTexture(const_cast<SDL_Renderer*>(renderer), highlightServer, nullptr, &fr); };
                     }
 
                     // Cell value text
@@ -2397,7 +2398,7 @@ void MainMenu::NetPanelRender() {
             snprintf(chatText, sizeof(chatText), "Say: %s_", networkChatInput);
             panelText.UpdateText(const_cast<SDL_Renderer*>(renderer), chatText, 0);
             panelText.UpdatePosition({actionStartX, chatY});
-            SDL_RenderCopy(const_cast<SDL_Renderer*>(renderer), panelText.Texture(), nullptr, panelText.Coords());
+            { SDL_FRect fr = ToFRect(*panelText.Coords()); SDL_RenderTexture(const_cast<SDL_Renderer*>(renderer), panelText.Texture(), nullptr, &fr); };
         }
 
         // Display chat messages in status area (like original at y=355-435)
@@ -2423,7 +2424,7 @@ void MainMenu::NetPanelRender() {
             int yPos = chatStatusY - (maxChatLines - 1 - chatLine) * chatLineHeight;
             panelText.UpdateText(const_cast<SDL_Renderer*>(renderer), chatLineText, 0);
             panelText.UpdatePosition({chatStatusX, yPos});
-            SDL_RenderCopy(const_cast<SDL_Renderer*>(renderer), panelText.Texture(), nullptr, panelText.Coords());
+            { SDL_FRect fr = ToFRect(*panelText.Coords()); SDL_RenderTexture(const_cast<SDL_Renderer*>(renderer), panelText.Texture(), nullptr, &fr); };
         }
 
         // Show player nickname and count at y=336 like original (below chat input at y=320)
@@ -2435,7 +2436,7 @@ void MainMenu::NetPanelRender() {
         snprintf(statusText, sizeof(statusText), "Player: %s", netClient->GetPlayerNick().c_str());
         panelText.UpdateText(const_cast<SDL_Renderer*>(renderer), statusText, 0);
         panelText.UpdatePosition({statusX, statusY});
-        SDL_RenderCopy(const_cast<SDL_Renderer*>(renderer), panelText.Texture(), nullptr, panelText.Coords());
+        { SDL_FRect fr = ToFRect(*panelText.Coords()); SDL_RenderTexture(const_cast<SDL_Renderer*>(renderer), panelText.Texture(), nullptr, &fr); };
 
         // Show available players or game info below
         char playersText[256];
@@ -2450,7 +2451,7 @@ void MainMenu::NetPanelRender() {
                 (int)currentGame->players.size(), playerNames.c_str());
             panelText.UpdateText(const_cast<SDL_Renderer*>(renderer), playersText, 0);
             panelText.UpdatePosition({statusX, statusY + 16});
-            SDL_RenderCopy(const_cast<SDL_Renderer*>(renderer), panelText.Texture(), nullptr, panelText.Coords());
+            { SDL_FRect fr = ToFRect(*panelText.Coords()); SDL_RenderTexture(const_cast<SDL_Renderer*>(renderer), panelText.Texture(), nullptr, &fr); };
         } else {
             // Show lobby player list — header line then names, up to 3 per line
             std::vector<NetworkPlayer> openPlayers = netClient->GetOpenPlayers();
@@ -2458,7 +2459,7 @@ void MainMenu::NetPanelRender() {
             snprintf(playersText, sizeof(playersText), "Online (%d):", total);
             panelText.UpdateText(const_cast<SDL_Renderer*>(renderer), playersText, 0);
             panelText.UpdatePosition({statusX, statusY + 16});
-            SDL_RenderCopy(const_cast<SDL_Renderer*>(renderer), panelText.Texture(), nullptr, panelText.Coords());
+            { SDL_FRect fr = ToFRect(*panelText.Coords()); SDL_RenderTexture(const_cast<SDL_Renderer*>(renderer), panelText.Texture(), nullptr, &fr); };
 
             // Build name list, up to 9 names (3 lines × 3), then "+N more"
             const int maxShown = 9;
@@ -2476,7 +2477,7 @@ void MainMenu::NetPanelRender() {
                 if (shown % 3 == 0 || pi == total - 1) {
                     panelText.UpdateText(const_cast<SDL_Renderer*>(renderer), lineBuf.c_str(), 0);
                     panelText.UpdatePosition({statusX, lineY});
-                    SDL_RenderCopy(const_cast<SDL_Renderer*>(renderer), panelText.Texture(), nullptr, panelText.Coords());
+                    { SDL_FRect fr = ToFRect(*panelText.Coords()); SDL_RenderTexture(const_cast<SDL_Renderer*>(renderer), panelText.Texture(), nullptr, &fr); };
                     lineY += 16;
                     lineCount++;
                     lineBuf.clear();
@@ -2486,7 +2487,7 @@ void MainMenu::NetPanelRender() {
             if (!lineBuf.empty()) {
                 panelText.UpdateText(const_cast<SDL_Renderer*>(renderer), lineBuf.c_str(), 0);
                 panelText.UpdatePosition({statusX, lineY});
-                SDL_RenderCopy(const_cast<SDL_Renderer*>(renderer), panelText.Texture(), nullptr, panelText.Coords());
+                { SDL_FRect fr = ToFRect(*panelText.Coords()); SDL_RenderTexture(const_cast<SDL_Renderer*>(renderer), panelText.Texture(), nullptr, &fr); };
                 lineY += 16;
             }
             // Show overflow count if more players than we displayed
@@ -2495,7 +2496,7 @@ void MainMenu::NetPanelRender() {
                 snprintf(playersText, sizeof(playersText), "+%d more", remaining);
                 panelText.UpdateText(const_cast<SDL_Renderer*>(renderer), playersText, 0);
                 panelText.UpdatePosition({statusX, lineY});
-                SDL_RenderCopy(const_cast<SDL_Renderer*>(renderer), panelText.Texture(), nullptr, panelText.Coords());
+                { SDL_FRect fr = ToFRect(*panelText.Coords()); SDL_RenderTexture(const_cast<SDL_Renderer*>(renderer), panelText.Texture(), nullptr, &fr); };
             }
         }
 
@@ -2503,7 +2504,7 @@ void MainMenu::NetPanelRender() {
     }
 
     // For non-lobby screens, use void panel
-    SDL_RenderCopy(const_cast<SDL_Renderer*>(renderer), voidPanelBG, nullptr, &voidPanelRct);
+    { SDL_FRect fr = ToFRect(voidPanelRct); SDL_RenderTexture(const_cast<SDL_Renderer*>(renderer), voidPanelBG, nullptr, &fr); };
 
     char netText[512];
 
@@ -2518,7 +2519,7 @@ void MainMenu::NetPanelRender() {
             panelText.UpdateColor(fg, black);
             panelText.UpdateText(const_cast<SDL_Renderer*>(renderer), txt, 0);
             panelText.UpdatePosition({(640/2) - (panelText.Coords()->w / 2), y});
-            SDL_RenderCopy(const_cast<SDL_Renderer*>(renderer), panelText.Texture(), nullptr, panelText.Coords());
+            { SDL_FRect fr = ToFRect(*panelText.Coords()); SDL_RenderTexture(const_cast<SDL_Renderer*>(renderer), panelText.Texture(), nullptr, &fr); };
             y += panelText.Coords()->h;
         };
 
@@ -2600,7 +2601,7 @@ void MainMenu::NetPanelRender() {
             panelText.UpdateColor(fg, black);
             panelText.UpdateText(const_cast<SDL_Renderer*>(renderer), txt, 0);
             panelText.UpdatePosition({(640/2) - (panelText.Coords()->w / 2), y});
-            SDL_RenderCopy(const_cast<SDL_Renderer*>(renderer), panelText.Texture(), nullptr, panelText.Coords());
+            { SDL_FRect fr = ToFRect(*panelText.Coords()); SDL_RenderTexture(const_cast<SDL_Renderer*>(renderer), panelText.Texture(), nullptr, &fr); };
             y += panelText.Coords()->h;
         };
 
@@ -2673,7 +2674,7 @@ void MainMenu::NetPanelRender() {
             panelText.UpdateColor(fg, black);
             panelText.UpdateText(const_cast<SDL_Renderer*>(renderer), txt, 0);
             panelText.UpdatePosition({(640/2) - (panelText.Coords()->w / 2), y});
-            SDL_RenderCopy(const_cast<SDL_Renderer*>(renderer), panelText.Texture(), nullptr, panelText.Coords());
+            { SDL_FRect fr = ToFRect(*panelText.Coords()); SDL_RenderTexture(const_cast<SDL_Renderer*>(renderer), panelText.Texture(), nullptr, &fr); };
             y += panelText.Coords()->h;
         };
 
@@ -2700,7 +2701,7 @@ void MainMenu::NetPanelRender() {
             panelText.UpdateColor(fg, black);
             panelText.UpdateText(const_cast<SDL_Renderer*>(renderer), txt, 0);
             panelText.UpdatePosition({(640/2) - (panelText.Coords()->w / 2), y});
-            SDL_RenderCopy(const_cast<SDL_Renderer*>(renderer), panelText.Texture(), nullptr, panelText.Coords());
+            { SDL_FRect fr = ToFRect(*panelText.Coords()); SDL_RenderTexture(const_cast<SDL_Renderer*>(renderer), panelText.Texture(), nullptr, &fr); };
             y += panelText.Coords()->h;
         };
 
@@ -2891,7 +2892,7 @@ void MainMenu::NetPanelRender() {
     panelText.UpdateColor({255, 255, 255, 255}, {0, 0, 0, 255});
     panelText.UpdateText(const_cast<SDL_Renderer *>(renderer), netText, 0);
     panelText.UpdatePosition({(640/2) - (panelText.Coords()->w / 2), (480/2) - 120});
-    SDL_RenderCopy(const_cast<SDL_Renderer*>(renderer), panelText.Texture(), nullptr, panelText.Coords());
+    { SDL_FRect fr = ToFRect(*panelText.Coords()); SDL_RenderTexture(const_cast<SDL_Renderer*>(renderer), panelText.Texture(), nullptr, &fr); };
 }
 
 void MainMenu::press() {
@@ -2905,7 +2906,7 @@ void MainMenu::press() {
             showingLevelPanel = true;
             levelInput.clear();
             runDelay = false;
-            SDL_StartTextInput();
+            SDL_StartTextInput(SDL_GetKeyboardFocus());
         }
         else if (activeSPIdx == 2) ShowPanel(1);
         else if (activeSPIdx == 3) {
@@ -3187,7 +3188,7 @@ void MainMenu::ReturnToMenu() {
     awaitKp = false;
     selectedMode = 0;
     runDelay = false;
-    SDL_StopTextInput();
+    SDL_StopTextInput(SDL_GetKeyboardFocus());
 
     // Clean up server if running
     if (serverHosting) {
@@ -3220,7 +3221,7 @@ void MainMenu::ReturnToNetLobby() {
     networkGameStarting = false;
     wasmSyncWaitStart = 0;
     pendingLobbyConnect = false;
-    SDL_StopTextInput();
+    SDL_StopTextInput(SDL_GetKeyboardFocus());
 
     // Clear stale game list immediately so ESC-quitter can't see/join the in-progress game
     // Fresh list arrives shortly from RequestList()
