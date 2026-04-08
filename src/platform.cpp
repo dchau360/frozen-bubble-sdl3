@@ -49,8 +49,8 @@ void InitDataDir() {
     // Assets are extracted from the APK to internal storage by AssetExtractor.java.
     // We read the exact path Java used (FrozenBubbleActivity.sExtractedDataDir) via JNI
     // to avoid mismatches between /data/data/... and /data/user/0/... on some devices.
-    JNIEnv* env = (JNIEnv*)SDL_AndroidGetJNIEnv();
-    jobject activity = (jobject)SDL_AndroidGetActivity();
+    JNIEnv* env = (JNIEnv*)SDL_GetAndroidJNIEnv();
+    jobject activity = (jobject)SDL_GetAndroidActivity();
     if (env && activity) {
         jclass clazz = env->GetObjectClass(activity);
         jfieldID fid = env->GetStaticFieldID(clazz, "sExtractedDataDir", "Ljava/lang/String;");
@@ -70,7 +70,7 @@ void InitDataDir() {
     }
     // Fallback if JNI read failed
     if (g_dataDir.empty()) {
-        const char* p = SDL_AndroidGetInternalStoragePath();
+        const char* p = SDL_GetAndroidInternalStoragePath();
         g_dataDir = p ? std::string(p) + "/share" : "/data/data/org.frozenbubble/files/share";
         SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
                     "JNI read of sExtractedDataDir failed, using fallback: %s", g_dataDir.c_str());

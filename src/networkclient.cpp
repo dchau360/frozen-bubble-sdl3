@@ -28,7 +28,7 @@
 #include <stdio.h>
 #ifdef __ANDROID__
 #include <jni.h>
-#include <SDL_system.h>
+#include <SDL3/SDL_system.h>
 #endif
 
 NetworkClient* NetworkClient::ptrInstance = nullptr;
@@ -1529,10 +1529,10 @@ bool NetworkClient::IsReachable(const char* host, int port, int timeoutMs) {
 #ifndef __WASM_PORT__
 #ifdef __ANDROID__
 // Fetch a URL via JNI by calling FrozenBubbleActivity.fetchUrl(String) → String.
-// SDL2's SDL_AndroidGetJNIEnv() / SDL_AndroidGetActivity() give us the JNI context.
+// SDL3's SDL_GetAndroidJNIEnv() / SDL_GetAndroidActivity() give us the JNI context.
 static std::string androidFetchUrl(const char* url) {
-    JNIEnv* env = (JNIEnv*)SDL_AndroidGetJNIEnv();
-    jobject activity = (jobject)SDL_AndroidGetActivity();
+    JNIEnv* env = (JNIEnv*)SDL_GetAndroidJNIEnv();
+    jobject activity = (jobject)SDL_GetAndroidActivity();
     if (!env || !activity) return "";
 
     jclass cls = env->GetObjectClass(activity);
