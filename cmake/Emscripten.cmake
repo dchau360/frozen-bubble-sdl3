@@ -1,5 +1,10 @@
-# Emscripten CMake toolchain file for Frozen Bubble SDL3 WebAssembly port
+# Emscripten CMake toolchain file for Frozen Bubble WASM port
 # Usage: mkdir build-wasm && cd build-wasm && emcmake cmake .. && make
+#
+# NOTE: WASM build uses SDL2 Emscripten ports (not SDL3).
+# Emscripten 5.x has built-in ports for SDL3 and SDL3_ttf, but NOT
+# SDL3_image or SDL3_mixer. Until those ports ship, the WASM target
+# stays on SDL2 while desktop and Android use SDL3.
 
 set(CMAKE_SYSTEM_NAME Emscripten)
 set(CMAKE_SYSTEM_VERSION 1)
@@ -15,10 +20,10 @@ set(CMAKE_FIND_ROOT_PATH_MODE_LIBRARY ONLY)
 set(CMAKE_FIND_ROOT_PATH_MODE_INCLUDE ONLY)
 set(CMAKE_FIND_ROOT_PATH_MODE_PACKAGE ONLY)
 
-# Emscripten-specific flags
-set(EMSCRIPTEN_FLAGS "--bind -s USE_SDL=3 -s USE_SDL_IMAGE=3 -s USE_SDL_MIXER=3 -s USE_SDL_TTF=3")
-set(EMSCRIPTEN_FLAGS "${EMSCRIPTEN_FLAGS} -s SDL3_IMAGE_FORMATS=['png']")
-set(EMSCRIPTEN_FLAGS "${EMSCRIPTEN_FLAGS} -s SDL3_MIXER_FORMATS=['ogg']")
+# Emscripten-specific flags — SDL2 ports
+set(EMSCRIPTEN_FLAGS "--bind -s USE_SDL=2 -s USE_SDL_IMAGE=2 -s USE_SDL_MIXER=2 -s USE_SDL_TTF=2")
+set(EMSCRIPTEN_FLAGS "${EMSCRIPTEN_FLAGS} -s SDL2_IMAGE_FORMATS=['png']")
+set(EMSCRIPTEN_FLAGS "${EMSCRIPTEN_FLAGS} -s SDL2_MIXER_FORMATS=['ogg']")
 set(EMSCRIPTEN_FLAGS "${EMSCRIPTEN_FLAGS} -s ALLOW_MEMORY_GROWTH=1")
 set(EMSCRIPTEN_FLAGS "${EMSCRIPTEN_FLAGS} -s DISABLE_EXCEPTION_CATCHING=0")
 set(EMSCRIPTEN_FLAGS "${EMSCRIPTEN_FLAGS} -s WASM=1")
