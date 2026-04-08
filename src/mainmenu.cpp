@@ -496,7 +496,7 @@ void MainMenu::HandleInput(SDL_Event *e){
             // On Android: pressing 'R' in any options panel triggers "Remove Ads" IAP
             if (awaitKp && (showingOptPanel || showingNetSetupPanel) &&
                 e->key.key == SDLK_R) {
-                SDL_AndroidSendMessage(0x8002, 0); // launch Remove Ads purchase flow
+                SDL_SendAndroidMessage(0x8002, 0); // launch Remove Ads purchase flow
                 break;
             }
 #endif
@@ -1288,7 +1288,7 @@ void MainMenu::HandleInput(SDL_Event *e){
                                     netClient->RequestList();  // Immediate list on lobby entry
                                     lastListRequest = SDL_GetTicks();
 #ifdef __ANDROID__
-                                    SDL_AndroidSendMessage(0x8001, 0); // show lobby ad
+                                    SDL_SendAndroidMessage(0x8001, 0); // show lobby ad
 #endif
                                 }
                             } else {
@@ -1813,7 +1813,7 @@ void MainMenu::OptPanelRender() {
 #ifdef __ANDROID__
     // On Android, show "Remove Ads" option at the bottom of the options panel.
     // Pressing 'R' (mapped from a controller button via fake key event) triggers IAP.
-    // This is rendered as informational text; actual purchase is via SDL_AndroidSendMessage.
+    // This is rendered as informational text; actual purchase is via SDL_SendAndroidMessage.
     (void)0; // placeholder — text injected into snprintf below
 #endif
 
@@ -2026,7 +2026,7 @@ void MainMenu::NetPanelRender() {
                 netClient->RequestList();
                 lastListRequest = SDL_GetTicks();
 #ifdef __ANDROID__
-                SDL_AndroidSendMessage(0x8001, 0);
+                SDL_SendAndroidMessage(0x8001, 0);
 #endif
             }
         }
@@ -3231,7 +3231,7 @@ void MainMenu::ReturnToNetLobby() {
     if (netClient && netClient->IsConnected())
         netClient->RequestList();
 #ifdef __ANDROID__
-    SDL_AndroidSendMessage(0x8001, 0); // show lobby ad on return from game
+    SDL_SendAndroidMessage(0x8001, 0); // show lobby ad on return from game
 #endif
 }
 

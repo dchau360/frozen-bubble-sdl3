@@ -1,0 +1,12 @@
+[submodule "android/app/jni/SDL3"]
+	path = android/app/jni/SDL3
+	url = https://github.com/libsdl-org/SDL.git
+[submodule "android/app/jni/SDL3_image"]
+	path = android/app/jni/SDL3_image
+	url = https://github.com/libsdl-org/SDL_image.git
+[submodule "android/app/jni/SDL3_mixer"]
+	path = android/app/jni/SDL3_mixer
+	url = https://github.com/libsdl-org/SDL_mixer.git
+[submodule "android/app/jni/SDL3_ttf"]
+	path = android/app/jni/SDL3_ttf
+	url = https://github.com/libsdl-org/SDL_ttf.git

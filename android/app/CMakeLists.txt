@@ -4,64 +4,53 @@ project(frozen-bubble CXX C)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-# SDL2 and extension libs built from source in jni/
+# SDL3 and extension libs built from source in jni/ (git submodules)
 set(JNI_DIR "${CMAKE_SOURCE_DIR}/jni")
 
-# Disable SDL2 test programs to speed up build
+# Disable SDL3 test programs to speed up build
 set(SDL_TEST OFF CACHE BOOL "" FORCE)
-set(SDL2IMAGE_SAMPLES OFF CACHE BOOL "" FORCE)
-set(SDL2MIXER_SAMPLES OFF CACHE BOOL "" FORCE)
+set(SDL3IMAGE_SAMPLES OFF CACHE BOOL "" FORCE)
+set(SDL3MIXER_SAMPLES OFF CACHE BOOL "" FORCE)
 
-# SDL2_mixer: disable formats that require vendored external deps
-# Use system packages where possible; on Android we don't need OGG/FLAC/MP3
-set(SDL2MIXER_VENDORED ON CACHE BOOL "" FORCE)
-set(SDL2MIXER_OGG ON CACHE BOOL "" FORCE)
-set(SDL2MIXER_OGG_VENDORED ON CACHE BOOL "" FORCE)
-set(SDL2MIXER_FLAC OFF CACHE BOOL "" FORCE)
-set(SDL2MIXER_MP3 OFF CACHE BOOL "" FORCE)
-set(SDL2MIXER_OPUS OFF CACHE BOOL "" FORCE)
-set(SDL2MIXER_MIDI OFF CACHE BOOL "" FORCE)
-set(SDL2MIXER_WAVPACK OFF CACHE BOOL "" FORCE)
-# Keep only WAV support; disable all MOD formats (no system libs on Android)
-set(SDL2MIXER_WAV ON CACHE BOOL "" FORCE)
-set(SDL2MIXER_MOD OFF CACHE BOOL "" FORCE)
-set(SDL2MIXER_MOD_MIKMOD OFF CACHE BOOL "" FORCE)
-set(SDL2MIXER_MOD_MODPLUG OFF CACHE BOOL "" FORCE)
-set(SDL2MIXER_MOD_XMP OFF CACHE BOOL "" FORCE)
-set(SDL2MIXER_MOD_XMP_LITE OFF CACHE BOOL "" FORCE)
+# SDL3_mixer: disable formats that require vendored external deps
+set(SDL3MIXER_VENDORED ON CACHE BOOL "" FORCE)
+set(SDL3MIXER_VORBIS_VORBISFILE ON CACHE BOOL "" FORCE)
+set(SDL3MIXER_OGG ON CACHE BOOL "" FORCE)
+set(SDL3MIXER_FLAC OFF CACHE BOOL "" FORCE)
+set(SDL3MIXER_MP3 OFF CACHE BOOL "" FORCE)
+set(SDL3MIXER_OPUS OFF CACHE BOOL "" FORCE)
+set(SDL3MIXER_MIDI OFF CACHE BOOL "" FORCE)
+set(SDL3MIXER_WAVPACK OFF CACHE BOOL "" FORCE)
+set(SDL3MIXER_WAV ON CACHE BOOL "" FORCE)
+set(SDL3MIXER_MOD OFF CACHE BOOL "" FORCE)
+set(SDL3MIXER_MOD_XMP OFF CACHE BOOL "" FORCE)
+set(SDL3MIXER_MOD_XMP_LITE OFF CACHE BOOL "" FORCE)
+set(SDL3MIXER_GME OFF CACHE BOOL "" FORCE)
 
-# SDL2_image: PNG + GIF needed (bubble textures are GIFs)
-set(SDL2IMAGE_AVIF OFF CACHE BOOL "" FORCE)
-set(SDL2IMAGE_BMP OFF CACHE BOOL "" FORCE)
-set(SDL2IMAGE_GIF ON CACHE BOOL "" FORCE)
-set(SDL2IMAGE_JPG OFF CACHE BOOL "" FORCE)
-set(SDL2IMAGE_JXL OFF CACHE BOOL "" FORCE)
-set(SDL2IMAGE_LBM OFF CACHE BOOL "" FORCE)
-set(SDL2IMAGE_PCX OFF CACHE BOOL "" FORCE)
-set(SDL2IMAGE_PNM OFF CACHE BOOL "" FORCE)
-set(SDL2IMAGE_QOI OFF CACHE BOOL "" FORCE)
-set(SDL2IMAGE_SVG OFF CACHE BOOL "" FORCE)
-set(SDL2IMAGE_TGA OFF CACHE BOOL "" FORCE)
-set(SDL2IMAGE_TIF OFF CACHE BOOL "" FORCE)
-set(SDL2IMAGE_WEBP OFF CACHE BOOL "" FORCE)
-set(SDL2IMAGE_XCF OFF CACHE BOOL "" FORCE)
-set(SDL2IMAGE_XPM OFF CACHE BOOL "" FORCE)
-set(SDL2IMAGE_XV OFF CACHE BOOL "" FORCE)
-set(SDL2IMAGE_PNG ON CACHE BOOL "" FORCE)
-set(SDL2IMAGE_VENDORED ON CACHE BOOL "" FORCE)
+# SDL3_image: PNG + GIF needed (bubble textures are GIFs)
+set(SDL3IMAGE_AVIF OFF CACHE BOOL "" FORCE)
+set(SDL3IMAGE_BMP OFF CACHE BOOL "" FORCE)
+set(SDL3IMAGE_GIF ON CACHE BOOL "" FORCE)
+set(SDL3IMAGE_JPG OFF CACHE BOOL "" FORCE)
+set(SDL3IMAGE_JXL OFF CACHE BOOL "" FORCE)
+set(SDL3IMAGE_LBM OFF CACHE BOOL "" FORCE)
+set(SDL3IMAGE_PCX OFF CACHE BOOL "" FORCE)
+set(SDL3IMAGE_PNM OFF CACHE BOOL "" FORCE)
+set(SDL3IMAGE_QOI OFF CACHE BOOL "" FORCE)
+set(SDL3IMAGE_SVG OFF CACHE BOOL "" FORCE)
+set(SDL3IMAGE_TGA OFF CACHE BOOL "" FORCE)
+set(SDL3IMAGE_TIF OFF CACHE BOOL "" FORCE)
+set(SDL3IMAGE_WEBP OFF CACHE BOOL "" FORCE)
+set(SDL3IMAGE_XCF OFF CACHE BOOL "" FORCE)
+set(SDL3IMAGE_XPM OFF CACHE BOOL "" FORCE)
+set(SDL3IMAGE_XV OFF CACHE BOOL "" FORCE)
+set(SDL3IMAGE_PNG ON CACHE BOOL "" FORCE)
+set(SDL3IMAGE_VENDORED ON CACHE BOOL "" FORCE)
 
-add_subdirectory("${JNI_DIR}/SDL2"       SDL2_build)
-add_subdirectory("${JNI_DIR}/SDL2_image" SDL2_image_build)
-add_subdirectory("${JNI_DIR}/SDL2_mixer" SDL2_mixer_build)
-add_subdirectory("${JNI_DIR}/SDL2_ttf"   SDL2_ttf_build)
-
-# Generate SDL2/ prefix wrapper headers so <SDL2/SDL_mixer.h> etc. work.
-# Extension lib sources expose SDL_mixer.h (no prefix), but game source uses <SDL2/...>.
-set(SDL2_EXT_WRAPPERS "${CMAKE_BINARY_DIR}/sdl2_ext_wrappers")
-file(MAKE_DIRECTORY "${SDL2_EXT_WRAPPERS}/SDL2")
-file(WRITE "${SDL2_EXT_WRAPPERS}/SDL2/SDL_image.h" "#pragma once\n#include <SDL_image.h>\n")
-file(WRITE "${SDL2_EXT_WRAPPERS}/SDL2/SDL_mixer.h" "#pragma once\n#include <SDL_mixer.h>\n")
-file(WRITE "${SDL2_EXT_WRAPPERS}/SDL2/SDL_ttf.h"   "#pragma once\n#include <SDL_ttf.h>\n")
+add_subdirectory("${JNI_DIR}/SDL3"       SDL3_build)
+add_subdirectory("${JNI_DIR}/SDL3_image" SDL3_image_build)
+add_subdirectory("${JNI_DIR}/SDL3_mixer" SDL3_mixer_build)
+add_subdirectory("${JNI_DIR}/SDL3_ttf"   SDL3_ttf_build)
 
 # iniparser static lib (vendored in jni/iniparser)
 add_library(iniparser STATIC
@@ -95,15 +84,13 @@ target_compile_definitions(main PRIVATE
 
 target_include_directories(main PRIVATE
     ../../src
-    "${SDL2_EXT_WRAPPERS}"     # Generated SDL2/ wrappers: <SDL2/SDL_mixer.h> → <SDL_mixer.h>
-    "${JNI_DIR}/include"       # SDL2 core headers with SDL2/ subdir
 )
 
 target_link_libraries(main
-    SDL2
-    SDL2_image
-    SDL2_mixer
-    SDL2_ttf
+    SDL3::SDL3
+    SDL3_image::SDL3_image
+    SDL3_mixer::SDL3_mixer
+    SDL3_ttf::SDL3_ttf
     iniparser
     android
     log

@@ -21,13 +21,13 @@ import java.net.URL;
 /**
  * Frozen Bubble Android TV Activity.
  *
- * SDL2 message protocol (sent from C++ via SDL_AndroidSendMessage):
+ * SDL3 message protocol (sent from C++ via SDL_SendAndroidMessage):
  *   0x8001 — show interstitial ad (called when entering network lobby)
  *   0x8002 — launch "Remove Ads" IAP purchase flow
  */
 public class FrozenBubbleActivity extends SDLActivity {
 
-    // Custom SDL_AndroidSendMessage command codes (must match mainmenu.cpp)
+    // Custom SDL_SendAndroidMessage command codes (must match mainmenu.cpp)
     private static final int MSG_SHOW_AD      = 0x8001;
     private static final int MSG_REMOVE_ADS   = 0x8002;
 
@@ -66,7 +66,7 @@ public class FrozenBubbleActivity extends SDLActivity {
     }
 
     /**
-     * Called by SDL2 when the C++ side calls SDL_AndroidSendMessage().
+     * Called by SDL3 when the C++ side calls SDL_SendAndroidMessage().
      * This runs on the SDL thread — post UI work to the main thread.
      */
     @Override
@@ -95,7 +95,7 @@ public class FrozenBubbleActivity extends SDLActivity {
             conn.setConnectTimeout(5000);
             conn.setReadTimeout(8000);
             conn.setRequestMethod("GET");
-            conn.setRequestProperty("User-Agent", "FrozenBubble-SDL2/1.0");
+            conn.setRequestProperty("User-Agent", "FrozenBubble-SDL3/1.0");
             int code = conn.getResponseCode();
             if (code != HttpURLConnection.HTTP_OK) return "";
             BufferedReader reader = new BufferedReader(new InputStreamReader(conn.getInputStream()));
@@ -114,10 +114,10 @@ public class FrozenBubbleActivity extends SDLActivity {
     @Override
     protected String[] getLibraries() {
         return new String[] {
-            "SDL2",
-            "SDL2_image",
-            "SDL2_mixer",
-            "SDL2_ttf",
+            "SDL3",
+            "SDL3_image",
+            "SDL3_mixer",
+            "SDL3_ttf",
             "main"
         };
     }
