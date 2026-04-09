@@ -29,11 +29,12 @@ jobs:
             libgbm-dev libgl1-mesa-dev libgles2-mesa-dev libegl1-mesa-dev \
             libwayland-dev libdecor-0-dev libasound2-dev libpulse-dev \
             libjack-dev libsndio-dev libdbus-1-dev libudev-dev \
-            libpipewire-0.3-dev libibus-1.0-dev
+            libpipewire-0.3-dev libibus-1.0-dev \
+            zlib1g-dev libpng-dev libogg-dev libvorbis-dev \
+            libfreetype-dev libharfbuzz-dev
 
       - name: Build SDL3 from source
         run: |
-          cmake -S /dev/null -B /tmp/sdl3-dummy 2>/dev/null || true
           for repo_tag in \
             "SDL release-3.4.4" \
             "SDL_image release-3.4.2" \
@@ -51,9 +52,9 @@ jobs:
               -DSDLMIXER_MP3=OFF -DSDLMIXER_FLAC=OFF \
               -DSDLMIXER_OPUS=OFF -DSDLMIXER_GME=OFF \
               -DSDLMIXER_MOD=OFF -DSDLMIXER_MIDI=OFF \
-              -DSDLMIXER_VENDORED=ON \
-              -DSDLTTF_SAMPLES=OFF -DSDLTTF_VENDORED=ON \
-              -DSDLIMAGE_VENDORED=ON \
+              -DSDLMIXER_VENDORED=OFF \
+              -DSDLTTF_SAMPLES=OFF -DSDLTTF_VENDORED=OFF \
+              -DSDLIMAGE_VENDORED=OFF \
               -DSDLIMAGE_AVIF=OFF -DSDLIMAGE_JPG=OFF \
               -DSDLIMAGE_TIF=OFF -DSDLIMAGE_WEBP=OFF
             cmake --build /tmp/$repo/build --parallel
