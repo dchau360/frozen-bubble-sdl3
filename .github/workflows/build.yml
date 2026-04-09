@@ -7,6 +7,10 @@ on:
   pull_request:
     branches: [main]
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
@@ -60,6 +64,7 @@ jobs:
             cmake --build /tmp/$repo/build --parallel
             sudo cmake --install /tmp/$repo/build
           done
+          sudo ldconfig
 
       - name: Configure & build game
         run: |
