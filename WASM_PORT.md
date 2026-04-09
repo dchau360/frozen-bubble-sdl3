@@ -56,7 +56,7 @@ source ./emsdk_env.sh
 ### Build Steps
 
 ```bash
-cd /Users/dericchau/ai/fb2-port/frozen-bubble-sdl3
+cd frozen-bubble-sdl3
 
 # Create build directory
 mkdir build-wasm && cd build-wasm
