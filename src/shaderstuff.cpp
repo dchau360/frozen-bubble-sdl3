@@ -18,6 +18,8 @@
  */
 
 #include "shaderstuff.h"
+#include <cstdio>
+#include <cstdlib>
 
 const int XRES = 640;
 const int YRES = 480;

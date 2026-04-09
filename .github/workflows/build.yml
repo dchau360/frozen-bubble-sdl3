@@ -25,10 +25,11 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y ninja-build libglib2.0-dev libfuse2 file \
             libx11-dev libxext-dev libxrandr-dev libxcursor-dev libxfixes-dev \
-            libxi-dev libxss-dev libxkbcommon-dev libdrm-dev libgbm-dev \
-            libgl1-mesa-dev libgles2-mesa-dev libegl1-mesa-dev \
+            libxi-dev libxss-dev libxtst-dev libxkbcommon-dev libdrm-dev \
+            libgbm-dev libgl1-mesa-dev libgles2-mesa-dev libegl1-mesa-dev \
             libwayland-dev libdecor-0-dev libasound2-dev libpulse-dev \
-            libdbus-1-dev libudev-dev libpipewire-0.3-dev
+            libjack-dev libsndio-dev libdbus-1-dev libudev-dev \
+            libpipewire-0.3-dev libibus-1.0-dev
 
       - name: Build SDL3 from source
         run: |
@@ -116,15 +117,15 @@ jobs:
 
       - name: Install dependencies
         run: |
-          brew install sdl3 sdl3_image sdl3_ttf ninja dylibbundler create-dmg
+          brew install sdl3 sdl3_image sdl3_ttf ninja dylibbundler create-dmg \
+            libogg libvorbis
           # SDL3_mixer may not be in Homebrew yet — try brew first, fall back to source
           brew install sdl3_mixer 2>/dev/null || (
             git clone --depth 1 --branch release-3.2.0 \
               https://github.com/libsdl-org/SDL_mixer.git /tmp/SDL_mixer
-            git -C /tmp/SDL_mixer submodule update --init external/ogg external/vorbis
             cmake -S /tmp/SDL_mixer -B /tmp/SDL_mixer/build -G Ninja \
               -DCMAKE_BUILD_TYPE=Release \
-              -DSDLMIXER_VENDORED=ON \
+              -DSDLMIXER_VENDORED=OFF \
               -DSDLMIXER_MP3=OFF -DSDLMIXER_FLAC=OFF \
               -DSDLMIXER_OPUS=OFF -DSDLMIXER_GME=OFF \
               -DSDLMIXER_MOD=OFF -DSDLMIXER_MIDI=OFF
