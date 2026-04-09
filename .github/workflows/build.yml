@@ -23,7 +23,12 @@ jobs:
       - name: Install build tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y ninja-build libglib2.0-dev libfuse2 file
+          sudo apt-get install -y ninja-build libglib2.0-dev libfuse2 file \
+            libx11-dev libxext-dev libxrandr-dev libxcursor-dev libxfixes-dev \
+            libxi-dev libxss-dev libxkbcommon-dev libdrm-dev libgbm-dev \
+            libgl1-mesa-dev libgles2-mesa-dev libegl1-mesa-dev \
+            libwayland-dev libdecor-0-dev libasound2-dev libpulse-dev \
+            libdbus-1-dev libudev-dev libpipewire-0.3-dev
 
       - name: Build SDL3 from source
         run: |
@@ -116,6 +121,7 @@ jobs:
           brew install sdl3_mixer 2>/dev/null || (
             git clone --depth 1 --branch release-3.2.0 \
               https://github.com/libsdl-org/SDL_mixer.git /tmp/SDL_mixer
+            git -C /tmp/SDL_mixer submodule update --init external/ogg external/vorbis
             cmake -S /tmp/SDL_mixer -B /tmp/SDL_mixer/build -G Ninja \
               -DCMAKE_BUILD_TYPE=Release \
               -DSDLMIXER_VENDORED=ON \
@@ -201,11 +207,20 @@ jobs:
             mingw-w64-x86_64-gcc
             mingw-w64-x86_64-cmake
             mingw-w64-x86_64-ninja
-            mingw-w64-x86_64-SDL3
-            mingw-w64-x86_64-SDL3_image
-            mingw-w64-x86_64-SDL3_mixer
-            mingw-w64-x86_64-SDL3_ttf
             mingw-w64-x86_64-glib2
+
+      - name: Download SDL3 prebuilt MinGW libs
+        run: |
+          cd /tmp
+          curl -fsSL -O https://github.com/libsdl-org/SDL/releases/download/release-3.4.4/SDL3-devel-3.4.4-mingw.tar.gz
+          curl -fsSL -O https://github.com/libsdl-org/SDL_image/releases/download/release-3.4.2/SDL3_image-devel-3.4.2-mingw.tar.gz
+          curl -fsSL -O https://github.com/libsdl-org/SDL_mixer/releases/download/release-3.2.0/SDL3_mixer-devel-3.2.0-mingw.tar.gz
+          curl -fsSL -O https://github.com/libsdl-org/SDL_ttf/releases/download/release-3.2.2/SDL3_ttf-devel-3.2.2-mingw.tar.gz
+          for f in SDL3*.tar.gz; do tar xf "$f"; done
+          cp -r SDL3-3.4.4/x86_64-w64-mingw32/*       /mingw64/
+          cp -r SDL3_image-3.4.2/x86_64-w64-mingw32/* /mingw64/
+          cp -r SDL3_mixer-3.2.0/x86_64-w64-mingw32/* /mingw64/
+          cp -r SDL3_ttf-3.2.2/x86_64-w64-mingw32/*   /mingw64/
 
       - name: Configure & build
         run: cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
