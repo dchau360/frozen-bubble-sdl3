@@ -2,7 +2,13 @@
 
 ## Overview
 
-This document describes the WebAssembly port of Frozen Bubble SDL2, which allows the game to run in any modern web browser.
+This document describes the WebAssembly port of Frozen Bubble SDL3, which allows the game to run in any modern web browser.
+
+> **Note:** The WASM build currently uses SDL2 Emscripten ports, not SDL3.
+> Emscripten 5.x ships SDL3 and SDL3_ttf ports but not SDL3_image or SDL3_mixer yet.
+> Tracking: [emscripten-core/emscripten#26571](https://github.com/emscripten-core/emscripten/pull/26571) (SDL3_mixer, approved)
+> and [emscripten-core/emscripten#24634](https://github.com/emscripten-core/emscripten/pull/24634) (SDL3_image, stalled).
+> When both land, this build can be migrated to SDL3.
 
 ## Architecture
 
@@ -50,7 +56,7 @@ source ./emsdk_env.sh
 ### Build Steps
 
 ```bash
-cd /Users/dericchau/ai/fb2-port/frozen-bubble-sdl2
+cd /Users/dericchau/ai/fb2-port/frozen-bubble-sdl3
 
 # Create build directory
 mkdir build-wasm && cd build-wasm
@@ -64,9 +70,9 @@ emmake make -j4
 
 ### Output
 
-- `frozen-bubble-sdl2.html` - Main HTML page
-- `frozen-bubble-sdl2.js` - JavaScript glue code
-- `frozen-bubble-sdl2.wasm` - WebAssembly binary (~50MB with assets)
+- `frozen-bubble-sdl3.html` - Main HTML page
+- `frozen-bubble-sdl3.js` - JavaScript glue code
+- `frozen-bubble-sdl3.wasm` - WebAssembly binary (~50MB with assets)
 
 ## Running Locally
 
@@ -75,7 +81,7 @@ emmake make -j4
 python3 -m http.server 8080
 
 # Open in browser
-open http://localhost:8080/frozen-bubble-sdl2.html
+open http://localhost:8080/frozen-bubble-sdl3.html
 ```
 
 ## Multiplayer Networking

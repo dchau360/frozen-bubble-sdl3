@@ -94,8 +94,8 @@ sudo usermod -aG docker $USER   # lets you run docker without sudo (re-login aft
 ## Step 4 — Clone the Repo
 
 ```bash
-git clone https://github.com/dchau360/frozen-bubble-sdl2.git
-cd frozen-bubble-sdl2
+git clone https://github.com/dchau360/frozen-bubble-sdl3.git
+cd frozen-bubble-sdl3
 ```
 
 ---
@@ -158,7 +158,7 @@ In the game: **Net Game** → enter the host and port above → **Connect**.
 When a new version of fb-server is released, rebuild the Docker image to pick up the changes:
 
 ```bash
-cd ~/frozen-bubble-sdl2 && git pull && cd docker && docker compose up --build -d
+cd ~/frozen-bubble-sdl3 && git pull && cd docker && docker compose up --build -d
 ```
 
 ---

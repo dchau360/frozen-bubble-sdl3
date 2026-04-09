@@ -1,13 +1,13 @@
-# Frozen-Bubble: SDL2
+# Frozen-Bubble: SDL3
 <p align="center">
   <img src="https://github.com/user-attachments/assets/c68db5c9-7e72-4d19-8e98-c598a3f5e54e">
 </p>
 
-A C++ / SDL2 port of the classic [Frozen Bubble 2](http://www.frozen-bubble.org/), reimplementing its gameplay, network multiplayer, and chain reaction system. The original was Linux-only; this port targets **Linux, macOS, Windows, Android TV, and WebAssembly**.
+A C++ / SDL3 port of the classic [Frozen Bubble 2](http://www.frozen-bubble.org/), reimplementing its gameplay, network multiplayer, and chain reaction system. The original was Linux-only; this port targets **Linux, macOS, Windows, and Android TV**.
 
-> **Note:** The original game was written in Perl. This is a full rewrite in C++. While core gameplay and network protocol are faithfully reproduced, there may be inconsistencies and bugs compared to the original — particularly in edge-case game mechanics. Bug reports are welcome via [GitHub Issues](https://github.com/dchau360/frozen-bubble-sdl2/issues).
+> **Note:** The original game was written in Perl. This is a full rewrite in C++. While core gameplay and network protocol are faithfully reproduced, there may be inconsistencies and bugs compared to the original — particularly in edge-case game mechanics. Bug reports are welcome via [GitHub Issues](https://github.com/dchau360/frozen-bubble-sdl3/issues).
 
-**Play in browser:** [dchau360.itch.io/frozenbubble2](https://dchau360.itch.io/frozenbubble2)
+> **SDL3 port:** Migrated from SDL2 to SDL3 (3.4.4), SDL3_image, SDL3_mixer, SDL3_ttf. Desktop and Android use SDL3. WebAssembly stays on SDL2 ports until Emscripten ships SDL3_image/SDL3_mixer.
 
 ---
 
@@ -47,27 +47,39 @@ The last three settings are shown as a compact grid (P1–P5 columns) that the h
 ### 1. Clone the repo
 
 ```bash
-git clone https://github.com/dchau360/frozen-bubble-sdl2.git
-cd frozen-bubble-sdl2
+git clone https://github.com/dchau360/frozen-bubble-sdl3.git
+cd frozen-bubble-sdl3
 ```
 
 ### 2. Install dependencies
 
 **macOS (Homebrew):**
 ```bash
-brew install sdl2 sdl2_image sdl2_mixer sdl2_ttf cmake ninja
+brew install sdl3 sdl3_image sdl3_mixer sdl3_ttf cmake ninja
 ```
 
+> If SDL3_mixer isn't in Homebrew yet, build from source:
+> ```bash
+> git clone https://github.com/libsdl-org/SDL_mixer.git --branch release-3.2.0
+> cd SDL_mixer && cmake -B build -G Ninja && cmake --build build && sudo cmake --install build
+> ```
+
 **Ubuntu / Debian:**
+
+SDL3 is not yet in apt on most distros — build from source:
 ```bash
-sudo apt install libsdl2-dev libsdl2-image-dev libsdl2-mixer-dev libsdl2-ttf-dev cmake ninja-build
+# SDL3
+git clone https://github.com/libsdl-org/SDL.git --branch release-3.4.4
+cmake -S SDL -B SDL/build -G Ninja && cmake --build SDL/build && sudo cmake --install SDL/build
+
+# Repeat for SDL3_image, SDL3_mixer, SDL3_ttf
 ```
 
 **Windows (MSYS2 MinGW64):**
 ```bash
 pacman -S mingw-w64-x86_64-gcc mingw-w64-x86_64-cmake mingw-w64-x86_64-ninja \
-          mingw-w64-x86_64-SDL2 mingw-w64-x86_64-SDL2_image \
-          mingw-w64-x86_64-SDL2_mixer mingw-w64-x86_64-SDL2_ttf
+          mingw-w64-x86_64-SDL3 mingw-w64-x86_64-SDL3_image \
+          mingw-w64-x86_64-SDL3_mixer mingw-w64-x86_64-SDL3_ttf
 ```
 
 > `iniparser` is bundled — no separate install needed.
@@ -82,7 +94,7 @@ cmake --build build --parallel
 ### 4. Run
 
 ```bash
-./build/frozen-bubble-sdl2
+./build/frozen-bubble-sdl3
 ```
 
 The server binary (`fb-server`) is built automatically on Linux and macOS alongside the game.
@@ -184,6 +196,7 @@ See [CHANGELOG.md](CHANGELOG.md) for release history.
 
 - [ ] Sign macOS `.app` bundle for Gatekeeper compatibility
 - [ ] Sign Windows installer for SmartScreen compatibility
+- [ ] WebAssembly SDL3 build (blocked on Emscripten SDL3_image/SDL3_mixer ports)
 
 ---
 
@@ -199,7 +212,7 @@ Features ported from the original Frozen Bubble 2 Perl source:
 | 2–5 player network multiplayer layouts | ✅ |
 | Network protocol (fb-server + client messages) | ✅ |
 | LAN auto-discovery (UDP broadcast) | ✅ |
-| Public server list (desktop + WebAssembly) | ✅ |
+| Public server list (desktop) | ✅ |
 | In-game chat | ✅ |
 | Victories limit | ✅ |
 | Per-player color count (5–8 colors) | ✅ |
@@ -212,7 +225,7 @@ Features ported from the original Frozen Bubble 2 Perl source:
 | Local multiplayer (2 players, controllers) | ✅ |
 | Local multiplayer (3–5 players, controllers) | ⏳ (WIP) |
 | Single-player malus targeting logic | ✅ |
-| macOS, Windows, Android TV, WebAssembly | ✅ (original was Linux-only) |
+| macOS, Windows, Android TV | ✅ (original was Linux-only) |
 
 ---
 
