@@ -151,7 +151,9 @@ jobs:
           dylibbundler -od -b \
             -x "$APP/MacOS/frozen-bubble-sdl3" \
             -d "$APP/Frameworks" \
-            -p @executable_path/../Frameworks/
+            -p @executable_path/../Frameworks/ \
+            -s /usr/local/lib \
+            -s /opt/homebrew/lib
 
           cat > "$APP/Info.plist" << 'EOF'
           <?xml version="1.0" encoding="UTF-8"?>
