@@ -365,60 +365,6 @@ jobs:
           path: frozen-bubble-android-tv.apk
 
   # ────────────────────────────────────────────────────────────────
-  # Itch.io deploy — only on v*.*.* tag push
-  # Deploys desktop + Android builds (WASM pending Emscripten SDL3 ports)
-  # Secrets:   BUTLER_CREDENTIALS
-  # Variables: ITCHIO_USERNAME, ITCHIO_GAME
-  # ────────────────────────────────────────────────────────────────
-  deploy-itchio:
-    name: Deploy to Itch.io
-    needs: [build-linux, build-macos, build-windows, build-android]
-    if: startsWith(github.ref, 'refs/tags/')
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/download-artifact@v4
-
-      - name: Deploy Linux
-        uses: josephbmanley/butler-publish-itchio-action@master
-        env:
-          BUTLER_CREDENTIALS: ${{ secrets.BUTLER_CREDENTIALS }}
-          CHANNEL: linux
-          ITCH_GAME: ${{ vars.ITCHIO_GAME }}
-          ITCH_USER: ${{ vars.ITCHIO_USERNAME }}
-          PACKAGE: Linux
-          VERSION: ${{ github.ref_name }}
-
-      - name: Deploy macOS
-        uses: josephbmanley/butler-publish-itchio-action@master
-        env:
-          BUTLER_CREDENTIALS: ${{ secrets.BUTLER_CREDENTIALS }}
-          CHANNEL: osx
-          ITCH_GAME: ${{ vars.ITCHIO_GAME }}
-          ITCH_USER: ${{ vars.ITCHIO_USERNAME }}
-          PACKAGE: macOS
-          VERSION: ${{ github.ref_name }}
-
-      - name: Deploy Windows
-        uses: josephbmanley/butler-publish-itchio-action@master
-        env:
-          BUTLER_CREDENTIALS: ${{ secrets.BUTLER_CREDENTIALS }}
-          CHANNEL: windows
-          ITCH_GAME: ${{ vars.ITCHIO_GAME }}
-          ITCH_USER: ${{ vars.ITCHIO_USERNAME }}
-          PACKAGE: Windows
-          VERSION: ${{ github.ref_name }}
-
-      - name: Deploy Android
-        uses: josephbmanley/butler-publish-itchio-action@master
-        env:
-          BUTLER_CREDENTIALS: ${{ secrets.BUTLER_CREDENTIALS }}
-          CHANNEL: android
-          ITCH_GAME: ${{ vars.ITCHIO_GAME }}
-          ITCH_USER: ${{ vars.ITCHIO_USERNAME }}
-          PACKAGE: Android
-          VERSION: ${{ github.ref_name }}
-
-  # ────────────────────────────────────────────────────────────────
   # Release — only on v*.*.* tag push
   # ────────────────────────────────────────────────────────────────
   release:
