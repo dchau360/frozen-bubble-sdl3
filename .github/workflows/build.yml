@@ -409,3 +409,82 @@ jobs:
             macOS/frozen-bubble-macos.dmg
             Windows/frozen-bubble-windows-setup.exe
             Android/frozen-bubble-android-tv.apk
+
+  # ────────────────────────────────────────────────────────────────
+  # Itch.io — deploy each platform on tag push
+  # ────────────────────────────────────────────────────────────────
+  deploy-itchio-linux:
+    name: Deploy Linux to Itch.io
+    needs: build-linux
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: Linux
+          path: dist-linux
+      - uses: josephbmanley/butler-publish-itchio-action@master
+        env:
+          BUTLER_CREDENTIALS: ${{ secrets.BUTLER_CREDENTIALS }}
+          CHANNEL: linux
+          ITCH_GAME: ${{ vars.ITCHIO_GAME }}
+          ITCH_USER: ${{ vars.ITCHIO_USERNAME }}
+          PACKAGE: dist-linux
+          VERSION: ${{ github.ref_name }}
+
+  deploy-itchio-macos:
+    name: Deploy macOS to Itch.io
+    needs: build-macos
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: macOS
+          path: dist-macos
+      - uses: josephbmanley/butler-publish-itchio-action@master
+        env:
+          BUTLER_CREDENTIALS: ${{ secrets.BUTLER_CREDENTIALS }}
+          CHANNEL: osx
+          ITCH_GAME: ${{ vars.ITCHIO_GAME }}
+          ITCH_USER: ${{ vars.ITCHIO_USERNAME }}
+          PACKAGE: dist-macos
+          VERSION: ${{ github.ref_name }}
+
+  deploy-itchio-windows:
+    name: Deploy Windows to Itch.io
+    needs: build-windows
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: Windows
+          path: dist-windows
+      - uses: josephbmanley/butler-publish-itchio-action@master
+        env:
+          BUTLER_CREDENTIALS: ${{ secrets.BUTLER_CREDENTIALS }}
+          CHANNEL: windows
+          ITCH_GAME: ${{ vars.ITCHIO_GAME }}
+          ITCH_USER: ${{ vars.ITCHIO_USERNAME }}
+          PACKAGE: dist-windows
+          VERSION: ${{ github.ref_name }}
+
+  deploy-itchio-android:
+    name: Deploy Android to Itch.io
+    needs: build-android
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: Android
+          path: dist-android
+      - uses: josephbmanley/butler-publish-itchio-action@master
+        env:
+          BUTLER_CREDENTIALS: ${{ secrets.BUTLER_CREDENTIALS }}
+          CHANNEL: android
+          ITCH_GAME: ${{ vars.ITCHIO_GAME }}
+          ITCH_USER: ${{ vars.ITCHIO_USERNAME }}
+          PACKAGE: dist-android
+          VERSION: ${{ github.ref_name }}
