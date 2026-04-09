@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.13)
 
-project(frozen-bubble-sdl2 CXX C)
+project(frozen-bubble-sdl3 CXX C)
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/cmake")
 
@@ -49,7 +49,7 @@ if(WIN32 OR MINGW)
     ENABLE_LANGUAGE(RC)
 endif()
 
-add_executable(frozen-bubble-sdl2
+add_executable(frozen-bubble-sdl3
     src/frozenbubble.cpp
     src/main.cpp
     src/menubutton.cpp
@@ -67,8 +67,8 @@ add_executable(frozen-bubble-sdl2
     ${RES_FILES}
 )
 
-set_property(TARGET frozen-bubble-sdl2 PROPERTY CXX_STANDARD 17)
-set_property(TARGET frozen-bubble-sdl2 PROPERTY CXX_EXTENSIONS OFF)
+set_property(TARGET frozen-bubble-sdl3 PROPERTY CXX_STANDARD 17)
+set_property(TARGET frozen-bubble-sdl3 PROPERTY CXX_EXTENSIONS OFF)
 
 if(NOT DEFINED ASSET_PATH)
     set(ASSET_PATH ${CMAKE_SOURCE_DIR}/share)
@@ -78,15 +78,15 @@ message("Asset path is: ${ASSET_PATH}")
 
 if(ANDROID)
     # Android TV build configuration
-    target_compile_definitions(frozen-bubble-sdl2 PRIVATE __ANDROID_PORT__)
+    target_compile_definitions(frozen-bubble-sdl3 PRIVATE __ANDROID_PORT__)
     # DATA_DIR not needed on Android - assets loaded via asset manager
 else()
-    target_compile_definitions(frozen-bubble-sdl2 PRIVATE DATA_DIR=\"${ASSET_PATH}\")
+    target_compile_definitions(frozen-bubble-sdl3 PRIVATE DATA_DIR=\"${ASSET_PATH}\")
 endif()
 
 # SDL3 uses modern cmake targets — include dirs come from target properties
 
-target_link_libraries(frozen-bubble-sdl2 PRIVATE
+target_link_libraries(frozen-bubble-sdl3 PRIVATE
     SDL3::SDL3
     iniparser-static
     SDL3_image::SDL3_image
@@ -95,7 +95,7 @@ target_link_libraries(frozen-bubble-sdl2 PRIVATE
 )
 
 if(WIN32 OR MINGW)
-    target_link_libraries(frozen-bubble-sdl2 PRIVATE ws2_32)
+    target_link_libraries(frozen-bubble-sdl3 PRIVATE ws2_32)
 endif()
 
 # Installation configuration
@@ -108,7 +108,7 @@ if(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
 endif()
 
 # Install executable
-install(TARGETS frozen-bubble-sdl2
+install(TARGETS frozen-bubble-sdl3
     RUNTIME DESTINATION bin
     COMPONENT runtime
 )
