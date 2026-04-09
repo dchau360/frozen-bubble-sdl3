@@ -213,11 +213,14 @@ void conn_terminated(int fd, char* reason)
                                 fclose(jf);
                         }
                         free(nick[fd]);
+                        nick[fd] = NULL;
                 }
                 if (geoloc[fd] != NULL) {
                         free(geoloc[fd]);
+                        geoloc[fd] = NULL;
                 }
                 free(IP[fd]);
+                IP[fd] = NULL;
                 new_conns = g_list_remove(new_conns, GINT_TO_POINTER(fd));
                 player_part_game(fd);                       // this is where the recursive call can come from (process_msg_prio with a failed send)
                 player_disconnects(fd);
