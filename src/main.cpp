@@ -20,6 +20,7 @@
 #ifndef __ANDROID__
 #define SDL_MAIN_HANDLED
 #endif
+#include <SDL3/SDL_main.h>
 #include "platform.h"
 #include "frozenbubble.h"
 
