@@ -43,10 +43,16 @@ AudioMixer::AudioMixer()
 {
     gameSettings = GameSettings::Instance();
 
+    if (!MIX_Init()) {
+        SDL_LogError(1, "MIX_Init failed: %s", SDL_GetError());
+        mixerEnabled = false;
+        return;
+    }
+
     int freq = gameSettings->useClassicAudio() ? 22050 : 44100;
     SDL_AudioSpec spec = {SDL_AUDIO_S16, 2, freq};
 
-    mixer = MIX_CreateMixer(&spec);
+    mixer = MIX_CreateMixerDevice(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, &spec);
     if (!mixer) {
         SDL_LogError(1, "Could not open audio mixer! Music will be disabled. (%s)", SDL_GetError());
         mixerEnabled = false;

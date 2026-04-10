@@ -111,11 +111,11 @@ FrozenBubble::FrozenBubble() {
     }
 #endif
 
-    // Init video only — audio requires a user gesture in browsers and is
-    // initialized later by AudioMixer. SDL_INIT_AUDIO here would fail on
-    // Emscripten and cause the constructor to bail before creating the window.
-    if (!SDL_Init(SDL_INIT_VIDEO)) {
-        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "SDL_Init(VIDEO) failed: %s", SDL_GetError());
+    // Init video and audio. On Emscripten, the browser's AudioContext starts
+    // suspended until a user gesture; SDL3's emscripten audio driver handles
+    // resuming it automatically via navigator.userActivation.
+    if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO)) {
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "SDL_Init failed: %s", SDL_GetError());
         IsGameQuit = true;
         return;
     }
