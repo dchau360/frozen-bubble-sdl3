@@ -3,11 +3,24 @@
   <img src="https://github.com/user-attachments/assets/c68db5c9-7e72-4d19-8e98-c598a3f5e54e">
 </p>
 
-A C++ / SDL3 port of the classic [Frozen Bubble 2](http://www.frozen-bubble.org/), reimplementing its gameplay, network multiplayer, and chain reaction system. The original was Linux-only; this port targets **Linux, macOS, Windows, and Android TV**.
+A C++ / SDL3 port of the classic [Frozen Bubble 2](http://www.frozen-bubble.org/), reimplementing its gameplay, network multiplayer, and chain reaction system. The original was Linux-only; this port targets **Linux, macOS, Windows, Android TV, and WebAssembly**.
 
 > **Note:** The original game was written in Perl. This is a full rewrite in C++. While core gameplay and network protocol are faithfully reproduced, there may be inconsistencies and bugs compared to the original — particularly in edge-case game mechanics. Bug reports are welcome via [GitHub Issues](https://github.com/dchau360/frozen-bubble-sdl3/issues).
 
-> **SDL3 port:** Migrated from SDL2 to SDL3 (3.4.4), SDL3_image, SDL3_mixer, SDL3_ttf. Desktop and Android use SDL3. WebAssembly stays on SDL2 ports until Emscripten ships SDL3_image/SDL3_mixer.
+> **SDL3 port:** Fully migrated from SDL2 to SDL3 (3.4.4), SDL3_image, SDL3_mixer, SDL3_ttf across all platforms including WebAssembly.
+
+### Emscripten SDL3 Port Status
+
+The WASM build uses SDL3 via Emscripten ports. Emscripten's stable releases include SDL3 and SDL3_ttf, but **SDL3_image and SDL3_mixer are from pending PRs** that have not yet been merged:
+
+| Port | PR | Status |
+|---|---|---|
+| SDL3_mixer | [emscripten-core/emscripten#26571](https://github.com/emscripten-core/emscripten/pull/26571) | Approved, supports WAV/OGG/MP3 |
+| SDL3_image | [emscripten-core/emscripten#24634](https://github.com/emscripten-core/emscripten/pull/24634) | Draft, supports PNG/GIF/JPG |
+
+The CI workflow patches the local Emscripten SDK with these port files before building. This works reliably but means local WASM builds require the same manual setup (see [Building WASM locally](#building-wasm-locally) below).
+
+**Once both PRs are merged** into a stable Emscripten release, the patching step will be removed and WASM builds will work out of the box with `emcmake cmake`.
 
 ---
 
@@ -98,6 +111,58 @@ cmake --build build --parallel
 ```
 
 The server binary (`fb-server`) is built automatically on Linux and macOS alongside the game.
+
+### Building WASM locally
+
+Until the SDL3_image/SDL3_mixer Emscripten ports are merged upstream, local WASM builds require manual setup:
+
+1. **Install Emscripten** (v4.0.8+ recommended):
+   ```bash
+   git clone https://github.com/nickvdp/emsdk.git
+   cd emsdk && ./emsdk install latest && ./emsdk activate latest
+   source emsdk_env.sh
+   ```
+
+2. **Patch the SDK** with SDL3_image/SDL3_mixer port files:
+   ```bash
+   PORTS="$(dirname $(which emcc))/tools/ports"
+   SETTINGS_JS="$(dirname $(which emcc))/src/settings.js"
+   SETTINGS_PY="$(dirname $(which emcc))/tools/settings.py"
+
+   # Download port files from PR branches
+   curl -fsSL -o "$PORTS/sdl3_mixer.py" \
+     "https://raw.githubusercontent.com/nickvdp/emscripten/sdl3_mixer/tools/ports/sdl3_mixer.py"
+   curl -fsSL -o "$PORTS/sdl3_image.py" \
+     "https://raw.githubusercontent.com/nickvdp/emscripten/sdl3_image/tools/ports/sdl3_image.py"
+
+   # Register new settings variables
+   sed -i '/SDL2_MIXER_FORMATS/a\var SDL3_IMAGE_FORMATS = [];\nvar SDL3_MIXER_FORMATS = [];' "$SETTINGS_JS"
+   sed -i "s/'SDL2_MIXER_FORMATS'/'SDL2_MIXER_FORMATS', 'SDL3_IMAGE_FORMATS', 'SDL3_MIXER_FORMATS'/" "$SETTINGS_PY"
+
+   # Suppress SDL3 experimental warning
+   sed -i "s/diagnostics.warning('experimental'/# diagnostics.warning('experimental'/" "$PORTS/sdl3.py"
+   ```
+
+3. **Build**:
+   ```bash
+   mkdir build-wasm && cd build-wasm
+   emcmake cmake ..
+   emmake make -j$(nproc)
+   ```
+
+4. **Serve** (requires COOP/COEP headers for audio):
+   ```bash
+   python3 -c "
+   import http.server
+   class H(http.server.SimpleHTTPRequestHandler):
+       def end_headers(self):
+           self.send_header('Cross-Origin-Opener-Policy','same-origin')
+           self.send_header('Cross-Origin-Embedder-Policy','require-corp')
+           super().end_headers()
+   http.server.HTTPServer(('',8080),H).serve_forever()
+   " &
+   open http://localhost:8080/frozen-bubble-sdl3.html
+   ```
 
 ---
 
@@ -196,7 +261,8 @@ See [CHANGELOG.md](CHANGELOG.md) for release history.
 
 - [ ] Sign macOS `.app` bundle for Gatekeeper compatibility
 - [ ] Sign Windows installer for SmartScreen compatibility
-- [ ] WebAssembly SDL3 build (blocked on Emscripten SDL3_image/SDL3_mixer ports)
+- [x] WebAssembly SDL3 build (uses PR port files until Emscripten merges SDL3_image/SDL3_mixer)
+- [ ] Remove emsdk patching step once emscripten-core/emscripten#26571 and emscripten-core/emscripten#24634 are merged
 
 ---
 

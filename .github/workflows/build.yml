@@ -389,11 +389,75 @@ jobs:
           path: frozen-bubble-android-tv.apk
 
   # ────────────────────────────────────────────────────────────────
+  # WebAssembly (WASM) — SDL3 via Emscripten ports
+  # SDL3_image/SDL3_mixer ports are from pending PRs; this job
+  # patches the local emsdk with those port files before building.
+  # ────────────────────────────────────────────────────────────────
+  build-wasm:
+    name: WebAssembly (WASM)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Emscripten
+        uses: mymindstorm/setup-emsdk@v14
+        with:
+          version: '4.0.8'
+
+      - name: Install SDL3_image and SDL3_mixer port files from pending PRs
+        run: |
+          EMSDK_PORTS="$(dirname $(which emcc))/tools/ports"
+          EMSDK_SETTINGS_JS="$(dirname $(which emcc))/src/settings.js"
+          EMSDK_SETTINGS_PY="$(dirname $(which emcc))/tools/settings.py"
+
+          # Download SDL3_mixer port from PR #26571
+          curl -fsSL -o "$EMSDK_PORTS/sdl3_mixer.py" \
+            "https://raw.githubusercontent.com/nickvdp/emscripten/sdl3_mixer/tools/ports/sdl3_mixer.py"
+
+          # Download SDL3_image port from PR #24634
+          curl -fsSL -o "$EMSDK_PORTS/sdl3_image.py" \
+            "https://raw.githubusercontent.com/nickvdp/emscripten/sdl3_image/tools/ports/sdl3_image.py"
+
+          # Add SDL3_IMAGE_FORMATS and SDL3_MIXER_FORMATS to settings.js
+          if ! grep -q 'SDL3_IMAGE_FORMATS' "$EMSDK_SETTINGS_JS"; then
+            sed -i '/SDL2_MIXER_FORMATS/a\
+          var SDL3_IMAGE_FORMATS = [];\
+          var SDL3_MIXER_FORMATS = [];' "$EMSDK_SETTINGS_JS"
+          fi
+
+          # Add to PORTS_SETTINGS in settings.py
+          if ! grep -q 'SDL3_MIXER_FORMATS' "$EMSDK_SETTINGS_PY"; then
+            sed -i "s/'SDL2_MIXER_FORMATS'/'SDL2_MIXER_FORMATS', 'SDL3_IMAGE_FORMATS', 'SDL3_MIXER_FORMATS'/" "$EMSDK_SETTINGS_PY"
+          fi
+
+          # Suppress SDL3 experimental warning that breaks -Werror
+          sed -i "s/diagnostics.warning('experimental'/# diagnostics.warning('experimental'/" "$EMSDK_PORTS/sdl3.py"
+
+      - name: Configure & build
+        run: |
+          mkdir -p build-wasm && cd build-wasm
+          emcmake cmake .. -DCMAKE_TOOLCHAIN_FILE=../cmake/Emscripten.cmake
+          emmake make -j$(nproc)
+
+      - name: Package WASM output
+        run: |
+          mkdir -p dist-wasm
+          cp build-wasm/frozen-bubble-sdl3.html dist-wasm/index.html
+          cp build-wasm/frozen-bubble-sdl3.js dist-wasm/
+          cp build-wasm/frozen-bubble-sdl3.wasm dist-wasm/
+          cp build-wasm/frozen-bubble-sdl3.data dist-wasm/
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: WASM
+          path: dist-wasm/
+
+  # ────────────────────────────────────────────────────────────────
   # Release — only on v*.*.* tag push
   # ────────────────────────────────────────────────────────────────
   release:
     name: Create Release
-    needs: [build-linux, build-macos, build-windows, build-android]
+    needs: [build-linux, build-macos, build-windows, build-android, build-wasm]
     if: startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-latest
     permissions:
@@ -409,6 +473,7 @@ jobs:
             macOS/frozen-bubble-macos.dmg
             Windows/frozen-bubble-windows-setup.exe
             Android/frozen-bubble-android-tv.apk
+            WASM/
 
   # ────────────────────────────────────────────────────────────────
   # Itch.io — deploy each platform on tag push
@@ -487,4 +552,23 @@ jobs:
           ITCH_GAME: ${{ vars.ITCHIO_GAME }}
           ITCH_USER: ${{ vars.ITCHIO_USERNAME }}
           PACKAGE: dist-android
+          VERSION: ${{ github.ref_name }}
+
+  deploy-itchio-html5:
+    name: Deploy WASM to Itch.io
+    needs: build-wasm
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: WASM
+          path: dist-wasm
+      - uses: josephbmanley/butler-publish-itchio-action@master
+        env:
+          BUTLER_CREDENTIALS: ${{ secrets.BUTLER_CREDENTIALS }}
+          CHANNEL: html5
+          ITCH_GAME: ${{ vars.ITCHIO_GAME }}
+          ITCH_USER: ${{ vars.ITCHIO_USERNAME }}
+          PACKAGE: dist-wasm
           VERSION: ${{ github.ref_name }}

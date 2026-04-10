@@ -284,12 +284,14 @@ std::vector<ServerInfo> NetworkClient::DiscoverLANServers() {
 
 std::vector<ServerInfo> NetworkClient::FetchPublicServers() {
     // Return the known public server as default.
-    // Browser clients must use WSS (port 443) — plain port 1511 is blocked as
-    // mixed-content when the page is served over HTTPS (itch.io).
+    // When served over HTTPS (e.g. itch.io), browsers require WSS on port 443
+    // with a reverse proxy forwarding to fb-server on 1511.
+    // Over plain HTTP (localhost dev), use ws:// on the native server port.
+    bool isHttps = (bool)EM_ASM_INT({ return location.protocol === 'https:' ? 1 : 0; });
     std::vector<ServerInfo> servers;
     ServerInfo s;
     s.host = "fb.servequake.com";
-    s.port = 443;
+    s.port = isHttps ? 443 : 1511;
     s.name = "fb.servequake.com (browser)";
     s.latencyMs = 0;
     servers.push_back(s);

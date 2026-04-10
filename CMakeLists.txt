@@ -14,10 +14,12 @@ if (("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU") OR ("${CMAKE_CXX_COMPILER_ID}" MA
     add_compile_options(-Wall -Wextra -pedantic -Wno-pointer-arith)
 endif()
 
-find_package(SDL3 REQUIRED)
-find_package(SDL3_image REQUIRED)
-find_package(SDL3_mixer REQUIRED)
-find_package(SDL3_ttf REQUIRED)
+if(NOT EMSCRIPTEN)
+    find_package(SDL3 REQUIRED)
+    find_package(SDL3_image REQUIRED)
+    find_package(SDL3_mixer REQUIRED)
+    find_package(SDL3_ttf REQUIRED)
+endif()
 
 find_package(iniparser QUIET COMPONENTS static)
 if(NOT iniparser_FOUND OR NOT TARGET iniparser-static)
@@ -33,7 +35,7 @@ endif()
 
 # REQUIRED on find_package handles missing libraries
 
-if(NOT WIN32 AND NOT MINGW)
+if(NOT WIN32 AND NOT MINGW AND NOT EMSCRIPTEN)
     add_subdirectory(server)
 endif()
 
@@ -49,6 +51,13 @@ if(WIN32 OR MINGW)
     ENABLE_LANGUAGE(RC)
 endif()
 
+if(EMSCRIPTEN)
+    # WASM: compile both files; networkclient.cpp guards TCP code with #ifndef __WASM_PORT__
+    set(NETWORK_CLIENT_SRC src/networkclient.cpp src/networkclient_wasm.cpp)
+else()
+    set(NETWORK_CLIENT_SRC src/networkclient.cpp)
+endif()
+
 add_executable(frozen-bubble-sdl3
     src/frozenbubble.cpp
     src/main.cpp
@@ -61,7 +70,7 @@ add_executable(frozen-bubble-sdl3
     src/transitionmanager.cpp
     src/ttftext.cpp
     src/highscoremanager.cpp
-    src/networkclient.cpp
+    ${NETWORK_CLIENT_SRC}
     src/logger.cpp
     src/platform.cpp
     ${RES_FILES}
@@ -69,6 +78,10 @@ add_executable(frozen-bubble-sdl3
 
 set_property(TARGET frozen-bubble-sdl3 PROPERTY CXX_STANDARD 17)
 set_property(TARGET frozen-bubble-sdl3 PROPERTY CXX_EXTENSIONS OFF)
+
+if(EMSCRIPTEN)
+    set_target_properties(frozen-bubble-sdl3 PROPERTIES SUFFIX ".html")
+endif()
 
 if(NOT DEFINED ASSET_PATH)
     set(ASSET_PATH ${CMAKE_SOURCE_DIR}/share)
@@ -80,19 +93,23 @@ if(ANDROID)
     # Android TV build configuration
     target_compile_definitions(frozen-bubble-sdl3 PRIVATE __ANDROID_PORT__)
     # DATA_DIR not needed on Android - assets loaded via asset manager
+elseif(EMSCRIPTEN)
+    target_compile_definitions(frozen-bubble-sdl3 PRIVATE __WASM_PORT__ DATA_DIR=\"/share\")
 else()
     target_compile_definitions(frozen-bubble-sdl3 PRIVATE DATA_DIR=\"${ASSET_PATH}\")
 endif()
 
 # SDL3 uses modern cmake targets — include dirs come from target properties
 
-target_link_libraries(frozen-bubble-sdl3 PRIVATE
-    SDL3::SDL3
-    iniparser-static
-    SDL3_image::SDL3_image
-    SDL3_mixer::SDL3_mixer
-    SDL3_ttf::SDL3_ttf
-)
+if(NOT EMSCRIPTEN)
+    target_link_libraries(frozen-bubble-sdl3 PRIVATE
+        SDL3::SDL3
+        SDL3_image::SDL3_image
+        SDL3_mixer::SDL3_mixer
+        SDL3_ttf::SDL3_ttf
+    )
+endif()
+target_link_libraries(frozen-bubble-sdl3 PRIVATE iniparser-static)
 
 if(WIN32 OR MINGW)
     target_link_libraries(frozen-bubble-sdl3 PRIVATE ws2_32)
