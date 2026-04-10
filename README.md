@@ -146,7 +146,7 @@ Until the SDL3_image/SDL3_mixer Emscripten ports are merged upstream, local WASM
 3. **Build**:
    ```bash
    mkdir build-wasm && cd build-wasm
-   emcmake cmake ..
+   emcmake cmake .. -DCMAKE_BUILD_TYPE=Release
    emmake make -j$(nproc)
    ```
 

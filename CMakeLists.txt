@@ -81,6 +81,32 @@ set_property(TARGET frozen-bubble-sdl3 PROPERTY CXX_EXTENSIONS OFF)
 
 if(EMSCRIPTEN)
     set_target_properties(frozen-bubble-sdl3 PROPERTIES SUFFIX ".html")
+    # SDL3 port flags — compile step downloads port headers, link step bundles libs
+    target_compile_options(frozen-bubble-sdl3 PRIVATE
+        -Wno-experimental
+        -sUSE_SDL=3
+        -sUSE_SDL_IMAGE=3
+        -sUSE_SDL_MIXER=3
+        -sUSE_SDL_TTF=3
+    )
+    target_link_options(frozen-bubble-sdl3 PRIVATE
+        --bind
+        -Wno-experimental
+        -sUSE_SDL=3
+        -sUSE_SDL_IMAGE=3
+        -sUSE_SDL_MIXER=3
+        -sUSE_SDL_TTF=3
+        -sALLOW_MEMORY_GROWTH=1
+        -sDISABLE_EXCEPTION_CATCHING=0
+        -sWASM=1
+        -sTOTAL_MEMORY=268435456
+        -lwebsocket.js
+        "SHELL:-sENVIRONMENT=web"
+        "SHELL:-sSDL3_IMAGE_FORMATS=['png','gif']"
+        "SHELL:-sSDL3_MIXER_FORMATS=['ogg']"
+        "SHELL:--preload-file ${CMAKE_SOURCE_DIR}/share@/share"
+        "SHELL:-sEXPORTED_RUNTIME_METHODS=['cwrap','ccall','setValue','getValue','UTF8ToString','stringToUTF8']"
+    )
 endif()
 
 if(NOT DEFINED ASSET_PATH)

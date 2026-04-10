@@ -436,7 +436,7 @@ jobs:
       - name: Configure & build
         run: |
           mkdir -p build-wasm && cd build-wasm
-          emcmake cmake .. -DCMAKE_TOOLCHAIN_FILE=../cmake/Emscripten.cmake
+          emcmake cmake .. -DCMAKE_BUILD_TYPE=Release
           emmake make -j$(nproc)
 
       - name: Package WASM output
