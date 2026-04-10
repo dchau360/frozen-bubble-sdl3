@@ -404,19 +404,15 @@ jobs:
         with:
           version: '4.0.8'
 
-      - name: Install SDL3_image and SDL3_mixer port files from pending PRs
+      - name: Install SDL3_image and SDL3_mixer port files
         run: |
           EMSDK_PORTS="$(dirname $(which emcc))/tools/ports"
           EMSDK_SETTINGS_JS="$(dirname $(which emcc))/src/settings.js"
           EMSDK_SETTINGS_PY="$(dirname $(which emcc))/tools/settings.py"
 
-          # Download SDL3_mixer port from PR #26571 (onesixromcom/emscripten sdl3-mixer-port branch)
-          curl -fsSL -o "$EMSDK_PORTS/sdl3_mixer.py" \
-            "https://raw.githubusercontent.com/onesixromcom/emscripten/sdl3-mixer-port/tools/ports/sdl3_mixer.py"
-
-          # Download SDL3_image port from PR #24634 (fredheidrich/emscripten ports/sdl3_image branch)
-          curl -fsSL -o "$EMSDK_PORTS/sdl3_image.py" \
-            "https://raw.githubusercontent.com/fredheidrich/emscripten/ports/sdl3_image/tools/ports/sdl3_image.py"
+          # Use port files bundled in the repo (from pending PRs #26571 and #24634)
+          cp tools/ports/sdl3_mixer.py "$EMSDK_PORTS/sdl3_mixer.py"
+          cp tools/ports/sdl3_image.py "$EMSDK_PORTS/sdl3_image.py"
 
           # Add SDL3_IMAGE_FORMATS and SDL3_MIXER_FORMATS to settings.js
           if ! grep -q 'SDL3_IMAGE_FORMATS' "$EMSDK_SETTINGS_JS"; then
