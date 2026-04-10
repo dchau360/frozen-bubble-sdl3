@@ -402,7 +402,7 @@ jobs:
       - name: Install Emscripten
         uses: mymindstorm/setup-emsdk@v14
         with:
-          version: '4.0.8'
+          version: 'latest'
 
       - name: Install SDL3_image and SDL3_mixer port files
         run: |
