@@ -118,7 +118,7 @@ Until the SDL3_image/SDL3_mixer Emscripten ports are merged upstream, local WASM
 
 1. **Install Emscripten** (v4.0.8+ recommended):
    ```bash
-   git clone https://github.com/nickvdp/emsdk.git
+   git clone https://github.com/emscripten-core/emsdk.git
    cd emsdk && ./emsdk install latest && ./emsdk activate latest
    source emsdk_env.sh
    ```
@@ -131,9 +131,9 @@ Until the SDL3_image/SDL3_mixer Emscripten ports are merged upstream, local WASM
 
    # Download port files from PR branches
    curl -fsSL -o "$PORTS/sdl3_mixer.py" \
-     "https://raw.githubusercontent.com/nickvdp/emscripten/sdl3_mixer/tools/ports/sdl3_mixer.py"
+     "https://raw.githubusercontent.com/onesixromcom/emscripten/sdl3-mixer-port/tools/ports/sdl3_mixer.py"
    curl -fsSL -o "$PORTS/sdl3_image.py" \
-     "https://raw.githubusercontent.com/nickvdp/emscripten/sdl3_image/tools/ports/sdl3_image.py"
+     "https://raw.githubusercontent.com/fredheidrich/emscripten/ports/sdl3_image/tools/ports/sdl3_image.py"
 
    # Register new settings variables
    sed -i '/SDL2_MIXER_FORMATS/a\var SDL3_IMAGE_FORMATS = [];\nvar SDL3_MIXER_FORMATS = [];' "$SETTINGS_JS"
