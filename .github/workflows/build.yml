@@ -442,11 +442,14 @@ jobs:
           cp build-wasm/frozen-bubble-sdl3.js dist-wasm/
           cp build-wasm/frozen-bubble-sdl3.wasm dist-wasm/
           cp build-wasm/frozen-bubble-sdl3.data dist-wasm/
+          cd dist-wasm && zip -r ../frozen-bubble-wasm.zip .
 
       - uses: actions/upload-artifact@v4
         with:
           name: WASM
-          path: dist-wasm/
+          path: |
+            dist-wasm/
+            frozen-bubble-wasm.zip
 
   # ────────────────────────────────────────────────────────────────
   # Release — only on v*.*.* tag push
@@ -469,7 +472,7 @@ jobs:
             macOS/frozen-bubble-macos.dmg
             Windows/frozen-bubble-windows-setup.exe
             Android/frozen-bubble-android-tv.apk
-            WASM/
+            WASM/frozen-bubble-wasm.zip
 
   # ────────────────────────────────────────────────────────────────
   # Itch.io — deploy each platform on tag push
