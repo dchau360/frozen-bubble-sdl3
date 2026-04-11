@@ -99,13 +99,14 @@ if(EMSCRIPTEN)
         -sALLOW_MEMORY_GROWTH=1
         -sDISABLE_EXCEPTION_CATCHING=0
         -sWASM=1
-        -sTOTAL_MEMORY=268435456
+        -sINITIAL_MEMORY=16777216
         -lwebsocket.js
         "SHELL:-sENVIRONMENT=web"
         "SHELL:-sSDL3_IMAGE_FORMATS=['png','gif']"
         "SHELL:-sSDL3_MIXER_FORMATS=['ogg']"
         "SHELL:--preload-file ${CMAKE_SOURCE_DIR}/share@/share"
         "SHELL:-sEXPORTED_RUNTIME_METHODS=['cwrap','ccall','setValue','getValue','UTF8ToString','stringToUTF8']"
+        "SHELL:--shell-file ${CMAKE_SOURCE_DIR}/web/shell.html"
     )
 endif()
 

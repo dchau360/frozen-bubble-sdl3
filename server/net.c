@@ -509,9 +509,22 @@ void connections_manager(void)
                                 exit(EXIT_FAILURE);
                         }
 
-                        // timeout
-                        if (!retval)
+                        // timeout — still check gracetime for all idle connections
+                        // (stale/half-open TCP connections are only evicted here)
+                        if (!retval) {
+                                current_time = get_current_time();
+                                // conns_set is empty after timeout; FD_ISSET will be false for all
+                                // fds, so handle_incoming_data_generic falls through to gracetime check
+                                new_conns = g_list_copy(conns);
+                                g_list_foreach(conns, handle_incoming_data, &conns_set);
+                                g_list_free(conns);
+                                conns = new_conns;
+                                new_conns = g_list_copy(conns_prio);
+                                g_list_foreach(conns_prio, handle_incoming_data_prio, &conns_set);
+                                g_list_free(conns_prio);
+                                conns_prio = new_conns;
                                 continue;
+                        }
                 }
 
                 current_time = get_current_time();  // a bit of caching

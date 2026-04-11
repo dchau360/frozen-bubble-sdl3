@@ -714,6 +714,7 @@ void BubbleGame::NewGame(SetupSettings setup) {
     audMixer = AudioMixer::Instance();
     SDL_Renderer *rend = const_cast<SDL_Renderer*>(renderer);
     currentSettings = setup;
+    currentSettings.mouseEnabled = GameSettings::Instance()->mouseEnabled;
 
     lowGfx = GameSettings::Instance()->gfxLevel() > 2;
 
@@ -1651,6 +1652,18 @@ void BubbleGame::UpdatePenguin(BubbleArray &bArray) {
 
     float &angle = bArray.shooterSprite.angle;
     Penguin &penguin = bArray.penguinSprite;
+
+    // Mouse/touch aim: snap angle directly, before the fire check so the correct angle is used
+    if (bArray.mouseTargetAngle >= 0.f) {
+        angle = bArray.mouseTargetAngle;
+        if (angle < 0.1f) angle = 0.1f;
+        if (angle > (float)PI - 0.1f) angle = (float)PI - 0.1f;
+    }
+    // Mouse/touch fire: inject as shooterAction before the fire check
+    if (bArray.mouseFirePending) {
+        bArray.shooterAction = true;
+        bArray.mouseFirePending = false;
+    }
 
     // Check if we should fire: either local player action or remote player mp_fire flag (original line 2141)
     // Block local player from firing while malus bubbles are falling (original line 2146: !@{$malus_bubble{$::p}})
@@ -3978,6 +3991,29 @@ void BubbleGame::RenderPaused() {
     { SDL_FRect fr = ToFRect(pauseRct); SDL_RenderTexture(rend, pausePenguin[pauseFrame], nullptr, &fr); }
 
     timePaused = SDL_GetTicks();
+}
+
+void BubbleGame::HandleMouseAim(float mx, float my) {
+    if (!currentSettings.mouseEnabled) return;
+    if (currentSettings.playerCount < 1) return;
+    BubbleArray& bArr = bubbleArrays[0];
+    const SDL_Rect& r = bArr.shooterSprite.rect;
+    float sx = r.x + r.w * 0.5f;
+    float sy = r.y + r.h * 0.5f;
+    float dx = mx - sx;
+    float dy = sy - my;  // flip y: up = positive
+    // Only aim when mouse is above the shooter barrel (prevent backward shots)
+    if (my > sy - 5.f) return;
+    float ang = atan2f(dy, dx);
+    if (ang < 0.1f) ang = 0.1f;
+    if (ang > (float)PI - 0.1f) ang = (float)PI - 0.1f;
+    bArr.mouseTargetAngle = ang;
+}
+
+void BubbleGame::HandleMouseFire() {
+    if (!currentSettings.mouseEnabled) return;
+    if (currentSettings.playerCount < 1) return;
+    bubbleArrays[0].mouseFirePending = true;
 }
 
 void BubbleGame::HandleInput(SDL_Event *e) {

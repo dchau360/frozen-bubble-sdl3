@@ -251,6 +251,7 @@ struct SetupSettings {
     bool disableCompression[5] = {false, false, false, false, false};  // Per-player: skip row compression
     bool aimGuide[5] = {false, false, false, false, false};  // Per-player: show aim trajectory guide
     int victoriesLimit = 0;  // 0 = unlimited; >0 = first to reach this wins the match
+    bool mouseEnabled = false;  // Mouse/touchscreen aim+fire for player 1
 };
 
 struct BubbleArray {
@@ -262,6 +263,8 @@ struct BubbleArray {
         frozenWait = FROZEN_FRAMEWAIT, waitPrelight = PRELIGHT_SLOW, prelightTime = waitPrelight, framePrelight = PRELIGHT_FRAMEWAIT, hurryTimer = 0, warnTimer = 0, alertColumn = 0;
     int score = 0, chainLevel = 0;  // Score tracking and chain reaction multiplier
     bool shooterLeft = false, shooterRight = false, shooterCenter = false, shooterAction = false, newShoot = true, mpWinner = false, mpDone = false;
+    float mouseTargetAngle = -1.f;  // -1 = inactive; set from mouse/touch position
+    bool mouseFirePending = false;   // set on mouse click / touch-up
 
     // Player state for multiplayer (original: $pdata{$player}{state} and {left})
     enum class PlayerState { ALIVE, LOST, LEFT };
@@ -360,6 +363,8 @@ public:
     void RenderPaused(void);
     void NewGame(SetupSettings setup);
     void HandleInput(SDL_Event *e);
+    void HandleMouseAim(float mx, float my);  // logical canvas coords (0-640, 0-480)
+    void HandleMouseFire();
     void UpdatePenguin(BubbleArray &bArray);
 
     void LoadLevelset(const char *path);
@@ -374,6 +379,7 @@ public:
     void ProcessNetworkMessages();
 
     bool playedPause = false;
+    bool IsGameFinished() const { return gameFinish; }
 private:
     const SDL_Renderer *renderer;
     SDL_Texture *background = nullptr, *pauseBackground = nullptr, *prePauseBackground = nullptr;

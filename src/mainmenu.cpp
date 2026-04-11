@@ -285,6 +285,15 @@ void MainMenu::RefreshCandy(){
     InitCandy();
 }
 
+void MainMenu::SelectAndPressButton(int idx) {
+    if (idx < 0 || idx >= (int)buttons.size()) return;
+    buttons[active_button_index].Deactivate();
+    active_button_index = idx;
+    buttons[active_button_index].Activate();
+    buttons[active_button_index].Pressed(this);
+    AudioMixer::Instance()->PlaySFX("menu_selected");
+}
+
 void MainMenu::HandleInput(SDL_Event *e){
     // Map gamepad/D-pad to keyboard-equivalent actions for TV remotes
     if (e->type == SDL_EVENT_GAMEPAD_BUTTON_DOWN) {
@@ -530,11 +539,11 @@ void MainMenu::HandleInput(SDL_Event *e){
                 } else if (!awaitKp) {
                     // UP/DOWN: navigate keys within current player
                     if (e->key.key == SDLK_UP) {
-                        keyConfigIndex = (keyConfigIndex == 0) ? 6 : keyConfigIndex - 1;
+                        keyConfigIndex = (keyConfigIndex == 0) ? 7 : keyConfigIndex - 1;
                         AudioMixer::Instance()->PlaySFX("menu_change");
                         break;
                     } else if (e->key.key == SDLK_DOWN) {
-                        keyConfigIndex = (keyConfigIndex == 6) ? 0 : keyConfigIndex + 1;
+                        keyConfigIndex = (keyConfigIndex == 7) ? 0 : keyConfigIndex + 1;
                         AudioMixer::Instance()->PlaySFX("menu_change");
                         break;
                     } else if (e->key.key == SDLK_LEFT) {
@@ -597,6 +606,12 @@ void MainMenu::HandleInput(SDL_Event *e){
                             } else {
                                 AudioMixer::Instance()->MuteAll(false);
                             }
+                        } else if (keyConfigIndex == 7) {
+                            // Toggle mouse/touch aim
+                            GameSettings* gs = GameSettings::Instance();
+                            gs->mouseEnabled = !gs->mouseEnabled;
+                            gs->SaveKeys();
+                            AudioMixer::Instance()->PlaySFX("menu_change");
                         } else {
                             // Wait for key press
                             AudioMixer::Instance()->PlaySFX("menu_selected");
@@ -802,8 +817,8 @@ void MainMenu::HandleInput(SDL_Event *e){
 
                             int maxActions;
                             if (currentGame && currentGame->creator == netClient->GetPlayerNick()) {
-                                // Host: Chat + 4 global + 3 grid rows + optional Start
-                                maxActions = 8 + ((int)currentGame->players.size() > 1 ? 1 : 0);
+                                // Host: Chat + 4 global + 3 grid rows + Mouse/Touch + optional Start
+                                maxActions = 9 + ((int)currentGame->players.size() > 1 ? 1 : 0);
                             } else if (currentGame) {
                                 // Non-host in game
                                 maxActions = 1; // Just Chat (use ESC to leave)
@@ -847,8 +862,8 @@ void MainMenu::HandleInput(SDL_Event *e){
 
                             int maxActions;
                             if (currentGame && currentGame->creator == netClient->GetPlayerNick()) {
-                                // Host: Chat + 4 global + 3 grid rows + optional Start
-                                maxActions = 8 + ((int)currentGame->players.size() > 1 ? 1 : 0);
+                                // Host: Chat + 4 global + 3 grid rows + Mouse/Touch + optional Start
+                                maxActions = 9 + ((int)currentGame->players.size() > 1 ? 1 : 0);
                             } else if (currentGame) {
                                 // Non-host in game
                                 maxActions = 1; // Just Chat (use ESC to leave)
@@ -897,8 +912,8 @@ void MainMenu::HandleInput(SDL_Event *e){
                                 }
                                 AudioMixer::Instance()->PlaySFX("menu_change");
                                 settingChanged = true;
-                            } else if (selectedActionIndex >= 5 && selectedActionIndex <= 7) {
-                                // Grid rows 5/6/7: Left/Right navigates player columns
+                            } else if (selectedActionIndex >= 6 && selectedActionIndex <= 8) {
+                                // Grid rows 6/7/8: Left/Right navigates player columns
                                 // col 0 = ALL, col 1..N = P1..PN
                                 int numPlayers = (int)currentGame->players.size();
                                 if (numPlayers < 1) numPlayers = 1;
@@ -916,7 +931,7 @@ void MainMenu::HandleInput(SDL_Event *e){
                             if (settingChanged) {
                                 static const int vLimits[] = {0,1,2,3,4,5,6,7,8,9,10,11,12,15,20,30,50,100};
                                 netClient->SendOptions(chainReactionEnabled, continueWhenPlayersLeave,
-                                    singlePlayerTargetting, vLimits[victoriesLimitIndex], playerColorCounts, playerNoCompress, playerAimGuide);
+                                    singlePlayerTargetting, vLimits[victoriesLimitIndex], playerColorCounts, playerNoCompress, playerAimGuide, netRoomMouseEnabled);
                             }
                         }
                     }
@@ -1029,6 +1044,10 @@ void MainMenu::HandleInput(SDL_Event *e){
                                         AudioMixer::Instance()->PlaySFX("menu_change");
                                         settingChanged = true;
                                     } else if (selectedActionIndex == 5) {
+                                        // Toggle mouse/touch aim (per-session, off by default)
+                                        netRoomMouseEnabled = !netRoomMouseEnabled;
+                                        AudioMixer::Instance()->PlaySFX("menu_change");
+                                    } else if (selectedActionIndex == 6) {
                                         // Cycle per-player color count; col 0 = ALL
                                         int np = (int)currentGame->players.size();
                                         if (np < 1) np = 1; if (np > 5) np = 5;
@@ -1040,7 +1059,7 @@ void MainMenu::HandleInput(SDL_Event *e){
                                         }
                                         AudioMixer::Instance()->PlaySFX("menu_change");
                                         settingChanged = true;
-                                    } else if (selectedActionIndex == 6) {
+                                    } else if (selectedActionIndex == 7) {
                                         // Toggle per-player compression; col 0 = ALL (set all to majority opposite)
                                         int np = (int)currentGame->players.size();
                                         if (np < 1) np = 1; if (np > 5) np = 5;
@@ -1051,7 +1070,7 @@ void MainMenu::HandleInput(SDL_Event *e){
                                         for (int i = lo; i < hi; i++) playerNoCompress[i] = allOn;
                                         AudioMixer::Instance()->PlaySFX("menu_change");
                                         settingChanged = true;
-                                    } else if (selectedActionIndex == 7) {
+                                    } else if (selectedActionIndex == 8) {
                                         // Toggle per-player aim guide; col 0 = ALL (set all to majority opposite)
                                         int np = (int)currentGame->players.size();
                                         if (np < 1) np = 1; if (np > 5) np = 5;
@@ -1062,8 +1081,8 @@ void MainMenu::HandleInput(SDL_Event *e){
                                         for (int i = lo; i < hi; i++) playerAimGuide[i] = !allOn;
                                         AudioMixer::Instance()->PlaySFX("menu_change");
                                         settingChanged = true;
-                                    } else if (selectedActionIndex == 8 && currentGame && currentGame->players.size() > 1) {
-                                        // Start game (index 8, fixed regardless of player count)
+                                    } else if (selectedActionIndex == 9 && currentGame && currentGame->players.size() > 1) {
+                                        // Start game (index 9, fixed regardless of player count)
                                         netClient->StartGame();
                                         netClient->AddStatusMessage("Starting game...");
                                         AudioMixer::Instance()->PlaySFX("menu_selected");
@@ -1071,7 +1090,7 @@ void MainMenu::HandleInput(SDL_Event *e){
                                     if (settingChanged) {
                                         static const int vLimits[] = {0,1,2,3,4,5,6,7,8,9,10,11,12,15,20,30,50,100};
                                         netClient->SendOptions(chainReactionEnabled, continueWhenPlayersLeave,
-                                            singlePlayerTargetting, vLimits[victoriesLimitIndex], playerColorCounts, playerNoCompress, playerAimGuide);
+                                            singlePlayerTargetting, vLimits[victoriesLimitIndex], playerColorCounts, playerNoCompress, playerAimGuide, netRoomMouseEnabled);
                                     }
                                 }
                                 // Non-host has no actions other than Chat (use ESC to leave)
@@ -1940,6 +1959,14 @@ void MainMenu::KeysPanelRender() {
 
     y += 6;
 
+    // Row 7: Mouse/touch toggle
+    bool mouseSel = (keyConfigIndex == 7);
+    const char* mouseState = gs->mouseEnabled ? "ON" : "OFF";
+    snprintf(lineBuf, sizeof(lineBuf), mouseSel ? "[ Mouse/Touch: %s ]" : "  Mouse/Touch: %s  ", mouseState);
+    renderLine(lineBuf, mouseSel ? yellow : white, y);
+
+    y += 6;
+
     if (awaitKp)
         renderLine("Press button or key...", yellow, y);
     else
@@ -2038,8 +2065,8 @@ void MainMenu::NetPanelRender() {
 
         // Apply any options broadcast by the host (joiners receive SETOPTIONS push)
         {
-            bool cr, cl, st; int vl; int pc[5]; bool nc[5]; bool ag[5];
-            if (netClient->GetAndClearPendingOptions(cr, cl, st, vl, pc, nc, ag)) {
+            bool cr, cl, st; int vl; int pc[5]; bool nc[5]; bool ag[5]; bool me;
+            if (netClient->GetAndClearPendingOptions(cr, cl, st, vl, pc, nc, ag, me)) {
                 chainReactionEnabled = cr;
                 continueWhenPlayersLeave = cl;
                 singlePlayerTargetting = st;
@@ -2048,8 +2075,9 @@ void MainMenu::NetPanelRender() {
                 victoriesLimitIndex = 5; // default
                 for (int i = 0; i < 18; i++) { if (vLimits[i] == vl) { victoriesLimitIndex = i; break; } }
                 for (int i = 0; i < 5; i++) { playerColorCounts[i] = pc[i]; playerNoCompress[i] = nc[i]; playerAimGuide[i] = ag[i]; }
-                SDL_Log("Applied host options: cr=%d cl=%d st=%d vl=%d colors=%d,%d,%d,%d,%d",
-                    cr,cl,st,vl,pc[0],pc[1],pc[2],pc[3],pc[4]);
+                netRoomMouseEnabled = me;
+                SDL_Log("Applied host options: cr=%d cl=%d st=%d vl=%d colors=%d,%d,%d,%d,%d mouse=%d",
+                    cr,cl,st,vl,pc[0],pc[1],pc[2],pc[3],pc[4],me);
             }
         }
 
@@ -2202,14 +2230,21 @@ void MainMenu::NetPanelRender() {
             actions.push_back(targetText);   // index 3
             actions.push_back(victoriesText);// index 4
 
-            // Per-player grid rows (indices 5-7) — label only; values rendered as grid cells below
-            actions.push_back("Max colors:"); // index 5
-            actions.push_back("Rows:");      // index 6
-            actions.push_back("Aim:");       // index 7
+            // Mouse/touch aim (index 5) — per-session local setting, defaults OFF
+            {
+                char mouseText[64];
+                snprintf(mouseText, sizeof(mouseText), "Mouse/Touch aim: %s", netRoomMouseEnabled ? "ON" : "OFF");
+                actions.push_back(mouseText); // index 5
+            }
 
-            // Start game (index 8) — host only when >1 player
+            // Per-player grid rows (indices 6-8) — label only; values rendered as grid cells below
+            actions.push_back("Max colors:"); // index 6
+            actions.push_back("Rows:");      // index 7
+            actions.push_back("Aim:");       // index 8
+
+            // Start game (index 9) — host only when >1 player
             if (currentGame->creator == netClient->GetPlayerNick() && currentGame->players.size() > 1) {
-                actions.push_back("Start game!"); // index 8
+                actions.push_back("Start game!"); // index 9
             }
             // No "Part game" menu item - use ESC key to leave like original
         } else {
@@ -2229,7 +2264,7 @@ void MainMenu::NetPanelRender() {
         }
 
         // Grid offset: player header + grid rows are shifted down one line to make room for nick header
-        const int gridStart = 5;       // First grid row index
+        const int gridStart = 6;       // First grid row index
         const int gridYOffset = lineHeight * 2; // Gap after Victories limit + space for nick header
 
         // Render actions with highlight
@@ -3039,6 +3074,7 @@ void MainMenu::ShowPanel(int which) {
             showingNetPanel = true;
             networkInLobby = false;
             networkInputMode = 7; // LAN server list
+            netRoomMouseEnabled = GameSettings::Instance()->mouseEnabled; // load persisted default
             break;
         }
         case 5: { // Net game - fetch public server list + local server
@@ -3048,10 +3084,12 @@ void MainMenu::ShowPanel(int which) {
             showingNetPanel = true;
             networkInLobby = false;
             networkInputMode = 10; // Public server list
+            netRoomMouseEnabled = GameSettings::Instance()->mouseEnabled; // load persisted default
             publicServers.clear();
 #ifdef __WASM_PORT__
             // WASM: FetchPublicServers() returns instantly (hardcoded list); no thread needed
             publicServers = NetworkClient::FetchPublicServers();
+            if (!publicServers.empty()) netMenuIndex = 1; // pre-select first server
 #else
             // Native: fetch + latency probe can block for seconds — run on background thread
             if (!serverFetchInProgress.load()) {
@@ -3143,6 +3181,8 @@ void MainMenu::SetupNewGame(int mode) {
                     ns.disableCompression[i] = playerNoCompress[i];
                     ns.aimGuide[i] = playerAimGuide[i];
                 }
+                // Apply per-session mouse setting (off by default in multiplayer)
+                GameSettings::Instance()->mouseEnabled = netRoomMouseEnabled;
                 FrozenBubble::Instance()->bubbleGame()->NewGame(ns);
             }
             break;

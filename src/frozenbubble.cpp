@@ -521,10 +521,105 @@ void FrozenBubble::HandleInput(SDL_Event *e) {
     }
 
     if (IsGamePause) return;
+
+    auto injectKey = [](SDL_Keycode k) {
+        SDL_Event ev = {};
+        ev.type = SDL_EVENT_KEY_DOWN;
+        ev.key.key = k;
+        SDL_PushEvent(&ev);
+    };
+
     if(currentState == Highscores) {
         hiscoreManager->HandleInput(e);
         return;
     }
-    if(currentState == TitleScreen) mainMenu->HandleInput(e);
-    if(currentState == MainGame) mainGame->HandleInput(e);
+    if(currentState == TitleScreen) {
+        mainMenu->HandleInput(e);
+
+        // Touch/click navigation for menu
+        // Buttons: x=89, y=14+i*56, w=202, h=46 in logical (640x480) coords
+        static float touchStartX = -1.f, touchStartY = -1.f;
+        static Uint32 lastMenuTapMs = 0;
+        Uint32 nowMs = SDL_GetTicks();
+        auto getMenuButtonAt = [](float lx, float ly) -> int {
+            if (lx < 89.f || lx > 291.f) return -1;
+            for (int i = 0; i < 8; i++) {
+                float by = 14.f + i * 56.f;
+                if (ly >= by && ly < by + 46.f) return i;
+            }
+            return -1;
+        };
+
+        if (e->type == SDL_EVENT_FINGER_DOWN) {
+            touchStartX = e->tfinger.x * 640.f;
+            touchStartY = e->tfinger.y * 480.f;
+        } else if (e->type == SDL_EVENT_FINGER_UP) {
+            // Debounce: ignore rapid re-fires (multi-finger or OS double events)
+            if (nowMs - lastMenuTapMs < 200) {
+                touchStartX = touchStartY = -1.f;
+                return;
+            }
+            lastMenuTapMs = nowMs;
+            float lx = e->tfinger.x * 640.f;
+            float ly = e->tfinger.y * 480.f;
+            float dx = (touchStartX >= 0) ? (lx - touchStartX) : 0.f;
+            float dy = (touchStartY >= 0) ? (ly - touchStartY) : 0.f;
+            touchStartX = touchStartY = -1.f;
+            if (!mainMenu->HasAnyPanelOpen()) {
+                int btn = getMenuButtonAt(lx, ly);
+                if (btn >= 0) mainMenu->SelectAndPressButton(btn);
+            } else if (dx < -40.f && fabsf(dy) < fabsf(dx)) {
+                injectKey(SDLK_ESCAPE);
+                if (mainMenu->IsTextEditActive()) {
+                    injectKey(SDLK_ESCAPE); // close keyboard then actually go back
+                }
+            } else if (fabsf(dy) > 15.f) {
+                injectKey(dy < 0 ? SDLK_UP : SDLK_DOWN);
+            } else {
+                injectKey(SDLK_RETURN);
+            }
+        } else if (e->type == SDL_EVENT_MOUSE_BUTTON_DOWN && e->button.button == SDL_BUTTON_LEFT) {
+            // Ignore mouse events synthesized from touch — those are handled by FINGER_UP above
+            if (e->button.which == SDL_TOUCH_MOUSEID) return;
+            float lx, ly;
+            SDL_RenderCoordinatesFromWindow(renderer, e->button.x, e->button.y, &lx, &ly);
+            if (!mainMenu->HasAnyPanelOpen()) {
+                int btn = getMenuButtonAt(lx, ly);
+                if (btn >= 0) mainMenu->SelectAndPressButton(btn);
+            } else {
+                injectKey(SDLK_RETURN);
+            }
+        } else if (e->type == SDL_EVENT_MOUSE_BUTTON_DOWN && e->button.button == SDL_BUTTON_RIGHT) {
+            if (e->button.which == SDL_TOUCH_MOUSEID) return;
+            injectKey(SDLK_ESCAPE);
+        }
+    }
+    if(currentState == MainGame) {
+        mainGame->HandleInput(e);
+
+        // Mouse aim: convert window coords to logical (640x480) canvas coords
+        if (e->type == SDL_EVENT_MOUSE_MOTION) {
+            float lx, ly;
+            SDL_RenderCoordinatesFromWindow(renderer, e->motion.x, e->motion.y, &lx, &ly);
+            mainGame->HandleMouseAim(lx, ly);
+        } else if (e->type == SDL_EVENT_MOUSE_BUTTON_DOWN && e->button.button == SDL_BUTTON_LEFT) {
+            if (mainGame->IsGameFinished())
+                injectKey(SDLK_RETURN);
+            else
+                mainGame->HandleMouseFire();
+        } else if (e->type == SDL_EVENT_MOUSE_BUTTON_DOWN && e->button.button == SDL_BUTTON_RIGHT) {
+            injectKey(SDLK_ESCAPE);
+        }
+        // Touch aim+fire: normalized 0-1 coords → logical canvas coords
+        else if (e->type == SDL_EVENT_FINGER_MOTION) {
+            mainGame->HandleMouseAim(e->tfinger.x * 640.f, e->tfinger.y * 480.f);
+        } else if (e->type == SDL_EVENT_FINGER_UP) {
+            if (mainGame->IsGameFinished()) {
+                injectKey(SDLK_RETURN); // tap to continue after round
+            } else {
+                mainGame->HandleMouseAim(e->tfinger.x * 640.f, e->tfinger.y * 480.f);
+                mainGame->HandleMouseFire();
+            }
+        }
+    }
 }

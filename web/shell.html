@@ -2,6 +2,7 @@
 <html lang="en-us">
 <head>
   <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
   <title>Frozen Bubble</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -9,19 +10,19 @@
       background: #000;
       width: 100vw;
       height: 100vh;
+      height: 100dvh;
       overflow: hidden;
       display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: center;
     }
-    /* Scale the canvas to fit the viewport while keeping 640:480 aspect ratio.
-       SDL sets the canvas pixel dimensions (640x480); CSS scales the display. */
     canvas.emscripten {
       display: block;
-      /* Fit width OR height, whichever is the binding constraint */
-      width: min(100vw, calc(100vh * 640 / 480));
-      height: min(100vh, calc(100vw * 480 / 640));
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform-origin: center center;
       image-rendering: pixelated;
       cursor: default;
     }
@@ -59,11 +60,25 @@
     var progressEl = document.getElementById('progress');
     var barEl     = document.getElementById('progress-bar');
 
+    function fitCanvas() {
+      var canvas = document.getElementById('canvas');
+      var scale = Math.min(window.innerWidth / 640, window.innerHeight / 480);
+      canvas.style.transform = 'translate(-50%, -50%) scale(' + scale + ')';
+    }
+    window.addEventListener('resize', fitCanvas);
+    // Re-apply scale whenever SDL changes the canvas width/height/style attributes
+    var canvasObserver = new MutationObserver(fitCanvas);
+    canvasObserver.observe(document.getElementById('canvas'), {
+      attributes: true, attributeFilter: ['width', 'height', 'style']
+    });
+
+    var hasError = false;
     var Module = {
       canvas: document.getElementById('canvas'),
       print: function(t) { console.log(t); },
       printErr: function(t) { console.error(t); },
       setStatus: function(text) {
+        if (hasError) return; // keep error visible
         if (text) {
           var m = text.match(/([^(]+)\((\d+)\/(\d+)\)/);
           if (m) {
@@ -89,9 +104,13 @@
       }
     };
     Module.setStatus('Downloading…');
-    window.onerror = function(msg) {
-      Module.setStatus('Error: ' + msg);
+    window.onerror = function(msg, src, line, col, err) {
+      if (!msg || msg === 'Script error.') return; // cross-origin noise, no details available
+      hasError = true;
+      statusEl.style.display = '';
       statusEl.style.color = '#f55';
+      statusEl.textContent = 'Error: ' + msg + (src ? ' (' + src.split('/').pop() + ':' + line + ')' : '');
+      progressEl.style.display = 'none';
     };
 
     // Prevent browser from acting on navigation/game keys (Backspace = back,

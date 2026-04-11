@@ -458,7 +458,7 @@ bool NetworkClient::SendTalk(const char* message) {
     return SendCommand(cmd);
 }
 
-bool NetworkClient::SendOptions(bool chainReaction, bool continueWhenLeave, bool singleTarget, int victoriesLimit, const int playerColors[5], const bool noCompress[5], const bool aimGuide[5]) {
+bool NetworkClient::SendOptions(bool chainReaction, bool continueWhenLeave, bool singleTarget, int victoriesLimit, const int playerColors[5], const bool noCompress[5], const bool aimGuide[5], bool mouseEnabled) {
     // Send game options using SETOPTIONS command (original line 4468-4474)
     // Format: SETOPTIONS CHAINREACTION:0/1,...,NUMCOLORS_P1:N,...,NUMCOLORS_P5:N
     char cmd[640];
@@ -466,14 +466,16 @@ bool NetworkClient::SendOptions(bool chainReaction, bool continueWhenLeave, bool
              "SETOPTIONS CHAINREACTION:%d,CONTINUEGAMEWHENPLAYERSLEAVE:%d,SINGLEPLAYERTARGETTING:%d,VICTORIESLIMIT:%d"
              ",NUMCOLORS_P1:%d,NUMCOLORS_P2:%d,NUMCOLORS_P3:%d,NUMCOLORS_P4:%d,NUMCOLORS_P5:%d"
              ",NOCOMPRESS_P1:%d,NOCOMPRESS_P2:%d,NOCOMPRESS_P3:%d,NOCOMPRESS_P4:%d,NOCOMPRESS_P5:%d"
-             ",AIMGUIDE_P1:%d,AIMGUIDE_P2:%d,AIMGUIDE_P3:%d,AIMGUIDE_P4:%d,AIMGUIDE_P5:%d",
+             ",AIMGUIDE_P1:%d,AIMGUIDE_P2:%d,AIMGUIDE_P3:%d,AIMGUIDE_P4:%d,AIMGUIDE_P5:%d"
+             ",MOUSEENABLED:%d",
              chainReaction ? 1 : 0,
              continueWhenLeave ? 1 : 0,
              singleTarget ? 1 : 0,
              victoriesLimit,
              playerColors[0], playerColors[1], playerColors[2], playerColors[3], playerColors[4],
              noCompress[0] ? 1 : 0, noCompress[1] ? 1 : 0, noCompress[2] ? 1 : 0, noCompress[3] ? 1 : 0, noCompress[4] ? 1 : 0,
-             aimGuide[0] ? 1 : 0, aimGuide[1] ? 1 : 0, aimGuide[2] ? 1 : 0, aimGuide[3] ? 1 : 0, aimGuide[4] ? 1 : 0);
+             aimGuide[0] ? 1 : 0, aimGuide[1] ? 1 : 0, aimGuide[2] ? 1 : 0, aimGuide[3] ? 1 : 0, aimGuide[4] ? 1 : 0,
+             mouseEnabled ? 1 : 0);
     SDL_Log("Sending game options: %s", cmd);
     return SendCommand(cmd);
 }
@@ -1104,6 +1106,7 @@ void NetworkClient::HandlePushMessage(const std::string& pushMsg) {
         rcvAimGuide[2] = parseVal("AIMGUIDE_P3", 0) != 0;
         rcvAimGuide[3] = parseVal("AIMGUIDE_P4", 0) != 0;
         rcvAimGuide[4] = parseVal("AIMGUIDE_P5", 0) != 0;
+        rcvMouseEnabled = parseVal("MOUSEENABLED", 0) != 0;
         pendingOptions = true;
     } else if (pushMsg.find("GAME_CAN_START:") == 0) {
         // Game is ready to start - server sent player mappings
@@ -1700,9 +1703,15 @@ std::vector<ServerInfo> NetworkClient::FetchPublicServers() {
     std::vector<ServerInfo> servers;
 
 #ifdef __WASM_PORT__
-    // WebAssembly uses emscripten_fetch for HTTP requests
-    // TODO: Implement async fetch using emscripten_websocket or emscripten_fetch
-    SDL_Log("Public server fetch not yet implemented in WebAssembly port (requires emscripten_fetch)");
+    // WASM: return hardcoded known public servers
+    {
+        ServerInfo si;
+        si.host = "fb.servequake.com";
+        si.port = 1511;
+        si.name = "Frozen Bubble Server";
+        si.latencyMs = -1; // latency probe not available in WASM
+        servers.push_back(si);
+    }
     return servers;
 #endif
 

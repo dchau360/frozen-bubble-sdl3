@@ -121,6 +121,11 @@ void GameSettings::CreateDefaultSettings()
 #else
         EvalIniResult(rval, dict, "Keys:SpeedMultiplier", "2.0");
 #endif
+#ifdef __WASM_PORT__
+        EvalIniResult(rval, dict, "Keys:MouseEnabled", "true");
+#else
+        EvalIniResult(rval, dict, "Keys:MouseEnabled", "false");
+#endif
         EvalIniResult(rval, dict, "Keys:Nickname", "");
         EvalIniResult(rval, dict, "Keys:P1Left", "80");      // SDL_SCANCODE_LEFT
         EvalIniResult(rval, dict, "Keys:P1Right", "79");     // SDL_SCANCODE_RIGHT
@@ -196,6 +201,12 @@ void GameSettings::ReadSettings()
     if (nick) snprintf(savedNickname, sizeof(savedNickname), "%s", nick);
 #endif
 
+#ifdef __WASM_PORT__
+    mouseEnabled = iniparser_getboolean(optDict, "Keys:MouseEnabled", true);
+#else
+    mouseEnabled = iniparser_getboolean(optDict, "Keys:MouseEnabled", false);
+#endif
+
     LoadDefaultKeys();
 }
 
@@ -239,6 +250,7 @@ void GameSettings::SaveKeys()
     char speedBuf[16];
     snprintf(speedBuf, sizeof(speedBuf), "%.2f", speedMultiplier);
     iniparser_set(optDict, "Keys:SpeedMultiplier", speedBuf);
+    iniparser_set(optDict, "Keys:MouseEnabled", mouseEnabled ? "true" : "false");
 
 #ifndef __WASM_PORT__
     iniparser_set(optDict, "Keys:Nickname", savedNickname);

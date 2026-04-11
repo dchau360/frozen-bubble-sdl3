@@ -87,6 +87,7 @@ public:
     float speedMultiplier = 2.0f;
 
     char savedNickname[32] = "";
+    bool mouseEnabled = false;  // Mouse/touchscreen aim+fire (player 1)
 
     GameSettings(const GameSettings& obj) = delete;
     void Dispose();
