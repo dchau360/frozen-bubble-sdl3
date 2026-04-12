@@ -123,6 +123,18 @@ public:
     // Enqueue an already-formatted GAMEMSG (used by WASM prio message path)
     void QueueGameMessage(const std::string& msg) { messageQueue.push_back(msg); }
     size_t MessageQueueSize() const { return messageQueue.size(); }
+
+    // Bubble-sync message queue: 'b|', 'N', 'T' messages routed here by ProcessNetworkMessages
+    // so WaitForBubble/WaitForNextBubble/WaitForTobeBubble can find them even if they arrived
+    // before SyncNetworkLevel was called (race condition fix for round 2+).
+    void PushSyncMessage(const std::string& msg) { syncQueue.push_back(msg); }
+    bool HasSyncMessage() const { return !syncQueue.empty(); }
+    std::string GetNextSyncMessage() {
+        if (syncQueue.empty()) return "";
+        std::string msg = syncQueue.front();
+        syncQueue.pop_front();
+        return msg;
+    }
     // Called by WASM open callback to transition state to CONNECTED
     void SetConnected() { state = CONNECTED; }
     // True while waiting for async CREATE OK/rejection from server (WASM only)
@@ -182,6 +194,7 @@ private:
     std::string playerGeoloc;
 
     std::deque<std::string> messageQueue;
+    std::deque<std::string> syncQueue;   // Bubble-sync messages ('b|', 'N', 'T') preserved for WaitForBubble
     std::vector<GameRoom> gameList;
     std::vector<NetworkPlayer> openPlayers;
     std::vector<ChatMessage> chatMessages;

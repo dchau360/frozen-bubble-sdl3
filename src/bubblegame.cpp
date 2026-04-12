@@ -4768,6 +4768,15 @@ void BubbleGame::ProcessNetworkMessages() {
                                 senderIdx, targetNick, myNick.c_str(), attackingMe.size());
                         break;
                     }
+                    case 'b':
+                    case 'N':
+                    case 'T':
+                        // Bubble sync messages from leader (SyncNetworkLevel).
+                        // Route to syncQueue so WaitForBubble/WaitForNextBubble/WaitForTobeBubble
+                        // can pick them up even if they arrived before ReloadGame was called.
+                        SDL_Log("Routing bubble-sync message '%c' to syncQueue", msgType);
+                        netClient->PushSyncMessage(msg);
+                        break;
                     default:
                         SDL_Log("Unknown game message type: %c", msgType);
                         break;

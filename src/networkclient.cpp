@@ -185,6 +185,7 @@ void NetworkClient::Disconnect() {
     currentGame = nullptr;
     gameList.clear();
     messageQueue.clear();
+    syncQueue.clear();
     SDL_Log("Disconnected from server");
 }
 
@@ -573,60 +574,57 @@ bool NetworkClient::SendTobeBubble(int bubbleId) {
 
 bool NetworkClient::WaitForBubble(int& cx, int& cy, int& bubbleId) {
     // Joiner waits for bubble message: b|cx|cy{bubbleId}
+    // Checks syncQueue first (pre-routed by ProcessNetworkMessages), then main queue.
     int timeout = 5000;  // 5 second timeout
     Uint32 startTime = SDL_GetTicks();
     std::vector<std::string> deferredMessages; // Collect non-matching messages
 
+    auto tryParse = [&](const std::string& msg) -> bool {
+        if (msg.find("GAMEMSG:") != 0) return false;
+        int senderId; char gameData[512];
+        if (sscanf(msg.c_str(), "GAMEMSG:%d:%511[^\n]", &senderId, gameData) != 2) return false;
+        if (gameData[0] != 'b' || gameData[1] != '|') {
+            deferredMessages.push_back(msg);
+            return false;
+        }
+        char* data = gameData + 2;
+        char cyBubble[16];
+        if (sscanf(data, "%d|%15s", &cx, cyBubble) == 2 && strlen(cyBubble) >= 2) {
+            cy = cyBubble[0] - '0';
+            bubbleId = atoi(cyBubble + 1);
+            SDL_Log("WaitForBubble: Received bubble: cx=%d cy=%d id=%d", cx, cy, bubbleId);
+            return true;
+        }
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "WaitForBubble: Failed to parse bubble data: %s", data);
+        return false;
+    };
+
     while (SDL_GetTicks() - startTime < timeout) {
         Update();  // Process incoming data
 
-        if (HasMessage()) {
+        // Drain syncQueue first (messages pre-buffered by ProcessNetworkMessages)
+        while (HasSyncMessage()) {
+            std::string msg = GetNextSyncMessage();
+            SDL_Log("WaitForBubble: Got sync-queued message: %s", msg.c_str());
+            if (tryParse(msg)) {
+                for (auto it = deferredMessages.rbegin(); it != deferredMessages.rend(); ++it)
+                    PutBackMessage(*it);
+                return true;
+            }
+        }
+
+        // Also drain main message queue
+        while (HasMessage()) {
             std::string msg = GetNextMessage();
             SDL_Log("WaitForBubble: Got message: %s", msg.c_str());
-
-            // Only process GAMEMSG format (ignore server protocol messages)
-            if (msg.find("GAMEMSG:") == 0) {
-                int senderId;
-                char gameData[512];
-                if (sscanf(msg.c_str(), "GAMEMSG:%d:%511[^\n]", &senderId, gameData) == 2) {
-                    SDL_Log("WaitForBubble: Parsed gameData: %s", gameData);
-                    // Check if it's a bubble message
-                    if (gameData[0] == 'b' && gameData[1] == '|') {
-                        // Parse b|cx|cy{bubbleId}  format: "b|0|07" means cx=0, cy=0, id=7
-                        char* data = gameData + 2;  // Skip "b|"
-                        SDL_Log("WaitForBubble: Parsing data: %s", data);
-
-                        // Parse cx and the cy+bubbleId string
-                        char cyBubble[16];
-                        if (sscanf(data, "%d|%15s", &cx, cyBubble) == 2) {
-                            // cyBubble is like "07" where first digit is cy, rest is bubbleId
-                            if (strlen(cyBubble) >= 2) {
-                                cy = cyBubble[0] - '0';  // First digit is cy
-                                bubbleId = atoi(cyBubble + 1);  // Rest is bubbleId
-                                SDL_Log("Received bubble: cx=%d cy=%d id=%d", cx, cy, bubbleId);
-                                // Put back deferred messages before returning
-                                for (auto it = deferredMessages.rbegin(); it != deferredMessages.rend(); ++it) {
-                                    PutBackMessage(*it);
-                                }
-                                return true;
-                            } else {
-                                SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "WaitForBubble: cyBubble string too short: %s", cyBubble);
-                            }
-                        } else {
-                            SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "WaitForBubble: Failed to parse bubble data: %s", data);
-                        }
-                    } else {
-                        SDL_Log("WaitForBubble: Not a bubble message, deferring");
-                        deferredMessages.push_back(msg);  // Defer non-bubble GAMEMSG for later (N, T, etc)
-                    }
-                } else {
-                    SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "WaitForBubble: Failed to parse GAMEMSG");
-                }
+            if (tryParse(msg)) {
+                for (auto it = deferredMessages.rbegin(); it != deferredMessages.rend(); ++it)
+                    PutBackMessage(*it);
+                return true;
             }
-            // Ignore non-GAMEMSG messages (server protocol) - don't put them back
-        } else {
-            SDL_Delay(10);  // Small delay to avoid busy waiting only when no messages
         }
+
+        SDL_Delay(10);
     }
 
     // Timeout - put back deferred messages
@@ -643,44 +641,42 @@ bool NetworkClient::WaitForNextBubble(int& bubbleId) {
     Uint32 startTime = SDL_GetTicks();
     std::vector<std::string> deferredMessages;
 
+    auto tryParse = [&](const std::string& msg) -> bool {
+        if (msg.find("GAMEMSG:") != 0) return false;
+        int senderId; char gameData[512];
+        if (sscanf(msg.c_str(), "GAMEMSG:%d:%511[^\n]", &senderId, gameData) != 2) return false;
+        if (gameData[0] != 'N') { deferredMessages.push_back(msg); return false; }
+        if (sscanf(gameData + 1, "%d", &bubbleId) == 1) {
+            SDL_Log("WaitForNextBubble: Received next bubble: id=%d", bubbleId);
+            return true;
+        }
+        return false;
+    };
+
     while (SDL_GetTicks() - startTime < timeout) {
         Update();
 
-        if (HasMessage()) {
-            std::string msg = GetNextMessage();
-
-            // Only process GAMEMSG format (ignore server protocol messages)
-            if (msg.find("GAMEMSG:") == 0) {
-                int senderId;
-                char gameData[512];
-                if (sscanf(msg.c_str(), "GAMEMSG:%d:%511[^\n]", &senderId, gameData) == 2) {
-                    if (gameData[0] == 'N') {
-                        if (sscanf(gameData + 1, "%d", &bubbleId) == 1) {
-                            SDL_Log("Received next bubble: id=%d", bubbleId);
-                            // Put back deferred messages
-                            for (auto it = deferredMessages.rbegin(); it != deferredMessages.rend(); ++it) {
-                                PutBackMessage(*it);
-                            }
-                            return true;
-                        }
-                    } else {
-                        // Not an N message, defer it
-                        deferredMessages.push_back(msg);
-                    }
-                } else {
-                    SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "WaitForNextBubble: Failed to parse GAMEMSG");
-                }
+        while (HasSyncMessage()) {
+            std::string msg = GetNextSyncMessage();
+            if (tryParse(msg)) {
+                for (auto it = deferredMessages.rbegin(); it != deferredMessages.rend(); ++it)
+                    PutBackMessage(*it);
+                return true;
             }
-            // Ignore non-GAMEMSG messages (server protocol) - don't put them back
-        } else {
-            SDL_Delay(10);
         }
+        while (HasMessage()) {
+            std::string msg = GetNextMessage();
+            if (tryParse(msg)) {
+                for (auto it = deferredMessages.rbegin(); it != deferredMessages.rend(); ++it)
+                    PutBackMessage(*it);
+                return true;
+            }
+        }
+        SDL_Delay(10);
     }
 
-    // Timeout - put back deferred messages
-    for (auto it = deferredMessages.rbegin(); it != deferredMessages.rend(); ++it) {
+    for (auto it = deferredMessages.rbegin(); it != deferredMessages.rend(); ++it)
         PutBackMessage(*it);
-    }
     SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Timeout waiting for next bubble");
     return false;
 }
@@ -691,44 +687,42 @@ bool NetworkClient::WaitForTobeBubble(int& bubbleId) {
     Uint32 startTime = SDL_GetTicks();
     std::vector<std::string> deferredMessages;
 
+    auto tryParse = [&](const std::string& msg) -> bool {
+        if (msg.find("GAMEMSG:") != 0) return false;
+        int senderId; char gameData[512];
+        if (sscanf(msg.c_str(), "GAMEMSG:%d:%511[^\n]", &senderId, gameData) != 2) return false;
+        if (gameData[0] != 'T') { deferredMessages.push_back(msg); return false; }
+        if (sscanf(gameData + 1, "%d", &bubbleId) == 1) {
+            SDL_Log("WaitForTobeBubble: Received tobe bubble: id=%d", bubbleId);
+            return true;
+        }
+        return false;
+    };
+
     while (SDL_GetTicks() - startTime < timeout) {
         Update();
 
-        if (HasMessage()) {
-            std::string msg = GetNextMessage();
-
-            // Only process GAMEMSG format (ignore server protocol messages)
-            if (msg.find("GAMEMSG:") == 0) {
-                int senderId;
-                char gameData[512];
-                if (sscanf(msg.c_str(), "GAMEMSG:%d:%511[^\n]", &senderId, gameData) == 2) {
-                    if (gameData[0] == 'T') {
-                        if (sscanf(gameData + 1, "%d", &bubbleId) == 1) {
-                            SDL_Log("Received tobe bubble: id=%d", bubbleId);
-                            // Put back deferred messages
-                            for (auto it = deferredMessages.rbegin(); it != deferredMessages.rend(); ++it) {
-                                PutBackMessage(*it);
-                            }
-                            return true;
-                        }
-                    } else {
-                        // Not a T message, defer it
-                        deferredMessages.push_back(msg);
-                    }
-                } else {
-                    SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "WaitForTobeBubble: Failed to parse GAMEMSG");
-                }
+        while (HasSyncMessage()) {
+            std::string msg = GetNextSyncMessage();
+            if (tryParse(msg)) {
+                for (auto it = deferredMessages.rbegin(); it != deferredMessages.rend(); ++it)
+                    PutBackMessage(*it);
+                return true;
             }
-            // Ignore non-GAMEMSG messages (server protocol) - don't put them back
-        } else {
-            SDL_Delay(10);
         }
+        while (HasMessage()) {
+            std::string msg = GetNextMessage();
+            if (tryParse(msg)) {
+                for (auto it = deferredMessages.rbegin(); it != deferredMessages.rend(); ++it)
+                    PutBackMessage(*it);
+                return true;
+            }
+        }
+        SDL_Delay(10);
     }
 
-    // Timeout - put back deferred messages
-    for (auto it = deferredMessages.rbegin(); it != deferredMessages.rend(); ++it) {
+    for (auto it = deferredMessages.rbegin(); it != deferredMessages.rend(); ++it)
         PutBackMessage(*it);
-    }
     SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Timeout waiting for tobe bubble");
     return false;
 }
