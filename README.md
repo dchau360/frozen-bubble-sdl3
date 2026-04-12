@@ -3,7 +3,7 @@
   <img src="https://github.com/user-attachments/assets/c68db5c9-7e72-4d19-8e98-c598a3f5e54e">
 </p>
 
-A C++ / SDL3 port of the classic [Frozen Bubble 2](http://www.frozen-bubble.org/), reimplementing its gameplay, network multiplayer, and chain reaction system. The original was Linux-only; this port targets **Linux, macOS, Windows, Android TV, and WebAssembly**.
+A C++ / SDL3 port of the classic [Frozen Bubble 2](http://www.frozen-bubble.org/), reimplementing its gameplay, network multiplayer, and chain reaction system. The original was Linux-only; this port targets **Linux, macOS, Windows, Android TV, and WebAssembly (including iPhone/mobile browsers)**.
 
 > **Note:** The original game was written in Perl. This is a full rewrite in C++. While core gameplay and network protocol are faithfully reproduced, there may be inconsistencies and bugs compared to the original — particularly in edge-case game mechanics. Bug reports are welcome via [GitHub Issues](https://github.com/dchau360/frozen-bubble-sdl3/issues).
 
@@ -50,8 +50,62 @@ The host can configure the following settings in the game room — all joined pl
 | Max colors per player | Maximum number of bubble colors per player's board (5–8, default 7). The optional 8th color is orange. |
 | Rows collapse per player | Whether rows drop down periodically for a specific player (on by default; set to off to disable) |
 | Aim guide per player | Show a trajectory preview for a specific player's shots |
+| Mouse/Touch mode | Enable mouse or touchscreen aiming for all players. **Note: mouse/touch aim is easier than keyboard-only controls** — the host should set this consistently so all players have the same experience. |
 
 The last three settings are shown as a compact grid (P1–P5 columns) that the host navigates with arrow keys and Enter.
+
+---
+
+## Play in Browser (iPhone / Mobile / Desktop)
+
+The game runs in any modern browser via WebAssembly. Mobile browsers (iPhone, Android) use touch controls; desktop browsers support keyboard and mouse.
+
+### Touch Controls (iPhone / Android)
+
+**Menus:**
+
+| Gesture | Action |
+|---|---|
+| Tap | Select / activate button |
+| Swipe up / down | Scroll through menu items |
+| Swipe left | Go back (same as Escape) |
+
+**In-game (Mouse/Touch mode OFF — default):**
+
+| Gesture | Action |
+|---|---|
+| Tap left half | Aim left |
+| Tap right half | Aim right |
+| Tap center / fire zone | Fire bubble |
+| Swipe left | Exit game (Escape) |
+
+**In-game (Mouse/Touch mode ON):**
+
+| Gesture | Action |
+|---|---|
+| Tap anywhere | Fire bubble toward tap position |
+| Drag / slide | Aim toward finger position |
+| Swipe left | Exit game (Escape) |
+
+Mouse/Touch mode is toggled by the host in the game room settings and syncs to all players.
+
+### Mouse Controls (Desktop Browser / Mouse Mode)
+
+| Action | Control |
+|---|---|
+| Aim | Move mouse |
+| Fire | Left click |
+| Go back / Escape | Right click |
+
+### Keyboard Controls (Desktop)
+
+| Key | Action |
+|---|---|
+| Left / Right arrow | Aim |
+| Up arrow or Space | Fire |
+| Escape | Back / pause |
+
+> **Fairness note:** Mouse/touch aim lets you point at any angle freely, which is easier than keyboard left/right aiming. In network games, the host should enable or disable Mouse/Touch mode consistently so all players use the same control scheme.
 
 ---
 
