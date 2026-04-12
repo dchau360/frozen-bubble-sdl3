@@ -1,0 +1,73 @@
+name: Update Itch.io Description
+
+on:
+  workflow_dispatch:
+
+jobs:
+  update-itchio:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Get game ID and update description
+        env:
+          BUTLER_CREDENTIALS: ${{ secrets.BUTLER_CREDENTIALS }}
+          ITCHIO_USER: ${{ vars.ITCHIO_USERNAME }}
+          ITCHIO_GAME: ${{ vars.ITCHIO_GAME }}
+        run: |
+          # Get game list to find our game ID
+          GAMES=$(curl -s "https://itch.io/api/1/${BUTLER_CREDENTIALS}/my-games")
+          echo "Games response: $GAMES"
+          GAME_ID=$(echo "$GAMES" | python3 -c "
+          import sys, json
+          data = json.load(sys.stdin)
+          games = data.get('games', [])
+          for g in games:
+              if g.get('url','').endswith('/${{ vars.ITCHIO_GAME }}'):
+                  print(g['id'])
+                  break
+          " 2>/dev/null)
+          echo "Game ID: $GAME_ID"
+
+          if [ -z "$GAME_ID" ]; then
+            echo "Could not find game ID, aborting"
+            exit 1
+          fi
+
+          DESCRIPTION='<h2>About</h2>
+          <p>A faithful C++ / SDL3 port of the classic <strong>Frozen Bubble 2</strong> — with 100 single-player levels, chain reactions, malus (attack bubbles), and <strong>2–5 player network multiplayer</strong>. Play on Linux, macOS, Windows, Android TV, or right in your browser (iPhone and Android supported).</p>
+
+          <h2>Controls</h2>
+
+          <h3>Touch (iPhone / Android)</h3>
+          <p><strong>Menus:</strong> Tap to select &middot; Swipe up/down to scroll &middot; Swipe left to go back</p>
+          <p><strong>In-game (standard):</strong> Tap left half to aim left &middot; Tap right half to aim right &middot; Tap center to fire &middot; Swipe left to exit</p>
+          <p><strong>In-game (Mouse/Touch mode):</strong> Tap or drag anywhere to aim &middot; Release to fire</p>
+
+          <h3>Mouse (desktop browser / Mouse mode)</h3>
+          <p>Move mouse to aim &middot; Left click to fire &middot; Right click to go back / exit</p>
+
+          <h3>Keyboard (desktop)</h3>
+          <p>Left/Right arrow to aim &middot; Up arrow or Space to fire &middot; Escape to back / pause</p>
+
+          <h3>2-Player Local</h3>
+          <p>Player 1: Arrow keys + Up to fire<br>Player 2: C / X / V + D to fire</p>
+
+          <h3>Controller (Android TV)</h3>
+          <p>D-pad to aim &middot; A / D-pad Up to fire &middot; B to back &middot; Start to pause</p>
+
+          <blockquote><strong>Fairness note:</strong> Mouse and touch aiming is point-and-click (easier than keyboard left/right). In network games, the host can toggle Mouse/Touch mode in the room settings — it syncs to all players.</blockquote>
+
+          <h2>Network Multiplayer (2–5 players)</h2>
+          <p>Play over LAN or internet. The lobby shows a world map with colored dots for each connected player. The host can configure chain reactions, malus targeting, victory limits, color counts, and more — all synced to players in real time.</p>
+
+          <h2>Game Modes</h2>
+          <ul>
+          <li><strong>Single Player</strong> — 100 levels, scoring, chain reactions</li>
+          <li><strong>2-Player Local</strong> — Two players on the same keyboard or controllers</li>
+          <li><strong>LAN Game</strong> — Auto-discovers servers on your network</li>
+          <li><strong>Net Game</strong> — Connect to any server by IP or from the public list</li>
+          </ul>'
+
+          RESULT=$(curl -s -X POST \
+            "https://itch.io/api/1/${BUTLER_CREDENTIALS}/games/${GAME_ID}/edit" \
+            --data-urlencode "description=${DESCRIPTION}")
+          echo "Edit result: $RESULT"
