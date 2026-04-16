@@ -3294,6 +3294,10 @@ void BubbleGame::HandlePlayerLoss(BubbleArray &bArray) {
         if (winnerIdx == 0) winsP1++;
         else winsP2++;
         Update2PText();
+    } else if (currentSettings.playerCount == 1) {
+        // Single player: original line 1964 — $pdata{state} = "lost $player"
+        gameFinish = true;
+        gameLost = true;
     }
 }
 
