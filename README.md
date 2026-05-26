@@ -311,6 +311,7 @@ See [CHANGELOG.md](CHANGELOG.md) for release history.
 
 ## TODO
 
+- [ ] Chat between rounds in multiplayer (currently chat only works during active play)
 - [ ] Sign macOS `.app` bundle for Gatekeeper compatibility
 - [ ] Sign Windows installer for SmartScreen compatibility
 - [x] WebAssembly SDL3 build (uses PR port files until Emscripten merges SDL3_image/SDL3_mixer)
