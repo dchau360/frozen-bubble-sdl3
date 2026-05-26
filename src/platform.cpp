@@ -107,13 +107,16 @@ void InitDataDir() {
         return;
     }
 #elif defined(__APPLE__)
-    // On macOS .app bundles, SDL_GetBasePath() returns Contents/Resources/.
-    // Assets are copied to Contents/Resources/share/ by the CI bundle step.
+    // In a .app bundle SDL_GetBasePath() returns Contents/Resources/.
+    // Only use it when inside a bundle (path ends with "Resources/").
     {
         const char* base = SDL_GetBasePath();
         if (base) {
-            g_dataDir = std::string(base) + "share";
-            return;
+            std::string b(base);
+            if (b.size() >= 10 && b.substr(b.size() - 10) == "Resources/") {
+                g_dataDir = b + "share";
+                return;
+            }
         }
     }
 #elif defined(__linux__)
