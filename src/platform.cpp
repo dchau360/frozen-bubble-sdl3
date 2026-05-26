@@ -19,6 +19,9 @@
 
 #include "platform.h"
 #include <SDL3/SDL.h>
+#if defined(_WIN32) || defined(__MINGW32__)
+#include <windows.h>
+#endif
 
 std::string g_dataDir;
 
@@ -89,6 +92,18 @@ void InitDataDir() {
 #else // Desktop platforms
 
 void InitDataDir() {
+#if defined(_WIN32) || defined(__MINGW32__)
+    // On Windows, assets live next to the .exe — derive path at runtime
+    // so installed builds work regardless of where the user installs them.
+    char exePath[MAX_PATH];
+    if (GetModuleFileNameA(nullptr, exePath, MAX_PATH)) {
+        std::string dir(exePath);
+        size_t sep = dir.find_last_of("\\/");
+        if (sep != std::string::npos) dir = dir.substr(0, sep);
+        g_dataDir = dir + "\\share";
+        return;
+    }
+#endif
     g_dataDir = DATA_DIR;
 }
 
