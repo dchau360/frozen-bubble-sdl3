@@ -3294,6 +3294,10 @@ void BubbleGame::HandlePlayerLoss(BubbleArray &bArray) {
         if (winnerIdx == 0) winsP1++;
         else winsP2++;
         Update2PText();
+    } else {
+        // Single player
+        gameFinish = true;
+        gameLost = true;
     }
 }
 

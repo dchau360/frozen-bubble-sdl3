@@ -20,7 +20,7 @@
 #ifndef PLATFORM_H
 #define PLATFORM_H
 
-#define APP_VERSION "v2.4.16"
+#define APP_VERSION "v2.4.18"
 
 #include <string>
 
