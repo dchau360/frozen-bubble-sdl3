@@ -106,6 +106,16 @@ void InitDataDir() {
         g_dataDir = dir + "\\share";
         return;
     }
+#elif defined(__APPLE__)
+    // On macOS .app bundles, SDL_GetBasePath() returns Contents/Resources/.
+    // Assets are copied to Contents/Resources/share/ by the CI bundle step.
+    {
+        const char* base = SDL_GetBasePath();
+        if (base) {
+            g_dataDir = std::string(base) + "share";
+            return;
+        }
+    }
 #elif defined(__linux__)
     // On Linux, use exe-relative path so AppImage builds work.
     // AppImage mounts at /tmp/.mount_XXXXX — absolute DATA_DIR won't match.
