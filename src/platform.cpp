@@ -21,6 +21,9 @@
 #include <SDL3/SDL.h>
 #if defined(_WIN32) || defined(__MINGW32__)
 #include <windows.h>
+#elif defined(__linux__)
+#include <unistd.h>
+#include <climits>
 #endif
 
 std::string g_dataDir;
@@ -102,6 +105,21 @@ void InitDataDir() {
         if (sep != std::string::npos) dir = dir.substr(0, sep);
         g_dataDir = dir + "\\share";
         return;
+    }
+#elif defined(__linux__)
+    // On Linux, use exe-relative path so AppImage builds work.
+    // AppImage mounts at /tmp/.mount_XXXXX — absolute DATA_DIR won't match.
+    char exePath[PATH_MAX];
+    ssize_t len = readlink("/proc/self/exe", exePath, sizeof(exePath) - 1);
+    if (len > 0) {
+        exePath[len] = '\0';
+        std::string dir(exePath);
+        // Strip "bin/frozen-bubble-sdl3" → get prefix, append share path
+        size_t bin = dir.rfind("/bin/");
+        if (bin != std::string::npos) {
+            g_dataDir = dir.substr(0, bin) + "/share/frozen-bubble";
+            return;
+        }
     }
 #endif
     g_dataDir = DATA_DIR;
