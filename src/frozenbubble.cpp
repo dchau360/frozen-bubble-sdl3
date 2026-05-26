@@ -603,11 +603,13 @@ void FrozenBubble::HandleInput(SDL_Event *e) {
             SDL_RenderCoordinatesFromWindow(renderer, e->motion.x, e->motion.y, &lx, &ly);
             mainGame->HandleMouseAim(lx, ly);
         } else if (e->type == SDL_EVENT_MOUSE_BUTTON_DOWN && e->button.button == SDL_BUTTON_LEFT) {
+            if (e->button.which == SDL_TOUCH_MOUSEID) return; // handled by FINGER_UP; skip synthesized mouse
             if (mainGame->IsGameFinished())
                 injectKey(SDLK_RETURN);
             else
                 mainGame->HandleMouseFire();
         } else if (e->type == SDL_EVENT_MOUSE_BUTTON_DOWN && e->button.button == SDL_BUTTON_RIGHT) {
+            if (e->button.which == SDL_TOUCH_MOUSEID) return;
             injectKey(SDLK_ESCAPE);
         }
         // Touch aim+fire: normalized 0-1 coords → logical canvas coords

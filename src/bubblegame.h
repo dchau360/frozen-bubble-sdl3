@@ -276,6 +276,8 @@ struct BubbleArray {
     bool compressionDisabled = false;  // If true, rows never drop down for this player
     bool aimGuideEnabled = false;      // If true, draw aim trajectory guide for this player
 
+    bool suppressFireUntilRelease = false;  // Block fire key for one frame after round transition
+
     // Network game action flags (original: $actions{$player}{mp_fire} and {mp_stick})
     bool mpFirePending = false;  // Set to true when we receive 'f' message, cleared after firing
     float pendingAngle = 0.0f;   // The angle from the 'f' message

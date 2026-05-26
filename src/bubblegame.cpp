@@ -731,6 +731,7 @@ void BubbleGame::NewGame(SetupSettings setup) {
     sendMalusToOne = -1;
     attackingMe.clear();
     for (int i = 0; i < 5; i++) playerTargeting[i] = -1;
+    for (int i = 0; i < currentSettings.playerCount; i++) bubbleArrays[i].suppressFireUntilRelease = true;
     pendingHighscore = false;
     curLevel = setup.startLevel;
     connectedPlayerCount = setup.playerCount;  // Reset connected count for new game
@@ -1314,6 +1315,7 @@ void BubbleGame::ReloadGame(int level) {
     sendMalusToOne = -1;
     attackingMe.clear();
     for (int i = 0; i < 5; i++) playerTargeting[i] = -1;
+    for (int i = 0; i < currentSettings.playerCount; i++) bubbleArrays[i].suppressFireUntilRelease = true;
 
     // Reset all players to ALIVE state for new round (especially important for 3-5 player games)
     // But keep LEFT players as LEFT — they disconnected and can't come back (original: left = 1 persists)
@@ -1586,6 +1588,10 @@ void BubbleGame::UpdatePenguin(BubbleArray &bArray) {
                 bArray.shooterRight  = IsKeyPressed(keys.right)  || controllerInputs[idx].right;
                 bArray.shooterCenter = IsKeyPressed(keys.center) || controllerInputs[idx].center;
                 bArray.shooterAction = IsKeyPressed(keys.fire)   || controllerInputs[idx].fire;
+                if (bArray.suppressFireUntilRelease) {
+                    if (!IsKeyPressed(keys.fire) && !controllerInputs[idx].fire) bArray.suppressFireUntilRelease = false;
+                    else bArray.shooterAction = false;
+                }
                 if (idx < numControllersOpen && controllers[idx]) {
                     SDL_Gamepad* ctrl = controllers[idx];
                     bArray.shooterLeft   = bArray.shooterLeft   || SDL_GetGamepadButton(ctrl, SDL_GAMEPAD_BUTTON_DPAD_LEFT)  != 0;
@@ -1596,12 +1602,20 @@ void BubbleGame::UpdatePenguin(BubbleArray &bArray) {
                 }
             } else if (bArray.playerAssigned == 0) {
                 bArray.shooterAction = IsKeyPressed(keys.fire);
+                if (bArray.suppressFireUntilRelease) {
+                    if (!IsKeyPressed(keys.fire)) bArray.suppressFireUntilRelease = false;
+                    else bArray.shooterAction = false;
+                }
                 bArray.shooterLeft   = IsKeyPressed(keys.left);
                 bArray.shooterRight  = IsKeyPressed(keys.right);
                 bArray.shooterCenter = IsKeyPressed(keys.center);
             }
             else if (bArray.playerAssigned == 1) {
                 bArray.shooterAction = IsKeyPressed(keys.fire);
+                if (bArray.suppressFireUntilRelease) {
+                    if (!IsKeyPressed(keys.fire)) bArray.suppressFireUntilRelease = false;
+                    else bArray.shooterAction = false;
+                }
                 bArray.shooterLeft   = IsKeyPressed(keys.left);
                 bArray.shooterRight  = IsKeyPressed(keys.right);
                 bArray.shooterCenter = IsKeyPressed(keys.center);
@@ -4131,6 +4145,17 @@ void BubbleGame::HandleInput(SDL_Event *e) {
                     // so only fall through here when gameFinish is set.
                     if (gameFinish && singleBubbles.size() == 0)
                         goto handle_return;
+                    break;
+                default:
+                    // Any configured fire key (up arrow, C, V, etc.) continues round when finished
+                    if (gameFinish && singleBubbles.size() == 0) {
+                        GameSettings* gs2 = GameSettings::Instance();
+                        SDL_Scancode sc = e->key.scancode;
+                        if (sc == gs2->player1Keys.fire || sc == gs2->player2Keys.fire ||
+                            sc == gs2->player3Keys.fire || sc == gs2->player4Keys.fire ||
+                            sc == gs2->player5Keys.fire)
+                            goto handle_return;
+                    }
                     break;
                 case SDLK_RETURN:
                 handle_return:
