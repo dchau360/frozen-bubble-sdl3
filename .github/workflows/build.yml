@@ -321,6 +321,22 @@ jobs:
           distribution: temurin
           java-version: '17'
 
+      - name: Cache NDK
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.ANDROID_SDK_ROOT }}/ndk/25.2.9519653
+          key: ndk-25.2.9519653
+
+      - name: Cache Gradle
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+            ~/.android/cache
+          key: gradle-${{ hashFiles('android/**/*.gradle*', 'android/**/gradle-wrapper.properties') }}
+          restore-keys: gradle-
+
       - name: Install NDK 25
         run: |
           $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager \
@@ -328,15 +344,15 @@ jobs:
 
       - name: Init SDL3 submodules
         run: |
-          git submodule update --init android/app/jni/SDL3
-          git submodule update --init android/app/jni/SDL3_image
-          git submodule update --init android/app/jni/SDL3_ttf
-          git submodule update --init --recursive android/app/jni/SDL3_mixer
+          git submodule update --init --depth 1 android/app/jni/SDL3
+          git submodule update --init --depth 1 android/app/jni/SDL3_image
+          git submodule update --init --depth 1 android/app/jni/SDL3_ttf
+          git submodule update --init --depth 1 --recursive android/app/jni/SDL3_mixer
 
       - name: Init SDL3_image and SDL3_ttf nested submodules
         run: |
-          git submodule update --init --recursive android/app/jni/SDL3_image
-          git submodule update --init --recursive android/app/jni/SDL3_ttf
+          git submodule update --init --depth 1 --recursive android/app/jni/SDL3_image
+          git submodule update --init --depth 1 --recursive android/app/jni/SDL3_ttf
 
       - name: Generate app icons from source PNG
         run: |
