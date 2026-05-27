@@ -2475,6 +2475,17 @@ void BubbleGame::CheckPossibleDestroy(BubbleArray &bArray){
         if (shouldRunChainReactions) {
             AssignChainReactions(bArray);
         }
+
+        // Re-validate nextBubble after pops: if the queued color was cleared, repick.
+        // Original Perl doesn't do this (same bug exists there); we improve on it.
+        // Skip for network games — nextBubble is synced via 's' messages from the leader.
+        if (!currentSettings.networkGame) {
+            std::vector<int> remaining = bArray.remainingBubbles();
+            if (!remaining.empty() &&
+                std::find(remaining.begin(), remaining.end(), bArray.nextBubble) == remaining.end()) {
+                bArray.nextBubble = remaining[ranrange(1, remaining.size()) - 1];
+            }
+        }
     }
 
     // Calculate malus: destroyed + falling - 2 (original formula at line 958)
