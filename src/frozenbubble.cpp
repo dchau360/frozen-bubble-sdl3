@@ -579,8 +579,12 @@ void FrozenBubble::HandleInput(SDL_Event *e) {
                 injectKey(SDLK_RETURN);
             }
         } else if (e->type == SDL_EVENT_MOUSE_BUTTON_DOWN && e->button.button == SDL_BUTTON_LEFT) {
-            // Ignore mouse events synthesized from touch — those are handled by FINGER_UP above
+            // On native SDL3, touch synthesizes MOUSE_BUTTON_DOWN with SDL_TOUCH_MOUSEID — skip it,
+            // handled by FINGER_UP above. In WASM, Emscripten may not set SDL_TOUCH_MOUSEID correctly,
+            // so allow the mouse path to handle touch there.
+#ifndef __WASM_PORT__
             if (e->button.which == SDL_TOUCH_MOUSEID) return;
+#endif
             float lx, ly;
             SDL_RenderCoordinatesFromWindow(renderer, e->button.x, e->button.y, &lx, &ly);
             if (!mainMenu->HasAnyPanelOpen()) {
@@ -590,7 +594,9 @@ void FrozenBubble::HandleInput(SDL_Event *e) {
                 injectKey(SDLK_RETURN);
             }
         } else if (e->type == SDL_EVENT_MOUSE_BUTTON_DOWN && e->button.button == SDL_BUTTON_RIGHT) {
+#ifndef __WASM_PORT__
             if (e->button.which == SDL_TOUCH_MOUSEID) return;
+#endif
             injectKey(SDLK_ESCAPE);
         }
     }
@@ -603,13 +609,17 @@ void FrozenBubble::HandleInput(SDL_Event *e) {
             SDL_RenderCoordinatesFromWindow(renderer, e->motion.x, e->motion.y, &lx, &ly);
             mainGame->HandleMouseAim(lx, ly);
         } else if (e->type == SDL_EVENT_MOUSE_BUTTON_DOWN && e->button.button == SDL_BUTTON_LEFT) {
+#ifndef __WASM_PORT__
             if (e->button.which == SDL_TOUCH_MOUSEID) return; // handled by FINGER_UP; skip synthesized mouse
+#endif
             if (mainGame->IsGameFinished())
                 injectKey(SDLK_RETURN);
             else
                 mainGame->HandleMouseFire();
         } else if (e->type == SDL_EVENT_MOUSE_BUTTON_DOWN && e->button.button == SDL_BUTTON_RIGHT) {
+#ifndef __WASM_PORT__
             if (e->button.which == SDL_TOUCH_MOUSEID) return;
+#endif
             injectKey(SDLK_ESCAPE);
         }
         // Touch aim+fire: normalized 0-1 coords → logical canvas coords
