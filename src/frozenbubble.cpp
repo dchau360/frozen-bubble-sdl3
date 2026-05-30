@@ -622,7 +622,11 @@ void FrozenBubble::HandleInput(SDL_Event *e) {
 #endif
             injectKey(SDLK_ESCAPE);
         }
-        // Touch aim+fire: normalized 0-1 coords → logical canvas coords
+        // Touch aim+fire via FINGER events (native only).
+        // In WASM, Emscripten generates both FINGER_UP and MOUSE_BUTTON_DOWN for one tap —
+        // using both would double-inject SDLK_RETURN and fire a bubble on the new round.
+        // WASM uses MOUSE_BUTTON_DOWN exclusively (see handler above).
+#ifndef __WASM_PORT__
         else if (e->type == SDL_EVENT_FINGER_MOTION) {
             mainGame->HandleMouseAim(e->tfinger.x * 640.f, e->tfinger.y * 480.f);
         } else if (e->type == SDL_EVENT_FINGER_UP) {
@@ -633,5 +637,6 @@ void FrozenBubble::HandleInput(SDL_Event *e) {
                 mainGame->HandleMouseFire();
             }
         }
+#endif
     }
 }
