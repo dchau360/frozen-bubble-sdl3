@@ -709,9 +709,12 @@ int process_msg(int fd, char* msg)
                         } else if (!(g = find_game_by_nick(args))) {
                                 send_line_log(fd, wn_no_such_game, msg_orig);
                         } else {
-                                if (add_player(g, fd, strdup(nick)))
+                                if (add_player(g, fd, strdup(nick))) {
+                                        if (nick[fd] != NULL)
+                                                free(nick[fd]);
+                                        nick[fd] = strdup(nick);
                                         send_ok(fd, msg_orig);
-                                else
+                                } else
                                         send_line_log(fd, wn_game_full, msg_orig);
                         }
                 }
