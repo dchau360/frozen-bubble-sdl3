@@ -1339,36 +1339,11 @@ void NetworkClient::ParseListResponse(const char* listData) {
                 // Found our game - sync player list from LIST
                 SDL_Log("LIST update: Our game '%s' has %d players", game.creator.c_str(), (int)game.players.size());
 
-                // First, mark all existing players as "not seen"
-                std::vector<std::string> seenNicks;
-                for (const auto& p : game.players) {
-                    seenNicks.push_back(p.nick);
-                }
-
-                // Add any players from LIST that aren't in currentGame
-                for (const auto& p : game.players) {
-                    bool found = false;
-                    for (const auto& existing : currentGame->players) {
-                        if (existing.nick == p.nick) {
-                            found = true;
-                            break;
-                        }
-                    }
-                    if (!found) {
-                        currentGame->players.push_back(p);
-                        SDL_Log("LIST sync: Added player %s to currentGame (now %d players)",
-                               p.nick.c_str(), (int)currentGame->players.size());
-                    }
-                }
-
-                // Remove players that are no longer in the LIST (they left)
-                currentGame->players.erase(
-                    std::remove_if(currentGame->players.begin(), currentGame->players.end(),
-                        [&seenNicks](const NetworkPlayer& p) {
-                            return std::find(seenNicks.begin(), seenNicks.end(), p.nick) == seenNicks.end();
-                        }),
-                    currentGame->players.end()
-                );
+                // Rebuild in server-authoritative order so all clients agree on slot indices.
+                // The old add-at-end approach left different clients with different orderings
+                // whenever players joined faster than the 500ms LIST refresh interval.
+                currentGame->players = game.players;
+                SDL_Log("LIST sync: rebuilt player list (%d players)", (int)currentGame->players.size());
 
                 break;
             }
