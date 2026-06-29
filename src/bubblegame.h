@@ -247,7 +247,7 @@ struct SetupSettings {
     int startLevel = 1;
     bool mpTraining = false;  // 1P multiplayer training mode (timed, score-based)
     bool localMultiplayer = false;  // True for local controller-based multiplayer
-    int playerColors[5] = {7, 7, 7, 7, 7};  // Per-player color count (5-8)
+    int playerColors[5] = {8, 8, 8, 8, 8};  // Per-player color count (5-8)
     bool disableCompression[5] = {false, false, false, false, false};  // Per-player: skip row compression
     bool aimGuide[5] = {false, false, false, false, false};  // Per-player: show aim trajectory guide
     int victoriesLimit = 0;  // 0 = unlimited; >0 = first to reach this wins the match
@@ -272,7 +272,7 @@ struct BubbleArray {
     int lobbyPlayerId = -1;  // The lobby/network player ID (for mapping network messages to player arrays)
     std::string playerNickname = "";  // Player nickname for display
     int winCount = 0;  // Number of rounds won by this player
-    int numColors = 7;  // Number of bubble colors for this player (5-8)
+    int numColors = 8;  // Number of bubble colors for this player (5-8)
     bool compressionDisabled = false;  // If true, rows never drop down for this player
     bool aimGuideEnabled = false;      // If true, draw aim trajectory guide for this player
 
