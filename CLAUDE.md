@@ -67,6 +67,20 @@ Entry point is `main()` in `src/main.cpp` which calls `FrozenBubble::Instance()-
 - Both share the same `messageQueue`/`syncQueue` deque interface; `ProcessNetworkMessages()` in `BubbleGame` drives per-frame processing
 - `syncQueue` stores bubble-sync messages (`b|`, `N`, `T`) separately so `SyncNetworkLevel()` can retrieve them even when they arrive before the sync call (round 2+ race fix)
 
+### Singleton architecture
+
+All major subsystems are singletons accessed via `::Instance()`: `FrozenBubble`, `GameSettings`, `NetworkClient`, `AudioMixer`, `TransitionManager`, `HighscoreManager`. There is no dependency injection — subsystems call each other's `Instance()` directly. `GameSettings` stores INI-parsed settings (key bindings, audio/gfx, speed multiplier, nickname) to `SDL_GetPrefPath()` via the bundled `third_party/iniparser`.
+
+### Rendering
+
+The game renders to a fixed **640×480 logical canvas** (`WINDOW_W`/`WINDOW_H` in `transitionmanager.h`); SDL3 scales this to the actual window. All stored rects are `SDL_Rect` (int), converted with `ToFRect()` (`src/sdl3_compat.h`) when calling SDL3 render functions that require `SDL_FRect`.
+
+Transition effects (plasma, bars, circles, etc.) live in `src/shaderstuff.cpp` — pixel-manipulation routines ported from the original Perl/C source. `TransitionManager` calls `TakeSnipOut`/`DoSnipIn` to apply them between screens.
+
+### Controller input
+
+Local multiplayer controller input uses a virtual scancode system: physical gamepad buttons are mapped to virtual scancodes starting at `CTRL_SC_BASE` (300), with 20 slots per player. `virtualKeyState[]` and `controllerInputs[5]` globals (in `src/gamesettings.h`) are written by `FrozenBubble::HandleControllerEvent()` and read by `BubbleGame` each frame alongside keyboard state via `IsKeyPressed()`.
+
 ### Platform abstraction
 
 `__WASM_PORT__` guards all browser-incompatible code (TCP sockets, server hosting, UDP discovery). `__ANDROID_PORT__`/`__ANDROID__` guards Android asset extraction. The `ASSET(relpath)` macro in `platform.h` prepends `g_dataDir` to asset paths; `g_dataDir` is set at startup by `InitDataDir()`.
@@ -81,13 +95,13 @@ Server is the original `fb-server` (C, in `server/`). Protocol is line-based tex
 
 The leader (game creator) is authoritative for level generation and sends bubble positions to joiners via `b|`/`N`/`T` sync messages during `SyncNetworkLevel()`.
 
+**Production server deployment:** `docker/docker-compose.yml` runs `fb-server` on TCP 1511 (native clients) plus an nginx container that terminates TLS and proxies WebSocket connections on port 443 (browser/WASM clients). See `SetupServer.md` for SSL certificate setup.
+
 ### Original Perl source (for verification)
 
-When implementing or debugging game mechanics, compare against the original Perl source at:
+When implementing or debugging game mechanics, compare against the original Perl source:
 - `bin/frozen-bubble` (~2500 lines) — main game loop, collision, chain reactions, malus, win conditions
 - `lib/Games/FrozenBubble/Net.pm` — original network protocol
-
-Location: `/Users/dericchau/ai/fb2-port/frozen-bubble-sdl2/`
 
 Key line references: malus formula (line 958), chain reactions (819–841), win sync `F` message (1943), `real_stick_bubble` (731), living players (600).
 
