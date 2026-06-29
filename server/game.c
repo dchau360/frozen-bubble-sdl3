@@ -694,25 +694,30 @@ int process_msg(int fd, char* msg)
                         send_line_log(fd, wn_missing_arguments, msg_orig);
                 } else {
                         struct game * g;
-                        char* nick = ptr + 1;
+                        char* joinnick = ptr + 1;
                         *ptr = '\0';
                         if ((ptr2 = strchr(ptr, ' ')))
                                 *ptr2 = '\0';
-                        if (strlen(nick) > 10)
-                                nick[10] = '\0';
-                        if (!is_nick_ok(nick)) {
+                        if (strlen(joinnick) > 10)
+                                joinnick[10] = '\0';
+                        if (!is_nick_ok(joinnick)) {
                                 send_line_log(fd, wn_nick_invalid, msg_orig);
-                        } else if (!nick_available(nick)) {
+                        } else if (!nick_available(joinnick)) {
                                 send_line_log(fd, wn_nick_in_use, msg_orig);
                         } else if (already_in_game(fd)) {
                                 send_line_log(fd, wn_already_in_game, msg_orig);
                         } else if (!(g = find_game_by_nick(args))) {
                                 send_line_log(fd, wn_no_such_game, msg_orig);
                         } else {
-                                if (add_player(g, fd, strdup(nick))) {
+                                if (add_player(g, fd, strdup(joinnick))) {
+                                        /* Update the GLOBAL nick[fd] table so TALK uses the in-game
+                                         * nick. The local was named `nick`, which shadowed the
+                                         * global char* nick[256] table — so nick[fd] indexed the
+                                         * local join-string (a char), not the table. Renamed to
+                                         * joinnick so nick[fd] resolves to the global table. */
                                         if (nick[fd] != NULL)
                                                 free(nick[fd]);
-                                        nick[fd] = strdup(nick);
+                                        nick[fd] = strdup(joinnick);
                                         send_ok(fd, msg_orig);
                                 } else
                                         send_line_log(fd, wn_game_full, msg_orig);
