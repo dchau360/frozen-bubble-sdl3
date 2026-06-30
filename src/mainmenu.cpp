@@ -539,11 +539,19 @@ void MainMenu::HandleInput(SDL_Event *e){
                 } else if (!awaitKp) {
                     // UP/DOWN: navigate keys within current player
                     if (e->key.key == SDLK_UP) {
+#ifdef __WASM_PORT__
                         keyConfigIndex = (keyConfigIndex == 0) ? 7 : keyConfigIndex - 1;
+#else
+                        keyConfigIndex = (keyConfigIndex == 0) ? 8 : keyConfigIndex - 1;
+#endif
                         AudioMixer::Instance()->PlaySFX("menu_change");
                         break;
                     } else if (e->key.key == SDLK_DOWN) {
+#ifdef __WASM_PORT__
                         keyConfigIndex = (keyConfigIndex == 7) ? 0 : keyConfigIndex + 1;
+#else
+                        keyConfigIndex = (keyConfigIndex == 8) ? 0 : keyConfigIndex + 1;
+#endif
                         AudioMixer::Instance()->PlaySFX("menu_change");
                         break;
                     } else if (e->key.key == SDLK_LEFT) {
@@ -612,6 +620,14 @@ void MainMenu::HandleInput(SDL_Event *e){
                             gs->mouseEnabled = !gs->mouseEnabled;
                             gs->SaveKeys();
                             AudioMixer::Instance()->PlaySFX("menu_change");
+#ifndef __WASM_PORT__
+                        } else if (keyConfigIndex == 8) {
+                            // Toggle fullscreen
+                            GameSettings* gs = GameSettings::Instance();
+                            gs->SetValue("GFX:Fullscreen", "");
+                            SDL_SetWindowFullscreen(SDL_GetRenderWindow(const_cast<SDL_Renderer*>(renderer)), gs->fullscreenMode());
+                            AudioMixer::Instance()->PlaySFX("menu_change");
+#endif
                         } else {
                             // Wait for key press
                             AudioMixer::Instance()->PlaySFX("menu_selected");
@@ -1964,6 +1980,16 @@ void MainMenu::KeysPanelRender() {
     const char* mouseState = gs->mouseEnabled ? "ON" : "OFF";
     snprintf(lineBuf, sizeof(lineBuf), mouseSel ? "[ Mouse/Touch: %s ]" : "  Mouse/Touch: %s  ", mouseState);
     renderLine(lineBuf, mouseSel ? yellow : white, y);
+
+#ifndef __WASM_PORT__
+    y += 6;
+
+    // Row 8: Fullscreen toggle
+    bool fsSel = (keyConfigIndex == 8);
+    const char* fsState = gs->fullscreenMode() ? "ON" : "OFF";
+    snprintf(lineBuf, sizeof(lineBuf), fsSel ? "[ Fullscreen: %s ]" : "  Fullscreen: %s  ", fsState);
+    renderLine(lineBuf, fsSel ? yellow : white, y);
+#endif
 
     y += 6;
 
