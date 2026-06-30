@@ -3940,7 +3940,7 @@ void BubbleGame::Render() {
                 { SDL_FRect fr = ToFRect(curArray.nextBubbleRct); SDL_RenderTexture(rend, useBubbles[curArray.nextBubble], nullptr, &fr); }
                 { SDL_FRect fr = ToFRect(curArray.onTopRct); SDL_RenderTexture(rend, onTopTexture, nullptr, &fr); }
             }
-            if (gameFinish && !curArray.mpWinner) { SDL_FRect fr = ToFRect(curArray.frozenBottomRct); SDL_RenderTexture(rend, useFrozen, nullptr, &fr); }
+            if ((gameFinish && !curArray.mpWinner) || curArray.playerState == BubbleArray::PlayerState::LOST) { SDL_FRect fr = ToFRect(curArray.frozenBottomRct); SDL_RenderTexture(rend, useFrozen, nullptr, &fr); }
 
             if (curArray.turnsToCompress <= 2) {
                 DoPrelightAnimation(curArray, curArray.prelightTime);
@@ -3965,6 +3965,11 @@ void BubbleGame::Render() {
                     DoWinAnimation(curArray, curArray.explodeWait);
                     idxMPWinner = i;
                 }
+            } else if (curArray.playerState == BubbleArray::PlayerState::LOST) {
+                // Player died mid-round while others are still playing (3-5 player games):
+                // progressively freeze their board so the death is visually indicated,
+                // matching the original Perl's update_lost() (frozen-bubble line 2007/2106).
+                DoFrozenAnimation(curArray, curArray.frozenWait);
             }
 
             UpdatePenguin(curArray);
