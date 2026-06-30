@@ -354,6 +354,12 @@ BubbleGame::BubbleGame(const SDL_Renderer *renderer)
     chatLineText.UpdateColor({255, 255, 255, 255}, {0, 0, 0, 0});
     chatInputText.LoadFont(ASSET("/gfx/DroidSans.ttf").c_str(), 14);
     chatInputText.UpdateColor({255, 255, 100, 255}, {0, 0, 0, 0});  // Yellow for input
+
+    statsText.LoadFont(ASSET("/gfx/DroidSans.ttf").c_str(), 14);
+    statsText.UpdateColor({255, 255, 255, 255}, {0, 0, 0, 0});
+
+    malusAlertText.LoadFont(ASSET("/gfx/DroidSans.ttf").c_str(), 16);
+    malusAlertText.UpdateColor({255, 140, 40, 255}, {0, 0, 0, 0});  // Orange "incoming malus" toast
 }
 
 BubbleGame::~BubbleGame() {
@@ -742,8 +748,13 @@ void BubbleGame::NewGame(SetupSettings setup) {
     mpTrainStartTime = 0;
 
     winsP1 = winsP2 = 0;
+    roundStatsFinalized = false;
+    roundsPlayed = 0;
     for (int i = 0; i < 5; i++) {
         bubbleArrays[i].winCount = 0;
+        // Reset both round and match statistics at the start of a new match.
+        bubbleArrays[i].rFired = bubbleArrays[i].rPopped = bubbleArrays[i].rSent = bubbleArrays[i].rRecv = 0;
+        bubbleArrays[i].mFired = bubbleArrays[i].mPopped = bubbleArrays[i].mSent = bubbleArrays[i].mRecv = 0;
         // Apply per-player color count (5-8); default 8 for single player
         int nc = (setup.playerCount >= 2) ? setup.playerColors[i] : 8;
         nc = (nc < 5) ? 5 : (nc > 8) ? 8 : nc;
@@ -1467,7 +1478,12 @@ void BubbleGame::ReloadGame(int level) {
         bubbleArrays[i].frozenWait = FROZEN_FRAMEWAIT;
         bubbleArrays[i].prelightTime = PRELIGHT_SLOW;
         bubbleArrays[i].waitPrelight = PRELIGHT_SLOW;
+        // Reset per-round stats; match totals (m*) persist across rounds.
+        bubbleArrays[i].rFired = bubbleArrays[i].rPopped = 0;
+        bubbleArrays[i].rSent = bubbleArrays[i].rRecv = 0;
+        bubbleArrays[i].malusAlerts.clear();
     }
+    roundStatsFinalized = false;
     frameCount = 0;
 
     if (!currentSettings.randomLevels) {
@@ -1535,6 +1551,8 @@ void BubbleGame::LaunchBubble(BubbleArray &bArray) {
     singleBubbles.push_back({bArray.playerAssigned, bArray.curLaunch, startX, startY, startX, startY, {(int)startX, (int)startY}, {}, bArray.shooterSprite.angle, false, true, bArray.leftLimit, bArray.rightLimit, bArray.topLimit, lowGfx});
     PickNextBubble(bArray);
     FrozenBubble::Instance()->totalBubbles++;
+    // Stats: count shots for locally-owned arrays only (remote arrays sync via 'S').
+    if (!currentSettings.networkGame || bArray.playerAssigned == 0) bArray.rFired++;
     bArray.hurryTimer = 0;
     bArray.chainLevel = 0; // Reset chain level for new shot
 
@@ -2438,6 +2456,10 @@ void BubbleGame::CheckPossibleDestroy(BubbleArray &bArray){
 
                     totalDestroyed += groupedCount;  // Excludes activator, matching original @will_destroy
 
+                    // Stats: count popped bubbles (group incl. activator) for locally-owned arrays.
+                    if (!currentSettings.networkGame || bArray.playerAssigned == 0)
+                        bArray.rPopped += groupedCount + 1;
+
                     for (Bubble *bubble : bubbleCount) {
                         float startX = (float)bubble->pos.x;
                         float startY = (float)bubble->pos.y;
@@ -2512,6 +2534,13 @@ void BubbleGame::CheckPossibleDestroy(BubbleArray &bArray){
                     if (i != attackerIdx && bubbleArrays[i].playerState == BubbleArray::PlayerState::ALIVE) {
                         for (int m = 0; m < malusEach; m++)
                             bubbleArrays[i].malusQueue.push_back(frameCount);
+                        bubbleArrays[i].rRecv += malusEach;  // Stats: malus received
+                        bArray.rSent += malusEach;           // Stats: malus sent by attacker
+                        AddMalusAlert(bubbleArrays[i],
+                                      bArray.playerNickname.empty()
+                                          ? ("Player " + std::to_string(attackerIdx + 1))
+                                          : bArray.playerNickname,
+                                      malusEach);
                         SDL_Log("Local malus: %d bubbles queued for player %d", malusEach, i);
                     }
                 }
@@ -2794,8 +2823,8 @@ void BubbleGame::SendMalusToOpponent(int malusCount) {
     // Single-player targeting: only focus-fire on ONE opponent when the player has actively
     // selected a target. With no target selected (sendMalusToOne == -1), fall through to
     // splitting among all living opponents — matching the original Perl (bin/frozen-bubble
-    // line 1204: "if (!sendmalustoone) { split }"). Team mode always splits.
-    if (currentSettings.singlePlayerTargetting && !currentSettings.teamMode && sendMalusToOne != -1) {
+    // line 1204: "if (!sendmalustoone) { split }").
+    if (currentSettings.singlePlayerTargetting && sendMalusToOne != -1) {
         if (sendMalusToOne < currentSettings.playerCount &&
             bubbleArrays[sendMalusToOne].playerState == BubbleArray::PlayerState::ALIVE) {
             std::string targetNick = bubbleArrays[sendMalusToOne].playerNickname;
@@ -2828,6 +2857,7 @@ void BubbleGame::SendMalusToOpponent(int malusCount) {
                 SDL_Log("Targeting: Sending all %d malus to %s (array %d)",
                         malusCount, targetNick.c_str(), sendMalusToOne);
                 netClient->SendGameData(malusMsg);
+                bubbleArrays[0].rSent += malusCount;  // Stats: malus sent (focus-fire)
                 return;
             }
         }
@@ -2880,6 +2910,7 @@ void BubbleGame::SendMalusToOpponent(int malusCount) {
                 malusPerOpponent, targetNick.c_str(), opponentIdx,
                 bubbleArrays[opponentIdx].lobbyPlayerId);
         netClient->SendGameData(malusMsg);
+        bubbleArrays[0].rSent += malusPerOpponent;  // Stats: malus sent (split among opponents)
     }
 }
 
@@ -3466,6 +3497,200 @@ static void DrawAimGuide(SDL_Renderer* rend, const BubbleArray& bArray) {
     SDL_SetRenderDrawBlendMode(rend, SDL_BLENDMODE_NONE);
 }
 
+void BubbleGame::FinalizeRoundStats() {
+    // Called once per round when the round ends. Rolls each player's per-round stats
+    // into their match totals, and (in network games) broadcasts the local player's
+    // round stats so all clients can render an accurate per-player table.
+    if (currentSettings.networkGame) {
+        BubbleArray &me = bubbleArrays[0];  // local player is authoritative for itself
+        me.mFired += me.rFired;
+        me.mPopped += me.rPopped;
+        me.mSent  += me.rSent;
+        me.mRecv  += me.rRecv;
+
+        NetworkClient* netClient = NetworkClient::Instance();
+        if (netClient && netClient->IsConnected() && netClient->GetState() == IN_GAME) {
+            char statsMsg[64];
+            snprintf(statsMsg, sizeof(statsMsg), "S%d:%d:%d:%d",
+                     me.rFired, me.rPopped, me.rSent, me.rRecv);
+            netClient->SendGameData(statsMsg);
+        }
+        // Remote arrays' totals are accumulated as their 'S' messages arrive.
+    } else {
+        // Local multiplayer: every array is locally tracked.
+        for (int i = 0; i < currentSettings.playerCount; i++) {
+            bubbleArrays[i].mFired  += bubbleArrays[i].rFired;
+            bubbleArrays[i].mPopped += bubbleArrays[i].rPopped;
+            bubbleArrays[i].mSent   += bubbleArrays[i].rSent;
+            bubbleArrays[i].mRecv   += bubbleArrays[i].rRecv;
+        }
+    }
+    roundsPlayed++;
+}
+
+void BubbleGame::AddMalusAlert(BubbleArray &target, const std::string &fromNick, int count) {
+    if (count <= 0) return;
+    const int ALERT_FRAMES = 150;  // ~2.5s at 60fps
+    std::string nick = fromNick.empty() ? "Someone" : fromNick;
+    // Aggregate repeated hits from the same sender into one toast.
+    for (auto &a : target.malusAlerts) {
+        if (a.fromNick == nick && a.framesLeft > 0) {
+            a.count += count;
+            a.framesLeft = ALERT_FRAMES;
+            return;
+        }
+    }
+    target.malusAlerts.push_back({nick, count, ALERT_FRAMES});
+    if (target.malusAlerts.size() > 4) target.malusAlerts.erase(target.malusAlerts.begin());
+}
+
+void BubbleGame::RenderMalusAlerts(SDL_Renderer *rend) {
+    for (int i = 0; i < currentSettings.playerCount; i++) {
+        BubbleArray &p = bubbleArrays[i];
+        if (p.malusAlerts.empty()) continue;
+
+        // Anchor just above the player's shooter; stack multiple alerts upward.
+        const int ax = p.shooterSprite.rect.x;
+        const int ay = p.shooterSprite.rect.y - 20;
+        const int lineH = 18;
+
+        int line = 0;
+        for (auto &a : p.malusAlerts) {
+            if (a.framesLeft <= 0) continue;
+            char buf[96];
+            snprintf(buf, sizeof(buf), "%s  +%d", a.fromNick.c_str(), a.count);
+            malusAlertText.UpdateText(rend, buf, 0);
+            int tw = malusAlertText.Coords()->w;
+            int x = ax;
+            if (x + tw > 636) x = 636 - tw;  // keep on-screen
+            if (x < 4) x = 4;
+            int y = ay - line * lineH;
+            if (y < 2) y = 2;
+            malusAlertText.UpdatePosition({x, y});
+            SDL_Texture *tex = malusAlertText.Texture();
+            if (tex) {
+                Uint8 alpha = a.framesLeft >= 40 ? 255 : (Uint8)(a.framesLeft * 255 / 40);  // fade out
+                SDL_SetTextureAlphaMod(tex, alpha);
+                SDL_FRect fr = ToFRect(*malusAlertText.Coords());
+                SDL_RenderTexture(rend, tex, nullptr, &fr);
+                SDL_SetTextureAlphaMod(tex, 255);
+            }
+            line++;
+        }
+
+        // Age and prune expired alerts.
+        for (auto &a : p.malusAlerts) a.framesLeft--;
+        p.malusAlerts.erase(
+            std::remove_if(p.malusAlerts.begin(), p.malusAlerts.end(),
+                           [](const BubbleArray::MalusAlert &a) { return a.framesLeft <= 0; }),
+            p.malusAlerts.end());
+    }
+}
+
+// Resolve a display name for a player array (local player gets its lobby nick or "You").
+static std::string StatsPlayerName(const BubbleArray &arr, int idx, bool networkGame) {
+    if (idx == 0) {
+        if (networkGame) {
+            std::string nick = NetworkClient::Instance()->GetPlayerNick();
+            if (!nick.empty()) return nick;
+        }
+        return "You";
+    }
+    if (!arr.playerNickname.empty()) return arr.playerNickname;
+    char buf[16];
+    snprintf(buf, sizeof(buf), "Player %d", idx + 1);
+    return buf;
+}
+
+void BubbleGame::RenderRoundStats(SDL_Renderer *rend) {
+    // Post-round per-player stats table overlay (multiplayer only).
+    const int n = currentSettings.playerCount;
+    if (n < 2) return;
+
+    const int boxW = 384, boxX = (640 - boxW) / 2, boxY = 6;
+    const int rowH = 16, headH = 22;
+    const int boxH = headH + rowH * (n + 1) + 6;
+
+    // Semi-transparent backing panel.
+    SDL_SetRenderDrawBlendMode(rend, SDL_BLENDMODE_BLEND);
+    SDL_Rect bg = {boxX, boxY, boxW, boxH};
+    SDL_SetRenderDrawColor(rend, 0, 0, 0, 190);
+    { SDL_FRect fr = ToFRect(bg); SDL_RenderFillRect(rend, &fr); }
+    SDL_SetRenderDrawColor(rend, 255, 255, 255, 90);
+    { SDL_FRect fr = ToFRect(bg); SDL_RenderRect(rend, &fr); }
+    SDL_SetRenderDrawBlendMode(rend, SDL_BLENDMODE_NONE);
+
+    // Column x offsets (numbers right-anchored-ish via left placement that fits 14px font).
+    const int colName = boxX + 8;
+    const int colFired = boxX + 168;
+    const int colPopped = boxX + 234;
+    const int colSent = boxX + 296;
+    const int colRecv = boxX + 348;
+
+    auto cell = [&](const char *txt, int x, int y, SDL_Color c) {
+        statsText.UpdateColor(c, {0, 0, 0, 0});
+        statsText.UpdateText(rend, txt, 0);
+        statsText.UpdatePosition({x, y});
+        if (statsText.Texture()) {
+            SDL_FRect fr = ToFRect(*statsText.Coords());
+            SDL_RenderTexture(rend, statsText.Texture(), nullptr, &fr);
+        }
+    };
+
+    const SDL_Color hdr = {255, 255, 100, 255};
+    const SDL_Color win = {120, 255, 120, 255};
+    const SDL_Color normal = {235, 235, 235, 255};
+
+    int y = boxY + 3;
+    cell("ROUND STATS", colName, y, hdr);
+    y += headH;
+    cell("Player", colName, y, hdr);
+    cell("Fire", colFired, y, hdr);
+    cell("Pop", colPopped, y, hdr);
+    cell("Atk", colSent, y, hdr);
+    cell("Def", colRecv, y, hdr);
+    y += rowH;
+
+    char buf[32];
+    for (int i = 0; i < n; i++) {
+        BubbleArray &p = bubbleArrays[i];
+        SDL_Color c = p.mpWinner ? win : normal;
+        std::string name = StatsPlayerName(p, i, currentSettings.networkGame);
+        if (name.size() > 14) name = name.substr(0, 14);
+        cell(name.c_str(), colName, y, c);
+        snprintf(buf, sizeof(buf), "%d", p.rFired);  cell(buf, colFired, y, c);
+        snprintf(buf, sizeof(buf), "%d", p.rPopped); cell(buf, colPopped, y, c);
+        snprintf(buf, sizeof(buf), "%d", p.rSent);   cell(buf, colSent, y, c);
+        snprintf(buf, sizeof(buf), "%d", p.rRecv);   cell(buf, colRecv, y, c);
+        y += rowH;
+    }
+}
+
+void BubbleGame::SendLobbyMatchSummary() {
+    // Leader posts a match summary to the lobby chatroom. Called from QuitToTitle AFTER
+    // PartGame() has returned us to IN_LOBBY (so TALK uses the lobby text protocol).
+    NetworkClient* netClient = NetworkClient::Instance();
+    if (!netClient || !netClient->IsConnected()) return;
+    if (!netClient->IsLeader()) return;        // only one client posts
+    if (roundsPlayed <= 0) return;             // nothing meaningful to report
+    if (currentSettings.playerCount < 2) return;
+
+    char line[256];
+    snprintf(line, sizeof(line), "--- Match over (%d round%s) ---",
+             roundsPlayed, roundsPlayed == 1 ? "" : "s");
+    netClient->SendTalk(line);
+
+    for (int i = 0; i < currentSettings.playerCount; i++) {
+        BubbleArray &p = bubbleArrays[i];
+        std::string name = StatsPlayerName(p, i, true);
+        snprintf(line, sizeof(line),
+                 "%s: %d win%s | fired %d, popped %d, atk %d, def %d",
+                 name.c_str(), p.winCount, p.winCount == 1 ? "" : "s",
+                 p.mFired, p.mPopped, p.mSent, p.mRecv);
+        netClient->SendTalk(line);
+    }
+}
+
 void BubbleGame::Render() {
     SDL_Renderer *rend = const_cast<SDL_Renderer*>(renderer);
     SDL_RenderTexture(rend, background, nullptr, nullptr);
@@ -3571,6 +3796,12 @@ void BubbleGame::Render() {
         audMixer->PauseMusic(true);
         playedPause = false;
         FrozenBubble::Instance()->startTime += SDL_GetTicks() - timePaused;
+    }
+
+    // Roll up per-round stats once when a multiplayer round ends (also broadcasts 'S').
+    if (gameFinish && !roundStatsFinalized && currentSettings.playerCount >= 2) {
+        FinalizeRoundStats();
+        roundStatsFinalized = true;
     }
 
     if(currentSettings.playerCount == 1) {
@@ -3924,6 +4155,12 @@ void BubbleGame::Render() {
                 }
             }
         }
+
+        // Incoming-malus toasts ("who hit you and how many"); fade out during play.
+        if (!gameFinish) RenderMalusAlerts(rend);
+
+        // Post-round stats table (multiplayer): shown while the round-end screen is up.
+        if (gameFinish) RenderRoundStats(rend);
     }
 
     // In-game chat overlay (network games only)
@@ -4267,7 +4504,9 @@ void BubbleGame::QuitToTitle() {
     if (currentSettings.networkGame) {
         NetworkClient* netClient = NetworkClient::Instance();
         if (netClient && netClient->IsConnected()) {
-            netClient->PartGame();  // Notify server we left
+            netClient->PartGame();  // Notify server we left (transitions us to IN_LOBBY)
+            // Leader posts the match summary to the lobby chatroom (now that TALK is valid again).
+            SendLobbyMatchSummary();
         }
         FrozenBubble::Instance()->CallNetLobbyReturn();
     } else {
@@ -4511,6 +4750,8 @@ void BubbleGame::ProcessNetworkMessages() {
                                 for (int i = 0; i < malusCount; i++) {
                                     bubbleArrays[0].malusQueue.push_back(frameCount);
                                 }
+                                bubbleArrays[0].rRecv += malusCount;  // Stats: malus received
+                                AddMalusAlert(bubbleArrays[0], netClient->GetPlayerNickname(senderId), malusCount);
                             } else {
                                 SDL_Log("  -> NO, not for me (dest='%s' != myNick='%s'), IGNORING",
                                         destNick, myNick.c_str());
@@ -4675,6 +4916,27 @@ void BubbleGame::ProcessNetworkMessages() {
                             }
                         } else {
                             SDL_Log("ERROR: Could not identify winner from F message: '%s'", winnerNick.c_str());
+                        }
+                        break;
+                    }
+                    case 'S': {
+                        // Round stats sync from a remote player: S{fired}:{popped}:{sent}:{recv}
+                        // Sent once per round by each client when its round ends.
+                        int rf, rp, rs, rr;
+                        if (sscanf(gameData + 1, "%d:%d:%d:%d", &rf, &rp, &rs, &rr) == 4) {
+                            int idx = -1;
+                            for (int i = 0; i < currentSettings.playerCount; i++) {
+                                if (bubbleArrays[i].lobbyPlayerId == senderId) { idx = i; break; }
+                            }
+                            if (idx >= 1) {
+                                BubbleArray &pa = bubbleArrays[idx];
+                                pa.rFired = rf; pa.rPopped = rp; pa.rSent = rs; pa.rRecv = rr;
+                                pa.mFired += rf; pa.mPopped += rp; pa.mSent += rs; pa.mRecv += rr;
+                                SDL_Log("Round stats from player %d (array %d): F%d P%d A%d D%d",
+                                        senderId, idx, rf, rp, rs, rr);
+                            } else {
+                                SDL_Log("'S' stats from unknown senderId %d, ignoring", senderId);
+                            }
                         }
                         break;
                     }

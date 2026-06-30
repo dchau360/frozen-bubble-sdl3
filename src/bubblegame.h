@@ -272,6 +272,14 @@ struct BubbleArray {
     int lobbyPlayerId = -1;  // The lobby/network player ID (for mapping network messages to player arrays)
     std::string playerNickname = "";  // Player nickname for display
     int winCount = 0;  // Number of rounds won by this player
+    // Round/match statistics (bubbles fired, bubbles popped, malus sent, malus received).
+    // r* = current round (reset every round); m* = whole match (reset at NewGame).
+    // In network games each client owns array 0's stats; remote arrays are filled from 'S' sync messages.
+    int rFired = 0, rPopped = 0, rSent = 0, rRecv = 0;
+    int mFired = 0, mPopped = 0, mSent = 0, mRecv = 0;
+    // Transient on-screen alerts: "who just sent you malus and how many" (fades out over time).
+    struct MalusAlert { std::string fromNick; int count; int framesLeft; };
+    std::vector<MalusAlert> malusAlerts;
     int numColors = 8;  // Number of bubble colors for this player (5-8)
     bool compressionDisabled = false;  // If true, rows never drop down for this player
     bool aimGuideEnabled = false;      // If true, draw aim trajectory guide for this player
@@ -417,6 +425,8 @@ private:
 
     bool lowGfx = false, gameWon = false, gameLost = false, gameFinish = false, firstRenderDone = false, gameMpDone = false;
     bool gameMatchOver = false; // Victories limit reached - match is over, return to lobby
+    bool roundStatsFinalized = false; // Per-round stats rolled into match totals (and 'S' broadcast) once per round
+    int roundsPlayed = 0;       // Completed rounds this match (gates the lobby summary)
     bool waitingForOpponentNewGame = false; // Waiting for opponents to press key for new game
     bool opponentReadyForNewGame = false; // Opponent sent 'n' ready signal
     int opponentsReadyCount = 0; // Number of opponents who sent 'n' (for 3+ player)
@@ -448,6 +458,8 @@ private:
     TTFText inGameText, winsP1Text, winsP2Text, scoreText, comboText, finalScoreText, mpTrainText;
     TTFText playerNameWinText[5];  // "PlayerName: WinCount" for each player (3-5 player mode)
     TTFText targetingText;   // Reused to render targeting indicators in MP mode
+    TTFText statsText;       // Reused per cell to render the post-round stats table
+    TTFText malusAlertText;  // Reused to render "incoming malus" toasts
 
     // In-game chat (network games only)
     struct InGameChatMsg { std::string nick; std::string text; int framesLeft; };
@@ -478,6 +490,11 @@ private:
     void SetSendMalusToOne(int opponentIdx);    // Set/clear single-player targeting (original: set_sendmalustoone)
     void ProcessMalusQueue(BubbleArray &bArray, int currentFrame);  // Generate malus bubbles from queue
     void CheckGameState(BubbleArray &bArray);
+    void AddMalusAlert(BubbleArray &target, const std::string &fromNick, int count);  // Queue an incoming-malus toast
+    void RenderMalusAlerts(SDL_Renderer *rend);  // Draw + age the incoming-malus toasts
+    void FinalizeRoundStats();   // Roll per-round stats into match totals; broadcast 'S' in network games
+    void RenderRoundStats(SDL_Renderer *rend);  // Post-round per-player stats table overlay
+    void SendLobbyMatchSummary();  // Leader posts the match summary to the lobby chatroom
     int CountLivingPlayers();  // Count players still alive (original: living_players() at line 600)
     void HandlePlayerLoss(BubbleArray &bArray);  // Handle player death and check win conditions
 

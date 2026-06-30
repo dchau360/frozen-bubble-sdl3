@@ -37,6 +37,8 @@ Two players on the same keyboard or controllers:
 ### Network Multiplayer (2–5 players)
 Play over LAN or internet using the included server. Supports chain reactions, malus (attack bubbles), win tracking, and 2–5 player layouts.
 
+When malus lands on your board, a fading on-screen indicator shows who attacked you and how many bubbles they sent. After each round a per-player stats table is shown (bubbles fired/popped, malus sent/received), and when the match ends the host posts a summary of the final standings to the lobby chat.
+
 The lobby displays a world map with colored dots showing where each connected player is located. Your location is detected automatically at connect time and shown as an animated pulsing dot.
 
 The host can configure the following settings in the game room — all joined players see updates in real time:
