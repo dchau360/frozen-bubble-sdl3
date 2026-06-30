@@ -1728,6 +1728,11 @@ void BubbleGame::UpdatePenguin(BubbleArray &bArray) {
     if (angle > PI-0.1) angle = PI-0.1;
 
     if (bArray.shooterLeft || bArray.shooterRight || bArray.shooterCenter) {
+        // Keyboard/controller aim takes over from mouse: clear the latched mouse angle so
+        // it stops overriding `angle` every frame. Mouse aim re-activates on the next
+        // mouse-move event (HandleMouseAim). Without this, once the mouse set mouseTargetAngle
+        // the keyboard could never move the aim again until the game was reloaded.
+        bArray.mouseTargetAngle = -1.f;
         float ds = FrozenBubble::Instance()->deltaScale;
         float launchStep = (float)LAUNCHER_SPEED * ds;
         if (bArray.shooterLeft) {
