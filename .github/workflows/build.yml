@@ -21,6 +21,7 @@ jobs:
   build-linux:
     name: Linux (AppImage)
     runs-on: ubuntu-22.04
+    if: false # disabled temporarily to reduce CI usage — WASM-only for now
     steps:
       - uses: actions/checkout@v4
 
@@ -118,6 +119,7 @@ jobs:
   build-macos:
     name: macOS (DMG)
     runs-on: macos-latest
+    if: false # disabled temporarily to reduce CI usage — WASM-only for now
     steps:
       - uses: actions/checkout@v4
 
@@ -203,6 +205,7 @@ jobs:
   build-windows:
     name: Windows (installer)
     runs-on: windows-latest
+    if: false # disabled temporarily to reduce CI usage — WASM-only for now
     defaults:
       run:
         shell: msys2 {0}
@@ -313,6 +316,7 @@ jobs:
   build-android:
     name: Android TV (APK)
     runs-on: ubuntu-latest
+    if: false # disabled temporarily to reduce CI usage — WASM-only for now
     steps:
       - uses: actions/checkout@v4
 
@@ -472,7 +476,7 @@ jobs:
   # ────────────────────────────────────────────────────────────────
   release:
     name: Create Release
-    needs: [build-linux, build-macos, build-windows, build-android, build-wasm]
+    needs: [build-wasm] # WASM-only for now — see if: false on other build-* jobs
     if: startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-latest
     permissions:
@@ -484,10 +488,6 @@ jobs:
         with:
           generate_release_notes: true
           files: |
-            Linux/frozen-bubble-linux-x86_64.AppImage
-            macOS/frozen-bubble-macos.dmg
-            Windows/frozen-bubble-windows-setup.exe
-            Android/frozen-bubble-android-tv.apk
             WASM/frozen-bubble-wasm.zip
 
   # ────────────────────────────────────────────────────────────────
@@ -496,7 +496,7 @@ jobs:
   deploy-itchio-linux:
     name: Deploy Linux to Itch.io
     needs: build-linux
-    if: startsWith(github.ref, 'refs/tags/')
+    if: false # disabled temporarily to reduce CI usage — WASM-only for now
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4
@@ -515,7 +515,7 @@ jobs:
   deploy-itchio-macos:
     name: Deploy macOS to Itch.io
     needs: build-macos
-    if: startsWith(github.ref, 'refs/tags/')
+    if: false # disabled temporarily to reduce CI usage — WASM-only for now
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4
@@ -534,7 +534,7 @@ jobs:
   deploy-itchio-windows:
     name: Deploy Windows to Itch.io
     needs: build-windows
-    if: startsWith(github.ref, 'refs/tags/')
+    if: false # disabled temporarily to reduce CI usage — WASM-only for now
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4
@@ -553,7 +553,7 @@ jobs:
   deploy-itchio-android:
     name: Deploy Android to Itch.io
     needs: build-android
-    if: startsWith(github.ref, 'refs/tags/')
+    if: false # disabled temporarily to reduce CI usage — WASM-only for now
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4
