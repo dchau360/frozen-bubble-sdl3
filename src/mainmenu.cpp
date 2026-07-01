@@ -46,10 +46,6 @@
 #include <stdlib.h>
 #endif
 
-// Virtual scancodes for controller buttons: CTRL_SC_BASE + controllerSlot*20 + SDL_GamepadButton
-static SDL_Scancode ControllerButtonScancode(int controllerSlot, SDL_GamepadButton btn) {
-    return (SDL_Scancode)(CTRL_SC_BASE + controllerSlot * 20 + (int)btn);
-}
 static std::string ControllerScancodeName(SDL_Scancode sc) {
     if (!IsVirtualScancode(sc)) return SDL_GetScancodeName(sc);
     int rel = sc - CTRL_SC_BASE;
@@ -2567,7 +2563,6 @@ void MainMenu::NetPanelRender() {
             int lineY = statusY + 32;
             int shown = 0;
             std::string lineBuf;
-            int lineCount = 0;
             for (int pi = 0; pi < total && shown < maxShown; pi++) {
                 const std::string& nick = openPlayers[pi].nick;
                 if (nick == netClient->GetPlayerNick()) continue; // skip self
@@ -2580,7 +2575,6 @@ void MainMenu::NetPanelRender() {
                     panelText.UpdatePosition({statusX, lineY});
                     { SDL_FRect fr = ToFRect(*panelText.Coords()); SDL_RenderTexture(const_cast<SDL_Renderer*>(renderer), panelText.Texture(), nullptr, &fr); };
                     lineY += 16;
-                    lineCount++;
                     lineBuf.clear();
                 }
             }

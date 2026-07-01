@@ -96,7 +96,7 @@ struct Penguin {
     SDL_Renderer *rend;
     SDL_Rect rect;
 
-    void LoadPenguin(SDL_Renderer* renderer, char *whichOne, SDL_Rect rct) {
+    void LoadPenguin(SDL_Renderer* renderer, const char *whichOne, SDL_Rect rct) {
         rend = renderer;
         rect = rct;
 
@@ -431,7 +431,9 @@ private:
     bool opponentReadyForNewGame = false; // Opponent sent 'n' ready signal
     int opponentsReadyCount = 0; // Number of opponents who sent 'n' (for 3+ player)
     int connectedPlayerCount = 0; // Players still connected (decremented when 'l' received)
+#ifdef __WASM_PORT__
     Uint32 wasmRoundSyncWaitStart = 0; // WASM joiner: timestamp when waiting for Round 2+ sync messages
+#endif
 
     int curLevel = 1, pauseFrame = 0, nextPauseUpd = 2, idxMPWinner = 0;
     int winsP1 = 0, winsP2 = 0; // 2p mode stuff

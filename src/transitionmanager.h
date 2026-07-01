@@ -47,7 +47,6 @@ private:
 
     SDL_Surface *snapIn = nullptr, *snapOut = nullptr;
     SDL_Texture *transitionTexture = nullptr;
-    bool stopRendering = true;
 };
 
 #endif //TRANSITIONMANAGER_H

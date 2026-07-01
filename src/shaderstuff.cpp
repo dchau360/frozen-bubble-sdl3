@@ -291,10 +291,11 @@ void plasma_init(char *datapath)
     char *finalpath;
     char mypath[] = "/data/plasma.raw";
     FILE *f;
-    finalpath = (char *)malloc(strlen(datapath) + sizeof(mypath) + 1);
+    size_t finalpathLen = strlen(datapath) + sizeof(mypath) + 1;
+    finalpath = (char *)malloc(finalpathLen);
     if (!finalpath)
         fb__out_of_memory();
-    sprintf(finalpath, "%s%s", datapath, mypath);
+    snprintf(finalpath, finalpathLen, "%s%s", datapath, mypath);
     f = fopen(finalpath, "rb");
     free(finalpath);
 
