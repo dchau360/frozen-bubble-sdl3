@@ -1790,21 +1790,22 @@ void MainMenu::LocalMPPanelRender() {
         else delayTime--;
     }
 
-    { SDL_FRect fr = ToFRect(voidPanelRct); SDL_RenderTexture(const_cast<SDL_Renderer*>(renderer), voidPanelBG, nullptr, &fr); };
-
     int connected = 0;
     { SDL_JoystickID *joys = SDL_GetJoysticks(&connected); SDL_free(joys); }
     char warningText[128] = "";
     if (connected < localMPPlayerCount) {
         snprintf(warningText, sizeof(warningText),
-            "WARNING: %d controller(s) connected, need %d\n\n",
+            "WARNING: %d controller(s) connected, need %d\n",
             connected, localMPPlayerCount);
     }
 
+    // Exactly one blank line separates the header (title + optional warning)
+    // from the settings list, whether or not the warning is shown.
     char pnltxt[1024];
     int pos = snprintf(pnltxt, sizeof(pnltxt),
-        "Local multiplayer\n\n"
+        "Local multiplayer\n"
         "%s"
+        "\n"
         "%s Players: %d\n"
         "%s Chain-reaction: %s\n"
         "%s Row collapse: %s\n",
@@ -1815,22 +1816,27 @@ void MainMenu::LocalMPPanelRender() {
         localMPCR ? "enabled" : "disabled",
         localMPMenuIndex == 2 ? ">" : " ",
         localMPNoCompress ? "disabled" : "enabled");
+
+    // Per-player rows are collapsed onto one line each (instead of one line
+    // per player) so the panel's height stays constant regardless of player
+    // count; the selected player's field is bracketed instead of using a
+    // leading "> " marker, since a whole line can no longer stand for one item.
+    pos += snprintf(pnltxt + pos, sizeof(pnltxt) - pos, "  Aim guide:");
     for (int pi = 0; pi < localMPPlayerCount && pi < 5; pi++) {
+        bool sel = localMPMenuIndex == 3 + pi;
         pos += snprintf(pnltxt + pos, sizeof(pnltxt) - pos,
-            "%s Aim guide P%d: %s\n",
-            localMPMenuIndex == 3 + pi ? ">" : " ",
-            pi + 1,
-            localMPAimGuide[pi] ? "enabled" : "disabled");
+            sel ? " [P%d:%s]" : " P%d:%s",
+            pi + 1, localMPAimGuide[pi] ? "on" : "off");
     }
+    pos += snprintf(pnltxt + pos, sizeof(pnltxt) - pos, "\n  Max colors:");
     for (int pi = 0; pi < localMPPlayerCount && pi < 5; pi++) {
+        bool sel = localMPMenuIndex == 3 + localMPPlayerCount + pi;
         pos += snprintf(pnltxt + pos, sizeof(pnltxt) - pos,
-            "%s Max colors P%d: %d\n",
-            localMPMenuIndex == 3 + localMPPlayerCount + pi ? ">" : " ",
-            pi + 1,
-            playerColorCounts[pi]);
+            sel ? " [P%d:%d]" : " P%d:%d",
+            pi + 1, playerColorCounts[pi]);
     }
     snprintf(pnltxt + pos, sizeof(pnltxt) - pos,
-        "%s Start game!\n\n"
+        "\n%s Start game!\n\n"
         "Each player needs a controller.\n"
         "Use UP/DOWN to select\n"
         "LEFT/RIGHT or ENTER to change\n"
@@ -1838,8 +1844,42 @@ void MainMenu::LocalMPPanelRender() {
         localMPMenuIndex == 3 + 2 * localMPPlayerCount ? ">" : " ");
 
     panelText.UpdateText(const_cast<SDL_Renderer *>(renderer), pnltxt, 0);
-    panelText.UpdatePosition({(640/2) - (panelText.Coords()->w / 2), (480/2) - 130});
-    { SDL_FRect fr = ToFRect(*panelText.Coords()); SDL_RenderTexture(const_cast<SDL_Renderer*>(renderer), panelText.Texture(), nullptr, &fr); };
+
+    // Size and center the panel around the actual measured text instead of a
+    // fixed box, so it always fully contains its content on-screen. padTop
+    // must clear the header bar's own height (~18px) — that bar is drawn at
+    // ~18% opacity, so text sitting on top of it lets the title-screen
+    // background show through the letters instead of a solid backdrop.
+    const int padX = 24, padTop = 20, padBottom = 20;
+    SDL_Rect textCoords = *panelText.Coords();
+    SDL_Rect panelRect = {
+        (640 - (textCoords.w + padX * 2)) / 2,
+        std::max(10, (480 - (textCoords.h + padTop + padBottom)) / 2),
+        textCoords.w + padX * 2,
+        std::min(textCoords.h + padTop + padBottom, 480 - 20),
+    };
+    panelText.UpdatePosition({panelRect.x + padX, panelRect.y + padTop});
+
+    // Slices are drawn top, then mid, then bottom, each overlapping the next
+    // by a couple pixels — abutting them exactly leaves a hairline seam
+    // where linear texture filtering samples across the crop boundary and
+    // shows the background through as a see-through gap.
+    SDL_Renderer* rend = const_cast<SDL_Renderer*>(renderer);
+    float srcW, srcH;
+    SDL_GetTextureSize(voidPanelBG, &srcW, &srcH);
+    float topCap = srcH * 0.11f, bottomCap = srcH * 0.14f;
+    float overlap = 2.0f;
+    SDL_FRect topSrc = {0, 0, srcW, topCap + overlap};
+    SDL_FRect topDst = {(float)panelRect.x, (float)panelRect.y, (float)panelRect.w, topCap + overlap};
+    SDL_FRect bottomSrc = {0, srcH - bottomCap - overlap, srcW, bottomCap + overlap};
+    SDL_FRect bottomDst = {(float)panelRect.x, panelRect.y + panelRect.h - bottomCap - overlap, (float)panelRect.w, bottomCap + overlap};
+    SDL_FRect midSrc = {0, topCap, srcW, srcH - topCap - bottomCap};
+    SDL_FRect midDst = {(float)panelRect.x, panelRect.y + topCap, (float)panelRect.w, panelRect.h - topCap - bottomCap};
+    SDL_RenderTexture(rend, voidPanelBG, &topSrc, &topDst);
+    SDL_RenderTexture(rend, voidPanelBG, &midSrc, &midDst);
+    SDL_RenderTexture(rend, voidPanelBG, &bottomSrc, &bottomDst);
+
+    { SDL_FRect fr = ToFRect(*panelText.Coords()); SDL_RenderTexture(rend, panelText.Texture(), nullptr, &fr); };
 }
 
 void MainMenu::OptPanelRender() {
