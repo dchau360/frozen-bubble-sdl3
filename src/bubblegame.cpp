@@ -35,7 +35,7 @@
 #include <algorithm>
 
 inline int ranrange(int a, int b) { return a + rand() % ((b - a ) + 1); }
-inline float ranrange(float b) { return (rand()) / (static_cast <float> (RAND_MAX/b)); }
+inline float ranrange(float b) { return rand() / (static_cast<float>(RAND_MAX) / b); }
 
 struct SingleBubble {
     int assignedArray; // assigned board to use
@@ -670,7 +670,7 @@ bool BubbleGame::SyncNetworkLevel() {
     return true;
 }
 
-void SetupGameMetrics(BubbleArray *bArray, int playerCount, bool lowGfx, bool localMultiplayer = false){
+void SetupGameMetrics(BubbleArray *bArray, int playerCount, bool lowGfx){
     switch (playerCount) {
         case 2:
             if (lowGfx) {
@@ -1249,7 +1249,7 @@ void BubbleGame::NewGame(SetupSettings setup) {
                 bubbleArrays[i].penguinSprite.rect.w, bubbleArrays[i].penguinSprite.rect.h);
     }
 
-    SetupGameMetrics(bubbleArrays, currentSettings.playerCount, lowGfx, currentSettings.localMultiplayer);
+    SetupGameMetrics(bubbleArrays, currentSettings.playerCount, lowGfx);
 
     // Clear any remaining single bubbles from previous game
     singleBubbles.clear();
@@ -1486,7 +1486,7 @@ void BubbleGame::ReloadGame(int level) {
     }
 
     RemoveArray(bubbleArrays, currentSettings.playerCount);
-    SetupGameMetrics(bubbleArrays, currentSettings.playerCount, lowGfx, currentSettings.localMultiplayer);
+    SetupGameMetrics(bubbleArrays, currentSettings.playerCount, lowGfx);
 
     // Clear mid-round state that doesn't persist between rounds
     singleBubbles.clear();

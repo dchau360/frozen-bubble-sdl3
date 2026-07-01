@@ -378,14 +378,6 @@ void FrozenBubble::HandleControllerEvent(SDL_Event *e) {
     }
     if (!cs) return;
 
-    // Get this player's key bindings
-    GameSettings* gs = GameSettings::Instance();
-    PlayerKeys* allKeys[] = {
-        &gs->player1Keys, &gs->player2Keys, &gs->player3Keys,
-        &gs->player4Keys, &gs->player5Keys
-    };
-    PlayerKeys* pk = allKeys[playerIdx < 5 ? playerIdx : 0];
-
     if (e->type == SDL_EVENT_GAMEPAD_BUTTON_DOWN || e->type == SDL_EVENT_GAMEPAD_BUTTON_UP) {
         bool down = (e->type == SDL_EVENT_GAMEPAD_BUTTON_DOWN);
 

@@ -219,14 +219,14 @@ private:
     bool pendingCreate = false;
     std::string pendingCreateOrigNick;
     std::string pendingCreateNick;
-    int pendingCreateSuffix = 2;
+    [[maybe_unused]] int pendingCreateSuffix = 2; // referenced only in networkclient_wasm.cpp
 
     // WASM async JOIN state
     bool pendingJoin = false;
     std::string pendingJoinCreator;
     std::string pendingJoinOrigNick;
     std::string pendingJoinNick;
-    int pendingJoinSuffix = 2;
+    [[maybe_unused]] int pendingJoinSuffix = 2; // referenced only in networkclient_wasm.cpp
 
     static NetworkClient* ptrInstance;
 };

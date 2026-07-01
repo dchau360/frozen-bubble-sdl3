@@ -575,8 +575,8 @@ bool NetworkClient::SendTobeBubble(int bubbleId) {
 bool NetworkClient::WaitForBubble(int& cx, int& cy, int& bubbleId) {
     // Joiner waits for bubble message: b|cx|cy{bubbleId}
     // Checks syncQueue first (pre-routed by ProcessNetworkMessages), then main queue.
-    int timeout = 5000;  // 5 second timeout
-    Uint32 startTime = SDL_GetTicks();
+    Uint64 timeout = 5000;  // 5 second timeout
+    Uint64 startTime = SDL_GetTicks();
     std::vector<std::string> deferredMessages; // Collect non-matching messages
 
     auto tryParse = [&](const std::string& msg) -> bool {
@@ -637,8 +637,8 @@ bool NetworkClient::WaitForBubble(int& cx, int& cy, int& bubbleId) {
 
 bool NetworkClient::WaitForNextBubble(int& bubbleId) {
     // Joiner waits for next bubble: N{bubbleId}
-    int timeout = 5000;
-    Uint32 startTime = SDL_GetTicks();
+    Uint64 timeout = 5000;
+    Uint64 startTime = SDL_GetTicks();
     std::vector<std::string> deferredMessages;
 
     auto tryParse = [&](const std::string& msg) -> bool {
@@ -683,8 +683,8 @@ bool NetworkClient::WaitForNextBubble(int& bubbleId) {
 
 bool NetworkClient::WaitForTobeBubble(int& bubbleId) {
     // Joiner waits for tobe bubble: T{bubbleId}
-    int timeout = 5000;
-    Uint32 startTime = SDL_GetTicks();
+    Uint64 timeout = 5000;
+    Uint64 startTime = SDL_GetTicks();
     std::vector<std::string> deferredMessages;
 
     auto tryParse = [&](const std::string& msg) -> bool {
@@ -1393,7 +1393,7 @@ std::vector<ServerInfo> NetworkClient::DiscoverLANServers() {
     snprintf(probe, sizeof(probe), "FB/%d.%d SERVER PROBE", PROTO_MAJOR, PROTO_MINOR);
     sendto(udpSock, probe, strlen(probe), 0, (struct sockaddr*)&dest, sizeof(dest));
 
-    Uint32 startTime = SDL_GetTicks();
+    Uint64 startTime = SDL_GetTicks();
     while (SDL_GetTicks() - startTime < 1000) {
         fd_set readfds;
         struct timeval tv = {0, 50000};  // 50ms
