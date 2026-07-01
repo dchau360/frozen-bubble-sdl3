@@ -713,6 +713,22 @@ void SetupGameMetrics(BubbleArray *bArray, int playerCount, bool lowGfx, bool lo
     }
 }
 
+static void ResetRoundInputState(BubbleArray &player) {
+    player.shooterLeft = player.shooterRight = player.shooterCenter = false;
+    player.shooterAction = false;
+    player.newShoot = true;
+    player.mouseTargetAngle = -1.f;
+    player.mouseFirePending = false;
+    player.suppressFireUntilRelease = true;
+    player.mpFirePending = false;
+    player.pendingAngle = PI / 2.0f;
+    player.mpStickPending = false;
+    player.stickCx = player.stickCy = player.stickCol = 0;
+    player.stickAnimActive = false;
+    player.stickAnimFrame = player.stickAnimSlowdown = 0;
+    player.stickAnimPos = {0, 0};
+}
+
 void BubbleGame::NewGame(SetupSettings setup) {
     // Clear any stale controller input state from previous session
     for (int i = 0; i < 5; i++) controllerInputs[i] = {};
@@ -737,7 +753,7 @@ void BubbleGame::NewGame(SetupSettings setup) {
     sendMalusToOne = -1;
     attackingMe.clear();
     for (int i = 0; i < 5; i++) playerTargeting[i] = -1;
-    for (int i = 0; i < currentSettings.playerCount; i++) bubbleArrays[i].suppressFireUntilRelease = true;
+    for (int i = 0; i < currentSettings.playerCount; i++) ResetRoundInputState(bubbleArrays[i]);
     pendingHighscore = false;
     curLevel = setup.startLevel;
     connectedPlayerCount = setup.playerCount;  // Reset connected count for new game
@@ -1326,7 +1342,12 @@ void BubbleGame::ReloadGame(int level) {
     sendMalusToOne = -1;
     attackingMe.clear();
     for (int i = 0; i < 5; i++) playerTargeting[i] = -1;
-    for (int i = 0; i < currentSettings.playerCount; i++) bubbleArrays[i].suppressFireUntilRelease = true;
+    for (int i = 0; i < currentSettings.playerCount; i++) {
+        BubbleArray &player = bubbleArrays[i];
+        // Finished rounds can still receive late fire/stick packets. They are not
+        // consumed while gameFinish is set, so none may survive into the new board.
+        ResetRoundInputState(player);
+    }
 
     // Reset all players to ALIVE state for new round (especially important for 3-5 player games)
     // But keep LEFT players as LEFT — they disconnected and can't come back (original: left = 1 persists)
