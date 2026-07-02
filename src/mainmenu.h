@@ -98,6 +98,21 @@ private:
     void up();
     void down();
 
+    // HandleInput decomposition (mainmenu_input.cpp)
+    void MenuTextInputEvent(SDL_Event *e);
+    bool MenuEditingKey(SDL_Event *e);
+    bool KeysPanelKey(SDL_Event *e);
+    bool LobbyChatTypingKey(SDL_Event *e);
+    bool LocalMPPanelKey(SDL_Event *e);
+    bool TwoPPanelKey(SDL_Event *e);
+    void MenuUpKey();
+    void MenuDownKey();
+    void MenuLeftRightKey(SDL_Event *e);
+    void SubmitLobbyChatInput(NetworkClient *netClient);
+    void GameRoomHostReturn(NetworkClient *netClient, GameRoom *currentGame);
+    void MenuReturnKey();
+    void MenuEscapeKey();
+
     void BlinkRender();
     void BannerRender();
     void CandyRender();
