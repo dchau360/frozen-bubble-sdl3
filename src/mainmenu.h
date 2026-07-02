@@ -219,6 +219,11 @@ private:
     SDL_Texture *highlightServer = nullptr;
 
     void NetPanelRender();
+    // NetPanelRender decomposition (mainmenu_netpanel.cpp)
+    void NetPanelWorldMapRender();       // World map background + geolocation player spots
+    void NetPanelLobbyActionsRender();   // Action list + per-player settings grid
+    void NetPanelChatStatusRender();     // Chat input/messages + player/status list
+    void NetPanelConnectionScreensRender(); // Pre-login screens: LAN list, manual entry, public list
     void NetSetupPanelRender(); // Chain reaction prompt for network games
     void SavePreNick();         // Persist networkPreNick (localStorage on WASM, INI elsewhere)
     void StartLocalServer();
