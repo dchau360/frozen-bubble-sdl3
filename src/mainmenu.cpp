@@ -3196,7 +3196,13 @@ void MainMenu::SetupNewGame(int mode) {
     TransitionManager::Instance()->DoSnipIn(const_cast<SDL_Renderer*>(renderer));
     switch(mode){
         case 1:
-            FrozenBubble::Instance()->bubbleGame()->NewGame({chainReaction, 1, false});
+            // Classic campaign ("Play All Levels") always has chain reaction off,
+            // per bin/frozen-bubble ~3327 ($chainreaction = 0 unless level is
+            // 'random' or 'mp_train'). `chainReaction` is a scratch member written
+            // by other modes' own Y/N prompts (2P setup, Random Levels, MP
+            // Training, Network); this path shows no such prompt, so it must not
+            // read their leftover value.
+            FrozenBubble::Instance()->bubbleGame()->NewGame({false, 1, false});
             break;
         case 2: {
             SetupSettings ns2p;
@@ -3248,7 +3254,10 @@ void MainMenu::SetupNewGame(int mode) {
             break;
         }
         case 5: // Pick start level
-            FrozenBubble::Instance()->bubbleGame()->NewGame({chainReaction, 1, false, false, false, pickedStartLevel});
+            // Same classic-campaign rule as case 1: a specific numbered level is
+            // not "random", so chain reaction must always be off here too, not
+            // whatever leftover value another mode's prompt left in `chainReaction`.
+            FrozenBubble::Instance()->bubbleGame()->NewGame({false, 1, false, false, false, pickedStartLevel});
             break;
         case 6: // Multiplayer training
             FrozenBubble::Instance()->bubbleGame()->NewGame({chainReaction, 1, false, true, false, 1, true});
