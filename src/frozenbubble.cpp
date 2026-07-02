@@ -396,6 +396,12 @@ void FrozenBubble::HandleControllerEvent(SDL_Event *e) {
             int btn = e->gbutton.button;
             if (btn == SDL_GAMEPAD_BUTTON_EAST)     { PushKey(SDLK_AC_BACK, down); }
             else if (btn == SDL_GAMEPAD_BUTTON_START) { PushKey(SDLK_PAUSE, down); }
+            else if (btn == SDL_GAMEPAD_BUTTON_WEST && mainGame->IsNetworkGame()) {
+                PushKey(mainGame->IsChatting() ? SDLK_RETURN : SDLK_T, down);
+            }
+            else if (btn == SDL_GAMEPAD_BUTTON_SOUTH && mainGame->IsGameFinished()) {
+                PushKey(SDLK_SPACE, down);
+            }
             else {
                 SDL_Scancode vsc = (SDL_Scancode)(CTRL_SC_BASE + playerIdx * 20 + btn);
                 PushScancode(vsc, down, true);
@@ -604,9 +610,12 @@ void FrozenBubble::HandleInput(SDL_Event *e) {
 #ifndef __WASM_PORT__
             if (e->button.which == SDL_TOUCH_MOUSEID) return; // handled by FINGER_UP; skip synthesized mouse
 #endif
-            if (mainGame->IsGameFinished())
-                injectKey(SDLK_RETURN);
-            else
+            if (mainGame->IsGameFinished()) {
+                float lx, ly;
+                SDL_RenderCoordinatesFromWindow(renderer, e->button.x, e->button.y, &lx, &ly);
+                if (!mainGame->HandleFinishedTap(lx, ly))
+                    injectKey(SDLK_RETURN);
+            } else
                 mainGame->HandleMouseFire();
         } else if (e->type == SDL_EVENT_MOUSE_BUTTON_DOWN && e->button.button == SDL_BUTTON_RIGHT) {
 #ifndef __WASM_PORT__
@@ -623,7 +632,8 @@ void FrozenBubble::HandleInput(SDL_Event *e) {
             mainGame->HandleMouseAim(e->tfinger.x * 640.f, e->tfinger.y * 480.f);
         } else if (e->type == SDL_EVENT_FINGER_UP) {
             if (mainGame->IsGameFinished()) {
-                injectKey(SDLK_RETURN); // tap to continue after round
+                if (!mainGame->HandleFinishedTap(e->tfinger.x * 640.f, e->tfinger.y * 480.f))
+                    injectKey(SDLK_RETURN); // tap to continue after round
             } else {
                 mainGame->HandleMouseAim(e->tfinger.x * 640.f, e->tfinger.y * 480.f);
                 mainGame->HandleMouseFire();

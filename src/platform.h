@@ -49,4 +49,16 @@ inline std::string ASSET(const char* relpath) {
 // On other platforms: uses DATA_DIR compile-time define.
 void InitDataDir();
 
+#ifdef __WASM_PORT__
+// True when the browser reports touch capability (phones/tablets).
+// SDL3's Emscripten backend has no screen-keyboard support, so touch devices
+// need native browser prompts for text entry (see WasmPromptText).
+bool WasmHasTouch();
+
+// Show a blocking browser prompt() pre-filled with `current`.
+// Returns true and copies the entry into `out` when the user confirms;
+// returns false (out untouched) when the user cancels.
+bool WasmPromptText(const char* title, const char* current, char* out, int outLen);
+#endif
+
 #endif // PLATFORM_H

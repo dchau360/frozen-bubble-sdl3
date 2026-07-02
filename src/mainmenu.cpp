@@ -290,6 +290,18 @@ void MainMenu::SelectAndPressButton(int idx) {
     AudioMixer::Instance()->PlaySFX("menu_selected");
 }
 
+void MainMenu::SavePreNick() {
+    // Persist the pre-lobby nickname so it survives even if the user doesn't connect
+    if (networkPreNick[0] == '\0') return;
+#ifdef __WASM_PORT__
+    EM_ASM({ localStorage.setItem('fb_nickname', UTF8ToString($0)); }, networkPreNick);
+#else
+    GameSettings* gsn = GameSettings::Instance();
+    snprintf(gsn->savedNickname, sizeof(gsn->savedNickname), "%s", networkPreNick);
+    gsn->SaveKeys();
+#endif
+}
+
 void MainMenu::HandleInput(SDL_Event *e){
     // Map gamepad/D-pad to keyboard-equivalent actions for TV remotes
     if (e->type == SDL_EVENT_GAMEPAD_BUTTON_DOWN) {
@@ -969,6 +981,14 @@ void MainMenu::HandleInput(SDL_Event *e){
                             GameRoom* currentGame = netClient->GetCurrentGame();
 
                             if (selectedActionIndex == 0) {
+#ifdef __WASM_PORT__
+                                // Touch devices can't type into the inline chat field
+                                // (SDL3's Emscripten backend can't summon the soft
+                                // keyboard) — compose in a native browser prompt.
+                                if (WasmHasTouch() && networkChatInput[0] == '\0') {
+                                    WasmPromptText("Chat message:", "", networkChatInput, sizeof(networkChatInput));
+                                }
+#endif
                                 // Chat - handle commands or send message
                                 if (strlen(networkChatInput) > 0) {
                                     // Check if it's a command (starts with /)
@@ -1003,6 +1023,12 @@ void MainMenu::HandleInput(SDL_Event *e){
                                 bool isHost = currentGame->creator == netClient->GetPlayerNick();
 
                                 if (selectedActionIndex == 0) {
+#ifdef __WASM_PORT__
+                                    // Same soft-keyboard workaround as the lobby chat above.
+                                    if (WasmHasTouch() && networkChatInput[0] == '\0') {
+                                        WasmPromptText("Chat message:", "", networkChatInput, sizeof(networkChatInput));
+                                    }
+#endif
                                     // Chat - same for both host and joiner
                                     if (strlen(networkChatInput) > 0) {
                                         if (networkChatInput[0] == '/') {
@@ -1187,16 +1213,7 @@ void MainMenu::HandleInput(SDL_Event *e){
                         networkInputMode = networkPreNickReturnMode;
                         SDL_StopTextInput(SDL_GetKeyboardFocus());
                         AudioMixer::Instance()->PlaySFX("menu_selected");
-                        // Save the nick immediately so it persists even if user doesn't connect
-                        if (networkPreNick[0] != '\0') {
-#ifdef __WASM_PORT__
-                            EM_ASM({ localStorage.setItem('fb_nickname', UTF8ToString($0)); }, networkPreNick);
-#else
-                            GameSettings* gsn = GameSettings::Instance();
-                            snprintf(gsn->savedNickname, sizeof(gsn->savedNickname), "%s", networkPreNick);
-                            gsn->SaveKeys();
-#endif
-                        }
+                        SavePreNick();
                         break;
                     } else if (showingNetPanel && !networkInLobby &&
                                (networkInputMode == 8 || networkInputMode == 9)) {
@@ -1210,6 +1227,36 @@ void MainMenu::HandleInput(SDL_Event *e){
                             // ENTER on Connect button → connect
                             goto DO_CONNECT;
                         } else {
+#ifdef __WASM_PORT__
+                            // Touch devices get a native browser prompt instead of the
+                            // in-canvas editor (no soft keyboard in SDL3 Emscripten).
+                            if (WasmHasTouch()) {
+                                if (networkManualFieldIndex == 0) {
+                                    char hostBuf[256];
+                                    if (WasmPromptText("Server address:", networkHost, hostBuf, sizeof(hostBuf))) {
+                                        // Same charset filter as the keyboard path
+                                        size_t len = 0;
+                                        for (const char* p = hostBuf; *p && len < sizeof(networkHost) - 1; p++) {
+                                            char c = *p;
+                                            if ((c >= '0' && c <= '9') || (c >= 'a' && c <= 'z') ||
+                                                (c >= 'A' && c <= 'Z') || c == '.' || c == '-' || c == ':')
+                                                networkHost[len++] = c;
+                                        }
+                                        networkHost[len] = '\0';
+                                        connectErrorMsg.clear();
+                                    }
+                                } else {
+                                    char cur[16], portBuf[16];
+                                    snprintf(cur, sizeof(cur), "%d", networkPort);
+                                    if (WasmPromptText("Server port:", cur, portBuf, sizeof(portBuf))) {
+                                        int p = SDL_atoi(portBuf);
+                                        if (p > 0 && p <= 65535) networkPort = p;
+                                    }
+                                }
+                                AudioMixer::Instance()->PlaySFX("menu_selected");
+                                break;
+                            }
+#endif
                             // ENTER on host/port field → open keyboard
                             networkFieldEditing = true;
                             SDL_StopTextInput(SDL_GetKeyboardFocus());
@@ -1241,6 +1288,18 @@ void MainMenu::HandleInput(SDL_Event *e){
                             int serverIdx = lanMenuIndex - 1;
                             if (serverIdx >= (int)discoveredServers.size()) {
                                 // "Set Name" selected (last item)
+#ifdef __WASM_PORT__
+                                if (WasmHasTouch()) {
+                                    // Native prompt on touch devices (no soft keyboard in SDL3 Emscripten)
+                                    char nick[32];
+                                    if (WasmPromptText("Enter nickname (max 15 chars):", networkPreNick, nick, sizeof(nick))) {
+                                        snprintf(networkPreNick, sizeof(networkPreNick), "%.15s", nick);
+                                        SavePreNick();
+                                    }
+                                    AudioMixer::Instance()->PlaySFX("menu_selected");
+                                    break;
+                                }
+#endif
                                 networkPreNick[0] = '\0';
                                 networkPreNickReturnMode = 7;
                                 networkInputMode = 11;
@@ -1266,6 +1325,18 @@ void MainMenu::HandleInput(SDL_Event *e){
                             int serverIdx = netMenuIndex - 1;
                             if (serverIdx >= (int)publicServers.size()) {
                                 // "Set Name" selected (last item)
+#ifdef __WASM_PORT__
+                                if (WasmHasTouch()) {
+                                    // Native prompt on touch devices (no soft keyboard in SDL3 Emscripten)
+                                    char nick[32];
+                                    if (WasmPromptText("Enter nickname (max 15 chars):", networkPreNick, nick, sizeof(nick))) {
+                                        snprintf(networkPreNick, sizeof(networkPreNick), "%.15s", nick);
+                                        SavePreNick();
+                                    }
+                                    AudioMixer::Instance()->PlaySFX("menu_selected");
+                                    break;
+                                }
+#endif
                                 networkPreNick[0] = '\0';
                                 networkPreNickReturnMode = 10;
                                 networkInputMode = 11;
