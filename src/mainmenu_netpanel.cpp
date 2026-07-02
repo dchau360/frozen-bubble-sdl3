@@ -169,10 +169,23 @@ void MainMenu::NetPanelRender() {
     }
 
     // If in lobby, use world map background; otherwise use void panel for connection screens
+
     if (networkInLobby && netGameBackground && networkInputMode == 0) {
-        // Reset text color to white — non-lobby screens (connecting, server list) may have
-        // left panelText set to yellow, which persists across frames.
-        panelText.UpdateColor({255, 255, 255, 255}, {0, 0, 0, 255});
+        NetPanelWorldMapRender();
+        NetPanelLobbyActionsRender();
+        NetPanelChatStatusRender();
+        return;
+    }
+
+    NetPanelConnectionScreensRender();
+}
+
+void MainMenu::NetPanelWorldMapRender() {
+    NetworkClient* netClient = NetworkClient::Instance();
+
+    // Reset text color to white — non-lobby screens (connecting, server list) may have
+    // left panelText set to yellow, which persists across frames.
+    panelText.UpdateColor({255, 255, 255, 255}, {0, 0, 0, 255});
 
         // Request LIST periodically (every 2 seconds)
         Uint32 now = SDL_GetTicks();
@@ -244,6 +257,10 @@ void MainMenu::NetPanelRender() {
                 if (++netSpotSelfFrame >= 13) netSpotSelfFrame = 0;
             }
         }
+}
+
+void MainMenu::NetPanelLobbyActionsRender() {
+    NetworkClient* netClient = NetworkClient::Instance();
 
         // Render action list at top left (like original)
         const int actionStartY = 30;
@@ -465,6 +482,12 @@ void MainMenu::NetPanelRender() {
                 }
             }
         }
+}
+
+void MainMenu::NetPanelChatStatusRender() {
+    NetworkClient* netClient = NetworkClient::Instance();
+    GameRoom* currentGame = netClient->GetCurrentGame();
+    const int actionStartX = 78;
 
         // If Chat is selected, show inline text input (like original at y=320)
         const int chatY = 320;
@@ -572,9 +595,10 @@ void MainMenu::NetPanelRender() {
                 { SDL_FRect fr = ToFRect(*panelText.Coords()); SDL_RenderTexture(const_cast<SDL_Renderer*>(renderer), panelText.Texture(), nullptr, &fr); };
             }
         }
+}
 
-        return;
-    }
+void MainMenu::NetPanelConnectionScreensRender() {
+    NetworkClient* netClient = NetworkClient::Instance();
 
     // For non-lobby screens, use void panel
     { SDL_FRect fr = ToFRect(voidPanelRct); SDL_RenderTexture(const_cast<SDL_Renderer*>(renderer), voidPanelBG, nullptr, &fr); };
@@ -967,4 +991,3 @@ void MainMenu::NetPanelRender() {
     panelText.UpdatePosition({(640/2) - (panelText.Coords()->w / 2), (480/2) - 120});
     { SDL_FRect fr = ToFRect(*panelText.Coords()); SDL_RenderTexture(const_cast<SDL_Renderer*>(renderer), panelText.Texture(), nullptr, &fr); };
 }
-
