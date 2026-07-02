@@ -641,9 +641,22 @@ void add_prio(int fd)
  * Called when a player voluntarily sends PART while in-game, so subsequent
  * lobby commands (LIST, JOIN, CREATE) are processed with the normal gracetime
  * instead of the 5-second in-game gracetime.  Also prevents duplicate entries
- * in conns_prio if the same fd later calls add_prio for a new game. */
+ * in conns_prio if the same fd later calls add_prio for a new game.
+ *
+ * PART is also legal for a player who created/joined a room but never
+ * actually started it (add_prio is only called on STARTing gameplay), in
+ * which case fd was never moved into conns_prio and is already sitting in
+ * the regular conns list being iterated as this tick's `new_conns` copy.
+ * Blindly removing fd from `new_conns` and re-appending it to `conns` in
+ * that case strips it from *every* list the main loop polls — the
+ * re-append is clobbered when `conns = new_conns` runs at the end of the
+ * current g_list_foreach(conns, ...) pass, so the connection silently
+ * stops being serviced forever. Guard on prio[fd] so this is a no-op
+ * unless the fd was actually promoted to conns_prio in the first place. */
 void remove_prio(int fd)
 {
+        if (!prio[fd])
+                return;
         /* Remove from the iteration copy — this becomes conns_prio at end of tick */
         new_conns = g_list_remove(new_conns, GINT_TO_POINTER(fd));
         prio[fd] = 0;
