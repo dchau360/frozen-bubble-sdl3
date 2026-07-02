@@ -3511,13 +3511,19 @@ static void DrawAimGuide(SDL_Renderer* rend, const BubbleArray& bArray) {
             }
         }
 
-        // Draw dot every 8 steps, fading with distance
+        // Draw a two-tone marker every 8 steps.  The dark rim and warm center
+        // stay readable over both light and dark skin backgrounds.
         if (step % 8 == 0) {
             int alpha = 200 - step / 2;
             if (alpha < 30) alpha = 30;
-            SDL_SetRenderDrawColor(rend, 255, 255, 255, (Uint8)alpha);
-            SDL_Rect dot = {(int)px + BUBBLE_SIZE / 2 - 3, (int)py + BUBBLE_SIZE / 2 - 3, 6, 6};
-            { SDL_FRect fr = ToFRect(dot); SDL_RenderFillRect(rend, &fr); }
+            SDL_Rect rim = {(int)px + BUBBLE_SIZE / 2 - 4,
+                            (int)py + BUBBLE_SIZE / 2 - 4, 8, 8};
+            SDL_SetRenderDrawColor(rend, 24, 20, 38, (Uint8)alpha);
+            { SDL_FRect fr = ToFRect(rim); SDL_RenderFillRect(rend, &fr); }
+
+            SDL_Rect center = {rim.x + 2, rim.y + 2, 4, 4};
+            SDL_SetRenderDrawColor(rend, 255, 211, 66, (Uint8)alpha);
+            { SDL_FRect fr = ToFRect(center); SDL_RenderFillRect(rend, &fr); }
         }
     }
 
