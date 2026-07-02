@@ -63,10 +63,21 @@ add_executable(frozen-bubble-sdl3
     src/main.cpp
     src/menubutton.cpp
     src/mainmenu.cpp
+    src/mainmenu_input.cpp
+    src/mainmenu_netpanel.cpp
+    src/mainmenu_panels.cpp
+    src/mainmenu_server.cpp
     src/gamesettings.cpp
     src/audiomixer.cpp
     src/shaderstuff.cpp
     src/bubblegame.cpp
+    src/bubblegame_board.cpp
+    src/bubblegame_input.cpp
+    src/bubblegame_level.cpp
+    src/bubblegame_net.cpp
+    src/bubblegame_render.cpp
+    src/bubblegame_shooter.cpp
+    src/bubblegame_state.cpp
     src/transitionmanager.cpp
     src/ttftext.cpp
     src/highscoremanager.cpp
