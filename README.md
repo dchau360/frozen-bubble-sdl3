@@ -39,7 +39,7 @@ Play over LAN or internet using the included server. Supports chain reactions, m
 
 When malus lands on your board, a fading on-screen indicator shows who attacked you and how many bubbles they sent. After each round a per-player stats table is shown (bubbles fired/popped, malus sent/received), and when the match ends the host posts a summary of the final standings to the lobby chat.
 
-In-game chat works during play (Enter or T, gamepad X) and between rounds (T or gamepad X — Enter/fire advances to the next round only while chat is closed). Enter sends, Escape cancels.
+In-game chat works during play (Enter or T, gamepad X) and between rounds (T or gamepad X — Enter/fire advances to the next round only while chat is closed). Enter sends, Escape cancels. On touch devices the round-end screen shows a tappable CHAT button, and text is entered through a native browser prompt (mobile browsers can't open an on-screen keyboard for the game canvas).
 
 The lobby displays a world map with colored dots showing where each connected player is located. Your location is detected automatically at connect time and shown as an animated pulsing dot.
 

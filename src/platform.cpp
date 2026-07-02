@@ -139,3 +139,27 @@ void InitDataDir() {
 }
 
 #endif
+
+#ifdef __WASM_PORT__
+#include <emscripten.h>
+
+bool WasmHasTouch() {
+    static int cached = -1;
+    if (cached < 0) {
+        cached = EM_ASM_INT({
+            return ('ontouchstart' in window || navigator.maxTouchPoints > 0) ? 1 : 0;
+        });
+    }
+    return cached == 1;
+}
+
+bool WasmPromptText(const char* title, const char* current, char* out, int outLen) {
+    int got = EM_ASM_INT({
+        var r = window.prompt(UTF8ToString($0), UTF8ToString($1));
+        if (r === null) return 0;
+        stringToUTF8(r, $2, $3);
+        return 1;
+    }, title, current ? current : "", out, outLen);
+    return got == 1;
+}
+#endif

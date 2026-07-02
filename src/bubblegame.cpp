@@ -3700,7 +3700,31 @@ void BubbleGame::RenderRoundStats(SDL_Renderer *rend) {
                 ? "T / X: CHAT    ENTER: LOBBY"
                 : "T / X: CHAT    ENTER / FIRE: NEXT ROUND");
         cell(hint, colName, y, hdr);
+
+        // Tappable CHAT button (touch devices have no T key). Anchored under
+        // the panel's left edge; HandleFinishedTap() hit-tests this rect.
+        statsChatBtn = {boxX, boxY + boxH + 4, 88, 24};
+        SDL_SetRenderDrawBlendMode(rend, SDL_BLENDMODE_BLEND);
+        SDL_SetRenderDrawColor(rend, 0, 0, 0, 190);
+        { SDL_FRect fr = ToFRect(statsChatBtn); SDL_RenderFillRect(rend, &fr); }
+        SDL_SetRenderDrawColor(rend, 255, 255, 100, 200);
+        { SDL_FRect fr = ToFRect(statsChatBtn); SDL_RenderRect(rend, &fr); }
+        SDL_SetRenderDrawBlendMode(rend, SDL_BLENDMODE_NONE);
+        cell(chattingMode ? "SEND" : "CHAT", statsChatBtn.x + 24, statsChatBtn.y + 4, hdr);
+    } else {
+        statsChatBtn = {0, 0, 0, 0};
     }
+}
+
+bool BubbleGame::HandleFinishedTap(float lx, float ly) {
+    if (!currentSettings.networkGame || !gameFinish) return false;
+    if (statsChatBtn.w <= 0) return false;
+    if (lx < statsChatBtn.x || lx >= statsChatBtn.x + statsChatBtn.w ||
+        ly < statsChatBtn.y || ly >= statsChatBtn.y + statsChatBtn.h)
+        return false;
+    if (chattingMode) FinishInGameChat(true);
+    else StartInGameChat();
+    return true;
 }
 
 void BubbleGame::SendLobbyMatchSummary() {
@@ -4319,6 +4343,20 @@ void BubbleGame::HandleMouseFire() {
 
 void BubbleGame::StartInGameChat() {
     if (!currentSettings.networkGame || chattingMode) return;
+#ifdef __WASM_PORT__
+    // SDL3's Emscripten backend cannot summon the mobile soft keyboard, so on
+    // touch devices compose the message in a native browser prompt and send it
+    // immediately instead of opening the in-canvas editor.
+    if (WasmHasTouch()) {
+        char msg[256] = "";
+        if (WasmPromptText("Chat message:", "", msg, sizeof(msg)) && msg[0] != '\0') {
+            chattingMode = true;
+            snprintf(chatInputBuf, sizeof(chatInputBuf), "%s", msg);
+            FinishInGameChat(true);
+        }
+        return;
+    }
+#endif
     chattingMode = true;
     chatInputBuf[0] = '\0';
     SDL_StartTextInput(SDL_GetKeyboardFocus());

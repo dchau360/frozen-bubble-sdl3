@@ -205,6 +205,7 @@ private:
 
     void NetPanelRender();
     void NetSetupPanelRender(); // Chain reaction prompt for network games
+    void SavePreNick();         // Persist networkPreNick (localStorage on WASM, INI elsewhere)
     void StartLocalServer();
     void StopLocalServer();
 

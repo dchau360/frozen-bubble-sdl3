@@ -392,6 +392,10 @@ public:
     bool IsGameFinished() const { return gameFinish; }
     bool IsNetworkGame() const { return currentSettings.networkGame; }
     bool IsChatting() const { return chattingMode; }
+    // Tap/click on the round-end screen in logical (640x480) coords.
+    // Returns true when consumed by the CHAT button (so the caller must
+    // not treat the tap as "next round").
+    bool HandleFinishedTap(float lx, float ly);
 private:
     const SDL_Renderer *renderer;
     SDL_Texture *background = nullptr, *pauseBackground = nullptr, *prePauseBackground = nullptr;
@@ -472,6 +476,7 @@ private:
     char chatInputBuf[256] = {};
     TTFText chatLineText;       // Reused per message line
     TTFText chatInputText;      // Input line ("Say: {text}_")
+    SDL_Rect statsChatBtn = {0, 0, 0, 0}; // Tappable CHAT button on the round-end stats panel
 
     std::vector<std::array<std::vector<int>, 10>> loadedLevels;
     BubbleArray bubbleArrays[5]; //5 custom arrays wtih different players
