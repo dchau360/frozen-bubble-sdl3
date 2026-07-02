@@ -39,6 +39,8 @@ Play over LAN or internet using the included server. Supports chain reactions, m
 
 When malus lands on your board, a fading on-screen indicator shows who attacked you and how many bubbles they sent. After each round a per-player stats table is shown (bubbles fired/popped, malus sent/received), and when the match ends the host posts a summary of the final standings to the lobby chat.
 
+In-game chat works during play (Enter or T, gamepad X) and between rounds (T or gamepad X — Enter/fire advances to the next round only while chat is closed). Enter sends, Escape cancels.
+
 The lobby displays a world map with colored dots showing where each connected player is located. Your location is detected automatically at connect time and shown as an animated pulsing dot.
 
 The host can configure the following settings in the game room — all joined players see updates in real time:
@@ -313,7 +315,7 @@ See [CHANGELOG.md](CHANGELOG.md) for release history.
 
 ## TODO
 
-- [ ] Chat between rounds in multiplayer (currently chat only works during active play)
+- [x] Chat between rounds in multiplayer
 - [ ] Sign macOS `.app` bundle for Gatekeeper compatibility
 - [ ] Sign Windows installer for SmartScreen compatibility
 - [x] WebAssembly SDL3 build (uses PR port files until Emscripten merges SDL3_image/SDL3_mixer)

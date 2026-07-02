@@ -396,6 +396,12 @@ void FrozenBubble::HandleControllerEvent(SDL_Event *e) {
             int btn = e->gbutton.button;
             if (btn == SDL_GAMEPAD_BUTTON_EAST)     { PushKey(SDLK_AC_BACK, down); }
             else if (btn == SDL_GAMEPAD_BUTTON_START) { PushKey(SDLK_PAUSE, down); }
+            else if (btn == SDL_GAMEPAD_BUTTON_WEST && mainGame->IsNetworkGame()) {
+                PushKey(mainGame->IsChatting() ? SDLK_RETURN : SDLK_T, down);
+            }
+            else if (btn == SDL_GAMEPAD_BUTTON_SOUTH && mainGame->IsGameFinished()) {
+                PushKey(SDLK_SPACE, down);
+            }
             else {
                 SDL_Scancode vsc = (SDL_Scancode)(CTRL_SC_BASE + playerIdx * 20 + btn);
                 PushScancode(vsc, down, true);

@@ -1599,7 +1599,8 @@ void BubbleGame::UpdatePenguin(BubbleArray &bArray) {
         // Use configured keys from settings
         // Don't accept input if player has lost or game is finished (except local player 0 in finished state)
         // Original: checks if $pdata{state} eq 'game'
-        bool acceptInput = (bArray.playerState == BubbleArray::PlayerState::ALIVE);
+        bool acceptInput = (bArray.playerState == BubbleArray::PlayerState::ALIVE)
+            && !(chattingMode && currentSettings.networkGame && bArray.playerAssigned == 0);
         if (!acceptInput && bArray.playerAssigned == 0 && gameFinish) {
             // Allow local player to continue for a bit during finish sequence
             acceptInput = false;
@@ -3635,7 +3636,8 @@ void BubbleGame::RenderRoundStats(SDL_Renderer *rend) {
 
     const int boxW = 384, boxX = (640 - boxW) / 2, boxY = 6;
     const int rowH = 16, headH = 22;
-    const int boxH = headH + rowH * (n + 1) + 6;
+    const int hintH = currentSettings.networkGame ? rowH : 0;
+    const int boxH = headH + rowH * (n + 1) + hintH + 6;
 
     // Semi-transparent backing panel.
     SDL_SetRenderDrawBlendMode(rend, SDL_BLENDMODE_BLEND);
@@ -3689,6 +3691,15 @@ void BubbleGame::RenderRoundStats(SDL_Renderer *rend) {
         snprintf(buf, sizeof(buf), "%d", p.rSent);   cell(buf, colSent, y, c);
         snprintf(buf, sizeof(buf), "%d", p.rRecv);   cell(buf, colRecv, y, c);
         y += rowH;
+    }
+
+    if (currentSettings.networkGame) {
+        const char *hint = waitingForOpponentNewGame
+            ? "T / X: CHAT    WAITING FOR PLAYERS"
+            : (gameMatchOver
+                ? "T / X: CHAT    ENTER: LOBBY"
+                : "T / X: CHAT    ENTER / FIRE: NEXT ROUND");
+        cell(hint, colName, y, hdr);
     }
 }
 
@@ -3755,6 +3766,7 @@ void BubbleGame::Render() {
             }
 #endif
             SDL_Log("All players ready - starting new game (detected in render loop)");
+            if (chattingMode) FinishInGameChat(false);
             waitingForOpponentNewGame = false;
             opponentReadyForNewGame = false;
             opponentsReadyCount = 0;
@@ -4281,6 +4293,7 @@ void BubbleGame::RenderPaused() {
 }
 
 void BubbleGame::HandleMouseAim(float mx, float my) {
+    if (chattingMode) return;
     if (!currentSettings.mouseEnabled) return;
     if (currentSettings.playerCount < 1) return;
     BubbleArray& bArr = bubbleArrays[0];
@@ -4298,9 +4311,47 @@ void BubbleGame::HandleMouseAim(float mx, float my) {
 }
 
 void BubbleGame::HandleMouseFire() {
+    if (chattingMode) return;
     if (!currentSettings.mouseEnabled) return;
     if (currentSettings.playerCount < 1) return;
     bubbleArrays[0].mouseFirePending = true;
+}
+
+void BubbleGame::StartInGameChat() {
+    if (!currentSettings.networkGame || chattingMode) return;
+    chattingMode = true;
+    chatInputBuf[0] = '\0';
+    SDL_StartTextInput(SDL_GetKeyboardFocus());
+    SDL_Log("In-game chat opened (betweenRounds=%d)", gameFinish);
+}
+
+void BubbleGame::FinishInGameChat(bool sendMessage) {
+    if (!chattingMode) return;
+
+    if (sendMessage && chatInputBuf[0] != '\0') {
+        NetworkClient* netClient = NetworkClient::Instance();
+        if (netClient && netClient->IsConnected() && netClient->GetState() == IN_GAME) {
+            char talkMsg[258];
+            snprintf(talkMsg, sizeof(talkMsg), "t%s", chatInputBuf);
+            netClient->SendGameData(talkMsg);
+            SDL_Log("In-game chat sent (betweenRounds=%d, length=%zu)",
+                    gameFinish, strlen(chatInputBuf));
+
+            InGameChatMsg self;
+            self.nick = netClient->GetPlayerNick();
+            if (self.nick.empty()) self.nick = "Me";
+            self.text = chatInputBuf;
+            self.framesLeft = 600;
+            inGameChatMessages.push_back(self);
+            if (inGameChatMessages.size() > 10)
+                inGameChatMessages.erase(inGameChatMessages.begin());
+        }
+    }
+
+    chatInputBuf[0] = '\0';
+    chattingMode = false;
+    SDL_StopTextInput(SDL_GetKeyboardFocus());
+    SDL_Log("In-game chat closed (sent=%d)", sendMessage);
 }
 
 void BubbleGame::HandleInput(SDL_Event *e) {
@@ -4336,7 +4387,7 @@ void BubbleGame::HandleInput(SDL_Event *e) {
             case SDL_GAMEPAD_BUTTON_SOUTH:      fake.key = SDLK_SPACE; break;
             case SDL_GAMEPAD_BUTTON_EAST:       fake.key = SDLK_ESCAPE; break;
             case SDL_GAMEPAD_BUTTON_START:      fake.key = SDLK_P; break;
-            case SDL_GAMEPAD_BUTTON_WEST:       fake.key = SDLK_RETURN; break; // X=Chat
+            case SDL_GAMEPAD_BUTTON_WEST:       fake.key = SDLK_T; break; // X=Chat
             default: return;
         }
         SDL_Event fakeEvent;
@@ -4356,22 +4407,25 @@ void BubbleGame::HandleInput(SDL_Event *e) {
             }
             return;
         case SDL_EVENT_KEY_DOWN:
-            // Backspace: allow key-repeat so holding it deletes continuously
-            if (chattingMode && e->key.key == SDLK_BACKSPACE) {
-                size_t len = strlen(chatInputBuf);
-                if (len > 0) chatInputBuf[len - 1] = '\0';
+            // The text editor owns every key while open. Characters arrive through
+            // SDL_EVENT_TEXT_INPUT; consuming key-down events prevents gameplay actions.
+            if (chattingMode) {
+                if (e->key.key == SDLK_BACKSPACE) {
+                    size_t len = strlen(chatInputBuf);
+                    if (len > 0) chatInputBuf[len - 1] = '\0';
+                } else if (!e->key.repeat &&
+                           (e->key.key == SDLK_RETURN || e->key.key == SDLK_KP_ENTER)) {
+                    FinishInGameChat(true);
+                } else if (!e->key.repeat &&
+                           (e->key.key == SDLK_ESCAPE || e->key.key == SDLK_AC_BACK)) {
+                    FinishInGameChat(false);
+                }
                 return;
             }
             if(e->key.repeat) break;
             switch(e->key.key) {
                 case SDLK_AC_BACK:
                 case SDLK_ESCAPE:
-                    if (chattingMode) {
-                        chattingMode = false;
-                        chatInputBuf[0] = '\0';
-                        SDL_StopTextInput(SDL_GetKeyboardFocus());
-                        break;
-                    }
                     QuitToTitle();
                     break;
                 case SDLK_F11: // mute / unpause audio
@@ -4388,6 +4442,9 @@ void BubbleGame::HandleInput(SDL_Event *e) {
                         settings->SetValue("GFX:ColorblindBubbles", currentMode ? "false" : "true");
                         SDL_Log("Colorblind mode: %s", currentMode ? "OFF" : "ON");
                     }
+                    break;
+                case SDLK_T:
+                    if (currentSettings.networkGame) StartInGameChat();
                     break;
                 // Single player targeting keys (original lines 1681-1690)
                 // Keys 1-4 target opponents rp1-rp4, key 0 or 5 clears targeting
@@ -4428,32 +4485,10 @@ void BubbleGame::HandleInput(SDL_Event *e) {
                     break;
                 case SDLK_RETURN:
                 handle_return:
-                    // Chat: during active network game, RETURN enters/sends chat
+                    // During play, RETURN opens chat. Between rounds it retains its
+                    // next-round action; T or gamepad X opens chat in either state.
                     if (currentSettings.networkGame && !gameFinish) {
-                        if (chattingMode) {
-                            if (strlen(chatInputBuf) > 0) {
-                                NetworkClient* netClientChat = NetworkClient::Instance();
-                                char talkMsg[258];
-                                snprintf(talkMsg, sizeof(talkMsg), "t%s", chatInputBuf);
-                                netClientChat->SendGameData(talkMsg);
-                                // Show our own message locally
-                                InGameChatMsg self;
-                                self.nick = netClientChat->GetPlayerNick();
-                                if (self.nick.empty()) self.nick = "Me";
-                                self.text = chatInputBuf;
-                                self.framesLeft = 600;
-                                inGameChatMessages.push_back(self);
-                                if (inGameChatMessages.size() > 10)
-                                    inGameChatMessages.erase(inGameChatMessages.begin());
-                            }
-                            chatInputBuf[0] = '\0';
-                            chattingMode = false;
-                            SDL_StopTextInput(SDL_GetKeyboardFocus());
-                        } else {
-                            chattingMode = true;
-                            chatInputBuf[0] = '\0';
-                            SDL_StartTextInput(SDL_GetKeyboardFocus());
-                        }
+                        StartInGameChat();
                         break;
                     }
                     if (!gameFinish || (gameFinish && singleBubbles.size() > 0)) break;

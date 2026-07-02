@@ -390,6 +390,8 @@ public:
 
     bool playedPause = false;
     bool IsGameFinished() const { return gameFinish; }
+    bool IsNetworkGame() const { return currentSettings.networkGame; }
+    bool IsChatting() const { return chattingMode; }
 private:
     const SDL_Renderer *renderer;
     SDL_Texture *background = nullptr, *pauseBackground = nullptr, *prePauseBackground = nullptr;
@@ -497,6 +499,8 @@ private:
     void FinalizeRoundStats();   // Roll per-round stats into match totals; broadcast 'S' in network games
     void RenderRoundStats(SDL_Renderer *rend);  // Post-round per-player stats table overlay
     void SendLobbyMatchSummary();  // Leader posts the match summary to the lobby chatroom
+    void StartInGameChat();
+    void FinishInGameChat(bool sendMessage);
     int CountLivingPlayers();  // Count players still alive (original: living_players() at line 600)
     void HandlePlayerLoss(BubbleArray &bArray);  // Handle player death and check win conditions
 
