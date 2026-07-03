@@ -220,6 +220,13 @@ void BubbleGame::UpdatePenguin(BubbleArray &bArray) {
         bArray.shooterAction = false;
         bArray.mpFirePending = false;  // Clear mp_fire flag (original line 2165)
         bArray.newShoot = false;
+        // Require the fire key/button to be released before the next shot can fire.
+        // newShoot flips back to true as soon as the launched bubble sticks, which can
+        // happen almost instantly for short shots (e.g. sticking near the bottom rows).
+        // Without this, a player still physically holding the fire key down would see
+        // shooterAction == true && newShoot == true again next frame and fire an
+        // unintended second shot with no new keypress at all.
+        bArray.suppressFireUntilRelease = true;
         return;
     }
 
