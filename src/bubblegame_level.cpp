@@ -69,6 +69,11 @@ void BubbleGame::LoadLevelset(const char *path) {
                 idx++;
             }
         }
+
+        // The file has no trailing blank line after the last level, so the
+        // final block is never flushed by the blank-line branch above — push
+        // it here or the last level silently goes missing from loadedLevels.
+        if (idx > 0) loadedLevels.push_back(level);
     }
     else {
         SDL_LogError(1, "No such levelset (%s).", path);
