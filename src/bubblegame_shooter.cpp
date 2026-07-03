@@ -45,7 +45,8 @@ void BubbleGame::LaunchBubble(BubbleArray &bArray) {
     // Use curLaunchRct for launch position (set per-player in NewGame/ReloadGame)
     float startX = (float)bArray.curLaunchRct.x;
     float startY = (float)bArray.curLaunchRct.y;
-    singleBubbles.push_back({bArray.playerAssigned, bArray.curLaunch, startX, startY, startX, startY, {(int)startX, (int)startY}, {}, bArray.shooterSprite.angle, false, true, bArray.leftLimit, bArray.rightLimit, bArray.topLimit, lowGfx});
+    bool isMiniLaunch = (currentSettings.playerCount >= 3 && bArray.playerAssigned >= 1);
+    singleBubbles.push_back({bArray.playerAssigned, bArray.curLaunch, startX, startY, startX, startY, {(int)startX, (int)startY}, {}, bArray.shooterSprite.angle, false, true, bArray.leftLimit, bArray.rightLimit, bArray.topLimit, lowGfx, isMiniLaunch ? 16 : 32});
     PickNextBubble(bArray);
     FrozenBubble::Instance()->totalBubbles++;
     // Stats: count shots for locally-owned arrays only (remote arrays sync via 'S').
