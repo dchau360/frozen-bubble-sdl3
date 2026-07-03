@@ -524,14 +524,18 @@ void BubbleGame::CheckGameState(BubbleArray &bArray) {
         bArray.penguinSprite.PlayAnimation(10);
     }
     // Check if ANY player hit the danger zone (original: verify_if_end() at line 1970-1975)
-    // In multiplayer, we need to check ALL players, not just the current one
-    if (currentSettings.networkGame && currentSettings.playerCount >= 2) {
+    // The original runs this sweep every frame over ALL players regardless of network vs.
+    // local play, so any multiplayer game (network or local) must sweep every player here —
+    // otherwise a local player pushed into the danger zone purely by incoming malus (rather
+    // than their own shot) wouldn't be flagged lost until they next fired themselves.
+    if (currentSettings.playerCount >= 2) {
         // Check all players for danger zone (original: iter_players with cy > 11 check)
         for (int i = 0; i < currentSettings.playerCount; i++) {
             BubbleArray &checkArray = bubbleArrays[i];
             if (checkArray.bubbleOnDanger() && checkArray.playerState == BubbleArray::PlayerState::ALIVE) {
-                if (i == 0) {
-                    // Local player lost
+                if (!currentSettings.networkGame || i == 0) {
+                    // Local player lost (network games only show this HUD cue for the local
+                    // player; local multiplayer shows it for whichever board actually lost)
                     panelRct = {SCREEN_CENTER_X - 173, 480 - 248, 345, 124};
                     checkArray.curLaunchRct = {checkArray.curLaunchRct.x - 1, checkArray.curLaunchRct.y - 1, 34, 48};
                 }
@@ -540,7 +544,7 @@ void BubbleGame::CheckGameState(BubbleArray &bArray) {
             }
         }
     } else {
-        // Single player or local 2P - only check the current player
+        // Single player - only check the current (only) player
         if (bArray.bubbleOnDanger() && bArray.playerState == BubbleArray::PlayerState::ALIVE) {
             panelRct = {SCREEN_CENTER_X - 173, 480 - 248, 345, 124};
             bArray.curLaunchRct = {bArray.curLaunchRct.x - 1, bArray.curLaunchRct.y - 1, 34, 48};

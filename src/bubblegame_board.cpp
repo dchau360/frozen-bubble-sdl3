@@ -328,10 +328,11 @@ void BubbleGame::CheckPossibleDestroy(BubbleArray &bArray){
                     if (!currentSettings.networkGame || bArray.playerAssigned == 0)
                         bArray.rPopped += groupedCount + 1;
 
+                    bool isMiniPop = (currentSettings.playerCount >= 3 && bArray.playerAssigned >= 1);
                     for (Bubble *bubble : bubbleCount) {
                         float startX = (float)bubble->pos.x;
                         float startY = (float)bubble->pos.y;
-                        SingleBubble bubs = {bArray.playerAssigned, bArray.curLaunch, startX, startY, startX, startY, bubble->pos, {}, bArray.shooterSprite.angle, false, false, bArray.leftLimit, bArray.rightLimit, bArray.topLimit, lowGfx};
+                        SingleBubble bubs = {bArray.playerAssigned, bArray.curLaunch, startX, startY, startX, startY, bubble->pos, {}, bArray.shooterSprite.angle, false, false, bArray.leftLimit, bArray.rightLimit, bArray.topLimit, lowGfx, isMiniPop ? 16 : 32};
                         bubs.CopyBubbleProperties(bubble);
                         bubs.GenerateFreeFall(true);
                         singleBubbles.push_back(bubs);
@@ -390,27 +391,23 @@ void BubbleGame::CheckPossibleDestroy(BubbleArray &bArray){
                     malusValue, totalDestroyed, fallingCount);
             SendMalusToOpponent(malusValue);
         } else if (!currentSettings.networkGame && currentSettings.playerCount >= 2) {
-            // Local multiplayer: distribute malus directly to all other living players' queues
+            // Local multiplayer: send the full malus to every other living player's queue.
+            // Original (line 1191-1216, !is_mp_game() branch) sends the undivided count to
+            // each opponent — division by (living - 1) only applies in the true network-game
+            // branch, so local multiplayer must not divide either.
             int attackerIdx = bArray.playerAssigned;
-            int livingOpponents = 0;
-            for (int i = 0; i < currentSettings.playerCount; i++)
-                if (i != attackerIdx && bubbleArrays[i].playerState == BubbleArray::PlayerState::ALIVE)
-                    livingOpponents++;
-            if (livingOpponents > 0) {
-                int malusEach = (malusValue + livingOpponents - 1) / livingOpponents;
-                for (int i = 0; i < currentSettings.playerCount; i++) {
-                    if (i != attackerIdx && bubbleArrays[i].playerState == BubbleArray::PlayerState::ALIVE) {
-                        for (int m = 0; m < malusEach; m++)
-                            bubbleArrays[i].malusQueue.push_back(frameCount);
-                        bubbleArrays[i].rRecv += malusEach;  // Stats: malus received
-                        bArray.rSent += malusEach;           // Stats: malus sent by attacker
-                        AddMalusAlert(bubbleArrays[i],
-                                      bArray.playerNickname.empty()
-                                          ? ("Player " + std::to_string(attackerIdx + 1))
-                                          : bArray.playerNickname,
-                                      malusEach);
-                        SDL_Log("Local malus: %d bubbles queued for player %d", malusEach, i);
-                    }
+            for (int i = 0; i < currentSettings.playerCount; i++) {
+                if (i != attackerIdx && bubbleArrays[i].playerState == BubbleArray::PlayerState::ALIVE) {
+                    for (int m = 0; m < malusValue; m++)
+                        bubbleArrays[i].malusQueue.push_back(frameCount);
+                    bubbleArrays[i].rRecv += malusValue;  // Stats: malus received
+                    bArray.rSent += malusValue;           // Stats: malus sent by attacker
+                    AddMalusAlert(bubbleArrays[i],
+                                  bArray.playerNickname.empty()
+                                      ? ("Player " + std::to_string(attackerIdx + 1))
+                                      : bArray.playerNickname,
+                                  malusValue);
+                    SDL_Log("Local malus: %d bubbles queued for player %d", malusValue, i);
                 }
             }
         }
@@ -470,6 +467,7 @@ int BubbleGame::CheckAirBubbles(BubbleArray &bArray) {
     std::vector<SDL_Point> fallingLocs;
     std::vector<SingleBubble> singlesFalling;
     int fallingCount = 0;
+    bool isMiniAir = (currentSettings.playerCount >= 3 && bArray.playerAssigned >= 1);
 
     // Mark all bubbles as unvisited (distance = 0 means not connected)
     std::set<std::pair<int, int>> connected;
@@ -521,7 +519,7 @@ int BubbleGame::CheckAirBubbles(BubbleArray &bArray) {
                 float startY = (float)bArray.bubbleMap[i][j].pos.y;
                 SingleBubble bubbly = {bArray.playerAssigned, bArray.curLaunch, startX, startY, startX, startY,
                                        bArray.bubbleMap[i][j].pos, {}, bArray.shooterSprite.angle, false, false,
-                                       bArray.leftLimit, bArray.rightLimit, bArray.topLimit, lowGfx};
+                                       bArray.leftLimit, bArray.rightLimit, bArray.topLimit, lowGfx, isMiniAir ? 16 : 32};
                 bubbly.CopyBubbleProperties(&bArray.bubbleMap[i][j]);
                 singlesFalling.push_back(bubbly);
                 fallingLocs.push_back({(int)j, (int)i});
@@ -572,12 +570,13 @@ void BubbleGame::DoFrozenAnimation(BubbleArray &bArray, int &waitTime){
 void BubbleGame::DoWinAnimation(BubbleArray &bArray, int &waitTime){
     if (waitTime <= 0) {
         waitTime = EXPLODE_FRAMEWAIT;
+        bool isMiniWin = (currentSettings.playerCount >= 3 && bArray.playerAssigned >= 1);
         for (int i = (int)bArray.bubbleMap.size() - 1; i >= 0; i--) {
             for (int j = (int)bArray.bubbleMap[i].size() - 1; j >= 0; j--) {
                 if (bArray.bubbleMap[i][j].bubbleId != -1) {
                     float startX = (float)bArray.bubbleMap[i][j].pos.x;
                     float startY = (float)bArray.bubbleMap[i][j].pos.y;
-                    SingleBubble bubbly = {bArray.playerAssigned, bArray.curLaunch, startX, startY, startX, startY, bArray.bubbleMap[i][j].pos, {}, bArray.shooterSprite.angle, false, false, bArray.leftLimit, bArray.rightLimit, bArray.topLimit, lowGfx};
+                    SingleBubble bubbly = {bArray.playerAssigned, bArray.curLaunch, startX, startY, startX, startY, bArray.bubbleMap[i][j].pos, {}, bArray.shooterSprite.angle, false, false, bArray.leftLimit, bArray.rightLimit, bArray.topLimit, lowGfx, isMiniWin ? 16 : 32};
                     bubbly.CopyBubbleProperties(&bArray.bubbleMap[i][j]);
                     bubbly.GenerateFreeFall(true, 0);
                     singleBubbles.push_back(bubbly);
