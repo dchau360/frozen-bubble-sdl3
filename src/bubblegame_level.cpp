@@ -119,8 +119,14 @@ void BubbleGame::LoadLevel(int id){
 }
 
 void BubbleGame::RandomLevel(BubbleArray &bArray){
-    int bubbleSize = 32;
-    int rowSize = bubbleSize * 7 / 8;  // ROW_SIZE = 28
+    // Mini players use half bubble size for spacing AND mini textures.
+    // Original: local $BUBBLE_SIZE = $BUBBLE_SIZE / 2; local $ROW_SIZE = $ROW_SIZE / 2;
+    // (iter_players + mini_graphics() in bin/frozen-bubble, applied to every
+    // real_stick_bubble() call for rp* players). Mirrors SyncNetworkLevel's
+    // effectiveBubbleSize, which already does this for network games.
+    bool isMini = (currentSettings.playerCount >= 3 && bArray.playerAssigned >= 1);
+    int bubbleSize = isMini ? 16 : 32;
+    int rowSize = bubbleSize * 7 / 8;  // ROW_SIZE = 28 (14 for mini)
 
     SDL_Point &offset = bArray.bubbleOffset;
     std::array<std::vector<Bubble>, 13> &bubbleMap = bArray.bubbleMap;

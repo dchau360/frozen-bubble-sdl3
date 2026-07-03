@@ -238,11 +238,15 @@ void BubbleGame::AssignChainReactions(BubbleArray &bArray) {
             sBubble.chainRow = freeRow;
             sBubble.chainCol = freeCol;
             // Compute pixel position from grid coords using actual row offset
-            // (matches how bubble pos.x is set in LoadLevel/RandomLevel)
-            int chainRowOffset = (bArray.bubbleMap[freeRow].size() == 7) ? 16 : 0;
+            // (matches how bubble pos.x is set in LoadLevel/RandomLevel). Mini
+            // players use half bubble size, matching RandomLevel/GetClosestFreeCell.
+            bool isMini = (currentSettings.playerCount >= 3 && bArray.playerAssigned >= 1);
+            int chainBubbleSize = isMini ? 16 : 32;
+            int chainRowSize = chainBubbleSize * 7 / 8;
+            int chainRowOffset = (bArray.bubbleMap[freeRow].size() == 7) ? chainBubbleSize / 2 : 0;
             sBubble.chainDest = {
-                bArray.bubbleOffset.x + freeCol * 32 + chainRowOffset,
-                bArray.bubbleOffset.y + freeRow * 28
+                bArray.bubbleOffset.x + freeCol * chainBubbleSize + chainRowOffset,
+                bArray.bubbleOffset.y + freeRow * chainRowSize
             };
             occupiedPositions.insert({freeRow, freeCol}); // Reserve this position
 

@@ -176,9 +176,11 @@ SDL_Texture** BubbleGame::GetBubbleTextures(bool mini) {
 }
 
 
-static void DrawAimGuide(SDL_Renderer* rend, const BubbleArray& bArray) {
-    const int BUBBLE_SIZE = 32;
-    const int ROW_SIZE = 28;
+static void DrawAimGuide(SDL_Renderer* rend, const BubbleArray& bArray, bool isMini) {
+    // Mini players use half bubble size for spacing (matches RandomLevel,
+    // GetClosestFreeCell, and AssignChainReactions' isMini handling).
+    const int BUBBLE_SIZE = isMini ? 16 : 32;
+    const int ROW_SIZE = BUBBLE_SIZE * 7 / 8;
     const float speed = (float)(BUBBLE_SPEED);  // 5 pixels/step
 
     float px = (float)bArray.curLaunchRct.x;
@@ -580,7 +582,10 @@ void BubbleGame::Render() {
         UpdatePenguin(curArray);
         if(!lowGfx) curArray.penguinSprite.Render();
         curArray.shooterSprite.Render(lowGfx);
-        if (curArray.aimGuideEnabled && !gameFinish) DrawAimGuide(rend, curArray);
+        if (curArray.aimGuideEnabled && !gameFinish) {
+            bool isMini = (currentSettings.playerCount >= 3 && curArray.playerAssigned >= 1);
+            DrawAimGuide(rend, curArray, isMini);
+        }
         { SDL_FRect fr = ToFRect(*inGameText.Coords()); SDL_RenderTexture(rend, inGameText.Texture(), nullptr, &fr); }
 
         // Display score (UpdateScoreText now renders immediately)
@@ -672,7 +677,8 @@ void BubbleGame::Render() {
             curArray.shooterSprite.Render(lowGfx);
             if (curArray.aimGuideEnabled && !gameFinish &&
                 curArray.playerState == BubbleArray::PlayerState::ALIVE) {
-                DrawAimGuide(rend, curArray);
+                bool isMini = (currentSettings.playerCount >= 3 && curArray.playerAssigned >= 1);
+                DrawAimGuide(rend, curArray, isMini);
             }
 
             // NOTE: UpdateSingleBubbles is now called ONCE before the loop (line 2416)
