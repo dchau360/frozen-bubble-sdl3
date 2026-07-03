@@ -300,12 +300,15 @@ static bool IsGridAdjacent(int r1, int c1, int r2, int c2, int oddswap = 0) {
 // anchorRow/anchorCol: grid position of the hit bubble (-1 if none, e.g. ceiling hit).
 // When provided, the result is guaranteed to be a free cell adjacent to the anchor.
 void GetClosestFreeCell(SingleBubble &sBubble, BubbleArray &bArray, int *row, int *col,
-                        int anchorRow = -1, int anchorCol = -1) {
+                        int anchorRow = -1, int anchorCol = -1, bool isMini = false) {
     // Original: get_array_closest_pos() at frozen-bubble lines 636-641
     // Uses MIDPOINT between old and new position (line 2208-2209)
 
-    const int BUBBLE_SIZE = 32;  // Original: line 91
-    const int ROW_SIZE = 28;     // Original: BUBBLE_SIZE * 7/8
+    // Mini players use half bubble size for spacing (matches RandomLevel,
+    // GetClosestFreeCell, and AssignChainReactions' isMini handling).
+    // Original: local $BUBBLE_SIZE = $BUBBLE_SIZE / 2; local $ROW_SIZE = $ROW_SIZE / 2;
+    const int BUBBLE_SIZE = isMini ? 16 : 32;  // Original: line 91
+    const int ROW_SIZE = BUBBLE_SIZE * 7 / 8;  // Original: BUBBLE_SIZE * 7/8
 
     // oddswap: 0 if row 0 has 8 cells (standard), 1 if row 0 has 7 cells (flipped)
     // Matches Perl's $pdata{$player}{oddswap} set by RandomLevel's r value
@@ -441,6 +444,7 @@ void BubbleGame::UpdateSingleBubbles(int /*id*/) {
         // Don't skip based on assignedArray - process all of them!
 
         BubbleArray *bArray = &bubbleArrays[sBubble.assignedArray];
+        bool isMini = (currentSettings.playerCount >= 3 && bArray->playerAssigned >= 1);
 
         // For chain reaction bubbles, update position FIRST to set chainReachedDest flag
         if (sBubble.chainExists && !sBubble.chainReachedDest) {
@@ -507,7 +511,7 @@ void BubbleGame::UpdateSingleBubbles(int /*id*/) {
             // Original line 2195: ceiling check FIRST, independent of existing bubbles
             if (sBubble.pos.y <= bArray->topLimit) {
                 int row, col;
-                GetClosestFreeCell(sBubble, *bArray, &row, &col);
+                GetClosestFreeCell(sBubble, *bArray, &row, &col, -1, -1, isMini);
                 SDL_Log("Ceiling hit: placing at row=%d col=%d pos=(%.1f,%.1f)", row, col, (float)sBubble.pos.x, (float)sBubble.pos.y);
                 if (currentSettings.networkGame && sBubble.assignedArray == 0) {
                     NetworkClient* netClient = NetworkClient::Instance();
@@ -546,7 +550,7 @@ void BubbleGame::UpdateSingleBubbles(int /*id*/) {
                     Bubble &bubble = bArray->bubbleMap[hitRow][hitCol];
                     if (sBubble.IsCollision(&bubble)) {
                         int row, col;
-                        GetClosestFreeCell(sBubble, *bArray, &row, &col, hitRow, hitCol);
+                        GetClosestFreeCell(sBubble, *bArray, &row, &col, hitRow, hitCol, isMini);
                         SDL_Log("Bubble stuck at row=%d, col=%d, position=(%.1f, %.1f)",
                                 row, col, (float)sBubble.pos.x, (float)sBubble.pos.y);
 
