@@ -146,9 +146,16 @@ void BubbleGame::UpdatePenguin(BubbleArray &bArray) {
         }
     }
 
-    // Hurry timer and warnings only for local players (remote players have their own timers)
-    if (isLocalPlayer) {
-        if (currentSettings.playerCount < 2) {
+    // Hurry timer and warnings only for local, still-alive players (remote players have their
+    // own timers; a dead player's board is frozen and must not accumulate hurry time or force-fire
+    // — original gates the whole per-player update on state == 'ingame', bin/frozen-bubble ~2106).
+    if (isLocalPlayer && bArray.playerState == BubbleArray::PlayerState::ALIVE) {
+        // Only the classic numbered single-player campaign gets the longer hurry timer
+        // (original ~line 3330-3332); random 1P levels and mp_train use the shorter default,
+        // same as multiplayer (original ~line 3300-3302).
+        bool isClassicCampaign = currentSettings.playerCount < 2 && !currentSettings.randomLevels
+            && !currentSettings.mpTraining;
+        if (isClassicCampaign) {
             if (bArray.hurryTimer >= TIME_HURRY_WARN) {
                 if (bArray.warnTimer <= HURRY_WARN_FC / 2){
                     if(bArray.warnTimer == 0) audMixer->PlaySFX("hurry");
@@ -480,10 +487,12 @@ void BubbleGame::UpdateSingleBubbles(int /*id*/) {
                 bool chainInFlight = false;
                 for (const auto& sb : singleBubbles)
                     if (!sb.shouldClear && sb.assignedArray == arr && sb.chainExists && !sb.chainReachedDest) { chainInFlight = true; break; }
-                if (!chainInFlight && (currentSettings.networkGame ? arr == 0 : currentSettings.playerCount >= 2))
+                if (!chainInFlight && (currentSettings.networkGame ? arr == 0 : (currentSettings.playerCount >= 2 || currentSettings.mpTraining)))
                     ProcessMalusQueue(bubbleArrays[arr], frameCount);
             }
-            CheckGameState(*bArray);
+            // Chain-reaction landings don't count toward the compressor/new-root counter
+            // (only real fired shots do) — see CheckGameState's countForRoot parameter.
+            CheckGameState(*bArray, false);
             continue;
         }
 
@@ -537,18 +546,8 @@ void BubbleGame::UpdateSingleBubbles(int /*id*/) {
                 bArray->stickAnimPos = {(int)sBubble.pos.x, (int)sBubble.pos.y};
                 sBubble.shouldClear = true;
                 CheckPossibleDestroy(*bArray);
-                // Original line 2218-2250: malus generation happens at stick time, only if no chain
-                // reactions are still in flight. We release queued malus here so it falls AFTER the shot sticks.
-                // Use bArray->playerAssigned (not sBubble.assignedArray) since CheckPossibleDestroy may
-                // push_back to singleBubbles causing reallocation, making sBubble a dangling reference.
-                {
-                    int arr = bArray->playerAssigned;
-                    bool chainInFlight = false;
-                    for (const auto& sb : singleBubbles)
-                        if (sb.assignedArray == arr && sb.chainExists && !sb.chainReachedDest) { chainInFlight = true; break; }
-                    if (!chainInFlight && (currentSettings.networkGame ? arr == 0 : currentSettings.playerCount >= 2))
-                        ProcessMalusQueue(bubbleArrays[arr], frameCount);
-                }
+                // Original: the ceiling-stick branch (~2195-2204) has no malus generation at all —
+                // only the collision-stick and chain-landing branches release queued malus.
                 CheckGameState(*bArray);
                 goto STOP_ITER;
             }
@@ -591,7 +590,7 @@ void BubbleGame::UpdateSingleBubbles(int /*id*/) {
                             bool chainInFlight = false;
                             for (const auto& sb : singleBubbles)
                                 if (sb.assignedArray == arr && sb.chainExists && !sb.chainReachedDest) { chainInFlight = true; break; }
-                            if (!chainInFlight && (currentSettings.networkGame ? arr == 0 : currentSettings.playerCount >= 2))
+                            if (!chainInFlight && (currentSettings.networkGame ? arr == 0 : (currentSettings.playerCount >= 2 || currentSettings.mpTraining)))
                                 ProcessMalusQueue(bubbleArrays[arr], frameCount);
                         }
                         CheckGameState(*bArray);
