@@ -448,9 +448,13 @@ void BubbleGame::Render() {
         // This ensures malus only falls AFTER the local player fires and their bubble sticks.
     }
 
-    // NOTE: Local multiplayer malus queues are processed at stick time (inside the stick handlers above),
-    // matching original Perl behavior where malus only falls after the recipient sticks their bubble.
-    if (!currentSettings.networkGame && currentSettings.playerCount >= 2 && !gameFinish) {
+    // NOTE: Local multiplayer and mp_train malus queues are processed at stick time (inside the
+    // stick handlers), matching original Perl behavior where malus only falls after the recipient
+    // sticks their bubble. mp_train is folded in here (instead of its own per-frame block) so
+    // frameCount still increments once per frame for it without a separate unconditional
+    // ProcessMalusQueue call contradicting "malus only falls after the shot sticks".
+    if ((!currentSettings.networkGame && currentSettings.playerCount >= 2 && !gameFinish) ||
+        (currentSettings.mpTraining && !gameFinish)) {
         frameCount++;
     }
 
@@ -481,12 +485,6 @@ void BubbleGame::Render() {
                 }
             }
         }
-    }
-
-    // Process malus queue for mp_training (not in networkGame block)
-    if (currentSettings.mpTraining && !gameFinish) {
-        frameCount++;
-        ProcessMalusQueue(bubbleArrays[0], frameCount);
     }
 
     if(playedPause) {
@@ -784,10 +782,14 @@ void BubbleGame::Render() {
             }
         }
 
-        // Check all players for danger zone every frame in network multiplayer (original: verify_if_end() at line 2319)
+        // Check all players for danger zone every frame in multiplayer (original: verify_if_end() at line 2319)
         // Original checks: if ($pdata{state} eq 'game' && any { $_->{cy} > 11 })
-        // Only check while global game state is "game" (not finished/won)
-        if (!gameFinish && currentSettings.networkGame && currentSettings.playerCount >= 2) {
+        // Only check while global game state is "game" (not finished/won).
+        // This sweep must run for local multiplayer too, not just network games: malus sticks
+        // deliberately don't call CheckGameState (to avoid double-counting the compressor/new-root
+        // counter), so this every-frame sweep is the only way to catch a local player pushed into
+        // the danger zone by incoming malus between their own shots.
+        if (!gameFinish && currentSettings.playerCount >= 2) {
             static int checkCounter = 0;
             checkCounter++;
             for (int i = 0; i < currentSettings.playerCount; i++) {
@@ -804,8 +806,9 @@ void BubbleGame::Render() {
 
                 if (isAlive && inDanger) {
                     SDL_Log("!!! Player %d hit danger zone!", i);
-                    if (i == 0) {
-                        // Local player lost
+                    // In network games only the local player's HUD (index 0) reflects here; in
+                    // local multiplayer every board is local so each losing player's HUD updates.
+                    if (!currentSettings.networkGame || i == 0) {
                         panelRct = {SCREEN_CENTER_X - 173, 480 - 248, 345, 124};
                         checkArray.curLaunchRct = {checkArray.curLaunchRct.x - 1, checkArray.curLaunchRct.y - 1, 34, 48};
                     }

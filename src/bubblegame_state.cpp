@@ -447,6 +447,44 @@ void BubbleGame::HandlePlayerLoss(BubbleArray &bArray) {
         if (winnerIdx == 0) winsP1++;
         else winsP2++;
         Update2PText();
+    } else if (currentSettings.playerCount >= 3 && !currentSettings.networkGame) {
+        // Local (controller-based) 3-4 player multiplayer: elimination-detection mirroring the
+        // networkGame branch above, minus the network broadcast. Without this branch, a local
+        // 3-4P round never actually finishes when reduced to one survivor.
+        int livingCount = CountLivingPlayers();
+        SDL_Log("Local multiplayer (%dP): living players: %d", currentSettings.playerCount, livingCount);
+
+        if (livingCount == 1) {
+            int winnerIdx = -1;
+            for (int i = 0; i < currentSettings.playerCount; i++) {
+                if (bubbleArrays[i].playerState == BubbleArray::PlayerState::ALIVE) {
+                    winnerIdx = i;
+                    break;
+                }
+            }
+
+            if (winnerIdx >= 0 && !gameFinish) {
+                SDL_Log("Local multiplayer winner found: player %d", winnerIdx);
+                gameFinish = true;
+                bubbleArrays[winnerIdx].mpWinner = true;
+                bubbleArrays[winnerIdx].penguinSprite.PlayAnimation(10);
+                bubbleArrays[winnerIdx].winCount++;
+
+                if (currentSettings.victoriesLimit > 0 &&
+                    bubbleArrays[winnerIdx].winCount >= currentSettings.victoriesLimit) {
+                    gameMatchOver = true;
+                    SDL_Log("Match over! Player %d reached %d victories",
+                            winnerIdx, currentSettings.victoriesLimit);
+                }
+            }
+        } else if (livingCount == 0) {
+            // All players dead - draw game (no winner)
+            SDL_Log("Draw game - all local players are dead!");
+            gameFinish = true;
+            gameLost = true;
+        } else {
+            SDL_Log("Local multiplayer game continues, %d players still alive", livingCount);
+        }
     } else if (currentSettings.playerCount == 1) {
         // Single player: original line 1964 — $pdata{state} = "lost $player"
         gameFinish = true;
@@ -454,8 +492,11 @@ void BubbleGame::HandlePlayerLoss(BubbleArray &bArray) {
     }
 }
 
-void BubbleGame::CheckGameState(BubbleArray &bArray) {
-    if (bArray.compressionDisabled) return;
+void BubbleGame::CheckGameState(BubbleArray &bArray, bool countForRoot) {
+    // Only actual fired shots advance the compressor/new-root counter; chain-reaction
+    // landings must not (original: count_for_root=0 for chain landings vs =1 for real
+    // shots, bin/frozen-bubble ~line 2566 vs the fire block).
+    if (countForRoot && !bArray.compressionDisabled) {
         bArray.turnsToCompress--;
         if (bArray.turnsToCompress == 1) bArray.waitPrelight = PRELIGHT_FAST;
         if (bArray.turnsToCompress == 0) {
@@ -475,6 +516,7 @@ void BubbleGame::CheckGameState(BubbleArray &bArray) {
                 audMixer->PlaySFX("newroot");
             }
         }
+    }
     if (bArray.allClear()) {
         // Award bonus for clearing the level!
         if (currentSettings.playerCount < 2) {

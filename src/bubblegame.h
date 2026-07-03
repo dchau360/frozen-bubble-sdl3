@@ -35,12 +35,18 @@
 
 #pragma region "BubbleGame Defines"
 #define TIME_APPEARS_NEW_ROOT_MP 11
-#define TIME_HURRY_WARN_MP 750
-#define TIME_HURRY_MAX_MP 1125
+// Original Perl (bin/frozen-bubble ~line 3300-3302, TARGET_ANIM_SPEED=20ms -> 50fps) default
+// hurry timer: warn=250 frames/5.0s, force-fire=375 frames/7.5s, used for every mode except
+// the classic numbered single-player campaign. Scaled to this port's 60fps baseline:
+// 250*60/50=300, 375*60/50=450.
+#define TIME_HURRY_WARN_MP 300
+#define TIME_HURRY_MAX_MP 450
 
-#define TIME_APPEARS_NEW_ROOT 8
-#define TIME_HURRY_WARN 720
-#define TIME_HURRY_MAX 1182
+// Original Perl (~line 3330-3332) overrides to warn=400 frames/8.0s, force-fire=525 frames/10.5s
+// ONLY for the classic numbered single-player campaign (random 1P levels and mp_train keep the
+// shorter default above, same as multiplayer). Scaled to 60fps: 400*60/50=480, 525*60/50=630.
+#define TIME_HURRY_WARN 480
+#define TIME_HURRY_MAX 630
 
 #define HURRY_WARN_FC 154
 #define HURRY_WARN_MP_FC 125 
@@ -498,7 +504,7 @@ private:
     void SendMalusToOpponent(int malusCount);   // Send malus attack to opponent
     void SetSendMalusToOne(int opponentIdx);    // Set/clear single-player targeting (original: set_sendmalustoone)
     void ProcessMalusQueue(BubbleArray &bArray, int currentFrame);  // Generate malus bubbles from queue
-    void CheckGameState(BubbleArray &bArray);
+    void CheckGameState(BubbleArray &bArray, bool countForRoot = true);
     void AddMalusAlert(BubbleArray &target, const std::string &fromNick, int count);  // Queue an incoming-malus toast
     void RenderMalusAlerts(SDL_Renderer *rend);  // Draw + age the incoming-malus toasts
     void FinalizeRoundStats();   // Roll per-round stats into match totals; broadcast 'S' in network games

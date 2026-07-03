@@ -313,6 +313,10 @@ void BubbleGame::ProcessNetworkMessages() {
                                 break;
                             }
 
+                            // Ignore malus for a player whose board is already frozen (dead), instead
+                            // of wrongly overlaying bubbles onto it (original ~line 1435).
+                            if (bubbleArrays[opponentIdx].playerState != BubbleArray::PlayerState::ALIVE) break;
+
                             BubbleArray &opponentArray = bubbleArrays[opponentIdx];
                             // Mini players use half bubble size
                             bool isMini = (currentSettings.playerCount >= 3 && opponentIdx >= 1);
@@ -362,6 +366,10 @@ void BubbleGame::ProcessNetworkMessages() {
                                            "Received 'M' message from unknown senderId %d, ignoring", senderId);
                                 break;
                             }
+
+                            // Ignore malus for a player whose board is already frozen (dead), instead
+                            // of wrongly overlaying bubbles onto it (original ~line 1453).
+                            if (bubbleArrays[opponentIdx].playerState != BubbleArray::PlayerState::ALIVE) break;
 
                             // Find and stick the corresponding malus bubble on opponent's board
                             for (auto &malus : malusBubbles) {
