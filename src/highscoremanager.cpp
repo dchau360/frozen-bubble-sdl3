@@ -1,7 +1,7 @@
 /*
  * Frozen-Bubble SDL2 C++ Port
  * Copyright (c) 2000-2012 The Frozen-Bubble Team
- * Copyright (c) 2026 Huy Chau
+ * Copyright (c) 2026 dchau360
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License
