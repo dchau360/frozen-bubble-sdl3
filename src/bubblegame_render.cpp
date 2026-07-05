@@ -580,6 +580,10 @@ void BubbleGame::Render() {
         UpdatePenguin(curArray);
         if(!lowGfx) curArray.penguinSprite.Render();
         curArray.shooterSprite.Render(lowGfx);
+        // Redraw the current bubble on top of the shooter/cannon sprite -- the
+        // cannon graphic is large enough to cover most of it, otherwise making
+        // the loaded bubble's color hard to see while aiming.
+        { SDL_FRect fr = ToFRect(curArray.curLaunchRct); SDL_RenderTexture(rend, gameFinish && !gameWon ? imgBubbleFrozen : useBubbles[curArray.curLaunch], nullptr, &fr); }
         if (curArray.aimGuideEnabled && !gameFinish) {
             bool isMini = (currentSettings.playerCount >= 3 && curArray.playerAssigned >= 1);
             DrawAimGuide(rend, curArray, isMini);
@@ -673,6 +677,13 @@ void BubbleGame::Render() {
             UpdatePenguin(curArray);
             if(!lowGfx) curArray.penguinSprite.Render();
             curArray.shooterSprite.Render(lowGfx);
+            // Redraw the current bubble on top of the shooter/cannon sprite -- the
+            // cannon graphic is large enough to cover most of it, otherwise making
+            // the loaded bubble's color hard to see while aiming.
+            if (curArray.playerState != BubbleArray::PlayerState::LOST) {
+                SDL_FRect fr = ToFRect(curArray.curLaunchRct);
+                SDL_RenderTexture(rend, gameFinish && !curArray.mpWinner ? useFrozen : useBubbles[curArray.curLaunch], nullptr, &fr);
+            }
             if (curArray.aimGuideEnabled && !gameFinish &&
                 curArray.playerState == BubbleArray::PlayerState::ALIVE) {
                 bool isMini = (currentSettings.playerCount >= 3 && curArray.playerAssigned >= 1);
