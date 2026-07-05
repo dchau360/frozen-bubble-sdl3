@@ -234,11 +234,61 @@ bool NetworkClient::SendCommand(const char* command) {
 #endif // __WASM_PORT__ (Disconnect, SendCommand)
 
 bool NetworkClient::SendNick(const char* nickname) {
-    playerNick = nickname;
-    myNickname = nickname;  // Store for ID mapping
+    // Implement retry with suffix if NICK_IN_USE, mirroring CreateGame()'s
+    // handling below. The server now rejects a nickname that's already held
+    // by another currently-active connection (rather than silently killing
+    // it), so two clients defaulting to the same nickname (e.g. both taking
+    // it from the OS username) no longer fight over the same nick.
+    std::string originalNick = nickname;
+    std::string tryNick = nickname;
+    int suffix = 2; // Start with suffix 2 for first retry
+
+#ifdef __WASM_PORT__
+    // In WASM, WebSocket responses arrive asynchronously between frames, so
+    // lastErrorResponse can't be observed synchronously here the way the
+    // native blocking path does below. Keep this a simple fire-and-forget;
+    // HandleServerResponse() already retries NICK_IN_USE responses for the
+    // pending CREATE/JOIN flows, and this repo's NICK usage doesn't need
+    // more than that for now.
+    playerNick = tryNick;
+    myNickname = tryNick;  // Store for ID mapping
     char cmd[128];
-    snprintf(cmd, sizeof(cmd), "NICK %s", nickname);
+    snprintf(cmd, sizeof(cmd), "NICK %s", tryNick.c_str());
     return SendCommand(cmd);
+#else
+    int maxRetries = 20;
+    for (int retry = 0; retry < maxRetries; retry++) {
+        char cmd[128];
+        snprintf(cmd, sizeof(cmd), "NICK %s", tryNick.c_str());
+        SDL_Log("Attempting to set nick: %s (attempt %d)", tryNick.c_str(), retry + 1);
+
+        lastErrorResponse.clear(); // Clear previous error
+
+        if (!SendCommand(cmd)) {
+            SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to send NICK command");
+            return false;
+        }
+
+        // Wait a bit for server response (SendCommand already waits 100ms in TCP path)
+        SDL_Delay(50);
+
+        // Check if we got NICK_IN_USE error (another connection is actively using this nick)
+        if (lastErrorResponse == "NICK_IN_USE") {
+            SDL_Log("Nickname '%s' is in use by an active connection, trying with suffix %d", tryNick.c_str(), suffix);
+            char suffixStr[16];
+            snprintf(suffixStr, sizeof(suffixStr), "%d", suffix);
+            tryNick = originalNick.substr(0, std::min((size_t)9, originalNick.length())) + suffixStr;
+            suffix++;
+            continue;
+        }
+        break; // No error — success
+    }
+
+    // Update playerNick and myNickname to whichever nickname actually succeeded
+    playerNick = tryNick;
+    myNickname = tryNick;  // Store for ID mapping
+    return true;
+#endif // __WASM_PORT__
 }
 
 bool NetworkClient::SendGeoLoc(const char* location) {
