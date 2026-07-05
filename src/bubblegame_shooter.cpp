@@ -640,6 +640,24 @@ void BubbleGame::UpdateSingleBubbles(int /*id*/) {
 
         // Stick the malus bubble to the grid
         if (malus.shouldStick) {
+            // malus.stickY was computed once, back in ProcessMalusQueue, from the
+            // column heights at generation time. Many frames pass while the bubble
+            // rises into place, and the board can change in that column in the
+            // meantime (a chain reaction, a new shot landing, a compression/new-root
+            // shift). Sticking at a stale row would silently overwrite whatever
+            // bubble is actually there now, or land in a gap with nothing next to
+            // it. Recompute the landing row fresh from the board's current state,
+            // mirroring the same top-of-column scan ProcessMalusQueue does, before
+            // placing the bubble.
+            int topOfCol = 0;
+            for (size_t row = 0; row < malusArray->bubbleMap.size(); row++) {
+                if (malus.cx < (int)malusArray->bubbleMap[row].size() &&
+                    malusArray->bubbleMap[row][malus.cx].bubbleId != -1) {
+                    if ((int)row > topOfCol) topOfCol = (int)row;
+                }
+            }
+            malus.stickY = std::min(topOfCol + 1, 12);
+
             SDL_Log("Malus bubble sticking at cx=%d stickY=%d", malus.cx, malus.stickY);
             malusArray->PlacePlayerBubble(malus.bubbleId, malus.stickY, malus.cx);
             // Malus landing must NOT be a match activator.
