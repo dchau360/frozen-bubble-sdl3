@@ -104,7 +104,7 @@ void BubbleGame::UpdatePlayerNameWinText() {
                 } else if (i == 2) {
                     textX = 553; textY = 2;
                 } else {
-                    textX = 83; textY = 298;  // Bottom-left mini
+                    textX = 83; textY = 465;  // Bottom-left mini
                 }
                 break;
             case 5:
@@ -116,9 +116,9 @@ void BubbleGame::UpdatePlayerNameWinText() {
                 } else if (i == 2) {
                     textX = 553; textY = 2;
                 } else if (i == 3) {
-                    textX = 83; textY = 298;
+                    textX = 83; textY = 465;
                 } else {
-                    textX = 553; textY = 298;  // Bottom-right mini
+                    textX = 553; textY = 465;  // Bottom-right mini
                 }
                 break;
             default:
