@@ -915,6 +915,14 @@ void BubbleGame::Render() {
                     { SDL_FRect fr = ToFRect(*chatLineText.Coords()); SDL_RenderTexture(rend, chatLineText.Texture(), nullptr, &fr); }
             }
         }
+
+        // Age and prune expired messages so the overlay auto-hides instead of
+        // lingering until 10 more messages are typed (mirrors RenderMalusAlerts).
+        for (auto &msg : inGameChatMessages) msg.framesLeft--;
+        inGameChatMessages.erase(
+            std::remove_if(inGameChatMessages.begin(), inGameChatMessages.end(),
+                           [](const InGameChatMsg &m) { return m.framesLeft <= 0; }),
+            inGameChatMessages.end());
     }
 
     if (!firstRenderDone) {
