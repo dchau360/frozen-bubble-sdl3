@@ -474,7 +474,7 @@ void BubbleGame::ProcessNetworkMessages() {
                         chatMsg.nick = netClient->GetPlayerNickname(senderId);
                         if (chatMsg.nick.empty()) chatMsg.nick = "Player";
                         chatMsg.text = gameData + 1;
-                        chatMsg.framesLeft = 600;  // 10 seconds at 60 fps
+                        chatMsg.framesLeft = 300;  // 5 seconds at 60 fps
                         inGameChatMessages.push_back(chatMsg);
                         if (inGameChatMessages.size() > 10)
                             inGameChatMessages.erase(inGameChatMessages.begin());

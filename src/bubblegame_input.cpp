@@ -109,7 +109,7 @@ void BubbleGame::FinishInGameChat(bool sendMessage) {
             self.nick = netClient->GetPlayerNick();
             if (self.nick.empty()) self.nick = "Me";
             self.text = chatInputBuf;
-            self.framesLeft = 600;
+            self.framesLeft = 300;  // 5 seconds at 60 fps
             inGameChatMessages.push_back(self);
             if (inGameChatMessages.size() > 10)
                 inGameChatMessages.erase(inGameChatMessages.begin());
