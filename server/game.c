@@ -620,37 +620,63 @@ int process_msg(int fd, char* msg)
                         if (!is_nick_ok(args)) {
                                 send_line_log(fd, wn_nick_invalid, msg_orig);
                         } else {
-                                if (nick[fd] != NULL) {
-                                        free(nick[fd]);
-                                }
-                                nick[fd] = strdup(args);
-                                // Log nick + IP + timestamp to joiners file
-                                {
-                                        FILE *jf = fopen("joiners.log", "a");
-                                        if (jf) {
-                                                time_t now = time(NULL);
-                                                struct tm *tm_info = gmtime(&now);
-                                                char tbuf[32];
-                                                strftime(tbuf, sizeof(tbuf), "%Y-%m-%d %H:%M:%S UTC", tm_info);
-                                                fprintf(jf, "%s  %-15s  %s\n", tbuf, IP[fd] ? IP[fd] : "unknown", nick[fd]);
-                                                fclose(jf);
-                                        }
-                                }
-                                // Evict any stale open_players entry with the same nick (ghost player fix).
-                                // When a player reconnects after a silent TCP drop, the old fd stays in
-                                // open_players until gracetime fires, causing duplicate entries in LIST.
+                                // Refuse the nick if another connection currently holds it AND is
+                                // still actively talking to us (two genuinely live clients — e.g.
+                                // two instances on the same machine defaulting to the same OS
+                                // username — must not be able to kill each other just by
+                                // connecting). Only a same-nick connection that's gone quiet is
+                                // treated as a stale ghost and evicted below; see the "ghost
+                                // player fix" comment there for why eviction exists at all.
+                                int live_collision_fd = -1;
                                 {
                                         GList *iter = open_players;
                                         while (iter) {
                                                 int other_fd = GPOINTER_TO_INT(iter->data);
                                                 iter = iter->next;
-                                                if (other_fd != fd && nick[other_fd] != NULL && streq(nick[other_fd], args)) {
-                                                        conn_terminated(other_fd, "replaced by new connection with same nick");
+                                                if (other_fd != fd && nick[other_fd] != NULL && streq(nick[other_fd], args)
+                                                    && conn_recently_active(other_fd)) {
+                                                        live_collision_fd = other_fd;
+                                                        break;
                                                 }
                                         }
                                 }
-                                calculate_list_games();
-                                send_ok(fd, msg_orig);
+                                if (live_collision_fd != -1) {
+                                        send_line_log(fd, wn_nick_in_use, msg_orig);
+                                } else {
+                                        if (nick[fd] != NULL) {
+                                                free(nick[fd]);
+                                        }
+                                        nick[fd] = strdup(args);
+                                        // Log nick + IP + timestamp to joiners file
+                                        {
+                                                FILE *jf = fopen("joiners.log", "a");
+                                                if (jf) {
+                                                        time_t now = time(NULL);
+                                                        struct tm *tm_info = gmtime(&now);
+                                                        char tbuf[32];
+                                                        strftime(tbuf, sizeof(tbuf), "%Y-%m-%d %H:%M:%S UTC", tm_info);
+                                                        fprintf(jf, "%s  %-15s  %s\n", tbuf, IP[fd] ? IP[fd] : "unknown", nick[fd]);
+                                                        fclose(jf);
+                                                }
+                                        }
+                                        // Evict any stale open_players entry with the same nick (ghost player fix).
+                                        // When a player reconnects after a silent TCP drop, the old fd stays in
+                                        // open_players until gracetime fires, causing duplicate entries in LIST.
+                                        // Only genuinely-stale collisions reach here — a live collision already
+                                        // branched away above.
+                                        {
+                                                GList *iter = open_players;
+                                                while (iter) {
+                                                        int other_fd = GPOINTER_TO_INT(iter->data);
+                                                        iter = iter->next;
+                                                        if (other_fd != fd && nick[other_fd] != NULL && streq(nick[other_fd], args)) {
+                                                                conn_terminated(other_fd, "replaced by new connection with same nick");
+                                                        }
+                                                }
+                                        }
+                                        calculate_list_games();
+                                        send_ok(fd, msg_orig);
+                                }
                         }
                 }
         } else if (streq(current_command, "GEOLOC")) {

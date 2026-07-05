@@ -46,6 +46,7 @@ ssize_t send_ok(int fd, char* inco_msg);
 
 void connections_manager();
 void conn_terminated(int fd, char* reason);
+int conn_recently_active(int fd);
 void create_server(int argc, char **argv);
 void register_server(int silent);
 void unregister_server();

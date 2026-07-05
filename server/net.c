@@ -235,6 +235,19 @@ void conn_terminated(int fd, char* reason)
 
 static int prio_processed;
 static time_t current_time;
+
+/* Has fd sent us anything within the last few seconds? Lobby clients poll
+ * LIST every 500ms (see mainmenu_netpanel.cpp), so a genuinely live
+ * connection always has very recent traffic; a connection that's gone
+ * silent for longer than this is almost certainly a stale ghost from an
+ * unclean disconnect rather than a still-open second session. Used by the
+ * NICK handler to decide whether a same-nickname collision is a real
+ * duplicate live client (reject the new one) or a ghost to evict. */
+int conn_recently_active(int fd)
+{
+        return (current_time - last_data_in[fd]) < 2;
+}
+
 static int need_another_run;
 static void handle_incoming_data_generic(gpointer data, gpointer user_data, int prio)
 {
