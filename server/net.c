@@ -39,6 +39,7 @@
 #  include <unistd.h>
 #  include <sys/socket.h>
 #  include <netinet/in.h>
+#  include <netinet/tcp.h>
 #  include <arpa/inet.h>
 #  include <netdb.h>
 #  include <poll.h>
@@ -601,6 +602,28 @@ void connections_manager(void)
                                 l1(OUTPUT_TYPE_INFO, "[%d] Closing connection (maximum transmission rate reached)", fd);
                                 SOCKET_CLOSE(fd);
                                 continue;
+                        }
+
+                        // Enable TCP keepalive so a peer that vanishes without a clean
+                        // FIN/RST (network drop, laptop sleep, OOM-killed client) gets
+                        // detected by the kernel well before the gracetime backstop
+                        // would otherwise catch it - left at OS defaults (commonly ~2
+                        // hours idle) this is the single biggest source of long-lived
+                        // "ghost" entries in the online/room lists.
+                        {
+                                int ka = 1;
+                                setsockopt(fd, SOL_SOCKET, SO_KEEPALIVE, (const char*)&ka, sizeof(ka));
+#ifndef _WIN32
+                                int idle = 15;
+#ifdef __APPLE__
+                                setsockopt(fd, IPPROTO_TCP, TCP_KEEPALIVE, &idle, sizeof(idle));
+#else
+                                int intvl = 5, cnt = 3;
+                                setsockopt(fd, IPPROTO_TCP, TCP_KEEPIDLE, &idle, sizeof(idle));
+                                setsockopt(fd, IPPROTO_TCP, TCP_KEEPINTVL, &intvl, sizeof(intvl));
+                                setsockopt(fd, IPPROTO_TCP, TCP_KEEPCNT, &cnt, sizeof(cnt));
+#endif
+#endif
                         }
 
                         // We've really accepted this new connection. Init data.
