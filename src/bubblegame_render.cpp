@@ -186,8 +186,16 @@ static void DrawAimGuide(SDL_Renderer* rend, const BubbleArray& bArray, bool isM
     float px = (float)bArray.curLaunchRct.x;
     float py = (float)bArray.curLaunchRct.y;
     float angle = bArray.shooterSprite.angle;
-    float dx = speed * cosf(angle);
-    float dy = speed * sinf(angle);
+    // Scale the simulated step by deltaScale, exactly as SingleBubble::UpdatePosition()
+    // does for the real bubble. deltaScale folds in the frame-rate normalization and
+    // the user's speed-multiplier setting, so without it the guide's per-step distance
+    // only matches the real shot's per-frame movement by coincidence at one particular
+    // speed setting on a perfectly steady frame - at any other speed, or under frame
+    // pacing variance, the guide's wall-bounce and grid-collision checks run at a
+    // different granularity than actual gameplay and can predict the wrong landing cell.
+    const float ds = FrozenBubble::Instance()->deltaScale;
+    float dx = speed * cosf(angle) * ds;
+    float dy = speed * sinf(angle) * ds;
 
     SDL_SetRenderDrawBlendMode(rend, SDL_BLENDMODE_BLEND);
 
@@ -206,8 +214,9 @@ static void DrawAimGuide(SDL_Renderer* rend, const BubbleArray& bArray, bool isM
 
         if (py <= (float)bArray.topLimit) break;
 
-        // Check grid collision every 2 steps
-        if (step % 2 == 0) {
+        // Check grid collision every step now that the step size itself matches the
+        // real per-frame movement (ds above already accounts for that granularity).
+        {
             int cy = (int)((py - bArray.bubbleOffset.y + ROW_SIZE / 2.0f) / ROW_SIZE);
             if (cy >= 0 && cy < 13) {
                 int oddRowOffset = ((int)bArray.bubbleMap[cy].size() == 7) ? BUBBLE_SIZE / 2 : 0;
