@@ -215,10 +215,10 @@ void SetupGameMetrics(BubbleArray *bArray, int playerCount, bool lowGfx){
                 bArray[0].lGfxShooterRct.w = bArray[0].lGfxShooterRct.h = 2;
                 bArray[1].lGfxShooterRct.w = bArray[1].lGfxShooterRct.h = 2;
             }
-            bArray[0].curLaunchRct = {SCREEN_CENTER_X+148, 480-89, 32, 32};
-            bArray[0].nextBubbleRct = {SCREEN_CENTER_X+148, 480-40, 32, 32};
-            bArray[0].onTopRct = {SCREEN_CENTER_X+144, 480-43, 39, 39};
-            bArray[0].frozenBottomRct = {SCREEN_CENTER_X+143, 480-43, 39, 39};
+            bArray[0].curLaunchRct = {SCREEN_CENTER_X+144, 480-89, 32, 32};
+            bArray[0].nextBubbleRct = {SCREEN_CENTER_X+144, 480-40, 32, 32};
+            bArray[0].onTopRct = {SCREEN_CENTER_X+141, 480-43, 39, 39};
+            bArray[0].frozenBottomRct = {SCREEN_CENTER_X+140, 480-43, 39, 39};
 
             bArray[1].curLaunchRct = {SCREEN_CENTER_X-176, 480-89, 32, 32};
             bArray[1].nextBubbleRct = {SCREEN_CENTER_X-176, 480-40, 32, 32};
@@ -373,7 +373,7 @@ void BubbleGame::NewGame(SetupSettings setup) {
             bubbleArrays[0].shooterSprite.angle = PI/2.0f;
             bubbleArrays[0].bubbleOffset = {354, 40};
             bubbleArrays[0].leftLimit = SCREEN_CENTER_X + 32;
-            bubbleArrays[0].rightLimit = 640 - 28;
+            bubbleArrays[0].rightLimit = 640 - 32;
             bubbleArrays[0].topLimit = 31;
             bubbleArrays[0].hurryRct = {SCREEN_CENTER_X + 40, 480 - 214, 244, 102};
             bubbleArrays[0].numSeparators = 0;
