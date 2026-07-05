@@ -651,7 +651,8 @@ void BubbleGame::UpdateSingleBubbles(int /*id*/) {
             // placing the bubble.
             int topOfCol = 0;
             for (size_t row = 0; row < malusArray->bubbleMap.size(); row++) {
-                if (malusArray->bubbleMap[row][malus.cx].bubbleId != -1) {
+                if (malus.cx < (int)malusArray->bubbleMap[row].size() &&
+                    malusArray->bubbleMap[row][malus.cx].bubbleId != -1) {
                     if ((int)row > topOfCol) topOfCol = (int)row;
                 }
             }
