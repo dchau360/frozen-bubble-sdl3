@@ -313,7 +313,7 @@ void BubbleGame::RenderRoundStats(SDL_Renderer *rend) {
     const int n = currentSettings.playerCount;
     if (n < 2) return;
 
-    const int boxW = 384, boxX = (640 - boxW) / 2, boxY = 6;
+    const int boxW = 434, boxX = (640 - boxW) / 2, boxY = 6;
     const int rowH = 16, headH = 22;
     const int hintH = currentSettings.networkGame ? rowH : 0;
     const int boxH = headH + rowH * (n + 1) + hintH + 6;
@@ -329,10 +329,11 @@ void BubbleGame::RenderRoundStats(SDL_Renderer *rend) {
 
     // Column x offsets (numbers right-anchored-ish via left placement that fits 14px font).
     const int colName = boxX + 8;
-    const int colFired = boxX + 168;
-    const int colPopped = boxX + 234;
-    const int colSent = boxX + 296;
-    const int colRecv = boxX + 348;
+    const int colWin = boxX + 160;
+    const int colFired = boxX + 206;
+    const int colPopped = boxX + 264;
+    const int colSent = boxX + 320;
+    const int colRecv = boxX + 372;
 
     auto cell = [&](const char *txt, int x, int y, SDL_Color c) {
         statsText.UpdateColor(c, {0, 0, 0, 0});
@@ -356,6 +357,7 @@ void BubbleGame::RenderRoundStats(SDL_Renderer *rend) {
     cell(roundHdr, colName, y, hdr);
     y += headH;
     cell("Player", colName, y, hdr);
+    cell("Win", colWin, y, hdr);
     cell("Fire", colFired, y, hdr);
     cell("Pop", colPopped, y, hdr);
     cell("Atk", colSent, y, hdr);
@@ -369,6 +371,7 @@ void BubbleGame::RenderRoundStats(SDL_Renderer *rend) {
         std::string name = StatsPlayerName(p, i, currentSettings.networkGame);
         if (name.size() > 14) name = name.substr(0, 14);
         cell(name.c_str(), colName, y, c);
+        snprintf(buf, sizeof(buf), "%d", p.winCount); cell(buf, colWin, y, c);
         snprintf(buf, sizeof(buf), "%d", p.rFired);  cell(buf, colFired, y, c);
         snprintf(buf, sizeof(buf), "%d", p.rPopped); cell(buf, colPopped, y, c);
         snprintf(buf, sizeof(buf), "%d", p.rSent);   cell(buf, colSent, y, c);
