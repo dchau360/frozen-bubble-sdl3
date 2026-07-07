@@ -349,7 +349,11 @@ void BubbleGame::RenderRoundStats(SDL_Renderer *rend) {
     const SDL_Color normal = {235, 235, 235, 255};
 
     int y = boxY + 3;
-    cell("ROUND STATS", colName, y, hdr);
+    // roundsPlayed is incremented by FinalizeRoundStats (called earlier this
+    // frame), so it already counts the round whose stats are shown here.
+    char roundHdr[32];
+    snprintf(roundHdr, sizeof(roundHdr), "ROUND %d STATS", roundsPlayed > 0 ? roundsPlayed : 1);
+    cell(roundHdr, colName, y, hdr);
     y += headH;
     cell("Player", colName, y, hdr);
     cell("Fire", colFired, y, hdr);
