@@ -299,6 +299,13 @@ void BubbleGame::NewGame(SetupSettings setup) {
     gameMpDone = false;
     sendMalusToOne = -1;
     attackingMe.clear();
+
+    // Next-round handshake state must not leak in from a previous match: if the
+    // last game was quit while waiting on the stats screen, a stale
+    // waitingForOpponentNewGame would silently swallow this match's 'n' sends.
+    waitingForOpponentNewGame = false;
+    opponentReadyForNewGame = false;
+    opponentsReadyCount = 0;
     for (int i = 0; i < 5; i++) playerTargeting[i] = -1;
     for (int i = 0; i < currentSettings.playerCount; i++) ResetRoundInputState(bubbleArrays[i]);
     pendingHighscore = false;
