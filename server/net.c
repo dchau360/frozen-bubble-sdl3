@@ -506,6 +506,18 @@ void connections_manager(void)
                         calculate_list_games();
                 recalculate_list_games = 0;
 
+                // Whether this iteration ran a fresh select() (vs. reusing the stale
+                // conns_set from need_another_run's skip-select fast path below). Only a
+                // fresh select() can be trusted for the listening sockets: accept() and
+                // recvfrom() are both blocking calls with no fd to select()/EAGAIN out of,
+                // so acting on a stale "readable" bit here -- left over from an earlier
+                // iteration that already consumed the one pending connection -- hangs the
+                // entire single-threaded event loop forever waiting for a connection that
+                // isn't actually there. (The per-client handle_incoming_data* reads below
+                // are unaffected: recv() there uses MSG_DONTWAIT, so a stale bit at worst
+                // costs a harmless EAGAIN.)
+                int did_select = !need_another_run;
+
                 if (!need_another_run) {
                         FD_ZERO(&conns_set);
                         g_list_foreach(conns, fill_conns_set, &conns_set);
@@ -559,7 +571,7 @@ void connections_manager(void)
                 g_list_free(conns);
                 conns = new_conns;
 
-                if (tcp_server_socket != -1 && FD_ISSET(tcp_server_socket, &conns_set)) {
+                if (did_select && tcp_server_socket != -1 && FD_ISSET(tcp_server_socket, &conns_set)) {
                         if ((fd = accept(tcp_server_socket, (struct sockaddr *) &client_addr, (socklen_t *) &len)) == -1) {
                                 l1(OUTPUT_TYPE_ERROR, "accept: %s", strerror(errno));
                                 continue;
@@ -650,7 +662,7 @@ void connections_manager(void)
                         recalculate_list_games = 1;
                 }
 
-                if (udp_server_socket != -1 && FD_ISSET(udp_server_socket, &conns_set))
+                if (did_select && udp_server_socket != -1 && FD_ISSET(udp_server_socket, &conns_set))
                         handle_udp_request();
         }
 }
