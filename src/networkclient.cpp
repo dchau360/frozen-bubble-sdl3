@@ -122,30 +122,33 @@ bool NetworkClient::Connect(const char* host, int port) {
         return false;
     }
 
-    // Wait for and consume all initial server messages
+    // Wait for and consume all initial server messages. Poll in short slices
+    // but judge "no more data" against an overall deadline, not the first
+    // quiet slice -- a remote server's banner can take noticeably longer to
+    // arrive than a single 100ms poll (localhost is ~0ms, but connect()
+    // itself plus the first round-trip can add up over a real network).
     char buffer[BUFFER_SIZE];
     bool gotServerReady = false;
 
-    // Give server time to send all initial messages
-    SDL_Delay(200);
+    Uint64 timeout = 3000;  // 3 second overall deadline
+    Uint64 startTime = SDL_GetTicks();
 
-    // Read all available data
-    while (true) {
+    while (SDL_GetTicks() - startTime < timeout) {
         fd_set readfds;
-        struct timeval timeout;
+        struct timeval selectTimeout;
         FD_ZERO(&readfds);
         FD_SET(sockfd, &readfds);
-        timeout.tv_sec = 0;
-        timeout.tv_usec = 100000; // 100ms
+        selectTimeout.tv_sec = 0;
+        selectTimeout.tv_usec = 100000; // 100ms poll slice
 
-        int selectResult = select(sockfd + 1, &readfds, NULL, NULL, &timeout);
+        int selectResult = select(sockfd + 1, &readfds, NULL, NULL, &selectTimeout);
         if (selectResult <= 0) {
-            break; // No more data
+            continue; // No data this slice; keep polling until the deadline
         }
 
         ssize_t received = recv(sockfd, buffer, sizeof(buffer) - 1, 0);
         if (received <= 0) {
-            break;
+            break; // Connection closed or errored
         }
 
         buffer[received] = '\0';
@@ -157,6 +160,10 @@ bool NetworkClient::Connect(const char* host, int port) {
                 gotServerReady = true;
             }
             line = strtok(NULL, "\n");
+        }
+
+        if (gotServerReady) {
+            break;
         }
     }
 
