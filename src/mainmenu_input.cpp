@@ -603,7 +603,16 @@ bool MainMenu::LocalMPPanelKey(SDL_Event *e) {
                         AudioMixer::Instance()->PlaySFX("menu_change");
                     } else if (localMPMenuIndex == 3) {
                         localMPClearMode = !localMPClearMode;
-                        if (localMPClearMode) { localMPNoCompress = true; localMPDisableMalus = true; }
+                        if (localMPClearMode) {
+                            // Entering Clear Mode: remember current settings so leaving it can restore them.
+                            localMPPreClearNoCompress = localMPNoCompress;
+                            localMPPreClearDisableMalus = localMPDisableMalus;
+                            localMPNoCompress = true;
+                            localMPDisableMalus = true;
+                        } else {
+                            localMPNoCompress = localMPPreClearNoCompress;
+                            localMPDisableMalus = localMPPreClearDisableMalus;
+                        }
                         AudioMixer::Instance()->PlaySFX("menu_change");
                     } else if (localMPMenuIndex == 4) {
                         localMPDisableMalus = !localMPDisableMalus;
@@ -640,7 +649,16 @@ bool MainMenu::LocalMPPanelKey(SDL_Event *e) {
                         AudioMixer::Instance()->PlaySFX("menu_change");
                     } else if (localMPMenuIndex == 3) {
                         localMPClearMode = !localMPClearMode;
-                        if (localMPClearMode) { localMPNoCompress = true; localMPDisableMalus = true; }
+                        if (localMPClearMode) {
+                            // Entering Clear Mode: remember current settings so leaving it can restore them.
+                            localMPPreClearNoCompress = localMPNoCompress;
+                            localMPPreClearDisableMalus = localMPDisableMalus;
+                            localMPNoCompress = true;
+                            localMPDisableMalus = true;
+                        } else {
+                            localMPNoCompress = localMPPreClearNoCompress;
+                            localMPDisableMalus = localMPPreClearDisableMalus;
+                        }
                         AudioMixer::Instance()->PlaySFX("menu_change");
                     } else if (localMPMenuIndex == 4) {
                         localMPDisableMalus = !localMPDisableMalus;
@@ -866,14 +884,21 @@ void MainMenu::MenuLeftRightKey(SDL_Event *e) {
                             bool settingChanged = false;
                             if (selectedActionIndex == 1) {
                                 int mode = netTeamMode ? 2 : (netClearMode ? 1 : 0);
+                                bool wasClear = netClearMode;
                                 mode += (e->key.key == SDLK_LEFT) ? -1 : 1;
                                 if (mode < 0) mode = 2;
                                 if (mode > 2) mode = 0;
                                 netClearMode = mode == 1;
                                 netTeamMode = mode == 2;
-                                if (netClearMode) {
+                                if (netClearMode && !wasClear) {
+                                    // Entering Clear Mode: remember current settings so leaving it can restore them.
+                                    for (int i = 0; i < 5; i++) netPreClearNoCompress[i] = playerNoCompress[i];
+                                    netPreClearDisableMalus = netDisableMalus;
                                     for (int i = 0; i < 5; i++) playerNoCompress[i] = true;
                                     netDisableMalus = true;
+                                } else if (wasClear && !netClearMode) {
+                                    for (int i = 0; i < 5; i++) playerNoCompress[i] = netPreClearNoCompress[i];
+                                    netDisableMalus = netPreClearDisableMalus;
                                 }
                                 AudioMixer::Instance()->PlaySFX("menu_change");
                                 settingChanged = true;
@@ -999,14 +1024,21 @@ void MainMenu::GameRoomHostReturn(NetworkClient *netClient, GameRoom *currentGam
         // Cycle game mode: Classic -> Clear -> Teams -> Classic
         int mode = netTeamMode ? 2 : (netClearMode ? 1 : 0);
         int nextMode = (mode + 1) % 3;
+        bool wasClear = netClearMode;
         {
             AudioMixer::Instance()->PlaySFX("menu_change");
             mode = nextMode;
             netClearMode = mode == 1;
             netTeamMode = mode == 2;
-            if (netClearMode) {
+            if (netClearMode && !wasClear) {
+                // Entering Clear Mode: remember current settings so leaving it can restore them.
+                for (int i = 0; i < 5; i++) netPreClearNoCompress[i] = playerNoCompress[i];
+                netPreClearDisableMalus = netDisableMalus;
                 for (int i = 0; i < 5; i++) playerNoCompress[i] = true;
                 netDisableMalus = true;
+            } else if (wasClear && !netClearMode) {
+                for (int i = 0; i < 5; i++) playerNoCompress[i] = netPreClearNoCompress[i];
+                netDisableMalus = netPreClearDisableMalus;
             }
             settingChanged = true;
         }
