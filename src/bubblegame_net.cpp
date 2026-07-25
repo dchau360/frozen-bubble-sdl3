@@ -423,6 +423,14 @@ void BubbleGame::ProcessNetworkMessages() {
                                 bubbleArrays[winnerPlayer].mpWinner = true;
                                 bubbleArrays[winnerPlayer].penguinSprite.PlayAnimation(10);
 
+                                // Every client already tracks a synced copy of every player's
+                                // board, so a clear win can be derived here without a protocol
+                                // change — the 'F' message itself doesn't say how the round was won.
+                                if (bubbleArrays[winnerPlayer].allClear()) {
+                                    wonByClearing = true;
+                                    audMixer->PlaySFX("applause");
+                                }
+
                                 if (winnerPlayer == 0) {
                                     winsP1++;
                                     SDL_Log("Win counter updated: We won! winsP1=%d", winsP1);

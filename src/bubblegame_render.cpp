@@ -892,6 +892,27 @@ void BubbleGame::Render() {
             }
         }
 
+        // Distinct banner for a win by clearing the board, set apart from an
+        // ordinary last-player-standing win. Positioned above panelRct so it
+        // never overlaps the 2P win-panel image or the 3-5P name/win-count text.
+        if (gameFinish && wonByClearing) {
+            int winnerIdx = -1;
+            for (int i = 0; i < currentSettings.playerCount; i++) {
+                if (bubbleArrays[i].mpWinner) { winnerIdx = i; break; }
+            }
+            if (winnerIdx >= 0) {
+                char banner[160];
+                snprintf(banner, sizeof(banner), "Board Cleared! %s Wins!",
+                         StatsPlayerName(bubbleArrays[winnerIdx], winnerIdx, currentSettings.networkGame).c_str());
+                clearWinText.UpdateText(rend, banner, 0);
+                clearWinText.UpdatePosition({SCREEN_CENTER_X - (clearWinText.Coords()->w / 2), 165});
+                if (clearWinText.Texture()) {
+                    SDL_FRect fr = ToFRect(*clearWinText.Coords());
+                    SDL_RenderTexture(rend, clearWinText.Texture(), nullptr, &fr);
+                }
+            }
+        }
+
         // Incoming-malus toasts ("who hit you and how many"); fade out during play.
         if (!gameFinish) RenderMalusAlerts(rend);
 

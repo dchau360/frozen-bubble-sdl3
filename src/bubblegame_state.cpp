@@ -531,7 +531,9 @@ void BubbleGame::CheckGameState(BubbleArray &bArray, bool countForRoot) {
         if (currentSettings.playerCount < 2) gameWon = true;
         else {
             audMixer->PlaySFX("lose");
+            audMixer->PlaySFX("applause");
             bArray.mpWinner = true;
+            wonByClearing = true;
 
             // In network games, only local player (array 0) processes wins
             if (currentSettings.networkGame && bArray.playerAssigned == 0) {

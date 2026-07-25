@@ -437,6 +437,10 @@ private:
 
     bool lowGfx = false, gameWon = false, gameLost = false, gameFinish = false, firstRenderDone = false, gameMpDone = false;
     bool gameMatchOver = false; // Victories limit reached - match is over, return to lobby
+    // True only when this round's win came from clearing the board (CheckGameState's
+    // allClear() branch, or its network-derived equivalent) rather than from
+    // HandlePlayerLoss's elimination paths. Drives the clear-win banner/sound.
+    bool wonByClearing = false;
     bool roundStatsFinalized = false; // Per-round stats rolled into match totals (and 'S' broadcast) once per round
     int roundsPlayed = 0;       // Completed rounds this match (gates the lobby summary)
     bool waitingForOpponentNewGame = false; // Waiting for opponents to press key for new game
@@ -470,6 +474,7 @@ private:
     AudioMixer *audMixer;
 
     TTFText inGameText, winsP1Text, winsP2Text, scoreText, comboText, finalScoreText, mpTrainText;
+    TTFText clearWinText;    // "Board Cleared — <Name> Wins!" banner, shown when wonByClearing
     TTFText playerNameWinText[5];  // "PlayerName: WinCount" for each player (3-5 player mode)
     TTFText targetingText;   // Reused to render targeting indicators in MP mode
     TTFText statsText;       // Reused per cell to render the post-round stats table

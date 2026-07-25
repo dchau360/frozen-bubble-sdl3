@@ -134,6 +134,10 @@ BubbleGame::BubbleGame(const SDL_Renderer *renderer)
     comboText.UpdateAlignment(TTF_HORIZONTAL_ALIGN_CENTER);
     comboText.UpdateColor({255, 255, 0, 255}, {0, 0, 0, 255}); // Yellow text
 
+    clearWinText.LoadFont(ASSET("/gfx/DroidSans.ttf").c_str(), 32);
+    clearWinText.UpdateAlignment(TTF_HORIZONTAL_ALIGN_CENTER);
+    clearWinText.UpdateColor({255, 255, 0, 255}, {0, 0, 0, 255}); // Yellow text
+
     finalScoreText.LoadFont(ASSET("/gfx/DroidSans.ttf").c_str(), 28);
     finalScoreText.UpdateAlignment(TTF_HORIZONTAL_ALIGN_CENTER);
     finalScoreText.UpdateColor({255, 255, 255, 255}, {0, 0, 0, 255});
@@ -296,6 +300,7 @@ void BubbleGame::NewGame(SetupSettings setup) {
 
     // Reset game state flags
     gameFinish = gameWon = gameLost = gameMatchOver = false;
+    wonByClearing = false;
     gameMpDone = false;
     sendMalusToOne = -1;
     attackingMe.clear();
@@ -903,6 +908,7 @@ void BubbleGame::ReloadGame(int level) {
     firstRenderDone = false;
 
     gameFinish = gameWon = gameLost = gameMatchOver = false;
+    wonByClearing = false;
     gameMpDone = false;
     sendMalusToOne = -1;
     attackingMe.clear();
