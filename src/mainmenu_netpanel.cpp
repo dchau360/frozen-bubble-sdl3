@@ -23,9 +23,11 @@
 #include "transitionmanager.h"
 #include "networkclient.h"
 #include "platform.h"
+#include "bubblegame.h"
 
 #include <SDL3_image/SDL_image.h>
 #include <cstring>
+#include <cstdlib>
 #include <cmath>
 #include <errno.h>
 #include <thread>
@@ -105,8 +107,8 @@ void MainMenu::NetPanelRender() {
 
         // Apply any options broadcast by the host (joiners receive SETOPTIONS push)
         {
-            bool cr, cl, st; int vl; int pc[5]; bool nc[5]; bool ag[5]; bool me;
-            if (netClient->GetAndClearPendingOptions(cr, cl, st, vl, pc, nc, ag, me)) {
+            bool cr, cl, st; int vl; int pc[5]; bool nc[5]; bool ag[5]; bool me; bool cm; bool dm; bool tm; int pt[5];
+            if (netClient->GetAndClearPendingOptions(cr, cl, st, vl, pc, nc, ag, me, cm, dm, tm, pt)) {
                 chainReactionEnabled = cr;
                 continueWhenPlayersLeave = cl;
                 singlePlayerTargetting = st;
@@ -116,8 +118,12 @@ void MainMenu::NetPanelRender() {
                 for (int i = 0; i < 18; i++) { if (vLimits[i] == vl) { victoriesLimitIndex = i; break; } }
                 for (int i = 0; i < 5; i++) { playerColorCounts[i] = pc[i]; playerNoCompress[i] = nc[i]; playerAimGuide[i] = ag[i]; }
                 netRoomMouseEnabled = me;
-                SDL_Log("Applied host options: cr=%d cl=%d st=%d vl=%d colors=%d,%d,%d,%d,%d mouse=%d",
-                    cr,cl,st,vl,pc[0],pc[1],pc[2],pc[3],pc[4],me);
+                netClearMode = cm;
+                netDisableMalus = dm;
+                netTeamMode = tm;
+                for (int i = 0; i < 5; i++) netPlayerTeams[i] = pt[i];
+                SDL_Log("Applied host options: cr=%d cl=%d st=%d vl=%d colors=%d,%d,%d,%d,%d mouse=%d cm=%d dm=%d tm=%d",
+                    cr,cl,st,vl,pc[0],pc[1],pc[2],pc[3],pc[4],me,cm,dm,tm);
             }
         }
 
@@ -275,33 +281,43 @@ void MainMenu::NetPanelLobbyActionsRender() {
             // In a game room - show game options
             actions.push_back("Chat");  // index 0
 
-            // Global settings (indices 1-4) - same for host and joiner
+            // Mode and Malus (indices 1-2) — surfaced first since they define the
+            // match type; newly created rooms default focus to "Game mode".
+            char modeText[64], malusText[64];
+            const char* mode = netTeamMode ? "Teams" : (netClearMode ? "Clear" : "Classic");
+            snprintf(modeText, sizeof(modeText), "Game mode: %s", mode);
+            snprintf(malusText, sizeof(malusText), "Attack bubbles: %s", netDisableMalus ? "OFF" : "ON");
+            actions.push_back(modeText);  // index 1
+            actions.push_back(malusText); // index 2
+
+            // Global settings (indices 3-6) - same for host and joiner
             char crText[64], continueText[64], targetText[64], victoriesText[64];
             snprintf(crText, sizeof(crText), "Chain-reaction: %s", chainReactionEnabled ? "enabled" : "disabled");
             snprintf(continueText, sizeof(continueText), "Continue when players leave: %s", continueWhenPlayersLeave ? "enabled" : "disabled");
             snprintf(targetText, sizeof(targetText), "Single player targetting: %s", singlePlayerTargetting ? "enabled" : "disabled");
             const char* victoriesLimits[] = {"none (unlimited)", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "15", "20", "30", "50", "100"};
             snprintf(victoriesText, sizeof(victoriesText), "Victories limit: %s", victoriesLimits[victoriesLimitIndex]);
-            actions.push_back(crText);       // index 1
-            actions.push_back(continueText); // index 2
-            actions.push_back(targetText);   // index 3
-            actions.push_back(victoriesText);// index 4
+            actions.push_back(crText);       // index 3
+            actions.push_back(continueText); // index 4
+            actions.push_back(targetText);   // index 5
+            actions.push_back(victoriesText);// index 6
 
-            // Mouse/touch aim (index 5) — per-session local setting, defaults OFF
+            // Mouse/touch aim (index 7) — per-session local setting, defaults OFF
             {
                 char mouseText[64];
                 snprintf(mouseText, sizeof(mouseText), "Mouse/Touch aim: %s", netRoomMouseEnabled ? "ON" : "OFF");
-                actions.push_back(mouseText); // index 5
+                actions.push_back(mouseText); // index 7
             }
 
-            // Per-player grid rows (indices 6-8) — label only; values rendered as grid cells below
-            actions.push_back("Max colors:"); // index 6
-            actions.push_back("Rows:");      // index 7
-            actions.push_back("Aim:");       // index 8
+            // Per-player grid rows (indices 8-11) — label only; values rendered as grid cells below
+            actions.push_back("Max colors:"); // index 8
+            actions.push_back("Rows:");       // index 9
+            actions.push_back("Aim:");        // index 10
+            actions.push_back("Team:");       // index 11
 
-            // Start game (index 9) — host only when >1 player
+            // Start game (index 12) — host only when >1 player
             if (currentGame->creator == netClient->GetPlayerNick() && currentGame->players.size() > 1) {
-                actions.push_back("Start game!"); // index 9
+                actions.push_back("Start game!"); // index 12
             }
             // No "Part game" menu item - use ESC key to leave like original
         } else {
@@ -321,11 +337,11 @@ void MainMenu::NetPanelLobbyActionsRender() {
         }
 
         // Grid offset: player header + grid rows are shifted down one line to make room for nick header
-        const int gridStart = 6;       // First grid row index
+        const int gridStart = 8;       // First grid row index
         const int gridYOffset = lineHeight * 2; // Gap after Victories limit + space for nick header
 
         // Render actions with highlight
-        for (size_t i = 0; i < actions.size() && i < 15; i++) {
+        for (size_t i = 0; i < actions.size() && i < 18; i++) {
             int renderY = actionStartY + (int)(i * lineHeight) + ((int)i >= gridStart ? gridYOffset : 0);
 
             if (i == (size_t)selectedActionIndex && highlightServer) {
@@ -333,8 +349,8 @@ void MainMenu::NetPanelLobbyActionsRender() {
                 { SDL_FRect fr = ToFRect(highlightRect); SDL_RenderTexture(const_cast<SDL_Renderer*>(renderer), highlightServer, nullptr, &fr); };
             }
 
-            // For grid rows (5-7 in a game room), skip the label text here — rendered as table below
-            if (currentGame && (int)i >= gridStart && (int)i <= gridStart + 2) {
+            // For grid rows (Colors/Rows/Aim/Team in a game room), skip the label text here — rendered as table below
+            if (currentGame && (int)i >= gridStart && (int)i <= gridStart + 3) {
                 continue;
             }
 
@@ -351,10 +367,25 @@ void MainMenu::NetPanelLobbyActionsRender() {
             if (numPlayers < 1) numPlayers = 1;
             if (numPlayers > 5) numPlayers = 5;
             bool isHost = currentGame->creator == netClient->GetPlayerNick();
+            std::string myNickForGrid = netClient->GetPlayerNick();
+            int myJoinerSlot = -1;
+            for (int i = 0; i < (int)currentGame->players.size(); i++) {
+                if (currentGame->players[i].nick == myNickForGrid) { myJoinerSlot = i; break; }
+            }
 
             // Column layout
-            const int labelW = 110;  // Width of row label ("Max colors:", "Row collapse:", "Aim guide:")
+            const int labelW = 110;  // Width of row label ("Max colors:", "Row collapse:", "Aim guide:", "Team:")
             const int colW   = 36;   // Width of each player column
+            const SDL_Color *teamColors = kTeamColors;
+            auto drawTeamSwatch = [&](int colLeft, int rowTop, int teamVal) {
+                int t = teamVal;
+                if (t < 1 || t > 5) t = 1;
+                SDL_Color c = teamColors[t - 1];
+                SDL_SetRenderDrawColor(const_cast<SDL_Renderer*>(renderer), c.r, c.g, c.b, 140);
+                SDL_Rect swatch = {colLeft + 3, rowTop - 1, colW - 6, lineHeight};
+                SDL_FRect fr = ToFRect(swatch);
+                SDL_RenderFillRect(const_cast<SDL_Renderer*>(renderer), &fr);
+            };
 
             // Header row sits exactly one lineHeight above the first data row
             int firstDataRowY = actionStartY + gridStart * lineHeight + gridYOffset;
@@ -369,7 +400,7 @@ void MainMenu::NetPanelLobbyActionsRender() {
                 int gridLeft  = actionStartX - 2;
                 int gridRight = actionStartX + labelW + totalCols * colW;
                 int gridTop   = headerY - 1;
-                int gridBot   = firstDataRowY + 3 * lineHeight; // 3 data rows
+                int gridBot   = firstDataRowY + 4 * lineHeight; // 4 data rows
 
                 // Outer border
                 SDL_Rect border = {gridLeft, gridTop, gridRight - gridLeft, gridBot - gridTop};
@@ -377,8 +408,8 @@ void MainMenu::NetPanelLobbyActionsRender() {
 
                 // Horizontal line after header row
                 SDL_RenderLine(rend, (float)gridLeft, (float)(firstDataRowY - 1), (float)gridRight, (float)(firstDataRowY - 1));
-                // Horizontal lines between data rows (after Colors, after Row collapse)
-                for (int r = 1; r <= 2; r++) {
+                // Horizontal lines between data rows (after Colors, after Row collapse, after Aim)
+                for (int r = 1; r <= 3; r++) {
                     int y = firstDataRowY + r * lineHeight;
                     SDL_RenderLine(rend, (float)gridLeft, (float)y, (float)gridRight, (float)y);
                 }
@@ -413,9 +444,9 @@ void MainMenu::NetPanelLobbyActionsRender() {
                 renderCentered(pnum, actionStartX + labelW + (pi + 1) * colW, headerY);
             }
 
-            // Grid rows: Colors (5), Rows (6), Aim (7)
-            const char* rowLabels[] = {"Max colors:", "Row collapse:", "Aim guide:"};
-            for (int row = 0; row < 3; row++) {
+            // Grid rows: Colors (8), Rows (9), Aim (10), Team (11)
+            const char* rowLabels[] = {"Max colors:", "Row collapse:", "Aim guide:", "Team:"};
+            for (int row = 0; row < 4; row++) {
                 int rowIdx = gridStart + row;
                 int rowY   = actionStartY + rowIdx * lineHeight + gridYOffset;
 
@@ -449,11 +480,20 @@ void MainMenu::NetPanelLobbyActionsRender() {
                         for (int i = 1; i < numPlayers; i++) if (playerNoCompress[i] != playerNoCompress[0]) { same = false; break; }
                         if (same) snprintf(cellText, sizeof(cellText), "%s", playerNoCompress[0] ? "off" : "on");
                         else snprintf(cellText, sizeof(cellText), "-");
-                    } else {
+                    } else if (row == 2) {
                         bool same = true;
                         for (int i = 1; i < numPlayers; i++) if (playerAimGuide[i] != playerAimGuide[0]) { same = false; break; }
                         if (same) snprintf(cellText, sizeof(cellText), "%s", playerAimGuide[0] ? "on" : "off");
                         else snprintf(cellText, sizeof(cellText), "-");
+                    } else {
+                        bool same = true;
+                        for (int i = 1; i < numPlayers; i++) if (netPlayerTeams[i] != netPlayerTeams[0]) { same = false; break; }
+                        if (same) {
+                            drawTeamSwatch(actionStartX + labelW, rowY, netPlayerTeams[0]);
+                            snprintf(cellText, sizeof(cellText), "%d", netPlayerTeams[0]);
+                        } else {
+                            snprintf(cellText, sizeof(cellText), "-");
+                        }
                     }
                     renderCentered(cellText, actionStartX + labelW, rowY);
                 }
@@ -463,8 +503,9 @@ void MainMenu::NetPanelLobbyActionsRender() {
                     int cellX = actionStartX + labelW + (pi + 1) * colW; // +1 to skip ALL column
                     bool isFocusedCell = (selectedActionIndex == rowIdx && currentPlayerCol == pi + 1);
 
-                    // Cell highlight for focused cell (host only)
-                    if (isFocusedCell && isHost && highlightServer) {
+                    // Cell highlight: host all rows; joiner only their own column on Teams row
+                    bool canHighlight = isHost || (row == 3 && pi == myJoinerSlot);
+                    if (isFocusedCell && canHighlight && highlightServer) {
                         SDL_Rect cellHl = {cellX - 2, rowY - 1, colW - 2, lineHeight};
                         { SDL_FRect fr = ToFRect(cellHl); SDL_RenderTexture(const_cast<SDL_Renderer*>(renderer), highlightServer, nullptr, &fr); };
                     }
@@ -475,8 +516,11 @@ void MainMenu::NetPanelLobbyActionsRender() {
                         snprintf(cellText, sizeof(cellText), "%d", playerColorCounts[pi]);
                     } else if (row == 1) {
                         snprintf(cellText, sizeof(cellText), "%s", playerNoCompress[pi] ? "off" : "on");
-                    } else {
+                    } else if (row == 2) {
                         snprintf(cellText, sizeof(cellText), "%s", playerAimGuide[pi] ? "on" : "off");
+                    } else {
+                        drawTeamSwatch(cellX, rowY, netPlayerTeams[pi]);
+                        snprintf(cellText, sizeof(cellText), "%d", netPlayerTeams[pi]);
                     }
                     renderCentered(cellText, cellX, rowY);
                 }
@@ -506,10 +550,40 @@ void MainMenu::NetPanelChatStatusRender() {
         const int maxChatLines = 5;
         std::vector<ChatMessage> chatMsgs = netClient->GetChatMessages();
 
-        // Display last 5 messages from bottom up
+        // Host: intercept !team:N commands sent by joiners and re-broadcast SETOPTIONS
+        if (currentGame && currentGame->creator == netClient->GetPlayerNick()) {
+            if (chatMsgs.size() < lastProcessedChatCount) lastProcessedChatCount = 0;
+            for (size_t mi = lastProcessedChatCount; mi < chatMsgs.size(); mi++) {
+                const std::string& msg = chatMsgs[mi].message;
+                if (msg.size() > 6 && msg.substr(0, 6) == "!team:") {
+                    // Format: !team:<nick>:<team>
+                    size_t sep = msg.find(':', 6);
+                    if (sep == std::string::npos) continue;
+                    std::string senderNick = msg.substr(6, sep - 6);
+                    int newTeam = std::atoi(msg.c_str() + sep + 1);
+                    if (newTeam >= 1 && newTeam <= 5 && !senderNick.empty()) {
+                        for (int i = 0; i < (int)currentGame->players.size(); i++) {
+                            if (currentGame->players[i].nick == senderNick) {
+                                netPlayerTeams[i] = newTeam;
+                                static const int vLimits[] = {0,1,2,3,4,5,6,7,8,9,10,11,12,15,20,30,50,100};
+                                netClient->SendOptions(chainReactionEnabled, continueWhenPlayersLeave,
+                                    singlePlayerTargetting, vLimits[victoriesLimitIndex], playerColorCounts,
+                                    playerNoCompress, playerAimGuide, netRoomMouseEnabled, netClearMode,
+                                    netDisableMalus, netTeamMode, netPlayerTeams);
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+            lastProcessedChatCount = chatMsgs.size();
+        }
+
+        // Display last 5 messages from bottom up (skip hidden !team: commands)
         int chatLine = 0;
         int startIdx = chatMsgs.size() > maxChatLines ? chatMsgs.size() - maxChatLines : 0;
         for (size_t i = startIdx; i < chatMsgs.size() && chatLine < maxChatLines; i++, chatLine++) {
+            if (chatMsgs[i].message.size() > 6 && chatMsgs[i].message.substr(0, 6) == "!team:") continue;
             char chatLineText[256];
             // Server messages start with ***, regular messages show <nick>
             if (chatMsgs[i].nick == "Server" || chatMsgs[i].message.find("***") == 0) {

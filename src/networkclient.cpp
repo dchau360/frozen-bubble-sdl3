@@ -516,16 +516,17 @@ bool NetworkClient::SendTalk(const char* message) {
     return SendCommand(cmd);
 }
 
-bool NetworkClient::SendOptions(bool chainReaction, bool continueWhenLeave, bool singleTarget, int victoriesLimit, const int playerColors[5], const bool noCompress[5], const bool aimGuide[5], bool mouseEnabled) {
+bool NetworkClient::SendOptions(bool chainReaction, bool continueWhenLeave, bool singleTarget, int victoriesLimit, const int playerColors[5], const bool noCompress[5], const bool aimGuide[5], bool mouseEnabled, bool clearMode, bool disableMalus, bool teamMode, const int playerTeams[5]) {
     // Send game options using SETOPTIONS command (original line 4468-4474)
     // Format: SETOPTIONS CHAINREACTION:0/1,...,NUMCOLORS_P1:N,...,NUMCOLORS_P5:N
-    char cmd[640];
+    char cmd[768];
     snprintf(cmd, sizeof(cmd),
              "SETOPTIONS CHAINREACTION:%d,CONTINUEGAMEWHENPLAYERSLEAVE:%d,SINGLEPLAYERTARGETTING:%d,VICTORIESLIMIT:%d"
              ",NUMCOLORS_P1:%d,NUMCOLORS_P2:%d,NUMCOLORS_P3:%d,NUMCOLORS_P4:%d,NUMCOLORS_P5:%d"
              ",NOCOMPRESS_P1:%d,NOCOMPRESS_P2:%d,NOCOMPRESS_P3:%d,NOCOMPRESS_P4:%d,NOCOMPRESS_P5:%d"
              ",AIMGUIDE_P1:%d,AIMGUIDE_P2:%d,AIMGUIDE_P3:%d,AIMGUIDE_P4:%d,AIMGUIDE_P5:%d"
-             ",MOUSEENABLED:%d",
+             ",MOUSEENABLED:%d,CLEARMODE:%d,DISABLEMALUS:%d"
+             ",TEAMMODE:%d,PLAYERTEAM_P1:%d,PLAYERTEAM_P2:%d,PLAYERTEAM_P3:%d,PLAYERTEAM_P4:%d,PLAYERTEAM_P5:%d",
              chainReaction ? 1 : 0,
              continueWhenLeave ? 1 : 0,
              singleTarget ? 1 : 0,
@@ -533,7 +534,8 @@ bool NetworkClient::SendOptions(bool chainReaction, bool continueWhenLeave, bool
              playerColors[0], playerColors[1], playerColors[2], playerColors[3], playerColors[4],
              noCompress[0] ? 1 : 0, noCompress[1] ? 1 : 0, noCompress[2] ? 1 : 0, noCompress[3] ? 1 : 0, noCompress[4] ? 1 : 0,
              aimGuide[0] ? 1 : 0, aimGuide[1] ? 1 : 0, aimGuide[2] ? 1 : 0, aimGuide[3] ? 1 : 0, aimGuide[4] ? 1 : 0,
-             mouseEnabled ? 1 : 0);
+             mouseEnabled ? 1 : 0, clearMode ? 1 : 0, disableMalus ? 1 : 0,
+             teamMode ? 1 : 0, playerTeams[0], playerTeams[1], playerTeams[2], playerTeams[3], playerTeams[4]);
     SDL_Log("Sending game options: %s", cmd);
     return SendCommand(cmd);
 }
@@ -1158,6 +1160,14 @@ void NetworkClient::HandlePushMessage(const std::string& pushMsg) {
         rcvAimGuide[3] = parseVal("AIMGUIDE_P4", 0) != 0;
         rcvAimGuide[4] = parseVal("AIMGUIDE_P5", 0) != 0;
         rcvMouseEnabled = parseVal("MOUSEENABLED", 0) != 0;
+        rcvClearMode = parseVal("CLEARMODE", 0) != 0;
+        rcvDisableMalus = parseVal("DISABLEMALUS", 0) != 0;
+        rcvTeamMode = parseVal("TEAMMODE", 0) != 0;
+        for (int i = 0; i < 5; i++) {
+            char key[32];
+            snprintf(key, sizeof(key), "PLAYERTEAM_P%d", i + 1);
+            rcvPlayerTeams[i] = parseVal(key, i + 1);
+        }
         pendingOptions = true;
     } else if (pushMsg.find("GAME_CAN_START:") == 0) {
         // Game is ready to start - server sent player mappings

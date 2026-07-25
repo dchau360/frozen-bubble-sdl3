@@ -424,6 +424,11 @@ void MainMenu::ShowPanel(int which) {
             networkInLobby = false;
             networkInputMode = 7; // LAN server list
             netRoomMouseEnabled = GameSettings::Instance()->mouseEnabled; // load persisted default
+            netClearMode = false;
+            netDisableMalus = false;
+            netTeamMode = false;
+            for (int i = 0; i < 5; i++) netPlayerTeams[i] = i + 1;
+            lastProcessedChatCount = 0;
             break;
         }
         case 5: { // Net game - fetch public server list + local server
@@ -434,6 +439,11 @@ void MainMenu::ShowPanel(int which) {
             networkInLobby = false;
             networkInputMode = 10; // Public server list
             netRoomMouseEnabled = GameSettings::Instance()->mouseEnabled; // load persisted default
+            netClearMode = false;
+            netDisableMalus = false;
+            netTeamMode = false;
+            for (int i = 0; i < 5; i++) netPlayerTeams[i] = i + 1;
+            lastProcessedChatCount = 0;
             publicServers.clear();
 #ifdef __WASM_PORT__
             // WASM: FetchPublicServers() returns instantly (hardcoded list); no thread needed
@@ -530,12 +540,16 @@ void MainMenu::SetupNewGame(int mode) {
                 ns.networkGame = true;
                 ns.randomLevels = true;
                 ns.singlePlayerTargetting = singlePlayerTargetting;
+                ns.clearMode = netClearMode;
+                ns.disableMalus = netDisableMalus;
+                ns.teamMode = netTeamMode;
                 static const int vLimits[] = {0,1,2,3,4,5,6,7,8,9,10,11,12,15,20,30,50,100};
                 ns.victoriesLimit = vLimits[victoriesLimitIndex];
                 for (int i = 0; i < 5; i++) {
                     ns.playerColors[i] = playerColorCounts[i];
                     ns.disableCompression[i] = playerNoCompress[i];
                     ns.aimGuide[i] = playerAimGuide[i];
+                    ns.playerTeams[i] = netPlayerTeams[i];
                 }
                 // Apply per-session mouse setting (off by default in multiplayer)
                 GameSettings::Instance()->mouseEnabled = netRoomMouseEnabled;
@@ -558,7 +572,11 @@ void MainMenu::SetupNewGame(int mode) {
             ns7.playerCount = localMPPlayerCount;
             ns7.randomLevels = true;
             ns7.localMultiplayer = true;
+            ns7.clearMode = localMPClearMode;
+            ns7.disableMalus = localMPDisableMalus;
+            ns7.teamMode = localMPTeamMode;
             for (int i = 0; i < 5; i++) {
+                ns7.playerTeams[i] = localMPTeamMode ? (i % 2) + 1 : i + 1;
                 ns7.playerColors[i] = playerColorCounts[i];
                 ns7.disableCompression[i] = localMPNoCompress;
                 ns7.aimGuide[i] = localMPAimGuide[i];
