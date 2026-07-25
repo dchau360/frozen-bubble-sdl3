@@ -9,6 +9,7 @@
 #   3. Copy the certs:
 #        sudo cp /etc/letsencrypt/live/yourdomain.com/fullchain.pem ssl/fullchain.pem
 #        sudo cp /etc/letsencrypt/live/yourdomain.com/privkey.pem   ssl/privkey.pem
+#      (These real cert files are git-ignored; only *.pem.example templates are tracked.)
 #   4. Run this script again.
 
 set -e
