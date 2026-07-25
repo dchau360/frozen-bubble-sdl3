@@ -381,7 +381,7 @@ void BubbleGame::CheckPossibleDestroy(BubbleArray &bArray){
 
     // Calculate malus: destroyed + falling - 2 (original formula at line 958)
     int malusValue = totalDestroyed + fallingCount - 2;
-    if (malusValue > 0) {
+    if (malusValue > 0 && !currentSettings.disableMalus) {
         if (currentSettings.mpTraining && bArray.playerAssigned == 0) {
             // mp_train: malus converted to score (original malus_change at line 1185)
             mpTrainScore += malusValue;
@@ -396,8 +396,10 @@ void BubbleGame::CheckPossibleDestroy(BubbleArray &bArray){
             // each opponent — division by (living - 1) only applies in the true network-game
             // branch, so local multiplayer must not divide either.
             int attackerIdx = bArray.playerAssigned;
+            int attackerTeam = currentSettings.playerTeams[attackerIdx];
             for (int i = 0; i < currentSettings.playerCount; i++) {
-                if (i != attackerIdx && bubbleArrays[i].playerState == BubbleArray::PlayerState::ALIVE) {
+                if (i != attackerIdx && bubbleArrays[i].playerState == BubbleArray::PlayerState::ALIVE &&
+                    (!currentSettings.teamMode || currentSettings.playerTeams[i] != attackerTeam)) {
                     for (int m = 0; m < malusValue; m++)
                         bubbleArrays[i].malusQueue.push_back(frameCount);
                     bubbleArrays[i].rRecv += malusValue;  // Stats: malus received
