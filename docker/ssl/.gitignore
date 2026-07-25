@@ -1,7 +1,15 @@
-# The placeholder .pem files in this directory (containing only setup
-# instructions) are tracked by git so the directory structure is visible.
+# Real TLS certificates and keys live in this directory as fullchain.pem and
+# privkey.pem -- copy or symlink your real files here (e.g. from certbot /
+# Let's Encrypt). Those exact names are git-ignored (rule below) so your real
+# certs are never accidentally staged, and so a symlinked deploy doesn't show
+# up as a "modified"/"typechange" on every `git pull`.
+#
+# The tracked *.pem.example files are placeholders that keep this directory and
+# its setup instructions visible in a fresh clone. To bring up the stack:
+#   cp fullchain.pem.example fullchain.pem   # then replace with your real cert chain
+#   cp privkey.pem.example   privkey.pem     # then replace with your real private key
+# (or symlink the real files to those names). docker-compose mounts
+# ./ssl/fullchain.pem and ./ssl/privkey.pem into the nginx container.
 #
 # DO NOT commit real certificates or private keys.
-# If you replace these files with real certs, add them to your local
-# .git/info/exclude or use `git update-index --assume-unchanged ssl/*.pem`
-# to prevent accidentally staging them.
+*.pem
