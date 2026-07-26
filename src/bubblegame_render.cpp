@@ -337,11 +337,14 @@ void BubbleGame::RenderRoyaleHud(SDL_Renderer *rend) {
 
     char aliveBuf[32];
     snprintf(aliveBuf, sizeof(aliveBuf), "%d/%d alive", alive, n);
-    cell(aliveBuf, 254, 28, hud);
+    cell(aliveBuf, 254, 12, hud);
 
     char pageBuf[64];
-    snprintf(pageBuf, sizeof(pageBuf), "opponents %d-%d of %d  [Tab]", pageStart, pageEnd, n - 1);
-    cell(pageBuf, 254, 44, hud);
+    if (netViewAuto)
+        snprintf(pageBuf, sizeof(pageBuf), "opponents: auto  [Tab]");
+    else
+        snprintf(pageBuf, sizeof(pageBuf), "opponents %d-%d of %d  [Tab]", pageStart, pageEnd, n - 1);
+    cell(pageBuf, 254, 28, hud);
 }
 
 // Resolve a display name for a player array (local player gets its lobby nick or "You").
@@ -366,7 +369,7 @@ void BubbleGame::RenderRoundStats(SDL_Renderer *rend) {
     const int n = currentSettings.playerCount;
     if (n < 2) return;
 
-    const int boxW = 434, boxX = (640 - boxW) / 2, boxY = 6;
+    const int boxW = 494, boxX = (640 - boxW) / 2, boxY = 6;
     const int rowH = 16, headH = 22;
     const int hintH = currentSettings.networkGame ? rowH : 0;
 
@@ -399,6 +402,7 @@ void BubbleGame::RenderRoundStats(SDL_Renderer *rend) {
     const int colPopped = boxX + 264;
     const int colSent = boxX + 320;
     const int colRecv = boxX + 372;
+    const int colKills = boxX + 424;
 
     auto cell = [&](const char *txt, int x, int y, SDL_Color c) {
         statsText.UpdateColor(c, {0, 0, 0, 0});
@@ -427,6 +431,7 @@ void BubbleGame::RenderRoundStats(SDL_Renderer *rend) {
     cell("Pop", colPopped, y, hdr);
     cell("Atk", colSent, y, hdr);
     cell("Def", colRecv, y, hdr);
+    cell("KO", colKills, y, hdr);
     y += rowH;
 
     char buf[32];
@@ -445,6 +450,7 @@ void BubbleGame::RenderRoundStats(SDL_Renderer *rend) {
         snprintf(buf, sizeof(buf), "%d", p.rPopped); cell(buf, colPopped, y, c);
         snprintf(buf, sizeof(buf), "%d", p.rSent);   cell(buf, colSent, y, c);
         snprintf(buf, sizeof(buf), "%d", p.rRecv);   cell(buf, colRecv, y, c);
+        snprintf(buf, sizeof(buf), "%d", p.rKills);  cell(buf, colKills, y, c);
         y += rowH;
     }
 
@@ -452,11 +458,12 @@ void BubbleGame::RenderRoundStats(SDL_Renderer *rend) {
         cell("TEAM TOTALS", colName, y, hdr);
         y += rowH;
         for (int t : teams) {
-            int tFired = 0, tPopped = 0, tSent = 0, tRecv = 0;
+            int tFired = 0, tPopped = 0, tSent = 0, tRecv = 0, tKills = 0;
             for (int i = 0; i < n; i++) {
                 if (currentSettings.playerTeams[i] != t) continue;
                 BubbleArray &p = bubbleArrays[i];
                 tFired += p.rFired; tPopped += p.rPopped; tSent += p.rSent; tRecv += p.rRecv;
+                tKills += p.rKills;
             }
             SDL_Color c = kTeamColors[t - 1];
             snprintf(buf, sizeof(buf), "TEAM %d", t); cell(buf, colName, y, c);
@@ -464,6 +471,7 @@ void BubbleGame::RenderRoundStats(SDL_Renderer *rend) {
             snprintf(buf, sizeof(buf), "%d", tPopped); cell(buf, colPopped, y, c);
             snprintf(buf, sizeof(buf), "%d", tSent);   cell(buf, colSent, y, c);
             snprintf(buf, sizeof(buf), "%d", tRecv);   cell(buf, colRecv, y, c);
+            snprintf(buf, sizeof(buf), "%d", tKills);  cell(buf, colKills, y, c);
             y += rowH;
         }
     }
@@ -856,7 +864,11 @@ void BubbleGame::Render() {
             // Render targeting attack indicator on the targeted opponent's board
             // (original: put_image_to_background($imgbin{attack}{...}) in set_sendmalustoone at line 1338)
             // Attack positions from Stuff.pm POS_MP: rp1={25,213}, rp2={496,214}, rp3={24,442}, rp4={496,442}
-            if (currentSettings.singlePlayerTargetting && sendMalusToOne == i && curArray.boardVisible &&
+            // >5-player rooms always use one-target attacks and the slot-relative picker is
+            // active regardless of the singlePlayerTargetting toggle (bubblegame_input.cpp),
+            // so the indicator must show up in that case too, independent of the toggle.
+            if ((currentSettings.singlePlayerTargetting || currentSettings.playerCount > 5) &&
+                sendMalusToOne == i && curArray.boardVisible &&
                 currentSettings.playerCount <= 5 &&
                 curArray.playerAssigned >= 1 && curArray.playerAssigned <= 4) {
                 static const SDL_Point attackPos[4] = {{25, 213}, {496, 214}, {24, 442}, {496, 442}};
@@ -868,7 +880,8 @@ void BubbleGame::Render() {
                     attackRct.y = attackPos[rpIdx].y;
                     { SDL_FRect fr = ToFRect(attackRct); SDL_RenderTexture(rend, imgAttack[rpIdx], nullptr, &fr); }
                 }
-            } else if (currentSettings.singlePlayerTargetting && sendMalusToOne == i && curArray.boardVisible &&
+            } else if ((currentSettings.singlePlayerTargetting || currentSettings.playerCount > 5) &&
+                       sendMalusToOne == i && curArray.boardVisible &&
                        currentSettings.playerCount > 5 && curArray.playerAssigned >= 1) {
                 // >5-player royale: multiple arrays can share the same physical mini-slot
                 // across pages, so key the attack icon off parkedSlot instead of array index.
@@ -883,8 +896,34 @@ void BubbleGame::Render() {
                 }
             }
 
+            // Blinking yellow border on any mini-board that was actually attacked
+            // (playtest feedback: this should follow real attacks, not the local
+            // player's persistent manual-target selection above -- a single attack
+            // can hit several boards at once via the <=5-alive-players split
+            // fallback, so every attacked board blinks independently off its own
+            // countdown, set in SendMalusToOpponent's send sites). Bounds derive
+            // from the board's own limits and shooter rect so the frame hugs
+            // whichever of the 4 parked slots the board occupies.
+            if (currentSettings.playerCount > 5 && curArray.boardVisible &&
+                curArray.attackFlashFramesLeft > 0) {
+                const int kBlinkPeriodFrames = 20;  // ~0.33s on/off cycle at 60fps
+                if ((frameCount % kBlinkPeriodFrames) < kBlinkPeriodFrames / 2) {
+                    int bx = curArray.leftLimit - 6;
+                    int by = curArray.topLimit - 6;
+                    int bw = (curArray.rightLimit - curArray.leftLimit) + 12;
+                    int bh = (curArray.shooterSprite.rect.y + curArray.shooterSprite.rect.h + 4) - by;
+                    SDL_SetRenderDrawColor(rend, 255, 255, 100, 255);
+                    for (int t = 0; t < 2; t++) {
+                        SDL_FRect fr = ToFRect(SDL_Rect{bx - t, by - t, bw + 2 * t, bh + 2 * t});
+                        SDL_RenderRect(rend, &fr);
+                    }
+                }
+                curArray.attackFlashFramesLeft--;
+            }
+
             // Show targeting text: who this player is targeting
-            if (curArray.boardVisible && currentSettings.singlePlayerTargetting && !gameFinish &&
+            if (curArray.boardVisible &&
+                (currentSettings.singlePlayerTargetting || currentSettings.playerCount > 5) && !gameFinish &&
                 playerTargeting[i] >= 0 && playerTargeting[i] < currentSettings.playerCount) {
                 const std::string& targetNick = bubbleArrays[playerTargeting[i]].playerNickname;
                 if (!targetNick.empty()) {
@@ -950,6 +989,13 @@ void BubbleGame::Render() {
                 // Check if player is alive AND has bubbles in danger zone (cy > 11 means row 12+)
                 bool inDanger = checkArray.bubbleOnDanger();
                 bool isAlive = (checkArray.playerState == BubbleArray::PlayerState::ALIVE);
+
+                // Edge-detect danger transitions for the >5-player auto view
+                // (ReRankNetView no-ops in every other mode).
+                if (inDanger != checkArray.wasInDanger) {
+                    checkArray.wasInDanger = inDanger;
+                    ReRankNetView();
+                }
 
                 // Log every 60 frames (once per second at 60fps) for debugging
                 if (checkCounter % 60 == 0 && i < 3) {

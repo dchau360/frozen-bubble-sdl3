@@ -404,6 +404,7 @@ void BubbleGame::CheckPossibleDestroy(BubbleArray &bArray){
                         bubbleArrays[i].malusQueue.push_back(frameCount);
                     bubbleArrays[i].rRecv += malusValue;  // Stats: malus received
                     bArray.rSent += malusValue;           // Stats: malus sent by attacker
+                    bubbleArrays[i].lastAttackerIdx = attackerIdx;  // Kill attribution
                     AddMalusAlert(bubbleArrays[i],
                                   bArray.playerNickname.empty()
                                       ? ("Player " + std::to_string(attackerIdx + 1))

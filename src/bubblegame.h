@@ -299,8 +299,14 @@ struct BubbleArray {
     // Round/match statistics (bubbles fired, bubbles popped, malus sent, malus received).
     // r* = current round (reset every round); m* = whole match (reset at NewGame).
     // In network games each client owns array 0's stats; remote arrays are filled from 'S' sync messages.
-    int rFired = 0, rPopped = 0, rSent = 0, rRecv = 0;
-    int mFired = 0, mPopped = 0, mSent = 0, mRecv = 0;
+    int rFired = 0, rPopped = 0, rSent = 0, rRecv = 0, rKills = 0;
+    int mFired = 0, mPopped = 0, mSent = 0, mRecv = 0, mKills = 0;
+    // Array index of whoever last sent this player malus (-1 = never attacked this
+    // round). Set at every real malus send site (network and local multiplayer);
+    // HandlePlayerLoss credits this player's attacker with a kill on death. Not
+    // reset by who's currently ALIVE -- an attacker who has since died still gets
+    // credit, matching "last attacker gets the kill" with no time limit.
+    int lastAttackerIdx = -1;
     // Transient on-screen alerts: "who just sent you malus and how many" (fades out over time).
     struct MalusAlert { std::string fromNick; int count; int framesLeft; };
     std::vector<MalusAlert> malusAlerts;
@@ -338,6 +344,13 @@ struct BubbleArray {
     // slot geometries and paged in/out of view via BubbleGame::netViewPage.
     bool boardVisible = true;  // Whether this array's board should be rendered this frame
     int parkedSlot = -1;       // -1 for player 0 / <=5-player games; 0-3 mini-slot index otherwise
+    bool wasInDanger = false;  // last observed danger state; edge-detects auto view re-ranks
+    // >5-player royale: frames left to blink this board's border after actually being
+    // attacked (SendMalusToOpponent's send sites set it) -- distinct from sendMalusToOne,
+    // which is the local player's persistent manual-target selection, not an attack event.
+    // A single attack can hit several boards at once (the <=5-alive-players split
+    // fallback), so each board tracks its own timer independently.
+    int attackFlashFramesLeft = 0;
 
     std::vector<int> remainingBubbles() {
         std::vector<int> a;
@@ -498,6 +511,9 @@ private:
     // currently visible (page 0 = slots/players 1-4, page 1 = 5-8, ...). Player 0's
     // center board is always visible regardless of page. See ApplyNetViewPage().
     int netViewPage = 0;
+    // >5-player royale: true = auto slot selection (RankNetViewBoards picks the
+    // 4 visible remote boards on events); false = manual Tab paging via netViewPage.
+    bool netViewAuto = true;
     bool pendingHighscore = false;      // A new highscore was earned, show screen after level completion
     std::array<std::vector<int>, 10> savedLevelGrid;  // Level grid saved at load time for highscore display
 
@@ -565,6 +581,8 @@ private:
     // current netViewPage. <=5-player games always show every board (page 0, all visible).
     void ApplyNetViewPage();
     void CycleNetViewPage();  // Tab: advance to the next page of remote boards; no-op for <=5 players
+    void ApplyNetViewAuto();  // auto mode: rank boards and assign boardVisible per slot class
+    void ReRankNetView();     // event hook: re-run auto ranking (no-op when manual/<=5/local)
 
     void RenderRoyaleHud(SDL_Renderer *rend);  // >5-player-only: alive count + page indicator
 

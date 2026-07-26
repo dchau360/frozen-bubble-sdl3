@@ -52,6 +52,12 @@ struct game
         int players_conn[MAX_PLAYERS_PER_GAME];
         char* players_nick[MAX_PLAYERS_PER_GAME];
         int players_started[MAX_PLAYERS_PER_GAME];
+        /* Per-game wire id for each player: 'A' + join order, monotonically
+         * assigned and never reused within a game. Replaces the raw fd in
+         * GAME_CAN_START and the synthesized leave message -- fds 10/13/44
+         * collide with the \n/\r/, framing and corrupt the client's parse. */
+        int players_id[MAX_PLAYERS_PER_GAME];
+        int next_player_id;
 };
 
 static GList * games = NULL;
@@ -196,12 +202,44 @@ static void create_game(int fd, char* nick, int max_players)
         struct game * g = malloc_(sizeof(struct game));
         g->players_number = 1;
         g->players_conn[0] = fd;
+        g->players_id[0] = 'A';
+        g->next_player_id = 'A' + 1;
         g->players_nick[0] = nick;
         g->status = GAME_STATUS_OPEN;
         g->max_players = max_players;
         games = g_list_append(games, g);
         open_players = g_list_remove(open_players, GINT_TO_POINTER(fd));
         calculate_list_games();
+}
+
+/* Allocate the next per-game seat id, wrapping within the printable
+ * single-byte window ['A', 'z'] (65-122) and skipping any id still held
+ * by a currently-seated player. g->next_player_id is monotonic over the
+ * whole lifetime of the game object, which persists as long as >=1
+ * player remains -- a long-lived room with a revolving cast of joiners
+ * can rack up hundreds of cumulative joins, so a raw counter would
+ * eventually wrap into a wire framing byte (0/'\n'/'\r'/',') or collide
+ * with a still-present player's live id. This window structurally
+ * excludes those framing bytes and never exceeds signed-char range, and
+ * it holds 58 values versus the MAX_PLAYERS_PER_GAME cap of 20, so the
+ * skip-scan below is always guaranteed to find a free id.
+ */
+static int next_seat_id(struct game * g)
+{
+        int id = g->next_player_id;
+        int i;
+        for (;;) {
+                if (id > 'z')
+                        id = 'A';
+                for (i = 0; i < g->players_number; i++)
+                        if (g->players_id[i] == id)
+                                break;
+                if (i == g->players_number)
+                        break;   /* id is free */
+                id++;
+        }
+        g->next_player_id = id + 1;
+        return id;
 }
 
 static int add_player(struct game * g, int fd, char* nick)
@@ -225,6 +263,7 @@ static int add_player(struct game * g, int fd, char* nick)
                         send_line_log_push(g->players_conn[i], joined_msg);
 
                 g->players_conn[g->players_number] = fd;
+                g->players_id[g->players_number] = next_seat_id(g);
                 g->players_nick[g->players_number] = nick;
                 g->players_number++;
                 open_players = g_list_remove(open_players, GINT_TO_POINTER(fd));
@@ -284,7 +323,7 @@ static void real_start_game(struct game* g)
                 int len = strlen(mapping_str);
                 if (len >= sizeof(mapping_str)-1)
                         return;
-                mapping_str[len] = g->players_conn[i];
+                mapping_str[len] = g->players_id[i];
                 mapping_str[len+1] = '\0';
                 strconcat(mapping_str, g->players_nick[i], sizeof(mapping_str));
                 if (i < g->players_number - 1)
@@ -897,7 +936,7 @@ void process_msg_prio_(int fd, char* msg, ssize_t len, struct game* g)
                                 char synchro4self[] = "?!\n";
                                 ssize_t retval;
                                 int dest = g->players_conn[i];
-                                synchro4self[0] = fd;
+                                synchro4self[0] = g->players_id[i];
                                 l1(OUTPUT_TYPE_DEBUG, "[%d] sending self synchro", dest);
                                 if (ws_is_websocket(dest))
                                         retval = (ws_send(dest, synchro4self, sizeof(synchro4self) - 1) < 0) ? -1 : (ssize_t)(sizeof(synchro4self) - 1);
@@ -961,6 +1000,7 @@ void player_part_game_(int fd, char* reason)
                 int i = find_player_number(g, fd);
                 int was_playing = (g->status == GAME_STATUS_PLAYING);
                 int leaving_player_index = i;
+                int save_id = g->players_id[i];
 
                 // remove parting player from game
                 save_nick = g->players_nick[i];
@@ -968,6 +1008,7 @@ void player_part_game_(int fd, char* reason)
                         g->players_conn[j] = g->players_conn[j + 1];
                         g->players_nick[j] = g->players_nick[j + 1];
                         g->players_started[j] = g->players_started[j + 1];
+                        g->players_id[j] = g->players_id[j + 1];
                 }
                 g->players_number--;
 
@@ -992,7 +1033,7 @@ void player_part_game_(int fd, char* reason)
                         if (g->status == GAME_STATUS_PLAYING) {
                                 // inform other players, playing state
                                 char leave_player_prio_msg[] = "?l\n";
-                                leave_player_prio_msg[0] = fd;
+                                leave_player_prio_msg[0] = save_id;
                                 process_msg_prio_(fd, leave_player_prio_msg, strlen(leave_player_prio_msg), g);
 
                                 // Record loss for the leaving player (they left during gameplay)
