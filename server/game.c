@@ -154,12 +154,19 @@ static void list_games_aux(gpointer data, gpointer user_data)
         const struct game* g = data;
         if (g->status == GAME_STATUS_OPEN) {
                 char* game;
+                char* cap;
                 games_open++;
                 strconcat(list_games_str, "[", sizeof(list_games_str));
                 game = list_game(g);
                 strconcat(list_games_str, game, sizeof(list_games_str));
                 free(game);
                 strconcat(list_games_str, "]", sizeof(list_games_str));
+                /* Room cap after the bracket: "[nick,nick]:20". Sits in the
+                 * inter-bracket gap every known LIST parser (Perl regex, C++
+                 * bracket scan) already skips, so legacy clients ignore it. */
+                cap = asprintf_(":%d", g->max_players);
+                strconcat(list_games_str, cap, sizeof(list_games_str));
+                free(cap);
         } else {
                 int i;
                 char* geo;

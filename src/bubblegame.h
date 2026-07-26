@@ -514,6 +514,11 @@ private:
     // >5-player royale: true = auto slot selection (RankNetViewBoards picks the
     // 4 visible remote boards on events); false = manual Tab paging via netViewPage.
     bool netViewAuto = true;
+    // >5-player royale, dead local player only: board index pinned into view by
+    // keys 1-4 while spectating (-1 = none). ApplyNetViewAuto() overrides the
+    // pinned board's slot-class pick and lazily clears the pin when the pinned
+    // player dies or leaves.
+    int netViewPinnedIdx = -1;
     bool pendingHighscore = false;      // A new highscore was earned, show screen after level completion
     std::array<std::vector<int>, 10> savedLevelGrid;  // Level grid saved at load time for highscore display
 

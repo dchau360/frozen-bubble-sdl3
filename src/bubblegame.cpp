@@ -367,6 +367,7 @@ void BubbleGame::NewGame(SetupSettings setup) {
     opponentsReadyCount = 0;
     netViewPage = 0;
     netViewAuto = true;
+    netViewPinnedIdx = -1;
     for (int i = 0; i < MAX_NET_PLAYERS; i++) playerTargeting[i] = -1;
     for (int i = 0; i < currentSettings.playerCount; i++) ResetRoundInputState(bubbleArrays[i]);
     pendingHighscore = false;
@@ -1194,6 +1195,7 @@ void BubbleGame::ReloadGame(int level) {
         }
     }
 
+    netViewPinnedIdx = -1;  // spectate pin never carries into a new round
     netViewPage = 0;
     ApplyNetViewPage();
     ReRankNetView();  // auto mode refines page-0 visibility (no-op when manual/<=5)
@@ -1313,6 +1315,16 @@ void BubbleGame::ApplyNetViewAuto() {
         states[i].visible = bubbleArrays[i].boardVisible;
     }
     std::array<int, 4> picks = RankNetViewBoards(n, sendMalusToOne, states);
+
+    // Spectate pin: keep the pinned board on screen regardless of ranking.
+    // Lazily clear the pin once that player is no longer alive (died/left).
+    if (netViewPinnedIdx > 0 &&
+        (netViewPinnedIdx >= n ||
+         bubbleArrays[netViewPinnedIdx].playerState != BubbleArray::PlayerState::ALIVE))
+        netViewPinnedIdx = -1;
+    if (netViewPinnedIdx > 0)
+        picks[(netViewPinnedIdx - 1) % 4] = netViewPinnedIdx;
+
     bubbleArrays[0].boardVisible = true;
     for (int i = 1; i < n; i++) bubbleArrays[i].boardVisible = false;
     for (int c = 0; c < 4; c++)

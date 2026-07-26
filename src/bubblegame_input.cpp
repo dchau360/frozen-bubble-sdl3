@@ -229,13 +229,23 @@ void BubbleGame::HandleInput(SDL_Event *e) {
                 case SDLK_0:
                     if (currentSettings.networkGame && currentSettings.playerCount > 5 &&
                         !gameFinish) {
-                        // >5 royale: slot-relative targeting -- key k targets whatever
+                        // >5 royale: slot-relative keys. Alive: key k targets whatever
                         // living board is currently shown in mini-slot k-1; 0 clears back
-                        // to random-per-attack. Active regardless of the host's
+                        // to random-per-attack (active regardless of the host's
                         // singlePlayerTargetting toggle, since >5-alive rooms always use
-                        // one-target attacks.
+                        // one-target attacks). Dead (spectating): key k instead PINS that
+                        // board into view -- it stays on screen even when the auto ranker
+                        // would swap it out -- and 0 unpins back to pure auto.
+                        bool spectating =
+                            bubbleArrays[0].playerState != BubbleArray::PlayerState::ALIVE;
                         if (e->key.key == SDLK_0) {
-                            SetSendMalusToOne(-1);
+                            if (spectating) {
+                                netViewPinnedIdx = -1;
+                                netViewAuto = true;
+                                ApplyNetViewAuto();
+                            } else {
+                                SetSendMalusToOne(-1);
+                            }
                         } else {
                             int slot = (e->key.key == SDLK_1) ? 0
                                      : (e->key.key == SDLK_2) ? 1
@@ -244,7 +254,15 @@ void BubbleGame::HandleInput(SDL_Event *e) {
                                 if (bubbleArrays[i].boardVisible &&
                                     bubbleArrays[i].parkedSlot == slot &&
                                     bubbleArrays[i].playerState == BubbleArray::PlayerState::ALIVE) {
-                                    SetSendMalusToOne(i);
+                                    if (spectating) {
+                                        // Pinning implies watching auto view: leave
+                                        // manual paging if active so the pin shows.
+                                        netViewPinnedIdx = i;
+                                        netViewAuto = true;
+                                        ApplyNetViewAuto();
+                                    } else {
+                                        SetSendMalusToOne(i);
+                                    }
                                     break;
                                 }
                             }
