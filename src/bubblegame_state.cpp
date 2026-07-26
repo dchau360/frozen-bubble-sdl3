@@ -63,6 +63,80 @@ void BubbleGame::SendMalusToOpponent(int malusCount) {
         return;
     }
 
+    // Battle royale (>5 players alive): malus always goes to ONE opponent (Tetris-99
+    // model). Splitting is disabled -- ceil(count/N) to every living opponent would
+    // inject up to 19x the malus. Manual target if selected, else random. This is
+    // independent of the singlePlayerTargetting toggle (a host setting that only
+    // controls the <=5-alive split-vs-single UI/behavior below) since a >5-alive round
+    // must never reach the N-way split loop regardless of that flag. Re-evaluated live
+    // every call (not a static room-size check) so the game correctly falls back to
+    // split/manual-target rules once the field thins to <=5 survivors.
+    {
+        int livingPlayers = 0;
+        for (int i = 0; i < currentSettings.playerCount; i++) {
+            if (bubbleArrays[i].playerState == BubbleArray::PlayerState::ALIVE) livingPlayers++;
+        }
+        if (currentSettings.networkGame && livingPlayers > 5) {
+            bool randomPick = (sendMalusToOne == -1);
+            if (!randomPick &&
+                !(sendMalusToOne >= 1 && sendMalusToOne < currentSettings.playerCount &&
+                  bubbleArrays[sendMalusToOne].playerState == BubbleArray::PlayerState::ALIVE)) {
+                // Manual target is stale (died or otherwise invalid) -- re-roll like the random case.
+                randomPick = true;
+            }
+            int target = randomPick ? livingOpponents[rand() % livingOpponents.size()]
+                                     : sendMalusToOne;
+
+            std::string targetNick = bubbleArrays[target].playerNickname;
+            int resolvedTarget = target;
+
+            // Fallback to lobbyPlayerId if nickname is empty
+            if (targetNick.empty()) {
+                int lobbyId = bubbleArrays[target].lobbyPlayerId;
+                if (lobbyId >= 0 && netClient) {
+                    targetNick = netClient->GetPlayerNickname(lobbyId);
+                    SDL_Log("Using fallback nickname '%s' from lobbyPlayerId %d for target array %d",
+                           targetNick.c_str(), lobbyId, target);
+                }
+            }
+
+            // Final fallback: generate a nickname
+            if (targetNick.empty()) {
+                int lobbyId = bubbleArrays[target].lobbyPlayerId;
+                char fallbackNick[32];
+                if (lobbyId >= 0) {
+                    snprintf(fallbackNick, sizeof(fallbackNick), "player%d", lobbyId);
+                } else {
+                    snprintf(fallbackNick, sizeof(fallbackNick), "player%d", target);
+                }
+                targetNick = fallbackNick;
+            }
+
+            // If even the chosen target somehow resolved to an empty nick (shouldn't
+            // happen given the fallback cascade above), try the other living opponents.
+            if (targetNick.empty()) {
+                for (int opp : livingOpponents) {
+                    if (opp == target) continue;
+                    std::string nick = bubbleArrays[opp].playerNickname;
+                    if (nick.empty() && bubbleArrays[opp].lobbyPlayerId >= 0) {
+                        nick = netClient->GetPlayerNickname(bubbleArrays[opp].lobbyPlayerId);
+                    }
+                    if (!nick.empty()) { targetNick = nick; resolvedTarget = opp; break; }
+                }
+            }
+
+            if (!targetNick.empty()) {
+                char malusMsg[128];
+                snprintf(malusMsg, sizeof(malusMsg), "g%s:%d", targetNick.c_str(), malusCount);
+                netClient->SendGameData(malusMsg);
+                bubbleArrays[0].rSent += malusCount;  // Stats: malus sent (focus-fire)
+                bubbleArrays[resolvedTarget].rRecv += malusCount;  // Stats: locally credit target's Def
+            }
+            if (randomPick) sendMalusToOne = -1;  // re-roll on the next attack
+            return;
+        }
+    }
+
     // Single player targeting mode: send all malus to ONE opponent only when the player has
     // actively selected a target (original lines 1217-1227). With no target selected
     // (sendMalusToOne == -1), fall through to splitting among all living opponents — matching

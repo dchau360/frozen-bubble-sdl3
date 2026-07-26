@@ -147,7 +147,7 @@ BubbleGame::BubbleGame(const SDL_Renderer *renderer)
 
     // Initialize player name/win text for multiplayer (3-5 players)
     // Player 0 (center/local) gets larger font (22), others get smaller font (16)
-    for (int i = 0; i < 5; i++) {
+    for (int i = 0; i < MAX_NET_PLAYERS; i++) {
         int fontSize = (i == 0) ? 22 : 16;
         playerNameWinText[i].LoadFont(ASSET("/gfx/DroidSans.ttf").c_str(), fontSize);
         playerNameWinText[i].UpdateAlignment(TTF_HORIZONTAL_ALIGN_CENTER);
@@ -213,6 +213,19 @@ void BubbleGame::CloseControllers() {
 
 
 void SetupGameMetrics(BubbleArray *bArray, int playerCount, bool lowGfx){
+    if (playerCount > 5) {
+        // >5-player battle royale: layout positions (curLaunchRct/nextBubbleRct/onTopRct/
+        // frozenBottomRct/etc.) are set in NewGame/ReloadGame's default: case, mirroring how
+        // the 3-5 player cases below leave those rects alone. Only lowGfx shooter sizing
+        // needs to happen here -- falling through to the case-1/default arm below would
+        // overwrite the royale center board's rects with single-player values.
+        if (lowGfx) {
+            for (int i = 0; i < playerCount; i++) {
+                bArray[i].lGfxShooterRct.w = bArray[i].lGfxShooterRct.h = 2;
+            }
+        }
+        return;
+    }
     switch (playerCount) {
         case 2:
             if (lowGfx) {
@@ -280,6 +293,42 @@ static void ResetRoundInputState(BubbleArray &player) {
 }
 
 
+// Applies the 5P-layout mini-board geometry for slot 0-3 (rp1-rp4). Values are verbatim
+// copies of the case-5 block's per-slot geometry above (bubbleArrays[1] through
+// bubbleArrays[4] in NewGame's case 5); do not "normalize" the small hand-authored offsets
+// between slots. Textures other than shooterTexture (i.e. hurryTexture) are set by the
+// caller inline, matching how every other player-count case in this file loads them.
+static void ApplyMiniSlotGeometry(BubbleArray& b, int slot, SDL_Renderer* rend,
+                                  SDL_Texture* shooterTexture) {
+    struct SlotGeo {
+        SDL_Rect penguin, shooter, hurry, curLaunch, nextBubble, onTop, frozenBottom;
+        SDL_Point offset; int left, right, top;
+    };
+    static const SlotGeo kSlots[4] = {
+        // slot 0 = rp1 top-left
+        {{94,211,40,30},{59,175,50,50},{5,128,122,51},{68,192,32,32},{76,216,32,32},{74,214,39,39},{74,214,39,39},{20,19},20,148,19},
+        // slot 1 = rp2 top-right
+        {{94,211,40,30},{531,175,50,50},{5,128,122,51},{540,192,32,32},{548,216,32,32},{546,214,39,39},{546,214,39,39},{492,19},492,620,19},
+        // slot 2 = rp3 bottom-left
+        {{94,439,40,30},{59,404,50,50},{5,345,122,51},{68,420,32,32},{76,445,32,32},{74,443,39,39},{74,443,39,39},{20,247},20,148,247},
+        // slot 3 = rp4 bottom-right
+        {{94,439,40,30},{531,404,50,50},{5,345,122,51},{540,420,32,32},{548,445,32,32},{546,443,39,39},{546,443,39,39},{492,247},492,620,247},
+    };
+    const SlotGeo& g = kSlots[slot];
+    b.penguinSprite.LoadPenguin(rend, "p2", g.penguin);
+    b.shooterSprite = {shooterTexture, rend};
+    b.shooterSprite.rect = g.shooter;
+    b.shooterSprite.angle = PI/2.0f;
+    b.bubbleOffset = g.offset;
+    b.leftLimit = g.left; b.rightLimit = g.right; b.topLimit = g.top;
+    b.hurryRct = g.hurry;
+    b.curLaunchRct = g.curLaunch; b.nextBubbleRct = g.nextBubble;
+    b.onTopRct = g.onTop; b.frozenBottomRct = g.frozenBottom;
+    b.numSeparators = 0;
+    b.turnsToCompress = 12;
+}
+
+
 void BubbleGame::NewGame(SetupSettings setup) {
     // Clear any stale controller input state from previous session
     for (int i = 0; i < 5; i++) controllerInputs[i] = {};
@@ -311,7 +360,8 @@ void BubbleGame::NewGame(SetupSettings setup) {
     waitingForOpponentNewGame = false;
     opponentReadyForNewGame = false;
     opponentsReadyCount = 0;
-    for (int i = 0; i < 5; i++) playerTargeting[i] = -1;
+    netViewPage = 0;
+    for (int i = 0; i < MAX_NET_PLAYERS; i++) playerTargeting[i] = -1;
     for (int i = 0; i < currentSettings.playerCount; i++) ResetRoundInputState(bubbleArrays[i]);
     pendingHighscore = false;
     curLevel = setup.startLevel;
@@ -325,7 +375,7 @@ void BubbleGame::NewGame(SetupSettings setup) {
     winsP1 = winsP2 = 0;
     roundStatsFinalized = false;
     roundsPlayed = 0;
-    for (int i = 0; i < 5; i++) {
+    for (int i = 0; i < MAX_NET_PLAYERS; i++) {
         bubbleArrays[i].winCount = 0;
         // Reset both round and match statistics at the start of a new match.
         bubbleArrays[i].rFired = bubbleArrays[i].rPopped = bubbleArrays[i].rSent = bubbleArrays[i].rRecv = 0;
@@ -750,7 +800,53 @@ void BubbleGame::NewGame(SetupSettings setup) {
 
             audMixer->PlayMusic("main2p");
             break;
+        default: {  // 6..MAX_NET_PLAYERS network battle royale
+            SDL_Log("NewGame: royale with %d players", currentSettings.playerCount);
+            background = IMG_LoadTexture(rend, ASSET("/gfx/back_multiplayer.png").c_str());
+
+            // p1 - Center player (full size) - identical to case 5's bubbleArrays[0] block
+            bubbleArrays[0].penguinSprite.LoadPenguin(rend, "p1", {213, 420, 80, 60});
+            bubbleArrays[0].shooterSprite = {shooterTexture, rend};
+            bubbleArrays[0].shooterSprite.rect = {268, 356, 100, 100};
+            bubbleArrays[0].shooterSprite.angle = PI/2.0f;
+            bubbleArrays[0].bubbleOffset = {190, 44};
+            bubbleArrays[0].leftLimit = 190;
+            bubbleArrays[0].rightLimit = 446;
+            bubbleArrays[0].topLimit = 44;
+            bubbleArrays[0].hurryRct = {10, 265, 244, 102};
+            bubbleArrays[0].curLaunchRct = {302, 390, 32, 32};
+            bubbleArrays[0].nextBubbleRct = {302, 440, 32, 32};
+            bubbleArrays[0].onTopRct = {298, 437, 39, 39};
+            bubbleArrays[0].frozenBottomRct = {298, 437, 39, 39};
+            bubbleArrays[0].numSeparators = 0;
+            bubbleArrays[0].playerAssigned = 0;
+            bubbleArrays[0].turnsToCompress = 12;
+            bubbleArrays[0].mpWinner = false;
+            bubbleArrays[0].mpDone = false;
+            bubbleArrays[0].playerState = BubbleArray::PlayerState::ALIVE;
+            bubbleArrays[0].hurryTimer = bubbleArrays[0].warnTimer = 0;
+            bubbleArrays[0].hurryTexture = IMG_LoadTexture(rend, ASSET("/gfx/hurry_p1.png").c_str());
+            bubbleArrays[0].parkedSlot = -1;
+
+            for (int i = 1; i < currentSettings.playerCount; i++) {
+                BubbleArray& b = bubbleArrays[i];
+                int slot = (i - 1) % 4;
+                ApplyMiniSlotGeometry(b, slot, rend, shooterTexture);
+                b.parkedSlot = slot;
+                b.playerAssigned = i;
+                b.mpWinner = false;
+                b.mpDone = false;
+                b.playerState = BubbleArray::PlayerState::ALIVE;
+                b.hurryTimer = b.warnTimer = 0;
+                b.hurryTexture = IMG_LoadTexture(rend, ASSET("/gfx/hurry_p2.png").c_str());
+            }
+
+            audMixer->PlayMusic("main2p");
+            break;
+        }
     }
+
+    ApplyNetViewPage();
 
     // Set lobby player IDs for network games
     if (currentSettings.networkGame) {
@@ -789,7 +885,7 @@ void BubbleGame::NewGame(SetupSettings setup) {
                 const auto& roomPlayers = room->players;
                 for (int arr = 0; arr < currentSettings.playerCount; arr++) {
                     const std::string& nick = bubbleArrays[arr].playerNickname;
-                    for (int slot = 0; slot < (int)roomPlayers.size() && slot < 5; slot++) {
+                    for (int slot = 0; slot < (int)roomPlayers.size() && slot < MAX_NET_PLAYERS; slot++) {
                         if (roomPlayers[slot].nick == nick) {
                             int nc = currentSettings.playerColors[slot];
                             nc = (nc < 5) ? 5 : (nc > 8) ? 8 : nc;
@@ -912,7 +1008,7 @@ void BubbleGame::ReloadGame(int level) {
     gameMpDone = false;
     sendMalusToOne = -1;
     attackingMe.clear();
-    for (int i = 0; i < 5; i++) playerTargeting[i] = -1;
+    for (int i = 0; i < MAX_NET_PLAYERS; i++) playerTargeting[i] = -1;
     for (int i = 0; i < currentSettings.playerCount; i++) {
         BubbleArray &player = bubbleArrays[i];
         // Finished rounds can still receive late fire/stick packets. They are not
@@ -1054,7 +1150,44 @@ void BubbleGame::ReloadGame(int level) {
             bubbleArrays[4].onTopRct = {546, 443, 39, 39};
             bubbleArrays[4].frozenBottomRct = {546, 443, 39, 39};
             break;
+        default: {  // 6..MAX_NET_PLAYERS network battle royale
+            // Player 0: identical to case 5's bubbleArrays[0] reload block
+            bubbleArrays[0].shooterSprite.angle = PI/2.0f;
+            bubbleArrays[0].bubbleOffset = {190, 44};
+            bubbleArrays[0].turnsToCompress = 12;
+            bubbleArrays[0].numSeparators = 0;
+            bubbleArrays[0].curLaunchRct = {302, 390, 32, 32};
+            bubbleArrays[0].nextBubbleRct = {302, 440, 32, 32};
+            bubbleArrays[0].onTopRct = {298, 437, 39, 39};
+            bubbleArrays[0].frozenBottomRct = {298, 437, 39, 39};
+
+            // Parked remotes: only reset the fields that shift mid-round (angle, offset,
+            // compressor state, and the launch/next/onTop/frozenBottom rects), same subset
+            // case 5's reload resets -- do NOT reload penguin/shooter textures here
+            // (ApplyMiniSlotGeometry is NewGame-only; reusing it here would reload mascot
+            // textures from disk every round).
+            static const SDL_Point kSlotOffset[4] = {{20,19},{492,19},{20,247},{492,247}};
+            static const SDL_Rect kSlotCurLaunch[4] = {{68,192,32,32},{540,192,32,32},{68,420,32,32},{540,420,32,32}};
+            static const SDL_Rect kSlotNextBubble[4] = {{76,216,32,32},{548,216,32,32},{76,445,32,32},{548,445,32,32}};
+            static const SDL_Rect kSlotOnTop[4] = {{74,214,39,39},{546,214,39,39},{74,443,39,39},{546,443,39,39}};
+            for (int i = 1; i < currentSettings.playerCount; i++) {
+                BubbleArray& b = bubbleArrays[i];
+                int slot = (i - 1) % 4;
+                b.shooterSprite.angle = PI/2.0f;
+                b.bubbleOffset = kSlotOffset[slot];
+                b.turnsToCompress = 12;
+                b.numSeparators = 0;
+                b.curLaunchRct = kSlotCurLaunch[slot];
+                b.nextBubbleRct = kSlotNextBubble[slot];
+                b.onTopRct = kSlotOnTop[slot];
+                b.frozenBottomRct = kSlotOnTop[slot];  // frozenBottomRct == onTopRct in every case-5 slot
+            }
+            break;
+        }
     }
+
+    netViewPage = 0;
+    ApplyNetViewPage();
 
     RemoveArray(bubbleArrays, currentSettings.playerCount);
     SetupGameMetrics(bubbleArrays, currentSettings.playerCount, lowGfx);
@@ -1128,6 +1261,27 @@ void BubbleGame::ReloadGame(int level) {
         }
     }
 
+}
+
+
+void BubbleGame::ApplyNetViewPage() {
+    int n = currentSettings.playerCount;
+    if (n <= 5) {  // classic layouts: everything visible
+        for (int i = 0; i < n; i++) bubbleArrays[i].boardVisible = true;
+        return;
+    }
+    int pages = ((n - 1) + 3) / 4;
+    if (netViewPage >= pages) netViewPage = 0;
+    bubbleArrays[0].boardVisible = true;
+    for (int i = 1; i < n; i++)
+        bubbleArrays[i].boardVisible = ((i - 1) / 4) == netViewPage;
+}
+
+void BubbleGame::CycleNetViewPage() {
+    if (!currentSettings.networkGame || currentSettings.playerCount <= 5) return;
+    netViewPage++;
+    ApplyNetViewPage();  // wraps netViewPage
+    audMixer->PlaySFX("menu_change");
 }
 
 
