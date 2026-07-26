@@ -153,6 +153,14 @@ if(WIN32 OR MINGW)
     target_link_libraries(frozen-bubble-sdl3 PRIVATE ws2_32)
 endif()
 
+include(CTest)
+if(BUILD_TESTING AND NOT EMSCRIPTEN AND NOT ANDROID)
+    find_package(Python3 COMPONENTS Interpreter REQUIRED)
+
+    add_test(NAME net-bots-test
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tests/net_bots_test.py)
+endif()
+
 # Installation configuration
 if(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
     if(APPLE)
