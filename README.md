@@ -34,29 +34,49 @@ Two players on the same keyboard or controllers:
 - Player 1: Arrow keys + Up to fire
 - Player 2: C/X/V + D to fire
 
-### Network Multiplayer (2–5 players)
-Play over LAN or internet using the included server. Supports chain reactions, malus (attack bubbles), win tracking, and 2–5 player layouts.
+Local multiplayer also supports **Clear Mode**, **Team Mode**, and a malus-attacks toggle — see the **Network Multiplayer** section below for what each one does; the local-multiplayer settings panel lets you switch between them the same way the network game room does.
 
-When malus lands on your board, a fading on-screen indicator shows who attacked you and how many bubbles they sent. After each round a per-player stats table is shown (bubbles fired/popped, malus sent/received), and when the match ends the host posts a summary of the final standings to the lobby chat.
+### Network Multiplayer (2–20 players)
+Play over LAN or internet using the included server. Supports chain reactions, malus (attack bubbles), win tracking, and room sizes from 2 up to 20 players.
+
+**Game modes** (chosen by the host, both in local multiplayer and network game rooms):
+- **Classic** — standard chain-reaction gameplay; last player or team standing wins.
+- **Clear Mode** — first player to clear their entire board wins the round (the last survivor also wins); malus and row compression are both disabled by default in this mode, though the host can override either.
+- **Team Mode** — players are split into teams; malus only ever lands on living opponents outside your own team. In rooms of 5 or fewer players, team assignment is a per-player grid in the game room settings. In rooms above 5 players, press **A** in the game room to open a roster screen where the host can assign any player's team (or a joiner can set their own).
+
+When malus lands on your board, a fading on-screen indicator shows who attacked you and how many bubbles they sent. After each round a per-player stats table is shown (bubbles fired/popped, malus sent/received, and kills), and when the match ends the host posts a summary of the final standings to the lobby chat.
 
 In-game chat works during play (Enter or T, gamepad X) and between rounds (T or gamepad X — Enter/fire advances to the next round only while chat is closed). Enter sends, Escape cancels. On touch devices the round-end screen shows a tappable CHAT button, and text is entered through a native browser prompt (mobile browsers can't open an on-screen keyboard for the game canvas).
 
-The lobby displays a world map with colored dots showing where each connected player is located. Your location is detected automatically at connect time and shown as an animated pulsing dot.
+The lobby has a persistent chat dock, scrollable room cards (showing each room's player count and cap), and a sidebar listing everyone currently online, alongside a world map with colored dots showing where each connected player is located. Your own location is detected automatically at connect time and shown as an animated pulsing dot.
 
 The host can configure the following settings in the game room — all joined players see updates in real time:
 
 | Setting | Description |
 |---|---|
+| Game mode | Classic / Clear Mode / Team Mode (see above) |
+| Malus attacks | Enable or disable attack bubbles entirely |
 | Chain reaction | Toggle cascading chain reactions on/off |
 | Continue when players leave | Keep the game going if a player disconnects |
-| Single player targeting | All malus attacks target one player instead of spreading |
+| Single player targeting | All malus attacks target one player instead of spreading. Rooms with more than 5 players alive always use one-target attacks regardless of this setting. |
 | Victories limit | Number of round wins needed to win the match (or unlimited) |
+| Room size | 5, 10, or 20 players — set when creating the room |
 | Max colors per player | Maximum number of bubble colors per player's board (5–8, default 7). The optional 8th color is orange. |
 | Rows collapse per player | Whether rows drop down periodically for a specific player (on by default; set to off to disable) |
 | Aim guide per player | Show a trajectory preview for a specific player's shots |
 | Mouse/Touch mode | Enable mouse or touchscreen aiming for all players. **Note: mouse/touch aim is easier than keyboard-only controls** — the host should set this consistently so all players have the same experience. |
 
-The last three settings are shown as a compact grid (P1–P5 columns) that the host navigates with arrow keys and Enter.
+Per-player settings (colors, row collapse, aim guide, and team in 5-or-fewer-player rooms) are shown as a compact grid the host navigates with arrow keys and Enter. Rooms of 5 or fewer players show a fat 5-slot player panel with team-color chips; rooms above 5 players use a compact 2-column roster instead.
+
+### Battle Royale (6–20 players)
+
+Rooms above 5 players get some extra UI to handle the larger player count:
+
+- Only 4 opponent boards are shown on screen at once. By default they're picked automatically — priority goes to whoever's targeting you, then attackers, then anyone in danger, then anyone else alive — and updates live as the match unfolds. Press **Tab** to page through opponents manually instead; paging past the last page returns to auto mode.
+- Keys **1-4** target whichever opponent currently occupies view slot 1-4 (**0** clears back to random targeting); this is active regardless of the single-player-targeting setting once more than 5 players are alive.
+- A board that's actually been attacked flashes a yellow border briefly.
+- The round-stats table includes a **KO** column — whoever last attacked a player is credited with the kill when that player is eliminated.
+- If you're eliminated before the round ends, the same **1-4**/**0** keys instead pin an opponent's board into view while you spectate (a **SPECTATING** label appears on screen), so you can keep watching a specific match instead of the auto view swapping around.
 
 ---
 
@@ -345,6 +365,11 @@ Features ported from the original Frozen Bubble 2 Perl source:
 | Multiplayer training mode | ✅ |
 | Geolocation dots on world map lobby | ✅ |
 | Aim guide (trajectory preview) | ✅ (added beyond original) |
+| Clear Mode (win by clearing your board) | ✅ (added beyond original) |
+| Team Mode (2–5 teams) | ✅ (added beyond original) |
+| Malus attacks toggle (disable entirely) | ✅ (added beyond original) |
+| Network multiplayer beyond 5 players (up to 20) | ✅ (added beyond original) |
+| Battle royale opponent auto-view, kill tracking, spectate mode | ✅ (added beyond original) |
 | Local multiplayer (2 players, controllers) | ✅ |
 | Local multiplayer (3–5 players, controllers) | ⏳ (WIP) |
 | Single-player malus targeting logic | ✅ |
