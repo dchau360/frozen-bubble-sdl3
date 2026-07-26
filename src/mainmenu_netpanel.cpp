@@ -418,9 +418,6 @@ void MainMenu::NetPanelLobbyActionsRender() {
             }
             drawPanel({10, 42, 430, 286}, panelFill, panelEdge);
             drawLabel("MATCH RULES", 20, 48, textGold);
-            drawLabel(isHost ? "Arrows choose / change   Enter applies"
-                             : "Host controls rules   You may choose your team",
-                      160, 48, textMuted);
             drawLabel("CONTROLS", 20, 180, textGold);
             drawLabel("PLAYER SETUP", 20, 218, textGold);
         } else {
