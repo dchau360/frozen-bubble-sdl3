@@ -179,7 +179,7 @@ void MainMenu::NetPanelRender() {
     if (networkInLobby && netGameBackground && networkInputMode == 0) {
         NetPanelWorldMapRender();
         NetPanelLobbyActionsRender();
-        NetPanelChatStatusRender();
+        NetPanelChatDockRender();
         return;
     }
 
@@ -267,10 +267,47 @@ void MainMenu::NetPanelWorldMapRender() {
 
 void MainMenu::NetPanelLobbyActionsRender() {
     NetworkClient* netClient = NetworkClient::Instance();
+    SDL_Renderer* roomRenderer = const_cast<SDL_Renderer*>(renderer);
+
+    // Card/panel drawing primitives shared by every box in this revamped
+    // layout (header bar, match-rules panel, room cards, player sidebar,
+    // online sidebar). Byte-identical copies live in NetPanelChatDockRender()
+    // since C++ lambdas aren't shared across functions without extra
+    // plumbing.
+    auto drawPanel = [&](const SDL_Rect& rect, SDL_Color fill, SDL_Color outline) {
+        SDL_SetRenderDrawBlendMode(roomRenderer, SDL_BLENDMODE_BLEND);
+        SDL_SetRenderDrawColor(roomRenderer, fill.r, fill.g, fill.b, fill.a);
+        SDL_FRect fr = ToFRect(rect);
+        SDL_RenderFillRect(roomRenderer, &fr);
+        SDL_SetRenderDrawColor(roomRenderer, outline.r, outline.g, outline.b, outline.a);
+        SDL_RenderRect(roomRenderer, &fr);
+    };
+    auto drawLabel = [&](const char* text, int x, int y, SDL_Color color) {
+        panelText.UpdateColor(color, {20, 12, 32, 255});
+        panelText.UpdateText(roomRenderer, text, 0);
+        panelText.UpdatePosition({x, y});
+        SDL_FRect fr = ToFRect(*panelText.Coords());
+        SDL_RenderTexture(roomRenderer, panelText.Texture(), nullptr, &fr);
+    };
+    auto drawSelection = [&](const SDL_Rect& rect) {
+        SDL_SetRenderDrawColor(roomRenderer, 255, 196, 64, 72);
+        SDL_FRect fr = ToFRect(rect);
+        SDL_RenderFillRect(roomRenderer, &fr);
+        SDL_SetRenderDrawColor(roomRenderer, 255, 218, 92, 240);
+        SDL_RenderRect(roomRenderer, &fr);
+    };
+
+    const SDL_Color panelFill = {26, 18, 48, 222};
+    const SDL_Color panelEdge = {255, 190, 46, 225};
+    const SDL_Color textMain  = {248, 250, 239, 255};
+    const SDL_Color textMuted = {174, 211, 202, 255};
+    const SDL_Color textGold  = {255, 218, 92, 255};
+    // Team colors — shared with the in-gameplay team indicators so a team
+    // reads the same color everywhere.
+    const SDL_Color *teamColors = kTeamColors;
 
         // Render action list at top left (like original)
-        const int actionStartY = 30;
-        const int actionStartX = 78;
+        const int actionStartX = 24;
         const int lineHeight = 16;
 
         // Action menu: Different options depending on whether in a game
@@ -327,38 +364,123 @@ void MainMenu::NetPanelLobbyActionsRender() {
 
             std::vector<GameRoom> games = netClient->GetGameList();
             for (const auto& game : games) {
-                std::string playerList;
-                for (size_t i = 0; i < game.players.size(); i++) {
-                    if (i > 0) playerList += ", ";
-                    playerList += game.players[i].nick;
-                }
-                actions.push_back("Join " + game.creator + "'s game: " + playerList);
+                int n = (int)game.players.size();
+                char roomLbl[160];
+                // Card-style summary: host and count/cap (fixed at /5, this
+                // repo's only cap) plus an in-progress badge.
+                snprintf(roomLbl, sizeof(roomLbl), "%s's room  (%d/5)%s",
+                         game.creator.c_str(), n, game.started ? "  [in game]" : "");
+                actions.push_back(roomLbl);
             }
         }
 
-        // Grid offset: player header + grid rows are shifted down one line to make room for nick header
         const int gridStart = 8;       // First grid row index
-        const int gridYOffset = lineHeight * 2; // Gap after Victories limit + space for nick header
+
+        // Header bar establishes location and role at a glance.
+        drawPanel({10, 8, 620, 28}, {38, 20, 57, 235}, panelEdge);
+
+        bool hasStartRow = currentGame && currentGame->creator == netClient->GetPlayerNick()
+                            && currentGame->players.size() > 1;
+
+        if (currentGame) {
+            char title[160];
+            bool isHost = currentGame->creator == netClient->GetPlayerNick();
+            snprintf(title, sizeof(title), "%.24s's GAME ROOM   |   %s   |   %d players",
+                     currentGame->creator.c_str(), isHost ? "HOST" : "GUEST",
+                     (int)currentGame->players.size());
+            drawLabel(title, 20, 14, textGold);
+            if (hasStartRow) {
+                // Right-aligned in the header so it can never collide with
+                // the title text (whose length varies with the creator's
+                // nickname) or the player sidebar panel drawn later.
+                bool startSel = (selectedActionIndex == 12);
+                SDL_Color startColor = startSel ? textGold : textMain;
+                panelText.UpdateColor(startColor, {20, 12, 32, 255});
+                panelText.UpdateText(roomRenderer, "Start game!", 0);
+                int tw = panelText.Coords()->w;
+                int sx = 622 - tw;
+                if (startSel) drawSelection({sx - 6, 10, tw + 12, 24});
+                drawLabel("Start game!", sx, 14, startColor);
+            }
+            drawPanel({10, 42, 430, 286}, panelFill, panelEdge);
+            drawLabel("MATCH RULES", 20, 48, textGold);
+            drawLabel(isHost ? "Arrows choose / change   Enter applies"
+                             : "Host controls rules   You may choose your team",
+                      160, 48, textMuted);
+            drawLabel("CONTROLS", 20, 180, textGold);
+            drawLabel("PLAYER SETUP", 20, 218, textGold);
+        } else {
+            char title[160];
+            snprintf(title, sizeof(title), "ONLINE LOBBY   |   %s", netClient->GetPlayerNick().c_str());
+            drawLabel(title, 20, 14, textGold);
+            drawPanel({10, 42, 428, 276}, panelFill, panelEdge);
+            drawPanel({446, 42, 184, 276}, {18, 55, 65, 225}, panelEdge);
+            drawLabel("GAME ROOMS", 20, 48, textGold);
+        }
+
+        // Room list scroll window: "selection-follows" — no dedicated
+        // scroll-offset state, this is recomputed from selectedActionIndex
+        // every frame. Shows exactly 5 rooms at a time.
+        int firstVisibleRoom = 0;
+        if (!currentGame && selectedActionIndex >= 2) {
+            firstVisibleRoom = selectedActionIndex - 2;
+            int maxFirst = std::max(0, (int)actions.size() - 2 - 5);
+            if (firstVisibleRoom > maxFirst) firstVisibleRoom = maxFirst;
+        }
 
         // Render actions with highlight
         for (size_t i = 0; i < actions.size() && i < 18; i++) {
-            int renderY = actionStartY + (int)(i * lineHeight) + ((int)i >= gridStart ? gridYOffset : 0);
-
-            if (i == (size_t)selectedActionIndex && highlightServer) {
-                SDL_Rect highlightRect = {actionStartX - 4, renderY - 1, 200, lineHeight};
-                { SDL_FRect fr = ToFRect(highlightRect); SDL_RenderTexture(const_cast<SDL_Renderer*>(renderer), highlightServer, nullptr, &fr); };
-            }
-
+            // Chat's own row is rendered by the persistent chat dock instead.
+            if (i == 0) continue;
             // For grid rows (Colors/Rows/Aim/Team in a game room), skip the label text here — rendered as table below
             if (currentGame && (int)i >= gridStart && (int)i <= gridStart + 3) {
                 continue;
             }
+            // Start Match/Start game is rendered in the header bar above.
+            if (currentGame && i == 12 && hasStartRow) continue;
+            // Outside the lobby room-list scroll window.
+            if (!currentGame && i >= 2 &&
+                ((int)i - 2 < firstVisibleRoom || (int)i - 2 >= firstVisibleRoom + 5)) continue;
+
+            int renderY = 0;
+            int renderX = actionStartX;
+            int highlightW = 396;
+            if (currentGame) {
+                // Y position per settings-row index, in on-screen top-to-bottom
+                // order. Must track the actions.push_back() order built above
+                // (index 1=Mode ... 7=Mouse/Touch aim) — this table is what
+                // actually controls visual layout, independent of navigation
+                // order. Index 7's y=198 is also where the per-player grid's
+                // firstDataRowY is derived from, below.
+                static const int settingY[] = {0, 68, 86, 104, 122, 140, 158, 198,
+                                                0, 0, 0, 0, 0};
+                size_t sy = (i < 13) ? i : 12;
+                renderY = settingY[sy];
+            } else if (i == 1) {
+                renderY = 68;
+                highlightW = 340;
+            } else {
+                renderY = 98 + ((int)i - 2 - firstVisibleRoom) * 40;
+                renderX = 20;
+                highlightW = 408;
+            }
+
+            // Card border behind lobby room entries.
+            if (!currentGame && i >= 2) {
+                SDL_Rect card = {14, renderY - 6, 420, 34};
+                SDL_SetRenderDrawColor(roomRenderer, 20, 72, 79, 215);
+                { SDL_FRect fr = ToFRect(card); SDL_RenderFillRect(roomRenderer, &fr); }
+                SDL_SetRenderDrawColor(roomRenderer, 105, 196, 176, 220);
+                { SDL_FRect fr = ToFRect(card); SDL_RenderRect(roomRenderer, &fr); }
+            }
+
+            if (i == (size_t)selectedActionIndex) {
+                drawSelection({renderX - 4, renderY - 3, highlightW, currentGame ? 18 : 30});
+            }
 
             char actionText[128];
             snprintf(actionText, sizeof(actionText), "%s", actions[i].c_str());
-            panelText.UpdateText(const_cast<SDL_Renderer*>(renderer), actionText, 0);
-            panelText.UpdatePosition({actionStartX, renderY});
-            { SDL_FRect fr = ToFRect(*panelText.Coords()); SDL_RenderTexture(const_cast<SDL_Renderer*>(renderer), panelText.Texture(), nullptr, &fr); };
+            drawLabel(actionText, renderX, renderY, i == (size_t)selectedActionIndex ? textGold : textMain);
         }
 
         // Render the per-player settings grid (only in a game room)
@@ -376,7 +498,6 @@ void MainMenu::NetPanelLobbyActionsRender() {
             // Column layout
             const int labelW = 110;  // Width of row label ("Max colors:", "Row collapse:", "Aim guide:", "Team:")
             const int colW   = 36;   // Width of each player column
-            const SDL_Color *teamColors = kTeamColors;
             auto drawTeamSwatch = [&](int colLeft, int rowTop, int teamVal) {
                 int t = teamVal;
                 if (t < 1 || t > 5) t = 1;
@@ -387,9 +508,16 @@ void MainMenu::NetPanelLobbyActionsRender() {
                 SDL_RenderFillRect(const_cast<SDL_Renderer*>(renderer), &fr);
             };
 
-            // Header row sits exactly one lineHeight above the first data row
-            int firstDataRowY = actionStartY + gridStart * lineHeight + gridYOffset;
-            int headerY = firstDataRowY - lineHeight;
+            // Derived from where the linear settings rows actually land above
+            // (settingY[7]=198, the "Mouse/Touch aim" row, matching the header
+            // bar's "PLAYER SETUP" label at y=218 just below it): one gap down
+            // to the "PLAYER SETUP" label, one more gap down to the grid's own
+            // header row (ALL/P1..PN), then one lineHeight down to the first
+            // data row.
+            const int lastLinearSettingRowY = 198;
+            const int sectionGap = lineHeight + 4;
+            int headerY = lastLinearSettingRowY + 2 * sectionGap;
+            int firstDataRowY = headerY + lineHeight;
 
             // Draw grid lines
             {
@@ -448,7 +576,7 @@ void MainMenu::NetPanelLobbyActionsRender() {
             const char* rowLabels[] = {"Max colors:", "Row collapse:", "Aim guide:", "Team:"};
             for (int row = 0; row < 4; row++) {
                 int rowIdx = gridStart + row;
-                int rowY   = actionStartY + rowIdx * lineHeight + gridYOffset;
+                int rowY   = firstDataRowY + row * lineHeight;
 
                 // Highlight full row if selected
                 if (selectedActionIndex == rowIdx && highlightServer) {
@@ -526,149 +654,185 @@ void MainMenu::NetPanelLobbyActionsRender() {
                 }
             }
         }
+
+        // Player sidebar (game room) / online-player sidebar (lobby) — the
+        // two are mutually exclusive, matching whether currentGame is set.
+        if (currentGame) {
+            // <=5-cap "fat-row" panel: always exactly 5 rows, empty slots
+            // show "Waiting for player...". Team chips reuse kTeamColors so a
+            // team reads the same color as the settings grid's own swatches.
+            const int panelX = 450;
+            const int panelY = 42;
+            const int panelW = 180;
+            drawPanel({panelX, panelY, panelW, 286}, {18, 55, 65, 225}, panelEdge);
+
+            char hdr[32];
+            snprintf(hdr, sizeof(hdr), "Players  %d", (int)currentGame->players.size());
+            drawLabel(hdr, panelX + 10, panelY + 8, textGold);
+
+            const int rowH = 38;
+            for (int pi = 0; pi < 5; pi++) {
+                int rowY = panelY + 30 + pi * rowH;
+                SDL_Rect rowBox = {panelX + 7, rowY, panelW - 14, rowH - 5};
+                SDL_SetRenderDrawColor(roomRenderer, 10, 38, 48, 185);
+                { SDL_FRect fr = ToFRect(rowBox); SDL_RenderFillRect(roomRenderer, &fr); }
+
+                char slot[8];
+                snprintf(slot, sizeof(slot), "P%d", pi + 1);
+                drawLabel(slot, panelX + 12, rowY + 8, textMuted);
+                if (pi < (int)currentGame->players.size()) {
+                    const NetworkPlayer& pl = currentGame->players[pi];
+                    bool host = (pl.nick == currentGame->creator);
+                    bool self = (pl.nick == netClient->GetPlayerNick());
+                    int team = netPlayerTeams[pi];
+                    if (team < 1 || team > 5) team = 1;
+                    SDL_Color chip = teamColors[team - 1];
+                    SDL_SetRenderDrawColor(roomRenderer, chip.r, chip.g, chip.b, chip.a);
+                    SDL_FRect chipRect = {(float)(panelX + 40), (float)(rowY + 8), 12.0f, 12.0f};
+                    SDL_RenderFillRect(roomRenderer, &chipRect);
+
+                    char row[96];
+                    snprintf(row, sizeof(row), "%.12s%s%s", pl.nick.c_str(),
+                             host ? "  HOST" : "", self ? "  YOU" : "");
+                    drawLabel(row, panelX + 58, rowY + 6, self ? textGold : textMain);
+                    char teamText[24];
+                    snprintf(teamText, sizeof(teamText), "Team %d", team);
+                    drawLabel(teamText, panelX + 58, rowY + 20, textMuted);
+                } else {
+                    drawLabel("Waiting for player...", panelX + 40, rowY + 8, textMuted);
+                }
+            }
+            drawLabel("ESC  Leave room", panelX + 12, panelY + 238, textMuted);
+        } else {
+            // Lobby online-player sidebar: green status dot + nickname per
+            // free player, excluding self, capped at 11 shown (no scroll).
+            std::vector<NetworkPlayer> openPlayers = netClient->GetOpenPlayers();
+            char onlineHeader[32];
+            snprintf(onlineHeader, sizeof(onlineHeader), "ONLINE  %d", (int)openPlayers.size());
+            drawLabel(onlineHeader, 456, 50, textGold);
+            int shown = 0;
+            for (const NetworkPlayer& player : openPlayers) {
+                if (player.nick == netClient->GetPlayerNick()) continue;
+                if (shown >= 11) break;
+                SDL_SetRenderDrawColor(roomRenderer, 104, 220, 151, 255);
+                SDL_FRect dot = {458.0f, (float)(76 + shown * 20), 7.0f, 7.0f};
+                SDL_RenderFillRect(roomRenderer, &dot);
+                char shortNick[24];
+                snprintf(shortNick, sizeof(shortNick), "%.18s", player.nick.c_str());
+                drawLabel(shortNick, 474, 70 + shown * 20, textMain);
+                shown++;
+            }
+            if (shown == 0) drawLabel("No free players", 458, 74, textMuted);
+        }
 }
 
-void MainMenu::NetPanelChatStatusRender() {
+void MainMenu::NetPanelChatDockRender() {
     NetworkClient* netClient = NetworkClient::Instance();
+    SDL_Renderer* roomRenderer = const_cast<SDL_Renderer*>(renderer);
     GameRoom* currentGame = netClient->GetCurrentGame();
-    const int actionStartX = 78;
 
-        // If Chat is selected, show inline text input (like original at y=320)
-        const int chatY = 320;
-        if (selectedActionIndex == 0) {
-            char chatText[512];
-            snprintf(chatText, sizeof(chatText), "Say: %s_", networkChatInput);
-            panelText.UpdateText(const_cast<SDL_Renderer*>(renderer), chatText, 0);
-            panelText.UpdatePosition({actionStartX, chatY});
-            { SDL_FRect fr = ToFRect(*panelText.Coords()); SDL_RenderTexture(const_cast<SDL_Renderer*>(renderer), panelText.Texture(), nullptr, &fr); };
-        }
+    // Same drawing primitives as NetPanelLobbyActionsRender() — duplicated
+    // here since C++ lambdas aren't shared across functions without extra
+    // plumbing.
+    auto drawPanel = [&](const SDL_Rect& rect, SDL_Color fill, SDL_Color outline) {
+        SDL_SetRenderDrawBlendMode(roomRenderer, SDL_BLENDMODE_BLEND);
+        SDL_SetRenderDrawColor(roomRenderer, fill.r, fill.g, fill.b, fill.a);
+        SDL_FRect fr = ToFRect(rect);
+        SDL_RenderFillRect(roomRenderer, &fr);
+        SDL_SetRenderDrawColor(roomRenderer, outline.r, outline.g, outline.b, outline.a);
+        SDL_RenderRect(roomRenderer, &fr);
+    };
+    auto drawLabel = [&](const char* text, int x, int y, SDL_Color color) {
+        panelText.UpdateColor(color, {20, 12, 32, 255});
+        panelText.UpdateText(roomRenderer, text, 0);
+        panelText.UpdatePosition({x, y});
+        SDL_FRect fr = ToFRect(*panelText.Coords());
+        SDL_RenderTexture(roomRenderer, panelText.Texture(), nullptr, &fr);
+    };
+    auto drawSelection = [&](const SDL_Rect& rect) {
+        SDL_SetRenderDrawColor(roomRenderer, 255, 196, 64, 72);
+        SDL_FRect fr = ToFRect(rect);
+        SDL_RenderFillRect(roomRenderer, &fr);
+        SDL_SetRenderDrawColor(roomRenderer, 255, 218, 92, 240);
+        SDL_RenderRect(roomRenderer, &fr);
+    };
 
-        // Display chat messages in status area (like original at y=355-435)
-        const int chatStatusX = 10; // Status messages use x=10 in original
-        const int chatStatusY = 435; // Bottom of chat area
-        const int chatLineHeight = 16;
-        const int maxChatLines = 5;
-        std::vector<ChatMessage> chatMsgs = netClient->GetChatMessages();
+    const SDL_Color panelEdge = {255, 190, 46, 225};
+    const SDL_Color textMain  = {248, 250, 239, 255};
+    const SDL_Color textMuted = {174, 211, 202, 255};
+    const SDL_Color textGold  = {255, 218, 92, 255};
 
-        // Host: intercept !team:N commands sent by joiners and re-broadcast SETOPTIONS
-        if (currentGame && currentGame->creator == netClient->GetPlayerNick()) {
-            if (chatMsgs.size() < lastProcessedChatCount) lastProcessedChatCount = 0;
-            for (size_t mi = lastProcessedChatCount; mi < chatMsgs.size(); mi++) {
-                const std::string& msg = chatMsgs[mi].message;
-                if (msg.size() > 6 && msg.substr(0, 6) == "!team:") {
-                    // Format: !team:<nick>:<team>
-                    size_t sep = msg.find(':', 6);
-                    if (sep == std::string::npos) continue;
-                    std::string senderNick = msg.substr(6, sep - 6);
-                    int newTeam = std::atoi(msg.c_str() + sep + 1);
-                    if (newTeam >= 1 && newTeam <= 5 && !senderNick.empty()) {
-                        for (int i = 0; i < (int)currentGame->players.size(); i++) {
-                            if (currentGame->players[i].nick == senderNick) {
-                                netPlayerTeams[i] = newTeam;
-                                static const int vLimits[] = {0,1,2,3,4,5,6,7,8,9,10,11,12,15,20,30,50,100};
-                                netClient->SendOptions(chainReactionEnabled, continueWhenPlayersLeave,
-                                    singlePlayerTargetting, vLimits[victoriesLimitIndex], playerColorCounts,
-                                    playerNoCompress, playerAimGuide, netRoomMouseEnabled, netClearMode,
-                                    netDisableMalus, netTeamMode, netPlayerTeams);
-                                break;
-                            }
+    // Persistent chat dock: its own background panel, always-visible message
+    // area, with the input row's focus box only shown while Chat is selected.
+    drawPanel({10, 334, 620, 138}, {29, 13, 43, 238}, panelEdge);
+    drawLabel("CHAT", 20, 340, textGold);
+    if (selectedActionIndex == 0) drawSelection({18, 438, 604, 26});
+    char chatText[128];
+    size_t inputLength = strlen(networkChatInput);
+    const char* visibleInput = networkChatInput;
+    bool clippedInput = inputLength > 70;
+    if (clippedInput) visibleInput += inputLength - 70;
+    snprintf(chatText, sizeof(chatText), "> %s%s%s", clippedInput ? "..." : "",
+             visibleInput, selectedActionIndex == 0 ? "_" : "");
+    drawLabel(chatText, 26, 444, textMain);
+
+    // Display chat messages in the dock's message area.
+    const int chatStatusX = 22;
+    const int chatStatusY = 426;
+    const int chatLineHeight = 16;
+    const int maxChatLines = 5;
+    std::vector<ChatMessage> chatMsgs = netClient->GetChatMessages();
+
+    // Host: intercept !team:N commands sent by joiners and re-broadcast SETOPTIONS.
+    // Visual chrome around this dock changed; this logic itself is untouched.
+    if (currentGame && currentGame->creator == netClient->GetPlayerNick()) {
+        if (chatMsgs.size() < lastProcessedChatCount) lastProcessedChatCount = 0;
+        for (size_t mi = lastProcessedChatCount; mi < chatMsgs.size(); mi++) {
+            const std::string& msg = chatMsgs[mi].message;
+            if (msg.size() > 6 && msg.substr(0, 6) == "!team:") {
+                // Format: !team:<nick>:<team>
+                size_t sep = msg.find(':', 6);
+                if (sep == std::string::npos) continue;
+                std::string senderNick = msg.substr(6, sep - 6);
+                int newTeam = std::atoi(msg.c_str() + sep + 1);
+                if (newTeam >= 1 && newTeam <= 5 && !senderNick.empty()) {
+                    for (int i = 0; i < (int)currentGame->players.size(); i++) {
+                        if (currentGame->players[i].nick == senderNick) {
+                            netPlayerTeams[i] = newTeam;
+                            static const int vLimits[] = {0,1,2,3,4,5,6,7,8,9,10,11,12,15,20,30,50,100};
+                            netClient->SendOptions(chainReactionEnabled, continueWhenPlayersLeave,
+                                singlePlayerTargetting, vLimits[victoriesLimitIndex], playerColorCounts,
+                                playerNoCompress, playerAimGuide, netRoomMouseEnabled, netClearMode,
+                                netDisableMalus, netTeamMode, netPlayerTeams);
+                            break;
                         }
                     }
                 }
             }
-            lastProcessedChatCount = chatMsgs.size();
         }
+        lastProcessedChatCount = chatMsgs.size();
+    }
 
-        // Display last 5 messages from bottom up (skip hidden !team: commands)
-        int chatLine = 0;
-        int startIdx = chatMsgs.size() > maxChatLines ? chatMsgs.size() - maxChatLines : 0;
-        for (size_t i = startIdx; i < chatMsgs.size() && chatLine < maxChatLines; i++, chatLine++) {
-            if (chatMsgs[i].message.size() > 6 && chatMsgs[i].message.substr(0, 6) == "!team:") continue;
-            char chatLineText[256];
-            // Server messages start with ***, regular messages show <nick>
-            if (chatMsgs[i].nick == "Server" || chatMsgs[i].message.find("***") == 0) {
-                snprintf(chatLineText, sizeof(chatLineText), "*** %s", chatMsgs[i].message.c_str());
-            } else {
-                snprintf(chatLineText, sizeof(chatLineText), "<%s> %s",
-                    chatMsgs[i].nick.c_str(), chatMsgs[i].message.c_str());
-            }
-
-            int yPos = chatStatusY - (maxChatLines - 1 - chatLine) * chatLineHeight;
-            panelText.UpdateText(const_cast<SDL_Renderer*>(renderer), chatLineText, 0);
-            panelText.UpdatePosition({chatStatusX, yPos});
-            { SDL_FRect fr = ToFRect(*panelText.Coords()); SDL_RenderTexture(const_cast<SDL_Renderer*>(renderer), panelText.Texture(), nullptr, &fr); };
-        }
-
-        // Show player nickname and count at y=336 like original (below chat input at y=320)
-        const int statusY = 336;
-        const int statusX = 78;
-        char statusText[256];
-
-        // Show own nickname first
-        snprintf(statusText, sizeof(statusText), "Player: %s", netClient->GetPlayerNick().c_str());
-        panelText.UpdateText(const_cast<SDL_Renderer*>(renderer), statusText, 0);
-        panelText.UpdatePosition({statusX, statusY});
-        { SDL_FRect fr = ToFRect(*panelText.Coords()); SDL_RenderTexture(const_cast<SDL_Renderer*>(renderer), panelText.Texture(), nullptr, &fr); };
-
-        // Show available players or game info below
-        char playersText[256];
-        if (currentGame) {
-            // Build comma-separated player list for current game room
-            std::string playerNames;
-            for (size_t i = 0; i < currentGame->players.size(); i++) {
-                if (i > 0) playerNames += ", ";
-                playerNames += currentGame->players[i].nick;
-            }
-            snprintf(playersText, sizeof(playersText), "Players (%d): %s",
-                (int)currentGame->players.size(), playerNames.c_str());
-            panelText.UpdateText(const_cast<SDL_Renderer*>(renderer), playersText, 0);
-            panelText.UpdatePosition({statusX, statusY + 16});
-            { SDL_FRect fr = ToFRect(*panelText.Coords()); SDL_RenderTexture(const_cast<SDL_Renderer*>(renderer), panelText.Texture(), nullptr, &fr); };
+    // Display last 5 messages from bottom up (skip hidden !team: commands).
+    int chatLine = 0;
+    int startIdx = (int)chatMsgs.size() - maxChatLines;
+    if (startIdx < 0) startIdx = 0;
+    for (size_t i = startIdx; i < chatMsgs.size() && chatLine < maxChatLines; i++) {
+        if (chatMsgs[i].message.size() > 6 && chatMsgs[i].message.substr(0, 6) == "!team:") continue;
+        char chatLineText[256];
+        // Server messages start with ***, regular messages show <nick>
+        if (chatMsgs[i].nick == "Server" || chatMsgs[i].message.find("***") == 0) {
+            snprintf(chatLineText, sizeof(chatLineText), "*** %.72s", chatMsgs[i].message.c_str());
         } else {
-            // Show lobby player list — header line then names, up to 3 per line
-            std::vector<NetworkPlayer> openPlayers = netClient->GetOpenPlayers();
-            int total = (int)openPlayers.size();
-            snprintf(playersText, sizeof(playersText), "Online (%d):", total);
-            panelText.UpdateText(const_cast<SDL_Renderer*>(renderer), playersText, 0);
-            panelText.UpdatePosition({statusX, statusY + 16});
-            { SDL_FRect fr = ToFRect(*panelText.Coords()); SDL_RenderTexture(const_cast<SDL_Renderer*>(renderer), panelText.Texture(), nullptr, &fr); };
-
-            // Build name list, up to 9 names (3 lines × 3), then "+N more"
-            const int maxShown = 9;
-            int lineY = statusY + 32;
-            int shown = 0;
-            std::string lineBuf;
-            for (int pi = 0; pi < total && shown < maxShown; pi++) {
-                const std::string& nick = openPlayers[pi].nick;
-                if (nick == netClient->GetPlayerNick()) continue; // skip self
-                if (!lineBuf.empty()) lineBuf += "  ";
-                lineBuf += nick;
-                shown++;
-                // Flush line every 3 names
-                if (shown % 3 == 0 || pi == total - 1) {
-                    panelText.UpdateText(const_cast<SDL_Renderer*>(renderer), lineBuf.c_str(), 0);
-                    panelText.UpdatePosition({statusX, lineY});
-                    { SDL_FRect fr = ToFRect(*panelText.Coords()); SDL_RenderTexture(const_cast<SDL_Renderer*>(renderer), panelText.Texture(), nullptr, &fr); };
-                    lineY += 16;
-                    lineBuf.clear();
-                }
-            }
-            // Flush any remaining partial line
-            if (!lineBuf.empty()) {
-                panelText.UpdateText(const_cast<SDL_Renderer*>(renderer), lineBuf.c_str(), 0);
-                panelText.UpdatePosition({statusX, lineY});
-                { SDL_FRect fr = ToFRect(*panelText.Coords()); SDL_RenderTexture(const_cast<SDL_Renderer*>(renderer), panelText.Texture(), nullptr, &fr); };
-                lineY += 16;
-            }
-            // Show overflow count if more players than we displayed
-            int remaining = total - shown - 1; // -1 for self
-            if (remaining > 0) {
-                snprintf(playersText, sizeof(playersText), "+%d more", remaining);
-                panelText.UpdateText(const_cast<SDL_Renderer*>(renderer), playersText, 0);
-                panelText.UpdatePosition({statusX, lineY});
-                { SDL_FRect fr = ToFRect(*panelText.Coords()); SDL_RenderTexture(const_cast<SDL_Renderer*>(renderer), panelText.Texture(), nullptr, &fr); };
-            }
+            snprintf(chatLineText, sizeof(chatLineText), "<%.16s> %.56s",
+                chatMsgs[i].nick.c_str(), chatMsgs[i].message.c_str());
         }
+
+        int yPos = chatStatusY - (maxChatLines - 1 - chatLine) * chatLineHeight;
+        drawLabel(chatLineText, chatStatusX, yPos,
+                  chatMsgs[i].nick == "Server" ? textMuted : textMain);
+        chatLine++;
+    }
 }
 
 void MainMenu::NetPanelConnectionScreensRender() {
