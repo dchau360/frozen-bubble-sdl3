@@ -207,6 +207,7 @@ private:
     bool netClearMode = false;         // Clear Mode for network game
     bool netDisableMalus = false;      // Disable malus for network game
     bool netTeamMode = false;          // Team Mode for network game
+    int netRoomSizeChoice = 2;         // Index into kRoomSizes for "Create Game Room" (0=5,1=10,2=20); default 20 (royale headline mode)
     int netPlayerTeams[5] = {1, 2, 3, 4, 5}; // Per-player team (<=5-cap grid path)
     size_t lastProcessedChatCount = 0; // Host: how many chat msgs we've scanned for !team: commands
     // Snapshot of playerNoCompress/netDisableMalus taken the moment Clear Mode is

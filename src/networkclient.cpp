@@ -305,7 +305,7 @@ bool NetworkClient::SendGeoLoc(const char* location) {
     return SendCommand(cmd);
 }
 
-bool NetworkClient::CreateGame() {
+bool NetworkClient::CreateGame(int maxPlayers) {
     // CREATE requires a game name argument (uses player's nickname)
     // Implement retry with suffix if NICK_IN_USE (original lines 4768-4785)
 
@@ -319,9 +319,9 @@ bool NetworkClient::CreateGame() {
     // confirm or reject and set up currentGame/state once the OK arrives.
     // Do NOT optimistically set state=IN_LOBBY — that caused a "phantom game"
     // bug where the client got stuck in a create-game view after server rejection.
-    SDL_Log("WASM CreateGame: sending CREATE %s", tryNick.c_str());
+    SDL_Log("WASM CreateGame: sending CREATE %s %d", tryNick.c_str(), maxPlayers);
     char cmd[128];
-    snprintf(cmd, sizeof(cmd), "CREATE %s", tryNick.c_str());
+    snprintf(cmd, sizeof(cmd), "CREATE %s %d", tryNick.c_str(), maxPlayers);
     if (!SendCommand(cmd)) {
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "WASM CreateGame: SendCommand failed");
         return false;
@@ -330,12 +330,13 @@ bool NetworkClient::CreateGame() {
     pendingCreateOrigNick = originalNick;
     pendingCreateNick = tryNick;
     pendingCreateSuffix = 2;
+    pendingCreateMaxPlayers = maxPlayers;
     return true;  // state/currentGame set later when server sends OK
 #else
     int maxRetries = 20;
     for (int retry = 0; retry < maxRetries; retry++) {
         char cmd[128];
-        snprintf(cmd, sizeof(cmd), "CREATE %s", tryNick.c_str());
+        snprintf(cmd, sizeof(cmd), "CREATE %s %d", tryNick.c_str(), maxPlayers);
         SDL_Log("Attempting to create game with nick: %s (attempt %d)", tryNick.c_str(), retry + 1);
 
         lastErrorResponse.clear(); // Clear previous error
@@ -1015,7 +1016,7 @@ void NetworkClient::HandleServerResponse(const std::string& response) {
             pendingCreateNick = retryNick;
             pendingCreateSuffix++;
             char cmd[128];
-            snprintf(cmd, sizeof(cmd), "CREATE %s", retryNick.c_str());
+            snprintf(cmd, sizeof(cmd), "CREATE %s %d", retryNick.c_str(), pendingCreateMaxPlayers);
             SDL_Log("CREATE NICK_IN_USE, retrying with: %s", retryNick.c_str());
             SendCommand(cmd);
         } else if (pendingCreate) {
@@ -1054,7 +1055,7 @@ void NetworkClient::HandleServerResponse(const std::string& response) {
             SDL_Log("CREATE rejected (ALREADY_IN_GAME), sending PART and retrying");
             SendCommand("PART");
             char cmd[128];
-            snprintf(cmd, sizeof(cmd), "CREATE %s", pendingCreateNick.c_str());
+            snprintf(cmd, sizeof(cmd), "CREATE %s %d", pendingCreateNick.c_str(), pendingCreateMaxPlayers);
             SendCommand(cmd);
             // pendingCreate stays true, waiting for the new response
         } else if (pendingJoin) {
