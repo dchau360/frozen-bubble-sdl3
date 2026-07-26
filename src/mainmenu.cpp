@@ -22,6 +22,7 @@
 #include "frozenbubble.h"
 #include "transitionmanager.h"
 #include "networkclient.h"
+#include "netteams.h"
 #include "platform.h"
 
 #include <SDL3_image/SDL_image.h>
@@ -549,10 +550,23 @@ void MainMenu::SetupNewGame(int mode) {
                     ns.playerColors[i] = playerColorCounts[i];
                     ns.disableCompression[i] = playerNoCompress[i];
                     ns.aimGuide[i] = playerAimGuide[i];
-                    ns.playerTeams[i] = netPlayerTeams[i];
+                }
+                ns.teamCount = netTeamCount;
+                if (playerCount > 5 && netTeamMode && netClient && netClient->GetCurrentGame()) {
+                    // >5-cap: resolve each slot from auto-balance + nick overrides.
+                    GameRoom* curGame = netClient->GetCurrentGame();
+                    for (int i = 0; i < playerCount && i < (int)curGame->players.size(); i++) {
+                        const std::string& nk = curGame->players[i].nick;
+                        int ov = netTeamOverrides.count(nk) ? netTeamOverrides[nk] : 0;
+                        ns.playerTeams[i] = EffectiveTeam(i, netTeamCount, ov);
+                    }
+                } else {
+                    // <=5-cap: unchanged grid path.
+                    for (int i = 0; i < 5; i++) ns.playerTeams[i] = netPlayerTeams[i];
                 }
                 // Apply per-session mouse setting (off by default in multiplayer)
                 GameSettings::Instance()->mouseEnabled = netRoomMouseEnabled;
+                netRosterEditMode = false;
                 FrozenBubble::Instance()->bubbleGame()->NewGame(ns);
             }
             break;
@@ -603,6 +617,7 @@ void MainMenu::ReturnToMenu() {
     showingLevelPanel = false;
     showingNetPanel = false;
     networkInLobby = false;
+    netRosterEditMode = false;
     awaitKp = false;
     selectedMode = 0;
     runDelay = false;
@@ -621,6 +636,7 @@ void MainMenu::ReturnToNetLobby() {
     // Clear the current game room data so it doesn't show stale info
     NetworkClient* netClient = NetworkClient::Instance();
     if (netClient) {
+        netRosterEditMode = false;
         GameRoom* currentGame = netClient->GetCurrentGame();
         if (currentGame) {
             currentGame->players.clear();

@@ -24,11 +24,14 @@
 #include <vector>
 #include <thread>
 #include <atomic>
+#include <map>
 #include <mutex>
+#include <string>
 
 #include "menubutton.h"
 #include "networkclient.h"
 #include "shaderstuff.h"
+#include "bubblegame.h"
 #include "ttftext.h"
 
 #pragma region "banner_defines"
@@ -208,8 +211,14 @@ private:
     bool netDisableMalus = false;      // Disable malus for network game
     bool netTeamMode = false;          // Team Mode for network game
     int netRoomSizeChoice = 2;         // Index into kRoomSizes for "Create Game Room" (0=5,1=10,2=20); default 20 (royale headline mode)
-    int netPlayerTeams[5] = {1, 2, 3, 4, 5}; // Per-player team (<=5-cap grid path)
-    size_t lastProcessedChatCount = 0; // Host: how many chat msgs we've scanned for !team: commands
+    int netPlayerTeams[MAX_NET_PLAYERS] = {1,2,3,4,5,1,2,3,4,5,1,2,3,4,5,1,2,3,4,5}; // Per-player team (<=5-cap grid path)
+    size_t lastProcessedChatCount = 0; // Host: how many chat msgs we've scanned for !team: commands (<=5 path)
+    // >5-cap Team Mode state:
+    int netTeamCount = 5;              // fixed team count for >5-cap rooms (matches kTeamColors' 5 entries)
+    std::map<std::string,int> netTeamOverrides;   // nick -> chosen team (absent = auto-balance default)
+    size_t teamOverrideChatCount = 0;  // all clients: chat msgs scanned for !team: -> override map (>5 path)
+    int netRosterCursor = 0;           // host override: selected roster row (0-based)
+    bool netRosterEditMode = false;    // host override: true while navigating the roster to reassign teams
     // Snapshot of playerNoCompress/netDisableMalus taken the moment Clear Mode is
     // switched on, restored when switching away from it (Clear Mode forces both
     // on; without this, leaving Clear Mode left them stuck on forever).

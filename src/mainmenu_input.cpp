@@ -18,6 +18,7 @@
  */
 
 #include "mainmenu.h"
+#include "netteams.h"
 #include "audiomixer.h"
 #include "frozenbubble.h"
 #include "transitionmanager.h"
@@ -78,6 +79,81 @@ void MainMenu::HandleInput(SDL_Event *e){
             MenuTextInputEvent(e);
             break;
         case SDL_EVENT_KEY_DOWN:
+            // [A] enters per-player team-assignment mode directly from the
+            // player-columns roster, for >5-cap Team Mode rooms: host gets a
+            // free-moving cursor over every joined player, a joiner's cursor
+            // is locked to their own row. Replaces the old separate "Set
+            // player teams" row + "My team:N" row, which didn't fit above
+            // the persistent chat dock (y=334) once >1 extra row was needed.
+            // NOTE: 'T' was tried first but collides with the existing
+            // chat-open hotkey (case SDLK_T below) -- C/R/J/T/U/S/P/N/M are
+            // all already claimed single-letter hotkeys on this screen.
+            if (!netRosterEditMode && showingNetPanel && networkInLobby && networkInputMode == 0 &&
+                selectedActionIndex != 0 && e->key.key == SDLK_A) {
+                NetworkClient* netClientT = NetworkClient::Instance();
+                GameRoom* curGameT = netClientT->GetCurrentGame();
+                if (curGameT && curGameT->maxPlayers > 5 && netTeamMode) {
+                    bool isHostT = curGameT->creator == netClientT->GetPlayerNick();
+                    netRosterEditMode = true;
+                    if (isHostT) {
+                        netRosterCursor = 0;
+                    } else {
+                        std::string myNickT = netClientT->GetPlayerNick();
+                        netRosterCursor = 0;
+                        for (int i = 0; i < (int)curGameT->players.size(); i++)
+                            if (curGameT->players[i].nick == myNickT) { netRosterCursor = i; break; }
+                    }
+                    AudioMixer::Instance()->PlaySFX("menu_change");
+                    return;
+                }
+            }
+
+            if (netRosterEditMode && showingNetPanel && networkInLobby && networkInputMode == 0) {
+                NetworkClient* netClient = NetworkClient::Instance();
+                GameRoom* currentGame = netClient->GetCurrentGame();
+                if (currentGame) {
+                    bool isHost = currentGame->creator == netClient->GetPlayerNick();
+                    int n = (int)currentGame->players.size();
+                    if (e->key.key == SDLK_ESCAPE || e->key.key == SDLK_RETURN) {
+                        netRosterEditMode = false;
+                        AudioMixer::Instance()->PlaySFX("menu_change");
+                        return;
+                    }
+                    // Host: cursor is a linear index into the joined-players
+                    // list (0-based join order), which the 2-column roster
+                    // renders column-major (first rowsPerCol players in
+                    // column 0, the rest in column 1) -- so Up/Down alone
+                    // already reaches every player, walking down column 0
+                    // then continuing into column 1. Joiner: cursor stays
+                    // locked to their own row (set on [A] entry) -- no nav.
+                    if (isHost) {
+                        if (e->key.key == SDLK_UP)    { if (netRosterCursor > 0) netRosterCursor--; }
+                        else if (e->key.key == SDLK_DOWN) { if (netRosterCursor < n - 1) netRosterCursor++; }
+                    }
+                    if (e->key.key == SDLK_LEFT || e->key.key == SDLK_RIGHT) {
+                        // Cycle the selected player's team. A joiner may only
+                        // ever have their own row selected (no nav above).
+                        bool ownRow = netRosterCursor >= 0 && netRosterCursor < n &&
+                                      currentGame->players[netRosterCursor].nick == netClient->GetPlayerNick();
+                        if (netRosterCursor >= 0 && netRosterCursor < n && (isHost || ownRow)) {
+                            const std::string& nk = currentGame->players[netRosterCursor].nick;
+                            int ov = netTeamOverrides.count(nk) ? netTeamOverrides[nk] : 0;
+                            int cur = EffectiveTeam(netRosterCursor, netTeamCount, ov);
+                            if (e->key.key == SDLK_LEFT) { cur--; if (cur < 1) cur = netTeamCount; }
+                            else                          { cur++; if (cur > netTeamCount) cur = 1; }
+                            netTeamOverrides[nk] = cur;   // optimistic local apply
+                            char talkMsg[48];
+                            snprintf(talkMsg, sizeof(talkMsg), "!team:%s:%d", nk.c_str(), cur);
+                            netClient->SendTalk(talkMsg);
+                        }
+                    }
+                    AudioMixer::Instance()->PlaySFX("menu_change");
+                    return;  // consume all keys while editing
+                } else {
+                    netRosterEditMode = false;  // stale/invalid state (e.g. room gone) -- don't stay stuck
+                }
+            }
+
             if (MenuEditingKey(e)) break;
 
             if (KeysPanelKey(e)) break;
@@ -193,6 +269,7 @@ void MainMenu::HandleInput(SDL_Event *e){
                     if (showingNetPanel && networkInLobby) {
                         NetworkClient* netClient = NetworkClient::Instance();
                         if (netClient->GetState() == IN_LOBBY) {
+                            netRosterEditMode = false;
                             netClient->PartGame();
                             netClient->RequestList();  // Immediate list after parting
                             lastListRequest = SDL_GetTicks();
@@ -966,7 +1043,7 @@ void MainMenu::MenuLeftRightKey(SDL_Event *e) {
                             if (settingChanged) {
                                 static const int vLimits[] = {0,1,2,3,4,5,6,7,8,9,10,11,12,15,20,30,50,100};
                                 netClient->SendOptions(chainReactionEnabled, continueWhenPlayersLeave,
-                                    singlePlayerTargetting, vLimits[victoriesLimitIndex], playerColorCounts, playerNoCompress, playerAimGuide, netRoomMouseEnabled, netClearMode, netDisableMalus, netTeamMode, netPlayerTeams);
+                                    singlePlayerTargetting, vLimits[victoriesLimitIndex], playerColorCounts, playerNoCompress, playerAimGuide, netRoomMouseEnabled, netClearMode, netDisableMalus, netTeamMode, netPlayerTeams, netTeamCount);
                             }
                         } else if (!currentGame && selectedActionIndex == 1) {
                             // Lobby "Create Game Room" row: Left/Right cycles the room-size choice
@@ -1024,6 +1101,9 @@ void MainMenu::SubmitLobbyChatInput(NetworkClient *netClient) {
 }
 
 void MainMenu::GameRoomHostReturn(NetworkClient *netClient, GameRoom *currentGame) {
+    // Entering per-player team-assignment mode (>5-cap, Team Mode) now happens
+    // via the [A] hotkey in HandleInput, not a dedicated action row -- see the
+    // comment above the A-key check there for why.
     // Host actions: 0=Chat, 1=Mode, 2=Malus, 3=CR, 4=Continue, 5=Target, 6=Victories,
     // 7=Mouse, 8..10=grid rows, 11=Team, 12=Start
     int numPlayers = currentGame ? (int)currentGame->players.size() : 1;
@@ -1136,7 +1216,7 @@ void MainMenu::GameRoomHostReturn(NetworkClient *netClient, GameRoom *currentGam
     if (settingChanged) {
         static const int vLimits[] = {0,1,2,3,4,5,6,7,8,9,10,11,12,15,20,30,50,100};
         netClient->SendOptions(chainReactionEnabled, continueWhenPlayersLeave,
-            singlePlayerTargetting, vLimits[victoriesLimitIndex], playerColorCounts, playerNoCompress, playerAimGuide, netRoomMouseEnabled, netClearMode, netDisableMalus, netTeamMode, netPlayerTeams);
+            singlePlayerTargetting, vLimits[victoriesLimitIndex], playerColorCounts, playerNoCompress, playerAimGuide, netRoomMouseEnabled, netClearMode, netDisableMalus, netTeamMode, netPlayerTeams, netTeamCount);
     }
 }
 
@@ -1523,6 +1603,7 @@ void MainMenu::MenuEscapeKey() {
                             GameRoom* currentGame = netClient->GetCurrentGame();
                             if (currentGame) {
                                 // Leave the game (like original)
+                                netRosterEditMode = false;
                                 netClient->PartGame();
                                 netClient->RequestList();  // Immediate list after parting
                                 lastListRequest = SDL_GetTicks();
