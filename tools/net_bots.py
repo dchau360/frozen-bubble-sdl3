@@ -106,6 +106,7 @@ class BotClient:
     log_lock: threading.Lock
     report_failure: Callable[[str, str], bool]
     num_colors: int = 8
+    fire_jitter: float = 0.0
     socket_timeout: float = 0.2
     stick_delay: float = 0.4
     rng: random.Random = field(init=False)
@@ -122,6 +123,13 @@ class BotClient:
 
     def __post_init__(self) -> None:
         self.rng = random.Random(self.nick)
+        # Persistent per-bot pace multiplier, drawn once (not resampled per shot):
+        # a fleet firing on the same average cadence reaches its Nth shot within
+        # a couple of seconds of each other regardless of per-shot jitter, since
+        # independent per-shot noise averages out over ~12-13 shots (the number
+        # needed to reach the danger zone). A fixed multiplier instead makes the
+        # gap between bots grow with every shot, so deaths actually spread out.
+        self.pace_multiplier = 1.0 + self.rng.uniform(-self.fire_jitter, self.fire_jitter)
 
     def log(self, message: str) -> None:
         timestamp = time.strftime("%H:%M:%S")
@@ -277,7 +285,8 @@ class BotClient:
         if self.pending_stick_payload is not None:
             return
 
-        if self.state.last_fire_at and now - self.state.last_fire_at < self.fire_interval:
+        effective_interval = self.fire_interval * self.pace_multiplier
+        if self.state.last_fire_at and now - self.state.last_fire_at < effective_interval:
             return
 
         fire_payload = build_fire_message(self.rng, self.num_colors)
@@ -331,6 +340,16 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         type=float,
         help=f"seconds between fire messages per bot (default: {DEFAULT_FIRE_INTERVAL})",
     )
+    parser.add_argument(
+        "--fire-jitter",
+        default=0.0,
+        type=float,
+        help="random fraction of --fire-interval applied as each bot's fixed pace "
+        "(e.g. 0.4 = each bot fires steadily somewhere between 60%% and 140%% of "
+        "the interval for its whole session); a per-shot jitter would average out "
+        "over the ~12-13 shots it takes to reach the danger zone, so this is "
+        "drawn once per bot to actually desynchronize deaths (default: 0.0)",
+    )
     return parser.parse_args(argv)
 
 
@@ -355,6 +374,7 @@ def run_bots(args: argparse.Namespace) -> int:
             host=args.host,
             port=args.port,
             fire_interval=args.fire_interval,
+            fire_jitter=getattr(args, "fire_jitter", 0.0),
             stop_event=stop_event,
             log_lock=log_lock,
             report_failure=failure_state.record,
@@ -409,6 +429,8 @@ def main(argv: list[str]) -> int:
         raise SystemExit("--count must be at least 1")
     if args.fire_interval <= 0:
         raise SystemExit("--fire-interval must be positive")
+    if not 0.0 <= getattr(args, "fire_jitter", 0.0) < 1.0:
+        raise SystemExit("--fire-jitter must be in [0, 1)")
     return run_bots(args)
 
 

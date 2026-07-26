@@ -100,6 +100,7 @@ class RunBotsFailurePropagationTest(unittest.TestCase):
                 stop_event: net_bots.threading.Event,
                 log_lock: net_bots.threading.Lock,
                 report_failure,
+                fire_jitter: float = 0.0,
             ) -> None:
                 self.nick = nick
                 self.stop_event = stop_event
