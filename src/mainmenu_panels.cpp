@@ -297,14 +297,23 @@ void MainMenu::LocalMPPanelRender() {
         "\n"
         "%s Players: %d\n"
         "%s Chain-reaction: %s\n"
-        "%s Row collapse: %s\n",
+        "%s Row collapse: %s\n"
+        "%s Mode: %s\n"
+        "%s Malus: %s\n"
+        "%s Team Mode: %s\n",
         warningText,
         localMPMenuIndex == 0 ? ">" : " ",
         localMPPlayerCount,
         localMPMenuIndex == 1 ? ">" : " ",
         localMPCR ? "enabled" : "disabled",
         localMPMenuIndex == 2 ? ">" : " ",
-        localMPNoCompress ? "disabled" : "enabled");
+        localMPNoCompress ? "disabled" : "enabled",
+        localMPMenuIndex == 3 ? ">" : " ",
+        localMPClearMode ? "Clear" : "Classic",
+        localMPMenuIndex == 4 ? ">" : " ",
+        localMPDisableMalus ? "disabled" : "enabled",
+        localMPMenuIndex == 5 ? ">" : " ",
+        localMPTeamMode ? "ON (P1+P3 vs P2+P4)" : "OFF");
 
     // Per-player rows are collapsed onto one line each (instead of one line
     // per player) so the panel's height stays constant regardless of player
@@ -312,14 +321,14 @@ void MainMenu::LocalMPPanelRender() {
     // leading "> " marker, since a whole line can no longer stand for one item.
     pos += snprintf(pnltxt + pos, sizeof(pnltxt) - pos, "  Aim guide:");
     for (int pi = 0; pi < localMPPlayerCount && pi < 5; pi++) {
-        bool sel = localMPMenuIndex == 3 + pi;
+        bool sel = localMPMenuIndex == 6 + pi;
         pos += snprintf(pnltxt + pos, sizeof(pnltxt) - pos,
             sel ? " [P%d:%s]" : " P%d:%s",
             pi + 1, localMPAimGuide[pi] ? "on" : "off");
     }
     pos += snprintf(pnltxt + pos, sizeof(pnltxt) - pos, "\n  Max colors:");
     for (int pi = 0; pi < localMPPlayerCount && pi < 5; pi++) {
-        bool sel = localMPMenuIndex == 3 + localMPPlayerCount + pi;
+        bool sel = localMPMenuIndex == 6 + localMPPlayerCount + pi;
         pos += snprintf(pnltxt + pos, sizeof(pnltxt) - pos,
             sel ? " [P%d:%d]" : " P%d:%d",
             pi + 1, playerColorCounts[pi]);
@@ -330,7 +339,7 @@ void MainMenu::LocalMPPanelRender() {
         "Use UP/DOWN to select\n"
         "LEFT/RIGHT or ENTER to change\n"
         "Press ESC to cancel",
-        localMPMenuIndex == 3 + 2 * localMPPlayerCount ? ">" : " ");
+        localMPMenuIndex == 6 + 2 * localMPPlayerCount ? ">" : " ");
 
     panelText.UpdateText(const_cast<SDL_Renderer *>(renderer), pnltxt, 0);
 

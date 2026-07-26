@@ -572,8 +572,9 @@ bool MainMenu::LobbyChatTypingKey(SDL_Event *e) {
 
 bool MainMenu::LocalMPPanelKey(SDL_Event *e) {
             if (showingLocalMPPanel && !runDelay) {
-                // 0=Players, 1=CR, 2=Row collapse, 3..3+N-1=Aim guide per player, 3+N..3+2N-1=Colors per player, 3+2N=Start
-                int localMaxIdx = 3 + 2 * localMPPlayerCount;
+                // 0=Players, 1=CR, 2=Row collapse, 3=Mode, 4=Malus, 5=Team mode,
+                // 6..6+N-1=Aim guide per player, 6+N..6+2N-1=Colors per player, 6+2N=Start
+                int localMaxIdx = 6 + 2 * localMPPlayerCount;
                 if (e->key.key == SDLK_UP) {
                     localMPMenuIndex--;
                     if (localMPMenuIndex < 0) localMPMenuIndex = localMaxIdx;
@@ -600,12 +601,31 @@ bool MainMenu::LocalMPPanelKey(SDL_Event *e) {
                     } else if (localMPMenuIndex == 2) {
                         localMPNoCompress = !localMPNoCompress;
                         AudioMixer::Instance()->PlaySFX("menu_change");
-                    } else if (localMPMenuIndex >= 3 && localMPMenuIndex < 3 + localMPPlayerCount) {
-                        int pi = localMPMenuIndex - 3;
+                    } else if (localMPMenuIndex == 3) {
+                        localMPClearMode = !localMPClearMode;
+                        if (localMPClearMode) {
+                            // Entering Clear Mode: remember current settings so leaving it can restore them.
+                            localMPPreClearNoCompress = localMPNoCompress;
+                            localMPPreClearDisableMalus = localMPDisableMalus;
+                            localMPNoCompress = true;
+                            localMPDisableMalus = true;
+                        } else {
+                            localMPNoCompress = localMPPreClearNoCompress;
+                            localMPDisableMalus = localMPPreClearDisableMalus;
+                        }
+                        AudioMixer::Instance()->PlaySFX("menu_change");
+                    } else if (localMPMenuIndex == 4) {
+                        localMPDisableMalus = !localMPDisableMalus;
+                        AudioMixer::Instance()->PlaySFX("menu_change");
+                    } else if (localMPMenuIndex == 5) {
+                        localMPTeamMode = !localMPTeamMode;
+                        AudioMixer::Instance()->PlaySFX("menu_change");
+                    } else if (localMPMenuIndex >= 6 && localMPMenuIndex < 6 + localMPPlayerCount) {
+                        int pi = localMPMenuIndex - 6;
                         localMPAimGuide[pi] = !localMPAimGuide[pi];
                         AudioMixer::Instance()->PlaySFX("menu_change");
-                    } else if (localMPMenuIndex >= 3 + localMPPlayerCount && localMPMenuIndex < 3 + 2 * localMPPlayerCount) {
-                        int pi = localMPMenuIndex - 3 - localMPPlayerCount;
+                    } else if (localMPMenuIndex >= 6 + localMPPlayerCount && localMPMenuIndex < 6 + 2 * localMPPlayerCount) {
+                        int pi = localMPMenuIndex - 6 - localMPPlayerCount;
                         if (e->key.key == SDLK_LEFT) {
                             playerColorCounts[pi]--;
                             if (playerColorCounts[pi] < 5) playerColorCounts[pi] = 8;
@@ -627,12 +647,31 @@ bool MainMenu::LocalMPPanelKey(SDL_Event *e) {
                     } else if (localMPMenuIndex == 2) {
                         localMPNoCompress = !localMPNoCompress;
                         AudioMixer::Instance()->PlaySFX("menu_change");
-                    } else if (localMPMenuIndex >= 3 && localMPMenuIndex < 3 + localMPPlayerCount) {
-                        int pi = localMPMenuIndex - 3;
+                    } else if (localMPMenuIndex == 3) {
+                        localMPClearMode = !localMPClearMode;
+                        if (localMPClearMode) {
+                            // Entering Clear Mode: remember current settings so leaving it can restore them.
+                            localMPPreClearNoCompress = localMPNoCompress;
+                            localMPPreClearDisableMalus = localMPDisableMalus;
+                            localMPNoCompress = true;
+                            localMPDisableMalus = true;
+                        } else {
+                            localMPNoCompress = localMPPreClearNoCompress;
+                            localMPDisableMalus = localMPPreClearDisableMalus;
+                        }
+                        AudioMixer::Instance()->PlaySFX("menu_change");
+                    } else if (localMPMenuIndex == 4) {
+                        localMPDisableMalus = !localMPDisableMalus;
+                        AudioMixer::Instance()->PlaySFX("menu_change");
+                    } else if (localMPMenuIndex == 5) {
+                        localMPTeamMode = !localMPTeamMode;
+                        AudioMixer::Instance()->PlaySFX("menu_change");
+                    } else if (localMPMenuIndex >= 6 && localMPMenuIndex < 6 + localMPPlayerCount) {
+                        int pi = localMPMenuIndex - 6;
                         localMPAimGuide[pi] = !localMPAimGuide[pi];
                         AudioMixer::Instance()->PlaySFX("menu_change");
-                    } else if (localMPMenuIndex >= 3 + localMPPlayerCount && localMPMenuIndex < 3 + 2 * localMPPlayerCount) {
-                        int pi = localMPMenuIndex - 3 - localMPPlayerCount;
+                    } else if (localMPMenuIndex >= 6 + localMPPlayerCount && localMPMenuIndex < 6 + 2 * localMPPlayerCount) {
+                        int pi = localMPMenuIndex - 6 - localMPPlayerCount;
                         playerColorCounts[pi]++;
                         if (playerColorCounts[pi] > 8) playerColorCounts[pi] = 5;
                         AudioMixer::Instance()->PlaySFX("menu_change");
@@ -733,20 +772,15 @@ void MainMenu::MenuUpKey() {
                         NetworkClient* netClient = NetworkClient::Instance();
                         if (netClient->GetState() == CONNECTED || netClient->GetState() == IN_LOBBY) {
                             GameRoom* currentGame = netClient->GetCurrentGame();
-
-                            // Joiners in game room cannot scroll - stay on chat
-                            if (currentGame && currentGame->creator != netClient->GetPlayerNick()) {
-                                // Non-host in game - don't allow scrolling
-                                return;
-                            }
+                            bool isHostRoom = currentGame && currentGame->creator == netClient->GetPlayerNick();
 
                             int maxActions;
-                            if (currentGame && currentGame->creator == netClient->GetPlayerNick()) {
-                                // Host: Chat + 4 global + 3 grid rows + Mouse/Touch + optional Start
-                                maxActions = 9 + ((int)currentGame->players.size() > 1 ? 1 : 0);
+                            if (currentGame && isHostRoom) {
+                                // Host: Chat(1) + Mode/Malus(2) + CR/Continue/Target/Victories(4) + Mouse(1) + grid rows(4) + optional Start(1)
+                                maxActions = 12 + ((int)currentGame->players.size() > 1 ? 1 : 0);
                             } else if (currentGame) {
-                                // Non-host in game
-                                maxActions = 1; // Just Chat (use ESC to leave)
+                                // Joiner: navigate same rows (read-only except Teams)
+                                maxActions = 12;
                             } else {
                                 // In lobby
                                 std::vector<GameRoom> games = netClient->GetGameList();
@@ -755,6 +789,14 @@ void MainMenu::MenuUpKey() {
                             selectedActionIndex--;
                             if (selectedActionIndex < 0) selectedActionIndex = maxActions - 1;
                             AudioMixer::Instance()->PlaySFX("menu_change");
+
+                            // Joiner on Teams row: auto-focus their own column
+                            if (currentGame && !isHostRoom && selectedActionIndex == 11) {
+                                std::string myNick = netClient->GetPlayerNick();
+                                for (int i = 0; i < (int)currentGame->players.size(); i++) {
+                                    if (currentGame->players[i].nick == myNick) { currentPlayerCol = i + 1; break; }
+                                }
+                            }
                         }
                     } else {
                         up();
@@ -780,20 +822,15 @@ void MainMenu::MenuDownKey() {
                         NetworkClient* netClient = NetworkClient::Instance();
                         if (netClient->GetState() == CONNECTED || netClient->GetState() == IN_LOBBY) {
                             GameRoom* currentGame = netClient->GetCurrentGame();
-
-                            // Joiners in game room cannot scroll - stay on chat
-                            if (currentGame && currentGame->creator != netClient->GetPlayerNick()) {
-                                // Non-host in game - don't allow scrolling
-                                return;
-                            }
+                            bool isHostRoom = currentGame && currentGame->creator == netClient->GetPlayerNick();
 
                             int maxActions;
-                            if (currentGame && currentGame->creator == netClient->GetPlayerNick()) {
-                                // Host: Chat + 4 global + 3 grid rows + Mouse/Touch + optional Start
-                                maxActions = 9 + ((int)currentGame->players.size() > 1 ? 1 : 0);
+                            if (currentGame && isHostRoom) {
+                                // Host: Chat(1) + Mode/Malus(2) + CR/Continue/Target/Victories(4) + Mouse(1) + grid rows(4) + optional Start(1)
+                                maxActions = 12 + ((int)currentGame->players.size() > 1 ? 1 : 0);
                             } else if (currentGame) {
-                                // Non-host in game
-                                maxActions = 1; // Just Chat (use ESC to leave)
+                                // Joiner: navigate same rows (read-only except Teams)
+                                maxActions = 12;
                             } else {
                                 // In lobby
                                 std::vector<GameRoom> games = netClient->GetGameList();
@@ -802,6 +839,14 @@ void MainMenu::MenuDownKey() {
                             selectedActionIndex++;
                             if (selectedActionIndex >= maxActions) selectedActionIndex = 0;
                             AudioMixer::Instance()->PlaySFX("menu_change");
+
+                            // Joiner on Teams row: auto-focus their own column
+                            if (currentGame && !isHostRoom && selectedActionIndex == 11) {
+                                std::string myNick = netClient->GetPlayerNick();
+                                for (int i = 0; i < (int)currentGame->players.size(); i++) {
+                                    if (currentGame->players[i].nick == myNick) { currentPlayerCol = i + 1; break; }
+                                }
+                            }
                         }
                     } else {
                         down();
@@ -814,22 +859,66 @@ void MainMenu::MenuLeftRightKey(SDL_Event *e) {
                     if (showingNetPanel && networkInLobby && networkInputMode == 0 && selectedActionIndex != 0) {
                         NetworkClient* netClient = NetworkClient::Instance();
                         GameRoom* currentGame = netClient->GetCurrentGame();
-                        if (currentGame && currentGame->creator == netClient->GetPlayerNick()) {
+                        if (currentGame && currentGame->creator != netClient->GetPlayerNick() && selectedActionIndex == 11) {
+                            // Joiner LEFT/RIGHT on Teams row: change own team and notify host
+                            std::string myNick = netClient->GetPlayerNick();
+                            int mySlot = -1;
+                            for (int i = 0; i < (int)currentGame->players.size(); i++) {
+                                if (currentGame->players[i].nick == myNick) { mySlot = i; break; }
+                            }
+                            if (mySlot >= 0) {
+                                if (e->key.key == SDLK_LEFT) {
+                                    netPlayerTeams[mySlot]--;
+                                    if (netPlayerTeams[mySlot] < 1) netPlayerTeams[mySlot] = 5;
+                                } else {
+                                    netPlayerTeams[mySlot]++;
+                                    if (netPlayerTeams[mySlot] > 5) netPlayerTeams[mySlot] = 1;
+                                }
+                                AudioMixer::Instance()->PlaySFX("menu_change");
+                                char talkMsg[32];
+                                snprintf(talkMsg, sizeof(talkMsg), "!team:%s:%d", myNick.c_str(), netPlayerTeams[mySlot]);
+                                netClient->SendTalk(talkMsg);
+                            }
+                        } else if (currentGame && currentGame->creator == netClient->GetPlayerNick()) {
                             // Only host can change settings
                             bool settingChanged = false;
                             if (selectedActionIndex == 1) {
-                                chainReactionEnabled = !chainReactionEnabled;
+                                int mode = netTeamMode ? 2 : (netClearMode ? 1 : 0);
+                                bool wasClear = netClearMode;
+                                mode += (e->key.key == SDLK_LEFT) ? -1 : 1;
+                                if (mode < 0) mode = 2;
+                                if (mode > 2) mode = 0;
+                                netClearMode = mode == 1;
+                                netTeamMode = mode == 2;
+                                if (netClearMode && !wasClear) {
+                                    // Entering Clear Mode: remember current settings so leaving it can restore them.
+                                    for (int i = 0; i < 5; i++) netPreClearNoCompress[i] = playerNoCompress[i];
+                                    netPreClearDisableMalus = netDisableMalus;
+                                    for (int i = 0; i < 5; i++) playerNoCompress[i] = true;
+                                    netDisableMalus = true;
+                                } else if (wasClear && !netClearMode) {
+                                    for (int i = 0; i < 5; i++) playerNoCompress[i] = netPreClearNoCompress[i];
+                                    netDisableMalus = netPreClearDisableMalus;
+                                }
                                 AudioMixer::Instance()->PlaySFX("menu_change");
                                 settingChanged = true;
                             } else if (selectedActionIndex == 2) {
-                                continueWhenPlayersLeave = !continueWhenPlayersLeave;
+                                netDisableMalus = !netDisableMalus;
                                 AudioMixer::Instance()->PlaySFX("menu_change");
                                 settingChanged = true;
                             } else if (selectedActionIndex == 3) {
-                                singlePlayerTargetting = !singlePlayerTargetting;
+                                chainReactionEnabled = !chainReactionEnabled;
                                 AudioMixer::Instance()->PlaySFX("menu_change");
                                 settingChanged = true;
                             } else if (selectedActionIndex == 4) {
+                                continueWhenPlayersLeave = !continueWhenPlayersLeave;
+                                AudioMixer::Instance()->PlaySFX("menu_change");
+                                settingChanged = true;
+                            } else if (selectedActionIndex == 5) {
+                                singlePlayerTargetting = !singlePlayerTargetting;
+                                AudioMixer::Instance()->PlaySFX("menu_change");
+                                settingChanged = true;
+                            } else if (selectedActionIndex == 6) {
                                 // LEFT/RIGHT cycle victories limit
                                 if (e->key.key == SDLK_LEFT) {
                                     victoriesLimitIndex--;
@@ -840,8 +929,8 @@ void MainMenu::MenuLeftRightKey(SDL_Event *e) {
                                 }
                                 AudioMixer::Instance()->PlaySFX("menu_change");
                                 settingChanged = true;
-                            } else if (selectedActionIndex >= 6 && selectedActionIndex <= 8) {
-                                // Grid rows 6/7/8: Left/Right navigates player columns
+                            } else if (selectedActionIndex >= 8 && selectedActionIndex <= 10) {
+                                // Grid rows 8/9/10: Left/Right navigates player columns
                                 // col 0 = ALL, col 1..N = P1..PN
                                 int numPlayers = (int)currentGame->players.size();
                                 if (numPlayers < 1) numPlayers = 1;
@@ -855,11 +944,29 @@ void MainMenu::MenuLeftRightKey(SDL_Event *e) {
                                     if (currentPlayerCol >= totalCols) currentPlayerCol = 0;
                                 }
                                 AudioMixer::Instance()->PlaySFX("menu_change");
+                            } else if (selectedActionIndex == 11) {
+                                // Team row: Left/Right changes team number for focused column
+                                int numPlayers = (int)currentGame->players.size();
+                                if (numPlayers < 1) numPlayers = 1;
+                                if (numPlayers > 5) numPlayers = 5;
+                                int lo = (currentPlayerCol == 0) ? 0 : currentPlayerCol - 1;
+                                int hi = (currentPlayerCol == 0) ? numPlayers : currentPlayerCol;
+                                for (int i = lo; i < hi; i++) {
+                                    if (e->key.key == SDLK_LEFT) {
+                                        netPlayerTeams[i]--;
+                                        if (netPlayerTeams[i] < 1) netPlayerTeams[i] = 5;
+                                    } else {
+                                        netPlayerTeams[i]++;
+                                        if (netPlayerTeams[i] > 5) netPlayerTeams[i] = 1;
+                                    }
+                                }
+                                AudioMixer::Instance()->PlaySFX("menu_change");
+                                settingChanged = true;
                             }
                             if (settingChanged) {
                                 static const int vLimits[] = {0,1,2,3,4,5,6,7,8,9,10,11,12,15,20,30,50,100};
                                 netClient->SendOptions(chainReactionEnabled, continueWhenPlayersLeave,
-                                    singlePlayerTargetting, vLimits[victoriesLimitIndex], playerColorCounts, playerNoCompress, playerAimGuide, netRoomMouseEnabled);
+                                    singlePlayerTargetting, vLimits[victoriesLimitIndex], playerColorCounts, playerNoCompress, playerAimGuide, netRoomMouseEnabled, netClearMode, netDisableMalus, netTeamMode, netPlayerTeams);
                             }
                         }
                     }
@@ -907,37 +1014,64 @@ void MainMenu::SubmitLobbyChatInput(NetworkClient *netClient) {
 }
 
 void MainMenu::GameRoomHostReturn(NetworkClient *netClient, GameRoom *currentGame) {
-    // Host actions: 0=Chat, 1=CR, 2=Continue, 3=Target, 4=Victories, 5..5+N-1=Colors, last=Start
+    // Host actions: 0=Chat, 1=Mode, 2=Malus, 3=CR, 4=Continue, 5=Target, 6=Victories,
+    // 7=Mouse, 8..10=grid rows, 11=Team, 12=Start
     int numPlayers = currentGame ? (int)currentGame->players.size() : 1;
     if (numPlayers < 1) numPlayers = 1;
     if (numPlayers > 5) numPlayers = 5;
     bool settingChanged = false;
     if (selectedActionIndex == 1) {
+        // Cycle game mode: Classic -> Clear -> Teams -> Classic
+        int mode = netTeamMode ? 2 : (netClearMode ? 1 : 0);
+        int nextMode = (mode + 1) % 3;
+        bool wasClear = netClearMode;
+        {
+            AudioMixer::Instance()->PlaySFX("menu_change");
+            mode = nextMode;
+            netClearMode = mode == 1;
+            netTeamMode = mode == 2;
+            if (netClearMode && !wasClear) {
+                // Entering Clear Mode: remember current settings so leaving it can restore them.
+                for (int i = 0; i < 5; i++) netPreClearNoCompress[i] = playerNoCompress[i];
+                netPreClearDisableMalus = netDisableMalus;
+                for (int i = 0; i < 5; i++) playerNoCompress[i] = true;
+                netDisableMalus = true;
+            } else if (wasClear && !netClearMode) {
+                for (int i = 0; i < 5; i++) playerNoCompress[i] = netPreClearNoCompress[i];
+                netDisableMalus = netPreClearDisableMalus;
+            }
+            settingChanged = true;
+        }
+    } else if (selectedActionIndex == 2) {
+        netDisableMalus = !netDisableMalus;
+        AudioMixer::Instance()->PlaySFX("menu_change");
+        settingChanged = true;
+    } else if (selectedActionIndex == 3) {
         // Toggle chain reaction
         chainReactionEnabled = !chainReactionEnabled;
         AudioMixer::Instance()->PlaySFX("menu_change");
         settingChanged = true;
-    } else if (selectedActionIndex == 2) {
+    } else if (selectedActionIndex == 4) {
         // Toggle continue when players leave
         continueWhenPlayersLeave = !continueWhenPlayersLeave;
         AudioMixer::Instance()->PlaySFX("menu_change");
         settingChanged = true;
-    } else if (selectedActionIndex == 3) {
+    } else if (selectedActionIndex == 5) {
         // Toggle single player targetting
         singlePlayerTargetting = !singlePlayerTargetting;
         AudioMixer::Instance()->PlaySFX("menu_change");
         settingChanged = true;
-    } else if (selectedActionIndex == 4) {
+    } else if (selectedActionIndex == 6) {
         // Cycle victories limit
         victoriesLimitIndex++;
         if (victoriesLimitIndex > 17) victoriesLimitIndex = 0; // 18 values total
         AudioMixer::Instance()->PlaySFX("menu_change");
         settingChanged = true;
-    } else if (selectedActionIndex == 5) {
+    } else if (selectedActionIndex == 7) {
         // Toggle mouse/touch aim (per-session, off by default)
         netRoomMouseEnabled = !netRoomMouseEnabled;
         AudioMixer::Instance()->PlaySFX("menu_change");
-    } else if (selectedActionIndex == 6) {
+    } else if (selectedActionIndex == 8) {
         // Cycle per-player color count; col 0 = ALL
         int np = (int)currentGame->players.size();
         if (np < 1) np = 1; if (np > 5) np = 5;
@@ -949,7 +1083,7 @@ void MainMenu::GameRoomHostReturn(NetworkClient *netClient, GameRoom *currentGam
         }
         AudioMixer::Instance()->PlaySFX("menu_change");
         settingChanged = true;
-    } else if (selectedActionIndex == 7) {
+    } else if (selectedActionIndex == 9) {
         // Toggle per-player compression; col 0 = ALL (set all to majority opposite)
         int np = (int)currentGame->players.size();
         if (np < 1) np = 1; if (np > 5) np = 5;
@@ -960,7 +1094,7 @@ void MainMenu::GameRoomHostReturn(NetworkClient *netClient, GameRoom *currentGam
         for (int i = lo; i < hi; i++) playerNoCompress[i] = allOn;
         AudioMixer::Instance()->PlaySFX("menu_change");
         settingChanged = true;
-    } else if (selectedActionIndex == 8) {
+    } else if (selectedActionIndex == 10) {
         // Toggle per-player aim guide; col 0 = ALL (set all to majority opposite)
         int np = (int)currentGame->players.size();
         if (np < 1) np = 1; if (np > 5) np = 5;
@@ -971,8 +1105,20 @@ void MainMenu::GameRoomHostReturn(NetworkClient *netClient, GameRoom *currentGam
         for (int i = lo; i < hi; i++) playerAimGuide[i] = !allOn;
         AudioMixer::Instance()->PlaySFX("menu_change");
         settingChanged = true;
-    } else if (selectedActionIndex == 9 && currentGame && currentGame->players.size() > 1) {
-        // Start game (index 9, fixed regardless of player count)
+    } else if (selectedActionIndex == 11) {
+        // ENTER: advance team number for focused column (same as RIGHT)
+        int np = (int)currentGame->players.size();
+        if (np < 1) np = 1; if (np > 5) np = 5;
+        int lo = (currentPlayerCol == 0) ? 0 : currentPlayerCol - 1;
+        int hi = (currentPlayerCol == 0) ? np : currentPlayerCol;
+        for (int i = lo; i < hi; i++) {
+            netPlayerTeams[i]++;
+            if (netPlayerTeams[i] > 5) netPlayerTeams[i] = 1;
+        }
+        AudioMixer::Instance()->PlaySFX("menu_change");
+        settingChanged = true;
+    } else if (selectedActionIndex == 12 && currentGame && currentGame->players.size() > 1) {
+        // Start game
         netClient->StartGame();
         netClient->AddStatusMessage("Starting game...");
         AudioMixer::Instance()->PlaySFX("menu_selected");
@@ -980,7 +1126,7 @@ void MainMenu::GameRoomHostReturn(NetworkClient *netClient, GameRoom *currentGam
     if (settingChanged) {
         static const int vLimits[] = {0,1,2,3,4,5,6,7,8,9,10,11,12,15,20,30,50,100};
         netClient->SendOptions(chainReactionEnabled, continueWhenPlayersLeave,
-            singlePlayerTargetting, vLimits[victoriesLimitIndex], playerColorCounts, playerNoCompress, playerAimGuide, netRoomMouseEnabled);
+            singlePlayerTargetting, vLimits[victoriesLimitIndex], playerColorCounts, playerNoCompress, playerAimGuide, netRoomMouseEnabled, netClearMode, netDisableMalus, netTeamMode, netPlayerTeams);
     }
 }
 
@@ -1014,8 +1160,23 @@ void MainMenu::MenuReturnKey() {
                                     SubmitLobbyChatInput(netClient);
                                 } else if (isHost) {
                                     GameRoomHostReturn(netClient, currentGame);
+                                } else if (!isHost && selectedActionIndex == 11) {
+                                    // Joiner ENTER on Teams row: advance own team assignment
+                                    std::string myNick = netClient->GetPlayerNick();
+                                    int mySlot = -1;
+                                    for (int i = 0; i < (int)currentGame->players.size(); i++) {
+                                        if (currentGame->players[i].nick == myNick) { mySlot = i; break; }
+                                    }
+                                    if (mySlot >= 0) {
+                                        netPlayerTeams[mySlot]++;
+                                        if (netPlayerTeams[mySlot] > 5) netPlayerTeams[mySlot] = 1;
+                                        AudioMixer::Instance()->PlaySFX("menu_change");
+                                        char talkMsg[32];
+                                        snprintf(talkMsg, sizeof(talkMsg), "!team:%s:%d", myNick.c_str(), netPlayerTeams[mySlot]);
+                                        netClient->SendTalk(talkMsg);
+                                    }
                                 }
-                                // Non-host has no actions other than Chat (use ESC to leave)
+                                // Non-host has no other actions besides Chat/Teams (use ESC to leave)
                             } else {
                                 // In lobby - handle Create/Join actions
                                 if (selectedActionIndex == 1) {
@@ -1035,7 +1196,8 @@ void MainMenu::MenuReturnKey() {
                                             SDL_Log("JoinGame returned true - successfully joined!");
                                             netClient->AddStatusMessage("Joined game");
                                             AudioMixer::Instance()->PlaySFX("menu_selected");
-                                            // Joiner defaults to chat (index 0) and can't scroll through settings
+                                            // Joiner defaults to chat (index 0); can navigate the read-only
+                                            // rows and self-select their own Teams column
                                             selectedActionIndex = 0;
                                         } else {
                                             SDL_Log("JoinGame returned false - join failed!");

@@ -143,7 +143,7 @@ public:
     bool IsPendingJoin() const { return pendingJoin; }
 
     // Send game options to other players (host only)
-    bool SendOptions(bool chainReaction, bool continueWhenLeave, bool singleTarget, int victoriesLimit, const int playerColors[5], const bool noCompress[5], const bool aimGuide[5], bool mouseEnabled);
+    bool SendOptions(bool chainReaction, bool continueWhenLeave, bool singleTarget, int victoriesLimit, const int playerColors[5], const bool noCompress[5], const bool aimGuide[5], bool mouseEnabled, bool clearMode, bool disableMalus, bool teamMode, const int playerTeams[5]);
 
     // Received options from host (updated when SETOPTIONS push arrives)
     bool pendingOptions = false;
@@ -155,13 +155,19 @@ public:
     bool rcvNoCompress[5] = {false, false, false, false, false};
     bool rcvAimGuide[5] = {false, false, false, false, false};
     bool rcvMouseEnabled = false;
+    bool rcvClearMode = false;
+    bool rcvDisableMalus = false;
+    bool rcvTeamMode = false;
+    int rcvPlayerTeams[5] = {1, 2, 3, 4, 5};
     // Returns true (and clears flag) if new options arrived since last call
-    bool GetAndClearPendingOptions(bool& cr, bool& cl, bool& st, int& vl, int pc[5], bool nc[5], bool ag[5], bool& me) {
+    bool GetAndClearPendingOptions(bool& cr, bool& cl, bool& st, int& vl, int pc[5], bool nc[5], bool ag[5], bool& me, bool& cm, bool& dm, bool& tm, int pt[5]) {
         if (!pendingOptions) return false;
         pendingOptions = false;
         cr = rcvChainReaction; cl = rcvContinueLeave; st = rcvSingleTarget; vl = rcvVictoriesLimit;
         for (int i = 0; i < 5; i++) { pc[i] = rcvPlayerColors[i]; nc[i] = rcvNoCompress[i]; ag[i] = rcvAimGuide[i]; }
         me = rcvMouseEnabled;
+        cm = rcvClearMode; dm = rcvDisableMalus;
+        tm = rcvTeamMode; for (int i = 0; i < 5; i++) pt[i] = rcvPlayerTeams[i];
         return true;
     }
 

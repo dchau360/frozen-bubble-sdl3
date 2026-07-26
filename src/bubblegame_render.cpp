@@ -80,6 +80,12 @@ void BubbleGame::UpdatePlayerNameWinText() {
 
         playerNameWinText[i].UpdateText(renderer, nameWinStr, 0);
 
+        // Recolor by team so a team reads the same color here as in the lobby's
+        // team chips (kTeamColors, shared via bubblegame.h). No-op outside Team Mode.
+        if (currentSettings.teamMode) {
+            playerNameWinText[i].UpdateColor(kTeamColors[currentSettings.playerTeams[i] - 1], {0, 0, 0, 255});
+        }
+
         // Use fixed positions based on player layout (matching original FB2)
         // Positions are centered above/below each player's grid
         int textX, textY;
@@ -316,7 +322,19 @@ void BubbleGame::RenderRoundStats(SDL_Renderer *rend) {
     const int boxW = 434, boxX = (640 - boxW) / 2, boxY = 6;
     const int rowH = 16, headH = 22;
     const int hintH = currentSettings.networkGame ? rowH : 0;
-    const int boxH = headH + rowH * (n + 1) + hintH + 6;
+
+    // Distinct teams present, in ascending team-number order (team subtotal rows below).
+    std::vector<int> teams;
+    if (currentSettings.teamMode) {
+        for (int i = 0; i < n; i++) {
+            int t = currentSettings.playerTeams[i];
+            if (std::find(teams.begin(), teams.end(), t) == teams.end()) teams.push_back(t);
+        }
+        std::sort(teams.begin(), teams.end());
+    }
+    const int teamRows = teams.empty() ? 0 : (int)teams.size() + 1;  // +1 separator/header row
+
+    const int boxH = headH + rowH * (n + 1 + teamRows) + hintH + 6;
 
     // Semi-transparent backing panel.
     SDL_SetRenderDrawBlendMode(rend, SDL_BLENDMODE_BLEND);
@@ -367,7 +385,11 @@ void BubbleGame::RenderRoundStats(SDL_Renderer *rend) {
     char buf[32];
     for (int i = 0; i < n; i++) {
         BubbleArray &p = bubbleArrays[i];
-        SDL_Color c = p.mpWinner ? win : normal;
+        // Winner color still takes priority; otherwise show the player's team
+        // color so team affiliation reads here too, not just in the lobby.
+        SDL_Color c = p.mpWinner ? win
+                     : currentSettings.teamMode ? kTeamColors[currentSettings.playerTeams[i] - 1]
+                     : normal;
         std::string name = StatsPlayerName(p, i, currentSettings.networkGame);
         if (name.size() > 14) name = name.substr(0, 14);
         cell(name.c_str(), colName, y, c);
@@ -377,6 +399,26 @@ void BubbleGame::RenderRoundStats(SDL_Renderer *rend) {
         snprintf(buf, sizeof(buf), "%d", p.rSent);   cell(buf, colSent, y, c);
         snprintf(buf, sizeof(buf), "%d", p.rRecv);   cell(buf, colRecv, y, c);
         y += rowH;
+    }
+
+    if (!teams.empty()) {
+        cell("TEAM TOTALS", colName, y, hdr);
+        y += rowH;
+        for (int t : teams) {
+            int tFired = 0, tPopped = 0, tSent = 0, tRecv = 0;
+            for (int i = 0; i < n; i++) {
+                if (currentSettings.playerTeams[i] != t) continue;
+                BubbleArray &p = bubbleArrays[i];
+                tFired += p.rFired; tPopped += p.rPopped; tSent += p.rSent; tRecv += p.rRecv;
+            }
+            SDL_Color c = kTeamColors[t - 1];
+            snprintf(buf, sizeof(buf), "TEAM %d", t); cell(buf, colName, y, c);
+            snprintf(buf, sizeof(buf), "%d", tFired);  cell(buf, colFired, y, c);
+            snprintf(buf, sizeof(buf), "%d", tPopped); cell(buf, colPopped, y, c);
+            snprintf(buf, sizeof(buf), "%d", tSent);   cell(buf, colSent, y, c);
+            snprintf(buf, sizeof(buf), "%d", tRecv);   cell(buf, colRecv, y, c);
+            y += rowH;
+        }
     }
 
     if (currentSettings.networkGame) {

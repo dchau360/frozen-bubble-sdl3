@@ -48,11 +48,13 @@ void BubbleGame::SendMalusToOpponent(int malusCount) {
     // 1. Split malus to ALL living opponents (default)
     // 2. Send ALL malus to ONE specific target (single player targetting mode)
 
-    // Count living opponents (exclude local player at array 0)
+    // Count living opponents (exclude local player at array 0, and teammates in team mode)
     std::vector<int> livingOpponents;
+    int localTeam = currentSettings.playerTeams[0];
     for (int i = 1; i < currentSettings.playerCount; i++) {
         if (bubbleArrays[i].playerState == BubbleArray::PlayerState::ALIVE) {
-            livingOpponents.push_back(i);
+            if (!currentSettings.teamMode || currentSettings.playerTeams[i] != localTeam)
+                livingOpponents.push_back(i);
         }
     }
 
@@ -64,8 +66,8 @@ void BubbleGame::SendMalusToOpponent(int malusCount) {
     // Single player targeting mode: send all malus to ONE opponent only when the player has
     // actively selected a target (original lines 1217-1227). With no target selected
     // (sendMalusToOne == -1), fall through to splitting among all living opponents — matching
-    // the original (line 1204: "if (!sendmalustoone) { split }").
-    if (currentSettings.singlePlayerTargetting && sendMalusToOne != -1) {
+    // the original (line 1204: "if (!sendmalustoone) { split }"). In team mode we always split.
+    if (currentSettings.singlePlayerTargetting && !currentSettings.teamMode && sendMalusToOne != -1) {
         if (sendMalusToOne < currentSettings.playerCount &&
             bubbleArrays[sendMalusToOne].playerState == BubbleArray::PlayerState::ALIVE) {
             std::string targetNick = bubbleArrays[sendMalusToOne].playerNickname;
@@ -353,6 +355,15 @@ int BubbleGame::CountLivingPlayers() {
     return livingCount;
 }
 
+int BubbleGame::CountLivingTeams() {
+    std::set<int> aliveTeams;
+    for (int i = 0; i < currentSettings.playerCount; i++) {
+        if (bubbleArrays[i].playerState == BubbleArray::PlayerState::ALIVE)
+            aliveTeams.insert(currentSettings.playerTeams[i]);
+    }
+    return (int)aliveTeams.size();
+}
+
 // Handle player loss and check win conditions (original: sub lose() at line 1906-1968)
 void BubbleGame::HandlePlayerLoss(BubbleArray &bArray) {
     SDL_Log("HandlePlayerLoss: player %d lost", bArray.playerAssigned);
@@ -372,7 +383,10 @@ void BubbleGame::HandlePlayerLoss(BubbleArray &bArray) {
         int livingCount = CountLivingPlayers();
         SDL_Log("Living players: %d", livingCount);
 
-        if (livingCount == 1) {
+        bool roundOver = (livingCount == 1) ||
+                         (currentSettings.teamMode && livingCount > 0 && CountLivingTeams() == 1);
+
+        if (roundOver) {
             // Find the winner (the last living player)
             int winnerIdx = -1;
             for (int i = 0; i < currentSettings.playerCount; i++) {
@@ -387,6 +401,14 @@ void BubbleGame::HandlePlayerLoss(BubbleArray &bArray) {
                 SDL_Log("Winner found: player %d", winnerIdx);
                 bubbleArrays[winnerIdx].mpWinner = true;
                 bubbleArrays[winnerIdx].penguinSprite.PlayAnimation(10);
+                if (currentSettings.teamMode) {
+                    int winTeam = currentSettings.playerTeams[winnerIdx];
+                    for (int i = 0; i < currentSettings.playerCount; i++) {
+                        if (i != winnerIdx && bubbleArrays[i].playerState == BubbleArray::PlayerState::ALIVE
+                            && currentSettings.playerTeams[i] == winTeam)
+                            bubbleArrays[i].mpWinner = true;
+                    }
+                }
 
                 // Guard: only process once per round.
                 // Multiple clients independently detect the same winner and each send 'F'.
@@ -404,6 +426,17 @@ void BubbleGame::HandlePlayerLoss(BubbleArray &bArray) {
                         winsP2++;
                     }
                     bubbleArrays[winnerIdx].winCount++;
+                    // Every living teammate shares the win, not just the specific array
+                    // that happened to trigger elimination detection — otherwise the
+                    // scoreboard only ticks up for whichever teammate was found first.
+                    if (currentSettings.teamMode) {
+                        int winTeam = currentSettings.playerTeams[winnerIdx];
+                        for (int i = 0; i < currentSettings.playerCount; i++) {
+                            if (i != winnerIdx && bubbleArrays[i].playerState == BubbleArray::PlayerState::ALIVE
+                                && currentSettings.playerTeams[i] == winTeam)
+                                bubbleArrays[i].winCount++;
+                        }
+                    }
                     Update2PText();
 
                     // Check victories limit
@@ -454,7 +487,10 @@ void BubbleGame::HandlePlayerLoss(BubbleArray &bArray) {
         int livingCount = CountLivingPlayers();
         SDL_Log("Local multiplayer (%dP): living players: %d", currentSettings.playerCount, livingCount);
 
-        if (livingCount == 1) {
+        bool roundOver = (livingCount == 1) ||
+                         (currentSettings.teamMode && livingCount > 0 && CountLivingTeams() == 1);
+
+        if (roundOver) {
             int winnerIdx = -1;
             for (int i = 0; i < currentSettings.playerCount; i++) {
                 if (bubbleArrays[i].playerState == BubbleArray::PlayerState::ALIVE) {
@@ -469,6 +505,18 @@ void BubbleGame::HandlePlayerLoss(BubbleArray &bArray) {
                 bubbleArrays[winnerIdx].mpWinner = true;
                 bubbleArrays[winnerIdx].penguinSprite.PlayAnimation(10);
                 bubbleArrays[winnerIdx].winCount++;
+                if (currentSettings.teamMode) {
+                    int winTeam = currentSettings.playerTeams[winnerIdx];
+                    for (int i = 0; i < currentSettings.playerCount; i++) {
+                        if (i != winnerIdx && bubbleArrays[i].playerState == BubbleArray::PlayerState::ALIVE
+                            && currentSettings.playerTeams[i] == winTeam) {
+                            bubbleArrays[i].mpWinner = true;
+                            // Every living teammate shares the win, not just the specific
+                            // array that happened to trigger elimination detection.
+                            bubbleArrays[i].winCount++;
+                        }
+                    }
+                }
 
                 if (currentSettings.victoriesLimit > 0 &&
                     bubbleArrays[winnerIdx].winCount >= currentSettings.victoriesLimit) {
@@ -534,6 +582,19 @@ void BubbleGame::CheckGameState(BubbleArray &bArray, bool countForRoot) {
             audMixer->PlaySFX("applause");
             bArray.mpWinner = true;
             wonByClearing = true;
+            // Every living teammate shares the win, matching the elimination-win paths'
+            // team handling — otherwise a teammate's scoreboard entry never moves when
+            // their partner is the one who happens to clear the board.
+            if (currentSettings.teamMode) {
+                int winTeam = currentSettings.playerTeams[bArray.playerAssigned];
+                for (int i = 0; i < currentSettings.playerCount; i++) {
+                    if (i != bArray.playerAssigned && bubbleArrays[i].playerState == BubbleArray::PlayerState::ALIVE
+                        && currentSettings.playerTeams[i] == winTeam) {
+                        bubbleArrays[i].mpWinner = true;
+                        bubbleArrays[i].winCount++;
+                    }
+                }
+            }
 
             // In network games, only local player (array 0) processes wins
             if (currentSettings.networkGame && bArray.playerAssigned == 0) {

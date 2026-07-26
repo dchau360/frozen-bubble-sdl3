@@ -204,6 +204,16 @@ private:
     bool playerAimGuide[5] = {false, false, false, false, false};  // Per-player: show aim guide
     int currentPlayerCol = 0;  // Focused player column when navigating per-player grid settings
     bool netRoomMouseEnabled = false;  // Per-session mouse/touch for network games (defaults OFF)
+    bool netClearMode = false;         // Clear Mode for network game
+    bool netDisableMalus = false;      // Disable malus for network game
+    bool netTeamMode = false;          // Team Mode for network game
+    int netPlayerTeams[5] = {1, 2, 3, 4, 5}; // Per-player team (<=5-cap grid path)
+    size_t lastProcessedChatCount = 0; // Host: how many chat msgs we've scanned for !team: commands
+    // Snapshot of playerNoCompress/netDisableMalus taken the moment Clear Mode is
+    // switched on, restored when switching away from it (Clear Mode forces both
+    // on; without this, leaving Clear Mode left them stuck on forever).
+    bool netPreClearNoCompress[5] = {false, false, false, false, false};
+    bool netPreClearDisableMalus = false;
 
     // Geolocation state
     float myGeoLat = 0.0f, myGeoLon = 0.0f;
@@ -240,10 +250,17 @@ private:
 
     // Local multiplayer setup panel
     bool showingLocalMPPanel = false;
-    int localMPMenuIndex = 0;       // 0=players, 1=CR, 2=row collapse, 3..3+N-1=aim guide per player, 3+N..3+2N-1=colors per player, 3+2N=start
+    int localMPMenuIndex = 0;       // 0=players, 1=CR, 2=row collapse, 3=mode, 4=malus, 5=team mode, 6..6+N-1=aim guide per player, 6+N..6+2N-1=colors per player, 6+2N=start
     int localMPPlayerCount = 2;     // 2-5 players
     bool localMPCR = true;          // Chain reaction enabled
     bool localMPNoCompress = false;  // Disable row compression for all players
+    bool localMPClearMode = false;   // Clear Mode (win by clearing board; defaults compression+malus off)
+    bool localMPDisableMalus = false; // Disable malus attacks
+    bool localMPTeamMode = false;    // Team Mode (P1+P3 vs P2+P4, etc.)
+    // Snapshot taken when Clear Mode is switched on, restored when switching away
+    // from it (see the matching netPreClear* fields above for why).
+    bool localMPPreClearNoCompress = false;
+    bool localMPPreClearDisableMalus = false;
     bool localMPAimGuide[5] = {false, false, false, false, false};  // Per-player aim guide
     void LocalMPPanelRender();
 };

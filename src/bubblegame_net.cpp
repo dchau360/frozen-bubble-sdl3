@@ -439,6 +439,18 @@ void BubbleGame::ProcessNetworkMessages() {
                                     SDL_Log("Win counter updated: Opponent won! winsP2=%d", winsP2);
                                 }
                                 bubbleArrays[winnerPlayer].winCount++;
+                                // Every living teammate shares the win, matching the local
+                                // elimination-win handling in HandlePlayerLoss.
+                                if (currentSettings.teamMode) {
+                                    int winTeam = currentSettings.playerTeams[winnerPlayer];
+                                    for (int i = 0; i < currentSettings.playerCount; i++) {
+                                        if (i != winnerPlayer && bubbleArrays[i].playerState == BubbleArray::PlayerState::ALIVE
+                                            && currentSettings.playerTeams[i] == winTeam) {
+                                            bubbleArrays[i].mpWinner = true;
+                                            bubbleArrays[i].winCount++;
+                                        }
+                                    }
+                                }
                                 Update2PText();
                                 panelRct = {SCREEN_CENTER_X - 173, 480 - 289, 329, 159};
 
@@ -535,6 +547,18 @@ void BubbleGame::ProcessNetworkMessages() {
                                         if (w == 0) winsP1++;
                                         else winsP2++;
                                         bubbleArrays[w].winCount++;
+                                        // Every living teammate shares the win, matching
+                                        // HandlePlayerLoss's elimination-win handling.
+                                        if (currentSettings.teamMode) {
+                                            int winTeam = currentSettings.playerTeams[w];
+                                            for (int t = 0; t < currentSettings.playerCount; t++) {
+                                                if (t != w && bubbleArrays[t].playerState == BubbleArray::PlayerState::ALIVE
+                                                    && currentSettings.playerTeams[t] == winTeam) {
+                                                    bubbleArrays[t].mpWinner = true;
+                                                    bubbleArrays[t].winCount++;
+                                                }
+                                            }
+                                        }
                                         Update2PText();
                                         break;
                                     }

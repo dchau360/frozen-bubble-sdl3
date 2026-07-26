@@ -258,6 +258,18 @@ struct SetupSettings {
     bool aimGuide[5] = {false, false, false, false, false};  // Per-player: show aim trajectory guide
     int victoriesLimit = 0;  // 0 = unlimited; >0 = first to reach this wins the match
     bool mouseEnabled = false;  // Mouse/touchscreen aim+fire for player 1
+    bool clearMode = false;    // Clear Mode: win by clearing the board
+    bool disableMalus = false; // Disable malus attacks
+    bool teamMode = false;
+    int playerTeams[5] = {1,1,1,1,1};  // Per-player team number (1..5); meaningful when teamMode
+};
+
+// Shared between the lobby/game-room team UI and in-gameplay team indicators
+// (bubblegame_render.cpp) so a team reads the same color everywhere. Indexed
+// by playerTeams[i] - 1.
+inline constexpr SDL_Color kTeamColors[5] = {
+    {255, 112, 112, 255}, {92, 184, 255, 255}, {255, 211, 66, 255},
+    {132, 220, 130, 255}, {205, 139, 255, 255}
 };
 
 struct BubbleArray {
@@ -518,6 +530,7 @@ private:
     void StartInGameChat();
     void FinishInGameChat(bool sendMessage);
     int CountLivingPlayers();  // Count players still alive (original: living_players() at line 600)
+    int CountLivingTeams();   // Count distinct teams with at least one alive player
     void HandlePlayerLoss(BubbleArray &bArray);  // Handle player death and check win conditions
 
     void DoFrozenAnimation(BubbleArray &bArray, int &waitTime);
