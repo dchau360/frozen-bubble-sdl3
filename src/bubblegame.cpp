@@ -24,6 +24,7 @@
 #include "transitionmanager.h"
 #include "gamesettings.h"
 #include "platform.h"
+#include "netview.h"
 
 #include <fstream>
 #include <sstream>
@@ -290,6 +291,10 @@ static void ResetRoundInputState(BubbleArray &player) {
     player.stickAnimActive = false;
     player.stickAnimFrame = player.stickAnimSlowdown = 0;
     player.stickAnimPos = {0, 0};
+    player.wasInDanger = false;
+    player.attackFlashFramesLeft = 0;
+    player.rKills = 0;
+    player.lastAttackerIdx = -1;
 }
 
 
@@ -361,6 +366,7 @@ void BubbleGame::NewGame(SetupSettings setup) {
     opponentReadyForNewGame = false;
     opponentsReadyCount = 0;
     netViewPage = 0;
+    netViewAuto = true;
     for (int i = 0; i < MAX_NET_PLAYERS; i++) playerTargeting[i] = -1;
     for (int i = 0; i < currentSettings.playerCount; i++) ResetRoundInputState(bubbleArrays[i]);
     pendingHighscore = false;
@@ -380,6 +386,7 @@ void BubbleGame::NewGame(SetupSettings setup) {
         // Reset both round and match statistics at the start of a new match.
         bubbleArrays[i].rFired = bubbleArrays[i].rPopped = bubbleArrays[i].rSent = bubbleArrays[i].rRecv = 0;
         bubbleArrays[i].mFired = bubbleArrays[i].mPopped = bubbleArrays[i].mSent = bubbleArrays[i].mRecv = 0;
+        bubbleArrays[i].rKills = bubbleArrays[i].mKills = 0;
         // Apply per-player color count (5-8); default 8 for single player
         int nc = (setup.playerCount >= 2) ? setup.playerColors[i] : 8;
         nc = (nc < 5) ? 5 : (nc > 8) ? 8 : nc;
@@ -847,6 +854,7 @@ void BubbleGame::NewGame(SetupSettings setup) {
     }
 
     ApplyNetViewPage();
+    ReRankNetView();  // auto mode refines page-0 visibility (no-op when manual/<=5)
 
     // Set lobby player IDs for network games
     if (currentSettings.networkGame) {
@@ -1188,6 +1196,7 @@ void BubbleGame::ReloadGame(int level) {
 
     netViewPage = 0;
     ApplyNetViewPage();
+    ReRankNetView();  // auto mode refines page-0 visibility (no-op when manual/<=5)
 
     RemoveArray(bubbleArrays, currentSettings.playerCount);
     SetupGameMetrics(bubbleArrays, currentSettings.playerCount, lowGfx);
@@ -1206,6 +1215,7 @@ void BubbleGame::ReloadGame(int level) {
         // Reset per-round stats; match totals (m*) persist across rounds.
         bubbleArrays[i].rFired = bubbleArrays[i].rPopped = 0;
         bubbleArrays[i].rSent = bubbleArrays[i].rRecv = 0;
+        bubbleArrays[i].rKills = 0;
         bubbleArrays[i].malusAlerts.clear();
     }
     roundStatsFinalized = false;
@@ -1270,18 +1280,48 @@ void BubbleGame::ApplyNetViewPage() {
         for (int i = 0; i < n; i++) bubbleArrays[i].boardVisible = true;
         return;
     }
-    int pages = ((n - 1) + 3) / 4;
-    if (netViewPage >= pages) netViewPage = 0;
-    bubbleArrays[0].boardVisible = true;
-    for (int i = 1; i < n; i++)
-        bubbleArrays[i].boardVisible = ((i - 1) / 4) == netViewPage;
+    if (netViewPage >= NetViewPageCount(n)) netViewPage = 0;
+    for (int i = 0; i < n; i++)
+        bubbleArrays[i].boardVisible = NetViewBoardVisible(n, netViewPage, i);
 }
 
 void BubbleGame::CycleNetViewPage() {
     if (!currentSettings.networkGame || currentSettings.playerCount <= 5) return;
-    netViewPage++;
-    ApplyNetViewPage();  // wraps netViewPage
+    if (netViewAuto) {
+        // Leave auto mode into manual paging, starting at page 0.
+        netViewAuto = false;
+        netViewPage = 0;
+        ApplyNetViewPage();
+    } else if (netViewPage + 1 >= NetViewPageCount(currentSettings.playerCount)) {
+        // Tab past the last manual page returns to auto mode.
+        netViewAuto = true;
+        ApplyNetViewAuto();
+    } else {
+        netViewPage++;
+        ApplyNetViewPage();
+    }
     audMixer->PlaySFX("menu_change");
+}
+
+void BubbleGame::ApplyNetViewAuto() {
+    int n = currentSettings.playerCount;
+    NetViewBoardState states[MAX_NET_PLAYERS];
+    for (int i = 0; i < n; i++) {
+        states[i].alive = bubbleArrays[i].playerState == BubbleArray::PlayerState::ALIVE;
+        states[i].targetingMe = (i != 0) && (playerTargeting[i] == 0);
+        states[i].inDanger = bubbleArrays[i].bubbleOnDanger();
+        states[i].visible = bubbleArrays[i].boardVisible;
+    }
+    std::array<int, 4> picks = RankNetViewBoards(n, sendMalusToOne, states);
+    bubbleArrays[0].boardVisible = true;
+    for (int i = 1; i < n; i++) bubbleArrays[i].boardVisible = false;
+    for (int c = 0; c < 4; c++)
+        if (picks[c] >= 0) bubbleArrays[picks[c]].boardVisible = true;
+}
+
+void BubbleGame::ReRankNetView() {
+    if (!currentSettings.networkGame || currentSettings.playerCount <= 5 || !netViewAuto) return;
+    ApplyNetViewAuto();
 }
 
 

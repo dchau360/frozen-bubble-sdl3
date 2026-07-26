@@ -38,6 +38,10 @@
 void BubbleGame::SendMalusToOpponent(int malusCount) {
     if (!currentSettings.networkGame) return;
 
+    // >5-player royale mini-board blink: 2 full cycles of the render's 20-frame
+    // blink period (bubblegame_render.cpp) at 60fps.
+    const int kAttackFlashDurationFrames = 40;
+
     NetworkClient* netClient = NetworkClient::Instance();
     if (!netClient || !netClient->IsConnected() || netClient->GetState() != IN_GAME) {
         return;
@@ -131,6 +135,10 @@ void BubbleGame::SendMalusToOpponent(int malusCount) {
                 netClient->SendGameData(malusMsg);
                 bubbleArrays[0].rSent += malusCount;  // Stats: malus sent (focus-fire)
                 bubbleArrays[resolvedTarget].rRecv += malusCount;  // Stats: locally credit target's Def
+                bubbleArrays[resolvedTarget].attackFlashFramesLeft = kAttackFlashDurationFrames;
+                // Kill attribution: the sender never sees its own 'g' echoed back, so
+                // credit this locally too, same as the Def stat above.
+                bubbleArrays[resolvedTarget].lastAttackerIdx = 0;
             }
             if (randomPick) sendMalusToOne = -1;  // re-roll on the next attack
             return;
@@ -175,6 +183,8 @@ void BubbleGame::SendMalusToOpponent(int malusCount) {
                         malusCount, targetNick.c_str(), sendMalusToOne);
                 netClient->SendGameData(malusMsg);
                 bubbleArrays[0].rSent += malusCount;  // Stats: malus sent (focus-fire)
+                bubbleArrays[sendMalusToOne].attackFlashFramesLeft = kAttackFlashDurationFrames;
+                bubbleArrays[sendMalusToOne].lastAttackerIdx = 0;
                 return;
             }
         }
@@ -228,6 +238,9 @@ void BubbleGame::SendMalusToOpponent(int malusCount) {
                 bubbleArrays[opponentIdx].lobbyPlayerId);
         netClient->SendGameData(malusMsg);
         bubbleArrays[0].rSent += malusPerOpponent;  // Stats: malus sent (split among opponents)
+        // Split hits every living opponent at once, so all of their boards blink together.
+        bubbleArrays[opponentIdx].attackFlashFramesLeft = kAttackFlashDurationFrames;
+        bubbleArrays[opponentIdx].lastAttackerIdx = 0;
     }
 }
 
@@ -254,6 +267,7 @@ void BubbleGame::SetSendMalusToOne(int opponentIdx) {
             SDL_Log("Set malus target to %s (array %d)", nick.c_str(), opponentIdx);
         }
     }
+    ReRankNetView();  // the target is rank 1, so auto mode pulls it on screen
 }
 
 void BubbleGame::ProcessMalusQueue(BubbleArray &bArray, int currentFrame) {
@@ -447,6 +461,22 @@ void BubbleGame::HandlePlayerLoss(BubbleArray &bArray) {
 
     // Play lose sound
     audMixer->PlaySFX("lose");
+
+    // Credit a kill to whoever last attacked this player (network and local
+    // multiplayer both set lastAttackerIdx at their real malus-send sites; -1
+    // means this player was never attacked, i.e. a self-inflicted overflow, so
+    // no kill is credited to anyone).
+    if (bArray.lastAttackerIdx >= 0 && bArray.lastAttackerIdx < currentSettings.playerCount) {
+        bubbleArrays[bArray.lastAttackerIdx].rKills++;
+    }
+
+    // >5 royale: a dead target reverts targeting to random-per-attack (mirrors
+    // the 'l' handler's clear for departed targets), and the auto view re-ranks.
+    if (currentSettings.networkGame && currentSettings.playerCount > 5 &&
+        sendMalusToOne == bArray.playerAssigned) {
+        SetSendMalusToOne(-1);
+    }
+    ReRankNetView();
 
     if (currentSettings.networkGame && currentSettings.playerCount >= 2) {
         // NOTE: Don't send death notification - in the original, each client independently
@@ -743,12 +773,13 @@ void BubbleGame::FinalizeRoundStats() {
         me.mPopped += me.rPopped;
         me.mSent  += me.rSent;
         me.mRecv  += me.rRecv;
+        me.mKills += me.rKills;
 
         NetworkClient* netClient = NetworkClient::Instance();
         if (netClient && netClient->IsConnected() && netClient->GetState() == IN_GAME) {
             char statsMsg[64];
-            snprintf(statsMsg, sizeof(statsMsg), "S%d:%d:%d:%d",
-                     me.rFired, me.rPopped, me.rSent, me.rRecv);
+            snprintf(statsMsg, sizeof(statsMsg), "S%d:%d:%d:%d:%d",
+                     me.rFired, me.rPopped, me.rSent, me.rRecv, me.rKills);
             netClient->SendGameData(statsMsg);
         }
         // Remote arrays' totals are accumulated as their 'S' messages arrive.
@@ -759,6 +790,7 @@ void BubbleGame::FinalizeRoundStats() {
             bubbleArrays[i].mPopped += bubbleArrays[i].rPopped;
             bubbleArrays[i].mSent   += bubbleArrays[i].rSent;
             bubbleArrays[i].mRecv   += bubbleArrays[i].rRecv;
+            bubbleArrays[i].mKills  += bubbleArrays[i].rKills;
         }
     }
     roundsPlayed++;

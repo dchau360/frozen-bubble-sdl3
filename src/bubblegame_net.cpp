@@ -261,6 +261,15 @@ void BubbleGame::ProcessNetworkMessages() {
                                     destNick, malusCount, myNick.c_str(), senderId,
                                     netClient ? netClient->GetMyPlayerId() : -1);
 
+                            // Kill attribution: every client sees every 'g' message broadcast
+                            // (not just the addressee), so each independently tracks who last
+                            // attacked whom from the same messages -- resolve the sender's
+                            // array index once here for both branches below.
+                            int senderIdx = -1;
+                            for (int i = 0; i < currentSettings.playerCount; i++) {
+                                if (bubbleArrays[i].lobbyPlayerId == senderId) { senderIdx = i; break; }
+                            }
+
                             if (netClient && myNick == destNick) {
                                 SDL_Log("  -> YES, this malus is FOR ME! Adding to my queue");
 
@@ -271,6 +280,7 @@ void BubbleGame::ProcessNetworkMessages() {
                                     bubbleArrays[0].malusQueue.push_back(frameCount);
                                 }
                                 bubbleArrays[0].rRecv += malusCount;  // Stats: malus received
+                                if (senderIdx >= 0) bubbleArrays[0].lastAttackerIdx = senderIdx;
                                 AddMalusAlert(bubbleArrays[0], netClient->GetPlayerNickname(senderId), malusCount);
                             } else {
                                 SDL_Log("  -> NO, not for me (dest='%s' != myNick='%s'), IGNORING",
@@ -468,20 +478,23 @@ void BubbleGame::ProcessNetworkMessages() {
                         break;
                     }
                     case 'S': {
-                        // Round stats sync from a remote player: S{fired}:{popped}:{sent}:{recv}
-                        // Sent once per round by each client when its round ends.
-                        int rf, rp, rs, rr;
-                        if (sscanf(gameData + 1, "%d:%d:%d:%d", &rf, &rp, &rs, &rr) == 4) {
+                        // Round stats sync from a remote player: S{fired}:{popped}:{sent}:{recv}:{kills}
+                        // Sent once per round by each client when its round ends. The trailing
+                        // :{kills} field is newer than the rest; sscanf fills rf/rp/rs/rr from the
+                        // same call even if it stops at 4 (kills stays at its 0 default), so this
+                        // stays compatible with any peer still on the old 4-field format.
+                        int rf, rp, rs, rr, rk = 0;
+                        if (sscanf(gameData + 1, "%d:%d:%d:%d:%d", &rf, &rp, &rs, &rr, &rk) >= 4) {
                             int idx = -1;
                             for (int i = 0; i < currentSettings.playerCount; i++) {
                                 if (bubbleArrays[i].lobbyPlayerId == senderId) { idx = i; break; }
                             }
                             if (idx >= 1) {
                                 BubbleArray &pa = bubbleArrays[idx];
-                                pa.rFired = rf; pa.rPopped = rp; pa.rSent = rs; pa.rRecv = rr;
-                                pa.mFired += rf; pa.mPopped += rp; pa.mSent += rs; pa.mRecv += rr;
-                                SDL_Log("Round stats from player %d (array %d): F%d P%d A%d D%d",
-                                        senderId, idx, rf, rp, rs, rr);
+                                pa.rFired = rf; pa.rPopped = rp; pa.rSent = rs; pa.rRecv = rr; pa.rKills = rk;
+                                pa.mFired += rf; pa.mPopped += rp; pa.mSent += rs; pa.mRecv += rr; pa.mKills += rk;
+                                SDL_Log("Round stats from player %d (array %d): F%d P%d A%d D%d K%d",
+                                        senderId, idx, rf, rp, rs, rr, rk);
                             } else {
                                 SDL_Log("'S' stats from unknown senderId %d, ignoring", senderId);
                             }
@@ -522,6 +535,7 @@ void BubbleGame::ProcessNetworkMessages() {
                             SDL_Log("Marking player array %d (lobbyId=%d) as LEFT (disconnected)", playerIdx, senderId);
                             bubbleArrays[playerIdx].playerState = BubbleArray::PlayerState::LEFT;
                             bubbleArrays[playerIdx].penguinSprite.PlayAnimation(11);
+                            ReRankNetView();  // departed board should leave the auto view
 
                             // Clear targeting if targeted player died (original: set_sendmalustoone(undef) at line 1947)
                             if (sendMalusToOne == playerIdx) {
@@ -618,6 +632,7 @@ void BubbleGame::ProcessNetworkMessages() {
                         }
                         SDL_Log("'A' message: sender=%d targetNick='%s' myNick='%s' attackingMe.size=%zu",
                                 senderIdx, targetNick, myNick.c_str(), attackingMe.size());
+                        ReRankNetView();  // attacker set/cleared: auto view re-ranks
                         break;
                     }
                     case 'b':

@@ -227,8 +227,31 @@ void BubbleGame::HandleInput(SDL_Event *e) {
                 case SDLK_3:
                 case SDLK_4:
                 case SDLK_0:
-                    if (currentSettings.networkGame && currentSettings.playerCount >= 3 &&
-                        currentSettings.singlePlayerTargetting && !gameFinish) {
+                    if (currentSettings.networkGame && currentSettings.playerCount > 5 &&
+                        !gameFinish) {
+                        // >5 royale: slot-relative targeting -- key k targets whatever
+                        // living board is currently shown in mini-slot k-1; 0 clears back
+                        // to random-per-attack. Active regardless of the host's
+                        // singlePlayerTargetting toggle, since >5-alive rooms always use
+                        // one-target attacks.
+                        if (e->key.key == SDLK_0) {
+                            SetSendMalusToOne(-1);
+                        } else {
+                            int slot = (e->key.key == SDLK_1) ? 0
+                                     : (e->key.key == SDLK_2) ? 1
+                                     : (e->key.key == SDLK_3) ? 2 : 3;
+                            for (int i = 1; i < currentSettings.playerCount; i++) {
+                                if (bubbleArrays[i].boardVisible &&
+                                    bubbleArrays[i].parkedSlot == slot &&
+                                    bubbleArrays[i].playerState == BubbleArray::PlayerState::ALIVE) {
+                                    SetSendMalusToOne(i);
+                                    break;
+                                }
+                            }
+                            // No living board in that slot: no-op.
+                        }
+                    } else if (currentSettings.networkGame && currentSettings.playerCount >= 3 &&
+                               currentSettings.singlePlayerTargetting && !gameFinish) {
                         int target = -1;
                         if (e->key.key == SDLK_1) target = 1;
                         else if (e->key.key == SDLK_2 && currentSettings.playerCount >= 3) target = 2;
