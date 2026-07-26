@@ -232,7 +232,7 @@ private:
     // NetPanelRender decomposition (mainmenu_netpanel.cpp)
     void NetPanelWorldMapRender();       // World map background + geolocation player spots
     void NetPanelLobbyActionsRender();   // Action list + per-player settings grid
-    void NetPanelChatStatusRender();     // Chat input/messages + player/status list
+    void NetPanelChatDockRender();        // Persistent chat dock: input + last 5 messages
     void NetPanelConnectionScreensRender(); // Pre-login screens: LAN list, manual entry, public list
     void NetSetupPanelRender(); // Chain reaction prompt for network games
     void SavePreNick();         // Persist networkPreNick (localStorage on WASM, INI elsewhere)
