@@ -80,6 +80,7 @@ add_executable(frozen-bubble-sdl3
     src/bubblegame_state.cpp
     src/netview.cpp
     src/netteams.cpp
+    src/roundstats_color.cpp
     src/transitionmanager.cpp
     src/ttftext.cpp
     src/highscoremanager.cpp
@@ -179,6 +180,15 @@ if(BUILD_TESTING AND NOT EMSCRIPTEN AND NOT ANDROID)
 
     add_test(NAME net-bots-test
         COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tests/net_bots_test.py)
+
+    add_executable(roundstats-color-test
+        tests/roundstats_color_test.cpp
+        src/roundstats_color.cpp
+    )
+    set_property(TARGET roundstats-color-test PROPERTY CXX_STANDARD 17)
+    set_property(TARGET roundstats-color-test PROPERTY CXX_EXTENSIONS OFF)
+    target_include_directories(roundstats-color-test PRIVATE src)
+    add_test(NAME roundstats-color-test COMMAND roundstats-color-test)
 
     add_test(NAME server-list-cap-test
         COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tests/server_list_cap_test.py $<TARGET_FILE:fb-server>)
