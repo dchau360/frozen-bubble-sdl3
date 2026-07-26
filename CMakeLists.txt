@@ -169,6 +169,9 @@ if(BUILD_TESTING AND NOT EMSCRIPTEN AND NOT ANDROID)
 
     add_test(NAME net-bots-test
         COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tests/net_bots_test.py)
+
+    add_test(NAME server-list-cap-test
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tests/server_list_cap_test.py $<TARGET_FILE:fb-server>)
 endif()
 
 # Installation configuration

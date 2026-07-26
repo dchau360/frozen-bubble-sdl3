@@ -366,10 +366,11 @@ void MainMenu::NetPanelLobbyActionsRender() {
             for (const auto& game : games) {
                 int n = (int)game.players.size();
                 char roomLbl[160];
-                // Card-style summary: host and count/cap (fixed at /5, this
-                // repo's only cap) plus an in-progress badge.
-                snprintf(roomLbl, sizeof(roomLbl), "%s's room  (%d/5)%s",
-                         game.creator.c_str(), n, game.started ? "  [in game]" : "");
+                // Card-style summary: host, count/cap, and status badge. The cap
+                // comes from LIST's "]:N" suffix (5 when an old server omits it).
+                snprintf(roomLbl, sizeof(roomLbl), "%s's room  (%d/%d)%s",
+                         game.creator.c_str(), n, game.maxPlayers,
+                         game.started ? "  [in game]" : "");
                 actions.push_back(roomLbl);
             }
         }
@@ -665,45 +666,91 @@ void MainMenu::NetPanelLobbyActionsRender() {
             // <=5-cap "fat-row" panel: always exactly 5 rows, empty slots
             // show "Waiting for player...". Team chips reuse kTeamColors so a
             // team reads the same color as the settings grid's own swatches.
-            const int panelX = 450;
+            // >5-cap rooms get a compact 2-column roster instead (Team Mode is
+            // capped at 5 players, so no team chips there).
+            const bool bigRoom = currentGame->maxPlayers > 5;
+            // Compact 2-column roster for >5-cap rooms occupies the whole gap
+            // right of the settings grid (grid never passes x=350 at its
+            // 5-column clamp); <=5-cap rooms keep the classic fat panel.
+            const int panelX = bigRoom ? 354 : 450;
             const int panelY = 42;
-            const int panelW = 180;
+            const int panelW = bigRoom ? 276 : 180;
             drawPanel({panelX, panelY, panelW, 286}, {18, 55, 65, 225}, panelEdge);
 
             char hdr[32];
-            snprintf(hdr, sizeof(hdr), "Players  %d", (int)currentGame->players.size());
+            if (bigRoom)
+                snprintf(hdr, sizeof(hdr), "Players  %d/%d",
+                         (int)currentGame->players.size(), currentGame->maxPlayers);
+            else
+                snprintf(hdr, sizeof(hdr), "Players  %d", (int)currentGame->players.size());
             drawLabel(hdr, panelX + 10, panelY + 8, textGold);
 
-            const int rowH = 38;
-            for (int pi = 0; pi < 5; pi++) {
-                int rowY = panelY + 30 + pi * rowH;
-                SDL_Rect rowBox = {panelX + 7, rowY, panelW - 14, rowH - 5};
-                SDL_SetRenderDrawColor(roomRenderer, 10, 38, 48, 185);
-                { SDL_FRect fr = ToFRect(rowBox); SDL_RenderFillRect(roomRenderer, &fr); }
+            if (bigRoom) {
+                // Two columns of slim rows; slots split evenly (cap 20 -> 10+10,
+                // cap 10 -> 5+5). No team chips: Team Mode is capped at 5 players.
+                const int cap = currentGame->maxPlayers;
+                const int rowsPerCol = (cap + 1) / 2;
+                // 19px pitch: 10 rows span y +30..+217, clear of the legend at
+                // +224 and the ESC line at +238.
+                const int rowH2 = 19;
+                const int colW2 = (panelW - 14) / 2;  // 131 at panelW=276
+                for (int pi = 0; pi < cap; pi++) {
+                    int col = pi / rowsPerCol;
+                    int row = pi % rowsPerCol;
+                    int rowX = panelX + 7 + col * (colW2 + 3);
+                    int rowY = panelY + 30 + row * rowH2;
+                    SDL_Rect rowBox = {rowX, rowY, colW2 - 3, rowH2 - 3};
+                    SDL_SetRenderDrawColor(roomRenderer, 10, 38, 48, 185);
+                    { SDL_FRect fr = ToFRect(rowBox); SDL_RenderFillRect(roomRenderer, &fr); }
 
-                char slot[8];
-                snprintf(slot, sizeof(slot), "P%d", pi + 1);
-                drawLabel(slot, panelX + 12, rowY + 8, textMuted);
-                if (pi < (int)currentGame->players.size()) {
-                    const NetworkPlayer& pl = currentGame->players[pi];
-                    bool host = (pl.nick == currentGame->creator);
-                    bool self = (pl.nick == netClient->GetPlayerNick());
-                    int team = netPlayerTeams[pi];
-                    if (team < 1 || team > 5) team = 1;
-                    SDL_Color chip = teamColors[team - 1];
-                    SDL_SetRenderDrawColor(roomRenderer, chip.r, chip.g, chip.b, chip.a);
-                    SDL_FRect chipRect = {(float)(panelX + 40), (float)(rowY + 8), 12.0f, 12.0f};
-                    SDL_RenderFillRect(roomRenderer, &chipRect);
+                    if (pi < (int)currentGame->players.size()) {
+                        const NetworkPlayer& pl = currentGame->players[pi];
+                        bool host = (pl.nick == currentGame->creator);
+                        bool self = (pl.nick == netClient->GetPlayerNick());
+                        char rowTxt[64];
+                        snprintf(rowTxt, sizeof(rowTxt), "%2d %.9s%s%s", pi + 1,
+                                 pl.nick.c_str(), host ? " H" : "", self ? " *" : "");
+                        drawLabel(rowTxt, rowX + 4, rowY + 2, self ? textGold : textMain);
+                    } else {
+                        char rowTxt[24];
+                        snprintf(rowTxt, sizeof(rowTxt), "%2d -", pi + 1);
+                        drawLabel(rowTxt, rowX + 4, rowY + 2, textMuted);
+                    }
+                }
+                // Legend for the compact markers ("H" host, "*" you).
+                drawLabel("H host   * you", panelX + 12, panelY + 224, textMuted);
+            } else {
+                const int rowH = 38;
+                for (int pi = 0; pi < 5; pi++) {
+                    int rowY = panelY + 30 + pi * rowH;
+                    SDL_Rect rowBox = {panelX + 7, rowY, panelW - 14, rowH - 5};
+                    SDL_SetRenderDrawColor(roomRenderer, 10, 38, 48, 185);
+                    { SDL_FRect fr = ToFRect(rowBox); SDL_RenderFillRect(roomRenderer, &fr); }
 
-                    char row[96];
-                    snprintf(row, sizeof(row), "%.12s%s%s", pl.nick.c_str(),
-                             host ? "  HOST" : "", self ? "  YOU" : "");
-                    drawLabel(row, panelX + 58, rowY + 6, self ? textGold : textMain);
-                    char teamText[24];
-                    snprintf(teamText, sizeof(teamText), "Team %d", team);
-                    drawLabel(teamText, panelX + 58, rowY + 20, textMuted);
-                } else {
-                    drawLabel("Waiting for player...", panelX + 40, rowY + 8, textMuted);
+                    char slot[8];
+                    snprintf(slot, sizeof(slot), "P%d", pi + 1);
+                    drawLabel(slot, panelX + 12, rowY + 8, textMuted);
+                    if (pi < (int)currentGame->players.size()) {
+                        const NetworkPlayer& pl = currentGame->players[pi];
+                        bool host = (pl.nick == currentGame->creator);
+                        bool self = (pl.nick == netClient->GetPlayerNick());
+                        int team = netPlayerTeams[pi];
+                        if (team < 1 || team > 5) team = 1;
+                        SDL_Color chip = teamColors[team - 1];
+                        SDL_SetRenderDrawColor(roomRenderer, chip.r, chip.g, chip.b, chip.a);
+                        SDL_FRect chipRect = {(float)(panelX + 40), (float)(rowY + 8), 12.0f, 12.0f};
+                        SDL_RenderFillRect(roomRenderer, &chipRect);
+
+                        char row[96];
+                        snprintf(row, sizeof(row), "%.12s%s%s", pl.nick.c_str(),
+                                 host ? "  HOST" : "", self ? "  YOU" : "");
+                        drawLabel(row, panelX + 58, rowY + 6, self ? textGold : textMain);
+                        char teamText[24];
+                        snprintf(teamText, sizeof(teamText), "Team %d", team);
+                        drawLabel(teamText, panelX + 58, rowY + 20, textMuted);
+                    } else {
+                        drawLabel("Waiting for player...", panelX + 40, rowY + 8, textMuted);
+                    }
                 }
             }
             drawLabel("ESC  Leave room", panelX + 12, panelY + 238, textMuted);

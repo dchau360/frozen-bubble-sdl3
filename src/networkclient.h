@@ -53,6 +53,7 @@ struct GameRoom {
     std::string creator;
     std::vector<NetworkPlayer> players;
     bool started;
+    int maxPlayers = 5;  // room cap from LIST's "]:N" suffix; 5 when absent (old server)
 };
 
 struct ChatMessage {

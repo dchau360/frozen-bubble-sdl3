@@ -345,6 +345,12 @@ void BubbleGame::RenderRoyaleHud(SDL_Renderer *rend) {
     else
         snprintf(pageBuf, sizeof(pageBuf), "opponents %d-%d of %d  [Tab]", pageStart, pageEnd, n - 1);
     cell(pageBuf, 254, 28, hud);
+
+    if (bubbleArrays[0].playerState != BubbleArray::PlayerState::ALIVE) {
+        const SDL_Color spec = {255, 160, 60, 255};
+        cell("SPECTATING", 254, 44, spec);
+        cell("[1-4] pin view  [0] auto", 254, 60, spec);
+    }
 }
 
 // Resolve a display name for a player array (local player gets its lobby nick or "You").

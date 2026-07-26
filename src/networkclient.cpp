@@ -376,6 +376,7 @@ bool NetworkClient::CreateGame(int maxPlayers) {
     }
     currentGame->creator = playerNick;
     currentGame->started = false;
+    currentGame->maxPlayers = maxPlayers;
 
     // Add self as the first player
     NetworkPlayer self;
@@ -963,6 +964,7 @@ void NetworkClient::HandleServerResponse(const std::string& response) {
             if (!currentGame) currentGame = new GameRoom();
             currentGame->creator = pendingCreateNick;
             currentGame->started = false;
+            currentGame->maxPlayers = pendingCreateMaxPlayers;
             NetworkPlayer self;
             self.nick = pendingCreateNick;
             self.ready = false;
@@ -1387,12 +1389,27 @@ void NetworkClient::ParseListResponse(const char* listData) {
             }
         }
 
-        if (!game.players.empty()) {
-            gameList.push_back(game);
-            SDL_Log("Game: %s (%d players)", game.creator.c_str(), (int)game.players.size());
+        // Optional ":<cap>" suffix after the closing bracket (server sends the
+        // room's max_players there; absent on old servers -> default 5).
+        size_t capEnd = endPos + 1;
+        if (capEnd < data.size() && data[capEnd] == ':') {
+            int cap = 0;
+            size_t d = capEnd + 1;
+            while (d < data.size() && data[d] >= '0' && data[d] <= '9') {
+                if (cap <= 20) cap = cap * 10 + (data[d] - '0');
+                d++;
+            }
+            if (cap >= 2) game.maxPlayers = std::min(cap, 20);  // clamp to MAX room size
+            capEnd = d;
         }
 
-        data = data.substr(endPos + 1);
+        if (!game.players.empty()) {
+            gameList.push_back(game);
+            SDL_Log("Game: %s (%d/%d players)", game.creator.c_str(),
+                    (int)game.players.size(), game.maxPlayers);
+        }
+
+        data = data.substr(capEnd);
     }
 
     SDL_Log("Found %d games and %d open players", (int)gameList.size(), (int)openPlayers.size());
@@ -1411,6 +1428,7 @@ void NetworkClient::ParseListResponse(const char* listData) {
                 // The old add-at-end approach left different clients with different orderings
                 // whenever players joined faster than the 500ms LIST refresh interval.
                 currentGame->players = game.players;
+                currentGame->maxPlayers = game.maxPlayers;
                 SDL_Log("LIST sync: rebuilt player list (%d players)", (int)currentGame->players.size());
 
                 break;
