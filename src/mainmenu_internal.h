@@ -29,6 +29,11 @@
 
 inline int ranrange(int a, int b) { return a + rand() % ((b - a ) + 1); }
 
+// Room-size choices for the lobby's "Create Game Room" selector (netRoomSizeChoice
+// indexes this). `static` gives each including translation unit its own copy,
+// avoiding an ODR violation across mainmenu_netpanel.cpp/mainmenu_input.cpp.
+static const int kRoomSizes[3] = {5, 10, 20};
+
 // Texture dimensions helper (mainmenu.cpp).
 SDL_Point GetSize(SDL_Texture *texture);
 

@@ -244,6 +244,12 @@ struct Shooter {
     }
 };
 
+// >5-player network battle royale: player 0 keeps the case-5 center board and is always
+// visible; remote players are parked round-robin at the 4 case-5 mini-board slot
+// geometries and paged in/out of view via BubbleGame::netViewPage. Old cap this replaces
+// was a bare literal 5 everywhere below.
+inline constexpr int MAX_NET_PLAYERS = 20;
+
 struct SetupSettings {
     bool chainReaction = false;
     int playerCount = 1;
@@ -253,9 +259,9 @@ struct SetupSettings {
     int startLevel = 1;
     bool mpTraining = false;  // 1P multiplayer training mode (timed, score-based)
     bool localMultiplayer = false;  // True for local controller-based multiplayer
-    int playerColors[5] = {8, 8, 8, 8, 8};  // Per-player color count (5-8)
-    bool disableCompression[5] = {false, false, false, false, false};  // Per-player: skip row compression
-    bool aimGuide[5] = {false, false, false, false, false};  // Per-player: show aim trajectory guide
+    int playerColors[MAX_NET_PLAYERS] = {8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8};  // Per-player color count (5-8)
+    bool disableCompression[MAX_NET_PLAYERS] = {};  // Per-player: skip row compression
+    bool aimGuide[MAX_NET_PLAYERS] = {};  // Per-player: show aim trajectory guide
     int victoriesLimit = 0;  // 0 = unlimited; >0 = first to reach this wins the match
     bool mouseEnabled = false;  // Mouse/touchscreen aim+fire for player 1
     bool clearMode = false;    // Clear Mode: win by clearing the board
@@ -326,6 +332,12 @@ struct BubbleArray {
     // Perl-compatible next-colors queue (original: $pdata{$player}{nextcolors})
     // 8 upcoming bubble IDs, synced via 's' messages so all clients agree on new root row colors
     std::vector<int> nextColors;
+
+    // >5-player network battle royale: player 0 keeps the case-5 center board and is
+    // always visible; remote players are parked round-robin at the 4 case-5 mini-board
+    // slot geometries and paged in/out of view via BubbleGame::netViewPage.
+    bool boardVisible = true;  // Whether this array's board should be rendered this frame
+    int parkedSlot = -1;       // -1 for player 0 / <=5-player games; 0-3 mini-slot index otherwise
 
     std::vector<int> remainingBubbles() {
         std::vector<int> a;
@@ -478,7 +490,14 @@ private:
     // Single player targeting state (original: $pdata{sendmalustoone})
     int sendMalusToOne = -1;           // -1 = split to all, 1-4 = opponent bubbleArrays index
     std::vector<int> attackingMe;       // opponent array indices currently targeting local player (p1)
-    int playerTargeting[5] = {-1, -1, -1, -1, -1};  // Who each player is targeting (-1 = all/none)
+    // Who each player is targeting (-1 = all/none); no default-member-init since it's now
+    // sized MAX_NET_PLAYERS -- reset by the NewGame/ReloadGame loops before first read.
+    int playerTargeting[MAX_NET_PLAYERS];
+
+    // >5-player battle royale: which page of 4 parked remote-player mini-boards is
+    // currently visible (page 0 = slots/players 1-4, page 1 = 5-8, ...). Player 0's
+    // center board is always visible regardless of page. See ApplyNetViewPage().
+    int netViewPage = 0;
     bool pendingHighscore = false;      // A new highscore was earned, show screen after level completion
     std::array<std::vector<int>, 10> savedLevelGrid;  // Level grid saved at load time for highscore display
 
@@ -487,7 +506,7 @@ private:
 
     TTFText inGameText, winsP1Text, winsP2Text, scoreText, comboText, finalScoreText, mpTrainText;
     TTFText clearWinText;    // "Board Cleared — <Name> Wins!" banner, shown when wonByClearing
-    TTFText playerNameWinText[5];  // "PlayerName: WinCount" for each player (3-5 player mode)
+    TTFText playerNameWinText[MAX_NET_PLAYERS];  // "PlayerName: WinCount" for each player (3-5 player mode)
     TTFText targetingText;   // Reused to render targeting indicators in MP mode
     TTFText statsText;       // Reused per cell to render the post-round stats table
     TTFText malusAlertText;  // Reused to render "incoming malus" toasts
@@ -502,7 +521,7 @@ private:
     SDL_Rect statsChatBtn = {0, 0, 0, 0}; // Tappable CHAT button on the round-end stats panel
 
     std::vector<std::array<std::vector<int>, 10>> loadedLevels;
-    BubbleArray bubbleArrays[5]; //5 custom arrays wtih different players
+    BubbleArray bubbleArrays[MAX_NET_PLAYERS]; //custom arrays wtih different players
 
     void ChooseFirstBubble(BubbleArray *bArray);
     void PickNextBubble(BubbleArray &bArray);
@@ -541,6 +560,13 @@ private:
     bool SyncNetworkLevel();  // Synchronize level for network multiplayer; returns false on sync failure
     void ReloadGame(int level);
     void SubmitScore(BubbleArray &bArray);
+
+    // >5-player battle royale view paging: assigns BubbleArray::boardVisible for the
+    // current netViewPage. <=5-player games always show every board (page 0, all visible).
+    void ApplyNetViewPage();
+    void CycleNetViewPage();  // Tab: advance to the next page of remote boards; no-op for <=5 players
+
+    void RenderRoyaleHud(SDL_Renderer *rend);  // >5-player-only: alive count + page indicator
 
     void QuitToTitle();
 

@@ -24,3 +24,4 @@ android/local.properties
 # Embedded git repos in SDL2 dependencies
 android/app/jni/SDL2_mixer/external/ogg/
 android/app/jni/SDL2_mixer/external/vorbis/
+__pycache__/

@@ -43,11 +43,12 @@
 
 enum game_status { GAME_STATUS_OPEN, GAME_STATUS_CLOSED, GAME_STATUS_PLAYING };
 
-#define MAX_PLAYERS_PER_GAME 5
+#define MAX_PLAYERS_PER_GAME 20
 struct game
 {
         enum game_status status;
         int players_number;
+        int max_players;
         int players_conn[MAX_PLAYERS_PER_GAME];
         char* players_nick[MAX_PLAYERS_PER_GAME];
         int players_started[MAX_PLAYERS_PER_GAME];
@@ -190,13 +191,14 @@ void calculate_list_games(void)
         free(free_players);
 }
 
-static void create_game(int fd, char* nick)
+static void create_game(int fd, char* nick, int max_players)
 {
         struct game * g = malloc_(sizeof(struct game));
         g->players_number = 1;
         g->players_conn[0] = fd;
         g->players_nick[0] = nick;
         g->status = GAME_STATUS_OPEN;
+        g->max_players = max_players;
         games = g_list_append(games, g);
         open_players = g_list_remove(open_players, GINT_TO_POINTER(fd));
         calculate_list_games();
@@ -206,7 +208,17 @@ static int add_player(struct game * g, int fd, char* nick)
 {
         char joined_msg[1000];
         int i;
-        if (g->players_number < MAX_PLAYERS_PER_GAME) {
+        if (g->max_players > 5 && remote_proto_minor[fd] < 3) {
+                /* Legacy (pre-1.3) clients can't render a room shaped for >5
+                 * players. Reject them here and let the JOIN handler reply with
+                 * the existing wn_game_full ("GAME_FULL") string -- deliberate
+                 * reuse, not a new wire message, since legacy clients only
+                 * understand the warning strings that already existed in their
+                 * build. */
+                free(nick);
+                return 0;   /* JOIN handler already replies wn_game_full */
+        }
+        if (g->players_number < g->max_players) {
                 /* inform other players */
                 snprintf(joined_msg, sizeof(joined_msg), ok_player_joined, nick);
                 for (i = 0; i < g->players_number; i++)
@@ -698,8 +710,12 @@ int process_msg(int fd, char* msg)
                 if (!args) {
                         send_line_log(fd, wn_missing_arguments, msg_orig);
                 } else {
-                        if ((ptr = strchr(args, ' ')))
+                        int max_players = 5;  // legacy default: clients that don't ask get classic rooms
+                        if ((ptr = strchr(args, ' '))) {
+                                int mp = charstar_to_int(ptr + 1);
+                                if (mp >= 2 && mp <= MAX_PLAYERS_PER_GAME) max_players = mp;
                                 *ptr = '\0';
+                        }
                         if (strlen(args) > 10)
                                 args[10] = '\0';
                         if (!is_nick_ok(args)) {
@@ -711,7 +727,7 @@ int process_msg(int fd, char* msg)
                         } else if (games_open == 16) {  // FB client can display 16 max
                                 send_line_log(fd, wn_max_open_games, msg_orig);
                         } else {
-                                create_game(fd, strdup(args));
+                                create_game(fd, strdup(args), max_players);
                                 send_ok(fd, msg_orig);
                         }
                 }

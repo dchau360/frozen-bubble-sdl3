@@ -32,7 +32,7 @@
 #endif
 
 #define PROTO_MAJOR 1
-#define PROTO_MINOR 2
+#define PROTO_MINOR 3
 #define BUFFER_SIZE 4096
 
 enum ConnectionState {
@@ -82,7 +82,7 @@ public:
     // Protocol commands
     bool SendNick(const char* nickname);
     bool SendGeoLoc(const char* location);
-    bool CreateGame();
+    bool CreateGame(int maxPlayers = 5);
     bool JoinGame(const char* creator);
     bool StartGame();
     bool PartGame();
@@ -226,6 +226,7 @@ private:
     std::string pendingCreateOrigNick;
     std::string pendingCreateNick;
     [[maybe_unused]] int pendingCreateSuffix = 2; // referenced only in networkclient_wasm.cpp
+    [[maybe_unused]] int pendingCreateMaxPlayers = 5;  // room size chosen for the in-flight CREATE, carried across nick-suffix retries
 
     // WASM async JOIN state
     bool pendingJoin = false;

@@ -480,6 +480,10 @@ void MainMenu::NetPanelLobbyActionsRender() {
 
             char actionText[128];
             snprintf(actionText, sizeof(actionText), "%s", actions[i].c_str());
+            if (!currentGame && i == 1) {
+                snprintf(actionText, sizeof(actionText), "Create Game Room    < %d players >",
+                         kRoomSizes[netRoomSizeChoice]);
+            }
             drawLabel(actionText, renderX, renderY, i == (size_t)selectedActionIndex ? textGold : textMain);
         }
 

@@ -968,6 +968,16 @@ void MainMenu::MenuLeftRightKey(SDL_Event *e) {
                                 netClient->SendOptions(chainReactionEnabled, continueWhenPlayersLeave,
                                     singlePlayerTargetting, vLimits[victoriesLimitIndex], playerColorCounts, playerNoCompress, playerAimGuide, netRoomMouseEnabled, netClearMode, netDisableMalus, netTeamMode, netPlayerTeams);
                             }
+                        } else if (!currentGame && selectedActionIndex == 1) {
+                            // Lobby "Create Game Room" row: Left/Right cycles the room-size choice
+                            if (e->key.key == SDLK_LEFT) {
+                                netRoomSizeChoice--;
+                                if (netRoomSizeChoice < 0) netRoomSizeChoice = 2;
+                            } else {
+                                netRoomSizeChoice++;
+                                if (netRoomSizeChoice > 2) netRoomSizeChoice = 0;
+                            }
+                            AudioMixer::Instance()->PlaySFX("menu_change");
                         }
                     }
                     return;
@@ -1181,7 +1191,7 @@ void MainMenu::MenuReturnKey() {
                                 // In lobby - handle Create/Join actions
                                 if (selectedActionIndex == 1) {
                                     // Create new game - do it immediately like original
-                                    netClient->CreateGame();
+                                    netClient->CreateGame(kRoomSizes[netRoomSizeChoice]);
                                     netClient->AddStatusMessage("Game created - now you need to wait for players to join");
                                     AudioMixer::Instance()->PlaySFX("menu_selected");
                                 } else {
@@ -1214,7 +1224,7 @@ void MainMenu::MenuReturnKey() {
                         NetworkClient* netClient = NetworkClient::Instance();
                         // Accept CONNECTED or IN_LOBBY — after returning from a game state is IN_LOBBY
                         if (netClient->GetState() == CONNECTED || netClient->GetState() == IN_LOBBY) {
-                            if (netClient->CreateGame()) {
+                            if (netClient->CreateGame(kRoomSizes[netRoomSizeChoice])) {
                                 AudioMixer::Instance()->PlaySFX("menu_selected");
                             }
                         }

@@ -127,9 +127,20 @@ void BubbleGame::UpdatePlayerNameWinText() {
                     textX = 553; textY = 465;  // Bottom-right mini
                 }
                 break;
-            default:
-                // Shouldn't reach here, but fallback
-                textX = 320; textY = 12;
+            default:  // >5 royale: key off the parked slot, not the array index
+                if (i == 0) { textX = 320; textY = 12; }
+                else {
+                    static const SDL_Point kSlotText[4] = {{83,2},{553,2},{83,465},{553,465}};
+                    int parkedSlot = bubbleArrays[i].parkedSlot;
+                    if (parkedSlot >= 0 && parkedSlot < 4) {
+                        textX = kSlotText[parkedSlot].x;
+                        textY = kSlotText[parkedSlot].y;
+                    } else {
+                        // Defensive fallback for an unexpected parkedSlot value
+                        textX = kSlotText[0].x;
+                        textY = kSlotText[0].y;
+                    }
+                }
                 break;
         }
 
@@ -267,6 +278,9 @@ void BubbleGame::RenderMalusAlerts(SDL_Renderer *rend) {
         int line = 0;
         for (auto &a : p.malusAlerts) {
             if (a.framesLeft <= 0) continue;
+            // Draw only when this board is on the current view page; the alert's own
+            // framesLeft countdown still ages below regardless of paging.
+            if (!p.boardVisible) { line++; continue; }
             char buf[96];
             snprintf(buf, sizeof(buf), "%s  +%d", a.fromNick.c_str(), a.count);
             malusAlertText.UpdateText(rend, buf, 0);
@@ -295,6 +309,39 @@ void BubbleGame::RenderMalusAlerts(SDL_Renderer *rend) {
                            [](const BubbleArray::MalusAlert &a) { return a.framesLeft <= 0; }),
             p.malusAlerts.end());
     }
+}
+
+void BubbleGame::RenderRoyaleHud(SDL_Renderer *rend) {
+    // >5-player royale only (caller already checks playerCount > 5); shown clear of the
+    // center board's top (board spans x 190-446, top y=44 -- see NewGame's default: case).
+    const int n = currentSettings.playerCount;
+    int alive = 0;
+    for (int i = 0; i < n; i++) {
+        if (bubbleArrays[i].playerState == BubbleArray::PlayerState::ALIVE) alive++;
+    }
+
+    int pageStart = netViewPage * 4 + 1;
+    int pageEnd = std::min(pageStart + 3, n - 1);
+
+    auto cell = [&](const char *txt, int x, int y, SDL_Color c) {
+        statsText.UpdateColor(c, {0, 0, 0, 0});
+        statsText.UpdateText(rend, txt, 0);
+        statsText.UpdatePosition({x, y});
+        if (statsText.Texture()) {
+            SDL_FRect fr = ToFRect(*statsText.Coords());
+            SDL_RenderTexture(rend, statsText.Texture(), nullptr, &fr);
+        }
+    };
+
+    const SDL_Color hud = {255, 255, 100, 255};
+
+    char aliveBuf[32];
+    snprintf(aliveBuf, sizeof(aliveBuf), "%d/%d alive", alive, n);
+    cell(aliveBuf, 254, 28, hud);
+
+    char pageBuf[64];
+    snprintf(pageBuf, sizeof(pageBuf), "opponents %d-%d of %d  [Tab]", pageStart, pageEnd, n - 1);
+    cell(pageBuf, 254, 44, hud);
 }
 
 // Resolve a display name for a player array (local player gets its lobby nick or "You").
@@ -679,43 +726,54 @@ void BubbleGame::Render() {
         for (int i = 0; i < currentSettings.playerCount; i++) {
             BubbleArray &curArray = bubbleArrays[i];
 
-            SDL_Rect rct;
-            for (int i = 1; i < 13; i++) {
-                rct.x = curArray.rightLimit;
-                rct.y = 104 - (7 * i) - i;
-                rct.w = rct.h = 7;
-                { SDL_FRect fr = ToFRect(rct); SDL_RenderTexture(rend, dotTexture[i == curArray.turnsToCompress ? 1 : 0], nullptr, &fr); }
-            }
-
             // Use mini textures for remote players (playerAssigned >= 1) in 3-5 player games
             bool useMini = (currentSettings.playerCount >= 3 && curArray.playerAssigned >= 1);
             SDL_Texture** useBubbles = GetBubbleTextures(useMini);
             SDL_Texture* useFrozen = useMini ? imgMiniBubbleFrozen : imgBubbleFrozen;
             SDL_Texture* usePrelight = useMini ? imgMiniBubblePrelight : imgBubblePrelight;
 
-            // Don't render shooter bubbles for LOST players (prevents crashes from invalid bubble indices)
-            // In network games, losing players become spectators and shouldn't have active bubbles
-            if (curArray.playerState != BubbleArray::PlayerState::LOST) {
-                { SDL_FRect fr = ToFRect(curArray.curLaunchRct); SDL_RenderTexture(rend, gameFinish && !curArray.mpWinner ? useFrozen : useBubbles[curArray.curLaunch], nullptr, &fr); }
-                { SDL_FRect fr = ToFRect(curArray.nextBubbleRct); SDL_RenderTexture(rend, useBubbles[curArray.nextBubble], nullptr, &fr); }
-                { SDL_FRect fr = ToFRect(curArray.onTopRct); SDL_RenderTexture(rend, onTopTexture, nullptr, &fr); }
+            // >5-player royale: boards paged out of view (BubbleGame::netViewPage) skip all
+            // draw-only work below. Every simulation/state-advancing call (UpdatePenguin,
+            // win/loss animation flips, DoPrelightAnimation, single/malus bubble physics via
+            // UpdateSingleBubbles(0) above) still runs unconditionally for every player every
+            // frame so hidden boards keep playing and can still finish/die/win off-screen.
+            // No-op for <=5-player games since ApplyNetViewPage() marks everything visible.
+            if (curArray.boardVisible) {
+                SDL_Rect rct;
+                for (int i = 1; i < 13; i++) {
+                    rct.x = curArray.rightLimit;
+                    rct.y = 104 - (7 * i) - i;
+                    rct.w = rct.h = 7;
+                    { SDL_FRect fr = ToFRect(rct); SDL_RenderTexture(rend, dotTexture[i == curArray.turnsToCompress ? 1 : 0], nullptr, &fr); }
+                }
+
+                // Don't render shooter bubbles for LOST players (prevents crashes from invalid bubble indices)
+                // In network games, losing players become spectators and shouldn't have active bubbles
+                if (curArray.playerState != BubbleArray::PlayerState::LOST) {
+                    { SDL_FRect fr = ToFRect(curArray.curLaunchRct); SDL_RenderTexture(rend, gameFinish && !curArray.mpWinner ? useFrozen : useBubbles[curArray.curLaunch], nullptr, &fr); }
+                    { SDL_FRect fr = ToFRect(curArray.nextBubbleRct); SDL_RenderTexture(rend, useBubbles[curArray.nextBubble], nullptr, &fr); }
+                    { SDL_FRect fr = ToFRect(curArray.onTopRct); SDL_RenderTexture(rend, onTopTexture, nullptr, &fr); }
+                }
+                if ((gameFinish && !curArray.mpWinner) || curArray.playerState == BubbleArray::PlayerState::LOST) { SDL_FRect fr = ToFRect(curArray.frozenBottomRct); SDL_RenderTexture(rend, useFrozen, nullptr, &fr); }
             }
-            if ((gameFinish && !curArray.mpWinner) || curArray.playerState == BubbleArray::PlayerState::LOST) { SDL_FRect fr = ToFRect(curArray.frozenBottomRct); SDL_RenderTexture(rend, useFrozen, nullptr, &fr); }
 
             if (curArray.turnsToCompress <= 2) {
                 DoPrelightAnimation(curArray, curArray.prelightTime);
             }
-            for (const std::vector<Bubble> &vecBubble : curArray.bubbleMap) for (Bubble bubble : vecBubble) bubble.Render(rend, useBubbles, usePrelight, useFrozen);
 
-            // Stick effect animation (original: $sticking_bubble / sticking_step)
-            if (curArray.stickAnimActive) {
-                SDL_Texture* stickTex = useMini ? imgMiniBubbleStick[curArray.stickAnimFrame] : imgBubbleStick[curArray.stickAnimFrame];
-                int sz = useMini ? 16 : 32;
-                SDL_Rect sr = {curArray.stickAnimPos.x - sz/2, curArray.stickAnimPos.y - sz/2, sz, sz};
-                { SDL_FRect fr = ToFRect(sr); SDL_RenderTexture(rend, stickTex, nullptr, &fr); }
-                if (++curArray.stickAnimSlowdown >= 2) {
-                    curArray.stickAnimSlowdown = 0;
-                    if (++curArray.stickAnimFrame > BUBBLE_STICKFC) curArray.stickAnimActive = false;
+            if (curArray.boardVisible) {
+                for (const std::vector<Bubble> &vecBubble : curArray.bubbleMap) for (Bubble bubble : vecBubble) bubble.Render(rend, useBubbles, usePrelight, useFrozen);
+
+                // Stick effect animation (original: $sticking_bubble / sticking_step)
+                if (curArray.stickAnimActive) {
+                    SDL_Texture* stickTex = useMini ? imgMiniBubbleStick[curArray.stickAnimFrame] : imgBubbleStick[curArray.stickAnimFrame];
+                    int sz = useMini ? 16 : 32;
+                    SDL_Rect sr = {curArray.stickAnimPos.x - sz/2, curArray.stickAnimPos.y - sz/2, sz, sz};
+                    { SDL_FRect fr = ToFRect(sr); SDL_RenderTexture(rend, stickTex, nullptr, &fr); }
+                    if (++curArray.stickAnimSlowdown >= 2) {
+                        curArray.stickAnimSlowdown = 0;
+                        if (++curArray.stickAnimFrame > BUBBLE_STICKFC) curArray.stickAnimActive = false;
+                    }
                 }
             }
 
@@ -733,19 +791,21 @@ void BubbleGame::Render() {
             }
 
             UpdatePenguin(curArray);
-            if(!lowGfx) curArray.penguinSprite.Render();
-            curArray.shooterSprite.Render(lowGfx);
-            // Redraw the current bubble on top of the shooter/cannon sprite -- the
-            // cannon graphic is large enough to cover most of it, otherwise making
-            // the loaded bubble's color hard to see while aiming.
-            if (curArray.playerState != BubbleArray::PlayerState::LOST) {
-                SDL_FRect fr = ToFRect(curArray.curLaunchRct);
-                SDL_RenderTexture(rend, gameFinish && !curArray.mpWinner ? useFrozen : useBubbles[curArray.curLaunch], nullptr, &fr);
-            }
-            if (curArray.aimGuideEnabled && !gameFinish &&
-                curArray.playerState == BubbleArray::PlayerState::ALIVE) {
-                bool isMini = (currentSettings.playerCount >= 3 && curArray.playerAssigned >= 1);
-                DrawAimGuide(rend, curArray, isMini);
+            if (curArray.boardVisible) {
+                if(!lowGfx) curArray.penguinSprite.Render();
+                curArray.shooterSprite.Render(lowGfx);
+                // Redraw the current bubble on top of the shooter/cannon sprite -- the
+                // cannon graphic is large enough to cover most of it, otherwise making
+                // the loaded bubble's color hard to see while aiming.
+                if (curArray.playerState != BubbleArray::PlayerState::LOST) {
+                    SDL_FRect fr = ToFRect(curArray.curLaunchRct);
+                    SDL_RenderTexture(rend, gameFinish && !curArray.mpWinner ? useFrozen : useBubbles[curArray.curLaunch], nullptr, &fr);
+                }
+                if (curArray.aimGuideEnabled && !gameFinish &&
+                    curArray.playerState == BubbleArray::PlayerState::ALIVE) {
+                    bool isMini = (currentSettings.playerCount >= 3 && curArray.playerAssigned >= 1);
+                    DrawAimGuide(rend, curArray, isMini);
+                }
             }
 
             // NOTE: UpdateSingleBubbles is now called ONCE before the loop (line 2416)
@@ -754,13 +814,13 @@ void BubbleGame::Render() {
             // Display score with nickname for each player (original: print_scores at line 1868)
             // In 3+ player games, skip score text — win counts are shown via UpdatePlayerNameWinText
             // at the same screen positions, so rendering both would cause overlapping text.
-            if (currentSettings.playerCount < 3) {
+            if (curArray.boardVisible && currentSettings.playerCount < 3) {
                 UpdateScoreText(curArray);
             }
 
             // Display "left" overlay for players who actually disconnected (original line 1951-1955)
             // NOTE: LOST = died (still in game), LEFT = disconnected. Only show for LEFT.
-            if (currentSettings.networkGame && curArray.playerAssigned >= 1 &&
+            if (curArray.boardVisible && currentSettings.networkGame && curArray.playerAssigned >= 1 &&
                 curArray.playerState == BubbleArray::PlayerState::LEFT) {
                 // Determine which texture and position to use based on player and mini graphics
                 SDL_Texture* leftTexture = nullptr;
@@ -796,7 +856,8 @@ void BubbleGame::Render() {
             // Render targeting attack indicator on the targeted opponent's board
             // (original: put_image_to_background($imgbin{attack}{...}) in set_sendmalustoone at line 1338)
             // Attack positions from Stuff.pm POS_MP: rp1={25,213}, rp2={496,214}, rp3={24,442}, rp4={496,442}
-            if (currentSettings.singlePlayerTargetting && sendMalusToOne == i &&
+            if (currentSettings.singlePlayerTargetting && sendMalusToOne == i && curArray.boardVisible &&
+                currentSettings.playerCount <= 5 &&
                 curArray.playerAssigned >= 1 && curArray.playerAssigned <= 4) {
                 static const SDL_Point attackPos[4] = {{25, 213}, {496, 214}, {24, 442}, {496, 442}};
                 int rpIdx = curArray.playerAssigned - 1;
@@ -807,10 +868,23 @@ void BubbleGame::Render() {
                     attackRct.y = attackPos[rpIdx].y;
                     { SDL_FRect fr = ToFRect(attackRct); SDL_RenderTexture(rend, imgAttack[rpIdx], nullptr, &fr); }
                 }
+            } else if (currentSettings.singlePlayerTargetting && sendMalusToOne == i && curArray.boardVisible &&
+                       currentSettings.playerCount > 5 && curArray.playerAssigned >= 1) {
+                // >5-player royale: multiple arrays can share the same physical mini-slot
+                // across pages, so key the attack icon off parkedSlot instead of array index.
+                static const SDL_Point attackPos[4] = {{25, 213}, {496, 214}, {24, 442}, {496, 442}};
+                int rpIdx = curArray.parkedSlot;
+                if (rpIdx >= 0 && rpIdx < 4 && imgAttack[rpIdx]) {
+                    SDL_Rect attackRct;
+                    { float fw, fh; SDL_GetTextureSize(imgAttack[rpIdx], &fw, &fh); attackRct.w = (int)fw; attackRct.h = (int)fh; }
+                    attackRct.x = attackPos[rpIdx].x;
+                    attackRct.y = attackPos[rpIdx].y;
+                    { SDL_FRect fr = ToFRect(attackRct); SDL_RenderTexture(rend, imgAttack[rpIdx], nullptr, &fr); }
+                }
             }
 
             // Show targeting text: who this player is targeting
-            if (currentSettings.singlePlayerTargetting && !gameFinish &&
+            if (curArray.boardVisible && currentSettings.singlePlayerTargetting && !gameFinish &&
                 playerTargeting[i] >= 0 && playerTargeting[i] < currentSettings.playerCount) {
                 const std::string& targetNick = bubbleArrays[playerTargeting[i]].playerNickname;
                 if (!targetNick.empty()) {
@@ -838,15 +912,25 @@ void BubbleGame::Render() {
         if (currentSettings.singlePlayerTargetting && !attackingMe.empty() && !gameFinish) {
             for (size_t k = 0; k < attackingMe.size(); k++) {
                 int attackerArray = attackingMe[k];
-                if (attackerArray >= 1 && attackerArray <= 4) {
-                    int rpIdx = attackerArray - 1;
-                    if (imgAttackMe[rpIdx]) {
-                        SDL_Rect amRct;
-                        { float fw, fh; SDL_GetTextureSize(imgAttackMe[rpIdx], &fw, &fh); amRct.w = (int)fw; amRct.h = (int)fh; }
-                        amRct.x = 185 + ((int)k * 24);
-                        amRct.y = 448;
-                        { SDL_FRect fr = ToFRect(amRct); SDL_RenderTexture(rend, imgAttackMe[rpIdx], nullptr, &fr); }
-                    }
+                if (attackerArray < 0 || attackerArray >= currentSettings.playerCount) continue;
+                int rpIdx;
+                if (currentSettings.playerCount <= 5) {
+                    if (attackerArray < 1 || attackerArray > 4) continue;
+                    rpIdx = attackerArray - 1;
+                } else {
+                    // >5-player royale: the attacker's board must be on the current view
+                    // page, and multiple arrays can share a slot, so key off parkedSlot.
+                    const BubbleArray &attacker = bubbleArrays[attackerArray];
+                    if (!attacker.boardVisible) continue;
+                    rpIdx = attacker.parkedSlot;
+                    if (rpIdx < 0 || rpIdx > 3) continue;
+                }
+                if (imgAttackMe[rpIdx]) {
+                    SDL_Rect amRct;
+                    { float fw, fh; SDL_GetTextureSize(imgAttackMe[rpIdx], &fw, &fh); amRct.w = (int)fw; amRct.h = (int)fh; }
+                    amRct.x = 185 + ((int)k * 24);
+                    amRct.y = 448;
+                    { SDL_FRect fr = ToFRect(amRct); SDL_RenderTexture(rend, imgAttackMe[rpIdx], nullptr, &fr); }
                 }
             }
         }
@@ -903,12 +987,18 @@ void BubbleGame::Render() {
 
         if(singleBubbles.size() > 0) {
             SDL_Texture** useBubbles = GetBubbleTextures();
-            for (SingleBubble &bubble : singleBubbles) bubble.Render(rend, useBubbles);
+            for (SingleBubble &bubble : singleBubbles) {
+                // >5-player royale: only draw bubbles belonging to a board on the current
+                // view page. Physics (UpdatePosition) already ran unconditionally above.
+                if (!bubbleArrays[bubble.assignedArray].boardVisible) continue;
+                bubble.Render(rend, useBubbles);
+            }
         }
 
         // Render malus bubbles (attack bubbles)
         if(malusBubbles.size() > 0) {
             for (MalusBubble &malus : malusBubbles) {
+                if (!bubbleArrays[malus.assignedArray].boardVisible) continue;
                 // Determine if this malus bubble belongs to a mini player
                 // In 3+ player games: array 0 (center) is full size, arrays 1+ are mini
                 bool useMini = (currentSettings.playerCount >= 3 && malus.assignedArray >= 1);
@@ -928,11 +1018,15 @@ void BubbleGame::Render() {
 
             // 3-5 player mode: show player name and win count
             for (int i = 0; i < currentSettings.playerCount; i++) {
+                if (!bubbleArrays[i].boardVisible) continue;
                 if (playerNameWinText[i].Texture()) {
                     { SDL_FRect fr = ToFRect(*playerNameWinText[i].Coords()); SDL_RenderTexture(rend, playerNameWinText[i].Texture(), nullptr, &fr); }
                 }
             }
         }
+
+        // >5-player royale HUD: alive count + page indicator. No-op for <=5 players.
+        if (currentSettings.playerCount > 5) RenderRoyaleHud(rend);
 
         // Distinct banner for a win by clearing the board, set apart from an
         // ordinary last-player-standing win. Positioned above panelRct so it

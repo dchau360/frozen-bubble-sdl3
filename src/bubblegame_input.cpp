@@ -214,6 +214,12 @@ void BubbleGame::HandleInput(SDL_Event *e) {
                 case SDLK_T:
                     if (currentSettings.networkGame) StartInGameChat();
                     break;
+                case SDLK_TAB:
+                    // >5-player royale only: page through remote boards. CycleNetViewPage()
+                    // itself no-ops for <=5-player/non-network games; the chattingMode guard
+                    // above already keeps this from firing while composing a chat message.
+                    CycleNetViewPage();
+                    break;
                 // Single player targeting keys (original lines 1681-1690)
                 // Keys 1-4 target opponents rp1-rp4, key 0 or 5 clears targeting
                 case SDLK_1:
