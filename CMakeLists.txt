@@ -79,6 +79,7 @@ add_executable(frozen-bubble-sdl3
     src/bubblegame_shooter.cpp
     src/bubblegame_state.cpp
     src/netview.cpp
+    src/netteams.cpp
     src/transitionmanager.cpp
     src/ttftext.cpp
     src/highscoremanager.cpp
@@ -166,6 +167,15 @@ if(BUILD_TESTING AND NOT EMSCRIPTEN AND NOT ANDROID)
     set_property(TARGET netview-test PROPERTY CXX_EXTENSIONS OFF)
     target_include_directories(netview-test PRIVATE src)
     add_test(NAME netview-test COMMAND netview-test)
+
+    add_executable(netteams-test
+        tests/netteams_test.cpp
+        src/netteams.cpp
+    )
+    set_property(TARGET netteams-test PROPERTY CXX_STANDARD 17)
+    set_property(TARGET netteams-test PROPERTY CXX_EXTENSIONS OFF)
+    target_include_directories(netteams-test PRIVATE src)
+    add_test(NAME netteams-test COMMAND netteams-test)
 
     add_test(NAME net-bots-test
         COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tests/net_bots_test.py)

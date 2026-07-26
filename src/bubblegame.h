@@ -267,7 +267,11 @@ struct SetupSettings {
     bool clearMode = false;    // Clear Mode: win by clearing the board
     bool disableMalus = false; // Disable malus attacks
     bool teamMode = false;
-    int playerTeams[5] = {1,1,1,1,1};  // Per-player team number (1..5); meaningful when teamMode
+    // Per-player team number (1..teamCount). Widened to MAX_NET_PLAYERS to
+    // match playerColors/disableCompression/aimGuide; fully resolved at game
+    // start (menu fills it), so the static initializer is just a placeholder.
+    int playerTeams[MAX_NET_PLAYERS] = {1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1};
+    int teamCount = 2;  // number of teams (2..5); meaningful when teamMode
 };
 
 // Shared between the lobby/game-room team UI and in-gameplay team indicators

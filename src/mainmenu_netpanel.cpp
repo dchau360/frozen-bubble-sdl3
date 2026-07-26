@@ -18,6 +18,7 @@
  */
 
 #include "mainmenu.h"
+#include "netteams.h"
 #include "audiomixer.h"
 #include "frozenbubble.h"
 #include "transitionmanager.h"
@@ -107,8 +108,8 @@ void MainMenu::NetPanelRender() {
 
         // Apply any options broadcast by the host (joiners receive SETOPTIONS push)
         {
-            bool cr, cl, st; int vl; int pc[5]; bool nc[5]; bool ag[5]; bool me; bool cm; bool dm; bool tm; int pt[5];
-            if (netClient->GetAndClearPendingOptions(cr, cl, st, vl, pc, nc, ag, me, cm, dm, tm, pt)) {
+            bool cr, cl, st; int vl; int pc[5]; bool nc[5]; bool ag[5]; bool me; bool cm; bool dm; bool tm; int pt[5]; int rcvTc;
+            if (netClient->GetAndClearPendingOptions(cr, cl, st, vl, pc, nc, ag, me, cm, dm, tm, pt, rcvTc)) {
                 chainReactionEnabled = cr;
                 continueWhenPlayersLeave = cl;
                 singlePlayerTargetting = st;
@@ -121,6 +122,7 @@ void MainMenu::NetPanelRender() {
                 netClearMode = cm;
                 netDisableMalus = dm;
                 netTeamMode = tm;
+                if (rcvTc >= 2 && rcvTc <= 5) netTeamCount = rcvTc;
                 for (int i = 0; i < 5; i++) netPlayerTeams[i] = pt[i];
                 SDL_Log("Applied host options: cr=%d cl=%d st=%d vl=%d colors=%d,%d,%d,%d,%d mouse=%d cm=%d dm=%d tm=%d",
                     cr,cl,st,vl,pc[0],pc[1],pc[2],pc[3],pc[4],me,cm,dm,tm);
@@ -357,6 +359,17 @@ void MainMenu::NetPanelLobbyActionsRender() {
                 actions.push_back("Start game!"); // index 12
             }
             // No "Part game" menu item - use ESC key to leave like original
+
+            // >5-cap Team Mode: team count is fixed at 5 (kTeamColors' full
+            // range) rather than host-adjustable -- an earlier "Teams: N"
+            // row here was removed after live playtesting found it visually
+            // overlapped the per-player grid's "Team:" row (both landed at
+            // y~302-306, since the settings column has no vertical room left
+            // above the persistent chat dock at y=334) and its 2-5 range was
+            // confusing (defaulted to 2, so red/blue was all that appeared
+            // until the row was found and adjusted). Per-player team
+            // assignment (host: any player; joiner: self only) happens
+            // directly in the player-columns roster via the [A] hotkey.
         } else {
             // In lobby - show create/join options
             actions.push_back("Chat");
@@ -707,18 +720,47 @@ void MainMenu::NetPanelLobbyActionsRender() {
                         const NetworkPlayer& pl = currentGame->players[pi];
                         bool host = (pl.nick == currentGame->creator);
                         bool self = (pl.nick == netClient->GetPlayerNick());
+                        int ov = netTeamOverrides.count(pl.nick) ? netTeamOverrides[pl.nick] : 0;
+                        int team = EffectiveTeam(pi, netTeamCount, ov);
+                        if (netTeamMode && team >= 1 && team <= 5) {
+                            SDL_Color chip = kTeamColors[team - 1];
+                            SDL_SetRenderDrawColor(roomRenderer, chip.r, chip.g, chip.b, chip.a);
+                            SDL_FRect chipRect = {(float)(rowX + 2), (float)(rowY + 3), 8.0f, 8.0f};
+                            SDL_RenderFillRect(roomRenderer, &chipRect);
+                        }
                         char rowTxt[64];
                         snprintf(rowTxt, sizeof(rowTxt), "%2d %.9s%s%s", pi + 1,
                                  pl.nick.c_str(), host ? " H" : "", self ? " *" : "");
-                        drawLabel(rowTxt, rowX + 4, rowY + 2, self ? textGold : textMain);
+                        drawLabel(rowTxt, rowX + (netTeamMode ? 14 : 4), rowY + 2, self ? textGold : textMain);
                     } else {
                         char rowTxt[24];
                         snprintf(rowTxt, sizeof(rowTxt), "%2d -", pi + 1);
                         drawLabel(rowTxt, rowX + 4, rowY + 2, textMuted);
                     }
+
+                    if (netRosterEditMode && pi == netRosterCursor) {
+                        SDL_SetRenderDrawColor(roomRenderer, 255, 255, 120, 255);
+                        SDL_FRect hl = {(float)rowX, (float)rowY, (float)(colW2 - 3), (float)(rowH2 - 3)};
+                        SDL_RenderRect(roomRenderer, &hl);
+                    }
                 }
-                // Legend for the compact markers ("H" host, "*" you).
-                drawLabel("H host   * you", panelX + 12, panelY + 224, textMuted);
+                // Legend for the compact markers ("H" host, "*" you). The
+                // [A] hint is appended here rather than on its own line --
+                // there's no vertical room left above the chat dock (y=334).
+                // While actually in roster-edit mode, swap the legend for the
+                // in-mode key hint -- otherwise the Left/Right cycle keys and
+                // the exit key are never shown anywhere on screen (found
+                // live: user could enter the mode via [A] but had no way to
+                // discover what to press next).
+                if (netRosterEditMode) {
+                    bool selfHost = currentGame->creator == netClient->GetPlayerNick();
+                    drawLabel(selfHost ? "Up/Down move   Left/Right team   Enter/Esc done"
+                                       : "Left/Right change your team   Enter/Esc done",
+                              panelX + 12, panelY + 224, textMuted);
+                } else {
+                    drawLabel(netTeamMode ? "H host   * you   [A] assign teams" : "H host   * you",
+                              panelX + 12, panelY + 224, textMuted);
+                }
             } else {
                 const int rowH = 38;
                 for (int pi = 0; pi < 5; pi++) {
@@ -834,6 +876,27 @@ void MainMenu::NetPanelChatDockRender() {
     const int maxChatLines = 5;
     std::vector<ChatMessage> chatMsgs = netClient->GetChatMessages();
 
+    // >5-cap rooms: every client (not just the host) applies !team:<nick>:<n>
+    // TALK broadcasts directly to its own nick->override map. SETOPTIONS
+    // can't carry teams for P6-20, so the nick-keyed channel is the sync
+    // mechanism there. (<=5-cap rooms keep the host-intercept path below.)
+    if (currentGame && currentGame->maxPlayers > 5) {
+        std::vector<ChatMessage> allMsgs = netClient->GetChatMessages();
+        if (allMsgs.size() < teamOverrideChatCount) teamOverrideChatCount = 0;
+        for (size_t mi = teamOverrideChatCount; mi < allMsgs.size(); mi++) {
+            const std::string& msg = allMsgs[mi].message;
+            if (msg.size() > 6 && msg.substr(0, 6) == "!team:") {
+                size_t sep = msg.find(':', 6);
+                if (sep == std::string::npos) continue;
+                std::string senderNick = msg.substr(6, sep - 6);
+                int newTeam = std::atoi(msg.c_str() + sep + 1);
+                if (!senderNick.empty() && newTeam >= 1 && newTeam <= 5)
+                    netTeamOverrides[senderNick] = newTeam;
+            }
+        }
+        teamOverrideChatCount = allMsgs.size();
+    }
+
     // Host: intercept !team:N commands sent by joiners and re-broadcast SETOPTIONS.
     // Visual chrome around this dock changed; this logic itself is untouched.
     if (currentGame && currentGame->creator == netClient->GetPlayerNick()) {
@@ -854,7 +917,7 @@ void MainMenu::NetPanelChatDockRender() {
                             netClient->SendOptions(chainReactionEnabled, continueWhenPlayersLeave,
                                 singlePlayerTargetting, vLimits[victoriesLimitIndex], playerColorCounts,
                                 playerNoCompress, playerAimGuide, netRoomMouseEnabled, netClearMode,
-                                netDisableMalus, netTeamMode, netPlayerTeams);
+                                netDisableMalus, netTeamMode, netPlayerTeams, netTeamCount);
                             break;
                         }
                     }
