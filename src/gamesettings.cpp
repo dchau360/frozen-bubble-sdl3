@@ -119,7 +119,7 @@ void GameSettings::CreateDefaultSettings()
 #ifdef __ANDROID__
         EvalIniResult(rval, dict, "Keys:SpeedMultiplier", "1.25");
 #else
-        EvalIniResult(rval, dict, "Keys:SpeedMultiplier", "2.0");
+        EvalIniResult(rval, dict, "Keys:SpeedMultiplier", "3.0");
 #endif
 #ifdef __WASM_PORT__
         EvalIniResult(rval, dict, "Keys:MouseEnabled", "true");
@@ -191,7 +191,7 @@ void GameSettings::ReadSettings()
 #ifdef __ANDROID__
     speedMultiplier = (float)iniparser_getdouble(optDict, "Keys:SpeedMultiplier", 1.25);
 #else
-    speedMultiplier = (float)iniparser_getdouble(optDict, "Keys:SpeedMultiplier", 2.0);
+    speedMultiplier = (float)iniparser_getdouble(optDict, "Keys:SpeedMultiplier", 3.0);
 #endif
     if (speedMultiplier < 1.0f) speedMultiplier = 1.0f;
     if (speedMultiplier > 5.0f) speedMultiplier = 5.0f;

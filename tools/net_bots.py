@@ -120,6 +120,7 @@ class BotClient:
     game_started: bool = field(default=False, init=False)
     pending_stick_payload: Optional[str] = field(default=None, init=False)
     stick_due_at: float = field(default=0.0, init=False)
+    ready_acked: bool = field(default=False, init=False)
 
     def __post_init__(self) -> None:
         self.rng = random.Random(self.nick)
@@ -259,13 +260,23 @@ class BotClient:
             return
         msg_type = payload[0]
         if msg_type == "n":
-            self.state.row = 0
-            self.state.shot_count = 0
-            self.state.round_index += 1
-            self.pending_stick_payload = None
-            self.log(
-                f"round reset from player {sender_id}; round={self.state.round_index + 1}"
-            )
+            # The next round only starts once every player has sent its own 'n'
+            # (ready) message, so ack the first peer 'n' of each transition
+            # exactly once; the client guards against double-counting repeats.
+            if not self.ready_acked:
+                self.state.row = 0
+                self.state.shot_count = 0
+                self.state.round_index += 1
+                self.pending_stick_payload = None
+                self.ready_acked = True
+                self.send_game_payload("n")
+                # Grace period so we don't fire into the stats screen before
+                # the round actually restarts on the human client.
+                self.state.last_fire_at = time.monotonic() + 1.0
+                self.log(
+                    f"round reset from player {sender_id}; acked ready; "
+                    f"round={self.state.round_index + 1}"
+                )
             return
         if msg_type in {"f", "s", "p"}:
             return
@@ -291,6 +302,7 @@ class BotClient:
 
         fire_payload = build_fire_message(self.rng, self.num_colors)
         stick_payload = build_stick_message(self.state, self.rng, self.num_colors)
+        self.ready_acked = False  # firing means the new round is underway
         self.send_game_payload(fire_payload)
         self.pending_stick_payload = stick_payload
         self.stick_due_at = now + self.stick_delay

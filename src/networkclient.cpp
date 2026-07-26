@@ -1094,6 +1094,25 @@ void NetworkClient::HandlePushMessage(const std::string& pushMsg) {
         } else {
             SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "JOINED message received but currentGame is NULL!");
         }
+    } else if (pushMsg.find("ROOM_CLOSED:") == 0) {
+        // Creator/leader left before the round started; server tore down the
+        // whole room rather than promoting another connection to lead (see
+        // player_part_game_ in server/game.c). Everyone else drops back to
+        // the lobby, same as a manual PartGame().
+        std::string creatorNick = pushMsg.substr(13); // Skip "ROOM_CLOSED: "
+        SDL_Log("Room closed: creator %s left", creatorNick.c_str());
+
+        ChatMessage chat;
+        chat.nick = "Server";
+        chat.message = "Room closed: " + creatorNick + " (the host) left";
+        chat.timestamp = SDL_GetTicks();
+        chatMessages.push_back(chat);
+        if (chatMessages.size() > 50) {
+            chatMessages.erase(chatMessages.begin());
+        }
+
+        state = IN_LOBBY;
+        currentGame = nullptr;
     } else if (pushMsg.find("PARTED:") == 0) {
         // Player left
         std::string nick = pushMsg.substr(8); // Skip "PARTED: "

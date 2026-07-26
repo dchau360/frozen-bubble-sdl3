@@ -1053,6 +1053,24 @@ void player_part_game_(int fd, char* reason)
                                         stats_record_win(winner_nick);
                                         l1(OUTPUT_TYPE_INFO, "Game ended: %s wins (last player remaining)", winner_nick);
                                 }
+                        } else if (leaving_player_index == 0) {
+                                // Creator/leader left before the round started. The creator is
+                                // the only client wired up to be authoritative for level
+                                // generation (SyncNetworkLevel's b|/N/T sync); silently
+                                // promoting players_nick[1] to slot 0 would make some other
+                                // client (often a bot with no leader logic at all) the new
+                                // "creator" with no way to actually host. Close the whole room
+                                // instead, so the remaining players return to the lobby rather
+                                // than being stuck in a room with a leader who can't lead.
+                                char room_closed_msg[1000];
+                                snprintf(room_closed_msg, sizeof(room_closed_msg), "ROOM_CLOSED: %s", save_nick);
+                                for (j = 0; j < g->players_number; j++) {
+                                        send_line_log_push(g->players_conn[j], room_closed_msg);
+                                        open_players = g_list_append(open_players, GINT_TO_POINTER(g->players_conn[j]));
+                                }
+                                games = g_list_remove(games, g);
+                                free(g);
+                                g = NULL;
                         } else {
                                 char parted_msg[1000];
                                 // inform other players, non-playing state
