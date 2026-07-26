@@ -37,6 +37,7 @@
 #include <cmath>
 #include <algorithm>
 #include "bubblegame_internal.h"
+#include "roundstats_color.h"
 
 void BubbleGame::Update2PText() {
     char plyp[16];
@@ -443,11 +444,18 @@ void BubbleGame::RenderRoundStats(SDL_Renderer *rend) {
     char buf[32];
     for (int i = 0; i < n; i++) {
         BubbleArray &p = bubbleArrays[i];
-        // Winner color still takes priority; otherwise show the player's team
-        // color so team affiliation reads here too, not just in the lobby.
-        SDL_Color c = p.mpWinner ? win
-                     : currentSettings.teamMode ? kTeamColors[currentSettings.playerTeams[i] - 1]
-                     : normal;
+        SDL_Color c = normal;
+        switch (RoundStatsRowColorKind(currentSettings.teamMode,
+                                       currentSettings.playerTeams[i], p.mpWinner)) {
+        case RoundStatsColorKind::TEAM:
+            c = kTeamColors[currentSettings.playerTeams[i] - 1];
+            break;
+        case RoundStatsColorKind::WINNER:
+            c = win;
+            break;
+        case RoundStatsColorKind::NORMAL:
+            break;
+        }
         std::string name = StatsPlayerName(p, i, currentSettings.networkGame);
         if (name.size() > 14) name = name.substr(0, 14);
         cell(name.c_str(), colName, y, c);
@@ -1202,4 +1210,3 @@ void BubbleGame::RenderPaused() {
 
     timePaused = SDL_GetTicks();
 }
-
