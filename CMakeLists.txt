@@ -190,8 +190,10 @@ if(BUILD_TESTING AND NOT EMSCRIPTEN AND NOT ANDROID)
     target_include_directories(roundstats-color-test PRIVATE src)
     add_test(NAME roundstats-color-test COMMAND roundstats-color-test)
 
-    add_test(NAME server-list-cap-test
-        COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tests/server_list_cap_test.py $<TARGET_FILE:fb-server>)
+    if(TARGET fb-server)
+        add_test(NAME server-list-cap-test
+            COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tests/server_list_cap_test.py $<TARGET_FILE:fb-server>)
+    endif()
 endif()
 
 # Installation configuration
