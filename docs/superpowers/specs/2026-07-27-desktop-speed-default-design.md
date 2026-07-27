@@ -27,8 +27,6 @@ key is absent.
 - Historical changelog entries remain intact; a current entry records the
   desktop default.
 
-## Testing
+## Verification
 
-Add focused settings-default coverage that verifies the compiled platform
-default. Verify through the settings loading path that a saved 2.0 overrides
-the default. Run the full CTest suite and rebuild the native game.
+Rebuild the native game and confirm existing saved preferences remain unchanged.

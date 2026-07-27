@@ -116,11 +116,9 @@ void GameSettings::CreateDefaultSettings()
         EvalIniResult(rval, dict, "Sound:ClassicAF", "false");
 
         EvalIniResult(rval, dict, "Keys", NULL);
-#ifdef __ANDROID__
-        EvalIniResult(rval, dict, "Keys:SpeedMultiplier", "1.25");
-#else
-        EvalIniResult(rval, dict, "Keys:SpeedMultiplier", "3.0");
-#endif
+        char defaultSpeedBuf[16];
+        snprintf(defaultSpeedBuf, sizeof(defaultSpeedBuf), "%.2f", DEFAULT_SPEED_MULTIPLIER);
+        EvalIniResult(rval, dict, "Keys:SpeedMultiplier", defaultSpeedBuf);
 #ifdef __WASM_PORT__
         EvalIniResult(rval, dict, "Keys:MouseEnabled", "true");
 #else
@@ -188,11 +186,8 @@ void GameSettings::ReadSettings()
     playSfx = iniparser_getboolean(optDict, "Sound:EnableSFX", true);
     classicSound = iniparser_getboolean(optDict, "Sound:ClassicAF", false);
 
-#ifdef __ANDROID__
-    speedMultiplier = (float)iniparser_getdouble(optDict, "Keys:SpeedMultiplier", 1.25);
-#else
-    speedMultiplier = (float)iniparser_getdouble(optDict, "Keys:SpeedMultiplier", 3.0);
-#endif
+    speedMultiplier = (float)iniparser_getdouble(
+        optDict, "Keys:SpeedMultiplier", DEFAULT_SPEED_MULTIPLIER);
     if (speedMultiplier < 1.0f) speedMultiplier = 1.0f;
     if (speedMultiplier > 5.0f) speedMultiplier = 5.0f;
 

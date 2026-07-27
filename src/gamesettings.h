@@ -83,8 +83,12 @@ public:
     void SaveKeys();
 
     // Game speed multiplier (1.0–5.0). Persisted per device.
-    // Default: 2.0 on desktop, 1.25 on Android.
-    float speedMultiplier = 2.0f;
+#if defined(__ANDROID__) || defined(__ANDROID_PORT__)
+    static constexpr float DEFAULT_SPEED_MULTIPLIER = 1.25f;
+#else
+    static constexpr float DEFAULT_SPEED_MULTIPLIER = 3.0f;
+#endif
+    float speedMultiplier = DEFAULT_SPEED_MULTIPLIER;
 
     char savedNickname[32] = "";
     bool mouseEnabled = false;  // Mouse/touchscreen aim+fire (player 1)

@@ -67,7 +67,7 @@
 //   $MALUS_BUBBLE_SPEED = 30  → ported as 30/2=15 px/frame (unused; see MALUS_SPEED in bubblegame.cpp)
 //   $LAUNCHER_SPEED    = 0.015 rad/frame
 // Current values are the original port defaults; actual runtime speed is multiplied
-// by FrozenBubble::deltaScale (native ~1.25x, browser 3.0x normalized).
+// by FrozenBubble::deltaScale (3.0x desktop/browser default, 1.25x Android default).
 #define BUBBLE_SPEED 10 / 2
 #define MALUS_BUBBLE_SPEED 30 / 2
 #define LAUNCHER_SPEED 0.015 * 0.6
