@@ -13,7 +13,7 @@
 
 | Component | Recorded value |
 |---|---|
-| Agent | Codex subagents `task_1_implementer` (bootstrap) and `task_2_implementer` (baselines) |
+| Agent | Codex subagents `task_1_implementer` (bootstrap), `task_2_implementer` (baselines), and `task_3a_static` (server static review) |
 | Model | Unknown; the dispatcher did not expose a model identifier |
 | Host | macOS 26.5.2 (build 25F84), Darwin 25.5.0, arm64 |
 | Compiler | Apple clang 21.0.0 (`clang-2100.1.1.101`), target `arm64-apple-darwin25.5.0` |
@@ -31,8 +31,8 @@
 ## Current state
 
 - Phase: Phase 2 — subsystem review
-- Active gate: Task 3 (pending)
-- Exact next action: Begin Task 3, Step 1: map protocol entry points, allocation owners, buffer sizes, length types, and state transitions.
+- Active gate: Task 3 (active; Task 3A static review complete, Task 3B pending)
+- Exact next action: Begin Task 3B runtime validation with foreground, kernel-assigned-port reproductions of the kicked-priority and post-start room-closure priority-orphan server-exit paths, then execute the documented TCP/WebSocket/UDP boundary matrix.
 
 ## Gate checklist
 
@@ -40,7 +40,7 @@
 |---|---|---|
 | Task 1 | Bootstrap resumable audit workspace | complete |
 | Task 2 | Reproducible build, test, sanitizer, and analysis baselines | complete |
-| Task 3 | C server and untrusted TCP/WebSocket protocol | pending |
+| Task 3 | C server and untrusted TCP/WebSocket protocol | active (3A complete; 3B pending) |
 | Task 4 | Native/WASM clients and multiplayer synchronization | pending |
 | Task 5 | Gameplay rules, board algorithms, and round state | pending |
 | Task 6 | Lobby, settings, persistence, and input | pending |
@@ -54,31 +54,39 @@
 
 ## Active candidates
 
-- IMP-001 — strict no-argument server prototypes (suspected improvement; 12 unique warning locations covering six functions).
-- IMP-002 — signed/unsigned server comparisons (suspected improvement; seven unique warning locations).
-- IMP-003 — unused server callback/signal parameters (suspected improvement; six unique warning locations).
-- IMP-004 — dead server locals (suspected improvement; two unique warning locations).
-- BUG-001, BUG-002 — `TextureEx` failure/leak handling and server signal safety.
-- SEC-001, SEC-002, SEC-003 — privilege-drop verification, master-response bounds, and peer numeric/board bounds.
-- REL-001, REL-002 — server format mismatch and fixed-port/daemonized test isolation.
-- IMP-005 through IMP-010 — initialization, numeric intent, ownership, modernization, control-flow, and failure-policy improvements.
+- BUG-001 — `TextureEx` failure/leak handling, owned by Task 7.
+- BUG-007 — blocking/one-shot server output and WebSocket short-frame behavior; exact slow-reader/backpressure scenario assigned to Task 3B.
+- SEC-003 — peer numeric/board bounds, owned by Task 4.
+- REL-003 — Windows `SOCKET` narrowing/dense fd indexing; Windows runtime and Task 9 boundary evidence pending.
+- IMP-005 through IMP-009 — initialization, numeric intent, ownership, modernization, and control-flow improvements in later assigned subsystems.
+- IMP-010 — server raw-allocation policy is statically proven inconsistent; Task 7 must finish the cross-owner asset/allocation disposition.
+- Server hardening without assigned IDs: two-second nickname eviction and repeated `START`/post-start `CLOSE` state transitions require Task 3B scenarios.
 
 ## Confirmed findings
 
-None. Every ID registered in [FINDINGS.md](FINDINGS.md) remains `suspected`.
+- Task 3A confirmed BUG-002 through BUG-006, BUG-008, BUG-009;
+  SEC-001, SEC-002, SEC-004 through SEC-006; and REL-001, REL-002,
+  REL-004. It also confirmed IMP-001 through IMP-004 as improvements, not
+  defects.
+- The highest-impact static chains are BUG-003 (priority fd left without a
+  game can trigger peer-driven server exit), SEC-004 (unbound player/leader
+  identity), and SEC-005 (128-byte UDP probe permits out-of-bounds stack read).
+- See [FINDINGS.md](FINDINGS.md) and the
+  [server notebook](subsystems/01-server-protocol.md) for severity, proof, and
+  exact Task 3B dependencies.
 
 ## Commands and evidence
 
 Each row records exactly one top-level shell command. A shell loop remains one
 syntactic command, but unnamed multi-command “gate” rows are not used. Exit
-values and material output are from captured Task 1, fix-round, and Task 2
-evidence.
+values and material output are from captured Task 1, fix-round, Task 2, and
+Task 3A evidence.
 
-**Canonical log cutoff:** completed Task 2 baseline, analyzer, REL-002
-investigation, and review-fix evidence collection. Task 2 staging, commit, and
-post-commit checks—and later evidence-amendment validation, staging, commit,
-and post-commit checks—belong in the ignored controller report, preventing a
-false claim that a commit records itself.
+**Canonical log cutoff:** completed Task 3A source inspection and static
+disposition. Task 3A final validation, staging, commit, and post-commit checks
+belong in the ignored controller report, preventing a false claim that a
+commit records itself. Earlier Task 2 staging/commit exclusions remain covered
+by its ignored controller report.
 
 | Timestamp (UTC) | Command | Exit | Concise result | Evidence |
 |---|---|---:|---|---|
@@ -347,12 +355,24 @@ false claim that a commit records itself.
 | 2026-07-28T04:05:55Z | <code>cmake --build build-audit-sanitize --parallel</code> | 0 | Post-review final replay: `ninja: no work to do` | `build-audit-sanitize` |
 | 2026-07-28T04:06:02Z | <code>ctest --test-dir build-audit-release --output-on-failure -E server-list-cap-test</code> | 0 | Post-review final replay: 4/4 unaffected tests passed in 0.13 seconds | `build-audit-release` |
 | 2026-07-28T04:06:02Z | <code>ASAN_OPTIONS=detect_leaks=0:halt_on_error=1 UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1 ctest --test-dir build-audit-sanitize --output-on-failure -E server-list-cap-test</code> | 0 | Post-review final replay: 4/4 unaffected tests passed in 0.37 seconds with no sanitizer diagnostic | `build-audit-sanitize` |
+| 2026-07-28 (Task 3A; exact time not captured) | <code>wc -l server/fb-server.c server/game.c server/game.h server/net.c server/net.h server/ws.c server/ws.h server/tools.c server/tools.h server/stats.c server/stats.h server/log.c server/log.h server/win32_compat.h server/CMakeLists.txt server/README tests/server_list_cap_test.py tools/server_tests/test_room_caps.py</code> | 0 | Counted 4,337 lines across every named implementation/header/boundary/test input before review | [Server coverage](subsystems/01-server-protocol.md#coverage) |
+| 2026-07-28 (Task 3A; exact time not captured) | <code>find server/init -type f -maxdepth 2 -print</code> | 0 | Enumerated all three init boundary files | [Server coverage](subsystems/01-server-protocol.md#coverage) |
+| 2026-07-28 (Task 3A; exact time not captured) | <code>nl -ba server/tools.c</code> | 0 | Reviewed numeric/allocation/list/daemon/privilege paths with stable line references | [Task 2 dispositions](subsystems/01-server-protocol.md#task-2-candidate-dispositions) |
+| 2026-07-28 (Task 3A; exact time not captured) | <code>nl -ba server/ws.c</code> | 0 | Reviewed handshake, per-fd state, send framing, and in-place decode bounds | [Length trace](subsystems/01-server-protocol.md#network-derived-length-and-index-trace) |
+| 2026-07-28 (Task 3A; exact time not captured) | <code>nl -ba server/stats.c</code> | 0 | Reviewed hash/file ownership, reset, save, and win/loss lifecycle | [Ownership review](subsystems/01-server-protocol.md#allocation-owners-and-destruction-paths) |
+| 2026-07-28 (Task 3A; exact time not captured) | <code>nl -ba server/log.c</code> | 0 | Reviewed formatting allocation, syslog/stderr, and signal-reachable behavior | [Ownership review](subsystems/01-server-protocol.md#allocation-owners-and-destruction-paths) |
+| 2026-07-28 (Task 3A; exact time not captured) | <code>nl -ba server/net.c &#124; sed -n '565,725p'</code> | 0 | Confirmed admission guard, fd initialization, buffer allocation, and normal/priority list transitions | [Lifecycle map](subsystems/01-server-protocol.md#acceptance-input-retention-dispatch-and-teardown) |
+| 2026-07-28 (Task 3A; exact time not captured) | <code>nl -ba server/game.c &#124; sed -n '621,845p'</code> | 0 | Confirmed protocol parsing, nickname/room validation, and command authority dispatch | [Authorization review](subsystems/01-server-protocol.md#authorization-and-room-lifecycle) |
+| 2026-07-28 (Task 3A; exact time not captured) | <code>rg -n 'amount_transmitted&#124;players_started&#124;players_id&#124;players_conn&#124;players_nick&#124;games_open&#124;open_players&#124;nick_available&#124;current_command' server/game.c server/net.c</code> | 0 | Proved no transmission-counter increment and enumerated every room/fd identity state access | [BUG-004 and lifecycle evidence](subsystems/01-server-protocol.md#authorization-and-room-lifecycle) |
+| 2026-07-28 (Task 3A; exact time not captured) | <code>git log -S'amount_transmitted +=' --oneline --all -- server/game.c server/net.c</code> | 0 | Located historical counter-removal commit `2d1a4b4d`; current tree has no increment | [BUG-004](subsystems/01-server-protocol.md#confirmed-findings) |
+| 2026-07-28 (Task 3A; exact time not captured) | <code>git diff --stat 09d6c7bfcd864a0ad3951b87d16a88dc770392a3..345e58b5c8e92bd39aa6b38e8b31d49fb6f1081c -- server tests/server_list_cap_test.py tools/server_tests/test_room_caps.py</code> | 0 | No output; audited server/test inputs exactly match the production baseline | Audit baseline above |
+| 2026-07-28 (Task 3A; exact time not captured) | <code>git status --short --branch</code> | 0 | Began on the requested branch with no tracked or untracked status entries beyond the branch header | Task 3A preflight |
 
 ## Limitations
 
 - Emscripten, cppcheck, and clang-tidy were absent at bootstrap and installed successfully in Task 2. Homebrew LLVM remains keg-only, so the audit invokes clang-tidy by its absolute `$(brew --prefix llvm)/bin` path.
-- The default Release build is successful but not warning-clean: AppleClang emitted 51 server warning instances from 27 unique locations. IMP-001 through IMP-004 retain every unique location for Task 3 review.
-- The strict Debug build cannot complete until IMP-001 through IMP-004 are resolved. Its subsequent 3/5 not-run CTest result is a downstream missing-executable consequence, not an independent candidate.
+- The default Release build is successful but not warning-clean: AppleClang emitted 51 server warning instances from 27 unique locations. Task 3A confirmed IMP-001 through IMP-004 as implementation improvements; the audit itself intentionally leaves production code unchanged.
+- The strict Debug build cannot complete until IMP-001 through IMP-004 are resolved in a future remediation task. Its subsequent 3/5 not-run CTest result is a downstream missing-executable consequence, not an independent candidate.
 - Apple ASan does not support leak detection on this host. The required leak-enabled run is recorded as an environment limitation; the accepted leak-disabled verification passed four unaffected tests plus the isolated foreground server-list assertions with no sanitizer diagnostic.
 - The sanitizer build's two `sprintf` deprecation warnings are in bundled `third_party/iniparser`, classified as vendored dependency noise pending Task 9 boundary/version review.
 - The exact clang-tidy helper command was not directly usable with keg-only LLVM 22: it needed an explicit binary, explicit check families, and an Xcode SDK sysroot. All failed attempts and the successful reproducible fallback are retained.
@@ -360,11 +380,13 @@ false claim that a commit records itself.
 - REL-002 prevents the registered server-list CTest result from proving which binary served the request on POSIX. Task 2 therefore records the raw result but accepts only the supplemental dynamic-port, foreground, live-child-verified runs as Release/sanitizer server evidence.
 - Only native macOS arm64 build/test/analyzer baselines were run. Linux, Windows, Android-device, and browser/WASM build/runtime behavior has not been tested; Emscripten availability alone is not WASM coverage.
 - No release/deployment credentials, signing credentials, external hosts, or interactive gameplay scenarios were evaluated in Task 2.
+- Task 3A executed no socket, server, process, DNS, HTTP, signal, or other runtime/network scenario; all new dispositions are source proofs, and the exact remaining dynamic scenarios are assigned to Task 3B in the server notebook.
 
 ## Processes and cleanup
 
 - REL-002's first reproduction created Task 2-owned daemon PID 95766 on temporary port 25512; it was identified by exact command/start time, terminated, and the port was verified closed. The preliminary hardcoded-port reruns were not accepted as ownership evidence. The accepted dynamic-port foreground reruns asserted the exact child alive and cleaned up normally.
 - Pre-existing listeners on ports 15511, 15512, 15113, and 15998 were observed during isolation diagnosis. They predate Task 2 or are outside its assigned ownership and were intentionally left untouched; no Task 2-owned server, client, proxy, port listener, background process, or shell session remains.
+- Task 3A started no process or network scenario, so it created no process, listener, or external state requiring cleanup.
 - Temporary files include the Task 1 inventory files and Task 2 analyzer logs/triage artifacts under `/tmp/fb-sdl3-audit/`; all are local, regenerable evidence and contain no credentials.
 - The four generated audit build directories are retained for Tasks 3 and 9
   (especially the sanitized server) and are locally excluded through untracked
