@@ -69,6 +69,7 @@ Improvements are ranked separately by expected benefit, implementation effort, a
 | BUG-022 | confirmed | Medium | High | Task 5 | Chain target reservation uses standard parity on flipped grids and omits the reference cross-chain validity pass | [Chain-reaction proof](subsystems/03-gameplay.md#placement-collision-grouping-and-compression) |
 | BUG-023 | confirmed | Medium | High | Tasks 5-6 | The local two-player victories limit is displayed but neither propagated into gameplay nor enforced | [Local match proof](subsystems/03-gameplay.md#round-winner-departure-and-match-transitions) |
 | BUG-024 | confirmed | Medium | High | Task 5 | Remote clear-win accounting depends on whether `F` is queued before deferred replicated-stick resolution | [Clear-order proof](subsystems/03-gameplay.md#round-winner-departure-and-match-transitions) |
+| BUG-025 | confirmed | Medium | High | Task 5 Fix Round 1 | Maximum native delta can move a launched bubble completely through an occupied bubble between endpoint-only collision samples, changing its eventual attachment cell | [Maximum-delta proof](subsystems/03-gameplay.md#maximum-delta-collision-trace) |
 
 Task 2 alone confirmed no defect. Tasks 3 through 5 promoted only findings with
 complete source-level causal proof. Runtime/security reproduction was not
@@ -77,5 +78,6 @@ rather than observed runtime facts. Raw analyzer diagnostics were not
 bulk-promoted. Task 4's required bot unit checks passed; its available harness
 could not autonomously create, start, synchronize, and assert a two-round game.
 Task 5's helper tests, pure-helper oracle, and headless production-object
-boundary harness passed, but no graphical or multi-client gameplay runtime was
-claimed.
+boundary harness passed. Fix Round 1 also reproduced BUG-025 with the linked
+production collision predicate, free-cell selector, and placement primitive;
+no graphical or multi-client gameplay runtime was claimed.

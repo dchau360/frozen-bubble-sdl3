@@ -42,7 +42,7 @@
 | Task 2 | Reproducible build, test, sanitizer, and analysis baselines | complete |
 | Task 3 | C server and untrusted TCP/WebSocket protocol | complete (static evidence; runtime/security matrix omitted by user direction) |
 | Task 4 | Native/WASM clients and multiplayer synchronization | complete (static plus existing bot unit checks; security traffic and two-round smoke omitted) |
-| Task 5 | Gameplay rules, board algorithms, and round state | complete (static plus pure-helper tests and safe deterministic boundary model) |
+| Task 5 | Gameplay rules, board algorithms, and round state | complete (Fix Round 1 added a core invariant ledger and exact maximum-delta production-object evidence) |
 | Task 6 | Lobby, settings, persistence, and input | pending |
 | Task 7 | Rendering, transitions, fonts, and audio lifecycle | pending |
 | Task 8 | Native, WASM, and Android platform integration | pending |
@@ -79,13 +79,15 @@
   response correlation, native TCP record assumptions, and Windows per-frame
   receive remaining blocking. See the
   [network client notebook](subsystems/02-network-client-sync.md).
-- Task 5 confirmed BUG-018 through BUG-024 and IMP-005, IMP-006, and
+- Task 5 confirmed BUG-018 through BUG-025 and IMP-005, IMP-006, and
   IMP-009. The highest-impact gameplay path is BUG-020: a quit/new-match
   transition can retain in-flight malus assigned to an array whose board was
   cleared, later reaching invalid row-vector indexing. Other confirmed rule
   failures cover unconditional clear wins, simultaneous final losses,
   departures, flipped-grid chain assignment, inert local victory limits, and
-  timing-dependent remote clear accounting. See the
+  timing-dependent remote clear accounting. BUG-025 proves that the 75 px
+  maximum native step can cross an occupied bubble between endpoint-only
+  collision samples and attach elsewhere. See the
   [gameplay notebook](subsystems/03-gameplay.md).
 
 ## Task 3 closure provenance
@@ -145,6 +147,18 @@
   preference, socket, graphical session, or hostile placement message was
   created. Static causal traces support the remaining findings; omitted runtime
   cases are limitations, not passes.
+- Fix Round 1 traced projectile/malus positions and owners, shooter and deferred
+  action transitions, target sentinels and update sites, and round/victory
+  reset/enforcement state in an explicit invariant ledger. It then extended the
+  same production-object harness with the exact native `deltaScale=15` case.
+  Linked production `IsCollision`, `GetClosestFreeCell`, and
+  `PlacePlayerBubble` calls reproduced BUG-025 normally and under leak-disabled
+  ASan+UBSan: both endpoint samples miss the crossed bubble, while the missed
+  path later selects the ceiling rather than the adjacent placement. The full
+  `UpdatePosition` call remains omitted because it creates the graphical and
+  preferences-owning `FrozenBubble` singleton; the production movement formula
+  and call order were instead proved statically, so this is not an open
+  collision limitation.
 
 ## Commands and evidence
 
@@ -153,10 +167,9 @@ syntactic command, but unnamed multi-command “gate” rows are not used. Exit
 values and material output are from captured Task 1, fix-round, Task 2, Task 3,
 Task 4, and Task 5 evidence.
 
-**Canonical log cutoff:** completed Task 5 static source/reference inspection,
-analyzer triage, helper tests, pure-helper modeling, production-object boundary
-scenarios, and final candidate disposition. Task 5 final validation, staging,
-commit, and post-commit
+**Canonical log cutoff:** completed Task 5 Fix Round 1 invariant and
+maximum-delta source trace plus normal/sanitized production-object reproduction.
+Fix Round 1 final validation, staging, commit, and post-commit
 checks belong in the ignored controller report, preventing a false claim that a
 commit records itself. Earlier Task 2 staging/commit exclusions remain covered
 by its ignored controller report.
@@ -485,6 +498,8 @@ by its ignored controller report.
 | 2026-07-28 (Task 5 production-harness development; exact time not captured) | <code>object_paths=($(find build-audit-werror/CMakeFiles/frozen-bubble-sdl3.dir/src -name '*.o' ! -name 'main.cpp.o' -print)); /usr/bin/c++ -I/opt/homebrew/include -I/usr/local/include -I/Users/dchau/gr/frozen-bubble-sdl3/src -I/Users/dchau/gr/frozen-bubble-sdl3/third_party/iniparser -std=c++17 -arch arm64 -Wall -Wextra -pedantic -Werror /tmp/fb-sdl3-audit/task5_actual_gameplay_harness.cpp $object_paths build-audit-werror/libiniparser-static.a -Wl,-rpath,/opt/homebrew/lib /opt/homebrew/lib/libSDL3_image.0.4.4.dylib /opt/homebrew/lib/libSDL3_mixer.0.2.4.dylib /opt/homebrew/lib/libSDL3_ttf.0.2.2.dylib /opt/homebrew/lib/libSDL3.0.dylib -o /tmp/fb-sdl3-audit/task5_actual_gameplay_harness &amp;&amp; /tmp/fb-sdl3-audit/task5_actual_gameplay_harness</code> | 1 | First executable run exposed a harness expectation that assumed random levels always start in standard orientation; corrected to validate and flip either generated orientation | Production-harness development chronology |
 | 2026-07-28 (Task 5; exact time not captured) | <code>object_paths=($(find build-audit-werror/CMakeFiles/frozen-bubble-sdl3.dir/src -name '*.o' ! -name 'main.cpp.o' -print)); /usr/bin/c++ -I/opt/homebrew/include -I/usr/local/include -I/Users/dchau/gr/frozen-bubble-sdl3/src -I/Users/dchau/gr/frozen-bubble-sdl3/third_party/iniparser -std=c++17 -arch arm64 -Wall -Wextra -pedantic -Werror /tmp/fb-sdl3-audit/task5_actual_gameplay_harness.cpp $object_paths build-audit-werror/libiniparser-static.a -Wl,-rpath,/opt/homebrew/lib /opt/homebrew/lib/libSDL3_image.0.4.4.dylib /opt/homebrew/lib/libSDL3_mixer.0.2.4.dylib /opt/homebrew/lib/libSDL3_ttf.0.2.2.dylib /opt/homebrew/lib/libSDL3.0.dylib -o /tmp/fb-sdl3-audit/task5_actual_gameplay_harness &amp;&amp; /tmp/fb-sdl3-audit/task5_actual_gameplay_harness</code> | 0 | Unchanged warnings-strict production objects passed the full boundary matrix and directly reproduced BUG-018/019 | [Task 5 dynamic evidence](subsystems/03-gameplay.md#dynamic-evidence) |
 | 2026-07-28 (Task 5; exact time not captured) | <code>object_paths=($(find build-audit-sanitize/CMakeFiles/frozen-bubble-sdl3.dir/src -name '*.o' ! -name 'main.cpp.o' -print)); /usr/bin/c++ -I/opt/homebrew/include -I/usr/local/include -I/Users/dchau/gr/frozen-bubble-sdl3/src -I/Users/dchau/gr/frozen-bubble-sdl3/third_party/iniparser -std=c++17 -arch arm64 -Wall -Wextra -pedantic -Werror -O1 -g -fno-omit-frame-pointer -fsanitize=address,undefined /tmp/fb-sdl3-audit/task5_actual_gameplay_harness.cpp $object_paths build-audit-sanitize/libiniparser-static.a -fsanitize=address,undefined -Wl,-rpath,/opt/homebrew/lib /opt/homebrew/lib/libSDL3_image.0.4.4.dylib /opt/homebrew/lib/libSDL3_mixer.0.2.4.dylib /opt/homebrew/lib/libSDL3_ttf.0.2.2.dylib /opt/homebrew/lib/libSDL3.0.dylib -o /tmp/fb-sdl3-audit/task5_actual_gameplay_harness_sanitize &amp;&amp; ASAN_OPTIONS=detect_leaks=0:halt_on_error=1 UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1 /tmp/fb-sdl3-audit/task5_actual_gameplay_harness_sanitize</code> | 0 | Sanitized unchanged production objects passed the same matrix with no ASan/UBSan diagnostic | [Task 5 dynamic evidence](subsystems/03-gameplay.md#dynamic-evidence) |
+| 2026-07-28T13:12:24Z | <code>object_paths=($(find build-audit-werror/CMakeFiles/frozen-bubble-sdl3.dir/src -name '*.o' ! -name 'main.cpp.o' -print)); /usr/bin/c++ -I/opt/homebrew/include -I/usr/local/include -I/Users/dchau/gr/frozen-bubble-sdl3/src -I/Users/dchau/gr/frozen-bubble-sdl3/third_party/iniparser -std=c++17 -arch arm64 -Wall -Wextra -pedantic -Werror /tmp/fb-sdl3-audit/task5_actual_gameplay_harness.cpp $object_paths build-audit-werror/libiniparser-static.a -Wl,-rpath,/opt/homebrew/lib /opt/homebrew/lib/libSDL3_image.0.4.4.dylib /opt/homebrew/lib/libSDL3_mixer.0.2.4.dylib /opt/homebrew/lib/libSDL3_ttf.0.2.2.dylib /opt/homebrew/lib/libSDL3.0.dylib -o /tmp/fb-sdl3-audit/task5_actual_gameplay_harness_fix1 &amp;&amp; /tmp/fb-sdl3-audit/task5_actual_gameplay_harness_fix1</code> | 0 | Fix Round 1 strict harness printed `maxDeltaTunnel=BUG-025 collisionPlacement=adjacent actualPlacement=ceiling` using linked production collision/selection/placement code | [Maximum-delta proof](subsystems/03-gameplay.md#maximum-delta-collision-trace) |
+| 2026-07-28T13:12:24Z | <code>object_paths=($(find build-audit-sanitize/CMakeFiles/frozen-bubble-sdl3.dir/src -name '*.o' ! -name 'main.cpp.o' -print)); /usr/bin/c++ -I/opt/homebrew/include -I/usr/local/include -I/Users/dchau/gr/frozen-bubble-sdl3/src -I/Users/dchau/gr/frozen-bubble-sdl3/third_party/iniparser -std=c++17 -arch arm64 -Wall -Wextra -pedantic -Werror -O1 -g -fno-omit-frame-pointer -fsanitize=address,undefined /tmp/fb-sdl3-audit/task5_actual_gameplay_harness.cpp $object_paths build-audit-sanitize/libiniparser-static.a -fsanitize=address,undefined -Wl,-rpath,/opt/homebrew/lib /opt/homebrew/lib/libSDL3_image.0.4.4.dylib /opt/homebrew/lib/libSDL3_mixer.0.2.4.dylib /opt/homebrew/lib/libSDL3_ttf.0.2.2.dylib /opt/homebrew/lib/libSDL3.0.dylib -o /tmp/fb-sdl3-audit/task5_actual_gameplay_harness_fix1_sanitize &amp;&amp; ASAN_OPTIONS=detect_leaks=0:halt_on_error=1 UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1 /tmp/fb-sdl3-audit/task5_actual_gameplay_harness_fix1_sanitize</code> | 0 | Fix Round 1 ASan+UBSan harness printed the same BUG-025 outcome with no diagnostic | [Maximum-delta proof](subsystems/03-gameplay.md#maximum-delta-collision-trace) |
 
 ## Limitations
 

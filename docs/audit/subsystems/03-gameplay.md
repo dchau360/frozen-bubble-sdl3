@@ -45,6 +45,27 @@ unchecked peer numeric fields can violate the valid gameplay ranges below. Task
 - With the configured native maximum speed multiplier, `deltaScale` is capped
   at 15. A 5 px shot moves at most 75 px per frame, below the narrowest mini-board
   interior of 112 px, so the single wall-reflection update cannot skip two walls.
+  That wall bound does not bound collision sampling; the separate trace below
+  proves BUG-025.
+
+### Core invariant ledger
+
+The table distinguishes maintained ordinary-flow invariants from peer-supplied
+fields whose missing validation is already SEC-003. There is no
+`assignedBubbles` container: the similarly named ownership fields are
+`SingleBubble::assignedArray` and `MalusBubble::assignedArray`, while the owning
+containers are the global `singleBubbles` and `malusBubbles` vectors.
+
+| State | Valid range, sentinel, and units | Owner and reset owner | Writers, transitions, consumers, and adjacent finding |
+|---|---|---|---|
+| Board cell and position | Row `0..12`; column `0..bubbleMap[row].size()-1` (ordinary rows alternate 8/7); `bubbleId=-1` is empty, otherwise `0..numColors-1`; `Bubble::pos` is integer 640x480 logical-canvas top-left pixels derived from `bubbleOffset`, 32/16 px cell width, and 28/14 px row height. | Each `BubbleArray` owns its 13 row vectors. `NewGame`/`ReloadGame` rebuild active maps through level generation/loading; `RemoveArray` clears active maps. | Local generation and `PlacePlayerBubble` maintain the range. Peer `s`/`m` coordinates bypass it (SEC-003). BUG-020 matters here because a stale attack can retain an inactive array owner after its rows were cleared. |
+| Launched/falling projectile | `SingleBubble::assignedArray` must be an active array index `[0,playerCount)`; `bubbleId` uses that array's color domain. `posX/posY` and `oldPosX/oldPosY` are float logical top-left pixels; `pos/oldpos` are their truncated integer collision/render copies. Launch angle is ordinarily `[0.1,PI-0.1]`, size is 32 or 16, and launch displacement is `5*deltaScale` px per frame. Chain destinations use row `0..12`, valid column, with `-1/-1` meaning none. | `singleBubbles` owns all free projectiles across arrays. `LaunchBubble`, destruction, and chain assignment create entries; `ReloadGame` clears them, and `NewGame` clears them after board setup. | `UpdatePosition` stores the prior sample, performs one movement/reflection, then `UpdateSingleBubbles` tests ceiling and occupied bubbles. `shouldClear` ends ownership. Peer fire angle is accepted under SEC-003. Endpoint-only collision sampling at the 75 px cap is BUG-025. |
+| In-flight malus | `MalusBubble::assignedArray` must be active; `bubbleId` is `0..numColors-1`; ordinary `cx` is `0..6`, `cy=12`, and `stickY=top_of_cx[cx]+1` in `0..12`. `posX/posY` are float logical top-left pixels and `pos` is the integer copy. | `malusBubbles` is the cross-player owner; a `BubbleArray::malusQueue` owns award-frame integers until generation. `ReloadGame` clears both. | `ProcessMalusQueue` creates and sorts malus, `UpdateSingleBubbles` moves at `2.5*deltaScale` px/frame, recomputes/clamps `stickY`, places it, and erases `shouldClear`. `NewGame` does not clear these owners/counters, which is BUG-020; peer `m`/`M` fields remain SEC-003. |
+| Shooter input and launch availability | `shooterLeft`, `shooterRight`, `shooterCenter`, `shooterAction`, `mouseFirePending`, `mpFirePending`, and `mpStickPending` are booleans. `newShoot=true` means no local shot blocks launch; `mouseTargetAngle=-1` is inactive, otherwise the local clamped angle; `pendingAngle` is the deferred peer angle. | Each `BubbleArray` owns its flags. `ResetRoundInputState`, called by both `NewGame` and `ReloadGame`, clears directional/action/pending flags, sets `newShoot=true`, angle sentinel `-1`, peer angle `PI/2`, peer stick fields zero, and enables release suppression. | `UpdatePenguin` samples local input/force-fire, consumes action or `mpFirePending`, calls `LaunchBubble`, then clears action/pending and sets `newShoot=false`. Collision, ceiling, chain, peer-stick, and malus landings restore `newShoot=true`; peer `f`/`s` parsing sets the pending flags. BUG-024 is the adjacent deferred-stick/order failure; SEC-003 owns unchecked peer angle/stick values. |
+| Player lifecycle | `PlayerState` is exactly `ALIVE`, `LOST`, or `LEFT`; active player arrays are the prefix `[0,playerCount)`. `lobbyPlayerId=-1` means no mapped lobby seat. | Each array owns its lifecycle. `NewGame` establishes the match; `ReloadGame` restores non-`LEFT` arrays to `ALIVE` and deliberately preserves `LEFT`. | Danger checks and departure messages move players out of `ALIVE`; winner logic counts living players/teams. BUG-019 covers sequential final losses, and BUG-021 covers the separate departure resolution. |
+| Target selection | `sendMalusToOne=-1` means split/random; otherwise it is an opponent array index `1..playerCount-1`. `playerTargeting[i]=-1` means no/all target; otherwise it is an active array index. `attackingMe` contains unique opponent array indices. Target messages identify players by nickname, then map back to an array/lobby ID. | `BubbleGame` owns all three. `NewGame` and `ReloadGame` set both sentinel stores and clear the vector. | Local keys call `SetSendMalusToOne`, which writes both the local target and `playerTargeting[0]`. Peer `A` records update `playerTargeting[senderIdx]` and insert/erase `attackingMe`; death/leave clears a selected target and leave erases its attacker entry. Send/render/net-view consumers validate liveness/range, but nickname identity and hostile fields remain under SEC-004/SEC-003. |
+| Round/level and timing counts | `curLevel` is the configured level index, ordinarily starting at `startLevel>=1`; winner advance increments it, replay retains it. `roundsPlayed`, `frameCount`, `rFired/rPopped/rSent/rRecv/rKills`, and `m*` totals are nonnegative ordinary-play counts. `roundStatsFinalized` is a once-per-round guard. | `BubbleGame` owns level, round, and frame counts; each array owns its stats. `NewGame` resets round/match counts and the guard; `ReloadGame` resets per-round stats, frame count, and guard while preserving match totals. | Render increments `frameCount`, finalizes once after `gameFinish`, rolls `r*` into `m*`, and increments `roundsPlayed`. BUG-020 is the adjacent defect because `NewGame` omits `frameCount` and other transient resets; remote stats input remains SEC-003. |
+| Victories and match termination | `winCount`, `winsP1`, and `winsP2` are nonnegative. `victoriesLimit=0` means unlimited; maintained menus otherwise select `1..12,15,20,30,50,100`. `gameMatchOver` becomes true when an enforced winner count reaches a positive limit. | Each array owns `winCount`; `BubbleGame` owns display counters, limit snapshot, and match-over flag. `NewGame` resets all wins and match-over; `ReloadGame` preserves wins but resets per-round finish/match-over flags before play resumes. | Elimination and normal `F`/local-clear paths increment counters and enforce the limit. BUG-021 omits enforcement on departure, BUG-023 neither propagates nor enforces local 2P limits/canonical `winCount`, and BUG-024 can lose remote clear accounting through stick/`F` order. |
 
 ## Static review
 
@@ -63,6 +84,30 @@ The full-board fallback in `GetClosestFreeCell` can return its occupied origin,
 but an ordinarily full 13-row board has already crossed the loss line and input
 is stopped. No independent ordinary defect was promoted. Peer-chosen duplicate
 or out-of-range placement remains SEC-003 and was not exercised.
+
+### Maximum-delta collision trace
+
+The native configured maximum is exact: settings clamp `speedMultiplier` to 5,
+and `RunOneFrame` clamps `deltaScale` to `mult*3`, hence 15. For launching
+bubbles, `SingleBubble::UpdatePosition` stores the prior sample and performs one
+unsubdivided `5*deltaScale` movement before `UpdateSingleBubbles` checks
+placement. The consumer order is: update once; if `pos.y<=topLimit`, place by
+the ceiling path; otherwise iterate occupied cells and call `IsCollision` on
+the new point; on a hit choose the closest adjacent free cell and place. The
+ceiling half-space cannot be tunneled by monotonic upward travel, but an
+occupied bubble can because no swept segment or substep is tested.
+
+The production geometry gives a deterministic ordinary-state counterexample.
+On the full two-player board, use `topLimit=40` and the valid row-2/column-3
+bubble at top-left `(450,96)`. A vertical 75 px maximum step takes the launched
+bubble from `(450,136)` to `(450,61)`. The collision radius is
+`32*0.82=26.24` px, while the old and new endpoint distances are respectively
+40 and 35 px, so the actual endpoint predicate returns false even though the
+segment crosses `(450,96)`. The first new point remains below the ceiling test
+(`61>40`). The following equal step reaches `y=-14`, enters the ceiling branch,
+and places in row 0 instead of beside the row-2 target. This proves BUG-025:
+maximum native delta can tunnel a shot through an occupied bubble and change
+its attachment cell.
 
 Chain assignment is not orientation-consistent. Candidate discovery and the
 free neighbor search call `GridNeighborOffsets(..., oddswap)`, but the target
@@ -181,13 +226,19 @@ three consecutive elimination rounds reaching a victories limit; and the
 actual simultaneous-final-loss sequence. It also reproduces two confirmed
 defects directly: the same empty board ends Classic as well as Clear Mode
 (BUG-018), and the simultaneous-loss sequence retains a credited winner after
-entering draw state (BUG-019). The first harness remains supplemental evidence
+entering draw state (BUG-019). Fix Round 1 added the exact maximum-delta case
+using the actual `SingleBubble::IsCollision`, `GetClosestFreeCell`, and
+`BubbleArray::PlacePlayerBubble` implementations. Both normal and leak-disabled
+ASan+UBSan runs proved the endpoint miss and the adjacent-collision versus
+row-0-ceiling placement difference without a diagnostic, printing
+`maxDeltaTunnel=BUG-025 collisionPlacement=adjacent actualPlacement=ceiling`.
+The first harness remains supplemental evidence
 for maximum configured delta, page visibility, flipped-grid neighbor semantics,
 and the expected batched/departure rules.
 
 ## Candidates
 
-All Task 5 candidates are resolved. BUG-018 through BUG-024 are confirmed;
+All Task 5 candidates are resolved. BUG-018 through BUG-025 are confirmed;
 full-board overwrite without a prior missed loss and remote malformed placement
 are not separate ordinary candidates.
 
@@ -207,6 +258,9 @@ are not separate ordinary candidates.
   neither propagated nor enforced.
 - **BUG-024 (Medium):** remote clear-win accounting depends on whether `F`
   reaches the per-frame queue before replicated stick resolution.
+- **BUG-025 (Medium):** the maximum native frame step can cross an occupied
+  bubble while both sampled endpoints remain outside the collision radius, so
+  the shot can attach at the ceiling or a later bubble instead.
 - **IMP-005, IMP-006, IMP-009:** initialization, numeric-intent, and dead/control
   cleanup are confirmed improvements; no analyzer-only gameplay defect was
   inferred. IMP-008 remains a selective low-priority cleanup family.
@@ -221,8 +275,10 @@ are not separate ordinary candidates.
 - A completely occupied board can exhaust nearest-free search, but ordinary
   state has already crossed row 12 and stopped input. No independent reachable
   overwrite was established.
-- High configured delta cannot traverse the narrowest board twice in one frame;
-  one rebound remains sufficient. Local aim bounds are applied before launch.
+- High configured delta cannot traverse the narrowest board twice in one frame,
+  so one rebound remains sufficient; that bound does not prevent the separately
+  confirmed endpoint-collision tunnel in BUG-025. Local aim bounds are applied
+  before launch.
 - Ordinary malus counts and score increments are nonnegative and bounded per
   board event. Reaching signed match-total overflow requires infeasible play;
   hostile numeric traffic belongs to SEC-003 and was not tested.
@@ -241,9 +297,13 @@ maintained inventory and were not treated as production owners.
   invariant; omitted security/runtime cases are not passes.
 - No graphical or interactive game client was launched. The headless harness
   executes actual production gameplay objects and transition methods, but does
-  not render, play sound, drive collision animation, invoke `NewGame`/`ReloadGame`
-  end to end, or create real multi-client timing. Complete source traces cover
-  the promoted reset, disconnect, chain, local-option, and message-order defects.
+  not render, play sound, invoke `SingleBubble::UpdatePosition` (it would create
+  the graphical/preferences-owning `FrozenBubble` singleton), drive collision
+  animation, invoke `NewGame`/`ReloadGame` end to end, or create real
+  multi-client timing. BUG-025 does not remain open on that omission: the exact
+  production movement formula/order is statically complete and the linked
+  production predicate, selector, and placement primitive reproduce its
+  distinct outcomes. Complete source traces cover the other promoted defects.
 - The sanitizer host cannot run LeakSanitizer. Leak-enabled failures and the
   accepted leak-disabled ASan+UBSan rerun are both recorded.
 - Player-count and option origin validation belongs to Task 6. Task 10 should
@@ -252,7 +312,7 @@ maintained inventory and were not treated as production owners.
 
 ## Gate conclusion
 
-Complete. Every scoped file and candidate has a disposition, seven gameplay
+Complete. Every scoped file and candidate has a disposition, eight gameplay
 defects are confirmed with complete causal traces, existing helper tests and
 both the pure-helper oracle and production-object boundary harness are recorded,
 production code is unchanged, and security runtime work remains explicitly
