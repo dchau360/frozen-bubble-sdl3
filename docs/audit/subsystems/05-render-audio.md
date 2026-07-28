@@ -95,7 +95,7 @@ path that releases it. Leak rows are cross-referenced to findings.
 | `SDL_Window` | `FrozenBubble` ctor | `FrozenBubble::window` | never replaced | `~FrozenBubble` (explicitly invoked in `RunForEver`) |
 | `SDL_Renderer` | `FrozenBubble` ctor | `FrozenBubble::renderer`; aliased by every subsystem | never replaced | `~FrozenBubble`, before window |
 | Window icon surface | `SDL_LoadBMP` | ctor local | n/a | destroyed immediately after `SDL_SetWindowIcon` |
-| `MainMenu` textures (~44: background, logo, 4 banners, 4 blink, 5 idle SP buttons, panel/button/void, 5+13 net spots, misc) | `MainMenu` ctor | `MainMenu` members | never replaced | `~MainMenu` destroys only `background`+`fbLogo`; `MainMenu` itself is never deleted → shutdown-scope only (IMP-007 family note) |
+| `MainMenu` textures — **37**, re-derived in fix round 2 from the 21 `IMG_LoadTexture` statements in `mainmenu.cpp` with their loop bounds expanded: 19 scalar statements (`:86,87,94-97,110,111,115,116,126-128,130,145-149`) + `idleSPButtons[SP_OPT]` (`SP_OPT` = 5, `mainmenu.h:49`, loop `:120-124`) + `netSpotSelf[13]` (loop `:152-156`) | `MainMenu` ctor | `MainMenu` members | never replaced | `~MainMenu` destroys only `background`+`fbLogo`; `MainMenu` itself is never deleted → shutdown-scope only (IMP-007 family note) |
 | `activeSPButtons[5]` **surfaces** | `IMG_Load` in `MainMenu` ctor (`mainmenu.cpp:124`, **result never null-checked**) | `MainMenu` | never | never destroyed; process-lifetime. Unchecked loads are dereferenced at `mainmenu_panels.cpp:198` (`activeSPButtons[0]->w`) and passed into production `overlook_` at `:213`, which reads `orig->format` at `shaderstuff.cpp:1485` — BUG-044 |
 | `MenuButton` icons + 2 backgrounds (per button, 8 buttons) | `MenuButton` ctor | move-only `MenuButton` | n/a | `~MenuButton` destroys all (verified Task 6) |
 | `candyOrig`/`candyModif`/`logoMask` (`TextureEx` surfaces + `candyModif.tex`) | `InitCandy` | `MainMenu` | `LoadTextureData`/`LoadEmptyAndApply` **reassign `sfc` without destroying the previous surface**; only the method-3/4/8 branches explicitly destroy `candyOrig.sfc` once; `OutputTexture` destroys the prior texture correctly | no destructor on `TextureEx` → leaks on every `RefreshCandy` (user-triggered LCTRL, `mainmenu_input.cpp:280`) — BUG-001 |
@@ -110,7 +110,7 @@ path that releases it. Leak rows are cross-referenced to findings.
 | `bubbleArrays[i].hurryTexture` (one live texture per active player, 1–20 per match; **17 load sites** in `bubblegame.cpp`, lines 441–849 — 18 occurrences of the identifier, one of which is the comment at line 304) | each `NewGame` case | `BubbleArray` | **reloaded per `NewGame` with no destroy of the prior texture** | never — BUG-042 |
 | Penguin animation frames (71+97+68+158 = 394 per player) | `Penguin::LoadPenguin`, called for every player in every `NewGame` case and `ApplyMiniSlotGeometry` | `Penguin` arrays | **unconditionally re-`IMG_LoadTexture`s over prior pointers** | never — BUG-042 |
 | `prePauseBackground` | `RenderPaused` on pause entry | `BubbleGame` | destroyed before replacement (`bubblegame_render.cpp:1188`) | correct while running; last one process-lifetime |
-| `TTFText` instances — **exhaustive, 23 total**: `BubbleGame` 13 scalars (`inGameText`, `winsP1Text`, `winsP2Text`, `scoreText`, `comboText`, `finalScoreText`, `mpTrainText`, `clearWinText`, `targetingText`, `statsText`, `malusAlertText`, `chatLineText`, `chatInputText`; `bubblegame.h:532-545`) **+ `playerNameWinText[MAX_NET_PLAYERS]` = 5 more instances (`bubblegame.h:534`)**; `MainMenu` 2 (`panelText`, `networkText`); **`FrozenBubble::menuText` (`frozenbubble.h:96`)**; `HighscoreManager` 2 (`panelText`, `nameInput`) plus the per-score `layoutText` | ctors | owning class | `UpdateText` destroys prior texture; `LoadFont(path)` closes prior owned font | `~TTFText` closes owned font + texture (correct); sanitized 200-iteration stress clean. `LoadFont` sweep (18 call sites, whole tree): every instance is font-loaded **except two** — `targetingText`, which is still driven through `UpdateText`/`Coords()`/`Texture()` at `bubblegame_render.cpp:946-957` (BUG-043), and `FrozenBubble::menuText`, which has zero references outside `frozenbubble.h:96` (dead member — IMP-012 extension). `playerNameWinText[i]` is correctly loaded in the `bubblegame.cpp:153` loop |
+| `TTFText` instances — **exhaustive over the declarations** (count corrected in fix round 2): **38 fixed members**, plus a runtime-variable per-highscore set. `BubbleGame` 13 scalars (`inGameText`, `winsP1Text`, `winsP2Text`, `scoreText`, `comboText`, `finalScoreText`, `mpTrainText`, `clearWinText`, `targetingText`, `statsText`, `malusAlertText`, `chatLineText`, `chatInputText`; `bubblegame.h:532-545`) **+ `playerNameWinText[MAX_NET_PLAYERS]` = 20 more (`bubblegame.h:534`; `inline constexpr int MAX_NET_PLAYERS = 20` at `bubblegame.h:251`)** = 33; `MainMenu` 2 (`panelText` `mainmenu.h:123`, `networkText` `:198`); `FrozenBubble::menuText` (`frozenbubble.h:96`) 1; `HighscoreManager` 2 (`panelText`, `nameInput`, `highscoremanager.h:67`). The trailing comment on `bubblegame.h:534` still reads "for each player (3-5 player mode)"; the **declaration governs**, and reading the comment instead of the array bound is what produced the earlier wrong figure of 23. **Non-constant set, stated separately rather than folded into the total:** one `layoutText` per `HighscoreData` element of the file-scope `std::vector<HighscoreData> levelsetScores` (member `highscoremanager.cpp:35`, vector `:55`), 0–10 elements (capped by the `resize(10)` at `:179`) | ctors | owning class | `UpdateText` destroys prior texture; `LoadFont(path)` closes prior owned font | `~TTFText` closes owned font + texture (correct); sanitized 200-iteration stress clean. `LoadFont` sweep (18 call sites, whole tree): of the **38** fixed members exactly two are never font-loaded — `targetingText`, still driven through `UpdateText`/`Coords()`/`Texture()` at `bubblegame_render.cpp:946-957` (BUG-043), and `FrozenBubble::menuText`, which has zero references outside `frozenbubble.h:96` (dead member — IMP-012 extension). The larger array does **not** change that conclusion: all **20** `playerNameWinText[i]` are font-loaded, because the loader loop at `bubblegame.cpp:151` uses the same `MAX_NET_PLAYERS` bound as the declaration. The per-`levelsetScores` `layoutText` **are** font-loaded — `RefreshTextStatus` (`highscoremanager.cpp:47`), driven for every element by the `CreateLevelImages` loop (`:313-315`) — but the loaded state is discarded whenever elements are copied into or within the vector, because `TTFText`'s copy constructor (`ttftext.h:52`) resets to empty and its copy assignment (`:53`) is a no-op — BUG-045 |
 | `HighscoreManager` surfaces (`backgroundSfc`, 8 `useBubbles`) and textures (6 + `smallBG[10]`) | ctor / `CreateLevelImages` | singleton | `smallBG[slot]` destroyed before replacement (correct) | `Dispose` saves files and closes only the font; rest process-lifetime |
 | `highscoreFont` (TTF) | ctor | singleton | never | `~HighscoreManager` via `Dispose` (before `TTF_Quit` — order verified) |
 | `shaderstuff` static buffers: `circle_steps` (1.2 MB), `plasma`/`plasma2`/`plasma3` (300 KB ea), `points` (200), `flakes` (200), `precalc_cos/sin` (200 ea) | `init_effects` / first effect use | translation-unit statics | allocated once | never freed; process-lifetime by design; all `fb__out_of_memory`-guarded **except `precalc_cos`/`precalc_sin`** (IMP-010) |
@@ -191,9 +191,11 @@ complete grep-verified absence of any destroy site.
   BUG-001's missing-asset crash class exists outside `TextureEx`:
   `MainMenu`'s constructor stores five `IMG_Load` results into
   `activeSPButtons[i]` with **no null check** (`mainmenu.cpp:124`, inside the
-  `SP_OPT` loop; note the sibling `idleSPButtons[i] = IMG_LoadTexture(...)` on
-  the previous line is equally unchecked but only ever reaches SDL entry points
-  that validate null). `activeSPButtons` is then dereferenced twice in
+  `SP_OPT` loop). The sibling `idleSPButtons[i] = IMG_LoadTexture(...)` on the
+  previous line is equally unchecked; its dismissal is completed in fix round 2
+  under "Dismissed candidates" with the full consequence trace (deterministic
+  zero-sized rect, nothing drawn — **not** BUG-043's indeterminate-rect
+  mechanism). `activeSPButtons` is then dereferenced twice in
   `SPPanelRender`: unconditionally at `mainmenu_panels.cpp:198`
   (`SDL_CreateSurface(activeSPButtons[0]->w, activeSPButtons[0]->h, …)`) and at
   `:213`, which passes `activeSPButtons[i]` into production `overlook_`, whose
@@ -246,9 +248,11 @@ complete grep-verified absence of any destroy site.
   Failure leaves `coords` stale — cosmetic. Font replacement closes the prior
   owned font; adopting an external font clears ownership; the destructor
   closes only owned fonts (external-font survival verified dynamically).
-- **Font-load sweep (fix round).** The 18 `LoadFont` call sites in `src/` were
-  matched against the 23 `TTFText` instances in the ownership table. Two
-  instances are never font-loaded: `FrozenBubble::menuText` (harmless — zero
+- **Font-load sweep (fix round; count corrected in fix round 2).** The 18
+  `LoadFont` call sites in `src/` were matched against the **38** fixed
+  `TTFText` members in the ownership table (13 + 20 + 2 + 1 + 2; the array is
+  `playerNameWinText[MAX_NET_PLAYERS]` with `MAX_NET_PLAYERS = 20`, not 5).
+  Two fixed members are never font-loaded: `FrozenBubble::menuText` (harmless — zero
   references outside `frozenbubble.h:96`, a dead member recorded under IMP-012)
   and `BubbleGame::targetingText`, which **is** used. `targetingText` has no
   initializer for `coords` (`ttftext.h:57`) and the default constructor
@@ -265,7 +269,10 @@ complete grep-verified absence of any destroy site.
   **reopens and corrects** the earlier IMP-005 render-slice closure, which had
   concluded there was no reachable use-before-initialization.
 - Per-frame text churn: `Update2PText`, `UpdateScoreText`, `RenderRoundStats`
-  (~30 `cell()` calls), `RenderRoyaleHud`, chat overlay, and
+  (**24 static `cell()` call sites** re-counted in fix round 2 — 8 header, 7
+  inside the per-player loop, 6 inside the per-team loop, 3 standalone — so the
+  per-frame invocation count is at most `11 + 7·players + 6·teams`, not the
+  flat "~30" previously stated), `RenderRoyaleHud`, chat overlay, and
   `UpdatePlayerNameWinText` re-render TTF surfaces and re-create textures
   every frame. Correct (no leak — each `UpdateText` frees the prior texture)
   but wasteful; recorded under the confirmed IMP-009/IMP-006 families.
@@ -426,6 +433,35 @@ are `nofont` and `overlooknull`):
   `MainMenu`, so it rests on the static chain (an unconditional `->w` on a
   pointer the tree never null-checks).
 
+Fix-round-2 additions use a second, smaller harness
+(`/tmp/fb-sdl3-audit/task7/task7_fix2_harness.cpp`) built warnings-strict
+(`-Wall -Wextra -pedantic -Werror`, exit 0) against the unchanged production
+`ttftext.cpp.o` from `build-audit-werror` plus the installed SDL3. It
+constructs no `GameSettings`/`FrozenBubble` singleton and opens no preference
+file, so the `CFFIXED_USER_HOME` gate does not apply; the font is passed as an
+absolute path to `share/gfx/DroidSans.ttf` (read-only).
+
+- **`getsize`** (exit 0, `fix2-getsize.log`): `float fw, fh` were poisoned to
+  `0xCDCDCDCD` and passed to `SDL_GetTextureSize(nullptr, &fw, &fh)` against
+  the linked SDL 3.4.10 runtime. Output:
+  `pre fw=-0x1.9b9b9ap+28 fh=-0x1.9b9b9ap+28` / `ret=0 err='Parameter
+  'texture' is invalid'` / `post fw=0x0p+0 fh=0x0p+0 int_w=0 int_h=0`.
+  **SDL zeroes both outputs before the texture validity check**, so the null
+  case yields deterministic zeros, not indeterminate values. This is the
+  counter-evidence for the `idleSPButtons` dismissal below.
+- **`ttfcopy`** (exit 0, `fix2-ttfcopy.log`): a production `TTFText` inside a
+  plain aggregate mirroring `HighscoreData` was font-loaded and rendered
+  (`src tex=0x9b5048c00 coords={40,50,47,57}`), then `push_back` into a
+  `std::vector` — the exact operation at `highscoremanager.cpp:172` — produced
+  `copy tex=0x0 coords={0,0,0,0} level=7 name=audit`: the non-`TTFText` fields
+  copied, the `TTFText` reset to empty. The subsequent
+  `SDL_RenderTexture(rend, copy.Texture(), nullptr, &ToFRect(*copy.Coords()))`
+  — the render at `highscoremanager.cpp:339` — returned
+  `render_copy_ok=0 err='Parameter 'texture' is invalid' rect={0,0,0,0}`.
+  Copy assignment (what `std::sort` at `highscoremanager.cpp:175` performs on
+  the member) printed `assign_dst_tex=0x0 assign_src_tex=0x9b5048f00` — the
+  destination was not updated. BUG-045 reproduced against production code.
+
 No listener, server, socket, browser, process kill, or hostile input was
 created; runs used only dummy drivers, read-only `share/` assets, and the
 isolated preference home.
@@ -454,6 +490,26 @@ two new candidates; all three are resolved:
 - **BUG-044 — new, confirmed** (`activeSPButtons` `IMG_Load` results are never
   null-checked and are dereferenced twice in `SPPanelRender`; the second
   dereference reproduced under UBSan/ASan).
+
+Fix round 2 (second independent review) raised one false claim this gate had
+introduced and one incomplete dismissal; correcting them opened one new
+candidate, now resolved:
+
+- **`TTFText` instance count — corrected.** Fix round 1 wrote
+  "`playerNameWinText[MAX_NET_PLAYERS]` = 5 more instances" and totalled the
+  ownership table at 23, reading `bubblegame.h:534`'s stale comment instead of
+  the array bound. `MAX_NET_PLAYERS` is 20 (`bubblegame.h:251`), so the fixed
+  member total is **38**, plus one `layoutText` per `levelsetScores` element.
+  The exhaustiveness statement and every propagation of "23" are corrected.
+- **`idleSPButtons` dismissal — completed, still a dismissal.** The reviewer
+  proposed that `SDL_GetTextureSize` leaves `fw`/`fh` untouched on a null
+  texture, making `mainmenu_panels.cpp:210` an indeterminate rect like
+  BUG-043. Verified against source and runtime: it does not. See
+  "Dismissed candidates".
+- **BUG-045 — new, confirmed, reproduced** (`TTFText`'s reset-to-empty copy
+  constructor and no-op copy assignment silently discard the loaded font and
+  texture when highscore rows are stored in `levelsetScores`, so the
+  levelset highscore screen renders null textures through zero-sized rects).
 
 ## Confirmed findings
 
@@ -605,6 +661,77 @@ two new candidates; all three are resolved:
   *Verification strategy.* Run the client with one `txt_*_text.png` renamed and
   confirm the SP panel opens with a degraded entry and a logged asset error
   instead of crashing.
+- **BUG-045 (Medium, confirmed, runtime-reproduced; new in fix round 2;
+  the promoted instance of IMP-007's `TTFText` copy semantics, cross-linked
+  not duplicated):** storing a highscore row in `levelsetScores` silently
+  discards its loaded font and rendered texture, so the levelset highscore
+  screen renders null textures through zero-sized rects.
+  *Evidence and causal path.* (1) `HighscoreData` (`highscoremanager.cpp:30-53`)
+  holds a `TTFText layoutText` **by value**, and the rows live in the
+  file-scope `std::vector<HighscoreData> levelsetScores` (`:55`).
+  (2) `TTFText`'s copy constructor (`ttftext.h:52`) copies *nothing*: it
+  initializes `curText(nullptr), coords{}, forecolor{}, backcolor{},
+  textFont(nullptr), ownsFont(false), outTexture(nullptr)`. Its copy assignment
+  (`ttftext.h:53`) is `{ return *this; }`. Because `TTFText` declares a
+  destructor and both copy operations, no move operations are implicitly
+  generated, so **every** vector insertion, reallocation, and sort step routes
+  through these two. (3) `CheckAndAddScore` (`highscoremanager.cpp:156-181`)
+  builds `newEntry`, font-loads and renders it via
+  `newEntry.RefreshTextStatus(rend, highscoreFont)` at `:171`, then
+  `levelsetScores.push_back(newEntry)` at `:172` — the stored element's
+  `layoutText` therefore has `textFont == nullptr`, `outTexture == nullptr`,
+  `coords == {0,0,0,0}`; if that `push_back` reallocates, the pre-existing
+  elements are copy-constructed too and lose their loaded state as well.
+  (4) `std::sort` at `:175` permutes `level`/`name`/`time`/`picId` through
+  `HighscoreData`'s implicit assignment, whose `TTFText` member assignment is
+  the `:53` no-op, so whatever text state survives stays bound to the *slot*,
+  not to the row. (5) Nothing reloads them: `CreateLevelImages` — the only
+  function that font-loads every element (`:313-315`) — has exactly two call
+  sites in the tree, `highscoremanager.cpp:152` (`AppendToLevels`) and `:230`
+  (constructor), and `CheckAndAddScore` calls neither. Its caller
+  `BubbleGame::SubmitScore` (`bubblegame_state.cpp:405-427`) calls
+  `AppendToLevels` at `:418` and only *then* `CheckAndAddScore` at `:422`, so
+  the refresh always runs **before** the mutation that destroys it; the other
+  caller, `bubblegame_render.cpp:600` (multiplayer-training score), performs no
+  refresh at all. (6) `HighscoreManager::RenderScoreScreen` then loops every
+  row and unconditionally executes, at `:339`,
+  `{ SDL_FRect fr = ToFRect(*levelsetScores[i].layoutText.Coords());
+  SDL_RenderTexture(rend, levelsetScores[i].layoutText.Texture(), nullptr, &fr); }`
+  — a null texture and a `{0,0,0,0}` destination.
+  *Reachability.* `SubmitScore` runs on every single-player levelset
+  completion (`bubblegame_state.cpp:407` returns early only for network or
+  multi-player games), and a qualifying score sets `pendingHighscore`, which
+  routes to the highscore screen. The name-entry `SDLK_RETURN` branch
+  (`highscoremanager.cpp:398-404`) re-runs `RefreshTextStatus` on the newest
+  `newHighscore` row, but only when a non-empty name was typed, and it repairs
+  no row that lost its state to a reallocation.
+  *Distinction from BUG-043 and IMP-007.* Unlike BUG-043 the rect is
+  **deterministic zeros**, not indeterminate — `coords{}` is value-initialized
+  by the copy constructor — so there is no undefined behavior here, only a
+  missing render. IMP-007 already records the *shape* of these copy semantics
+  and was held at improvement grade because "current call order never trips
+  it"; `levelsetScores` is a call site that does trip it with a user-visible
+  consequence, so this instance is promoted while IMP-007 stands (the same
+  relationship IMP-005 has to BUG-043).
+  *User impact.* After earning a new levelset highscore, the score rows on the
+  highscore screen draw no text — the level/name/time labels are missing —
+  until the next `HighscoreManager` construction or `AppendToLevels`.
+  *Reproduction.* Harness `ttfcopy` against the unchanged production
+  `ttftext.cpp` object: a loaded instance (`src tex=0x9b5048c00
+  coords={40,50,47,57}`) became `copy tex=0x0 coords={0,0,0,0}` on
+  `push_back`, and the production render call returned
+  `render_copy_ok=0 err=Parameter 'texture' is invalid rect={0,0,0,0}`; copy
+  assignment left the destination null (`assign_dst_tex=0x0
+  assign_src_tex=0x9b5048f00`).
+  *Proposed correction.* Give `TTFText` real value semantics (or delete the
+  copy operations and store `HighscoreData` rows by `std::unique_ptr`/index),
+  and, independently, call `CreateLevelImages()` — or at least
+  `RefreshTextStatus` on every row — after `CheckAndAddScore` mutates the
+  vector.
+  *Verification strategy.* Re-run the `ttfcopy` harness and assert the copied
+  instance keeps a non-null texture and non-zero `coords.w/h`; in a full
+  client, finish a single-player level with a qualifying time and confirm the
+  levelset highscore screen shows every row's label text.
 - **IMP-007 (improvement, confirmed and extended):** `TTFText`'s copy
   assignment returns `*this` without copying or transferring any member, its
   copy constructor silently resets to empty, and `curText` retains a borrowed
@@ -613,8 +740,13 @@ two new candidates; all three are resolved:
   `TransitionManager` (never invoked), `HighscoreManager`, and `GameSettings`
   end in `this->~T()` while leaving `ptrInstance` dangling, so any
   post-Dispose `Instance()` returns a destroyed object. Current call order
-  never does so (verified), keeping this improvement-grade. 200 sanitized
-  lifecycle iterations support the current-behavior safety.
+  never does so (verified), keeping the *Dispose* half improvement-grade. 200
+  sanitized lifecycle iterations support the current-behavior safety. **Fix
+  round 2 correction to the copy-semantics half:** the claim that the copy
+  operations are never tripped is true of the singleton members but false of
+  `levelsetScores`, where `HighscoreData` rows are copied into a `std::vector`
+  — that instance is promoted to BUG-045 and reproduced; IMP-007 stands as the
+  general improvement.
 - **IMP-010 (improvement, confirmed; cross-owner disposition complete):**
   allocation/load failure policy is inconsistent by design across owners —
   server: unchecked/`exit`-style mixes proven in Task 3 (`log.c`, `stats.c`);
@@ -699,6 +831,32 @@ two new candidates; all three are resolved:
   only files and its font, no `SDL_DestroyTexture` executes after
   `SDL_DestroyRenderer`, and SDL3 frees renderer-owned textures with the
   renderer.
+- **Unchecked `idleSPButtons[i] = IMG_LoadTexture(...)` (`mainmenu.cpp:123`) —
+  dismissed with a complete consequence trace (fix round 2).** Fix round 1
+  dismissed this sibling of BUG-044 on the bare ground that it "only ever
+  reaches SDL entry points that validate null", which asserted the absence of a
+  crash without tracing the consequence. The second review proposed that the
+  consumer at `mainmenu_panels.cpp:207-210` —
+  `{ float fw, fh; SDL_GetTextureSize(idleSPButtons[i], &fw, &fh); w = (int)fw;
+  h = (int)fh; }` feeding `subRct` at `:210` — reads `fw`/`fh` uninitialized on
+  a null texture, i.e. BUG-043's indeterminate-rect mechanism. **It does not.**
+  `SDL_GetTextureSize` writes `*w = 0` and `*h = 0` *before* the
+  `CHECK_TEXTURE_MAGIC` validity check that returns `false`
+  (`android/app/jni/SDL3/src/render/SDL_render.c:1921-1941`, the SDL 3.4.4
+  submodule pinned in this tree; the installed SDL 3.4.10 that the native build
+  links behaves identically — harness `getsize` poisoned both floats to
+  `0xCDCDCDCD` and read back `0x0p+0` with `ret=0`). The documented contract in
+  `/opt/homebrew/include/SDL3/SDL_render.h:978-994` promises only the boolean
+  return, so the guarantee rests on the implementation, which is readable here
+  for both versions. Full consequence chain on a failed load: `w = h = 0` →
+  `subRct = {171, y, 0, 0}` (`:210`) → the only consumer of `subRct` is
+  `SDL_RenderTexture(renderer, idleSPButtons[i], nullptr, &fr)` at `:227`,
+  which rejects the null texture and returns `false`. The panel background
+  (`:205`) and the active-entry frame still draw; the idle button's label is
+  silently missing. **Not a defect** — no undefined behavior, no crash, no
+  indeterminate value — but the missing-asset *policy* gap it shares with
+  BUG-044 is recorded under IMP-010, and the recommended null check in
+  BUG-044's proposed correction already covers both loads in the `SP_OPT` loop.
 - `RenderPaused`'s `pausePenguin[pauseFrame]` and stick-animation
   `imgBubbleStick[stickAnimFrame]` indexing: bounded — `pauseFrame` wraps to
   12 upon reaching 34 against a 35-entry array; `stickAnimFrame` renders at
@@ -722,6 +880,10 @@ boundary closed under IMP-010. Supporting resource-creation sites in
 `highscoremanager.cpp` were re-examined only for ownership; their existing
 Task 4-6 dispositions stand, now annotated with BUG-042 where applicable and
 with BUG-043/BUG-044 origin sites (`bubblegame.h:535`, `mainmenu.cpp:124`).
+Fix round 2 added BUG-045's origin sites to that annotation set
+(`highscoremanager.cpp:35/55/171-175/339`, `ttftext.h:52-53`) and re-derived
+the `MainMenu` texture count and the `TTFText` member inventory from the
+declarations rather than from comments or unexpanded greps.
 
 ## Limitations
 
@@ -743,6 +905,14 @@ with BUG-043/BUG-044 origin sites (`bubblegame.h:535`, `mainmenu.cpp:124`).
   Likewise BUG-043 was reproduced at the `TTFText` boundary with poisoned
   storage standing in for the heap-allocated `BubbleGame`; no full-client run
   of a multiplayer targeting scenario was performed.
+- BUG-045 was likewise reproduced at the `TTFText`/`std::vector` boundary
+  against the production `ttftext.cpp` object, using an aggregate that mirrors
+  `HighscoreData`'s shape; `HighscoreData` itself is defined inside
+  `highscoremanager.cpp` and is not reachable from a test TU, and no
+  full-client single-player levelset completion was driven, so the step from
+  the reproduced copy semantics to the on-screen missing labels rests on the
+  static call-order trace (`bubblegame_state.cpp:418` → `:422`, and the
+  two-call-site `CreateLevelImages` grep).
 - `effect()` selects its animation via unseeded `rand()`; the six sanitized
   transitions covered the sequence that selection produced, not provably all
   five effect families.
@@ -759,7 +929,7 @@ with BUG-043/BUG-044 origin sites (`bubblegame.h:535`, `mainmenu.cpp:124`).
 
 ## Gate conclusion
 
-Complete, as corrected by fix round 1. Every scoped file has a final
+Complete, as corrected by fix rounds 1 and 2. Every scoped file has a final
 disposition; BUG-001 is confirmed with two production-code sanitizer
 reproductions (quantity corrected to 2 leaked rects per `InitCandy`, and the
 two orderings' differing production reachability now stated); the inherited
@@ -770,7 +940,9 @@ findings BUG-041 (runtime-reproduced transition texture leak, trigger set
 corrected to game start and round reload only), BUG-042 (static-proven
 per-match texture reload leak), BUG-043 (reproduced: the multiplayer targeting
 indicator can never render), BUG-044 (reproduced: unchecked `activeSPButtons`
-loads dereferenced in `SPPanelRender`), and IMP-013 (ASan-demonstrated
+loads dereferenced in `SPPanelRender`), BUG-045 (reproduced in fix round 2:
+`TTFText`'s reset-to-empty copy semantics blank the levelset highscore rows),
+and IMP-013 (ASan-demonstrated
 pixel-helper bounds defect, unreachable with shipped assets) are registered;
 the IMP-005 render-slice closure was reopened, corrected, and re-closed with
 one promoted instance. No candidate remains open. Repeated-lifecycle scenarios
@@ -788,5 +960,37 @@ items (the exhaustive ownership table's missing `TTFText` entries, the
 `get_pixel`/`set_pixel` clamp attribution, and BUG-001's ordering
 reachability). Two new harness subcommands (`nofont`, `overlooknull`) were
 added and both new defects reproduced against unchanged production objects.
+
+**Fix-round-2 provenance.** A second independent review of `f4d44bda` confirmed
+fix round 1's five corrections but found that fix round 1 had introduced one new
+false claim and left one dismissal incomplete. Both were verified against
+production source and accepted, with one partial dispute:
+
+1. *False claim, accepted.* The ownership table's `TTFText` row counted
+   `playerNameWinText[MAX_NET_PLAYERS]` as 5 instances by reading the stale
+   trailing comment on `bubblegame.h:534` rather than the array bound.
+   `MAX_NET_PLAYERS` is 20 (`bubblegame.h:251`), so the exhaustive fixed-member
+   total is **38**, not 23. The corrected count changes no downstream
+   conclusion for the array itself — the loader loop at `bubblegame.cpp:151`
+   carries the same `MAX_NET_PLAYERS` bound, so all 20 are font-loaded and
+   "exactly two fixed members are never font-loaded" still holds — but the
+   per-`levelsetScores` `layoutText` instances, which fix round 1 folded into
+   the fixed number, turned out to expose BUG-045 when examined separately.
+2. *Incomplete dismissal, corrected — but the proposed defect is disputed.*
+   The `idleSPButtons` dismissal did need a real consequence trace, and it now
+   has one. The reviewer's proposed mechanism, however, is wrong:
+   `SDL_GetTextureSize` zeroes `*w`/`*h` before its validity check in both the
+   pinned SDL 3.4.4 submodule source and the linked SDL 3.4.10 runtime
+   (`getsize` harness), so the rect is deterministic zeros and nothing is
+   drawn — it is not BUG-043's indeterminate-rect mechanism and not a defect.
+   It stays dismissed, now with counter-evidence that traces the consequence to
+   its end.
+3. *Quantity sweep.* Every array-size, instance-count, site-count, and quantity
+   claim in the four Task 7 documents was re-derived from the declarations.
+   Two more were wrong and are corrected: the `MainMenu` texture family
+   ("~44" → **37**, from 21 `IMG_LoadTexture` statements with `SP_OPT` = 5 and
+   the 13-frame `netSpotSelf` loop expanded) and `RenderRoundStats`'s per-frame
+   text churn ("~30 `cell()` calls" → **24 static call sites**, 13 of them
+   inside per-player/per-team loops). All other quantities re-derived correct.
 
 Next gate: Task 8 (platform integration).

@@ -44,7 +44,7 @@
 | Task 4 | Native/WASM clients and multiplayer synchronization | complete (static plus existing bot unit checks; security traffic and two-round smoke omitted) |
 | Task 5 | Gameplay rules, board algorithms, and round state | complete (Fix Round 1 added a core invariant ledger and exact maximum-delta production-object evidence) |
 | Task 6 | Lobby, settings, persistence, and input | complete (static review plus isolated-preferences runtime matrix; security runtime and live-server lobby transitions omitted) |
-| Task 7 | Rendering, transitions, fonts, and audio lifecycle | complete (Fix Round 1 corrected BUG-001's leak quantity, BUG-041's trigger set, the pixel-format claim, and IMP-013's attribution; reopened IMP-005's render slice into BUG-043 and registered BUG-044, both reproduced against production objects; dummy-driver-only rendering and full-client navigation omissions recorded) |
+| Task 7 | Rendering, transitions, fonts, and audio lifecycle | complete (Fix Round 1 corrected BUG-001's leak quantity, BUG-041's trigger set, the pixel-format claim, and IMP-013's attribution; reopened IMP-005's render slice into BUG-043 and registered BUG-044, both reproduced against production objects. Fix Round 2 corrected the `TTFText` instance count Fix Round 1 had misread from a comment — 38 fixed members, not 23 — plus the `MainMenu` texture and `cell()` churn counts, completed the `idleSPButtons` dismissal with a full consequence trace that disproves the proposed indeterminate-rect mechanism, and registered BUG-045, reproduced against the production `ttftext.cpp` object; dummy-driver-only rendering and full-client navigation omissions recorded) |
 | Task 8 | Native, WASM, and Android platform integration | pending |
 | Task 9 | Build, tests, packaging, CI, deployment, tooling, and operations | pending |
 | Task 10 | Cross-subsystem dynamic integration matrix | pending |
@@ -76,7 +76,12 @@
   multiplayer targeting indicator can never render) and BUG-044 (confirmed,
   runtime-reproduced: unchecked `activeSPButtons` loads dereferenced at
   `mainmenu_panels.cpp:198` and `:213`), and extended IMP-012 with the unused
-  `FrozenBubble::menuText` member. The registry now holds 68 unique IDs.
+  `FrozenBubble::menuText` member. Fix Round 2 added BUG-045 (confirmed,
+  runtime-reproduced: `TTFText`'s reset-to-empty copy constructor and no-op
+  copy assignment blank every highscore row stored in `levelsetScores`, so
+  `highscoremanager.cpp:339` renders a null texture through a zero rect) — the
+  promoted instance of IMP-007's copy semantics, which stands as a confirmed
+  improvement. The registry now holds 69 unique IDs.
 
 ## Confirmed findings
 
@@ -314,8 +319,10 @@
   registered as **BUG-044**, the same missing-asset crash class as BUG-001 and
   cross-linked to it rather than duplicated.
 - Completeness items: the Step 1 ownership table's `TTFText` row is now
-  exhaustive (23 instances, `playerNameWinText[MAX_NET_PLAYERS]` itemized and
-  `FrozenBubble::menuText` added); `menuText` has zero references outside
+  exhaustive (`playerNameWinText[MAX_NET_PLAYERS]` itemized and
+  `FrozenBubble::menuText` added; the instance total this round stated as 23
+  was **wrong and is corrected to 38 fixed members in Fix Round 2 below**);
+  `menuText` has zero references outside
   `frozenbubble.h:96` and is recorded as an IMP-012 extension rather than a new
   ID, since IMP-012 already covers unused menu-layer members; and BUG-001 now
   states that `shaderstuff.h:67` is the asset-reachable ordering while `:55`
@@ -327,6 +334,84 @@
   (UBSan null member access at `shaderstuff.cpp:1485`, then SEGV, exit 134).
   BUG-044's `:198` half rests on the static chain — its TU cannot be linked
   without full `MainMenu` construction.
+
+### Task 7 Fix Round 2
+
+- A second independent review of commit `f4d44bda` confirmed all five Fix
+  Round 1 corrections but found that Fix Round 1 had **introduced one new false
+  claim** and left **one dismissal incomplete**. Both were re-verified against
+  production source; one was accepted in full, one was accepted as to the
+  incompleteness but its proposed mechanism was disproved.
+- **False claim, accepted and corrected.** The Step 1 ownership table wrote
+  "`playerNameWinText[MAX_NET_PLAYERS]` = 5 more instances" and totalled 23,
+  presenting the table as exhaustive. `src/bubblegame.h:251` declares
+  `inline constexpr int MAX_NET_PLAYERS = 20`, so `bubblegame.h:534` declares
+  **20** instances; the "3-5 player mode" comment on that line is stale and the
+  declaration governs. Re-derived from the declarations, the fixed member total
+  is **38**: `BubbleGame` 13 scalars + 20 array = 33, `MainMenu` 2
+  (`mainmenu.h:123`, `:198`), `FrozenBubble::menuText` 1 (`frozenbubble.h:96`),
+  `HighscoreManager` 2 (`highscoremanager.h:67`). The per-`levelsetScores`
+  `layoutText` (`highscoremanager.cpp:35`, vector `:55`) is a **runtime-variable
+  set of 0–10**, now stated separately instead of folded into the total.
+- **Downstream effect of the corrected count.** For the array itself, none: the
+  loader loop at `bubblegame.cpp:151` carries the same `MAX_NET_PLAYERS` bound,
+  so all 20 are font-loaded and "exactly two fixed members are never
+  font-loaded" (`targetingText`, `menuText`) still holds. For the per-levelset
+  set, examining it separately exposed a defect — the rows *are* font-loaded by
+  `CreateLevelImages` (`:313-315`), but the state is discarded by `TTFText`'s
+  reset-to-empty copy constructor on `push_back`, registered as **BUG-045**
+  (the promoted instance of IMP-007's copy semantics, cross-linked to IMP-007
+  and to BUG-043's render-a-null-texture consequence rather than duplicating
+  either).
+- **Incomplete dismissal, corrected; proposed mechanism disproved.** The
+  `idleSPButtons` dismissal did rest on an absence of crashes rather than a
+  consequence trace, and now carries one. The proposed defect — that
+  `SDL_GetTextureSize` leaves `fw`/`fh` uninitialized at
+  `mainmenu_panels.cpp:208`, making `:210`'s `subRct` indeterminate like
+  BUG-043 — is **wrong**: the function writes `*w = 0` and `*h = 0` *before*
+  `CHECK_TEXTURE_MAGIC` returns `false`
+  (`android/app/jni/SDL3/src/render/SDL_render.c:1921-1941`, the SDL 3.4.4
+  submodule pinned in this tree), and the linked SDL 3.4.10 runtime was probed
+  directly with `0xCDCDCDCD`-poisoned floats and read back `0x0p+0`. The
+  documented header contract
+  (`/opt/homebrew/include/SDL3/SDL_render.h:978-994`) promises only the boolean
+  return, so the guarantee is stated as resting on the readable implementation
+  of both versions. Consequence chain to its end: `w = h = 0` →
+  `subRct = {171, y, 0, 0}` → `SDL_RenderTexture` at `:227` refuses the null
+  texture → the idle button's label is silently missing. Not a defect; the
+  policy gap stays under IMP-010 and BUG-044's proposed null check covers both
+  loads in the `SP_OPT` loop.
+- **Quantity sweep.** Every array-size, instance-count, site-count, and
+  quantity claim in the four Task 7 documents was re-derived from the
+  declarations rather than from comments or unexpanded greps. Two further
+  errors were found and corrected: the `MainMenu` texture family ("~44" →
+  **37**: 21 `IMG_LoadTexture` statements, of which two are loops —
+  `SP_OPT` = 5 (`mainmenu.h:49`) and `netSpotSelf[13]` — giving 19 + 5 + 13)
+  and `RenderRoundStats`'s churn ("~30 `cell()` calls" → **24 static call
+  sites**, 7 in the per-player loop and 6 in the per-team loop, so at most
+  `11 + 7·players + 6·teams` per frame). Re-derived and confirmed correct:
+  `SP_OPT` = 5; `activeSPButtons` 4 occurrences; `hurryTexture` 17 load sites /
+  18 occurrences in `bubblegame.cpp` / 21 tree-wide; `bubbleArrays` sized
+  `MAX_NET_PLAYERS` = 20; 18 `LoadFont` call sites; Penguin frames
+  71 + 97 + 68 + 158 = 394 (`bubblegame.h:55-58`); `BUBBLE_STYLES` = 8 so
+  "4×8 bubble sets"; `imgBubbleStick[BUBBLE_STICKFC + 1]` = 8 entries with
+  `BUBBLE_STICKFC` = 7; `pausePenguin[35]` with the `:1202-1203` wrap to 12 at
+  34; 8 `MenuButton`s; the BubbleGame texture breakdown (3 shooters,
+  2 compressor, 2 on-top, 4 + 4 attack, 5 left overlays, 2 dots, 2 + 2 panels,
+  frozen/prelight ×4); `circle_steps` = `XRES*YRES*sizeof(int)` = 1.2 MB;
+  `plasma`/`plasma2`/`plasma3` = 640×480 = 300 KB each; `points`/`flakes`
+  `amount = 200`; `precalc_cos`/`precalc_sin` 200 doubles; `bars_effect`
+  16 × 40 segments of `(640/16)*bpp`; `fillrect`'s `640/32`/`480/32` rejection;
+  3 `LoadEmptyAndApply` sites in an `if`/`else if` chain. Analyzer record
+  counts (229 cppcheck, 248 clang-tidy, 86/60/37/20 families) are tool-output
+  derived, not declaration derived, and were left as recorded; their artifacts
+  remain under `/tmp/fb-sdl3-audit/`.
+- One new harness (`/tmp/fb-sdl3-audit/task7/task7_fix2_harness.cpp`,
+  subcommands `getsize` and `ttfcopy`) was built warnings-strict against the
+  unchanged production `ttftext.cpp.o` from `build-audit-werror`. It
+  constructs no preference-owning singleton and opens no preference file, so
+  the `CFFIXED_USER_HOME` gate does not apply; it reads only the read-only
+  `share/gfx/DroidSans.ttf`.
 
 ## Commands and evidence
 
@@ -727,8 +812,8 @@ same exclusion already covers Task 2, the Task 5 fix round, and Task 6.
 | 2026-07-28 (Task 7 Fix Round 1; exact time not captured) | <code>grep -rn 'firstRenderDone' src/</code> | 0 | 5 hits: set false at `bubblegame.cpp:1013` (after `ReloadGame`'s `DoSnipIn`) and `bubblegame.cpp:1363` (`QuitToTitle`, with **no** `DoSnipIn`); consumed at `bubblegame_render.cpp:1172-1174`; declared `bubblegame.h:479`. Confirms menu return produces no transition animation | [BUG-041](subsystems/05-render-audio.md#confirmed-findings) |
 | 2026-07-28 (Task 7 Fix Round 1; exact time not captured) | <code>grep -rn 'SetupNewGame' src/</code> | 0 | 9 hits; every game-start path (`mainmenu.cpp:285`, `mainmenu_panels.cpp:238/278/407/436`, and the network start at `mainmenu_netpanel.cpp:163`) funnels through `MainMenu::SetupNewGame`, whose first statement is the `DoSnipIn` at line 497 — so line 497 is the game-start trigger, not a menu-return trigger | [BUG-041](subsystems/05-render-audio.md#confirmed-findings) |
 | 2026-07-28 (Task 7 Fix Round 1; exact time not captured) | <code>grep -rn 'targetingText' src/</code> | 0 | Exactly 4 hits: declaration `bubblegame.h:535` and uses `bubblegame_render.cpp:946` (`UpdateText`), `:956` (`UpdatePosition`), `:957` (`Coords()`/`Texture()` render). **No `LoadFont` call** (BUG-043 basis) | [BUG-043](subsystems/05-render-audio.md#confirmed-findings) |
-| 2026-07-28 (Task 7 Fix Round 1; exact time not captured) | <code>grep -rn 'LoadFont(' src/ &#124; grep -v ttftext</code> | 0 | 18 `LoadFont` call sites across `bubblegame.cpp` (13, incl. the `playerNameWinText[i]` loop at :153), `mainmenu.cpp` (2), `highscoremanager.cpp` (3). Matched against the 23 `TTFText` instances, exactly two are never loaded: `targetingText` (BUG-043) and `FrozenBubble::menuText` (IMP-012) | [Ownership table](subsystems/05-render-audio.md#static-review) |
-| 2026-07-28 (Task 7 Fix Round 1; exact time not captured) | <code>grep -n 'TTFText' src/bubblegame.h src/mainmenu.h src/highscoremanager.h src/frozenbubble.h</code> | 0 | Exhaustive member inventory for the Step 1 table: `bubblegame.h:532-545` = 13 scalars + `playerNameWinText[MAX_NET_PLAYERS]`; `mainmenu.h:123,198` = 2; `highscoremanager.h:67` = 2; `frozenbubble.h:96` = `menuText`. 23 instances total | [Ownership table](subsystems/05-render-audio.md#static-review) |
+| 2026-07-28 (Task 7 Fix Round 1; exact time not captured) | <code>grep -rn 'LoadFont(' src/ &#124; grep -v ttftext</code> | 0 | 18 `LoadFont` call sites across `bubblegame.cpp` (13, incl. the `playerNameWinText[i]` loop at :153), `mainmenu.cpp` (2), `highscoremanager.cpp` (3). Matched against the `TTFText` member inventory, exactly two fixed members are never loaded: `targetingText` (BUG-043) and `FrozenBubble::menuText` (IMP-012). **Fix Round 2:** this row originally said "the 23 `TTFText` instances"; the correct fixed-member total is 38, and the two-never-loaded conclusion is unchanged | [Ownership table](subsystems/05-render-audio.md#static-review) |
+| 2026-07-28 (Task 7 Fix Round 1; exact time not captured) | <code>grep -n 'TTFText' src/bubblegame.h src/mainmenu.h src/highscoremanager.h src/frozenbubble.h</code> | 0 | Member inventory for the Step 1 table: `bubblegame.h:532-545` = 13 scalars + `playerNameWinText[MAX_NET_PLAYERS]`; `mainmenu.h:123,198` = 2; `highscoremanager.h:67` = 2; `frozenbubble.h:96` = `menuText`. **Superseded by Fix Round 2:** this grep does not expand `MAX_NET_PLAYERS`, and the "23 instances total" concluded from it was wrong — `bubblegame.h:251` fixes the bound at 20, giving 38 fixed members plus a runtime-variable per-`levelsetScores` set. See the Fix Round 2 rows below | [Ownership table](subsystems/05-render-audio.md#static-review) |
 | 2026-07-28 (Task 7 Fix Round 1; exact time not captured) | <code>grep -rn 'menuText' src/</code> | 0 | Exactly one line — `src/frozenbubble.h:96: TTFText menuText;`. Zero references outside the declaration: unused member, recorded as an IMP-012 extension | [IMP-012](subsystems/05-render-audio.md#confirmed-findings) |
 | 2026-07-28 (Task 7 Fix Round 1; exact time not captured) | <code>grep -rn 'activeSPButtons' src/</code> | 0 | Exactly 4 lines: `mainmenu.h:128` (decl), `mainmenu.cpp:124` (`IMG_Load`, result never checked), `mainmenu_panels.cpp:198` (`activeSPButtons[0]->w`), `:213` (passed into `overlook_`). No null check exists anywhere on the path (BUG-044 basis) | [BUG-044](subsystems/05-render-audio.md#confirmed-findings) |
 | 2026-07-28 (Task 7 Fix Round 1; exact time not captured) | <code>grep -rn 'backgroundSfc' src/</code> | 0 | Exactly 4 lines: `highscoremanager.h:63` (decl), `.cpp:189` (`IMG_Load` of `back_one_player.png`), `:290` (a log), `:291` (`SDL_BlitSurface` into the ARGB8888 `bigOne`). The RGB24 surface is only format-converting-blitted, never indexed — the corrected pixel-format safety argument | [Trust boundaries](subsystems/05-render-audio.md#trust-boundaries-and-invariants) |
@@ -739,6 +824,15 @@ same exclusion already covers Task 2, the Task 5 fix round, and Task 6.
 | 2026-07-28 (Task 7 Fix Round 1; exact time not captured) | <code>SDL_VIDEODRIVER=dummy /tmp/fb-sdl3-audit/task7/task7_harness nofont</code> | 0 | Printed `texture=0x0 coords_x=120 coords_y=300 coords_w=-842150451 coords_h=-842150451` then `render_texture_ok=0 err=Parameter 'texture' is invalid`. `-842150451` == `0xCDCDCDCD` poison: production `UpdateText` never wrote `coords.w/h` and never created a texture — BUG-043 reproduced | `/tmp/fb-sdl3-audit/task7/nofont.log` |
 | 2026-07-28 (Task 7 Fix Round 1; exact time not captured) | <code>SDL_VIDEODRIVER=dummy /tmp/fb-sdl3-audit/task7/task7_harness_sanitize nofont</code> | 0 | Identical output under ASan+UBSan with no sanitizer diagnostic (the indeterminate read is not MSan-detectable on this host; the poison value carries the proof) | `/tmp/fb-sdl3-audit/task7/nofont-sanitize.log` |
 | 2026-07-28 (Task 7 Fix Round 1; exact time not captured) | <code>SDL_VIDEODRIVER=dummy /tmp/fb-sdl3-audit/task7/task7_harness_sanitize overlooknull</code> | 134 | Production `overlook_(dest, nullptr, 0, 149)` produced `src/shaderstuff.cpp:1485:41: runtime error: member access within null pointer of type 'SDL_Surface'`, then `AddressSanitizer: SEGV on unknown address 0x000000000004` with frame `#0 overlook_ shaderstuff.cpp:1485` — BUG-044's `mainmenu_panels.cpp:213` half reproduced | `/tmp/fb-sdl3-audit/task7/overlooknull-sanitize.log` |
+| 2026-07-28T15:44:15Z | <code>grep -n 'MAX_NET_PLAYERS = ' src/bubblegame.h</code> | 0 | Printed `251:inline constexpr int MAX_NET_PLAYERS = 20;`. The declaration governs; `bubblegame.h:534`'s "3-5 player mode" comment is stale. `playerNameWinText[MAX_NET_PLAYERS]` is therefore **20** instances, not 5, and the exhaustive fixed-member `TTFText` total is **38** (13 + 20 + 2 + 1 + 2), correcting Fix Round 1's 23 | [Ownership table](subsystems/05-render-audio.md#static-review) |
+| 2026-07-28T15:44:15Z | <code>grep -c 'IMG_LoadTexture' src/mainmenu.cpp</code> | 0 | Printed `21`. Two of the 21 statements sit in loops (`:123` over `SP_OPT` = 5, `:156` over 13 `netSpotSelf` frames), so the `MainMenu` texture family is 19 + 5 + 13 = **37**, correcting the "~44" in the Step 1 table | [Ownership table](subsystems/05-render-audio.md#static-review) |
+| 2026-07-28T15:44:15Z | <code>sed -n '1921,1941p' android/app/jni/SDL3/src/render/SDL_render.c</code> | 0 | `SDL_GetTextureSize` writes `*w = 0` and `*h = 0` **before** `CHECK_TEXTURE_MAGIC(texture, false)`, so a null texture leaves deterministic zeros, not indeterminate values. Counter-evidence disproving the proposed indeterminate-rect defect at `mainmenu_panels.cpp:208-210`; the dismissal stands, now with a full consequence trace | [Dismissed candidates](subsystems/05-render-audio.md#dismissed-candidates) |
+| 2026-07-28T15:44:22Z | <code>grep -rn 'CreateLevelImages()' src/</code> | 0 | Exactly two call sites — `highscoremanager.cpp:152` (`AppendToLevels`) and `:230` (constructor) — plus the definition at `:277` and the declaration at `highscoremanager.h:61`. `CheckAndAddScore` calls neither, and `BubbleGame::SubmitScore` calls `AppendToLevels` (`bubblegame_state.cpp:418`) **before** `CheckAndAddScore` (`:422`), so no refresh follows the mutation — BUG-045 basis | [BUG-045](subsystems/05-render-audio.md#confirmed-findings) |
+| 2026-07-28T15:44:22Z | <code>grep -n 'RefreshTextStatus&#124;push_back(newEntry)&#124;std::sort' src/highscoremanager.cpp</code> | 0 | `:171` refreshes `newEntry`, `:172` copies it into the vector, `:175` sorts. The copy at `:172` runs `TTFText`'s reset-to-empty copy constructor (`ttftext.h:52`) and the sort's assignments are the no-op at `ttftext.h:53`, so the row stored is textless — BUG-045 basis | [BUG-045](subsystems/05-render-audio.md#confirmed-findings) |
+| 2026-07-28T15:44:22Z | <code>awk '/void BubbleGame::RenderRoundStats/,/^}$/' src/bubblegame_render.cpp &#124; grep -c 'cell('</code> | 0 | Printed `24`: 24 static `cell()` call sites (8 header, 7 in the per-player loop, 6 in the per-team loop, 3 standalone), so per-frame invocations are at most `11 + 7·players + 6·teams` — correcting the "~30 `cell()` calls" churn note | [Step 3](subsystems/05-render-audio.md#static-review) |
+| 2026-07-28T15:45:03Z | <code>/usr/bin/c++ -I/opt/homebrew/include -I"$PWD/src" -std=c++17 -arch arm64 -Wall -Wextra -pedantic -Werror /tmp/fb-sdl3-audit/task7/task7_fix2_harness.cpp build-audit-werror/CMakeFiles/frozen-bubble-sdl3.dir/src/ttftext.cpp.o -Wl,-rpath,/opt/homebrew/lib -L/opt/homebrew/lib -lSDL3 -lSDL3_image -lSDL3_mixer -lSDL3_ttf -o /tmp/fb-sdl3-audit/task7/task7_fix2_harness</code> | 0 | Built the fix-round-2 harness warnings-strict against the unchanged production `ttftext.cpp` object; no diagnostic. It constructs no `GameSettings`/`FrozenBubble` singleton and opens no preference file | `/tmp/fb-sdl3-audit/task7/task7_fix2_harness.cpp` |
+| 2026-07-28T15:45:04Z | <code>SDL_VIDEODRIVER=dummy /tmp/fb-sdl3-audit/task7/task7_fix2_harness getsize</code> | 0 | Against the linked SDL 3.4.10 runtime: `pre fw=-0x1.9b9b9ap+28 fh=-0x1.9b9b9ap+28` (0xCDCDCDCD poison), then `ret=0 err='Parameter 'texture' is invalid'` and `post fw=0x0p+0 fh=0x0p+0 int_w=0 int_h=0`, `getsize_outputs_written=1`. Confirms the 3.4.4 source reading on the version the native build actually links | `/tmp/fb-sdl3-audit/task7/fix2-getsize.log` |
+| 2026-07-28T15:45:04Z | <code>SDL_VIDEODRIVER=dummy /tmp/fb-sdl3-audit/task7/task7_fix2_harness ttfcopy "$PWD/share/gfx/DroidSans.ttf"</code> | 0 | Production `TTFText` loaded and rendered (`src tex=0x9b5048c00 coords={40,50,47,57}`); `push_back` into a `std::vector` of an aggregate mirroring `HighscoreData` yielded `copy tex=0x0 coords={0,0,0,0} level=7 name=audit`, and the production render call returned `render_copy_ok=0 err='Parameter 'texture' is invalid' rect={0,0,0,0}`; copy assignment left the destination null (`assign_dst_tex=0x0 assign_src_tex=0x9b5048f00`). BUG-045 reproduced | `/tmp/fb-sdl3-audit/task7/fix2-ttfcopy.log` |
 
 ## Limitations
 
@@ -805,6 +899,16 @@ same exclusion already covers Task 2, the Task 5 fix round, and Task 6.
   selection means the six sanitized animations did not provably cover all
   five effect families. WASM/Android render and audio paths remain Task 8
   static scope, and no security-specific runtime test was run in Task 7.
+- Task 7 Fix Round 2 reproduced BUG-045 at the `TTFText`/`std::vector`
+  boundary, not through `HighscoreData` itself, which is defined inside
+  `highscoremanager.cpp` and is unreachable from a test TU; no full-client
+  single-player levelset completion was driven, so the step from the
+  reproduced copy semantics to the missing on-screen labels rests on the
+  static call-order trace. `SDL_GetTextureSize`'s output-write behavior is
+  guaranteed by the readable SDL 3.4.4 submodule source and confirmed
+  empirically on the linked SDL 3.4.10 runtime; the public header documents
+  only the boolean return, so the property is implementation-verified rather
+  than contract-guaranteed and could change in a future SDL release.
 
 ## Processes and cleanup
 
@@ -837,7 +941,11 @@ same exclusion already covers Task 2, the Task 5 fix round, and Task 6.
   binaries, logs, and the isolated home live under
   `/tmp/fb-sdl3-audit/task7/` as local regenerable evidence owning no
   external state. The user's real preference files were hashed before and
-  verified byte-identical after the gate.
+  verified byte-identical after the gate. Fix Round 2 added
+  `task7_fix2_harness.cpp`, its binary, and `fix2-getsize.log` /
+  `fix2-ttfcopy.log` in the same directory; both runs exited 0 under the dummy
+  video driver, started no process, and opened no preference file (the harness
+  constructs no preference-owning singleton).
 - Temporary files include the Task 1 inventory files and Task 2 analyzer logs/triage artifacts under `/tmp/fb-sdl3-audit/`; all are local, regenerable evidence and contain no credentials.
 - The four generated audit build directories are retained for Tasks 3 and 9
   (especially the sanitized server) and are locally excluded through untracked
