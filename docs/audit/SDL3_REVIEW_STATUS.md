@@ -13,7 +13,7 @@
 
 | Component | Recorded value |
 |---|---|
-| Agent | Codex subagents `task_1_implementer` (bootstrap), `task_2_implementer` (baselines), `task_3a_static` (server static review), and `task_3c_synthesis` (static Task 3 closure) |
+| Agent | Codex subagents `task_1_implementer` (bootstrap), `task_2_implementer` (baselines), `task_3a_static` (server static review), `task_3c_synthesis` (static Task 3 closure), and `task_4_implementer` (client/synchronization review) |
 | Model | Unknown; the dispatcher did not expose a model identifier |
 | Host | macOS 26.5.2 (build 25F84), Darwin 25.5.0, arm64 |
 | Compiler | Apple clang 21.0.0 (`clang-2100.1.1.101`), target `arm64-apple-darwin25.5.0` |
@@ -31,8 +31,8 @@
 ## Current state
 
 - Phase: Phase 2 — subsystem review
-- Active gate: Task 4 (pending)
-- Exact next action: Begin Task 4 static review of native/WASM clients and multiplayer synchronization, consuming SEC-004's confirmed server trust boundary; omit security-specific runtime checks by user direction.
+- Active gate: Task 5 (pending)
+- Exact next action: Begin Task 5 static review of gameplay rules, board algorithms, and round state, consuming Task 4's validated message and round-state boundary.
 
 ## Gate checklist
 
@@ -41,7 +41,7 @@
 | Task 1 | Bootstrap resumable audit workspace | complete |
 | Task 2 | Reproducible build, test, sanitizer, and analysis baselines | complete |
 | Task 3 | C server and untrusted TCP/WebSocket protocol | complete (static evidence; runtime/security matrix omitted by user direction) |
-| Task 4 | Native/WASM clients and multiplayer synchronization | pending |
+| Task 4 | Native/WASM clients and multiplayer synchronization | complete (static plus existing bot unit checks; security traffic and two-round smoke omitted) |
 | Task 5 | Gameplay rules, board algorithms, and round state | pending |
 | Task 6 | Lobby, settings, persistence, and input | pending |
 | Task 7 | Rendering, transitions, fonts, and audio lifecycle | pending |
@@ -55,8 +55,9 @@
 ## Active candidates
 
 - BUG-001 — `TextureEx` failure/leak handling, owned by Task 7.
-- SEC-003 — peer numeric/board bounds, owned by Task 4.
-- IMP-005 through IMP-009 — initialization, numeric intent, ownership, modernization, and control-flow improvements in later assigned subsystems.
+- IMP-005 through IMP-009 — initialization, numeric intent, ownership,
+  modernization, and control-flow improvements in later assigned subsystems;
+  Task 4's IMP-005 slice is dismissed by construction-before-use proof.
 - IMP-010 — server raw-allocation policy is statically proven inconsistent; Task 7 must finish the cross-owner asset/allocation disposition.
 
 ## Confirmed findings
@@ -71,6 +72,13 @@
 - See [FINDINGS.md](FINDINGS.md) and the
   [server notebook](subsystems/01-server-protocol.md) for severity, proof, and
   exact static causal paths and downstream owners.
+- Task 4 confirmed SEC-003 and BUG-013 through BUG-017, dismissed/reserved
+  BUG-012, and extended REL-003
+  from the server to the native Windows client. The highest-impact client paths
+  are unchecked peer coordinates reaching board indexing, incomplete command
+  response correlation, native TCP record assumptions, and Windows per-frame
+  receive remaining blocking. See the
+  [network client notebook](subsystems/02-network-client-sync.md).
 
 ## Task 3 closure provenance
 
@@ -85,15 +93,38 @@
   facts. The omitted TCP/WebSocket/UDP, backpressure, identity, fault-injection,
   and server-survival checks are a final-audit limitation, not passing evidence.
 
+## Task 4 closure provenance
+
+- Every native/WASM client, shared protocol, compatibility, sync consumer,
+  harness, and test file named by the Task 4 brief received a final static
+  disposition. Security conclusions remain source proofs because the user
+  directed the audit not to send hostile traffic.
+- `python3 tests/net_bots_test.py` passed 6/6 and the retained sanitizer CTest
+  registration passed 1/1. These are Python unit checks, not socket, browser, or
+  C++ sanitizer integration evidence.
+- A safe autonomous two-round smoke was unavailable: `tools/net_bots.py` can
+  only join a human-created room and cannot create/start it or validate level
+  sync/round completion. No server, proxy, client connection, or gameplay
+  traffic was started, and existing foreign listeners remained untouched.
+- An isolated WASM configure under `/tmp/fb-sdl3-audit/` succeeded. Compilation
+  stopped at the documented need to patch Emscripten with SDL3_image and
+  SDL3_mixer ports. Direct compilation of both audited client translation units
+  then passed with warnings; no link or browser runtime result is claimed.
+- Independent read-only review rejected the draft BUG-012 causal chain by
+  locating the priority `FB/` diversion, then identified incomplete response
+  and TCP-stream candidate coverage. The source recheck dismissed/reserved
+  BUG-012, broadened BUG-015, and confirmed BUG-017 before final validation.
+
 ## Commands and evidence
 
 Each row records exactly one top-level shell command. A shell loop remains one
 syntactic command, but unnamed multi-command “gate” rows are not used. Exit
-values and material output are from captured Task 1, fix-round, Task 2, and
-Task 3A evidence.
+values and material output are from captured Task 1, fix-round, Task 2, Task 3,
+and Task 4 evidence.
 
-**Canonical log cutoff:** completed Task 3 static source inspection and final
-candidate disposition. Task 3 final validation, staging, commit, and post-commit
+**Canonical log cutoff:** completed Task 4 static source inspection, focused
+dynamic checks, and final candidate disposition. Task 4 final validation,
+staging, commit, and post-commit
 checks belong in the ignored controller report, preventing a false claim that a
 commit records itself. Earlier Task 2 staging/commit exclusions remain covered
 by its ignored controller report.
@@ -383,6 +414,26 @@ by its ignored controller report.
 | 2026-07-28 (Task 3 closure; exact time not captured) | <code>nl -ba server/net.c &#124; sed -n '480,670p'</code> | 0 | Rechecked single-thread list replacement, select/accept admission, and fd-indexed initialization supporting BUG-011 and REL-003 | [Lifecycle map](subsystems/01-server-protocol.md#acceptance-input-retention-dispatch-and-teardown) |
 | 2026-07-28 (Task 3 closure; exact time not captured) | <code>nl -ba server/ws.c &#124; sed -n '135,255p'</code> | 0 | Rechecked blocking single-send WebSocket output, frame construction, and upgrade handling supporting BUG-006/007 and IMP-011 | [Length trace](subsystems/01-server-protocol.md#network-derived-length-and-index-trace) |
 | 2026-07-28 (Task 3 closure; exact time not captured) | <code>sed -n '1,180p' server/win32_compat.h</code> | 0 | Rechecked the Winsock compatibility boundary used by the confirmed REL-003 source/build mismatch | [Platform boundary](subsystems/01-server-protocol.md#build-operations-and-harness-boundary) |
+| 2026-07-28 (Task 4; exact time not captured) | <code>git status --short --branch</code> | 0 | Began on `codex/sdl3-complete-audit` at `52424189f9a2f4ee68e9552e8f8f27df4f3a2bc7` with no changed path | Task 4 preflight |
+| 2026-07-28 (Task 4; exact time not captured) | <code>nl -ba src/networkclient.cpp</code> | 0 | Reviewed native/shared connection, response, parser, identity, sync, discovery, and latency paths | [Task 4 static review](subsystems/02-network-client-sync.md#static-review) |
+| 2026-07-28 (Task 4; exact time not captured) | <code>nl -ba src/networkclient_wasm.cpp</code> | 0 | Reviewed WebSocket callback, framing, async state, lifecycle, and browser stub parity | [Task 4 static review](subsystems/02-network-client-sync.md#static-review) |
+| 2026-07-28 (Task 4; exact time not captured) | <code>nl -ba src/networkclient.h</code> | 0 | Reviewed all 244 lines of public/private state, defaults, queue APIs, IDs, options, and raw ownership | [Task 4 trust boundaries](subsystems/02-network-client-sync.md#trust-boundaries-and-invariants) |
+| 2026-07-28 (Task 4; exact time not captured) | <code>nl -ba src/socket_compat.h</code> | 0 | Reviewed all 66 lines of Winsock/POSIX type, flag, startup, error, and close compatibility | [Task 4 Windows boundary](subsystems/02-network-client-sync.md#lobby-response-and-reachability-handling) |
+| 2026-07-28 (Task 4; exact time not captured) | <code>nl -ba src/bubblegame_net.cpp</code> | 0 | Traced every game opcode, sender/array mapping, peer numeric sink, and sync routing path | [Peer-message review](subsystems/02-network-client-sync.md#peer-messages-and-round-flow) |
+| 2026-07-28 (Task 4; exact time not captured) | <code>nl -ba src/bubblegame.cpp; nl -ba src/bubblegame_state.cpp; nl -ba src/bubblegame_render.cpp; nl -ba src/bubblegame_shooter.cpp; nl -ba src/bubblegame_level.cpp; nl -ba src/bubblegame.h; nl -ba src/mainmenu_netpanel.cpp</code> | 0 | Reviewed 6,369 focused consumer/declaration lines for exit, round sync, placement, level order, and lobby-thread boundaries | [Task 4 coverage](subsystems/02-network-client-sync.md#coverage) |
+| 2026-07-28 (Task 4; exact time not captured) | <code>nl -ba tools/net_bots.py</code> | 0 | Reviewed all 450 lines of framing, buffering, bot state, threads, failure propagation, and cleanup | [Bot harness fidelity](subsystems/02-network-client-sync.md#bot-harness-fidelity) |
+| 2026-07-28 (Task 4; exact time not captured) | <code>nl -ba tests/net_bots_test.py</code> | 0 | Reviewed all six unit cases and established their socket/sync coverage boundary | [Bot harness fidelity](subsystems/02-network-client-sync.md#bot-harness-fidelity) |
+| 2026-07-28 (Task 4; exact time not captured) | <code>python3 tests/net_bots_test.py</code> | 0 | Six tests passed in 0.013 seconds | [Dynamic evidence](subsystems/02-network-client-sync.md#dynamic-evidence) |
+| 2026-07-28 (Task 4; exact time not captured) | <code>ctest --test-dir build-audit-sanitize -R net-bots-test --output-on-failure</code> | 0 | Registered net-bots-test passed 1/1 in 0.30 seconds | [Dynamic evidence](subsystems/02-network-client-sync.md#dynamic-evidence) |
+| 2026-07-28 (Task 4; exact time not captured) | <code>emcmake cmake -S /Users/dchau/gr/frozen-bubble-sdl3 -B /tmp/fb-sdl3-audit/task4-wasm-build -G Ninja -DCMAKE_BUILD_TYPE=Release</code> | 0 | Isolated WASM target configured successfully | [Dynamic evidence](subsystems/02-network-client-sync.md#dynamic-evidence) |
+| 2026-07-28 (Task 4; exact time not captured) | <code>cmake --build /tmp/fb-sdl3-audit/task4-wasm-build --parallel</code> | 1 | Build stopped at documented unpatched SDK boundary: SDL3_image and SDL3_mixer headers absent | [Dynamic evidence](subsystems/02-network-client-sync.md#dynamic-evidence) |
+| 2026-07-28 (Task 4; exact time not captured) | <code>em++ -std=c++17 -Wall -Wextra -pedantic -D__WASM_PORT__ -Isrc -sUSE_SDL=3 -c src/networkclient.cpp -o /tmp/fb-sdl3-audit/task4-networkclient-wasm.o</code> | 0 | Shared client WASM translation unit compiled with two unused-variable warnings | [Dynamic evidence](subsystems/02-network-client-sync.md#dynamic-evidence) |
+| 2026-07-28 (Task 4; exact time not captured) | <code>em++ -std=c++17 -Wall -Wextra -pedantic -D__WASM_PORT__ -Isrc -sUSE_SDL=3 -c src/networkclient_wasm.cpp -o /tmp/fb-sdl3-audit/task4-networkclient-wasm-transport.o</code> | 0 | WebSocket transport WASM translation unit compiled with three nonfatal warnings | [Dynamic evidence](subsystems/02-network-client-sync.md#dynamic-evidence) |
+| 2026-07-28 (Task 4; exact time not captured) | <code>lsof -nP -iTCP -sTCP:LISTEN &#124; rg 'fb-server&#124;COMMAND&#124;1511&#124;15511&#124;15512&#124;15113&#124;15998'</code> | 0 | Observed four pre-existing fb-server listeners; no process or socket was touched | [Dynamic evidence](subsystems/02-network-client-sync.md#dynamic-evidence) |
+| 2026-07-28 (Task 4; exact time not captured) | <code>git diff 09d6c7bfcd864a0ad3951b87d16a88dc770392a3 -- server docker .github CMakeLists.txt cmake src/main.cpp</code> | 0 | No output; audited production/configuration paths remained unchanged | Audit baseline above |
+| 2026-07-28 (Task 4 review correction; exact time not captured) | <code>nl -ba server/net.c &#124; sed -n '345,375p'; nl -ba server/game.c &#124; sed -n '629,910p'</code> | 0 | Verified priority `FB/` diversion and explicit PART/remove-priority branch, dismissing and reserving BUG-012 | [Connection lifecycle](subsystems/02-network-client-sync.md#connection-and-room-lifecycle) |
+| 2026-07-28 (Task 4 review correction; exact time not captured) | <code>nl -ba src/networkclient.cpp &#124; sed -n '924,1130p'</code> | 0 | Verified incomplete error recognition and uncorrelated WASM OK handling, broadening BUG-015 | [Response handling](subsystems/02-network-client-sync.md#lobby-response-and-reachability-handling) |
+| 2026-07-28 (Task 4 review correction; exact time not captured) | <code>nl -ba bin/frozen-bubble &#124; sed -n '4590,4608p'; nl -ba lib/Games/FrozenBubble/Net.pm &#124; sed -n '350,365p'</code> | 0 | Rechecked the original client's active-game escape and disconnect/reconnect reference behavior used only as BUG-012 comparison evidence | [Connection lifecycle](subsystems/02-network-client-sync.md#connection-and-room-lifecycle) |
 
 ## Limitations
 
@@ -394,7 +445,12 @@ by its ignored controller report.
 - The exact clang-tidy helper command was not directly usable with keg-only LLVM 22: it needed an explicit binary, explicit check families, and an Xcode SDK sysroot. All failed attempts and the successful reproducible fallback are retained.
 - Cppcheck and clang-tidy are broad signal sources, not test or proof substitutes. Task 2 triaged every project-owned diagnostic by counted family, but assigned subsystem gates still own semantic confirmation or dismissal.
 - REL-002 prevents the registered server-list CTest result from proving which binary served the request on POSIX. Task 2 therefore records the raw result but accepts only the supplemental dynamic-port, foreground, live-child-verified runs as Release/sanitizer server evidence.
-- Only native macOS arm64 build/test/analyzer baselines were run. Linux, Windows, Android-device, and browser/WASM build/runtime behavior has not been tested; Emscripten availability alone is not WASM coverage.
+- Only native macOS arm64 build/test/analyzer baselines were run. Linux,
+  Windows, and Android-device behavior has not been tested. Task 4's isolated
+  browser configure passed, but compilation stopped at the documented unpatched
+  SDL3_image/SDL3_mixer SDK boundary. Both audited client translation units did
+  compile directly for WASM with warnings; no full link or browser runtime was
+  tested.
 - No release/deployment credentials, signing credentials, external hosts, or interactive gameplay scenarios were evaluated in Task 2.
 - Task 3 executed no socket, server, process, port, harness, DNS, HTTP, signal,
   fault-injection, or other runtime/network scenario. Three whole-task runtime
@@ -402,6 +458,10 @@ by its ignored controller report.
   classifier before producing evidence; the user then explicitly skipped
   security work. All Task 3 dispositions are source proofs, and the omitted
   security/runtime matrix remains a final-audit limitation.
+- Task 4 ran no hostile input, server, socket, proxy, browser, or graphical
+  gameplay scenario. The available bot could not autonomously establish and
+  assert two rounds, so passing unit checks do not close runtime synchronization
+  coverage. Windows conclusions are static portability proofs.
 
 ## Processes and cleanup
 
@@ -410,6 +470,10 @@ by its ignored controller report.
 - Task 3 started no runtime process, listener, port, harness, client, or traffic,
   so it created no external state requiring cleanup. Existing foreign listeners
   were not queried or disturbed during Task 3 closure and remain untouched.
+- Task 4 likewise created no listener, server, proxy, client connection, or
+  gameplay traffic. Read-only inventory found the same foreign listeners and
+  left them untouched. The failed `/tmp/fb-sdl3-audit/task4-wasm-build` tree is
+  regenerable local build evidence and owns no running process.
 - Temporary files include the Task 1 inventory files and Task 2 analyzer logs/triage artifacts under `/tmp/fb-sdl3-audit/`; all are local, regenerable evidence and contain no credentials.
 - The four generated audit build directories are retained for Tasks 3 and 9
   (especially the sanitized server) and are locally excluded through untracked
