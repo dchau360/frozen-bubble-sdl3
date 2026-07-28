@@ -44,7 +44,7 @@
 | Task 4 | Native/WASM clients and multiplayer synchronization | complete (static plus existing bot unit checks; security traffic and two-round smoke omitted) |
 | Task 5 | Gameplay rules, board algorithms, and round state | complete (Fix Round 1 added a core invariant ledger and exact maximum-delta production-object evidence) |
 | Task 6 | Lobby, settings, persistence, and input | complete (static review plus isolated-preferences runtime matrix; security runtime and live-server lobby transitions omitted) |
-| Task 7 | Rendering, transitions, fonts, and audio lifecycle | complete (static ownership/pixel/lifecycle review plus isolated production-object runtime: BUG-001 and the new BUG-041 reproduced; dummy-driver-only rendering and full-client navigation omissions recorded) |
+| Task 7 | Rendering, transitions, fonts, and audio lifecycle | complete (Fix Round 1 corrected BUG-001's leak quantity, BUG-041's trigger set, the pixel-format claim, and IMP-013's attribution; reopened IMP-005's render slice into BUG-043 and registered BUG-044, both reproduced against production objects; dummy-driver-only rendering and full-client navigation omissions recorded) |
 | Task 8 | Native, WASM, and Android platform integration | pending |
 | Task 9 | Build, tests, packaging, CI, deployment, tooling, and operations | pending |
 | Task 10 | Cross-subsystem dynamic integration matrix | pending |
@@ -56,17 +56,27 @@
 
 - No Task 7 candidate remains open. BUG-001 is confirmed (both `TextureEx`
   null-deref orderings reproduced under UBSan against production code plus the
-  rect/surface leak family); IMP-007 and IMP-010 are confirmed improvements
-  with their cross-owner dispositions finished; the IMP-005 and IMP-006 render
-  slices are closed without promotion.
+  rect/surface leak family — 2 owner-less rects per `InitCandy`, since the
+  three `LoadEmptyAndApply` sites are an `if`/`else if` chain); IMP-007 and
+  IMP-010 are confirmed improvements with their cross-owner dispositions
+  finished; the IMP-006 render slice is closed without promotion. Fix Round 1
+  **reopened** the IMP-005 render slice, promoted its one reachable instance to
+  BUG-043, and re-closed it; IMP-005 stands as a confirmed improvement.
 - IMP-008 — selective API/const/cast/parser cleanup remains open for the later
   assigned subsystems (Tasks 8-9 files); the slices belonging to already-closed
   gates, now including Task 7's render slice, are dispositioned in their
   notebooks.
 - Task 7 added BUG-041 (confirmed, runtime-reproduced transition texture
   leak), BUG-042 (confirmed, static-proven per-match penguin/hurry texture
-  reload leak), and IMP-013 (confirmed improvement: pixel-helper clamp
-  off-by-one, ASan-demonstrated, unreachable with shipped assets).
+  reload leak), and IMP-013 (confirmed improvement: off-by-one clamp bounds —
+  `get_pixel`'s own at `shaderstuff.cpp:49` and the `set_pixel` call sites at
+  `:488`/`:1155`; `set_pixel` itself has no clamp — ASan-demonstrated,
+  unreachable with shipped assets). Fix Round 1 added BUG-043 (confirmed,
+  runtime-reproduced: `BubbleGame::targetingText` never receives a font, so the
+  multiplayer targeting indicator can never render) and BUG-044 (confirmed,
+  runtime-reproduced: unchecked `activeSPButtons` loads dereferenced at
+  `mainmenu_panels.cpp:198` and `:213`), and extended IMP-012 with the unused
+  `FrozenBubble::menuText` member. The registry now holds 68 unique IDs.
 
 ## Confirmed findings
 
@@ -101,13 +111,20 @@
   IMP-013, and closed BUG-034's audio-side lifetime question by cross-link.
   The highest-impact render paths are BUG-041 (every transition animation
   frame leaks a 640×480 texture — reproduced at exactly 1.2 MB/frame through
-  linked production objects, ~40-50 MB per game start, round reload, or menu
-  return) and BUG-042 (every `NewGame` reloads 394 penguin textures per
-  player plus `hurryTexture` with no destroy site). BUG-001's two null-deref
-  orderings were reproduced under UBSan at `shaderstuff.h:55` and `:67`.
-  Sanitized production-object stress of transitions, audio lifecycle, and
-  text lifecycle produced no other diagnostic. See the
-  [render/audio notebook](subsystems/05-render-audio.md).
+  linked production objects, ~40-50 MB per game start and per round reload,
+  the only two `DoSnipIn` producers; menu return is not a trigger) and BUG-042
+  (every `NewGame` reloads 394 penguin textures per player plus its 17
+  `hurryTexture` load sites, with no destroy site). BUG-001's two null-deref
+  orderings were reproduced under UBSan at `shaderstuff.h:55` and `:67`; only
+  the `:67` ordering is reachable from a missing asset alone, since production
+  callers of `LoadFromSurface` pass `candyModif.sfc`. Fix Round 1 added
+  BUG-043 (the multiplayer targeting indicator can never render —
+  `targetingText` never receives a font) and BUG-044 (unchecked
+  `activeSPButtons` `IMG_Load` results dereferenced in `SPPanelRender`), both
+  reproduced against unchanged production objects, and extended IMP-012 with
+  the dead `FrozenBubble::menuText` member. Sanitized production-object stress
+  of transitions, audio lifecycle, and text lifecycle produced no other
+  diagnostic. See the [render/audio notebook](subsystems/05-render-audio.md).
 - Task 5 confirmed BUG-018 through BUG-025 and IMP-005, IMP-006, and
   IMP-009. The highest-impact gameplay path is BUG-020: a quit/new-match
   transition can retain in-flight malus assigned to an array whose board was
@@ -244,8 +261,10 @@
   the warnings-strict and ASan+UBSan trees. Preference isolation was proven
   with `CFFIXED_USER_HOME` before any stateful run (`ISOLATION=OK`; the
   user's three real preference files were hashed before and verified
-  byte-identical after). Runs covered: image-format/pitch verification of all
-  eight shipped effect inputs, an ASan demonstration of the `get_pixel` clamp
+  byte-identical after). Runs covered: image-format/pitch verification of
+  eight shipped files — the seven that reach a pixel routine are 4 bpp
+  tight-pitch ABGR8888, while `back_one_player.png` is RGB24 at 3 bpp and is
+  blit-only (`highscoremanager.cpp:291`) — an ASan demonstration of the `get_pixel` clamp
   off-by-one on the production object, both `TextureEx` failure crashes
   (UBSan exits 134), six sanitized full transition animations with no
   diagnostic, three sanitized audio lifecycle cycles ending in a clean
@@ -261,6 +280,53 @@
   proof rather than a runtime reproduction. No listener, server, socket,
   browser, hostile input, or process kill was created; security-specific
   runtime testing remained out of scope by user direction.
+
+### Task 7 Fix Round 1
+
+- Independent review of commit `d9597304` raised five substantive and four
+  minor findings. All nine were re-verified against production source at the
+  cited lines and **accepted; none were disputed**.
+- Factual corrections to claims this gate had made: BUG-001's leak quantity
+  (`mainmenu.cpp:204/214/224/228` is an `if`/`else if` chain, so at most one
+  `LoadEmptyAndApply` — 2 leaked rects — runs per `InitCandy`, not three calls
+  and six rects); BUG-041's trigger set (only two `DoSnipIn` producers exist —
+  `mainmenu.cpp:497` inside `SetupNewGame`, which *is* the game-start trigger
+  and had been misattributed to menu return, and `bubblegame.cpp:1012` in
+  `ReloadGame`; `QuitToTitle` at `bubblegame.cpp:1363` clears
+  `firstRenderDone` with no `DoSnipIn`, so menu return produces no animation);
+  the pixel-format claim (this gate's own `formats.log` lists
+  `back_one_player.png` as RGB24 bpp=3, so seven of eight, not all eight, are
+  4 bpp — the safety argument now rests on that file being blit-only at
+  `highscoremanager.cpp:291`); the `hurryTexture` load-site count (17, not 20);
+  and IMP-013's attribution (`set_pixel`, `shaderstuff.cpp:41-45`, has no
+  clamp — the off-by-one clamps are `get_pixel`'s own and the call sites at
+  `:488` and `:1155`, as the notebook's trust-boundary bullet already said).
+- Two closures had hidden real defects and were corrected. IMP-005's render
+  slice claimed no reachable use-before-initialization; `TTFText::coords`
+  (`ttftext.h:57`, uninitialized, default constructor `ttftext.cpp:22-24`
+  empty) is reachable through `BubbleGame::targetingText` (`bubblegame.h:535`),
+  which has no `LoadFont` call anywhere, so `UpdateText` always returns at
+  `ttftext.cpp:48` and `bubblegame_render.cpp:957` renders a null texture
+  through an indeterminate rect — registered as **BUG-043**. The
+  `mainmenu_panels.cpp` coverage row read "Complete … overlook surface/texture
+  per-frame lifecycle correct" while `mainmenu.cpp:124` stores unchecked
+  `IMG_Load` results that `mainmenu_panels.cpp:198` and `:213` dereference —
+  registered as **BUG-044**, the same missing-asset crash class as BUG-001 and
+  cross-linked to it rather than duplicated.
+- Completeness items: the Step 1 ownership table's `TTFText` row is now
+  exhaustive (23 instances, `playerNameWinText[MAX_NET_PLAYERS]` itemized and
+  `FrozenBubble::menuText` added); `menuText` has zero references outside
+  `frozenbubble.h:96` and is recorded as an IMP-012 extension rather than a new
+  ID, since IMP-012 already covers unused menu-layer members; and BUG-001 now
+  states that `shaderstuff.h:67` is the asset-reachable ordering while `:55`
+  additionally requires an `SDL_CreateSurface` failure.
+- Two harness subcommands were added to the existing Task 7 harness (`nofont`,
+  `overlooknull`), linking the same unchanged production objects. `nofont`
+  proved BUG-043 (`coords_w`/`coords_h` still `0xCDCDCDCD`, null texture,
+  `SDL_RenderTexture` rejected); `overlooknull` proved BUG-044's `:213` half
+  (UBSan null member access at `shaderstuff.cpp:1485`, then SEGV, exit 134).
+  BUG-044's `:198` half rests on the static chain — its TU cannot be linked
+  without full `MainMenu` construction.
 
 ## Commands and evidence
 
@@ -634,7 +700,7 @@ same exclusion already covers Task 2, the Task 5 fix round, and Task 6.
 | 2026-07-28 (Task 7 scope; exact time not captured) | <code>wc -l src/shaderstuff.cpp src/shaderstuff.h src/transitionmanager.cpp src/transitionmanager.h src/ttftext.cpp src/ttftext.h src/audiomixer.cpp src/audiomixer.h src/sdl3_compat.h src/frozenbubble.cpp src/bubblegame_render.cpp src/mainmenu_panels.cpp</code> | 0 | Counted 4,925 lines across the twelve scoped files before review | [Task 7 scope](subsystems/05-render-audio.md#scope) |
 | 2026-07-28 (Task 7 Step 2; exact time not captured) | <code>file share/gfx/menu/fblogo.png share/gfx/menu/fblogo-mask.png share/gfx/menu/txt_*_text.png share/gfx/menu/txt_*_outlined_text.png</code> | 0 | Every shipped effect-input PNG is 8-bit/color RGBA | [Task 7 static review](subsystems/05-render-audio.md#static-review) |
 | 2026-07-28 (Task 7 Step 1; exact time not captured) | <code>grep -n 'IMG_Load…SDL_DestroyTexture…TTF_OpenFont…MIX_…new SDL_Rect…' src/*.cpp src/*.h</code> | 0 | Enumerated every SDL create/destroy site for the Step 1 ownership table | [Ownership table](subsystems/05-render-audio.md#static-review) |
-| 2026-07-28 (Task 7 Step 1; exact time not captured) | <code>grep -n 'hurryTexture&#92;&#124;DestroyTexture' src/bubblegame.cpp</code> | 0 | 20 `hurryTexture` load sites and zero matching destroy sites (BUG-042 basis) | [BUG-042](subsystems/05-render-audio.md#confirmed-findings) |
+| 2026-07-28 (Task 7 Step 1; exact time not captured) | <code>grep -n 'hurryTexture&#92;&#124;DestroyTexture' src/bubblegame.cpp</code> | 0 | 17 `hurryTexture` load sites and zero matching destroy sites (BUG-042 basis); the earlier "20" miscounted — corrected in Fix Round 1, see the recount row below | [BUG-042](subsystems/05-render-audio.md#confirmed-findings) |
 | 2026-07-28 (Task 7 Step 1; exact time not captured) | <code>grep -n 'LoadPenguin' src/*.cpp</code> | 0 | Every `NewGame` player-count case calls `LoadPenguin` per player; no destroy path exists for the 394-texture set | [BUG-042](subsystems/05-render-audio.md#confirmed-findings) |
 | 2026-07-28T14:27:35Z | <code>grep -rn 'transitionTexture' src/</code> | 0 | Only the null initializer and the by-value `effect()` argument exist; the member is never assigned (BUG-041 basis) | [BUG-041](subsystems/05-render-audio.md#confirmed-findings) |
 | 2026-07-28T14:27:35Z | <code>for fn in draw_line_ blacken_ alphaize_ pixelize_ rotate_nearest_ rotate_bicubic_ autopseudocrop store_effect copy_line shrink_; do printf '%s: ' $fn; grep -rl "$fn" src/ --exclude=shaderstuff.cpp --exclude=shaderstuff.h &#124; tr '&#92;n' ' '; echo; done</code> | 0 | Seven effect helpers have no external caller (dead code, IMP-009); `shrink_`'s only caller is `highscoremanager.cpp` | [Dismissed candidates](subsystems/05-render-audio.md#dismissed-candidates) |
@@ -644,7 +710,7 @@ same exclusion already covers Task 2, the Task 5 fix round, and Task 6.
 | 2026-07-28 (Task 7 harness; exact time not captured) | <code>/usr/bin/c++ … -O1 -g -fno-omit-frame-pointer -fsanitize=address,undefined … build-audit-sanitize object set … -o /tmp/fb-sdl3-audit/task7/task7_harness_sanitize</code> | 0 | ASan+UBSan harness linked the sanitized production objects | `/tmp/fb-sdl3-audit/task7/task7_harness_sanitize` |
 | 2026-07-28 (Task 7 isolation; exact time not captured) | <code>shasum -a 256 "/Users/dchau/Library/Application Support/frozen-bubble/settings.ini" "…/highscores" "…/highlevelshistory" &#124; tee /tmp/fb-sdl3-audit/task7/real-prefs-baseline.txt</code> | 0 | Recorded pre-work hashes of the user's three real preference files | `/tmp/fb-sdl3-audit/task7/real-prefs-baseline.txt` |
 | 2026-07-28 (Task 7 isolation; exact time not captured) | <code>mkdir -p /tmp/fb-sdl3-audit/task7/home7 &amp;&amp; env HOME=/tmp/fb-sdl3-audit/task7/home7 CFFIXED_USER_HOME=/tmp/fb-sdl3-audit/task7/home7 SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy /tmp/fb-sdl3-audit/task7/task7_harness probe /tmp/fb-sdl3-audit/task7/home7</code> | 0 | `ISOLATION=OK`: pref path resolved inside the temporary home before any preference-owning singleton existed | [Task 7 dynamic evidence](subsystems/05-render-audio.md#dynamic-evidence) |
-| 2026-07-28 (Task 7 Step 2; exact time not captured) | <code>SDL_VIDEODRIVER=dummy /tmp/fb-sdl3-audit/task7/task7_harness formats "$PWD/share"</code> | 0 | All eight effect inputs are 4 bpp tight-pitch; `fblogo-mask.png` has zero white border pixels | `/tmp/fb-sdl3-audit/task7/formats.log` |
+| 2026-07-28 (Task 7 Step 2; exact time not captured) | <code>SDL_VIDEODRIVER=dummy /tmp/fb-sdl3-audit/task7/task7_harness formats "$PWD/share"</code> | 0 | Seven of the eight probed files are 4 bpp tight-pitch ABGR8888 — every input that reaches a pixel routine; the eighth, `back_one_player.png`, is `SDL_PIXELFORMAT_RGB24` bpp=3 and is blit-only. `fblogo-mask.png` has zero white border pixels. (The original row said "all eight", contradicting its own log; corrected in Fix Round 1.) | `/tmp/fb-sdl3-audit/task7/formats.log` |
 | 2026-07-28 (Task 7 Step 2; exact time not captured) | <code>SDL_VIDEODRIVER=dummy ASAN_OPTIONS=detect_leaks=0:halt_on_error=1 UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1 /tmp/fb-sdl3-audit/task7/task7_harness_sanitize oobdemo</code> | 134 | Production `get_pixel` (`shaderstuff.cpp:49`) performed a 4-byte heap-buffer-overflow READ exactly 0 bytes past a tightly-sized surface when passed `x == w` (IMP-013 demonstration) | `/tmp/fb-sdl3-audit/task7/oobdemo.log` |
 | 2026-07-28 (Task 7 Step 5; exact time not captured) | <code>SDL_VIDEODRIVER=dummy /tmp/fb-sdl3-audit/task7/task7_harness texleak 100</code> | 0 | 100 production `synchro_after` frames grew RSS linearly 18→138 MB: exactly 1.2 MB (one dropped 640×480 texture) per frame | [BUG-041](subsystems/05-render-audio.md#dynamic-evidence) |
 | 2026-07-28T14:24:51Z | <code>env HOME=… CFFIXED_USER_HOME=… SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy /tmp/fb-sdl3-audit/task7/task7_harness transition /tmp/fb-sdl3-audit/task7/home7 "$PWD/share" 5</code> | 0 | `ISOLATION=OK`, default `gfxLevel=1`; five full production `DoSnipIn`/`TakeSnipOut` cycles grew RSS 21→149 MB (one allocator-return dip recorded honestly) | `/tmp/fb-sdl3-audit/task7/transition.log` |
@@ -656,6 +722,23 @@ same exclusion already covers Task 2, the Task 5 fix round, and Task 6.
 | 2026-07-28 (Task 7 cleanup; exact time not captured) | <code>shasum -a 256 -c /tmp/fb-sdl3-audit/task7/real-prefs-baseline.txt</code> | 0 | All three real preference files reported `OK`; the user's preferences were never modified | [Task 7 limitations](subsystems/05-render-audio.md#limitations) |
 | 2026-07-28T14:27:35Z | <code>git diff --stat 09d6c7bfcd864a0ad3951b87d16a88dc770392a3 -- src server</code> | 0 | No output; production source remains identical to the pinned baseline | Audit baseline above |
 | 2026-07-28 (Task 7 ledger; exact time not captured) | <code>test "$(awk -F'&#96;' '/^&#92;&#124; &#96;/ {count++} END {print count+0}' docs/audit/FILE_COVERAGE.md)" = "237" &amp;&amp; tmpdir=$(mktemp -d /tmp/fb-sdl3-task7-inventory.XXXXXX) &amp;&amp; git ls-tree -r --name-only 09d6c7bf… &#124; rg '…' &#124; sort &gt; "$tmpdir/pinned.txt" &amp;&amp; python3 -c '…' &gt; "$tmpdir/ledger.txt" &amp;&amp; diff -u "$tmpdir/pinned.txt" "$tmpdir/ledger.txt"</code> | 0 | `rows=237 OK` and `inventory equality OK` after the Task 7 disposition rewrites | [FILE_COVERAGE.md](FILE_COVERAGE.md) |
+| 2026-07-28 (Task 7 Fix Round 1; exact time not captured) | <code>grep -n 'LoadEmptyAndApply&#92;&#124;candyMethod ==' src/mainmenu.cpp</code> | 0 | Printed 8 lines: `candyMethod` tests at 196/204/214/224/228 and `LoadEmptyAndApply` calls at 208/218/231. Lines 204/214/224/228 are `if` / `else if` / `else if` / `else if`, so at most one of the three calls executes per `InitCandy` → 2 leaked rects, not 6 (BUG-001 quantity correction) | [BUG-001](subsystems/05-render-audio.md#confirmed-findings) |
+| 2026-07-28 (Task 7 Fix Round 1; exact time not captured) | <code>grep -rn 'DoSnipIn&#92;&#124;TakeSnipOut' src/</code> | 0 | 7 hits. Producers: `mainmenu.cpp:497` (inside `SetupNewGame`) and `bubblegame.cpp:1012` (`ReloadGame`). Consumer: `bubblegame_render.cpp:1173`. Remaining hits are the declarations/definitions in `transitionmanager.{h,cpp}`. Exactly two triggers — menu return is not one (BUG-041 correction) | [BUG-041](subsystems/05-render-audio.md#confirmed-findings) |
+| 2026-07-28 (Task 7 Fix Round 1; exact time not captured) | <code>grep -rn 'firstRenderDone' src/</code> | 0 | 5 hits: set false at `bubblegame.cpp:1013` (after `ReloadGame`'s `DoSnipIn`) and `bubblegame.cpp:1363` (`QuitToTitle`, with **no** `DoSnipIn`); consumed at `bubblegame_render.cpp:1172-1174`; declared `bubblegame.h:479`. Confirms menu return produces no transition animation | [BUG-041](subsystems/05-render-audio.md#confirmed-findings) |
+| 2026-07-28 (Task 7 Fix Round 1; exact time not captured) | <code>grep -rn 'SetupNewGame' src/</code> | 0 | 9 hits; every game-start path (`mainmenu.cpp:285`, `mainmenu_panels.cpp:238/278/407/436`, and the network start at `mainmenu_netpanel.cpp:163`) funnels through `MainMenu::SetupNewGame`, whose first statement is the `DoSnipIn` at line 497 — so line 497 is the game-start trigger, not a menu-return trigger | [BUG-041](subsystems/05-render-audio.md#confirmed-findings) |
+| 2026-07-28 (Task 7 Fix Round 1; exact time not captured) | <code>grep -rn 'targetingText' src/</code> | 0 | Exactly 4 hits: declaration `bubblegame.h:535` and uses `bubblegame_render.cpp:946` (`UpdateText`), `:956` (`UpdatePosition`), `:957` (`Coords()`/`Texture()` render). **No `LoadFont` call** (BUG-043 basis) | [BUG-043](subsystems/05-render-audio.md#confirmed-findings) |
+| 2026-07-28 (Task 7 Fix Round 1; exact time not captured) | <code>grep -rn 'LoadFont(' src/ &#124; grep -v ttftext</code> | 0 | 18 `LoadFont` call sites across `bubblegame.cpp` (13, incl. the `playerNameWinText[i]` loop at :153), `mainmenu.cpp` (2), `highscoremanager.cpp` (3). Matched against the 23 `TTFText` instances, exactly two are never loaded: `targetingText` (BUG-043) and `FrozenBubble::menuText` (IMP-012) | [Ownership table](subsystems/05-render-audio.md#static-review) |
+| 2026-07-28 (Task 7 Fix Round 1; exact time not captured) | <code>grep -n 'TTFText' src/bubblegame.h src/mainmenu.h src/highscoremanager.h src/frozenbubble.h</code> | 0 | Exhaustive member inventory for the Step 1 table: `bubblegame.h:532-545` = 13 scalars + `playerNameWinText[MAX_NET_PLAYERS]`; `mainmenu.h:123,198` = 2; `highscoremanager.h:67` = 2; `frozenbubble.h:96` = `menuText`. 23 instances total | [Ownership table](subsystems/05-render-audio.md#static-review) |
+| 2026-07-28 (Task 7 Fix Round 1; exact time not captured) | <code>grep -rn 'menuText' src/</code> | 0 | Exactly one line — `src/frozenbubble.h:96: TTFText menuText;`. Zero references outside the declaration: unused member, recorded as an IMP-012 extension | [IMP-012](subsystems/05-render-audio.md#confirmed-findings) |
+| 2026-07-28 (Task 7 Fix Round 1; exact time not captured) | <code>grep -rn 'activeSPButtons' src/</code> | 0 | Exactly 4 lines: `mainmenu.h:128` (decl), `mainmenu.cpp:124` (`IMG_Load`, result never checked), `mainmenu_panels.cpp:198` (`activeSPButtons[0]->w`), `:213` (passed into `overlook_`). No null check exists anywhere on the path (BUG-044 basis) | [BUG-044](subsystems/05-render-audio.md#confirmed-findings) |
+| 2026-07-28 (Task 7 Fix Round 1; exact time not captured) | <code>grep -rn 'backgroundSfc' src/</code> | 0 | Exactly 4 lines: `highscoremanager.h:63` (decl), `.cpp:189` (`IMG_Load` of `back_one_player.png`), `:290` (a log), `:291` (`SDL_BlitSurface` into the ARGB8888 `bigOne`). The RGB24 surface is only format-converting-blitted, never indexed — the corrected pixel-format safety argument | [Trust boundaries](subsystems/05-render-audio.md#trust-boundaries-and-invariants) |
+| 2026-07-28 (Task 7 Fix Round 1; exact time not captured) | <code>grep -c 'hurryTexture' src/bubblegame.cpp &amp;&amp; grep -c 'hurryTexture = IMG_LoadTexture' src/bubblegame.cpp</code> | 0 | Printed `18` then `17`: 18 occurrences, one of which is the comment at line 304, leaving **17** load sites (441…849). Corrects the earlier "20 load sites" row | [BUG-042](subsystems/05-render-audio.md#confirmed-findings) |
+| 2026-07-28 (Task 7 Fix Round 1; exact time not captured) | <code>grep -n 'bytes_per_pixel' src/shaderstuff.cpp</code> | 0 | 39 hits. Only `:620`, `:1206`, `:1212`, `:1460`, `:1485`, `:1490` test `!= 4` and `abort()`; the other samplers only reject `== 1`, so 2/3-bpp inputs would silently misindex there. Also fixes the `set_pixel`/`get_pixel` clamp attribution: `set_pixel` (`:41-45`) has no clamp; the off-by-one clamps are `get_pixel`'s (`:49`) and the call sites `:488`/`:1155` | [IMP-013](subsystems/05-render-audio.md#confirmed-findings) |
+| 2026-07-28 (Task 7 Fix Round 1 harness; exact time not captured) | <code>/usr/bin/c++ -I/opt/homebrew/include -I"$PWD/src" -I"$PWD/third_party/iniparser" -std=c++17 -arch arm64 -Wall -Wextra -pedantic -Werror /tmp/fb-sdl3-audit/task7/task7_render_audio_harness.cpp build-audit-werror/CMakeFiles/frozen-bubble-sdl3.dir/src/{shaderstuff,transitionmanager,audiomixer,ttftext,gamesettings,platform}.cpp.o build-audit-werror/libiniparser-static.a -Wl,-rpath,/opt/homebrew/lib -L/opt/homebrew/lib -lSDL3 -lSDL3_image -lSDL3_mixer -lSDL3_ttf -o /tmp/fb-sdl3-audit/task7/task7_harness</code> | 0 | Rebuilt the warnings-strict harness with the two new subcommands (`nofont`, `overlooknull`) against the same unchanged production objects; no diagnostic | `/tmp/fb-sdl3-audit/task7/task7_render_audio_harness.cpp` |
+| 2026-07-28 (Task 7 Fix Round 1 harness; exact time not captured) | <code>/usr/bin/c++ … -O1 -g -fno-omit-frame-pointer -fsanitize=address,undefined /tmp/fb-sdl3-audit/task7/task7_render_audio_harness.cpp build-audit-sanitize/CMakeFiles/frozen-bubble-sdl3.dir/src/{shaderstuff,transitionmanager,audiomixer,ttftext,gamesettings,platform}.cpp.o build-audit-sanitize/libiniparser-static.a … -o /tmp/fb-sdl3-audit/task7/task7_harness_sanitize</code> | 0 | Rebuilt the ASan+UBSan harness against the sanitized production objects | `/tmp/fb-sdl3-audit/task7/task7_harness_sanitize` |
+| 2026-07-28 (Task 7 Fix Round 1; exact time not captured) | <code>SDL_VIDEODRIVER=dummy /tmp/fb-sdl3-audit/task7/task7_harness nofont</code> | 0 | Printed `texture=0x0 coords_x=120 coords_y=300 coords_w=-842150451 coords_h=-842150451` then `render_texture_ok=0 err=Parameter 'texture' is invalid`. `-842150451` == `0xCDCDCDCD` poison: production `UpdateText` never wrote `coords.w/h` and never created a texture — BUG-043 reproduced | `/tmp/fb-sdl3-audit/task7/nofont.log` |
+| 2026-07-28 (Task 7 Fix Round 1; exact time not captured) | <code>SDL_VIDEODRIVER=dummy /tmp/fb-sdl3-audit/task7/task7_harness_sanitize nofont</code> | 0 | Identical output under ASan+UBSan with no sanitizer diagnostic (the indeterminate read is not MSan-detectable on this host; the poison value carries the proof) | `/tmp/fb-sdl3-audit/task7/nofont-sanitize.log` |
+| 2026-07-28 (Task 7 Fix Round 1; exact time not captured) | <code>SDL_VIDEODRIVER=dummy /tmp/fb-sdl3-audit/task7/task7_harness_sanitize overlooknull</code> | 134 | Production `overlook_(dest, nullptr, 0, 149)` produced `src/shaderstuff.cpp:1485:41: runtime error: member access within null pointer of type 'SDL_Surface'`, then `AddressSanitizer: SEGV on unknown address 0x000000000004` with frame `#0 overlook_ shaderstuff.cpp:1485` — BUG-044's `mainmenu_panels.cpp:213` half reproduced | `/tmp/fb-sdl3-audit/task7/overlooknull-sanitize.log` |
 
 ## Limitations
 
