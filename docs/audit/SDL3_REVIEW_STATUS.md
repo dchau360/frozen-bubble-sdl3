@@ -13,7 +13,7 @@
 
 | Component | Recorded value |
 |---|---|
-| Agent | Codex subagents `task_1_implementer` (bootstrap), `task_2_implementer` (baselines), `task_3a_static` (server static review), `task_3c_synthesis` (static Task 3 closure), and `task_4_implementer` (client/synchronization review) |
+| Agent | Codex subagents `task_1_implementer` (bootstrap), `task_2_implementer` (baselines), `task_3a_static` (server static review), `task_3c_synthesis` (static Task 3 closure), `task_4_implementer` (client/synchronization review), and `task_5_implementer` (gameplay review) |
 | Model | Unknown; the dispatcher did not expose a model identifier |
 | Host | macOS 26.5.2 (build 25F84), Darwin 25.5.0, arm64 |
 | Compiler | Apple clang 21.0.0 (`clang-2100.1.1.101`), target `arm64-apple-darwin25.5.0` |
@@ -31,8 +31,8 @@
 ## Current state
 
 - Phase: Phase 2 — subsystem review
-- Active gate: Task 5 (pending)
-- Exact next action: Begin Task 5 static review of gameplay rules, board algorithms, and round state, consuming Task 4's validated message and round-state boundary.
+- Active gate: Task 6 (pending)
+- Exact next action: Begin Task 6, Step 1: map menu and room state transitions.
 
 ## Gate checklist
 
@@ -42,7 +42,7 @@
 | Task 2 | Reproducible build, test, sanitizer, and analysis baselines | complete |
 | Task 3 | C server and untrusted TCP/WebSocket protocol | complete (static evidence; runtime/security matrix omitted by user direction) |
 | Task 4 | Native/WASM clients and multiplayer synchronization | complete (static plus existing bot unit checks; security traffic and two-round smoke omitted) |
-| Task 5 | Gameplay rules, board algorithms, and round state | pending |
+| Task 5 | Gameplay rules, board algorithms, and round state | complete (static plus pure-helper tests and safe deterministic boundary model) |
 | Task 6 | Lobby, settings, persistence, and input | pending |
 | Task 7 | Rendering, transitions, fonts, and audio lifecycle | pending |
 | Task 8 | Native, WASM, and Android platform integration | pending |
@@ -55,9 +55,9 @@
 ## Active candidates
 
 - BUG-001 — `TextureEx` failure/leak handling, owned by Task 7.
-- IMP-005 through IMP-009 — initialization, numeric intent, ownership,
-  modernization, and control-flow improvements in later assigned subsystems;
-  Task 4's IMP-005 slice is dismissed by construction-before-use proof.
+- IMP-007 and IMP-008 — ownership and selective API/const/cast/parser cleanup in
+  later assigned subsystems. Task 5 confirmed IMP-005, IMP-006, and IMP-009 as
+  improvements while dismissing analyzer-only gameplay defect interpretations.
 - IMP-010 — server raw-allocation policy is statically proven inconsistent; Task 7 must finish the cross-owner asset/allocation disposition.
 
 ## Confirmed findings
@@ -79,6 +79,14 @@
   response correlation, native TCP record assumptions, and Windows per-frame
   receive remaining blocking. See the
   [network client notebook](subsystems/02-network-client-sync.md).
+- Task 5 confirmed BUG-018 through BUG-024 and IMP-005, IMP-006, and
+  IMP-009. The highest-impact gameplay path is BUG-020: a quit/new-match
+  transition can retain in-flight malus assigned to an array whose board was
+  cleared, later reaching invalid row-vector indexing. Other confirmed rule
+  failures cover unconditional clear wins, simultaneous final losses,
+  departures, flipped-grid chain assignment, inert local victory limits, and
+  timing-dependent remote clear accounting. See the
+  [gameplay notebook](subsystems/03-gameplay.md).
 
 ## Task 3 closure provenance
 
@@ -115,16 +123,40 @@
   and TCP-stream candidate coverage. The source recheck dismissed/reserved
   BUG-012, broadened BUG-015, and confirmed BUG-017 before final validation.
 
+## Task 5 closure provenance
+
+- All ten gameplay translation/header files, all six pure helper files, all
+  three matching tests, and relevant Perl mechanics received final semantic
+  dispositions. Task 4's SEC-003 player/index boundary was consumed without
+  generating malformed traffic or recycling its ID.
+- The required Release and warnings-strict helper filters passed 3/3. The exact
+  leak-enabled sanitizer filter failed because Apple ASan does not support leak
+  detection; the accepted leak-disabled ASan+UBSan filter passed 3/3 with no
+  diagnostic. Both outcomes remain recorded.
+- A fixed-seed pure-helper/oracle harness passed normally and under ASan+UBSan
+  for page/team/color/grid boundaries and maximum configured delta. A second
+  headless harness linked the unchanged warnings-strict production objects and,
+  through a test-TU-only visibility seam, called actual `BubbleGame` count,
+  generation, compression, game-state, and loss methods.
+- The production-object harness passed normally and under leak-disabled
+  ASan+UBSan for player counts 1/2/5/6/20, team counts 1-5, colors 5/8, both
+  orientations, three consecutive rounds, Clear Mode, and simultaneous final
+  loss. It directly reproduced BUG-018 and BUG-019. No client, listener,
+  preference, socket, graphical session, or hostile placement message was
+  created. Static causal traces support the remaining findings; omitted runtime
+  cases are limitations, not passes.
+
 ## Commands and evidence
 
 Each row records exactly one top-level shell command. A shell loop remains one
 syntactic command, but unnamed multi-command “gate” rows are not used. Exit
 values and material output are from captured Task 1, fix-round, Task 2, Task 3,
-and Task 4 evidence.
+Task 4, and Task 5 evidence.
 
-**Canonical log cutoff:** completed Task 4 static source inspection, focused
-dynamic checks, and final candidate disposition. Task 4 final validation,
-staging, commit, and post-commit
+**Canonical log cutoff:** completed Task 5 static source/reference inspection,
+analyzer triage, helper tests, pure-helper modeling, production-object boundary
+scenarios, and final candidate disposition. Task 5 final validation, staging,
+commit, and post-commit
 checks belong in the ignored controller report, preventing a false claim that a
 commit records itself. Earlier Task 2 staging/commit exclusions remain covered
 by its ignored controller report.
@@ -434,6 +466,25 @@ by its ignored controller report.
 | 2026-07-28 (Task 4 review correction; exact time not captured) | <code>nl -ba server/net.c &#124; sed -n '345,375p'; nl -ba server/game.c &#124; sed -n '629,910p'</code> | 0 | Verified priority `FB/` diversion and explicit PART/remove-priority branch, dismissing and reserving BUG-012 | [Connection lifecycle](subsystems/02-network-client-sync.md#connection-and-room-lifecycle) |
 | 2026-07-28 (Task 4 review correction; exact time not captured) | <code>nl -ba src/networkclient.cpp &#124; sed -n '924,1130p'</code> | 0 | Verified incomplete error recognition and uncorrelated WASM OK handling, broadening BUG-015 | [Response handling](subsystems/02-network-client-sync.md#lobby-response-and-reachability-handling) |
 | 2026-07-28 (Task 4 review correction; exact time not captured) | <code>nl -ba bin/frozen-bubble &#124; sed -n '4590,4608p'; nl -ba lib/Games/FrozenBubble/Net.pm &#124; sed -n '350,365p'</code> | 0 | Rechecked the original client's active-game escape and disconnect/reconnect reference behavior used only as BUG-012 comparison evidence | [Connection lifecycle](subsystems/02-network-client-sync.md#connection-and-room-lifecycle) |
+| 2026-07-28 (Task 5; exact time not captured) | <code>git status --short &amp;&amp; git diff --check &amp;&amp; git diff --stat &amp;&amp; git diff --name-only 4083c31c51ba4c1dbd2bb98f6ae4e37eeaba67fc</code> | 0 | Preflight found only the four approved audit documents modified and no whitespace error | Task 5 scope preflight |
+| 2026-07-28 (Task 5; exact time not captured) | <code>nl -ba src/bubblegame.cpp &#124; sed -n '337,455p;900,1018p;1180,1230p;1330,1385p'; nl -ba src/bubblegame_state.cpp &#124; sed -n '430,790p'; nl -ba src/bubblegame_net.cpp &#124; sed -n '210,590p'</code> | 0 | Traced match construction/reset, clear/loss/team/victory accounting, and ordinary peer finish/departure state | [Task 5 transition review](subsystems/03-gameplay.md#round-winner-departure-and-match-transitions) |
+| 2026-07-28 (Task 5; exact time not captured) | <code>nl -ba src/bubblegame_board.cpp &#124; sed -n '1,690p'; nl -ba src/bubblegame_shooter.cpp &#124; sed -n '1,705p'; nl -ba src/bubblegame_level.cpp &#124; sed -n '1,315p'</code> | 0 | Traced adjacency, grouping, falling/chains, launch/collision/malus placement, generation, and compression paths | [Task 5 board review](subsystems/03-gameplay.md#placement-collision-grouping-and-compression) |
+| 2026-07-28 (Task 5; exact time not captured) | <code>nl -ba src/bubblegame.h; nl -ba src/bubblegame_internal.h; nl -ba src/bubblegame_input.cpp; nl -ba src/bubblegame_render.cpp; nl -ba src/netview.cpp; nl -ba src/netview.h; nl -ba src/netteams.cpp; nl -ba src/netteams.h; nl -ba src/roundstats_color.cpp; nl -ba src/roundstats_color.h; nl -ba tests/netview_test.cpp; nl -ba tests/netteams_test.cpp; nl -ba tests/roundstats_color_test.cpp</code> | 0 | Completed declaration, inline-physics, input, render, pure-helper, and matching-test inspection for every remaining scoped file | [Task 5 coverage](subsystems/03-gameplay.md#coverage) |
+| 2026-07-28 (Task 5; exact time not captured) | <code>nl -ba bin/frozen-bubble &#124; sed -n '590,620p;720,910p;940,970p;1900,1990p;2300,2410p'; nl -ba lib/Games/FrozenBubble/Net.pm &#124; sed -n '1,430p'</code> | 0 | Compared living-player, placement, chain-validation, malus, simultaneous-finish, and protocol semantics with the Perl reference | [Task 5 static review](subsystems/03-gameplay.md#static-review) |
+| 2026-07-28 (Task 5; exact time not captured) | <code>rg -n 'bubblegame&#124;netview&#124;netteams&#124;roundstats' /tmp/fb-sdl3-audit/cppcheck-project-unique.txt /tmp/fb-sdl3-audit/cppcheck-uninitialized.txt /tmp/fb-sdl3-audit/clang-tidy-project-unique.txt &#124; sed -n '1,260p'</code> | 0 | Revisited the gameplay-owned initialization, numeric, constness, shadowing, and control diagnostics before final IMP-005/006/008/009 disposition | [Task 5 analyzer disposition](subsystems/03-gameplay.md#reload-reset-and-construction) |
+| 2026-07-28 (Task 5; exact time not captured) | <code>tmpdir=$(mktemp -d /tmp/fb-sdl3-task5-inventory.XXXXXX) &amp;&amp; git ls-tree -r --name-only 09d6c7bfcd864a0ad3951b87d16a88dc770392a3 &#124; rg '^(src&#124;server&#124;tests&#124;tools&#124;android&#124;web&#124;cmake&#124;docker&#124;\.github)/&#124;^(CMakeLists\.txt&#124;CMakeListsEmscripten\.txt&#124;README\.md&#124;SetupServer\.md&#124;WASM_PORT\.md&#124;start-server\.sh&#124;netlify\.toml&#124;shell\.nix&#124;default\.nix&#124;flake\.nix&#124;flake\.lock)$' &#124; sort &gt; "$tmpdir/pinned.txt" &amp;&amp; python3 -c "from pathlib import Path; t=chr(96); print('\\n'.join(sorted(x.split(t)[1] for x in Path('docs/audit/FILE_COVERAGE.md').read_text().splitlines() if x.startswith('&#124; '+t))))" &gt; "$tmpdir/ledger.txt" &amp;&amp; diff -u "$tmpdir/pinned.txt" "$tmpdir/ledger.txt"</code> | 0 | Coverage inventory exactly matched all 237 pinned-tree paths | [Task 5 coverage](subsystems/03-gameplay.md#coverage) |
+| 2026-07-28 (Task 5; exact time not captured) | <code>ctest --test-dir build-audit-release -R 'netview&#124;netteams&#124;roundstats' --output-on-failure</code> | 0 | Required Release helper filter passed 3/3 | [Task 5 dynamic evidence](subsystems/03-gameplay.md#dynamic-evidence) |
+| 2026-07-28 (Task 5; exact time not captured) | <code>ctest --test-dir build-audit-werror -R 'netview&#124;netteams&#124;roundstats' --output-on-failure</code> | 0 | Required warnings-strict Debug helper filter passed 3/3 | [Task 5 dynamic evidence](subsystems/03-gameplay.md#dynamic-evidence) |
+| 2026-07-28 (Task 5; exact time not captured) | <code>ASAN_OPTIONS=detect_leaks=1:halt_on_error=1 UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1 ctest --test-dir build-audit-sanitize -R 'netview&#124;netteams&#124;roundstats' --output-on-failure</code> | 8 | Required leak-enabled filter aborted 3/3 because Apple ASan reports `detect_leaks is not supported on this platform`; environment limitation, not a test pass | [Task 5 dynamic evidence](subsystems/03-gameplay.md#dynamic-evidence) |
+| 2026-07-28 (Task 5; exact time not captured) | <code>ASAN_OPTIONS=detect_leaks=0:halt_on_error=1 UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1 ctest --test-dir build-audit-sanitize -R 'netview&#124;netteams&#124;roundstats' --output-on-failure</code> | 0 | Accepted leak-disabled ASan+UBSan helper filter passed 3/3 with no diagnostic | [Task 5 dynamic evidence](subsystems/03-gameplay.md#dynamic-evidence) |
+| 2026-07-28 (Task 5 harness development; exact time not captured) | <code>test -f /tmp/fb-sdl3-audit/task5_boundary_harness.cpp &amp;&amp; /usr/bin/c++ -I/opt/homebrew/include -I/usr/local/include -I/Users/dchau/gr/frozen-bubble-sdl3/src -I/Users/dchau/gr/frozen-bubble-sdl3/third_party/iniparser -std=c++17 -arch arm64 -Wall -Wextra -pedantic -Werror /tmp/fb-sdl3-audit/task5_boundary_harness.cpp src/netview.cpp src/netteams.cpp src/roundstats_color.cpp -o /tmp/fb-sdl3-audit/task5_boundary_harness &amp;&amp; /tmp/fb-sdl3-audit/task5_boundary_harness &#124; tee /tmp/fb-sdl3-audit/task5_boundary_harness.log</code> | 1 | Initial compile exposed three harness API-name mistakes; non-evidence corrected before execution | Harness development chronology |
+| 2026-07-28 (Task 5 harness development; exact time not captured) | <code>/usr/bin/c++ -I/opt/homebrew/include -I/usr/local/include -I/Users/dchau/gr/frozen-bubble-sdl3/src -I/Users/dchau/gr/frozen-bubble-sdl3/third_party/iniparser -std=c++17 -arch arm64 -Wall -Wextra -pedantic -Werror /tmp/fb-sdl3-audit/task5_boundary_harness.cpp src/netview.cpp src/netteams.cpp src/roundstats_color.cpp -o /tmp/fb-sdl3-audit/task5_boundary_harness &amp;&amp; /tmp/fb-sdl3-audit/task5_boundary_harness &#124; tee /tmp/fb-sdl3-audit/task5_boundary_harness.log</code> | 1 | First executable run caught an error in the clear-winner oracle assertion; non-evidence corrected before acceptance | Harness development chronology |
+| 2026-07-28 (Task 5; exact time not captured) | <code>/usr/bin/c++ -I/opt/homebrew/include -I/usr/local/include -I/Users/dchau/gr/frozen-bubble-sdl3/src -I/Users/dchau/gr/frozen-bubble-sdl3/third_party/iniparser -std=c++17 -arch arm64 -Wall -Wextra -pedantic -Werror /tmp/fb-sdl3-audit/task5_boundary_harness.cpp src/netview.cpp src/netteams.cpp src/roundstats_color.cpp -o /tmp/fb-sdl3-audit/task5_boundary_harness &amp;&amp; /tmp/fb-sdl3-audit/task5_boundary_harness &#124; tee /tmp/fb-sdl3-audit/task5_boundary_harness.log</code> | 0 | Accepted fixed-seed boundary run passed players 1/2/5/6/20, teams 1-5, colors 5/8, both orientations, delta 15, and three-round/state scenarios | `/tmp/fb-sdl3-audit/task5_boundary_harness.cpp` and `.log` |
+| 2026-07-28 (Task 5; exact time not captured) | <code>/usr/bin/c++ -I/opt/homebrew/include -I/usr/local/include -I/Users/dchau/gr/frozen-bubble-sdl3/src -I/Users/dchau/gr/frozen-bubble-sdl3/third_party/iniparser -std=c++17 -arch arm64 -Wall -Wextra -pedantic -Werror -O1 -g -fno-omit-frame-pointer -fsanitize=address,undefined /tmp/fb-sdl3-audit/task5_boundary_harness.cpp src/netview.cpp src/netteams.cpp src/roundstats_color.cpp -fsanitize=address,undefined -o /tmp/fb-sdl3-audit/task5_boundary_harness_sanitize &amp;&amp; ASAN_OPTIONS=detect_leaks=0:halt_on_error=1 UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1 /tmp/fb-sdl3-audit/task5_boundary_harness_sanitize</code> | 0 | Sanitized fixed-seed boundary run printed the same PASS matrix with no ASan/UBSan diagnostic | [Task 5 dynamic evidence](subsystems/03-gameplay.md#dynamic-evidence) |
+| 2026-07-28 (Task 5 production-harness development; exact time not captured) | <code>object_paths=($(find build-audit-werror/CMakeFiles/frozen-bubble-sdl3.dir/src -name '*.o' ! -name 'main.cpp.o' -print)); /usr/bin/c++ -I/opt/homebrew/include -I/usr/local/include -I/Users/dchau/gr/frozen-bubble-sdl3/src -I/Users/dchau/gr/frozen-bubble-sdl3/third_party/iniparser -std=c++17 -arch arm64 -Wall -Wextra -pedantic -Werror /tmp/fb-sdl3-audit/task5_actual_gameplay_harness.cpp $object_paths build-audit-werror/libiniparser-static.a -Wl,-rpath,/opt/homebrew/lib /opt/homebrew/lib/libSDL3_image.0.4.4.dylib /opt/homebrew/lib/libSDL3_mixer.0.2.4.dylib /opt/homebrew/lib/libSDL3_ttf.0.2.2.dylib /opt/homebrew/lib/libSDL3.0.dylib -o /tmp/fb-sdl3-audit/task5_actual_gameplay_harness</code> | 1 | Initial strict compile rejected the test-only `private` visibility macro under `-Wkeyword-macro`; a scoped diagnostic pragma fixed the harness only | Production-harness development chronology |
+| 2026-07-28 (Task 5 production-harness development; exact time not captured) | <code>object_paths=($(find build-audit-werror/CMakeFiles/frozen-bubble-sdl3.dir/src -name '*.o' ! -name 'main.cpp.o' -print)); /usr/bin/c++ -I/opt/homebrew/include -I/usr/local/include -I/Users/dchau/gr/frozen-bubble-sdl3/src -I/Users/dchau/gr/frozen-bubble-sdl3/third_party/iniparser -std=c++17 -arch arm64 -Wall -Wextra -pedantic -Werror /tmp/fb-sdl3-audit/task5_actual_gameplay_harness.cpp $object_paths build-audit-werror/libiniparser-static.a -Wl,-rpath,/opt/homebrew/lib /opt/homebrew/lib/libSDL3_image.0.4.4.dylib /opt/homebrew/lib/libSDL3_mixer.0.2.4.dylib /opt/homebrew/lib/libSDL3_ttf.0.2.2.dylib /opt/homebrew/lib/libSDL3.0.dylib -o /tmp/fb-sdl3-audit/task5_actual_gameplay_harness &amp;&amp; /tmp/fb-sdl3-audit/task5_actual_gameplay_harness</code> | 1 | First executable run exposed a harness expectation that assumed random levels always start in standard orientation; corrected to validate and flip either generated orientation | Production-harness development chronology |
+| 2026-07-28 (Task 5; exact time not captured) | <code>object_paths=($(find build-audit-werror/CMakeFiles/frozen-bubble-sdl3.dir/src -name '*.o' ! -name 'main.cpp.o' -print)); /usr/bin/c++ -I/opt/homebrew/include -I/usr/local/include -I/Users/dchau/gr/frozen-bubble-sdl3/src -I/Users/dchau/gr/frozen-bubble-sdl3/third_party/iniparser -std=c++17 -arch arm64 -Wall -Wextra -pedantic -Werror /tmp/fb-sdl3-audit/task5_actual_gameplay_harness.cpp $object_paths build-audit-werror/libiniparser-static.a -Wl,-rpath,/opt/homebrew/lib /opt/homebrew/lib/libSDL3_image.0.4.4.dylib /opt/homebrew/lib/libSDL3_mixer.0.2.4.dylib /opt/homebrew/lib/libSDL3_ttf.0.2.2.dylib /opt/homebrew/lib/libSDL3.0.dylib -o /tmp/fb-sdl3-audit/task5_actual_gameplay_harness &amp;&amp; /tmp/fb-sdl3-audit/task5_actual_gameplay_harness</code> | 0 | Unchanged warnings-strict production objects passed the full boundary matrix and directly reproduced BUG-018/019 | [Task 5 dynamic evidence](subsystems/03-gameplay.md#dynamic-evidence) |
+| 2026-07-28 (Task 5; exact time not captured) | <code>object_paths=($(find build-audit-sanitize/CMakeFiles/frozen-bubble-sdl3.dir/src -name '*.o' ! -name 'main.cpp.o' -print)); /usr/bin/c++ -I/opt/homebrew/include -I/usr/local/include -I/Users/dchau/gr/frozen-bubble-sdl3/src -I/Users/dchau/gr/frozen-bubble-sdl3/third_party/iniparser -std=c++17 -arch arm64 -Wall -Wextra -pedantic -Werror -O1 -g -fno-omit-frame-pointer -fsanitize=address,undefined /tmp/fb-sdl3-audit/task5_actual_gameplay_harness.cpp $object_paths build-audit-sanitize/libiniparser-static.a -fsanitize=address,undefined -Wl,-rpath,/opt/homebrew/lib /opt/homebrew/lib/libSDL3_image.0.4.4.dylib /opt/homebrew/lib/libSDL3_mixer.0.2.4.dylib /opt/homebrew/lib/libSDL3_ttf.0.2.2.dylib /opt/homebrew/lib/libSDL3.0.dylib -o /tmp/fb-sdl3-audit/task5_actual_gameplay_harness_sanitize &amp;&amp; ASAN_OPTIONS=detect_leaks=0:halt_on_error=1 UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1 /tmp/fb-sdl3-audit/task5_actual_gameplay_harness_sanitize</code> | 0 | Sanitized unchanged production objects passed the same matrix with no ASan/UBSan diagnostic | [Task 5 dynamic evidence](subsystems/03-gameplay.md#dynamic-evidence) |
 
 ## Limitations
 
@@ -462,6 +513,15 @@ by its ignored controller report.
   gameplay scenario. The available bot could not autonomously establish and
   assert two rounds, so passing unit checks do not close runtime synchronization
   coverage. Windows conclusions are static portability proofs.
+- Task 5 ran no malformed/hostile placement traffic, graphical client, or live
+  multi-client gameplay. Its headless production-object harness calls actual
+  private gameplay methods but does not render, play audio, drive collision
+  animation, invoke full `NewGame`/`ReloadGame` transitions, or exercise real
+  network arrival timing. SEC-003 and omitted security runtime remain
+  limitations rather than passes.
+- The local two-player and disconnect option-propagation origins identified by
+  BUG-021/023 cross into Task 6. Task 5 proves their gameplay consequences;
+  Task 6 still owns the complete menu/settings transition review.
 
 ## Processes and cleanup
 
@@ -474,6 +534,10 @@ by its ignored controller report.
   gameplay traffic. Read-only inventory found the same foreign listeners and
   left them untouched. The failed `/tmp/fb-sdl3-audit/task4-wasm-build` tree is
   regenerable local build evidence and owns no running process.
+- Task 5 started no listener, client, graphical session, or background process
+  and touched no preferences. Its normal and sanitizer oracle/production-object
+  harness binaries, sources, and log under `/tmp/fb-sdl3-audit/` are local
+  regenerable evidence; they own no running process or external state.
 - Temporary files include the Task 1 inventory files and Task 2 analyzer logs/triage artifacts under `/tmp/fb-sdl3-audit/`; all are local, regenerable evidence and contain no credentials.
 - The four generated audit build directories are retained for Tasks 3 and 9
   (especially the sanitized server) and are locally excluded through untracked
