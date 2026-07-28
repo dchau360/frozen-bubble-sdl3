@@ -13,7 +13,7 @@
 
 | Component | Recorded value |
 |---|---|
-| Agent | Codex subagents `task_1_implementer` (bootstrap), `task_2_implementer` (baselines), and `task_3a_static` (server static review) |
+| Agent | Codex subagents `task_1_implementer` (bootstrap), `task_2_implementer` (baselines), `task_3a_static` (server static review), and `task_3c_synthesis` (static Task 3 closure) |
 | Model | Unknown; the dispatcher did not expose a model identifier |
 | Host | macOS 26.5.2 (build 25F84), Darwin 25.5.0, arm64 |
 | Compiler | Apple clang 21.0.0 (`clang-2100.1.1.101`), target `arm64-apple-darwin25.5.0` |
@@ -31,8 +31,8 @@
 ## Current state
 
 - Phase: Phase 2 — subsystem review
-- Active gate: Task 3 (active; Task 3A static review complete, Task 3B pending)
-- Exact next action: Begin Task 3B runtime validation with foreground, kernel-assigned-port reproductions of the kicked-priority and post-start room-closure priority-orphan server-exit paths, then execute the documented TCP/WebSocket/UDP boundary matrix.
+- Active gate: Task 4 (pending)
+- Exact next action: Begin Task 4 static review of native/WASM clients and multiplayer synchronization, consuming SEC-004's confirmed server trust boundary; omit security-specific runtime checks by user direction.
 
 ## Gate checklist
 
@@ -40,7 +40,7 @@
 |---|---|---|
 | Task 1 | Bootstrap resumable audit workspace | complete |
 | Task 2 | Reproducible build, test, sanitizer, and analysis baselines | complete |
-| Task 3 | C server and untrusted TCP/WebSocket protocol | active (3A complete; 3B pending) |
+| Task 3 | C server and untrusted TCP/WebSocket protocol | complete (static evidence; runtime/security matrix omitted by user direction) |
 | Task 4 | Native/WASM clients and multiplayer synchronization | pending |
 | Task 5 | Gameplay rules, board algorithms, and round state | pending |
 | Task 6 | Lobby, settings, persistence, and input | pending |
@@ -55,25 +55,35 @@
 ## Active candidates
 
 - BUG-001 — `TextureEx` failure/leak handling, owned by Task 7.
-- BUG-007 — blocking/one-shot server output and WebSocket short-frame behavior; exact slow-reader/backpressure scenario assigned to Task 3B.
 - SEC-003 — peer numeric/board bounds, owned by Task 4.
-- REL-003 — Windows `SOCKET` narrowing/dense fd indexing; Windows runtime and Task 9 boundary evidence pending.
 - IMP-005 through IMP-009 — initialization, numeric intent, ownership, modernization, and control-flow improvements in later assigned subsystems.
 - IMP-010 — server raw-allocation policy is statically proven inconsistent; Task 7 must finish the cross-owner asset/allocation disposition.
-- Server hardening without assigned IDs: two-second nickname eviction and repeated `START`/post-start `CLOSE` state transitions require Task 3B scenarios.
 
 ## Confirmed findings
 
-- Task 3A confirmed BUG-002 through BUG-006, BUG-008, BUG-009;
-  SEC-001, SEC-002, SEC-004 through SEC-006; and REL-001, REL-002,
-  REL-004. It also confirmed IMP-001 through IMP-004 as improvements, not
-  defects.
+- Task 3 confirmed BUG-002 through BUG-011; SEC-001, SEC-002, SEC-004 through
+  SEC-006; and REL-001 through REL-004. It confirmed IMP-001 through IMP-004
+  and IMP-011 as improvements, not defects. BUG-010 resolves nickname eviction;
+  BUG-011 resolves repeated `START`; BUG-003 includes post-start `CLOSE`.
 - The highest-impact static chains are BUG-003 (priority fd left without a
   game can trigger peer-driven server exit), SEC-004 (unbound player/leader
   identity), and SEC-005 (128-byte UDP probe permits out-of-bounds stack read).
 - See [FINDINGS.md](FINDINGS.md) and the
   [server notebook](subsystems/01-server-protocol.md) for severity, proof, and
-  exact Task 3B dependencies.
+  exact static causal paths and downstream owners.
+
+## Task 3 closure provenance
+
+- Three whole-task runtime-agent dispatches and one split runtime dispatch were
+  rejected by the automated classifier before producing runtime evidence.
+- The user then explicitly skipped security work. Task 3 closure therefore used
+  the completed static review and read-only source/audit synthesis only.
+- No Task 3 runtime server, process, port, harness, client, socket traffic,
+  signal scenario, or fault injection was created. Existing foreign listeners
+  remained untouched.
+- Confirmed Task 3 findings are code-supported inferences, not observed runtime
+  facts. The omitted TCP/WebSocket/UDP, backpressure, identity, fault-injection,
+  and server-survival checks are a final-audit limitation, not passing evidence.
 
 ## Commands and evidence
 
@@ -82,9 +92,9 @@ syntactic command, but unnamed multi-command “gate” rows are not used. Exit
 values and material output are from captured Task 1, fix-round, Task 2, and
 Task 3A evidence.
 
-**Canonical log cutoff:** completed Task 3A source inspection and static
-disposition. Task 3A final validation, staging, commit, and post-commit checks
-belong in the ignored controller report, preventing a false claim that a
+**Canonical log cutoff:** completed Task 3 static source inspection and final
+candidate disposition. Task 3 final validation, staging, commit, and post-commit
+checks belong in the ignored controller report, preventing a false claim that a
 commit records itself. Earlier Task 2 staging/commit exclusions remain covered
 by its ignored controller report.
 
@@ -367,6 +377,12 @@ by its ignored controller report.
 | 2026-07-28 (Task 3A; exact time not captured) | <code>git log -S'amount_transmitted +=' --oneline --all -- server/game.c server/net.c</code> | 0 | Located historical counter-removal commit `2d1a4b4d`; current tree has no increment | [BUG-004](subsystems/01-server-protocol.md#confirmed-findings) |
 | 2026-07-28 (Task 3A; exact time not captured) | <code>git diff --stat 09d6c7bfcd864a0ad3951b87d16a88dc770392a3..345e58b5c8e92bd39aa6b38e8b31d49fb6f1081c -- server tests/server_list_cap_test.py tools/server_tests/test_room_caps.py</code> | 0 | No output; audited server/test inputs exactly match the production baseline | Audit baseline above |
 | 2026-07-28 (Task 3A; exact time not captured) | <code>git status --short --branch</code> | 0 | Began on the requested branch with no tracked or untracked status entries beyond the branch header | Task 3A preflight |
+| 2026-07-28 (Task 3 closure; exact time not captured) | <code>sed -n '1,280p' .superpowers/sdd/2026-07-28-complete-repository-audit/task-3c-synthesis-brief.md</code> | 0 | Read the controller brief requiring static-only closure, no security runtime work, final dispositions, Task 4 handoff, and the exact commit subject | Task 3 controller brief |
+| 2026-07-28 (Task 3 closure; exact time not captured) | <code>sed -n '1,9999p' .superpowers/sdd/2026-07-28-complete-repository-audit/task-3a-static-report.md</code> | 0 | Read the complete ignored static-phase report and its finding/dependency inventory | Static phase evidence |
+| 2026-07-28 (Task 3 closure; exact time not captured) | <code>nl -ba server/game.c &#124; sed -n '324,500p'</code> | 0 | Rechecked `START`, `CLOSE`, readiness, priority promotion, and kick paths supporting BUG-003 and BUG-011 | [Authorization review](subsystems/01-server-protocol.md#authorization-and-room-lifecycle) |
+| 2026-07-28 (Task 3 closure; exact time not captured) | <code>nl -ba server/net.c &#124; sed -n '480,670p'</code> | 0 | Rechecked single-thread list replacement, select/accept admission, and fd-indexed initialization supporting BUG-011 and REL-003 | [Lifecycle map](subsystems/01-server-protocol.md#acceptance-input-retention-dispatch-and-teardown) |
+| 2026-07-28 (Task 3 closure; exact time not captured) | <code>nl -ba server/ws.c &#124; sed -n '135,255p'</code> | 0 | Rechecked blocking single-send WebSocket output, frame construction, and upgrade handling supporting BUG-006/007 and IMP-011 | [Length trace](subsystems/01-server-protocol.md#network-derived-length-and-index-trace) |
+| 2026-07-28 (Task 3 closure; exact time not captured) | <code>sed -n '1,180p' server/win32_compat.h</code> | 0 | Rechecked the Winsock compatibility boundary used by the confirmed REL-003 source/build mismatch | [Platform boundary](subsystems/01-server-protocol.md#build-operations-and-harness-boundary) |
 
 ## Limitations
 
@@ -380,13 +396,20 @@ by its ignored controller report.
 - REL-002 prevents the registered server-list CTest result from proving which binary served the request on POSIX. Task 2 therefore records the raw result but accepts only the supplemental dynamic-port, foreground, live-child-verified runs as Release/sanitizer server evidence.
 - Only native macOS arm64 build/test/analyzer baselines were run. Linux, Windows, Android-device, and browser/WASM build/runtime behavior has not been tested; Emscripten availability alone is not WASM coverage.
 - No release/deployment credentials, signing credentials, external hosts, or interactive gameplay scenarios were evaluated in Task 2.
-- Task 3A executed no socket, server, process, DNS, HTTP, signal, or other runtime/network scenario; all new dispositions are source proofs, and the exact remaining dynamic scenarios are assigned to Task 3B in the server notebook.
+- Task 3 executed no socket, server, process, port, harness, DNS, HTTP, signal,
+  fault-injection, or other runtime/network scenario. Three whole-task runtime
+  dispatches and one split runtime dispatch were rejected by the automated
+  classifier before producing evidence; the user then explicitly skipped
+  security work. All Task 3 dispositions are source proofs, and the omitted
+  security/runtime matrix remains a final-audit limitation.
 
 ## Processes and cleanup
 
 - REL-002's first reproduction created Task 2-owned daemon PID 95766 on temporary port 25512; it was identified by exact command/start time, terminated, and the port was verified closed. The preliminary hardcoded-port reruns were not accepted as ownership evidence. The accepted dynamic-port foreground reruns asserted the exact child alive and cleaned up normally.
 - Pre-existing listeners on ports 15511, 15512, 15113, and 15998 were observed during isolation diagnosis. They predate Task 2 or are outside its assigned ownership and were intentionally left untouched; no Task 2-owned server, client, proxy, port listener, background process, or shell session remains.
-- Task 3A started no process or network scenario, so it created no process, listener, or external state requiring cleanup.
+- Task 3 started no runtime process, listener, port, harness, client, or traffic,
+  so it created no external state requiring cleanup. Existing foreign listeners
+  were not queried or disturbed during Task 3 closure and remain untouched.
 - Temporary files include the Task 1 inventory files and Task 2 analyzer logs/triage artifacts under `/tmp/fb-sdl3-audit/`; all are local, regenerable evidence and contain no credentials.
 - The four generated audit build directories are retained for Tasks 3 and 9
   (especially the sanitized server) and are locally excluded through untracked
