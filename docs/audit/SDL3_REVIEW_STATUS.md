@@ -31,8 +31,8 @@
 ## Current state
 
 - Phase: Phase 2 — subsystem review
-- Active gate: Task 6 (pending)
-- Exact next action: Begin Task 6, Step 1: map menu and room state transitions.
+- Active gate: Task 7 (pending)
+- Exact next action: Begin Task 7, Step 1: build an SDL resource ownership table.
 
 ## Gate checklist
 
@@ -43,7 +43,7 @@
 | Task 3 | C server and untrusted TCP/WebSocket protocol | complete (static evidence; runtime/security matrix omitted by user direction) |
 | Task 4 | Native/WASM clients and multiplayer synchronization | complete (static plus existing bot unit checks; security traffic and two-round smoke omitted) |
 | Task 5 | Gameplay rules, board algorithms, and round state | complete (Fix Round 1 added a core invariant ledger and exact maximum-delta production-object evidence) |
-| Task 6 | Lobby, settings, persistence, and input | pending |
+| Task 6 | Lobby, settings, persistence, and input | complete (static review plus isolated-preferences runtime matrix; security runtime and live-server lobby transitions omitted) |
 | Task 7 | Rendering, transitions, fonts, and audio lifecycle | pending |
 | Task 8 | Native, WASM, and Android platform integration | pending |
 | Task 9 | Build, tests, packaging, CI, deployment, tooling, and operations | pending |
@@ -59,6 +59,10 @@
   later assigned subsystems. Task 5 confirmed IMP-005, IMP-006, and IMP-009 as
   improvements while dismissing analyzer-only gameplay defect interpretations.
 - IMP-010 — server raw-allocation policy is statically proven inconsistent; Task 7 must finish the cross-owner asset/allocation disposition.
+- Task 6 closed its four inherited cross-owner items. BUG-021's and BUG-023's
+  menu origins are proven, SEC-004's lobby-side consumption is documented, and
+  IMP-005 now has only its Task 7 render slice open; its one reachable
+  use-before-initialization became BUG-034. No Task 6 candidate remains open.
 
 ## Confirmed findings
 
@@ -79,6 +83,16 @@
   response correlation, native TCP record assumptions, and Windows per-frame
   receive remaining blocking. See the
   [network client notebook](subsystems/02-network-client-sync.md).
+- Task 6 confirmed BUG-026 through BUG-040, SEC-007, and IMP-012, and resolved
+  the menu/settings half of BUG-021, BUG-023, SEC-004, and IMP-005 by extending
+  those entries. The highest-impact paths are BUG-026 (an unwritable or
+  unrepairable preferences file spins startup forever), BUG-032 (a corrupt
+  highscore file aborts the client during construction), BUG-034 (missing assets
+  leave `FrozenBubble`'s members indeterminate and `RunForEver` dereferences
+  them), and SEC-007 (an unclamped peer team number reaches five-element
+  `kTeamColors` indexing in gameplay). Eight of these were reproduced at runtime
+  against unchanged production code inside isolated preference homes. See the
+  [lobby/settings/input notebook](subsystems/04-lobby-settings-input.md).
 - Task 5 confirmed BUG-018 through BUG-025 and IMP-005, IMP-006, and
   IMP-009. The highest-impact gameplay path is BUG-020: a quit/new-match
   transition can retain in-flight malus assigned to an array whose board was
@@ -160,19 +174,56 @@
   and call order were instead proved statically, so this is not an open
   collision limitation.
 
+## Task 6 closure provenance
+
+- Every file named by the Task 6 brief received a final disposition: the seven
+  menu translation units and headers, both settings files, both highscore files,
+  both menu-button files, and the input/event/lifecycle paths of
+  `frozenbubble.cpp`/`.h`. Rendering and platform aspects of the two
+  `frozenbubble` files stay with Tasks 7-8.
+- Isolation was proved before any preferences work. macOS `SDL_GetPrefPath`
+  ignores `HOME`: the first probe resolved to the user's real preference
+  directory, and the harness's own isolation gate aborted with exit 4 before
+  opening a file. `CFFIXED_USER_HOME` produced correct isolation, every later
+  run asserted `ISOLATION=OK` first, and the user's three real preference files
+  were hashed beforehand and verified byte-identical afterwards.
+- A test-only translation unit linked the unchanged production `gamesettings`
+  object from both the warnings-strict and ASan+UBSan builds and drove the real
+  `ReadSettings`/`LoadDefaultKeys`/`SaveKeys` across twelve fixtures: first run,
+  empty file, syntax error, missing section/keys, out-of-range numerics,
+  non-numeric and NaN numerics, an over-long line, a long nickname, a read-only
+  valid file, a read-only malformed file, an unwritable preference directory,
+  and an uncreatable preference directory.
+- The sanitized production client itself was run five times with dummy video and
+  audio drivers, an isolated preference home, and a kill timeout. It reproduced
+  the startup hang, both corrupt-highscore aborts, and — through a
+  `Contents/Resources/` copy that makes `InitDataDir` derive a missing asset
+  directory — the indeterminate-member dereference of BUG-034.
+- Analyzer output was re-triaged for the scoped files only: 90 unique cppcheck
+  and 79 unique clang-tidy records. Two were promoted on independent evidence
+  (BUG-033, and the static-initializer note inside IMP-012); the enum-cast,
+  dangling-temporary, and null-`currentGame` families were dismissed with
+  recorded counter-evidence.
+- No listener, server, socket, browser, peer message, hostile input, or process
+  kill was created. The user's real preferences and every foreign process were
+  left untouched. Security conclusions, all live-server lobby transitions, and
+  the multi-controller hot-plug cases remain source proofs, not observed facts.
+
 ## Commands and evidence
 
 Each row records exactly one top-level shell command. A shell loop remains one
 syntactic command, but unnamed multi-command “gate” rows are not used. Exit
 values and material output are from captured Task 1, fix-round, Task 2, Task 3,
-Task 4, and Task 5 evidence.
+Task 4, Task 5, and Task 6 evidence. Task 6 read its scoped files with the
+agent's file reader rather than `nl`/`sed`, so only its shell commands appear
+below; the files it read are listed in the
+[Task 6 notebook scope](subsystems/04-lobby-settings-input.md#scope).
 
-**Canonical log cutoff:** completed Task 5 Fix Round 1 invariant and
-maximum-delta source trace plus normal/sanitized production-object reproduction.
-Fix Round 1 final validation, staging, commit, and post-commit
-checks belong in the ignored controller report, preventing a false claim that a
-commit records itself. Earlier Task 2 staging/commit exclusions remain covered
-by its ignored controller report.
+**Canonical log cutoff:** completed Task 6's isolated-preferences persistence
+matrix, sanitized full-client reproductions, and ledger updates. Task 6's final
+validation, staging, commit, and post-commit checks belong in its ignored
+controller report, preventing a false claim that a commit records itself. The
+same exclusion already covers Task 2 and the Task 5 fix round.
 
 | Timestamp (UTC) | Command | Exit | Concise result | Evidence |
 |---|---|---:|---|---|
@@ -500,6 +551,33 @@ by its ignored controller report.
 | 2026-07-28 (Task 5; exact time not captured) | <code>object_paths=($(find build-audit-sanitize/CMakeFiles/frozen-bubble-sdl3.dir/src -name '*.o' ! -name 'main.cpp.o' -print)); /usr/bin/c++ -I/opt/homebrew/include -I/usr/local/include -I/Users/dchau/gr/frozen-bubble-sdl3/src -I/Users/dchau/gr/frozen-bubble-sdl3/third_party/iniparser -std=c++17 -arch arm64 -Wall -Wextra -pedantic -Werror -O1 -g -fno-omit-frame-pointer -fsanitize=address,undefined /tmp/fb-sdl3-audit/task5_actual_gameplay_harness.cpp $object_paths build-audit-sanitize/libiniparser-static.a -fsanitize=address,undefined -Wl,-rpath,/opt/homebrew/lib /opt/homebrew/lib/libSDL3_image.0.4.4.dylib /opt/homebrew/lib/libSDL3_mixer.0.2.4.dylib /opt/homebrew/lib/libSDL3_ttf.0.2.2.dylib /opt/homebrew/lib/libSDL3.0.dylib -o /tmp/fb-sdl3-audit/task5_actual_gameplay_harness_sanitize &amp;&amp; ASAN_OPTIONS=detect_leaks=0:halt_on_error=1 UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1 /tmp/fb-sdl3-audit/task5_actual_gameplay_harness_sanitize</code> | 0 | Sanitized unchanged production objects passed the same matrix with no ASan/UBSan diagnostic | [Task 5 dynamic evidence](subsystems/03-gameplay.md#dynamic-evidence) |
 | 2026-07-28T13:12:24Z | <code>object_paths=($(find build-audit-werror/CMakeFiles/frozen-bubble-sdl3.dir/src -name '*.o' ! -name 'main.cpp.o' -print)); /usr/bin/c++ -I/opt/homebrew/include -I/usr/local/include -I/Users/dchau/gr/frozen-bubble-sdl3/src -I/Users/dchau/gr/frozen-bubble-sdl3/third_party/iniparser -std=c++17 -arch arm64 -Wall -Wextra -pedantic -Werror /tmp/fb-sdl3-audit/task5_actual_gameplay_harness.cpp $object_paths build-audit-werror/libiniparser-static.a -Wl,-rpath,/opt/homebrew/lib /opt/homebrew/lib/libSDL3_image.0.4.4.dylib /opt/homebrew/lib/libSDL3_mixer.0.2.4.dylib /opt/homebrew/lib/libSDL3_ttf.0.2.2.dylib /opt/homebrew/lib/libSDL3.0.dylib -o /tmp/fb-sdl3-audit/task5_actual_gameplay_harness_fix1 &amp;&amp; /tmp/fb-sdl3-audit/task5_actual_gameplay_harness_fix1</code> | 0 | Fix Round 1 strict harness printed `maxDeltaTunnel=BUG-025 collisionPlacement=adjacent actualPlacement=ceiling` using linked production collision/selection/placement code | [Maximum-delta proof](subsystems/03-gameplay.md#maximum-delta-collision-trace) |
 | 2026-07-28T13:12:24Z | <code>object_paths=($(find build-audit-sanitize/CMakeFiles/frozen-bubble-sdl3.dir/src -name '*.o' ! -name 'main.cpp.o' -print)); /usr/bin/c++ -I/opt/homebrew/include -I/usr/local/include -I/Users/dchau/gr/frozen-bubble-sdl3/src -I/Users/dchau/gr/frozen-bubble-sdl3/third_party/iniparser -std=c++17 -arch arm64 -Wall -Wextra -pedantic -Werror -O1 -g -fno-omit-frame-pointer -fsanitize=address,undefined /tmp/fb-sdl3-audit/task5_actual_gameplay_harness.cpp $object_paths build-audit-sanitize/libiniparser-static.a -fsanitize=address,undefined -Wl,-rpath,/opt/homebrew/lib /opt/homebrew/lib/libSDL3_image.0.4.4.dylib /opt/homebrew/lib/libSDL3_mixer.0.2.4.dylib /opt/homebrew/lib/libSDL3_ttf.0.2.2.dylib /opt/homebrew/lib/libSDL3.0.dylib -o /tmp/fb-sdl3-audit/task5_actual_gameplay_harness_fix1_sanitize &amp;&amp; ASAN_OPTIONS=detect_leaks=0:halt_on_error=1 UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1 /tmp/fb-sdl3-audit/task5_actual_gameplay_harness_fix1_sanitize</code> | 0 | Fix Round 1 ASan+UBSan harness printed the same BUG-025 outcome with no diagnostic | [Maximum-delta proof](subsystems/03-gameplay.md#maximum-delta-collision-trace) |
+| 2026-07-28T13:05Z | <code>wc -l src/mainmenu.cpp src/mainmenu.h src/mainmenu_internal.h src/mainmenu_input.cpp src/mainmenu_netpanel.cpp src/mainmenu_panels.cpp src/mainmenu_server.cpp src/gamesettings.cpp src/gamesettings.h src/highscoremanager.cpp src/highscoremanager.h src/menubutton.cpp src/menubutton.h src/frozenbubble.cpp src/frozenbubble.h</code> | 0 | Counted 6,730 lines across all fifteen scoped files before review | [Task 6 scope](subsystems/04-lobby-settings-input.md#scope) |
+| 2026-07-28T13:10Z | <code>grep -n 'errs&#92;&#124;line too long&#92;&#124;syntax' third_party/iniparser/iniparser.c</code> | 0 | Located the parse-failure sites proving `iniparser_load` returns NULL on syntax errors and over-long lines | [BUG-026 basis](subsystems/04-lobby-settings-input.md#settings-and-highscore-persistence-step-3) |
+| 2026-07-28T13:12Z | <code>grep -rn 'controllerInputs' src/</code> | 0 | Proved `controllerInputs[5]` is zeroed and read but never written by `HandleControllerEvent` | [IMP-012](subsystems/04-lobby-settings-input.md#keyboard-controller-and-mouse-bounds-step-4) |
+| 2026-07-28T13:12Z | <code>grep -rn 'GAMEPAD_REMOVED&#92;&#124;JOYSTICK_REMOVED&#92;&#124;SDL_CloseGamepad' src/</code> | 0 | Only `bubblegame.cpp` closes gamepads; no removal handler exists in `frozenbubble.cpp` | [BUG-035](subsystems/04-lobby-settings-input.md#keyboard-controller-and-mouse-bounds-step-4) |
+| 2026-07-28T13:13Z | <code>sed -n '160,182p' /opt/homebrew/include/SDL3/SDL_gamepad.h</code> | 0 | SDL3 defines 26 gamepad buttons with `SDL_GAMEPAD_BUTTON_TOUCHPAD = 20` | [BUG-036](subsystems/04-lobby-settings-input.md#keyboard-controller-and-mouse-bounds-step-4) |
+| 2026-07-28T13:14Z | <code>grep -n 'SDL_SCANCODE_COUNT' /opt/homebrew/include/SDL3/SDL_scancode.h</code> | 0 | `SDL_SCANCODE_COUNT = 512`, fixing the bound BUG-028 and BUG-035 exceed | [BUG-028](subsystems/04-lobby-settings-input.md#dynamic-evidence) |
+| 2026-07-28T13:16Z | <code>sed -n '1140,1200p' src/networkclient.cpp</code> | 0 | `TEAMCOUNT` is clamped 2-5 while `PLAYERTEAM_Pn` is stored unclamped | [SEC-007](subsystems/04-lobby-settings-input.md#option-serialization-and-validation-step-2) |
+| 2026-07-28T13:17Z | <code>grep -n 'SendOptions' -A 30 src/networkclient.cpp</code> | 0 | Wire format and signature stop at `_P5`, so room slots 6-20 are unrepresentable | [BUG-040](subsystems/04-lobby-settings-input.md#option-serialization-and-validation-step-2) |
+| 2026-07-28T13:18Z | <code>grep -rn 'showing2PPanel&#92;s*=&#92;&#124;selectedMode = 2&#92;&#124;SetupNewGame(2)' src/</code> | 0 | `showing2PPanel` is assigned false twice and true never; `SetupNewGame(2)` has no caller | [BUG-023 extension](subsystems/04-lobby-settings-input.md#menu-and-room-state-transitions-step-1) |
+| 2026-07-28T13:20Z | <code>grep -E '^src/(mainmenu&#124;gamesettings&#124;highscoremanager&#124;menubutton&#124;frozenbubble)' /tmp/fb-sdl3-audit/cppcheck-project-unique.txt &#124; awk -F'[][]' '{print $2}' &#124; sort &#124; uniq -c &#124; sort -rn</code> | 0 | 90 scoped cppcheck records across 21 check IDs, led by 23 redundantAssignment and 21 uninitialized-member records | [Analyzer triage](subsystems/04-lobby-settings-input.md#analyzer-triage) |
+| 2026-07-28T13:20Z | <code>grep -E '^src/(mainmenu&#124;gamesettings&#124;highscoremanager&#124;menubutton&#124;frozenbubble)' /tmp/fb-sdl3-audit/clang-tidy-project-unique.txt &#124; awk -F'[][]' '{print $2}' &#124; sort &#124; uniq -c &#124; sort -rn</code> | 0 | 79 scoped clang-tidy records across 16 check IDs, including the single command-processor and throwing-static-initialization hits | [Analyzer triage](subsystems/04-lobby-settings-input.md#analyzer-triage) |
+| 2026-07-28T13:35Z | <code>/usr/bin/c++ -I/opt/homebrew/include -I/Users/dchau/gr/frozen-bubble-sdl3/src -I/Users/dchau/gr/frozen-bubble-sdl3/third_party/iniparser -std=c++17 -arch arm64 -Wall -Wextra -pedantic -Werror /tmp/fb-sdl3-audit/task6/task6_settings_harness.cpp build-audit-werror/CMakeFiles/frozen-bubble-sdl3.dir/src/gamesettings.cpp.o build-audit-werror/libiniparser-static.a -Wl,-rpath,/opt/homebrew/lib /opt/homebrew/lib/libSDL3.0.dylib -o /tmp/fb-sdl3-audit/task6/task6_settings_harness</code> | 0 | Warnings-strict harness linked the unchanged production settings object with no diagnostic | `/tmp/fb-sdl3-audit/task6/task6_settings_harness.cpp` |
+| 2026-07-28T13:38Z | <code>env HOME=/tmp/fb-sdl3-audit/task6/home_probe /tmp/fb-sdl3-audit/task6/task6_settings_harness /tmp/fb-sdl3-audit/task6/home_probe probe</code> | 4 | Isolation gate refused: with `HOME` alone, `SDL_GetPrefPath` still resolved to the user's real directory; no file was opened | [Limitations](subsystems/04-lobby-settings-input.md#limitations) |
+| 2026-07-28T13:39Z | <code>env HOME=/tmp/fb-sdl3-audit/task6/home_probe CFFIXED_USER_HOME=/tmp/fb-sdl3-audit/task6/home_probe /tmp/fb-sdl3-audit/task6/task6_settings_harness /tmp/fb-sdl3-audit/task6/home_probe probe</code> | 0 | `ISOLATION=OK`: preference path resolved inside the temporary home | [Dynamic evidence](subsystems/04-lobby-settings-input.md#dynamic-evidence) |
+| 2026-07-28T13:40Z | <code>shasum -a 256 "/Users/dchau/Library/Application Support/frozen-bubble/settings.ini" "/Users/dchau/Library/Application Support/frozen-bubble/highscores" "/Users/dchau/Library/Application Support/frozen-bubble/highlevelshistory" &#124; tee /tmp/fb-sdl3-audit/task6/real-prefs-baseline.txt</code> | 0 | Recorded pre-work hashes of the user's three real preference files | `/tmp/fb-sdl3-audit/task6/real-prefs-baseline.txt` |
+| 2026-07-28T13:48Z | <code>chmod +x /tmp/fb-sdl3-audit/task6/run_matrix.sh &amp;&amp; bash /tmp/fb-sdl3-audit/task6/run_matrix.sh /tmp/fb-sdl3-audit/task6/task6_settings_harness /tmp/fb-sdl3-audit/task6/scen normal 10 2&gt;&amp;1 &#124; tee /tmp/fb-sdl3-audit/task6/matrix-normal.log &#124; head -200</code> | 0 | First matrix attempt: `head` closed the pipe and SIGPIPE killed the driver after case G. Truncated; non-evidence, superseded by the full rerun | Corrected immediately below |
+| 2026-07-28T13:50Z | <code>bash /tmp/fb-sdl3-audit/task6/run_matrix.sh /tmp/fb-sdl3-audit/task6/task6_settings_harness /tmp/fb-sdl3-audit/task6/scen normal 10 &gt; /tmp/fb-sdl3-audit/task6/matrix-normal.log 2&gt;&amp;1</code> | 0 | All twelve fixtures ran with `ISOLATION=OK`; C/G reset the file, E/F kept out-of-range height and NaN speed, H saved silently, I/J/K never returned | [Persistence matrix](subsystems/04-lobby-settings-input.md#dynamic-evidence) |
+| 2026-07-28T13:51Z | <code>/usr/bin/c++ -I/opt/homebrew/include -I/Users/dchau/gr/frozen-bubble-sdl3/src -I/Users/dchau/gr/frozen-bubble-sdl3/third_party/iniparser -std=c++17 -arch arm64 -Wall -Wextra -pedantic -Werror -O1 -g -fno-omit-frame-pointer -fsanitize=address,undefined /tmp/fb-sdl3-audit/task6/task6_settings_harness.cpp build-audit-sanitize/CMakeFiles/frozen-bubble-sdl3.dir/src/gamesettings.cpp.o build-audit-sanitize/libiniparser-static.a -fsanitize=address,undefined -Wl,-rpath,/opt/homebrew/lib /opt/homebrew/lib/libSDL3.0.dylib -o /tmp/fb-sdl3-audit/task6/task6_settings_harness_sanitize</code> | 0 | ASan+UBSan harness linked the sanitized production settings object | `/tmp/fb-sdl3-audit/task6/task6_settings_harness_sanitize` |
+| 2026-07-28T13:51Z | <code>ASAN_OPTIONS=detect_leaks=0:halt_on_error=1 UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1 bash /tmp/fb-sdl3-audit/task6/run_matrix.sh /tmp/fb-sdl3-audit/task6/task6_settings_harness_sanitize /tmp/fb-sdl3-audit/task6/scen-san sanitize 20 &gt; /tmp/fb-sdl3-audit/task6/matrix-sanitize.log 2&gt;&amp;1</code> | 0 | Same twelve outcomes plus UBSan `load of value 99999, which is not a valid value for type 'SDL_Scancode'` (SIGABRT) in case F | [BUG-028](subsystems/04-lobby-settings-input.md#dynamic-evidence) |
+| 2026-07-28T13:52Z | <code>HOME=… CFFIXED_USER_HOME=… SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy ASAN_OPTIONS=detect_leaks=0:halt_on_error=1 UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1 python3 -c '…subprocess.run(["build-audit-sanitize/frozen-bubble-sdl3"], timeout=12, cwd=clienthome)…'</code> | 0 | Clean isolated home: defaults created, both highscore files reported missing, reached `RunForEver: starting loop`, killed at the 12 s timeout; wrote its log into the working directory | [Full-client runs](subsystems/04-lobby-settings-input.md#dynamic-evidence) |
+| 2026-07-28T13:53Z | <code>printf 'notanumber,bob,12.5,3&#92;n' &gt; clienthome2/…/highscores &amp;&amp; HOME=… CFFIXED_USER_HOME=… SDL_VIDEODRIVER=dummy python3 -c '…subprocess.run(["build-audit-sanitize/frozen-bubble-sdl3"], timeout=12…)…'</code> | 0 | Child exit −6: `libc++abi: terminating due to uncaught exception of type std::invalid_argument: stoi: no conversion` | [BUG-032](subsystems/04-lobby-settings-input.md#dynamic-evidence) |
+| 2026-07-28T13:54Z | <code>for h in clienthome3 clienthome4; do HOME=… CFFIXED_USER_HOME=… SDL_VIDEODRIVER=dummy python3 -c '…subprocess.run(["build-audit-sanitize/frozen-bubble-sdl3"], timeout=12…)…' $h; done</code> | 0 | Read-only malformed settings hung the shipped binary for the full 12 s with no window; corrupt `highlevelshistory` aborted with exit −6 | [BUG-026 and BUG-032](subsystems/04-lobby-settings-input.md#dynamic-evidence) |
+| 2026-07-28T13:55Z | <code>mkdir -p /tmp/fb-sdl3-audit/task6/FakeBundle.app/Contents/Resources &amp;&amp; cp build-audit-sanitize/frozen-bubble-sdl3 … &amp;&amp; HOME=… CFFIXED_USER_HOME=… SDL_VIDEODRIVER=dummy UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1 python3 -c '…subprocess.run([FakeBundle…/frozen-bubble-sdl3], timeout=15…)…'</code> | 0 | Child exit −6 with UBSan `member call on misaligned address 0xbebebebebebebebe for type 'AudioMixer'` at `frozenbubble.cpp:228` from `main.cpp:30` | [BUG-034](subsystems/04-lobby-settings-input.md#dynamic-evidence) |
+| 2026-07-28T13:55Z | <code>shasum -a 256 -c /tmp/fb-sdl3-audit/task6/real-prefs-baseline.txt</code> | 0 | All three real preference files reported `OK`; the user's preferences were never modified | [Limitations](subsystems/04-lobby-settings-input.md#limitations) |
+| 2026-07-28T13:56Z | <code>cd /tmp/fb-sdl3-audit/task6 &amp;&amp; /usr/bin/c++ … numkeys.cpp … -o numkeys &amp;&amp; SDL_VIDEODRIVER=dummy ./numkeys</code> | 0 | Printed `numkeys=512 SDL_SCANCODE_COUNT=512`, the exact bound BUG-028 and BUG-035 exceed | [BUG-028](subsystems/04-lobby-settings-input.md#dynamic-evidence) |
+| 2026-07-28T14:05Z | <code>python3 - &lt;&lt;'PY' … rewrite the fifteen Task 6 rows of docs/audit/FILE_COVERAGE.md … PY</code> | 0 | Printed `rewritten rows: 15`; every scoped file now carries a Task 6 disposition | [FILE_COVERAGE.md](FILE_COVERAGE.md) |
+| 2026-07-28T14:06Z | <code>test "$(awk -F'`' '/^&#92;&#124; `/ {count++} END {print count+0}' docs/audit/FILE_COVERAGE.md)" = "237" &amp;&amp; tmpdir=$(mktemp -d …) &amp;&amp; git ls-tree -r --name-only 09d6c7bf… &#124; rg '…' &#124; sort &gt; "$tmpdir/pinned.txt" &amp;&amp; python3 -c '…' &gt; "$tmpdir/ledger.txt" &amp;&amp; diff -u "$tmpdir/pinned.txt" "$tmpdir/ledger.txt"</code> | 0 | `rows=237 OK` and `inventory equality OK`: the ledger still equals the pinned-tree filter exactly | [FILE_COVERAGE.md](FILE_COVERAGE.md) |
 
 ## Limitations
 
@@ -535,8 +613,27 @@ by its ignored controller report.
   network arrival timing. SEC-003 and omitted security runtime remain
   limitations rather than passes.
 - The local two-player and disconnect option-propagation origins identified by
-  BUG-021/023 cross into Task 6. Task 5 proves their gameplay consequences;
-  Task 6 still owns the complete menu/settings transition review.
+  BUG-021/023 crossed into Task 6, which resolved both menu origins and closed
+  that handoff.
+- macOS `SDL_GetPrefPath` ignores `HOME`, so Task 6 isolation required
+  `CFFIXED_USER_HOME`. The first probe therefore resolved to the user's real
+  preference directory; the harness gate aborted before opening a file, the
+  directory and its three files pre-existed, and all three hashes were verified
+  unchanged afterwards.
+- Task 6 exercised only the settings subsystem through a linked production
+  object. All full-client runs used dummy video/audio drivers and were killed at
+  the title screen, so no menu navigation, panel transition, key rebinding,
+  controller event, or lobby interaction was driven at runtime; those
+  conclusions are source traces.
+- Task 6 started no server or connection, so every network lobby transition was
+  reviewed statically. BUG-033 was deliberately not reproduced because doing so
+  kills processes on this host, and BUG-035/BUG-036 need six to eleven physical
+  gamepad hot-plug cycles this environment cannot supply.
+- Per the user's scope restriction, Task 6 ran no security-specific runtime
+  test. SEC-007 and the SEC-004 lobby-side consumption are code-supported
+  inferences; the omitted forged-`OPTIONS` and out-of-range-team checks are a
+  final-audit limitation, not a pass. WASM, Windows, and Android menu/input
+  paths were likewise reviewed statically only.
 
 ## Processes and cleanup
 
@@ -553,6 +650,14 @@ by its ignored controller report.
   and touched no preferences. Its normal and sanitizer oracle/production-object
   harness binaries, sources, and log under `/tmp/fb-sdl3-audit/` are local
   regenerable evidence; they own no running process or external state.
+- Task 6 started no listener, server, client connection, or background process,
+  and killed no process. Its five sanitized full-client runs used dummy drivers,
+  isolated preference homes, and kill timeouts; all exited or were terminated
+  within their timeout, and none remains running. Every scenario home, harness
+  binary, source, and log lives under `/tmp/fb-sdl3-audit/task6/`, including one
+  copy of the sanitized client inside a `FakeBundle.app` layout; all are local
+  regenerable evidence owning no external state. The user's real preference
+  files were hashed before and verified byte-identical after the gate.
 - Temporary files include the Task 1 inventory files and Task 2 analyzer logs/triage artifacts under `/tmp/fb-sdl3-audit/`; all are local, regenerable evidence and contain no credentials.
 - The four generated audit build directories are retained for Tasks 3 and 9
   (especially the sanitized server) and are locally excluded through untracked
