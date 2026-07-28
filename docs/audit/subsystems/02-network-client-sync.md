@@ -14,11 +14,22 @@ Not started.
 
 ## Dynamic evidence
 
-Not started.
+Task 2 baseline only: Release and retained ASan+UBSan CTest runs passed the
+registered network bot test. Task 4 protocol and synchronization investigation
+has not started.
 
 ## Candidates
 
-None.
+- **SEC-003 — unvalidated peer numeric fields reach board indexing (suspected
+  High):** broad clang-tidy identified 27 unchecked string-to-number sites. A
+  targeted review separates generic/local parsing from the peer-facing subset:
+  `src/bubblegame_net.cpp` accepts transmitted `s`, `m`, `M`, and statistics
+  fields, and `src/networkclient.cpp` accepts sync fields. In particular, the
+  `M` path passes peer-controlled `stickY` and `cx` to
+  `BubbleArray::PlacePlayerBubble`, which indexes `bubbleMap[row][col]` without
+  a bounds check. The `s` path similarly stores coordinates later used by the
+  shooter. Task 4 must reproduce malformed-message behavior and map every
+  peer-facing field before confirmation.
 
 ## Confirmed findings
 
@@ -34,7 +45,9 @@ Pending; see [FILE_COVERAGE.md](../FILE_COVERAGE.md).
 
 ## Limitations
 
-Not yet assessed.
+- Task 2 ran existing tests and analyzers only; it did not inject malformed
+  network frames. SEC-003 therefore remains suspected despite a direct static
+  index path.
 
 ## Gate conclusion
 

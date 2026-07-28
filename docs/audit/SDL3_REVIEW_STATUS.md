@@ -13,7 +13,7 @@
 
 | Component | Recorded value |
 |---|---|
-| Agent | Codex subagent `task_1_implementer` |
+| Agent | Codex subagents `task_1_implementer` (bootstrap) and `task_2_implementer` (baselines) |
 | Model | Unknown; the dispatcher did not expose a model identifier |
 | Host | macOS 26.5.2 (build 25F84), Darwin 25.5.0, arm64 |
 | Compiler | Apple clang 21.0.0 (`clang-2100.1.1.101`), target `arm64-apple-darwin25.5.0` |
@@ -24,22 +24,22 @@
 | Gradle | 8.2 via `android/gradlew` |
 | Android SDK | `/opt/homebrew/share/android-commandlinetools`; sdkmanager 20.0 |
 | Android NDK | 25.2.9519653 |
-| Emscripten | Unavailable (`emcc` not found) |
-| cppcheck | Unavailable (`cppcheck` not found) |
-| clang-tidy | Unavailable (`clang-tidy` not found) |
+| Emscripten | 6.0.4-git (Homebrew; initially absent, installed successfully in Task 2) |
+| cppcheck | 2.21.0 (Homebrew; initially absent, installed successfully in Task 2) |
+| clang-tidy | Homebrew LLVM 22.1.8, optimized build (initially absent, installed successfully in Task 2; invoked by absolute keg-only path) |
 
 ## Current state
 
-- Phase: Phase 1 — baseline and audit setup
-- Active gate: Task 2 (pending)
-- Exact next action: Begin Task 2, Step 1: install missing analysis tools and record final tool versions.
+- Phase: Phase 2 — subsystem review
+- Active gate: Task 3 (pending)
+- Exact next action: Begin Task 3, Step 1: map protocol entry points, allocation owners, buffer sizes, length types, and state transitions.
 
 ## Gate checklist
 
 | Task | Gate | Status |
 |---|---|---|
 | Task 1 | Bootstrap resumable audit workspace | complete |
-| Task 2 | Reproducible build, test, sanitizer, and analysis baselines | pending |
+| Task 2 | Reproducible build, test, sanitizer, and analysis baselines | complete |
 | Task 3 | C server and untrusted TCP/WebSocket protocol | pending |
 | Task 4 | Native/WASM clients and multiplayer synchronization | pending |
 | Task 5 | Gameplay rules, board algorithms, and round state | pending |
@@ -54,22 +54,30 @@
 
 ## Active candidates
 
-None.
+- IMP-001 — strict no-argument server prototypes (suspected improvement; 12 unique warning locations covering six functions).
+- IMP-002 — signed/unsigned server comparisons (suspected improvement; seven unique warning locations).
+- IMP-003 — unused server callback/signal parameters (suspected improvement; six unique warning locations).
+- IMP-004 — dead server locals (suspected improvement; two unique warning locations).
+- BUG-001, BUG-002 — `TextureEx` failure/leak handling and server signal safety.
+- SEC-001, SEC-002, SEC-003 — privilege-drop verification, master-response bounds, and peer numeric/board bounds.
+- REL-001, REL-002 — server format mismatch and fixed-port/daemonized test isolation.
+- IMP-005 through IMP-010 — initialization, numeric intent, ownership, modernization, control-flow, and failure-policy improvements.
 
 ## Confirmed findings
 
-None. No ID has been registered in [FINDINGS.md](FINDINGS.md).
+None. Every ID registered in [FINDINGS.md](FINDINGS.md) remains `suspected`.
 
 ## Commands and evidence
 
 Each row records exactly one top-level shell command. A shell loop remains one
 syntactic command, but unnamed multi-command “gate” rows are not used. Exit
-values and material output are from captured Task 1 / Fix Round 1 evidence.
+values and material output are from captured Task 1, fix-round, and Task 2
+evidence.
 
-**Canonical log cutoff:** completed post-commit and report verification for
-`820892d72fef1fafca16ac2d5bf31607a88ae5a1`. Commands that create, validate,
-stage, commit, or verify a later amendment to this same log belong in the
-controller report, preventing a false claim that a commit records itself.
+**Canonical log cutoff:** completed Task 2 baseline, analyzer, REL-002
+investigation, and review-fix evidence collection. Task 2 staging, commit, and
+post-commit checks belong in the ignored controller report, preventing a false
+claim that a commit records itself.
 
 | Timestamp (UTC) | Command | Exit | Concise result | Evidence |
 |---|---|---:|---|---|
@@ -243,16 +251,79 @@ controller report, preventing a false claim that a commit records itself.
 | 2026-07-28 (after 820892d7; exact time not captured) | <code>test "$(git diff-tree --no-commit-id --name-only -r HEAD)" = "docs/audit/SDL3_REVIEW_STATUS.md"</code> | 0 | Round 1 fix scope is status-only | Round 1 final handoff |
 | 2026-07-28 (after 820892d7; exact time not captured) | <code>rg -Fq 'Unavoidable circularity:' .superpowers/sdd/2026-07-28-complete-repository-audit/task-1-report.md</code> | 0 | Cutoff concern recorded | Round 1 final report check |
 | 2026-07-28 (after 820892d7; exact time not captured) | <code>printf 'FINAL ROUND 1 PASS: circularity_concern=reported report=ignored worktree=clean head=820892d7\n'</code> | 0 | Printed the quoted PASS summary | Round 1 final handoff |
+| 2026-07-28 (Task 2 Step 1; exact time not captured) | <code>mkdir -p /tmp/fb-sdl3-audit</code> | 0 | Created/confirmed the approved analyzer-artifact directory; no output | `/tmp/fb-sdl3-audit` |
+| 2026-07-28 (Task 2 Step 1; exact time not captured) | <code>command -v cppcheck &#124;&#124; brew install cppcheck</code> | 0 | Initially absent; installed cppcheck 2.21.0 and tinyxml2 11.0.0 successfully | Session environment above |
+| 2026-07-28 (Task 2 Step 1; exact time not captured) | <code>test -x "$(brew --prefix llvm 2&gt;/dev/null)/bin/clang-tidy" &#124;&#124; brew install llvm</code> | 0 | Initially absent; installed keg-only LLVM 22.1.8 and z3 4.16.0 successfully | Session environment above |
+| 2026-07-28 (Task 2 Step 1; exact time not captured) | <code>command -v emcc &#124;&#124; brew install emscripten</code> | 0 | Initially absent; installed Emscripten 6.0.4 and 18 dependencies; Homebrew also upgraded five dependencies | Session environment above |
+| 2026-07-28T03:25:33Z | <code>uname -a</code> | 0 | Darwin 25.5.0, RELEASE_ARM64_T8142, arm64 | Session environment above |
+| 2026-07-28T03:25:33Z | <code>sw_vers</code> | 0 | macOS 26.5.2, build 25F84 | Session environment above |
+| 2026-07-28T03:25:33Z | <code>cmake --version</code> | 0 | CMake 4.3.4 | Session environment above |
+| 2026-07-28T03:25:33Z | <code>ninja --version</code> | 0 | Ninja 1.13.2 | Session environment above |
+| 2026-07-28T03:25:33Z | <code>clang --version</code> | 0 | Apple clang 21.0.0, target arm64-apple-darwin25.5.0 | Session environment above |
+| 2026-07-28T03:25:33Z | <code>python3 --version</code> | 0 | Python 3.14.6 | Session environment above |
+| 2026-07-28T03:25:33Z | <code>java -version</code> | 0 | OpenJDK 17.0.19 Homebrew runtime | Session environment above |
+| 2026-07-28T03:25:33Z | <code>./android/gradlew --version</code> | 0 | Gradle 8.2, JVM 17.0.19, macOS aarch64 | Session environment above |
+| 2026-07-28T03:25:33Z | <code>emcc --version</code> | 0 | Emscripten 6.0.4-git; first invocation completed sanity checks | Session environment above |
+| 2026-07-28T03:25:33Z | <code>cppcheck --version</code> | 0 | Cppcheck 2.21.0 | Session environment above |
+| 2026-07-28T03:25:33Z | <code>"$(brew --prefix llvm)/bin/clang-tidy" --version</code> | 0 | Homebrew LLVM 22.1.8, optimized build | Session environment above |
+| 2026-07-28T03:25:33Z | <code>test ! -e build-audit-release &amp;&amp; test ! -e build-audit-werror &amp;&amp; test ! -e build-audit-sanitize &amp;&amp; test ! -e build-audit-compile-db</code> | 0 | All four audit build directories were absent before their first configure | Task 2 clean-build preflight |
+| 2026-07-28T03:27:35Z | <code>cmake -S . -B build-audit-release -G Ninja -DCMAKE_BUILD_TYPE=Release</code> | 0 | AppleClang Release configure succeeded; bundled iniparser selected; GLib 2.88.2 and Python 3.14.6 found | `build-audit-release` |
+| 2026-07-28T03:27:35Z | <code>cmake --build build-audit-release --parallel</code> | 0 | Built 49 steps including game, fb-server, and test targets; 51 server warning emissions from 27 unique project-owned locations | [Server baseline notebook](subsystems/01-server-protocol.md#candidates) |
+| 2026-07-28T03:27:35Z | <code>ctest --test-dir build-audit-release --output-on-failure</code> | 0 | Reported 5/5 passing in 1.85 seconds; REL-002 later invalidated ownership of the fixed-port server-list subprocess, while the other four results remain accepted | [Build/tooling notebook](subsystems/07-build-release-tooling.md#candidates) |
+| 2026-07-28T03:28:57Z | <code>cmake -S . -B build-audit-werror -G Ninja -DCMAKE_BUILD_TYPE=Debug -DCMAKE_C_FLAGS='-Werror' -DCMAKE_CXX_FLAGS='-Werror'</code> | 0 | Warnings-strict Debug configure succeeded | `build-audit-werror` |
+| 2026-07-28T03:28:57Z | <code>cmake --build build-audit-werror --parallel</code> | 1 | Expected classified baseline failure: AppleClang promoted server IMP-001 through IMP-004 warnings to errors; Ninja stopped before linking | [Server baseline notebook](subsystems/01-server-protocol.md#candidates) |
+| 2026-07-28T03:28:57Z | <code>ctest --test-dir build-audit-werror --output-on-failure</code> | 8 | `net-bots-test` passed six assertions; server-list reported `OK (skipped=1)` because its binary was missing; 3 C++ tests were not run | `build-audit-werror/Testing/Temporary/LastTest.log` |
+| 2026-07-28T03:30:17Z | <code>cmake -S . -B build-audit-sanitize -G Ninja -DCMAKE_BUILD_TYPE=Debug -DCMAKE_C_FLAGS='-O1 -g -fno-omit-frame-pointer -fsanitize=address,undefined' -DCMAKE_CXX_FLAGS='-O1 -g -fno-omit-frame-pointer -fsanitize=address,undefined' -DCMAKE_EXE_LINKER_FLAGS='-fsanitize=address,undefined'</code> | 0 | ASan+UBSan Debug configure succeeded | `build-audit-sanitize` |
+| 2026-07-28T03:30:17Z | <code>cmake --build build-audit-sanitize --parallel</code> | 0 | Built all 49 steps; repeated server IMP-001 through IMP-004 warnings plus two vendored iniparser `sprintf` deprecation warnings | [Build/tooling notebook](subsystems/07-build-release-tooling.md) |
+| 2026-07-28T03:30:17Z | <code>ASAN_OPTIONS=detect_leaks=1:halt_on_error=1 UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1 ctest --test-dir build-audit-sanitize --output-on-failure</code> | 8 | Apple ASan reported leak detection unsupported and aborted 3 instrumented C++ tests; CTest marked both Python rows Passed, but only net-bots is accepted while server-list retains REL-002 limits | [Build/tooling notebook](subsystems/07-build-release-tooling.md) |
+| 2026-07-28T03:30:17Z | <code>ASAN_OPTIONS=detect_leaks=0:halt_on_error=1 UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1 ctest --test-dir build-audit-sanitize --output-on-failure</code> | 0 | Reported 5/5 passing with no sanitizer diagnostic; REL-002 later invalidated server-list process ownership, which the supplemental foreground run restored | [Build/tooling notebook](subsystems/07-build-release-tooling.md#candidates) |
+| 2026-07-28 (Task 2 Step 5; exact time not captured) | <code>cmake -S . -B build-audit-compile-db -G Ninja -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON</code> | 0 | Compile-database configure succeeded and generated 43 project/vendored compile commands | `build-audit-compile-db/compile_commands.json` |
+| 2026-07-28 (Task 2 Step 5; exact time not captured) | <code>cppcheck --project=build-audit-compile-db/compile_commands.json --enable=warning,style,performance,portability --inline-suppr --error-exitcode=0 2&gt; /tmp/fb-sdl3-audit/cppcheck.txt</code> | 0 | 507 deduplicated diagnostics: 496 project-owned across 34 check IDs and 11 vendored | [Analyzer triage](subsystems/07-build-release-tooling.md#analyzer-triage) |
+| 2026-07-28 (Task 2 Step 5; exact time not captured) | <code>"$(brew --prefix llvm)/bin/run-clang-tidy" -p build-audit-compile-db &gt; /tmp/fb-sdl3-audit/clang-tidy.txt 2&gt;&amp;1</code> | 1 | Exact brief command could not find keg-only clang-tidy on PATH; retained as `clang-tidy-initial.txt` | [Build/tooling notebook](subsystems/07-build-release-tooling.md) |
+| 2026-07-28 (Task 2 Step 5; exact time not captured) | <code>"$(brew --prefix llvm)/bin/run-clang-tidy" -p build-audit-compile-db -clang-tidy-binary "$(brew --prefix llvm)/bin/clang-tidy" &gt; /tmp/fb-sdl3-audit/clang-tidy.txt 2&gt;&amp;1</code> | 1 | Explicit binary was found, but LLVM 22 enabled no checks without a repository configuration; retained as `clang-tidy-no-checks.txt` | [Build/tooling notebook](subsystems/07-build-release-tooling.md) |
+| 2026-07-28 (Task 2 Step 5; exact time not captured) | <code>"$(brew --prefix llvm)/bin/run-clang-tidy" -p build-audit-compile-db -clang-tidy-binary "$(brew --prefix llvm)/bin/clang-tidy" -checks='clang-analyzer-*,bugprone-*,performance-*,portability-*' -header-filter='^(src&#124;server&#124;tests)/' &gt; /tmp/fb-sdl3-audit/clang-tidy.txt 2&gt;&amp;1</code> | 1 | Broad checks reached project code but Homebrew LLVM could not locate the macOS SDK headers; retained as `clang-tidy-no-sysroot.txt` | [Build/tooling notebook](subsystems/07-build-release-tooling.md) |
+| 2026-07-28 (Task 2 Step 5; exact time not captured) | <code>xcrun --sdk macosx --show-sdk-path</code> | 0 | Resolved Xcode macOS 26.5 SDK sysroot | `/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.5.sdk` |
+| 2026-07-28 (Task 2 Step 5; exact time not captured) | <code>"$(brew --prefix llvm)/bin/run-clang-tidy" -p build-audit-compile-db -clang-tidy-binary "$(brew --prefix llvm)/bin/clang-tidy" -checks='clang-analyzer-*,bugprone-*,performance-*,portability-*' -header-filter='^/Users/dchau/gr/frozen-bubble-sdl3/(src&#124;server&#124;tests)/' -extra-arg=-isysroot -extra-arg="$(xcrun --sdk macosx --show-sdk-path)" &gt; /tmp/fb-sdl3-audit/clang-tidy.txt 2&gt;&amp;1</code> | 0 | 598 deduplicated diagnostics: 547 project-owned across 38 check IDs and 51 vendored | [Analyzer triage](subsystems/07-build-release-tooling.md#analyzer-triage) |
+| 2026-07-28 (Task 2 Step 5; exact time not captured) | <code>shasum -a 256 /tmp/fb-sdl3-audit/cppcheck.txt /tmp/fb-sdl3-audit/clang-tidy-initial.txt /tmp/fb-sdl3-audit/clang-tidy-no-checks.txt /tmp/fb-sdl3-audit/clang-tidy-no-sysroot.txt /tmp/fb-sdl3-audit/clang-tidy.txt</code> | 0 | Recorded immutable hashes for all five primary analyzer logs | [Build/tooling notebook](subsystems/07-build-release-tooling.md) |
+| 2026-07-28 (Task 2 final verification; exact time not captured) | <code>ctest --test-dir build-audit-release --output-on-failure</code> | 0 | Concurrent verification reported 5/5 passing; it shared REL-002's foreign fixed-port listener | [REL-002](subsystems/07-build-release-tooling.md#candidates) |
+| 2026-07-28 (Task 2 final verification; exact time not captured) | <code>ASAN_OPTIONS=detect_leaks=0:halt_on_error=1 UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1 ctest --test-dir build-audit-sanitize --output-on-failure</code> | 8 | Concurrent verification exposed REL-002: server-list received `CREATE: NICK_IN_USE`; the other four tests passed | [REL-002](subsystems/07-build-release-tooling.md#candidates) |
+| 2026-07-28 (Task 2 REL-002 investigation; exact time not captured) | <code>lsof -nP -iTCP:15512 -sTCP:LISTEN</code> | 0 | Identified `fb-server` PID 22300 listening on fixed port 15512 | [Server baseline notebook](subsystems/01-server-protocol.md#candidates) |
+| 2026-07-28 (Task 2 REL-002 investigation; exact time not captured) | <code>ps -o pid=,ppid=,lstart=,command= -p 22293,22300,74458,76361,92759</code> | 0 | PID 22300 had PPID 1, started 2026-07-26, and ran `/Users/dchau/gr/frozen-bubble-battle/build/server/fb-server -p 15512 -q -z` | [Server baseline notebook](subsystems/01-server-protocol.md#candidates) |
+| 2026-07-28 (Task 2 REL-002 investigation; exact time not captured) | <code>build-audit-release/server/fb-server -p 15512 -q -z</code> | 1 | Requested audit server reported `Address already in use`; test setup nevertheless accepted the foreign listener | [REL-002](subsystems/07-build-release-tooling.md#candidates) |
+| 2026-07-28 (Task 2 REL-002 reproduction; exact time not captured) | <code>python3 -c 'import pathlib,sys; path=pathlib.Path("tests/server_list_cap_test.py"); source=path.read_text().replace("self.port = 15512", "self.port = 25512"); sys.argv=[str(path), "build-audit-release/server/fb-server"]; globals()["__file__"]=str(path); exec(compile(source, str(path), "exec"), globals())'</code> | 0 | Assertions passed, but omission of `-d` reproduced the daemon leak on temporary port 25512 | [REL-002](subsystems/07-build-release-tooling.md#candidates) |
+| 2026-07-28 (Task 2 REL-002 reproduction; exact time not captured) | <code>lsof -nP -iTCP:25512 -sTCP:LISTEN</code> | 0 | Identified leaked listener PID 95766 on temporary port 25512 | Task 2 cleanup evidence |
+| 2026-07-28 (Task 2 REL-002 reproduction; exact time not captured) | <code>ps -o pid=,ppid=,lstart=,command= -p 95766</code> | 0 | PID 95766 had PPID 1 and exact command `build-audit-release/server/fb-server -p 25512 -q -z` | Task 2 cleanup evidence |
+| 2026-07-28 (Task 2 REL-002 investigation; exact time not captured) | <code>kill -TERM 95766; for task_try in 1 2 3 4 5; do if ! kill -0 95766 2&gt;/dev/null; then exit 0; fi; sleep 1; done; exit 1</code> | 0 | Terminated only the Task 2-owned reproduction daemon on temporary port 25512 | Task 2 cleanup evidence |
+| 2026-07-28 (Task 2 REL-002 preliminary verification; exact time not captured) | <code>python3 -c 'import pathlib,sys; path=pathlib.Path("tests/server_list_cap_test.py"); source=path.read_text(); assert source.count("self.port = 15512") == 1; assert source.count("[str(self.server_path), \"-p\"") == 1; source=source.replace("self.port = 15512", "self.port = 25512").replace("[str(self.server_path), \"-p\"", "[str(self.server_path), \"-d\", \"-p\""); sys.argv=[str(path), "build-audit-release/server/fb-server"]; globals()["__file__"]=str(path); exec(compile(source, str(path), "exec"), globals())'</code> | 0 | Assertions passed, but independent review rejected binary-ownership confidence because port 25512 remained hardcoded | [Server baseline notebook](subsystems/01-server-protocol.md) |
+| 2026-07-28 (Task 2 REL-002 preliminary verification; exact time not captured) | <code>ASAN_OPTIONS=detect_leaks=0:halt_on_error=1 UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1 python3 -c 'import pathlib,sys; path=pathlib.Path("tests/server_list_cap_test.py"); source=path.read_text(); assert source.count("self.port = 15512") == 1; assert source.count("[str(self.server_path), \"-p\"") == 1; source=source.replace("self.port = 15512", "self.port = 25512").replace("[str(self.server_path), \"-p\"", "[str(self.server_path), \"-d\", \"-p\""); sys.argv=[str(path), "build-audit-sanitize/server/fb-server"]; globals()["__file__"]=str(path); exec(compile(source, str(path), "exec"), globals())'</code> | 0 | Assertions passed, but independent review rejected binary-ownership confidence because port 25512 remained hardcoded | [Server baseline notebook](subsystems/01-server-protocol.md) |
+| 2026-07-28 (Task 2 REL-002 preliminary verification; exact time not captured) | <code>! nc -z 127.0.0.1 25512</code> | 0 | Proved only final port closure; not accepted as child-ownership evidence | Task 2 cleanup evidence |
+| 2026-07-28 (Task 2 final verification; exact time not captured) | <code>ctest --test-dir build-audit-release --output-on-failure -E server-list-cap-test</code> | 0 | Four unaffected Release tests passed | `build-audit-release` |
+| 2026-07-28 (Task 2 final verification; exact time not captured) | <code>ASAN_OPTIONS=detect_leaks=0:halt_on_error=1 UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1 ctest --test-dir build-audit-sanitize --output-on-failure -E server-list-cap-test</code> | 0 | Four unaffected ASan+UBSan tests passed with no sanitizer diagnostic | `build-audit-sanitize` |
+| 2026-07-28 (Task 2 final verification; exact time not captured) | <code>"$(brew --prefix llvm)/bin/run-clang-tidy" -j 1 -p build-audit-compile-db -clang-tidy-binary "$(brew --prefix llvm)/bin/clang-tidy" -checks='clang-analyzer-*,bugprone-*,performance-*,portability-*' -header-filter='^/Users/dchau/gr/frozen-bubble-sdl3/(src&#124;server&#124;tests)/' -extra-arg=-isysroot -extra-arg=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.5.sdk &gt; /tmp/fb-sdl3-audit/clang-tidy-repro.txt 2&gt;&amp;1</code> | 0 | Single-worker replay reproduced all 598 unique diagnostics and matched all 547 project-owned records exactly | [Build/tooling notebook](subsystems/07-build-release-tooling.md) |
+| 2026-07-28 (Task 2 review fix verification; exact time not captured) | <code>python3 -c 'import pathlib,sys; path=pathlib.Path("tests/server_list_cap_test.py"); source=path.read_text(); old_port="        self.port = 15512"; new_port="        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as port_probe:\n            port_probe.bind((\"127.0.0.1\", 0))\n            self.port = port_probe.getsockname()[1]\n        print(f\"OWNED_TEST_PORT={self.port}\")"; old_cmd="[str(self.server_path), \"-p\""; new_cmd="[str(self.server_path), \"-d\", \"-p\""; old_ready="        self.socks = []"; new_ready="        time.sleep(0.1)\n        if self.server.poll() is not None:\n            self.fail(f\"server launcher exited before ownership check: {self.server.returncode}\")\n        self.socks = []"; assert source.count(old_port) == source.count(old_cmd) == source.count(old_ready) == 1; source=source.replace(old_port,new_port).replace(old_cmd,new_cmd).replace(old_ready,new_ready); sys.argv=[str(path), "build-audit-release/server/fb-server"]; globals()["__file__"]=str(path); exec(compile(source, str(path), "exec"), globals())'</code> | 0 | Dynamically allocated port 63305; exact foreground Release child remained alive after readiness; assertions passed in 0.607 seconds | [Server baseline notebook](subsystems/01-server-protocol.md) |
+| 2026-07-28 (Task 2 review fix verification; exact time not captured) | <code>! pgrep -f 'build-audit-release/server/fb-server.*-d'</code> | 0 | No matching Release foreground child remained after teardown | Task 2 cleanup evidence |
+| 2026-07-28 (Task 2 review fix verification; exact time not captured) | <code>ASAN_OPTIONS=detect_leaks=0:halt_on_error=1 UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1 python3 -c 'import pathlib,sys; path=pathlib.Path("tests/server_list_cap_test.py"); source=path.read_text(); old_port="        self.port = 15512"; new_port="        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as port_probe:\n            port_probe.bind((\"127.0.0.1\", 0))\n            self.port = port_probe.getsockname()[1]\n        print(f\"OWNED_TEST_PORT={self.port}\")"; old_cmd="[str(self.server_path), \"-p\""; new_cmd="[str(self.server_path), \"-d\", \"-p\""; old_ready="        self.socks = []"; new_ready="        time.sleep(0.1)\n        if self.server.poll() is not None:\n            self.fail(f\"server launcher exited before ownership check: {self.server.returncode}\")\n        self.socks = []"; assert source.count(old_port) == source.count(old_cmd) == source.count(old_ready) == 1; source=source.replace(old_port,new_port).replace(old_cmd,new_cmd).replace(old_ready,new_ready); sys.argv=[str(path), "build-audit-sanitize/server/fb-server"]; globals()["__file__"]=str(path); exec(compile(source, str(path), "exec"), globals())'</code> | 0 | Dynamically allocated port 63316; exact foreground ASan+UBSan child remained alive after readiness; assertions passed in 1.000 second | [Server baseline notebook](subsystems/01-server-protocol.md) |
+| 2026-07-28 (Task 2 review fix verification; exact time not captured) | <code>! pgrep -f 'build-audit-sanitize/server/fb-server.*-d'</code> | 0 | No matching sanitizer foreground child remained after teardown | Task 2 cleanup evidence |
 
 ## Limitations
 
-- Emscripten, cppcheck, and clang-tidy are not installed or not on `PATH`; Task 2 must install or otherwise resolve them before claiming their coverage.
-- Only the macOS arm64 host was inspected during bootstrap. Linux, Windows, Android-device, and browser/WASM runtime behavior has not been tested.
-- No release/deployment credentials, signing credentials, external hosts, or interactive gameplay scenarios were evaluated in Task 1.
-- Task 1 performs workspace bootstrap only; builds, tests, sanitizers, analyzers, runtime checks, and subsystem review remain pending in Tasks 2-12.
+- Emscripten, cppcheck, and clang-tidy were absent at bootstrap and installed successfully in Task 2. Homebrew LLVM remains keg-only, so the audit invokes clang-tidy by its absolute `$(brew --prefix llvm)/bin` path.
+- The default Release build is successful but not warning-clean: AppleClang emitted 51 server warning instances from 27 unique locations. IMP-001 through IMP-004 retain every unique location for Task 3 review.
+- The strict Debug build cannot complete until IMP-001 through IMP-004 are resolved. Its subsequent 3/5 not-run CTest result is a downstream missing-executable consequence, not an independent candidate.
+- Apple ASan does not support leak detection on this host. The required leak-enabled run is recorded as an environment limitation; the accepted leak-disabled verification passed four unaffected tests plus the isolated foreground server-list assertions with no sanitizer diagnostic.
+- The sanitizer build's two `sprintf` deprecation warnings are in bundled `third_party/iniparser`, classified as vendored dependency noise pending Task 9 boundary/version review.
+- The exact clang-tidy helper command was not directly usable with keg-only LLVM 22: it needed an explicit binary, explicit check families, and an Xcode SDK sysroot. All failed attempts and the successful reproducible fallback are retained.
+- Cppcheck and clang-tidy are broad signal sources, not test or proof substitutes. Task 2 triaged every project-owned diagnostic by counted family, but assigned subsystem gates still own semantic confirmation or dismissal.
+- REL-002 prevents the registered server-list CTest result from proving which binary served the request on POSIX. Task 2 therefore records the raw result but accepts only the supplemental dynamic-port, foreground, live-child-verified runs as Release/sanitizer server evidence.
+- Only native macOS arm64 build/test/analyzer baselines were run. Linux, Windows, Android-device, and browser/WASM build/runtime behavior has not been tested; Emscripten availability alone is not WASM coverage.
+- No release/deployment credentials, signing credentials, external hosts, or interactive gameplay scenarios were evaluated in Task 2.
 
 ## Processes and cleanup
 
-- No servers, clients, proxies, ports, background processes, or persistent sessions were started.
-- Temporary files: `/tmp/fb-sdl3-audit-tracked-files.txt`, `/tmp/fb-sdl3-audit-file-coverage.md`, `/tmp/fb-sdl3-audit-filtered-paths.txt`, and `/tmp/fb-sdl3-audit-ledger-paths.txt`; all contain only regenerable inventory/bootstrap data.
-- Cleanup required: none. No listener or child process remains.
+- REL-002's first reproduction created Task 2-owned daemon PID 95766 on temporary port 25512; it was identified by exact command/start time, terminated, and the port was verified closed. The preliminary hardcoded-port reruns were not accepted as ownership evidence. The accepted dynamic-port foreground reruns asserted the exact child alive and cleaned up normally.
+- Pre-existing listeners on ports 15511, 15512, 15113, and 15998 were observed during isolation diagnosis. They predate Task 2 or are outside its assigned ownership and were intentionally left untouched; no Task 2-owned server, client, proxy, port listener, background process, or shell session remains.
+- Temporary files include the Task 1 inventory files and Task 2 analyzer logs/triage artifacts under `/tmp/fb-sdl3-audit/`; all are local, regenerable evidence and contain no credentials.
+- The four generated audit build directories are retained for Tasks 3 and 9
+  (especially the sanitized server) and are locally excluded through untracked
+  `.git/info/exclude` entries. Remove them after the complete audit; no listener
+  or child process remains.

@@ -7,7 +7,7 @@ Inventory rule: paths selected by Task 1 Step 4 from the pinned tree. The ledger
 | Path | Gate | Disposition | Evidence | Notes |
 |---|---|---|---|---|
 | `.github/workflows/build.yml` | Task 9 | Pending review | - | Project-owned or maintained integration surface; evidence pending assigned gate. |
-| `CMakeLists.txt` | Task 9 | Pending review | - | Project-owned or maintained integration surface; evidence pending assigned gate. |
+| `CMakeLists.txt` | Task 9 | Baseline exercised; static review pending | [Task 2 baseline](subsystems/07-build-release-tooling.md) | Configured four clean Ninja trees, built Release/sanitizer targets, registered and ran five tests, and emitted the analyzer compile database; semantic build review remains Task 9. |
 | `CMakeListsEmscripten.txt` | Tasks 8-9 | Pending review | - | Project-owned or maintained integration surface; evidence pending assigned gate. |
 | `README.md` | Task 9 | Pending review | - | Project-owned or maintained integration surface; evidence pending assigned gate. |
 | `SetupServer.md` | Task 9 | Pending review | - | Project-owned or maintained integration surface; evidence pending assigned gate. |
@@ -161,7 +161,7 @@ Inventory rule: paths selected by Task 1 Step 4 from the pinned tree. The ledger
 | `flake.nix` | Task 9 | Pending review | - | Project-owned or maintained integration surface; evidence pending assigned gate. |
 | `netlify.toml` | Task 9 | Pending review | - | Project-owned or maintained integration surface; evidence pending assigned gate. |
 | `server/AUTHORS` | Task 3 | Pending review | - | Project-owned or maintained integration surface; evidence pending assigned gate. |
-| `server/CMakeLists.txt` | Task 3 | Pending review | - | Project-owned or maintained integration surface; evidence pending assigned gate. |
+| `server/CMakeLists.txt` | Task 3 | Baseline exercised; static review pending | [Task 2 baseline](subsystems/01-server-protocol.md) | Native Release and sanitizer server targets linked; strict build exposed classified warnings; semantic target review remains Task 3. |
 | `server/README` | Task 3 | Pending review | - | Project-owned or maintained integration surface; evidence pending assigned gate. |
 | `server/fb-server.c` | Task 3 | Pending review | - | Project-owned or maintained integration surface; evidence pending assigned gate. |
 | `server/game.c` | Task 3 | Pending review | - | Project-owned or maintained integration surface; evidence pending assigned gate. |
@@ -231,12 +231,12 @@ Inventory rule: paths selected by Task 1 Step 4 from the pinned tree. The ledger
 | `src/ttftext.cpp` | Task 7 | Pending review | - | Project-owned or maintained integration surface; evidence pending assigned gate. |
 | `src/ttftext.h` | Task 7 | Pending review | - | Project-owned or maintained integration surface; evidence pending assigned gate. |
 | `start-server.sh` | Task 9 | Pending review | - | Project-owned or maintained integration surface; evidence pending assigned gate. |
-| `tests/net_bots_test.py` | Task 4 | Pending review | - | Project-owned or maintained integration surface; evidence pending assigned gate. |
-| `tests/netteams_test.cpp` | Task 5 | Pending review | - | Project-owned or maintained integration surface; evidence pending assigned gate. |
-| `tests/netview_test.cpp` | Task 5 | Pending review | - | Project-owned or maintained integration surface; evidence pending assigned gate. |
-| `tests/roundstats_color_test.cpp` | Task 5 | Pending review | - | Project-owned or maintained integration surface; evidence pending assigned gate. |
-| `tests/server_list_cap_test.py` | Task 3 | Pending review | - | Project-owned or maintained integration surface; evidence pending assigned gate. |
-| `tools/net_bots.py` | Task 4 | Pending review | - | Project-owned or maintained integration surface; evidence pending assigned gate. |
+| `tests/net_bots_test.py` | Task 4 | Baseline exercised; semantic review pending | [Task 2 baseline](subsystems/07-build-release-tooling.md) | Passed in Release and retained ASan+UBSan CTest runs; strict-tree Python run also passed. Task 4 still owns test-quality review. |
+| `tests/netteams_test.cpp` | Task 5 | Baseline exercised; semantic review pending | [Task 2 baseline](subsystems/07-build-release-tooling.md) | Compiled by analyzers and passed in Release and retained ASan+UBSan CTest runs. Task 5 still owns test-quality review. |
+| `tests/netview_test.cpp` | Task 5 | Baseline exercised; semantic review pending | [Task 2 baseline](subsystems/07-build-release-tooling.md) | Compiled by analyzers and passed in Release and retained ASan+UBSan CTest runs. Task 5 still owns test-quality review. |
+| `tests/roundstats_color_test.cpp` | Task 5 | Baseline exercised; semantic review pending | [Task 2 baseline](subsystems/07-build-release-tooling.md) | Compiled by analyzers and passed in Release and retained ASan+UBSan CTest runs. Task 5 still owns test-quality review. |
+| `tests/server_list_cap_test.py` | Task 3 | Baseline exercised; reliability review pending | [Task 2 baseline](subsystems/07-build-release-tooling.md) | REL-002 invalidates the fixed-port CTest ownership claim; unchanged assertions passed against both audit binaries after in-memory dynamic-port/foreground substitution plus live-child verification. Task 3/9 own the harness fix and semantic review. |
+| `tools/net_bots.py` | Task 4 | Baseline exercised; semantic review pending | [Task 2 baseline](subsystems/07-build-release-tooling.md) | Imported and exercised by the passing `net-bots-test`; Task 4 still owns harness and protocol fidelity review. |
 | `tools/ports/sdl3_image.py` | Task 9 | Pending review | - | Project-owned or maintained integration surface; evidence pending assigned gate. |
 | `tools/ports/sdl3_mixer.py` | Task 9 | Pending review | - | Project-owned or maintained integration surface; evidence pending assigned gate. |
 | `tools/server_tests/test_room_caps.py` | Task 3 | Pending review | - | Project-owned or maintained integration surface; evidence pending assigned gate. |
