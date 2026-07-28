@@ -20,17 +20,102 @@ source-supported causal proofs, not observed exploit results.
 
 ## Trust boundaries and invariants
 
-### Transport, thread, and ownership map
+### Execution contexts and callback ownership
 
-| State or resource | Producer/mutator | Consumer | Ownership and serialization invariant |
-|---|---|---|---|
-| Native `sockfd`, `state`, `recvBuffer`, and lobby models | `Connect`, `SendCommand`, per-frame `Update`, response handlers, `Disconnect` | Main menu and game loop | Main-thread singleton use; no concurrent socket reader is present. The public-server worker uses only static discovery/latency helpers and returns through separately synchronized menu state. |
-| WASM WebSocket handle and callbacks | Browser event callbacks registered with `createOnMainThread=true`; shared protocol handlers | Browser main loop and per-frame game code | Callback and frame work are serialized on the browser main thread, so the reviewed queue access does not require a mutex. The raw callback `userData` handle is deleted by `Disconnect`, including from close/error callbacks; callback-teardown ordering was not runtime-verified. |
-| `messageQueue` | Native stream parser or WASM message callback | `ProcessNetworkMessages` and synchronous wait helpers | FIFO order is assumed. The queue is unbounded. During play, `ProcessNetworkMessages` drains it every rendered frame. |
-| `syncQueue` | `ProcessNetworkMessages` routes `b`, `N`, and `T` | `WaitForBubble`, `WaitForNextBubble`, `WaitForTobeBubble` | FIFO order and exactly 38 board messages followed by `N` and `T` are assumed. There is no round number, sender validation, deduplication, or upper bound. |
-| Player-ID map and `myPlayerId` | `GAME_CAN_START` lobby push | binary game sender prefix, board-array routing, display names | The client assumes the server-provided mapping is authoritative. Task 3 proved the server does not bind a relayed first-byte sender ID to the connection (SEC-004). |
-| `currentGame` | `new GameRoom` in create/join/response paths | menu, leader test, options, state transitions | Raw heap pointer with no deleting owner. Several exit paths assign null directly, causing BUG-013. |
-| Round-ready/stat flags | `n`, `F`, and `S` handlers; local round state | render-loop transition and post-round table | Normal clients send once over reliable ordered transport. Receivers do not deduplicate by sender; the invariant is conventional, not enforced. |
+| Context or callback | Data touched | Thread and ownership conclusion |
+|---|---|---|
+| Native `Instance` methods, `Update`, and shared parsers | All instance state; socket reads and writes; lobby and game queues | Called from the game/menu loop. No second instance reader or writer was found, so mutation is serialized on the native main thread. |
+| Native public-server worker | Static `FetchPublicServers`/`MeasureLatency` results only | The worker does not obtain or mutate the `NetworkClient` singleton. It publishes its result through the menu's separately synchronized state. |
+| WASM `Connect` | Allocates `WebSocketHandle`, creates its Emscripten socket, stores the same handle in `websocketSocket` and `s_handle`, and registers four callbacks | The socket attribute requests `createOnMainThread=true`; setup and later callbacks are therefore serialized with the browser main loop in the reviewed build. |
+| `onWebSocketOpen` | Borrows callback `userData` as `WebSocketHandle*`, follows `client`, and calls `SetConnected` | Browser main thread. It does not retain event data. The handle is owned by `NetworkClient::Disconnect`, not by the callback. |
+| `onWebSocketMessage` | Borrows `e->data`/`e->numBytes`; calls `QueueGameMessage` in game state or `ParseMessage` otherwise | Browser main thread. Payloads are copied into parser/queue storage during the callback; the event buffer is not retained. A WebSocket event is treated as a self-contained parsing unit. |
+| `onWebSocketClose` / `onWebSocketError` | Borrow the same handle and call `Disconnect` through its `client` alias | Browser main thread. `Disconnect` closes/deletes the socket and deletes that very callback-data handle. Callback deregistration/lifetime ordering was not dynamically verified and remains a Task 10 platform-runtime limit. |
+| Destructor and static `Dispose` | Destructor calls `Disconnect`; `Dispose` deletes the singleton and nulls `ptrInstance` | No ordinary call to `Dispose` was found, so process lifetime is the normal owner. Standard members are destroyed only when the singleton is actually deleted; leaked `currentGame` allocations are not recovered after their pointer is cleared. |
+
+### Member-by-member lifecycle matrix
+
+The following matrix names every `NetworkClient` data member in
+`src/networkclient.h`, plus the WASM callback-handle fields and file-static
+handle that participate in its lifetime. “Main” means the native game/menu
+thread or the serialized browser main thread described above.
+
+| Member | Creator/default; owner and aliases | Writers and context | Readers | Replacement, reset, reconnect, and teardown |
+|---|---|---|---|---|
+| static `ptrInstance` | Static null pointer; owning singleton pointer returned by `Instance()` | `Instance()` allocates; `Dispose()` deletes/nulls, on caller thread | Every `Instance()` call | Not reset by connection teardown. `Dispose()` is the only singleton teardown; no ordinary caller was found. |
+| native `sockfd` | Constructor sets `-1`; `NetworkClient` owns the OS descriptor | `Connect` replaces it; `Disconnect` closes and writes `-1`; main | `Connect`, `SendCommand`, `SendGameData`, `Update`, `Disconnect` | A failed connect closes before returning. Disconnect/destructor close only the current descriptor. Reconnect starts from `-1`. |
+| WASM `websocketSocket` | Constructor sets null; owns a heap `WebSocketHandle`; aliased by every callback's `userData` and by `s_handle` | `Connect` assigns; `Disconnect` deletes the handle and nulls it; browser main | send methods and `Disconnect` | Replaced only after a disconnected-state connect. Disconnect/destructor close/delete the socket then delete the handle; callback-lifetime ordering is unverified. |
+| `WebSocketHandle::socket` | Set from `emscripten_websocket_new`; handle owns the browser socket until disconnect | Created in `Connect`; not independently replaced | send methods and `Disconnect` through the handle | Closed and deleted by `Disconnect` before its containing handle is deleted. |
+| `WebSocketHandle::client` | Set to `this` in `Connect`; non-owning back-reference | Written once per new handle | All four callbacks | Dies with the handle. Close/error callbacks follow it immediately before the handle may be deleted by `Disconnect`. |
+| file-static WASM `s_handle` | Static null; non-owning alias of `websocketSocket` | `Connect` assigns; `Disconnect` nulls; browser main | No reader in the reviewed source | Carries no independent lifetime. Its being unused is compiler-diagnosed; teardown nulls it. |
+| `state` | Constructor sets `DISCONNECTED` | Connect paths set `CONNECTING`/`CONNECTED`; create/join responses set `IN_LOBBY`; `GAME_CAN_START` sets `IN_GAME`; part/room-close set `IN_LOBBY`; disconnect sets `DISCONNECTED`; main/callback | Connection predicates, sends, update/parsers, menu and game | Reset on both disconnects. Other session fields are not uniformly reset with it. |
+| `playerNick` | Default-empty owned string | `SendNick`, create/join requests and their async success/retry paths; main | reconnect/create/join retry and identity access | Replaced by later identity operations; retained by both disconnects and destroyed with singleton. |
+| `playerGeoloc` | Default-empty owned string | `SendGeoLoc`; main | later identity send/access | Replaced by later call; retained across disconnect/reconnect; destroyed with singleton. |
+| `messageQueue` | Default-empty owned deque | Native stream parser and WASM callback push; `PutBackMessage` pushes front; consumers pop; main | queue APIs, lobby/game processing and wait helpers | Both disconnects clear it; destruction frees it. It is unbounded while connected. |
+| `syncQueue` | Default-empty owned deque | `PushSyncMessage` pushes; `GetNextSyncMessage` and the three sync wait methods pop; main | `HasSyncMessage`, `GetNextSyncMessage`, and sync wait methods | Native disconnect clears it; WASM disconnect does **not**, so reconnect can observe stale entries (BUG-013). Destruction frees it. |
+| `gameList` | Default-empty owned vector of value `GameRoom`s | `ParseList`, `ClearGameList`, and room/list parsing; main | copy-return accessor, menu, and current-room synchronization | `ParseList`/clear replace contents; both disconnects clear it; destruction recursively frees value members. |
+| `openPlayers` | Default-empty owned vector of value `NetworkPlayer`s | `ParseList` and `ClearGameList`; main | copy-return accessor/menu | Rebuilt/cleared by list paths, but neither disconnect explicitly clears it; next list refresh replaces it. Destruction frees it. |
+| `chatMessages` | Default-empty owned vector of value `ChatMessage`s | status, room-close, and talk handlers append and trim to 50; main | copy-return accessor/menu | Never connection-reset, intentionally/persistently retaining prior-session chat/status until singleton destruction. |
+| `currentGame` | Constructor null; raw owning-looking pointer returned as a non-owning alias by `GetCurrentGame` | Create/join success allocates or overwrites; list/push handlers mutate the pointee; part, room-close, and disconnect assign null; main | menu, leader/options logic, state transitions | No `delete currentGame` exists. Nulling loses allocations; a later create/join allocates anew, while an extant pointer may be overwritten by value. Destructor cannot free already-lost rooms (BUG-013). |
+| native `recvBuffer[4096]` | Object storage; bytes initially indeterminate and owned by the singleton | `ProcessIncomingData` appends, terminates, and `memmove`s retained bytes; main | That parser, always bounded by `recvBufferLen` | Neither disconnect clears bytes. They are harmless only while length is zero; stale length on reconnect makes stale bytes live (BUG-013). Destroyed with object. |
+| native `recvBufferLen` | Constructor sets zero | `ProcessIncomingData` increments, resets, and reduces it; main | capacity/framing checks in that parser | Native disconnect does not reset it, so a partial old line survives reconnect (BUG-013). Object destruction ends it. |
+| `myPlayerId` | Constructor sets zero | `GAME_CAN_START` assigns when nickname matches; main | `SendGameData`, game routing and accessors | Not reset by disconnect/part/room-close. A later successful `GAME_CAN_START` may replace it, but absent/malformed mapping can retain the old ID. |
+| `myNickname` | Default-empty owned string | Native `SendNick`; create/join success paths; main | `GAME_CAN_START` local-ID matching and accessor | Replaced by identity success; retained across disconnect/reconnect; destroyed with singleton. |
+| `lastErrorResponse` | Default-empty owned string | Identity/create/join entry points and an `OK` clear it; selected response errors assign it; main | native synchronous success/error decisions and accessor | Only three named error strings are recorded. Disconnect does not clear it; later operations usually clear before send. |
+| `playerIdToNick` | Default-empty owned map | `GAME_CAN_START` clears then repopulates; main | display-name/routing accessors | Not reset by disconnect/part/room-close; the next `GAME_CAN_START` normally replaces it. Destruction frees it. |
+| `pendingOptions` | In-class `false` | `OPTIONS:` parser sets true; `GetAndClearPendingOptions` sets false; main | pending-options consumer | Neither disconnect resets it. An old unconsumed options notification can cross a connection boundary. |
+| `rcvChainReaction` | In-class `true` | `OPTIONS:` parser overwrites; main | `GetAndClearPendingOptions`/menu | Retained across disconnect; next options push replaces it; destroyed with object. |
+| `rcvContinueLeave` | In-class `true` | Same options parser; main | Same options consumer | Retained across disconnect; replaced on next options push. |
+| `rcvSingleTarget` | In-class `true` | Same options parser; main | Same options consumer | Retained across disconnect; replaced on next options push. |
+| `rcvVictoriesLimit` | In-class `5` | Same options parser via `stoi`; main | Same options consumer | Retained across disconnect; replaced on next options push. |
+| `rcvPlayerColors[5]` | In-class all `7`; owned array | Same options parser via `stoi`; main | Same options consumer | Retained across disconnect; each element replaced on next complete options push. |
+| `rcvNoCompress[5]` | In-class all `false`; owned array | Same options parser; main | Same options consumer | Retained across disconnect; each element replaced on next options push. |
+| `rcvAimGuide[5]` | In-class all `false`; owned array | Same options parser; main | Same options consumer | Retained across disconnect; each element replaced on next options push. |
+| `rcvMouseEnabled` | In-class `false` | Same options parser; main | Same options consumer | Retained across disconnect; replaced on next options push. |
+| `rcvClearMode` | In-class `false` | Same options parser; main | Same options consumer | Retained across disconnect; replaced on next options push. |
+| `rcvDisableMalus` | In-class `false` | Same options parser; main | Same options consumer | Retained across disconnect; replaced on next options push. |
+| `rcvTeamMode` | In-class `false` | Same options parser; main | Same options consumer | Retained across disconnect; replaced on next options push. |
+| `rcvPlayerTeams[5]` | In-class `{1,2,3,4,5}`; owned array | Same options parser via `stoi`; main | Same options consumer | Retained across disconnect; each element replaced on next options push. |
+| `rcvTeamCount` | In-class `2` | Same options parser via clamped `stoi`; main | Same options consumer | Retained across disconnect; replaced on next options push. |
+| `pendingCreate` | In-class `false` | WASM create sets true; `OK`, retry exhaustion, or disconnect sets false; browser main | response handler | Native build never activates it. WASM disconnect resets only this gate; associated payload state remains but is gated. Unrecognized errors can leave it true (BUG-015). |
+| `pendingCreateOrigNick` | Default-empty owned string | WASM create records it; browser main | retry/success response logic | Replaced by next create; not cleared on completion/disconnect, but gated by `pendingCreate`; destroyed with singleton. |
+| `pendingCreateNick` | Default-empty owned string | WASM create/retry updates it; browser main | retry/success response logic | Same retained-but-gated lifecycle. |
+| `pendingCreateSuffix` | In-class `2` | WASM create resets and retry increments; browser main | retry response logic | Not reset by disconnect/completion; next create resets it to `2`. |
+| `pendingCreateMaxPlayers` | In-class `5` | WASM create stores requested maximum; browser main | retry command construction and room creation | Retained after completion/disconnect; next create replaces it. |
+| `pendingJoin` | In-class `false` | WASM join sets true; `OK`, `NO_SUCH_GAME`, retry exhaustion, or disconnect sets false; browser main | response handler | Native build never activates it. Payloads remain gated. Other unrecognized errors can leave it true (BUG-015). |
+| `pendingJoinCreator` | Default-empty owned string | WASM join records creator; browser main | retry command and room construction | Replaced by next join; retained but gated after completion/disconnect. |
+| `pendingJoinOrigNick` | Default-empty owned string | WASM join records it; browser main | retry/success response logic | Replaced by next join; retained but gated after completion/disconnect. |
+| `pendingJoinNick` | Default-empty owned string | WASM join/retry updates it; browser main | retry/success response logic | Replaced by next join; retained but gated after completion/disconnect. |
+| `pendingJoinSuffix` | In-class `2` | WASM join resets and retry increments; browser main | retry response logic | Not reset by disconnect/completion; next join resets it to `2`. |
+
+### Value-model field lifecycle
+
+| Value field | Initialization and writers | Readers, aliases, replacement, and teardown |
+|---|---|---|
+| `NetworkPlayer::nick` | Default-empty string; list/game parsers and room construction assign it | Read by menu, mapping, and room logic. Objects are stored by value; vector replacement/destruction owns cleanup. |
+| `NetworkPlayer::geoloc` | Default-empty string; player/list parsing assigns it when supplied | Read by menu/rendering. Same value ownership; no independent alias retained. |
+| `NetworkPlayer::ready` | No in-class initializer; every reviewed construction assigns it before insertion/use, and ready messages mutate room entries | Read by lobby/game readiness UI. Value copies are replaced/destroyed with their containing vectors. |
+| `GameRoom::creator` | Default-empty string; list/create/join paths assign it | Read by menu and leader checks. `gameList` owns value instances; `currentGame` is the separate leaking heap instance described above. |
+| `GameRoom::players` | Default-empty owned vector; list and room events populate/mutate it | Read by lobby and game setup. Recursively freed for value rooms; freed only if the raw `currentGame` allocation remains reachable and is deleted, which never occurs. |
+| `GameRoom::started` | No in-class initializer; every reviewed construction/parser path assigns it before use | Read by room/list UI and transitions. Same enclosing-room lifetime. |
+| `GameRoom::maxPlayers` | In-class `5`; create/list/parser paths overwrite it | Read by create/retry and room UI. Same enclosing-room lifetime. |
+| `ChatMessage::nick` | Default-empty string; every append path supplies it | Read through copied chat history; value vector owns replacement/destruction. |
+| `ChatMessage::message` | Default-empty string; every append path supplies it | Read through copied chat history; value vector owns replacement/destruction. |
+| `ChatMessage::timestamp` | No in-class initializer; every reviewed construction assigns it before insertion | Read by chat display; value vector owns lifetime. |
+| `ServerInfo::host` | Default-empty string; every discovery construction fills it | Used by discovery/menu/latency logic. Results are local/value vectors, not singleton instance state. |
+| `ServerInfo::name` | Default-empty string; every discovery construction fills or deliberately leaves it empty for host/port fallback | Used by server-list display. Results are local/value vectors, not singleton instance state. |
+| `ServerInfo::port` | No in-class initializer; every reviewed construction assigns it before use | Used by connection/latency calls; value lifetime only. |
+| `ServerInfo::latencyMs` | In-class `-1`; discovery/measurement replaces it | Read by server-list UI; value lifetime only. |
+
+### Teardown and reconnect path matrix
+
+| Path | Explicit reset/release | State intentionally or accidentally retained |
+|---|---|---|
+| Native `Disconnect` | Closes `sockfd`; sets `DISCONNECTED`; nulls `currentGame`; clears `gameList`, `messageQueue`, and `syncQueue` | Leaks the room; retains `recvBufferLen`/bytes, `openPlayers`, chat, identity/ID/map/error, option notification/values, and async payload fields. Pending booleans are not explicitly reset. |
+| WASM `Disconnect` | Closes/deletes browser socket, deletes/nulls handle aliases; sets `DISCONNECTED`; nulls `currentGame`; clears create/join pending booleans, `gameList`, and `messageQueue` | Leaks the room; retains `syncQueue`, `openPlayers`, chat, identity/ID/map/error, options, and pending-operation payload/suffix fields. |
+| Successful `PartGame` | Sets `IN_LOBBY` and nulls `currentGame` | Leaks the room and retains queues, lists, chat, identity/maps/options, native partial input, and async payloads. |
+| `ROOM_CLOSED` push | Adds status, sets `IN_LOBBY`, nulls `currentGame` | Same room leak and broad session retention; chat additionally records the closure. |
+| Destructor / `Dispose` | Destructor invokes platform `Disconnect`; standard strings/containers then destruct; `Dispose` nulls `ptrInstance` | A `currentGame` lost on any earlier nulling path remains leaked. Ordinary process flow never calls `Dispose`. |
+| Reconnect | Reuses the singleton and replaces the transport/state through `Connect` | No full session initializer runs. Native partial input and WASM sync data can become active in the next session; retained identities/maps/options can remain observable until later protocol replacement (BUG-013). |
 
 ### Protocol and synchronization invariants
 
@@ -49,6 +134,14 @@ source-supported causal proofs, not observed exploit results.
   stick cell/next colors, `g` adds malus, `m`/`M` animate and place malus
   bubbles, `F` ends the round, `S` contributes its stats row, `n` marks the next
   round ready, `l` marks a departure, and `A`/`r` update targeting.
+- The `p` receive arm is a defensive no-op keepalive handler; normal server
+  priority relaying suppresses that short ping form, so the audit does not claim
+  a routine peer-visible `p` exchange. The `t` arm displays capped in-game chat
+  and plays its sound, but neither the retained bot tests nor a live smoke
+  exercised it. Lobby options do not use an in-game opcode: the host sends
+  `SETOPTIONS`, the server pushes `OPTIONS:`, the shared lobby parser fills the
+  `rcv*` fields and `pendingOptions`, and the menu consumes them through
+  `GetAndClearPendingOptions`.
 - `ReloadGame` resets per-round game flags and then invokes level sync. It
   relies on all preceding `b`/`N`/`T` messages having been routed and on no
   stale synchronization messages surviving a connection lifecycle.
@@ -143,11 +236,14 @@ remains zero for the very sync traffic being awaited. Every joining browser
 client therefore reaches the five-second timeout before invoking a level reload
 whose sync queue was already ready. This proves BUG-014.
 
-The ordinary `f`/`s`, malus, finish, stats, ready, leave, and target paths are
-internally consistent when every sender follows the protocol once and transport
-order is preserved. Receiver-side ready/stats deduplication and leader-only sync
-validation are absent; under hostile/repeated traffic those gaps join the
-SEC-003/SEC-004 boundary rather than establishing a separate ordinary-flow bug.
+The statically reviewed ordinary `f`/`s`, malus, finish, stats, ready, leave,
+target, and `t` display paths are internally consistent when every sender
+follows the protocol once and transport order is preserved. Only the bot helper
+and failure tests were dynamically exercised; they do not prove each opcode or
+the normal lobby-options exchange. Receiver-side ready/stats deduplication and
+leader-only sync validation are absent; under hostile/repeated traffic those
+gaps join the SEC-003/SEC-004 boundary rather than establishing a separate
+ordinary-flow bug.
 
 ### Bot harness fidelity
 
