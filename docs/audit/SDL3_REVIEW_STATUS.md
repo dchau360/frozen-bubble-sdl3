@@ -13,7 +13,7 @@
 
 | Component | Recorded value |
 |---|---|
-| Agent | Codex subagents `task_1_implementer` (bootstrap), `task_2_implementer` (baselines), `task_3a_static` (server static review), `task_3c_synthesis` (static Task 3 closure), `task_4_implementer` (client/synchronization review), and `task_5_implementer` (gameplay review) |
+| Agent | Codex subagents `task_1_implementer` (bootstrap), `task_2_implementer` (baselines), `task_3a_static` (server static review), `task_3c_synthesis` (static Task 3 closure), `task_4_implementer` (client/synchronization review), and `task_5_implementer` (gameplay review), plus the Task 6 (lobby/settings/input) and Task 7 (render/audio) implementer agents |
 | Model | Unknown; the dispatcher did not expose a model identifier |
 | Host | macOS 26.5.2 (build 25F84), Darwin 25.5.0, arm64 |
 | Compiler | Apple clang 21.0.0 (`clang-2100.1.1.101`), target `arm64-apple-darwin25.5.0` |
@@ -31,8 +31,8 @@
 ## Current state
 
 - Phase: Phase 2 — subsystem review
-- Active gate: Task 7 (pending)
-- Exact next action: Begin Task 7, Step 1: build an SDL resource ownership table.
+- Active gate: Task 8 (pending)
+- Exact next action: Begin Task 8, Step 1: map platform-specific behavior.
 
 ## Gate checklist
 
@@ -44,7 +44,7 @@
 | Task 4 | Native/WASM clients and multiplayer synchronization | complete (static plus existing bot unit checks; security traffic and two-round smoke omitted) |
 | Task 5 | Gameplay rules, board algorithms, and round state | complete (Fix Round 1 added a core invariant ledger and exact maximum-delta production-object evidence) |
 | Task 6 | Lobby, settings, persistence, and input | complete (static review plus isolated-preferences runtime matrix; security runtime and live-server lobby transitions omitted) |
-| Task 7 | Rendering, transitions, fonts, and audio lifecycle | pending |
+| Task 7 | Rendering, transitions, fonts, and audio lifecycle | complete (static ownership/pixel/lifecycle review plus isolated production-object runtime: BUG-001 and the new BUG-041 reproduced; dummy-driver-only rendering and full-client navigation omissions recorded) |
 | Task 8 | Native, WASM, and Android platform integration | pending |
 | Task 9 | Build, tests, packaging, CI, deployment, tooling, and operations | pending |
 | Task 10 | Cross-subsystem dynamic integration matrix | pending |
@@ -54,15 +54,19 @@
 
 ## Active candidates
 
-- BUG-001 — `TextureEx` failure/leak handling, owned by Task 7.
-- IMP-007 and IMP-008 — ownership and selective API/const/cast/parser cleanup in
-  later assigned subsystems. Task 5 confirmed IMP-005, IMP-006, and IMP-009 as
-  improvements while dismissing analyzer-only gameplay defect interpretations.
-- IMP-010 — server raw-allocation policy is statically proven inconsistent; Task 7 must finish the cross-owner asset/allocation disposition.
-- Task 6 closed its four inherited cross-owner items. BUG-021's and BUG-023's
-  menu origins are proven, SEC-004's lobby-side consumption is documented, and
-  IMP-005 now has only its Task 7 render slice open; its one reachable
-  use-before-initialization became BUG-034. No Task 6 candidate remains open.
+- No Task 7 candidate remains open. BUG-001 is confirmed (both `TextureEx`
+  null-deref orderings reproduced under UBSan against production code plus the
+  rect/surface leak family); IMP-007 and IMP-010 are confirmed improvements
+  with their cross-owner dispositions finished; the IMP-005 and IMP-006 render
+  slices are closed without promotion.
+- IMP-008 — selective API/const/cast/parser cleanup remains open for the later
+  assigned subsystems (Tasks 8-9 files); the slices belonging to already-closed
+  gates, now including Task 7's render slice, are dispositioned in their
+  notebooks.
+- Task 7 added BUG-041 (confirmed, runtime-reproduced transition texture
+  leak), BUG-042 (confirmed, static-proven per-match penguin/hurry texture
+  reload leak), and IMP-013 (confirmed improvement: pixel-helper clamp
+  off-by-one, ASan-demonstrated, unreachable with shipped assets).
 
 ## Confirmed findings
 
@@ -93,6 +97,17 @@
   `kTeamColors` indexing in gameplay). Eight of these were reproduced at runtime
   against unchanged production code inside isolated preference homes. See the
   [lobby/settings/input notebook](subsystems/04-lobby-settings-input.md).
+- Task 7 confirmed BUG-001, BUG-041, and BUG-042 plus IMP-007, IMP-010, and
+  IMP-013, and closed BUG-034's audio-side lifetime question by cross-link.
+  The highest-impact render paths are BUG-041 (every transition animation
+  frame leaks a 640×480 texture — reproduced at exactly 1.2 MB/frame through
+  linked production objects, ~40-50 MB per game start, round reload, or menu
+  return) and BUG-042 (every `NewGame` reloads 394 penguin textures per
+  player plus `hurryTexture` with no destroy site). BUG-001's two null-deref
+  orderings were reproduced under UBSan at `shaderstuff.h:55` and `:67`.
+  Sanitized production-object stress of transitions, audio lifecycle, and
+  text lifecycle produced no other diagnostic. See the
+  [render/audio notebook](subsystems/05-render-audio.md).
 - Task 5 confirmed BUG-018 through BUG-025 and IMP-005, IMP-006, and
   IMP-009. The highest-impact gameplay path is BUG-020: a quit/new-match
   transition can retain in-flight malus assigned to an array whose board was
@@ -209,6 +224,44 @@
   left untouched. Security conclusions, all live-server lobby transitions, and
   the multi-controller hot-plug cases remain source proofs, not observed facts.
 
+## Task 7 closure provenance
+
+- Every file named by the Task 7 brief received a final disposition: the nine
+  render/transition/text/audio/compat files in full, the render slices of
+  `frozenbubble.cpp`/`.h`, `bubblegame_render.cpp`, and `mainmenu_panels.cpp`
+  (platform slices stay with Task 8), and the `server/log.c`/`server/stats.c`
+  allocation boundary inherited from Task 3, closed under confirmed IMP-010.
+- Step 1's ownership table is the leak instrument because Apple ASan cannot
+  detect leaks on this host: every window, renderer, texture family, surface,
+  font, effect buffer, mixer, track, and audio object is recorded with
+  creator, owner, replacement behavior, and destruction path. The two leak
+  defects it exposed are backed by RSS measurement (BUG-041, exactly
+  1.2 MB/frame over 100 production `synchro_after` frames, and 21→149 MB
+  across five full production `DoSnipIn`/`TakeSnipOut` cycles) and by a
+  grep-verified absence of any destroy site (BUG-042).
+- A harness linked the unchanged production `shaderstuff`, `transitionmanager`,
+  `audiomixer`, `ttftext`, `gamesettings`, and `platform` objects from both
+  the warnings-strict and ASan+UBSan trees. Preference isolation was proven
+  with `CFFIXED_USER_HOME` before any stateful run (`ISOLATION=OK`; the
+  user's three real preference files were hashed before and verified
+  byte-identical after). Runs covered: image-format/pitch verification of all
+  eight shipped effect inputs, an ASan demonstration of the `get_pixel` clamp
+  off-by-one on the production object, both `TextureEx` failure crashes
+  (UBSan exits 134), six sanitized full transition animations with no
+  diagnostic, three sanitized audio lifecycle cycles ending in a clean
+  `Dispose`, and 200 sanitized text lifecycle iterations.
+- IMP-013's out-of-bounds arithmetic was proven by sanitizer but dismissed as
+  a shipped-asset defect with measured counter-evidence: `fblogo-mask.png`
+  has zero white border pixels, so the `points_` walk cannot reach the
+  admitted one-past-the-end index; every other caller stays within `w-2`/`h-2`
+  guards.
+- All rendering used the dummy video driver's software renderer; no Metal/GPU
+  session, fullscreen or resize toggle, real audio device, or full-client
+  menu-to-game navigation was driven, and BUG-042 is a complete static causal
+  proof rather than a runtime reproduction. No listener, server, socket,
+  browser, hostile input, or process kill was created; security-specific
+  runtime testing remained out of scope by user direction.
+
 ## Commands and evidence
 
 Each row records exactly one top-level shell command. A shell loop remains one
@@ -219,11 +272,11 @@ agent's file reader rather than `nl`/`sed`, so only its shell commands appear
 below; the files it read are listed in the
 [Task 6 notebook scope](subsystems/04-lobby-settings-input.md#scope).
 
-**Canonical log cutoff:** completed Task 6's isolated-preferences persistence
-matrix, sanitized full-client reproductions, and ledger updates. Task 6's final
+**Canonical log cutoff:** completed Task 7's ownership/pixel/lifecycle review,
+isolated production-object harness runs, and ledger updates. Task 7's final
 validation, staging, commit, and post-commit checks belong in its ignored
 controller report, preventing a false claim that a commit records itself. The
-same exclusion already covers Task 2 and the Task 5 fix round.
+same exclusion already covers Task 2, the Task 5 fix round, and Task 6.
 
 | Timestamp (UTC) | Command | Exit | Concise result | Evidence |
 |---|---|---:|---|---|
@@ -578,6 +631,31 @@ same exclusion already covers Task 2 and the Task 5 fix round.
 | 2026-07-28T13:56Z | <code>cd /tmp/fb-sdl3-audit/task6 &amp;&amp; /usr/bin/c++ … numkeys.cpp … -o numkeys &amp;&amp; SDL_VIDEODRIVER=dummy ./numkeys</code> | 0 | Printed `numkeys=512 SDL_SCANCODE_COUNT=512`, the exact bound BUG-028 and BUG-035 exceed | [BUG-028](subsystems/04-lobby-settings-input.md#dynamic-evidence) |
 | 2026-07-28T14:05Z | <code>python3 - &lt;&lt;'PY' … rewrite the fifteen Task 6 rows of docs/audit/FILE_COVERAGE.md … PY</code> | 0 | Printed `rewritten rows: 15`; every scoped file now carries a Task 6 disposition | [FILE_COVERAGE.md](FILE_COVERAGE.md) |
 | 2026-07-28T14:06Z | <code>test "$(awk -F'`' '/^&#92;&#124; `/ {count++} END {print count+0}' docs/audit/FILE_COVERAGE.md)" = "237" &amp;&amp; tmpdir=$(mktemp -d …) &amp;&amp; git ls-tree -r --name-only 09d6c7bf… &#124; rg '…' &#124; sort &gt; "$tmpdir/pinned.txt" &amp;&amp; python3 -c '…' &gt; "$tmpdir/ledger.txt" &amp;&amp; diff -u "$tmpdir/pinned.txt" "$tmpdir/ledger.txt"</code> | 0 | `rows=237 OK` and `inventory equality OK`: the ledger still equals the pinned-tree filter exactly | [FILE_COVERAGE.md](FILE_COVERAGE.md) |
+| 2026-07-28 (Task 7 scope; exact time not captured) | <code>wc -l src/shaderstuff.cpp src/shaderstuff.h src/transitionmanager.cpp src/transitionmanager.h src/ttftext.cpp src/ttftext.h src/audiomixer.cpp src/audiomixer.h src/sdl3_compat.h src/frozenbubble.cpp src/bubblegame_render.cpp src/mainmenu_panels.cpp</code> | 0 | Counted 4,925 lines across the twelve scoped files before review | [Task 7 scope](subsystems/05-render-audio.md#scope) |
+| 2026-07-28 (Task 7 Step 2; exact time not captured) | <code>file share/gfx/menu/fblogo.png share/gfx/menu/fblogo-mask.png share/gfx/menu/txt_*_text.png share/gfx/menu/txt_*_outlined_text.png</code> | 0 | Every shipped effect-input PNG is 8-bit/color RGBA | [Task 7 static review](subsystems/05-render-audio.md#static-review) |
+| 2026-07-28 (Task 7 Step 1; exact time not captured) | <code>grep -n 'IMG_Load…SDL_DestroyTexture…TTF_OpenFont…MIX_…new SDL_Rect…' src/*.cpp src/*.h</code> | 0 | Enumerated every SDL create/destroy site for the Step 1 ownership table | [Ownership table](subsystems/05-render-audio.md#static-review) |
+| 2026-07-28 (Task 7 Step 1; exact time not captured) | <code>grep -n 'hurryTexture&#92;&#124;DestroyTexture' src/bubblegame.cpp</code> | 0 | 20 `hurryTexture` load sites and zero matching destroy sites (BUG-042 basis) | [BUG-042](subsystems/05-render-audio.md#confirmed-findings) |
+| 2026-07-28 (Task 7 Step 1; exact time not captured) | <code>grep -n 'LoadPenguin' src/*.cpp</code> | 0 | Every `NewGame` player-count case calls `LoadPenguin` per player; no destroy path exists for the 394-texture set | [BUG-042](subsystems/05-render-audio.md#confirmed-findings) |
+| 2026-07-28T14:27:35Z | <code>grep -rn 'transitionTexture' src/</code> | 0 | Only the null initializer and the by-value `effect()` argument exist; the member is never assigned (BUG-041 basis) | [BUG-041](subsystems/05-render-audio.md#confirmed-findings) |
+| 2026-07-28T14:27:35Z | <code>for fn in draw_line_ blacken_ alphaize_ pixelize_ rotate_nearest_ rotate_bicubic_ autopseudocrop store_effect copy_line shrink_; do printf '%s: ' $fn; grep -rl "$fn" src/ --exclude=shaderstuff.cpp --exclude=shaderstuff.h &#124; tr '&#92;n' ' '; echo; done</code> | 0 | Seven effect helpers have no external caller (dead code, IMP-009); `shrink_`'s only caller is `highscoremanager.cpp` | [Dismissed candidates](subsystems/05-render-audio.md#dismissed-candidates) |
+| 2026-07-28 (Task 7 triage; exact time not captured) | <code>grep -E '^src/(shaderstuff&#124;transitionmanager&#124;ttftext&#124;audiomixer&#124;sdl3_compat&#124;bubblegame_render&#124;mainmenu_panels&#124;frozenbubble)' /tmp/fb-sdl3-audit/cppcheck-project-unique.txt</code> | 0 | 229 scoped cppcheck records; promoted only the BUG-001/IMP-010/IMP-007/IMP-005 instances | [Analyzer triage](subsystems/05-render-audio.md#static-review) |
+| 2026-07-28 (Task 7 triage; exact time not captured) | <code>grep -E '^src/(shaderstuff&#124;transitionmanager&#124;ttftext&#124;audiomixer&#124;sdl3_compat&#124;bubblegame_render&#124;mainmenu_panels&#124;frozenbubble)' /tmp/fb-sdl3-audit/clang-tidy-project-unique.txt &#124; awk -F'[][]' '{print $2}' &#124; sort &#124; uniq -c &#124; sort -rn</code> | 0 | 248 scoped clang-tidy records across 16 check IDs, led by 86 narrowing and 60 implicit-widening | [Analyzer triage](subsystems/05-render-audio.md#static-review) |
+| 2026-07-28 (Task 7 harness; exact time not captured) | <code>/usr/bin/c++ -I/opt/homebrew/include -I…/src -I…/third_party/iniparser -std=c++17 -arch arm64 -Wall -Wextra -pedantic -Werror /tmp/fb-sdl3-audit/task7/task7_render_audio_harness.cpp build-audit-werror/CMakeFiles/frozen-bubble-sdl3.dir/src/shaderstuff.cpp.o …transitionmanager… …audiomixer… …ttftext… …gamesettings… …platform… build-audit-werror/libiniparser-static.a -Wl,-rpath,/opt/homebrew/lib …SDL3/SDL3_image/SDL3_mixer/SDL3_ttf dylibs… -o /tmp/fb-sdl3-audit/task7/task7_harness</code> | 0 | Warnings-strict harness linked six unchanged production objects with no diagnostic | `/tmp/fb-sdl3-audit/task7/task7_render_audio_harness.cpp` |
+| 2026-07-28 (Task 7 harness; exact time not captured) | <code>/usr/bin/c++ … -O1 -g -fno-omit-frame-pointer -fsanitize=address,undefined … build-audit-sanitize object set … -o /tmp/fb-sdl3-audit/task7/task7_harness_sanitize</code> | 0 | ASan+UBSan harness linked the sanitized production objects | `/tmp/fb-sdl3-audit/task7/task7_harness_sanitize` |
+| 2026-07-28 (Task 7 isolation; exact time not captured) | <code>shasum -a 256 "/Users/dchau/Library/Application Support/frozen-bubble/settings.ini" "…/highscores" "…/highlevelshistory" &#124; tee /tmp/fb-sdl3-audit/task7/real-prefs-baseline.txt</code> | 0 | Recorded pre-work hashes of the user's three real preference files | `/tmp/fb-sdl3-audit/task7/real-prefs-baseline.txt` |
+| 2026-07-28 (Task 7 isolation; exact time not captured) | <code>mkdir -p /tmp/fb-sdl3-audit/task7/home7 &amp;&amp; env HOME=/tmp/fb-sdl3-audit/task7/home7 CFFIXED_USER_HOME=/tmp/fb-sdl3-audit/task7/home7 SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy /tmp/fb-sdl3-audit/task7/task7_harness probe /tmp/fb-sdl3-audit/task7/home7</code> | 0 | `ISOLATION=OK`: pref path resolved inside the temporary home before any preference-owning singleton existed | [Task 7 dynamic evidence](subsystems/05-render-audio.md#dynamic-evidence) |
+| 2026-07-28 (Task 7 Step 2; exact time not captured) | <code>SDL_VIDEODRIVER=dummy /tmp/fb-sdl3-audit/task7/task7_harness formats "$PWD/share"</code> | 0 | All eight effect inputs are 4 bpp tight-pitch; `fblogo-mask.png` has zero white border pixels | `/tmp/fb-sdl3-audit/task7/formats.log` |
+| 2026-07-28 (Task 7 Step 2; exact time not captured) | <code>SDL_VIDEODRIVER=dummy ASAN_OPTIONS=detect_leaks=0:halt_on_error=1 UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1 /tmp/fb-sdl3-audit/task7/task7_harness_sanitize oobdemo</code> | 134 | Production `get_pixel` (`shaderstuff.cpp:49`) performed a 4-byte heap-buffer-overflow READ exactly 0 bytes past a tightly-sized surface when passed `x == w` (IMP-013 demonstration) | `/tmp/fb-sdl3-audit/task7/oobdemo.log` |
+| 2026-07-28 (Task 7 Step 5; exact time not captured) | <code>SDL_VIDEODRIVER=dummy /tmp/fb-sdl3-audit/task7/task7_harness texleak 100</code> | 0 | 100 production `synchro_after` frames grew RSS linearly 18→138 MB: exactly 1.2 MB (one dropped 640×480 texture) per frame | [BUG-041](subsystems/05-render-audio.md#dynamic-evidence) |
+| 2026-07-28T14:24:51Z | <code>env HOME=… CFFIXED_USER_HOME=… SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy /tmp/fb-sdl3-audit/task7/task7_harness transition /tmp/fb-sdl3-audit/task7/home7 "$PWD/share" 5</code> | 0 | `ISOLATION=OK`, default `gfxLevel=1`; five full production `DoSnipIn`/`TakeSnipOut` cycles grew RSS 21→149 MB (one allocator-return dip recorded honestly) | `/tmp/fb-sdl3-audit/task7/transition.log` |
+| 2026-07-28T14:25:15Z | <code>env HOME=… CFFIXED_USER_HOME=… SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy ASAN_OPTIONS=detect_leaks=0:halt_on_error=1 UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1 /tmp/fb-sdl3-audit/task7/task7_harness_sanitize audio /tmp/fb-sdl3-audit/task7/home7 "$PWD/share" 3</code> | 0 | Three sanitized audio lifecycle cycles (music replace, six overlapping SFX, missing file, pause/mute, unknown track, `Dispose`) with no diagnostic; missing-file repeats re-log a stale empty error | `/tmp/fb-sdl3-audit/task7/audio-sanitize.log` |
+| 2026-07-28 (Task 7 Step 5; exact time not captured) | <code>SDL_VIDEODRIVER=dummy ASAN_OPTIONS=detect_leaks=0:halt_on_error=1 UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1 /tmp/fb-sdl3-audit/task7/task7_harness_sanitize ttftext "$PWD/share" 200</code> | 0 | 200 sanitized text lifecycle iterations (empty/10 KB strings, font replacement, external-font adoption, destruction) with no diagnostic; RSS plateaued after iteration 50 | `/tmp/fb-sdl3-audit/task7/ttftext-sanitize.log` |
+| 2026-07-28 (Task 7 Step 5; exact time not captured) | <code>SDL_VIDEODRIVER=dummy ASAN_OPTIONS=detect_leaks=0:halt_on_error=1 UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1 /tmp/fb-sdl3-audit/task7/task7_harness_sanitize texfail "$PWD/share"</code> | 134 | UBSan: `member access within null pointer of type 'SDL_Surface'` at `shaderstuff.h:67` — `LoadEmptyAndApply` missing-asset crash (BUG-001) | `/tmp/fb-sdl3-audit/task7/texfail.log` |
+| 2026-07-28 (Task 7 Step 5; exact time not captured) | <code>SDL_VIDEODRIVER=dummy ASAN_OPTIONS=detect_leaks=0:halt_on_error=1 UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1 /tmp/fb-sdl3-audit/task7/task7_harness_sanitize texfail2</code> | 134 | UBSan: null-member access at `shaderstuff.h:55` — `LoadFromSurface(nullptr, …)` pre-check dereference (BUG-001) | `/tmp/fb-sdl3-audit/task7/texfail2.log` |
+| 2026-07-28 (Task 7 Step 5; exact time not captured) | <code>env HOME=… CFFIXED_USER_HOME=… SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy ASAN_OPTIONS=detect_leaks=0:halt_on_error=1 UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1 /tmp/fb-sdl3-audit/task7/task7_harness_sanitize transition /tmp/fb-sdl3-audit/task7/home7 "$PWD/share" 6</code> | 0 | Six sanitized full production transition animations: no ASan/UBSan diagnostic in any pixel loop; RSS 44→264 MB shows the BUG-041 growth under sanitizer too | `/tmp/fb-sdl3-audit/task7/transition-sanitize.log` |
+| 2026-07-28 (Task 7 cleanup; exact time not captured) | <code>shasum -a 256 -c /tmp/fb-sdl3-audit/task7/real-prefs-baseline.txt</code> | 0 | All three real preference files reported `OK`; the user's preferences were never modified | [Task 7 limitations](subsystems/05-render-audio.md#limitations) |
+| 2026-07-28T14:27:35Z | <code>git diff --stat 09d6c7bfcd864a0ad3951b87d16a88dc770392a3 -- src server</code> | 0 | No output; production source remains identical to the pinned baseline | Audit baseline above |
+| 2026-07-28 (Task 7 ledger; exact time not captured) | <code>test "$(awk -F'&#96;' '/^&#92;&#124; &#96;/ {count++} END {print count+0}' docs/audit/FILE_COVERAGE.md)" = "237" &amp;&amp; tmpdir=$(mktemp -d /tmp/fb-sdl3-task7-inventory.XXXXXX) &amp;&amp; git ls-tree -r --name-only 09d6c7bf… &#124; rg '…' &#124; sort &gt; "$tmpdir/pinned.txt" &amp;&amp; python3 -c '…' &gt; "$tmpdir/ledger.txt" &amp;&amp; diff -u "$tmpdir/pinned.txt" "$tmpdir/ledger.txt"</code> | 0 | `rows=237 OK` and `inventory equality OK` after the Task 7 disposition rewrites | [FILE_COVERAGE.md](FILE_COVERAGE.md) |
 
 ## Limitations
 
@@ -634,6 +712,16 @@ same exclusion already covers Task 2 and the Task 5 fix round.
   inferences; the omitted forged-`OPTIONS` and out-of-range-team checks are a
   final-audit limitation, not a pass. WASM, Windows, and Android menu/input
   paths were likewise reviewed statically only.
+- Task 7's rendering ran exclusively on the dummy video driver's software
+  renderer: no Metal/GPU renderer, real window, fullscreen toggle, live
+  resize, or real audio device was exercised, and no full-client menu-to-game
+  navigation was driven. BUG-042 is therefore a complete static causal proof,
+  not a runtime reproduction. Because Apple ASan cannot detect leaks, Task 7's
+  leak conclusions rest on the exhaustive ownership table, grep-verified
+  destroy-site absence, and RSS measurements; `effect()`'s unseeded random
+  selection means the six sanitized animations did not provably cover all
+  five effect families. WASM/Android render and audio paths remain Task 8
+  static scope, and no security-specific runtime test was run in Task 7.
 
 ## Processes and cleanup
 
@@ -658,6 +746,15 @@ same exclusion already covers Task 2 and the Task 5 fix round.
   copy of the sanitized client inside a `FakeBundle.app` layout; all are local
   regenerable evidence owning no external state. The user's real preference
   files were hashed before and verified byte-identical after the gate.
+- Task 7 started no listener, server, client connection, or background
+  process, and killed no process. Its harness runs used dummy video/audio
+  drivers, an isolated `CFFIXED_USER_HOME` preference home, and read-only
+  `share/` assets; the two expected UBSan crash reproductions terminated
+  themselves (exit 134) and left nothing running. All Task 7 harness sources,
+  binaries, logs, and the isolated home live under
+  `/tmp/fb-sdl3-audit/task7/` as local regenerable evidence owning no
+  external state. The user's real preference files were hashed before and
+  verified byte-identical after the gate.
 - Temporary files include the Task 1 inventory files and Task 2 analyzer logs/triage artifacts under `/tmp/fb-sdl3-audit/`; all are local, regenerable evidence and contain no credentials.
 - The four generated audit build directories are retained for Tasks 3 and 9
   (especially the sanitized server) and are locally excluded through untracked
