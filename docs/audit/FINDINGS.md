@@ -255,7 +255,7 @@ inside the originally cited `:390-398` range; the citation is now split across
 both steps. The corresponding Fix Round 1 self-review correction: the gate's
 "24/24 reproduced exactly" count-sweep claim was false for one item — the DLL
 count — and now reads 23 reproduced exactly, one corrected. Full record in the
-[status ledger](SDL3_REVIEW_STATUS.md#task-9-fix-round-1).
+[status ledger](SDL3_REVIEW_STATUS.md#task-9-fix-round-1-ledger).
 
 Task 2 alone confirmed no defect. Tasks 3 through 5 promoted only findings with
 complete source-level causal proof. Runtime/security reproduction was not

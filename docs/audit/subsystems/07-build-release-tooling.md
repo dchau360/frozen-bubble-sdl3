@@ -1061,4 +1061,4 @@ conclusion or severity changed. A re-run count sweep re-derived every Task 9
 quantity that depended on whitespace splitting, `tr`, a line count standing in
 for an occurrence count, or a first-occurrence index; only the DLL count
 reproduced differently (21, not 20). Full record in the
-[status ledger](../SDL3_REVIEW_STATUS.md#task-9-fix-round-1).
+[status ledger](../SDL3_REVIEW_STATUS.md#task-9-fix-round-1-ledger).
