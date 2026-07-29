@@ -2,7 +2,7 @@
 
 Pinned production tree: `09d6c7bfcd864a0ad3951b87d16a88dc770392a3` (`v2.4.27`)
 
-Inventory rule: paths selected by Task 1 Step 4 from the pinned tree. The ledger has 237 rows, one per selected path. A disposition containing the word `pending` — `Pending review`, `boundary review pending`, or `Baseline exercised; static review pending` — is an incomplete state, not a completed coverage claim; `boundary reviewed` (past tense) is a completed vendored disposition. After Task 8, **21** rows carried a pending disposition and all 21 were owned by Task 9: 20 read `Pending review` and one, `CMakeLists.txt`, read `Baseline exercised; static review pending`. **Task 9 dispositioned all 21**, so after Task 9 **0** rows carry a pending disposition and none is in the `boundary review pending` state. A full-file case-insensitive search finds the word `pending` nowhere else in this file — it appears only in this rule paragraph.
+Inventory rule: paths selected by Task 1 Step 4 from the pinned tree. The ledger has 237 rows, one per selected path. A disposition containing the word `pending` — `Pending review`, `boundary review pending`, or `Baseline exercised; static review pending` — is an incomplete state, not a completed coverage claim; `boundary reviewed` (past tense) is a completed vendored disposition. After Task 8, **21** rows carried a pending disposition and all 21 were owned by Task 9: 20 read `Pending review` and one, `CMakeLists.txt`, read `Baseline exercised; static review pending`. **Task 9 dispositioned all 21**, so after Task 9 **0** rows carry a pending disposition and none is in the `boundary review pending` state. No **disposition cell** in the ledger below contains the word: measured by `awk -F'|' 'NF>4 && $2 ~ /`/ {print $4}' FILE_COVERAGE.md | grep -ci pending` → **0** (exit 1). Its only whole-file occurrences are prose — this rule paragraph and the Task 12 verification note below. (Before Task 12 added that note the whole-file count was 1; the check that matters is the disposition-cell count, so it is the one stated here.)
 
 **Task 11 Step 1 reconciliation.** The pinned-commit inventory was regenerated
 verbatim from Task 1 Step 4's own selection command —
@@ -14,6 +14,44 @@ and `diff` between the two sorted lists produced **no output** (exit 0): every
 row still links to evidence or a vendored/boundary disposition, no selected
 path is missing, and no path in this file falls outside the regenerated
 selection. See the ledger below for the exact commands and exit codes.
+
+**Task 12 verification of this ledger.** The independent final challenge
+re-derived the inventory rather than re-reading it. Task 1 Step 4's own
+selection command was re-run against the pinned tree (**3623** paths) and
+matched exactly **237**; `diff` against the 237 paths extracted from this
+file's own rows produced no output and exited **0**. Every disposition cell was
+tabulated: **41** distinct strings summing to **237**, and every class was
+sampled — including the 97 vendored-symlink rows, the 19 other vendored rows,
+and the 2 `Binary; validated through …` rows — not only the easy ones. A
+case-insensitive search over the ledger's **disposition cells** finds
+`pending` **0** times; its whole-file occurrences are prose only. All Markdown link references in this file, `FINDINGS.md`,
+`SDL3_REVIEW_STATUS.md` and notebooks 01-09 were resolved programmatically
+against the target files' real headings: **0** missing files, **0** missing
+anchors.
+
+Two properties of the claim are recorded honestly rather than defended:
+
+1. **Three of the design's five disposition classes are used.** No row is
+   dispositioned *Excluded with a recorded reason* or *Blocked with a recorded
+   limitation*; blocked **checks** (browser runtime, Android device runtime,
+   Linux/Windows execution, packaged-artifact startup, security runtime) live in
+   `SDL3_REVIEW_STATUS.md`'s Limitations instead. That is defensible — the
+   blocks are on checks, not on reading the files — but a reader of this ledger
+   alone cannot see which rows rest on an unavailable platform.
+2. **Six maintained tracked paths inside the design's stated scope carry no row**,
+   because Task 1 Step 4's selection pattern does not match them: `CLAUDE.md`,
+   `CHANGELOG.md`, `.gitignore`, `.gitmodules`, `COPYING`, and the four
+   `third_party/iniparser/*` files. Five are **cited as evidence for confirmed
+   findings** — `CLAUDE.md` and `CHANGELOG.md` for REL-009, `.gitignore:8` for
+   REL-006, `COPYING` and `third_party/iniparser/` for REL-014 — so the audit
+   reviewed their content without dispositioning them. `SDL3_REVIEW_STATUS.md`
+   already recorded the `CLAUDE.md`/`CHANGELOG.md` half; the rest is recorded
+   here. Note the asymmetry: the Android duplicate
+   `android/app/jni/iniparser/*` has four rows while the primary copy — the one
+   statically linked into every desktop, Windows and WASM artifact — has none.
+   Not promoted to a finding: the approved design excludes vendored iniparser
+   internals, and the remaining paths are documentation or VCS metadata whose
+   content was in fact reviewed.
 
 | Path | Gate | Disposition | Evidence | Notes |
 |---|---|---|---|---|
@@ -226,7 +264,7 @@ selection. See the ledger below for the exact commands and exit codes.
 | `src/netteams.h` | Task 5 | Complete | [Task 5 invariants](subsystems/03-gameplay.md#trust-boundaries-and-invariants) | Pure helper contract and caller-owned team-count validation boundary reviewed. |
 | `src/netview.cpp` | Task 5 | Complete; helper and boundary harness passing | [Task 5 dynamic evidence](subsystems/03-gameplay.md#dynamic-evidence) | Page count/visibility and auto-ranking priorities/stickiness reviewed; boundary harness covered player counts 1,2,5,6,20. |
 | `src/netview.h` | Task 5 | Complete | [Task 5 invariants](subsystems/03-gameplay.md#trust-boundaries-and-invariants) | Pure view state/API contract and active-array caller invariant reviewed. |
-| `src/networkclient.cpp` | Tasks 4 and 10 | Complete; native baseline, direct WASM compile, and Task 10 live-socket runtime covered | [Task 10 dynamic evidence](subsystems/08-dynamic-integration.md#dynamic-evidence) | Full native/shared protocol, lifecycle, framing, ownership, sync wait, discovery, and latency review; BUG-013/015-017, SEC-003, and REL-003 evidence; BUG-012 dismissed. Task 10 closed Task 4's "no socket traffic was generated" gap by linking this file's unchanged sanitizer object into a harness driven against a live sanitized `fb-server`: connect/greeting, `NICK`, `CREATE 20`, `ParseListResponse` (recovers `maxPlayers=20` from the `[hL]:20` cap suffix and moves the player between roster and open list across `PART`), `IsLeader`, `PART`, `Disconnect`, and a refused-connect probe returning false all behaved correctly with no sanitizer diagnostic. BUG-015 was reproduced at runtime: `StartGame()` at `:495-504` returned true while the server replied `ALONE_IN_THE_DARK`. |
+| `src/networkclient.cpp` | Tasks 4, 10 and 12 | Complete; native baseline, direct WASM compile, Task 10 live-socket runtime, and Task 12 length-boundary re-review | [Task 12 confirmed findings](subsystems/09-final-challenge.md#confirmed-findings) | **Task 12 registered BUG-052 against this file**: `ProcessIncomingData`'s append guard at `:843` has no `else` and every `recvBufferLen` reduction (`:894`, `:914`, `:916`) sits inside its body, so a server line exceeding `BUFFER_SIZE` (4096) puts the connection into a permanently deaf absorbing state. The earlier Task 4 disposition of this row's static-review counterpart ("ordinary server messages fit the buffer") was falsified against `server/net.c:126-146` and `server/game.c:134`/`:139-151`. Prior coverage unchanged: full native/shared protocol, lifecycle, framing, ownership, sync wait, discovery, and latency review; BUG-013/015-017, SEC-003, and REL-003 evidence; BUG-012 dismissed. Task 10 closed Task 4's "no socket traffic was generated" gap by linking this file's unchanged sanitizer object into a harness driven against a live sanitized `fb-server`: connect/greeting, `NICK`, `CREATE 20`, `ParseListResponse` (recovers `maxPlayers=20` from the `[hL]:20` cap suffix and moves the player between roster and open list across `PART`), `IsLeader`, `PART`, `Disconnect`, and a refused-connect probe returning false all behaved correctly with no sanitizer diagnostic. BUG-015 was reproduced at runtime: `StartGame()` at `:495-504` returned true while the server replied `ALONE_IN_THE_DARK`. |
 | `src/networkclient.h` | Task 4 | Complete | [Task 4 trust boundaries](subsystems/02-network-client-sync.md#trust-boundaries-and-invariants) | Full public/private state, ownership, queue, ID, option, and construction invariant review; Task 4 IMP-005 slice dismissed. |
 | `src/networkclient_wasm.cpp` | Task 4 | Complete (static plus direct compile; runtime unavailable) | [Task 4 static review](subsystems/02-network-client-sync.md#static-review) | Full callback, WebSocket framing, async command, disconnect, and stub parity review; direct `em++` compile passed with warnings; BUG-013-015 evidence and Task 10 runtime limits recorded. |
 | `src/platform.cpp` | Task 8 | Complete; defect and improvement confirmed | [Task 8 dynamic evidence](subsystems/06-platform-ports.md#dynamic-evidence) | All three mutually exclusive `InitDataDir` definitions and the desktop branch's three interior arms traced, then exercised through the real function linked from the unchanged production object across five packaging layouts. Working-directory independence holds; the `.app` bundle branch resolves correctly; the staged-install case resolves to the build machine's source tree — REL-008. The Android-only `ASSET_FILES[]`/`extractAssets()` placeholder at lines 38-52 is dead — IMP-015. `WasmHasTouch`/`WasmPromptText` reviewed as the WASM text-entry boundary. |

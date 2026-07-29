@@ -236,6 +236,26 @@ No server-local candidate remains open:
 - IMP-011 — move the synchronous 50 ms WebSocket sniff out of the serial accept
   path and recognize complete upgrades through event-loop state.
 
+### Task 12 reachability qualifications
+
+Task 3 executed no runtime scenario and, for four findings, never stated which
+command-line configuration reaches the defective code. Task 12 established that
+statically, against the two launch commands this project actually documents —
+`start-server.sh:68` (`./fb-server -p $PORT -q -l -z $DEBUG_MODE`) and
+`docker/Dockerfile:31` (`fb-server -d -q -l -z -o CONNECT`). Both pass `-q` and
+`-l`; neither passes `-u`. No defect changed severity or was dismissed.
+
+| ID | Gate condition in source | Effect on the two documented launch paths |
+|---|---|---|
+| SEC-005 | UDP listener created only by `-l`/`-L` (`net.c:896-900` → `create_udp_server`, `:751-769`) | **Reachable in both.** This *strengthens* SEC-005: the 128-byte-probe `strstr()` over-read is live in every documented deployment, which the original disposition never asserted |
+| SEC-002 | All three `http_get` call sites are `!quiet`-gated — `download_blacklisted_IPs` (`net.c:494`), `register_server` (`:1295`), `unregister_server` (`:1332`) | **Unreachable in both**, because both pass `-q`. Reachable only for an operator running without `-q` (the default). Task 12 also extended the impact: see the registry row — a `Content-Length` wrapping to exactly `-1` yields `bufsize == 0` and a `recv` length of `(size_t)-1` at `:1253` |
+| SEC-001 | `setgid`/`setuid` live inside `daemonize()` (`tools.c:279-288`) and run only when `-u user` is given | **Unreachable in both.** Neither passes `-u`, and the Docker command's `-d` means `daemonize()` is never called at all |
+| BUG-002 | `sigterm_catcher` (`net.c:996-1001`) calls `l0()`, `close_server()`, `unregister_server()`, `exit()`; `unregister_server` is `!quiet && !lan_game_mode`-gated (`:1330-1333`) | **Partly reachable in both.** `l0()` and `exit()` are async-signal-unsafe in every configuration; the DNS/HTTP/allocation members inside `unregister_server` are skipped under `-q`/`-l` |
+
+No exploit attempt, probe, or fault injection was performed for any of these —
+they are static readings of the guard conditions, consistent with the standing
+user restriction on security runtime testing.
+
 ## Dismissed candidates
 
 - Clang's 30 `DeprecatedOrUnsafeBufferHandling` warnings largely recommend

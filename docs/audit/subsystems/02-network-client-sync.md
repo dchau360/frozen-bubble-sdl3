@@ -150,7 +150,7 @@ thread or the serialized browser main thread described above.
 
 | Path | Bound or framing behavior | Disposition |
 |---|---|---|
-| Native lobby input | `recvBuffer[4096]` retains incomplete normal lines in `ProcessIncomingData`; a chunk that would fill the buffer is silently skipped. `SendCommand` instead performs one 100 ms read and passes every `strtok` fragment to the parser, even without a terminating newline. The initial greeting also parses each `recv` independently. | Ordinary server messages fit the buffer, but response state/correlation establishes BUG-015 and split greeting tokens establish BUG-017. Overflow/flood behavior remains part of the untrusted-input limitation. |
+| Native lobby input | `recvBuffer[4096]` retains incomplete normal lines in `ProcessIncomingData`; a chunk that would fill the buffer is silently skipped. `SendCommand` instead performs one 100 ms read and passes every `strtok` fragment to the parser, even without a terminating newline. The initial greeting also parses each `recv` independently. | Response state/correlation establishes BUG-015 and split greeting tokens establish BUG-017. **The "silently skipped" clause was disposed of incorrectly and is now BUG-052.** This row originally read "Ordinary server messages fit the buffer … Overflow/flood behavior remains part of the untrusted-input limitation". Task 12 falsified both halves: the skip is not a dropped chunk but an *absorbing* state, because every statement that reduces `recvBufferLen` (`networkclient.cpp:894`, `:914`, `:916`) sits inside the very guard that failed (`:843`, which has no `else`), so the connection goes permanently deaf; and "ordinary messages fit" is false, because `send_line` (`server/net.c:126-146`) emits single lines up to 16383 bytes and the `LIST` reply's `list_games_str` is `[16384]` (`server/game.c:134`), with up to 25 bytes per lobby connection (`game.c:139-151`) against a `max_users` default of 255 (`net.c:82`). No hostile input is required, so this is not deferrable to the untrusted-input limitation. See [Confirmed findings](#confirmed-findings). |
 | Native game input | A retained 4096-byte stream buffer extracts the binary ID and newline-delimited payload; `gameMsg` and formatted queue entries use the same fixed bound. | Normal emitted payloads fit. Sender identity and numeric payloads are not authenticated/validated (SEC-003/SEC-004). |
 | WASM input | Each WebSocket event is parsed independently and copied into 4096-byte local buffers. A final event fragment without newline is treated as a complete line rather than retained. | The audited server emits a complete logical buffer per WebSocket frame in normal operation, so no ordinary defect was promoted. Fragmentation/proxy behavior remains unverified. |
 | Outbound game data | `snprintf` return values are used as send lengths without a truncation rejection. All repository call sites supply bounded protocol strings far below 4096 bytes. | No reachable ordinary defect in the scoped call graph; retain as hardening work rather than a finding. |
@@ -307,6 +307,22 @@ the exact-child/dynamic-port cleanup rules.
   and accepts short outbound writes as complete.
 - **REL-003 (High):** the existing Windows socket portability finding also
   affects the native client and includes a blocking per-frame receive path.
+- **BUG-052 (High, registered in Task 12):** `ProcessIncomingData`'s append
+  guard `if (recvBufferLen + received < BUFFER_SIZE)` (`networkclient.cpp:843`)
+  has no `else`, and every statement that reduces `recvBufferLen` (`:894`
+  in-game, `:914`/`:916` lobby) lives inside its body — so once the buffer
+  fills, the guard fails for every later `recv` and the connection is
+  permanently deaf while the socket stays open. `BUFFER_SIZE` is 4096
+  (`networkclient.h:36`, `:213`); the server emits single lines up to 16383
+  bytes (`server/net.c:126-146`), and the `LIST` reply grows by up to 25 bytes
+  per lobby connection (`server/game.c:139-151`) against a `max_users` default
+  of 255 (`server/net.c:82`), so ~165 idle clients suffice with no malformed
+  input. Consequence: the lobby stops updating and every push is dropped
+  (`GAME_CAN_START`, `OPTIONS:`, `TALK`, `KICKED`); in `IN_GAME` every relayed
+  peer frame is dropped and the boards diverge silently. Not memory corruption
+  (the guard is a strict `<`). Not reproduced — see the registry row and Task
+  12's limitations. This gate's own static-review row had conceded the skip and
+  set it aside; that disposition is corrected above.
 
 ## Dismissed candidates
 

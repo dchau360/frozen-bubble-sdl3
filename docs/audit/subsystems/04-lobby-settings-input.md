@@ -26,7 +26,7 @@ Four inputs cross into this subsystem, none of them under menu control:
 |---|---|---|---|
 | Persisted settings | `settings.ini` under `SDL_GetPrefPath("", "frozen-bubble")` — user-editable, sync-shared, or corrupt | `GameSettings::ReadSettings` / `LoadDefaultKeys` | `gfxQuality` clamped 1–3; `windowWidth` clamped; `speedMultiplier` clamped only for ordered comparisons; **no** validation of `windowHeight`'s upper bound, of NaN, or of any `P*` scancode |
 | Persisted highscores | `highscores`, `highlevelshistory` in the same directory | `HighscoreManager::LoadLevelsetHighscores` / `LoadHighscoreLevels` | none; `stoi`/`stof` are called directly on file text |
-| Peer/host room options | server-relayed `OPTIONS:` push (any room member can emit `SETOPTIONS`; see SEC-004) | `MainMenu::NetPanelRender` → `GetAndClearPendingOptions` | victories limit is mapped through a fixed table; `TEAMCOUNT` clamped 2–5; **no** clamp on `PLAYERTEAM_Pn`; colours only clamped later, inside gameplay |
+| Peer/host room options | server-relayed `OPTIONS:` push. **Corrected in Task 12:** this row previously read "any room member can emit `SETOPTIONS`". It cannot — `server/game.c:405` gates `setoptions` on `if (g->players_conn[0] == fd)` and answers any other seat with `wn_not_creator` (`:415`), which is what [notebook 01's own row](01-server-protocol.md#static-review) records. Only the **slot-zero room creator** can make the server emit an `OPTIONS:` push; see SEC-004 | `MainMenu::NetPanelRender` → `GetAndClearPendingOptions` | victories limit is mapped through a fixed table; `TEAMCOUNT` clamped 2–5; **no** clamp on `PLAYERTEAM_Pn`; colours only clamped later, inside gameplay |
 | SDL input events | keyboard, gamepad hot-plug, mouse, touch, text input | `FrozenBubble::HandleInput` / `HandleControllerEvent`, `MainMenu::HandleInput` | button/slot arithmetic is unchecked in both directions (see BUG-035, BUG-036) |
 
 Invariants the subsystem is written against, and their real status:
@@ -133,7 +133,12 @@ per-player configuration for slots 6-20 cannot be expressed, and
 `SetupNewGame(4)` leaves those `SetupSettings` entries at their static defaults
 (BUG-040). Second, `GetAndClearPendingOptions` is applied by *every* client,
 including the host, with no check that the push originated from the room
-creator — the lobby-side consumption of SEC-004.
+creator — the lobby-side consumption of SEC-004. **Task 12 bounded what that
+gap can be reached by:** the server itself emits `OPTIONS:` only for the
+slot-zero creator (`server/game.c:401-421`), so the missing client-side check is
+defence in depth against a hostile *creator* (and, unclaimed, against the
+verbatim in-game prio relay), not a path by which an ordinary joiner can
+overwrite the room's options.
 
 Team-value flow for SEC-007, exactly:
 `NetworkClient::HandlePushMessage` (`src/networkclient.cpp:1191-1195`) parses
@@ -394,7 +399,7 @@ from earlier gates:
 |---|---|
 | BUG-021 (disconnect option origin) | Confirmed at the origin: `continueWhenPlayersLeave` is edited, rendered, and transmitted, but `SetupSettings` has no corresponding field, so no menu change can reach gameplay. Recorded against BUG-021, no new ID. |
 | BUG-023 (local two-player victory limit) | Confirmed and extended: the limit is not propagated *and* the panel that edits it is unreachable, because `showing2PPanel` is never set true and `SetupNewGame(2)` is never called. Recorded against BUG-023. |
-| SEC-004 (unbound player/leader identity) | Lobby-side consumption confirmed: `GetAndClearPendingOptions` applies any `OPTIONS:` push unconditionally, including on the host, with no creator check. Recorded against SEC-004; the unclamped team value it carries is SEC-007. |
+| SEC-004 (unbound player/leader identity) | Lobby-side consumption confirmed: `GetAndClearPendingOptions` applies any `OPTIONS:` push unconditionally, including on the host, with no creator check. Recorded against SEC-004; the unclamped team value it carries is SEC-007. **Task 12 correction:** the server does enforce creator authority on `SETOPTIONS` (`server/game.c:405`), so the sender of a hostile `OPTIONS:` push must be the room creator. This row's earlier framing, and the trust-boundary row above it, wrongly implied any room member could send one. |
 | Task 4 option-propagation paths | Fully traced in the Step 2 table; the surviving defects are SEC-007 and BUG-040. |
 | IMP-005 (default member initialisation) | Task 6 slice split: the `FrozenBubble` pointer members are promoted to the defect BUG-034; `GameSettings`' ten uninitialised private members and the `HighscoreData`/`MainMenu` scalars remain improvement-level under IMP-005. |
 

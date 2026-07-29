@@ -149,7 +149,11 @@ complete grep-verified absence of any destroy site.
   (`shaderstuff.cpp:41-45`) has **no clamp of its own** — it indexes
   `[x + y*s->w]` directly; the off-by-one clamps that feed it live at its call
   sites, `shaderstuff.cpp:488` (`shrink_`) and `:1155` (`points_`), both
-  `CLAMP(…, 0, dest->w)` / `CLAMP(…, 0, dest->h)`. `get_pixel`
+  `CLAMP(…, 0, dest->w)` / `CLAMP(…, 0, dest->h)`. **Task 12 added a fourth
+  site of the identical family** that this enumeration omitted:
+  `shaderstuff.cpp:1158`'s `CLAMP((int)points[i].x, 0, mask->w)` /
+  `CLAMP((int)points[i].y, 0, mask->h)`, feeding a read of `mask->pixels`
+  three lines after `:1155` in the same loop. `get_pixel`
   (`shaderstuff.cpp:47-50`) applies the same wrong bounds internally:
   `CLAMP(x,0,s->w)` admits `x == w` (index `w + y*w`) and `CLAMP(y,0,s->h)`
   admits `y == h` (index `x + h*w`, past the buffer). ASan-demonstrated on the
@@ -224,14 +228,21 @@ complete grep-verified absence of any destroy site.
   the network one at `mainmenu_netpanel.cpp:163`, funnels through
   `SetupNewGame`) and `bubblegame.cpp:1012` (**round reload**, `ReloadGame`).
   The only `TakeSnipOut` call site is `bubblegame_render.cpp:1173`, gated on
-  `!firstRenderDone`. **Menu return is not a trigger**: `QuitToTitle`
-  (`bubblegame.cpp:1363`) clears `firstRenderDone` but calls no `DoSnipIn`, and
-  no `BubbleGame::Render` runs again until the next `SetupNewGame` — which
-  supplies its own `DoSnipIn` — so the cleared flag is consumed by the
-  game-start animation rather than producing an extra one. The earlier
-  three-trigger wording ("game start, round reload, and menu return")
-  double-counted `mainmenu.cpp:497`, attributing the game-start producer to
-  menu return; it is corrected here and in BUG-041. Each `TakeSnipOut` runs one `effect()`
+  `!firstRenderDone`. **Task 12 correction — this enumeration identified the
+  wrong call.** `DoSnipIn` (`transitionmanager.cpp:48-60`) only captures
+  `snapIn`; it invokes no `effect()` and therefore animates nothing. The
+  animation, and with it the leak, is produced solely by `TakeSnipOut`
+  (`:62-75`) at `bubblegame_render.cpp:1173`, and what arms it is
+  `firstRenderDone == false`. That flag is cleared at `bubblegame.cpp:1013`
+  (round reload), at `bubblegame.cpp:1363` (**`QuitToTitle`**) and by the
+  `bubblegame.h:479` initializer — clearing it is precisely what schedules an
+  animation, so the Fix Round 1 conclusion that "menu return is not a trigger
+  because `QuitToTitle` calls no `DoSnipIn`" is backwards. `mainmenu.cpp:497`
+  never clears the flag at all; the first-ever game start animates because the
+  member initializer already left it false, and later starts animate because
+  `QuitToTitle` cleared it. Reachability additionally requires
+  `gfxLevel() <= 2` (`transitionmanager.cpp:67`) and is compiled out on WASM
+  (`:64-66`). Each `TakeSnipOut` runs one `effect()`
   animation of ~31–41 frames; each frame creates a 640×480 texture that is
   never destroyed (BUG-041): `synchro_after` receives `tex` by value, destroys
   only the caller's stale pointer (always null, since
@@ -545,22 +556,27 @@ candidate, now resolved:
   stale pointer and drops the newly created texture;
   `TransitionManager::transitionTexture` is initialized null and never
   assigned, so the destroy branch never fires and no frame texture is ever
-  released. **Trigger set (corrected in fix round 1): exactly two, not three.**
-  The whole tree contains only two `DoSnipIn` producers —
-  `mainmenu.cpp:497` (first statement of `MainMenu::SetupNewGame`, i.e. **game
-  start**; every start path including the network one at
-  `mainmenu_netpanel.cpp:163` funnels through `SetupNewGame`) and
-  `bubblegame.cpp:1012` (**round reload**, `ReloadGame`) — and one consumer,
-  `bubblegame_render.cpp:1173`. Menu return via `QuitToTitle`
-  (`bubblegame.cpp:1363`) clears `firstRenderDone` with **no** `DoSnipIn` and
-  produces no animation; the cleared flag is consumed by the next game start,
-  which pairs with its own `DoSnipIn`. The earlier "per game start, round
-  reload, and menu return" wording double-counted `mainmenu.cpp:497` by
-  attributing the game-start producer to menu return. At default `gfxLevel`
-  (1) the cost is ~31–41 textures ≈ 40–50 MB of render memory **per game start
-  and per round reload**; an *N*-round match therefore leaks ≈ 40–50 MB × *N*
-  (one animation at start plus one per reload), and returning to the menu adds
-  nothing. Reproduced: exact 1.2 MB/frame linear RSS growth over 100 production
+  released. **Trigger set — Fix Round 1's correction was itself wrong and is
+  reversed by Task 12.** The producer is not `DoSnipIn`. `DoSnipIn`
+  (`transitionmanager.cpp:48-60`) captures `snapIn` and calls no `effect()`; the
+  animation is run only by `TakeSnipOut` (`:62-75`), whose sole call site is
+  `bubblegame_render.cpp:1173`, gated on `!firstRenderDone`. The arming sites are
+  therefore the three that clear that flag: `bubblegame.cpp:1013` (round reload,
+  alongside its `DoSnipIn` at `:1012`), `bubblegame.cpp:1363` (**`QuitToTitle`**,
+  i.e. menu return) and the `bubblegame.h:479` member initializer.
+  `mainmenu.cpp:497` clears nothing — the first game start after launch animates
+  because the initializer left the flag false, and every later start animates
+  because `QuitToTitle` cleared it on the way out. So menu return **is** part of
+  the trigger set, and the Fix Round 1 reasoning ("clears `firstRenderDone` with
+  **no** `DoSnipIn` and produces no animation") inverted the causal direction:
+  clearing the flag is what schedules the animation, and a stale `snapIn` only
+  makes the *content* wrong, not the animation absent. Reachability also requires
+  `gfxLevel() <= 2` (`transitionmanager.cpp:67`) and is compiled out on WASM
+  (`:64-66`). At default `gfxLevel`
+  (1) the cost is ~31–41 textures ≈ 40–50 MB of render memory **per armed
+  animation**; an *N*-round match therefore leaks ≈ 40–50 MB × *N* (one at
+  start plus one per reload), and each quit-to-menu-then-restart cycle arms one
+  more. Reproduced: exact 1.2 MB/frame linear RSS growth over 100 production
   frames, and 21 → 149 MB across five full production
   `DoSnipIn`/`TakeSnipOut` cycles.
 - **BUG-042 (Medium, confirmed, complete static causal proof):**
@@ -762,7 +778,8 @@ candidate, now resolved:
   `s->h` instead of `w-1`/`h-1`. `get_pixel` applies them internally
   (`shaderstuff.cpp:49`); `set_pixel` (`shaderstuff.cpp:41-45`) has **no clamp
   at all** — the equivalent off-by-one clamps sit at its two call sites,
-  `shaderstuff.cpp:488` and `:1155`. ASan proved the resulting one-past-the-end read
+  `shaderstuff.cpp:488` and `:1155` — plus, added in Task 12, the same-family
+  mask-read clamp at `:1158`. ASan proved the resulting one-past-the-end read
   on the production object. Unreachable with shipped assets (guards ≤ `w-2`;
   measured mask containment) but becomes an out-of-bounds *write* through
   `points_`/`set_pixel` if the mask asset ever gains a white border pixel.
