@@ -30,9 +30,9 @@
 
 ## Current state
 
-- Phase: Phase 2 — subsystem review
-- Active gate: Task 11 (pending)
-- Exact next action: Begin Task 11, Step 1.
+- Phase: Phase 3 — reconciliation and final challenge
+- Active gate: Task 12
+- Exact next action: Begin Task 12, Step 1.
 
 ## Gate checklist
 
@@ -48,7 +48,7 @@
 | Task 8 | Native, WASM, and Android platform integration | complete (Android release APK built locally with zero tracked-file drift; WASM linked in full against a disposable port-patched Emscripten copy; packaged-path, logger, and preference behavior reproduced against unchanged production objects. Browser runtime, Android device runtime, Linux/Windows execution, whole-program packaged-layout startup, and dynamic-library independence recorded as unavailable, not passed. Fix Round 1 applied seven accepted review findings: BUG-048's occurrence counts and characterization corrected, BUG-046 extended with the version-bump and stale-asset-on-update consequences, REL-008 reassessed High → Medium with two mitigating facts, the coverage bootstrap count corrected 20 → 21, two brief Step 6 substitutions added to Limitations, the `web/index.html` script-tag wording corrected, and a full count sweep that found two wrong quantities of twenty re-derived. Fix Round 2 applied one accepted Important and six accepted Minor findings: the REL-008 "highest-impact" superlative re-anchored to name what actually reaches shipped artifacts, the Fix Round 1 opening summary's review-coverage and attribution wording corrected, the count-sweep enumeration reconciled to its stated eighteen, eleven bundled-command ledger rows split to one command per row with two non-integer exit cells resolved, the gate-conclusion completion claim qualified against its recorded substitutions, the `syncfs` "own body" wording corrected to "own definition", and the WASM nickname read corrected from `EM_ASM` to `EM_ASM_PTR`) |
 | Task 9 | Build, tests, packaging, CI, deployment, tooling, and operations | complete (all five build definitions compared and reconciled; workflow, Compose, CMake, Gradle and Python configurations parsed locally; every confirmed defect from Tasks 3-9 mapped to a test, a dynamic case, or a registered gap; all 21 remaining pending coverage rows dispositioned. Fourteen IDs registered — REL-009..014 and IMP-016..023 — four entries extended (REL-004 severity Low → Medium, REL-006, REL-007, REL-008), IMP-008 closed, four candidates dismissed with counter-evidence including one disproved by running the command it doubted. The gate also corrected an inherited premise: `CLAUDE.md`'s claim that four of five platform build jobs are disabled with `if: false` is false at the pinned baseline — 0 of 11 jobs carry it — so Task 8's CI-reachability clause is corrected here and in the registry. No workflow was executed, no container started, and no external network operation performed; those are recorded as limitations, not passes. Fix Round 1 applied two accepted Important and two accepted Minor findings: REL-013's DLL count corrected 20 → 21 with the `tr`/undercount root cause recorded, REL-007's citation split across the two workflow steps its four password instances actually span, FILE_COVERAGE.md's inventory rule corrected to stop claiming a second `pending` location that does not exist, the "ten headings, each once" phrasing restated to name the subsystem notebooks it actually governs, and a re-run count sweep that found only the DLL count reproduced differently. Fix Round 2 applied two accepted Important and one accepted Minor finding: a Fix Round 1 ledger row that bundled sixteen independent commands under one non-representative exit was removed and split into sixteen individually re-run rows with honest exits, that same row's mislabeled "fourteen" quantity count corrected to sixteen commands (seventeen quantities), and the two identical "Task 9 Fix Round 1" headings disambiguated into "Findings" and "Ledger" with both misdirected cross-links retargeted to the ledger) |
 | Task 10 | Cross-subsystem dynamic integration matrix | complete (41 matrix rows recorded before any process launched — the original 38-row matrix's bundled row 38 was split in Fix Round 1 into 4 individually countable manual-observation rows; **31 executed, 10 recorded as not performed** — the six hostile-transport rows because the user restricted security-specific runtime testing, four manual visual/audio rows (clear-win banner and sound, spectator pinning, >5-player paging, malus/attack visuals) because no display, audio device or input-injection path existed). First gate to run real client code against a real server over a real socket: 24 `fb-server` instances (23 ASan+UBSan, 1 Release), each on its own dedicated port from a 24-port reserved range, driving rooms at 2/3/4/5/6/10/20 seats plus the 20-seat admission boundary and its boundary+1, normal/team/clear modes, rounds 1-3, member and creator departure both during and before a round, mid-game reconnect, `PART`/rejoin, and `SIGTERM` shutdown. Relay invariants re-derived from 11 saved journals: 4,990 frames delivered, 0 self-echoes, 0 unknown senders, all seat maps identical. Two defects and one improvement registered — **BUG-049** (High: recursive `player_part_game_` teardown frees the game and the outer frame reads it at `server/game.c:1051`; 11 identical ASan reproductions, minimum 3 seats, triggered by ordinary simultaneous disconnects, and **silent** on the uninstrumented Release build), **BUG-050** (Low: `LIST`'s `free:` counter contradicts its own open-player list) and **IMP-024** (unvalidated `CREATE` room cap). BUG-015 gained its first runtime reproduction; BUG-005 is recorded as entangled with BUG-049 and not independently measurable; BUG-013, BUG-021 and BUG-040 gained server-side runtime measurements with no severity change; three candidates dismissed with counter-evidence. No leak claim is made — Apple ASan requires `detect_leaks=0`. All 24 ports read free afterwards and the `fb-server` process list is byte-identical to the pre-launch baseline, so the four unrelated servers belonging to the user's own environment were neither touched nor counted. **Fix Round 1** corrected a false cleanup-proof claim and registered a fourth finding, **REL-015** (Medium): `fb-server`'s stats-file path is derived from `$HOME` unconditionally with no isolation mechanism, and this gate's own 24 launches — which isolated `joiners.log` by working directory but never set `HOME` — read from and wrote to the operator's real `~/.fb-server/stats.dat` for the entire gate, discovered in independent review rather than prevented; the off-by-one `networkclient.cpp:1306` citation was also corrected to `:1307`) |
-| Task 11 | Complete file coverage and prioritized improvements | pending |
+| Task 11 | Complete file coverage and prioritized improvements | complete (237-row pinned-commit inventory reconciled exactly, diff-empty against a fresh regeneration of Task 1 Step 4's own selection command; cross-cutting searches over unchecked indices, raw copies, allocation/SDL create-destroy pairing, ignored returns, singleton lifetime, compile guards, hardcoded capacities/versions, and filesystem/`getenv` assumptions found no new candidate — every hit already traces to a registered finding; one stale "Investigating" candidate row in the server notebook corrected to its already-confirmed disposition, leaving zero open `suspected`/`investigating` states across the 96-ID registry; all 24 `IMP` entries confirmed to share one benefit/effort/risk vocabulary; all five Task 6/Task 4/Task 10 deferred items resolved with re-derived evidence, not re-deferred; notebooks 01-08 reconfirmed at ten headings each with an explicit gate conclusion and no unresolved action) |
 | Task 12 | Independent final challenge | pending |
 | Task 13 | Complete repository review report | pending |
 
@@ -323,11 +323,20 @@
   `frozenbubble.cpp`/`.h`. Rendering and platform aspects of the two
   `frozenbubble` files stay with Tasks 7-8.
 - Isolation was proved before any preferences work. macOS `SDL_GetPrefPath`
-  ignores `HOME`: the first probe resolved to the user's real preference
-  directory, and the harness's own isolation gate aborted with exit 4 before
-  opening a file. `CFFIXED_USER_HOME` produced correct isolation, every later
-  run asserted `ISOLATION=OK` first, and the user's three real preference files
-  were hashed beforehand and verified byte-identical afterwards.
+  ignores `HOME`: the first probe (13:38Z) resolved to the user's real
+  preference directory, and the harness's own isolation gate aborted with exit
+  4 before opening a file, so the directory and its three files were confirmed
+  pre-existing only by listing and timestamps at that point, not by hash.
+  `CFFIXED_USER_HOME` produced correct isolation at the next probe (13:39Z,
+  `ISOLATION=OK`); a SHA-256 baseline of the three real files was then recorded
+  immediately afterward (13:40Z), before the stateful 12-fixture matrix run
+  (13:50Z), and every later run asserted `ISOLATION=OK` first. The baseline was
+  verified byte-identical at 13:55Z. (Task 11 correction: "hashed beforehand"
+  previously implied the hash predated the 13:38Z isolation probe itself; the
+  ledger shows the hash was recorded only after that probe succeeded, matching
+  the notebook's more precise "verified by listing and timestamps" wording for
+  the probe window and "re-verified byte-identical after the gate" for the
+  13:40Z→13:55Z window it actually protects.)
 - A test-only translation unit linked the unchanged production `gamesettings`
   object from both the warnings-strict and ASan+UBSan builds and drove the real
   `ReadSettings`/`LoadDefaultKeys`/`SaveKeys` across twelve fixtures: first run,
@@ -936,6 +945,101 @@ Full findings-registry text for REL-015 is in
 [Limitations](subsystems/08-dynamic-integration.md#limitations) and
 [Confirmed findings](subsystems/08-dynamic-integration.md#new-reliabilitydeployment-defect-fix-round-1)
 sections.
+
+## Task 11 closure provenance
+
+- **Agent and model.** The Task 11 implementer ran as **Claude Sonnet 5**
+  (model id `claude-sonnet-5`), dispatched by the audit controller.
+- **Step 1 — inventory reconciliation.** Task 1 Step 4's exact selection
+  command was re-run against the same pinned commit
+  `09d6c7bfcd864a0ad3951b87d16a88dc770392a3`: **237** paths, `diff`-identical
+  (exit 0, no output) to `FILE_COVERAGE.md`'s 237 rows. No path was added,
+  removed, or found missing an evidence/exclusion disposition.
+- **Step 2 — cross-cutting searches.** Searched project-owned `src/`/`server/`
+  (vendored SDL/iniparser internals excluded per the audit's standing
+  boundary) for raw string copies, allocation patterns, SDL create/destroy
+  pairing, compile guards, hardcoded version literals, and
+  filesystem/`getenv` assumptions. Every hit reconciled to an existing
+  notebook disposition — the three `strcpy`/`strcat`/`sprintf` hits are
+  bounds-safe (one is a comment), the `malloc`/`free` sites map to Task 3's
+  server allocation-owner table and Task 7's render ownership table, the
+  version-literal sweep found no string beyond REL-004's already-catalogued
+  five, the compile-guard sweep found only the two documented macros
+  (`__ANDROID__`, `__WASM_PORT__`), and the `getenv("HOME")`/CWD sweep found
+  only REL-015's already-registered site. TODO/FIXME/XXX/HACK markers exist
+  only inside vendored `org/libsdl/app/` files, out of scope. **No new
+  candidate was opened.**
+- **Step 3 — candidate registry.** One stale "Investigating" candidate row
+  survived in `subsystems/01-server-protocol.md` (IMP-010), left over from
+  before Task 7 closed its cross-owner half; corrected to "Confirmed
+  improvement (cross-owner disposition completed in Task 7)". After the fix,
+  the only remaining occurrences of `suspected`/`investigating` anywhere under
+  `docs/audit/` are `FINDINGS.md`'s own rule-definition sentence — the same
+  self-referential pattern `FILE_COVERAGE.md` already uses for "pending". The
+  96-ID registry (BUG-001..050, SEC-001..007, REL-001..015, IMP-001..024)
+  remains unique and contiguous per class; no ID was renumbered or recycled.
+- **Step 4 — severity/confidence normalization.** Confidence is uniformly
+  `High` across all 96 rows by this audit's established convention; the
+  observed-runtime-fact vs. complete-causal-proof vs. weaker-inference
+  distinction Step 4 asks for is already carried in each row's Summary text
+  (e.g. "reproduced under UBSan" vs. "code-supported inferences" vs.
+  "runtime/security reproduction was not performed by user direction") and
+  was spot-checked, not rewritten. Severity values are exactly
+  `Critical`/`High`/`Medium`/`Low`/`-` (the last only on `dismissed` rows) —
+  no stray values found.
+- **Step 5 — improvement ranking.** All 24 `IMP` entries already carry a
+  `{Low,Medium,High} benefit / {Low,Medium,High} effort / {Low,Medium,High}
+  risk` triple in one consistent vocabulary (verified by a parser that checks
+  every row against that exact pattern: 24/24 conforming). No entry needed
+  re-normalizing and no speculative entry was added to fill an empty
+  category; several categories (e.g. a dedicated "developer experience" IMP
+  distinct from diagnostics/testing) have no dedicated entry because no
+  gate's evidence supported one as a separate recommendation.
+- **The five deferred items were each resolved, not re-deferred:**
+  1. Task 6's runtime-reproduction count was six in `FINDINGS.md` and the
+     notebook's gate conclusion, eight in `SDL3_REVIEW_STATUS.md`. Re-derived
+     from the notebook's own persistence-matrix and full-client-run tables:
+     the true count is **eight** (BUG-026 through BUG-032, BUG-034).
+     `FINDINGS.md` and the notebook were corrected to read eight; this file's
+     existing "Eight of these" was already correct and is unchanged.
+  2. BUG-035's notebook entry stopped at "the derived code reaches ≥512,
+     past the 512-entry array `SDL_GetKeyboardState` returns" without tracing
+     how an out-of-range virtual scancode reaches a player's stored binding
+     in the first place. Completed with the missing hop: bind-capture
+     (`frozenbubble.cpp:384-388`) → `PushScancode`'s raw-event fallback,
+     which bypasses the virtual-range guard entirely once the code leaves
+     `[300,400)` (`frozenbubble.cpp:334-347`) → `KeysPanelKey`'s unchecked
+     store into `PlayerKeys` (`mainmenu_input.cpp:498-513`) → `IsKeyPressed`'s
+     unguarded `SDL_GetKeyboardState(NULL)[sc]` index
+     (`gamesettings.h:50-54`), verified line-for-line against the pinned
+     source.
+  3. The Task 6 closure-provenance and processes/cleanup wording said the
+     user's three real preference files were "hashed beforehand," which
+     overstates protection during the risky 13:38Z isolation probe itself —
+     the ledger shows the hash was recorded at 13:40Z, after both the failed
+     13:38Z probe and the successful 13:39Z one. Corrected to name what
+     actually protected each window: listing/timestamps before and during the
+     probe, a hash immediately after it succeeded, and byte-identical
+     re-verification after the later stateful matrix run — matching the
+     notebook's already-accurate "verified by listing and timestamps"
+     wording. Task 7's and Task 8's identically worded sentences were checked
+     against their own ledgers and left unchanged: Task 7's hash row
+     genuinely precedes its isolation-probe row.
+  4. A Task 4 fix-round link/schema validator's failing run was recorded with
+     its exit code and output but not its exact command text — only the
+     corrected re-run's text survives in `task-4-report.md`. The underlying
+     stale anchor was already fixed before this gate, so the original failure
+     cannot be reproduced without reintroducing it; documented as a closed
+     historical gap in `subsystems/02-network-client-sync.md`'s Limitations,
+     alongside today's re-run of the equivalent check (exit 0, still passing).
+  5. Notebook 08's Limitations item 4 canonical four-item list of unobserved
+     visuals (clear-win banner/sound, spectator pinning, >5-player paging,
+     malus/attack visuals) did not name row 11's parenthetical "on-screen team
+     banner" gap. Added to the list; confirmed it does not change the
+     41/31/10 matrix count, since row 11 is already one of the 31 executed
+     rows.
+- **No production source was touched.** Every edit in this gate is confined
+  to `docs/audit/`; the final drift check below confirms it.
 
 ## Commands and evidence
 
@@ -1700,6 +1804,31 @@ command, independently re-run against the pinned baseline and the preserved
 | 2026-07-29T18:27:10Z | <code>grep -rln "1306-1360" docs/audit .superpowers/sdd/2026-07-28-complete-repository-audit/task-10-report.md</code> | 0 | Matches only inside this ledger's own and the report's own narrative describing the old (wrong) citation string — not a live citation. The notebook and `FINDINGS.md` citations are confirmed all `:1307-1360` by separate inspection | [FINDINGS.md](FINDINGS.md) |
 | 2026-07-29T18:27:24Z | <code>for h in 'Scope' 'Trust boundaries and invariants' 'Static review' 'Dynamic evidence' 'Candidates' 'Confirmed findings' 'Dismissed candidates' 'Coverage' 'Limitations' 'Gate conclusion'; do grep -c "^## ${h}\$" docs/audit/subsystems/08-dynamic-integration.md; done &#124; sort -u</code> | 0 | Prints `1` once — every one of the ten headings still appears exactly once after all Fix Round 1 edits | [subsystems/08-dynamic-integration.md](subsystems/08-dynamic-integration.md) |
 
+### Task 11
+
+Reconciliation and prioritization gate. Each row is its own top-level command
+with its own real exit code, re-run against the pinned baseline and the live
+`docs/audit/` tree.
+
+| Time (UTC) | Command | Exit | Result | Evidence |
+|---|---|---:|---|---|
+| 2026-07-30T00:05:00Z | <code>git ls-tree -r --name-only 09d6c7bfcd864a0ad3951b87d16a88dc770392a3 &gt; /tmp/fb-sdl3-audit/task11-pinned-tree.txt</code> | 0 | 3,623 tracked paths at the pinned commit | `/tmp/fb-sdl3-audit/task11-pinned-tree.txt` |
+| 2026-07-30T00:05:10Z | <code>rg '^(src&#124;server&#124;tests&#124;tools&#124;android&#124;web&#124;cmake&#124;docker&#124;\.github)/&#124;^(CMakeLists\.txt&#124;CMakeListsEmscripten\.txt&#124;README\.md&#124;SetupServer\.md&#124;WASM_PORT\.md&#124;start-server\.sh&#124;netlify\.toml&#124;shell\.nix&#124;default\.nix&#124;flake\.nix&#124;flake\.lock)$' /tmp/fb-sdl3-audit/task11-pinned-tree.txt &#124; sort &gt; /tmp/fb-sdl3-audit/task11-regenerated-selection.txt</code> | 0 | Task 1 Step 4's exact selection pattern, re-run against the same pinned commit, reproduces **237** paths | `/tmp/fb-sdl3-audit/task11-regenerated-selection.txt` |
+| 2026-07-30T00:05:20Z | <code>grep -oE '^\| `[^`]+`' docs/audit/FILE_COVERAGE.md &#124; sed -E 's/^\| `//; s/`$//' &#124; sort &gt; /tmp/fb-sdl3-audit/task11-coverage-paths.txt</code> | 0 | 237 paths extracted from `FILE_COVERAGE.md`'s own rows | `/tmp/fb-sdl3-audit/task11-coverage-paths.txt` |
+| 2026-07-30T00:05:30Z | <code>diff /tmp/fb-sdl3-audit/task11-regenerated-selection.txt /tmp/fb-sdl3-audit/task11-coverage-paths.txt</code> | 0 | No output — the regenerated 237-path selection and `FILE_COVERAGE.md`'s 237 rows are exactly the same path set; no path is missing, no path is stale, no exclusion reason is needed | [FILE_COVERAGE.md](FILE_COVERAGE.md) |
+| 2026-07-30T00:06:00Z | <code>python3 -c "…extract BUG/SEC/REL/IMP IDs from FINDINGS.md and check uniqueness and per-class contiguity…"</code> | 0 | `total 96 unique 96 contiguous True counts {'IMP': 24, 'BUG': 50, 'SEC': 7, 'REL': 15}` — unchanged since Task 10 Fix Round 1; no ID added, renumbered, or recycled by Task 11 | [FINDINGS.md](FINDINGS.md) |
+| 2026-07-30T00:06:15Z | <code>grep -rn "suspected&#124;investigating&#124;Investigating" docs/audit/</code> | 0 | Before this gate: one live hit, `subsystems/01-server-protocol.md`'s IMP-010 candidate row, still reading "Investigating across Tasks 3 and 7" though `FINDINGS.md` already shows IMP-010 confirmed with its Task 7 cross-owner disposition complete. Corrected to "Confirmed improvement (cross-owner disposition completed in Task 7)"; re-run after the edit finds only this rule's own self-referential definition in `FINDINGS.md` line 3, matching `FILE_COVERAGE.md`'s established "pending" self-reference convention | [subsystems/01-server-protocol.md#candidates](subsystems/01-server-protocol.md#candidates) |
+| 2026-07-30T00:06:30Z | <code>for f in docs/audit/subsystems/0{1,2,3,4,5,6,7,8}-*.md; do for h in 'Scope' 'Trust boundaries and invariants' 'Static review' 'Dynamic evidence' 'Candidates' 'Confirmed findings' 'Dismissed candidates' 'Coverage' 'Limitations' 'Gate conclusion'; do c=$(grep -c "^## ${h}\$" "$f"); if [ "$c" != "1" ]; then echo "MISMATCH $f $h count=$c"; fi; done; done; echo SWEEP_DONE</code> | 0 | `SWEEP_DONE` with no `MISMATCH` line — all eight subsystem notebooks still carry exactly the ten required headings, each exactly once | [subsystems/](subsystems/) |
+| 2026-07-30T00:06:45Z | <code>python3 -c "…extract BUG IDs from notebook 04's persistence-matrix table and full-client-run section and union them…"</code> | 0 | `['BUG-026', 'BUG-027', 'BUG-028', 'BUG-029', 'BUG-030', 'BUG-031', 'BUG-032', 'BUG-034'] 8` — the notebook's own evidence tables name exactly eight runtime-reproduced IDs, resolving the "six" vs "eight" inconsistency (deferred item 1) in favor of **eight** | [subsystems/04-lobby-settings-input.md#dynamic-evidence](subsystems/04-lobby-settings-input.md#dynamic-evidence) |
+| 2026-07-30T00:07:00Z | <code>sed -n '384,388p;334,347p' src/frozenbubble.cpp; sed -n '498,513p' src/mainmenu_input.cpp; sed -n '50,54p' src/gamesettings.h</code> | 0 | Confirms all four hops of BUG-035's completed trace (deferred item 2) at their cited lines: `frozenbubble.cpp:384-388` (bind-capture emits the derived code), `frozenbubble.cpp:334-347` (`PushScancode`'s raw-event fallback, guarded only by `IsVirtualScancode`, not by `skipEvent`), `mainmenu_input.cpp:498-513` (`KeysPanelKey` stores `e->key.scancode` into `PlayerKeys` unchecked), `gamesettings.h:50-54` (`IsKeyPressed` falls to the unguarded `SDL_GetKeyboardState(NULL)[sc]` index) | [subsystems/04-lobby-settings-input.md#keyboard-controller-and-mouse-bounds-step-4](subsystems/04-lobby-settings-input.md#keyboard-controller-and-mouse-bounds-step-4) |
+| 2026-07-30T00:07:15Z | <code>grep -n "task6/real-prefs-baseline\|task6_settings_harness probe" docs/audit/SDL3_REVIEW_STATUS.md</code> | 0 | Confirms the Task 6 isolation ledger order (deferred item 3): 13:38Z probe without `CFFIXED_USER_HOME` (exit 4, no file opened), 13:39Z probe with it (`ISOLATION=OK`), 13:40Z hash baseline recorded, 13:50Z stateful matrix run, 13:55Z hash re-verified — the hash postdates the risky 13:38Z probe, so "hashed beforehand" overstated the probe-window protection; corrected to name the listing/timestamp protection the probe window actually had | [SDL3_REVIEW_STATUS.md#task-6-closure-provenance](SDL3_REVIEW_STATUS.md#task-6-closure-provenance) |
+| 2026-07-30T00:07:30Z | <code>python3 - &lt;&lt;'PY'\nfrom pathlib import Path\nimport re\nfiles=[Path('docs/audit/FINDINGS.md'),Path('docs/audit/FILE_COVERAGE.md'),Path('docs/audit/SDL3_REVIEW_STATUS.md'),Path('docs/audit/subsystems/02-network-client-sync.md')]\nfor f in files:\n for target in re.findall(r'\[[^]]+\]\(([^)]+)\)',f.read_text()):\n  if target.startswith(('http:','https:','#')): continue\n  base,_,anchor=target.partition('#'); p=(f.parent/base).resolve(); assert p.exists(),(f,target)\n  if anchor:\n   anchors=[]\n   for h in re.findall(r'^#{1,6} +(.*)$',p.read_text().lower(),re.M):\n    a=re.sub(r'[^a-z0-9 _-]','',h).strip().replace(' ','-'); anchors.append(re.sub(r'-+','-',a))\n   assert anchor.lower() in anchors,(f,target)\nprint('notebook_schema_and_links=PASS')\nPY</code> | 0 | `notebook_schema_and_links=PASS` — Task 4's fix-round link/schema check still passes today against the current anchor set (deferred item 4); the original failing command's exact text was not preserved in `task-4-report.md`, only its output, and there is no longer a stale anchor to reproduce it against, so this is documented as a closed historical gap in [subsystems/02-network-client-sync.md#limitations](subsystems/02-network-client-sync.md#limitations) rather than re-derived verbatim | [subsystems/02-network-client-sync.md#limitations](subsystems/02-network-client-sync.md#limitations) |
+| 2026-07-30T00:07:45Z | <code>python3 -c "…count rows 1-41 in notebook 08's matrix table and how many have a verdict cell starting '**Not performed'…"</code> | 0 | `total=41 not_performed=10 executed=31` reconfirmed unchanged; row 11's team-banner aside (deferred item 5) sits inside one of the 31 executed rows, so adding it to Limitations item 4's canonical list does not change this count | [subsystems/08-dynamic-integration.md#limitations](subsystems/08-dynamic-integration.md#limitations) |
+| 2026-07-30T00:08:00Z | <code>grep -rnE '\b(strcpy&#124;strcat&#124;sprintf&#124;gets)\s*\(' src server</code> | 0 | Three hits: a comment (`bubblegame_net.cpp:50`), a length-checked `strcat` into `chatInputBuf` (`bubblegame_input.cpp:174`, guarded by `curLen + addLen < sizeof(chatInputBuf) - 1`), and a fixed 9-byte literal `strcpy` into a 256-byte `networkHost` (`mainmenu_server.cpp:150`). Both real call sites are bounds-safe; no new candidate | [subsystems/04-lobby-settings-input.md#static-review](subsystems/04-lobby-settings-input.md#static-review) |
+| 2026-07-30T00:08:15Z | <code>grep -rnE 'TODO&#124;FIXME&#124;XXX&#124;HACK' src server tools tests android/app/src/main/java</code> | 0 | Every hit lives under vendored `org/libsdl/app/` (excluded by the audit's vendored-boundary rule) or is a comment describing an AppImage mount-point pattern, not a marker of incomplete project logic; no new candidate | [SDL3_REVIEW_STATUS.md#task-11-closure-provenance](SDL3_REVIEW_STATUS.md#task-11-closure-provenance) |
+| 2026-07-30T00:08:30Z | <code>python3 -c "…parse FINDINGS.md's IMP rows and check every Severity/Priority cell matches '(Low&#124;Medium&#124;High) benefit / (Low&#124;Medium&#124;High) effort / (Low&#124;Medium&#124;High) risk'…"</code> | 0 | `total_imp_rows 24 nonconforming []` — all 24 `IMP` entries already share one consistent benefit/effort/risk vocabulary; no duplicate normalization needed | [FINDINGS.md](FINDINGS.md) |
+| 2026-07-30T00:08:45Z | <code>git diff --name-only 09d6c7bfcd864a0ad3951b87d16a88dc770392a3 HEAD -- src server tests tools android web cmake docker .github CMakeLists.txt CMakeListsEmscripten.txt README.md SetupServer.md WASM_PORT.md start-server.sh netlify.toml default.nix flake.nix shell.nix CLAUDE.md</code> | 0 | No output — zero production drift going into Task 11's doc-only edits | [SDL3_REVIEW_STATUS.md#audit-baseline](SDL3_REVIEW_STATUS.md#audit-baseline) |
+
 ## Limitations
 
 - Emscripten, cppcheck, and clang-tidy were absent at bootstrap and installed successfully in Task 2. Homebrew LLVM remains keg-only, so the audit invokes clang-tidy by its absolute `$(brew --prefix llvm)/bin` path.
@@ -1890,7 +2019,10 @@ command, independently re-run against the pinned baseline and the preserved
   binary, source, and log lives under `/tmp/fb-sdl3-audit/task6/`, including one
   copy of the sanitized client inside a `FakeBundle.app` layout; all are local
   regenerable evidence owning no external state. The user's real preference
-  files were hashed before and verified byte-identical after the gate.
+  directory and files were confirmed pre-existing by listing and timestamps
+  before the 13:38Z→13:39Z isolation probe, hashed at 13:40Z immediately after
+  isolation succeeded, and verified byte-identical against that hash at 13:55Z
+  after the stateful matrix run.
 - Task 7 started no listener, server, client connection, or background
   process, and killed no process. Its harness runs used dummy video/audio
   drivers, an isolated `CFFIXED_USER_HOME` preference home, and read-only

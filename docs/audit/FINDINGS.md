@@ -123,11 +123,17 @@ Improvements are ranked separately by expected benefit, implementation effort, a
 
 Task 6 added BUG-026 through BUG-040, SEC-007, and IMP-012, and resolved the
 menu/settings side of BUG-021, BUG-023, SEC-004, and IMP-005 by extending those
-entries instead of allocating new IDs. Six Task 6 defects (BUG-026, BUG-027,
-BUG-028, BUG-029, BUG-030, BUG-031 plus BUG-032 and BUG-034) were reproduced at
+entries instead of allocating new IDs. Eight Task 6 defects (BUG-026, BUG-027,
+BUG-028, BUG-029, BUG-030, BUG-031, BUG-032, and BUG-034) were reproduced at
 runtime against unchanged production code under an isolated preference home;
 the remainder are complete source traces. SEC-007 was not reproduced with
-traffic, in line with the user's security-runtime restriction.
+traffic, in line with the user's security-runtime restriction. (Task 11
+reconciled this count: the notebook's own persistence matrix and full-client
+run table name exactly these eight IDs — cases C/G for BUG-027, E for BUG-029,
+F for BUG-028/BUG-029/BUG-030, H for BUG-031, I/J/K for BUG-026, plus the two
+full-client aborts for BUG-032 and BUG-034 — so "eight" is the count that
+matches the evidence tables, not the "six" this document and the notebook's
+gate conclusion previously stated.)
 
 Task 7 confirmed the inherited BUG-001 (both `TextureEx` null-deref orderings
 reproduced under UBSan against production code), added BUG-041 (transition

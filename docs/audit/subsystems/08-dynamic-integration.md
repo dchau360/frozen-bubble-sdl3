@@ -653,9 +653,16 @@ Runtime coverage delivered, by subsystem:
 4. **No manual visual or audio observation.** Every client process ran with
    `SDL_VIDEO_DRIVER=dummy`, `SDL_AUDIO_DRIVER=dummy` and the software renderer.
    The clear-win banner and its sound, spectator pinning on screen, the
-   >5-player mini-board paging, and the malus/attack visuals were not seen or
-   heard by a human. Their logic is covered by `netview-test`,
-   `roundstats-color-test` and Task 5's harness; their presentation is not.
+   >5-player mini-board paging, the malus/attack visuals, and (row 11) the
+   team-mode on-screen team banner were not seen or heard by a human. Their
+   logic is covered by `netview-test`, `roundstats-color-test` and Task 5's
+   harness; their presentation is not. (Task 11: row 11's parenthetical "Yes
+   for the on-screen team banner (not performed)" predates this gate's close
+   and names a fifth unobserved visual distinct from the clear-win banner in
+   this same list; it does not change the 41-row/31-executed/10-not-performed
+   counts, since row 11 itself is already counted among the 31 executed rows —
+   only its render-observation aside was previously missing from this
+   canonical list.)
 5. **The shipped client was never driven through its menus into a network
    game.** SDL's dummy video driver accepts no externally injected input and the
    binary takes no arguments (`src/main.cpp:27`), so there is no path to

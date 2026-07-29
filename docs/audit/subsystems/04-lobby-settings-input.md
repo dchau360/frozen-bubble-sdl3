@@ -224,9 +224,43 @@ Controller slot arithmetic:
   `CTRL_SC_COUNT = 100` entries and `IsVirtualScancode` gates writes to
   `[300, 400)`, so no write escapes; instead, from the sixth slot onward the
   derived code is ≥ 400, `IsVirtualScancode` is false, and in-game controller
-  input silently stops reaching `IsKeyPressed`. From the eleventh slot the
-  derived code reaches ≥ 512, past the 512-entry array `SDL_GetKeyboardState`
-  returns (BUG-035).
+  input silently stops reaching `IsKeyPressed`. **Completing the trace to the
+  actual out-of-bounds read (BUG-035) takes one more hop than the write side:**
+  the derived code first has to reach a player's stored binding, and the only
+  path that stores one is key-bind capture, not the in-game write path above.
+  1. **Bind capture emits the derived code.** While the Keys panel awaits a
+     binding, `HandleControllerEvent` (`frozenbubble.cpp:384-388`) computes
+     `vsc = 300 + playerIdx*20 + button` for whichever gamepad fired the
+     button and calls `PushScancode(vsc, true)`.
+  2. **`PushScancode`'s raw-event fallback bypasses the virtual-range guard
+     entirely.** `PushScancode` (`frozenbubble.cpp:334-347`) only touches
+     `virtualKeyState` inside `if (IsVirtualScancode(sc))`; for `vsc ≥ 400`
+     (slot 6+) that whole block is skipped, so the function falls straight
+     through to its unconditional tail and pushes a genuine
+     `SDL_EVENT_KEY_DOWN`/`_UP` `SDL_Event` with `ev.key.scancode = vsc` —
+     an `SDL_Scancode` value the enum was never meant to hold, and pushed
+     regardless of the caller's `skipEvent` argument, since that check only
+     runs inside the now-skipped `if`.
+  3. **`KeysPanelKey` stores the raw value with no range check.**
+     `MainMenu::KeysPanelKey` (`mainmenu_input.cpp:498-513`) is exactly what
+     `awaitKp` routes that synthetic key-down event to; it writes
+     `e->key.scancode` straight into `PlayerKeys::left/right/fire/center`
+     (case 0-3, `:509-512`) with no bounds check of any kind — the same sink
+     BUG-028 reaches from a corrupt INI file, but reached here from a live
+     controller instead of a settings file.
+  4. **`IsKeyPressed` then indexes `SDL_GetKeyboardState` with that value
+     every frame.** `IsKeyPressed` (`gamesettings.h:50-54`) is called once
+     per frame per bound key from `bubblegame_shooter.cpp`. Since the stored
+     scancode is `≥ 400`, `IsVirtualScancode` is false, so execution falls to
+     the `else` branch, `SDL_GetKeyboardState(NULL)[sc]` — indexing SDL's
+     real keyboard-state array (length `SDL_SCANCODE_COUNT = 512`, confirmed
+     by this gate's `numkeys=512` probe below) with the unbounded, unchecked
+     stored value. From the eleventh connected slot the derived code reaches
+     `300 + 11*20 = 520 ≥ 512`, so this is an out-of-bounds read of the
+     buffer `SDL_GetKeyboardState` returns, executed once per frame for as
+     long as the binding survives — not merely a "stops reaching
+     `IsKeyPressed`" dead end, which is what the in-game write path
+     (`frozenbubble.cpp:395-408`) alone would suggest.
 - SDL3 defines 26 gamepad buttons (`SDL_GAMEPAD_BUTTON_COUNT`, with
   `SDL_GAMEPAD_BUTTON_TOUCHPAD = 20`), but the stride is 20, so player 1's
   touchpad button produces exactly player 2's `SOUTH` code (BUG-036).
@@ -377,7 +411,7 @@ from earlier gates:
 | BUG-032 | High | Highscore and level-history files are parsed with `stoi`/`stof` without exception handling, aborting the client during construction | two full-client runs, exit −6, uncaught `std::invalid_argument` |
 | BUG-033 | Medium | Hosting a LAN server runs `system("pkill -x fb-server")`, killing every `fb-server` the user owns | `mainmenu_server.cpp:93`; Task 2 observed an unrelated `fb-server` on this host |
 | BUG-034 | High | `FrozenBubble`'s raw members have no initialisers and the constructor's early-return paths leave them indeterminate; `RunForEver` and the destructor then use them | UBSan `member call on misaligned address 0xbebebebebebebebe` at `frozenbubble.cpp:228` |
-| BUG-035 | Medium | Controller slots are never released and the slot index is unbounded: from slot 6 in-game controller input silently stops, and from slot 11 the derived scancode passes the 512-entry keyboard array | no `GAMEPAD_REMOVED` handler; `IsVirtualScancode` window `[300,400)`; `numkeys=512` |
+| BUG-035 | Medium | Controller slots are never released and the slot index is unbounded: from slot 6 in-game controller input silently stops, and from slot 11 the derived scancode passes the 512-entry keyboard array | Full four-hop trace: `frozenbubble.cpp:384-388` (bind-capture emits the derived code) → `frozenbubble.cpp:334-347` (`PushScancode`'s raw-event fallback pushes a real `SDL_Event` once the code leaves `IsVirtualScancode`'s `[300,400)` range) → `mainmenu_input.cpp:498-513` (`KeysPanelKey` stores `e->key.scancode` into `PlayerKeys` unchecked) → `gamesettings.h:50-54` (`IsKeyPressed` falls to the unguarded `SDL_GetKeyboardState(NULL)[sc]` index every frame); no `GAMEPAD_REMOVED` handler; `numkeys=512` probe |
 | BUG-036 | Medium | The 20-code stride per player is smaller than SDL3's 26 gamepad buttons, so button ≥ 20 aliases the next player's slot | `SDL_GAMEPAD_BUTTON_TOUCHPAD = 20` versus `CTRL_SC_BASE + slot*20` |
 | BUG-037 | Medium | Room-scoped lobby state (`netTeamOverrides`, chat scan counters, `selectedActionIndex`, `currentPlayerCol`) is never reset on part/join, so a previous room's nickname-keyed team overrides apply in the next room | no `netTeamOverrides.clear()` exists; `ReturnToNetLobby`/`MenuEscapeKey` traces |
 | BUG-038 | Low | On WASM the game list is rebuilt inside the WebSocket callback between frames, while the join action is an index into that list, so ENTER can join a room other than the highlighted one | `networkclient_wasm.cpp:112-127` parses inline; native frame order makes this safe (see dismissals) |
@@ -483,8 +517,10 @@ Complete. Every scoped file has a final disposition, every candidate is
 confirmed or dismissed with recorded evidence, and the four inherited
 cross-owner items (BUG-021, BUG-023, SEC-004, IMP-005) are resolved on their
 menu/settings side and cross-linked without recycling IDs. Fifteen defects, one
-security finding, and one improvement were promoted; six of them are reproduced
-at runtime against unchanged production code under an isolated preference home,
-and the user's real preferences were verified untouched. Security runtime work
+security finding, and one improvement were promoted; eight of them (BUG-026
+through BUG-032 and BUG-034) are reproduced at runtime against unchanged
+production code under an isolated preference home, per the persistence matrix
+and full-client run table above, and the user's real preferences were verified
+untouched. Security runtime work
 and all live-server menu transitions remain explicitly omitted. The exact next
 gate is Task 7, Step 1: build an SDL resource ownership table.

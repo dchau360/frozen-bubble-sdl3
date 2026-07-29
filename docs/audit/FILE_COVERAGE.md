@@ -4,6 +4,17 @@ Pinned production tree: `09d6c7bfcd864a0ad3951b87d16a88dc770392a3` (`v2.4.27`)
 
 Inventory rule: paths selected by Task 1 Step 4 from the pinned tree. The ledger has 237 rows, one per selected path. A disposition containing the word `pending` — `Pending review`, `boundary review pending`, or `Baseline exercised; static review pending` — is an incomplete state, not a completed coverage claim; `boundary reviewed` (past tense) is a completed vendored disposition. After Task 8, **21** rows carried a pending disposition and all 21 were owned by Task 9: 20 read `Pending review` and one, `CMakeLists.txt`, read `Baseline exercised; static review pending`. **Task 9 dispositioned all 21**, so after Task 9 **0** rows carry a pending disposition and none is in the `boundary review pending` state. A full-file case-insensitive search finds the word `pending` nowhere else in this file — it appears only in this rule paragraph.
 
+**Task 11 Step 1 reconciliation.** The pinned-commit inventory was regenerated
+verbatim from Task 1 Step 4's own selection command —
+`git ls-tree -r --name-only 09d6c7bfcd864a0ad3951b87d16a88dc770392a3` piped
+through the identical `rg` pattern from `task-1-brief.md` Step 4 — and diffed
+against this file's 237 paths (`grep -oE '^\| \`[^\`]+\`' FILE_COVERAGE.md`,
+stripped of backticks, sorted). The regenerated selection is exactly 237 paths
+and `diff` between the two sorted lists produced **no output** (exit 0): every
+row still links to evidence or a vendored/boundary disposition, no selected
+path is missing, and no path in this file falls outside the regenerated
+selection. See the ledger below for the exact commands and exit codes.
+
 | Path | Gate | Disposition | Evidence | Notes |
 |---|---|---|---|---|
 | `.github/workflows/build.yml` | Task 9 | Reviewed; defects confirmed | [Task 9 confirmed findings](subsystems/07-build-release-tooling.md#confirmed-findings) | Parsed with Ruby Psych (exit 0): **11** jobs, **0** with `if: false`, `release` `needs` all five build jobs and attaches **5** files — contradicting `CLAUDE.md`'s CI section and matching `CHANGELOG.md`'s `v2.4.27` entry (REL-009). **27** `uses:` references, **0** commit-pinned, **5** on the mutable `@master` and each carrying `secrets.BUTLER_CREDENTIALS`; Emscripten is `latest` and `linuxdeploy` is `continuous` (REL-011). The 21-DLL Windows copy loop suppresses every failure and `Cache NDK` interpolates an undefined `env.ANDROID_SDK_ROOT` to empty (REL-013). No `CMAKE_OSX_ARCHITECTURES` or universal-binary setting, so the DMG is single-architecture and unlabelled (REL-012). Zero `ctest`/`pytest` invocations (IMP-016). Version fallbacks and the throwaway keystore feed REL-004 and REL-007. Artifact naming/nesting checked and found correct. |

@@ -356,6 +356,22 @@ test file was changed.
   Task 10 browser-runtime boundary, not an unresolved Task 4 candidate.
 - Existing foreign server listeners were observed read-only and were not
   signaled, connected to, or otherwise modified.
+- **A Task 4 fix-round link/schema validator's failing command was not
+  preserved verbatim.** The fix-round record captured the failing run's exit
+  status (1) and its material output (`AssertionError:
+  (PosixPath('docs/audit/FILE_COVERAGE.md'),
+  'subsystems/02-network-client-sync.md#transport-thread-and-ownership-map')`)
+  after a matrix heading rename left a stale anchor, but not the exact
+  invocation text of that first, failing run — only the corrected re-run's
+  command was recorded verbatim. The stale anchor was fixed before this gate
+  closed, so there is no longer a live target to reproduce the original
+  failure against without reintroducing the stale link. Task 11 re-ran today's
+  equivalent link/schema check (the same inline Python walk over
+  `FINDINGS.md`, `FILE_COVERAGE.md`, `SDL3_REVIEW_STATUS.md`, and this
+  notebook) and confirmed it still exits 0 with `notebook_schema_and_links=PASS`,
+  so the underlying defect this validator caught has no live recurrence; the
+  gap is confined to that one historical command's verbatim text, not to any
+  unresolved link.
 
 ## Gate conclusion
 
