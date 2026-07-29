@@ -198,15 +198,20 @@ empirically in Dynamic evidence.
   otherwise it extracts and then writes the marker unconditionally (`:63-74`).
   `extractDir` and `extractFile` swallow every `Exception` into a `Log.e`
   (`:98-100`, `:115-117`), and `extractFile` skips any destination that already
-  exists with non-zero length (`:106`). Registered as BUG-046.
+  exists with non-zero length (`:106`). Because `:106` has no content, size, or
+  timestamp comparison, a re-extraction triggered by a version bump rewrites
+  only paths that are *absent or empty* — so neither a truncated file nor a
+  changed asset is ever refreshed by an update. Registered as BUG-046.
 - **WASM persistence.** `GameSettings::InitPrefPath` calls
   `SDL_GetPrefPath("", "frozen-bubble")` (`gamesettings.cpp:32`) and
   `HighscoreManager` derives `highlevelshistory`/`highscores` from the same
   `prefPath` (`highscoremanager.cpp:225-226`, `:259-260`). On Emscripten that
   path is MEMFS. The only persistent store in the tree is the `fb_nickname`
-  `localStorage` entry written by the four `EM_ASM` sites
-  (`mainmenu.cpp:163`, `:264`, `mainmenu_netpanel.cpp:80`,
-  `mainmenu_input.cpp:1507`), which is exactly why the `Keys:Nickname`
+  `localStorage` entry, reached by four `EM_ASM` sites — **one read**
+  (`localStorage.getItem`, `mainmenu.cpp:163`) and **three writes**
+  (`localStorage.setItem` at `mainmenu.cpp:264`, `mainmenu_netpanel.cpp:80`,
+  `mainmenu_input.cpp:1507`). The three writes are what create the persistence;
+  the read is what consumes it. That is exactly why the `Keys:Nickname`
   INI read/write is `#ifndef __WASM_PORT__` (`gamesettings.cpp:194-197`,
   `:250-252`). Everything else — key bindings, sound flags, graphics level,
   speed multiplier, mouse mode, and both highscore files — is written to
@@ -275,8 +280,10 @@ empirically in Dynamic evidence.
   handlers in the whole tree, so the asymmetry has no behavioral consequence
   here; recorded as an observation, not promoted.
 - `web/shell.html` is the `--shell-file`; `web/index.html` is a separate,
-  unreferenced page titled "Frozen Bubble SDL2" whose only script tag loads
-  `frozen-bubble-sdl2.js`, a file no build produces. CI overwrites
+  unreferenced page titled "Frozen Bubble SDL2". It carries two `<script>`
+  tags: an inline block at `:89-135` that defines the `Module` object and the
+  status/error handlers, and the one external tag at `:136`, which loads
+  `frozen-bubble-sdl2.js` — a file no build produces. CI overwrites
   `dist-wasm/index.html` with the generated shell (workflow line 475). Folded
   into REL-006.
 - `web/README.md:17` states the WASM build needs no websockify proxy;
@@ -396,11 +403,22 @@ not modified**; only its read-only `llvm`/`binaryen` directories were reused.
 - The custom shell is applied (`fitCanvas`/`preventNavKeys` from
   `web/shell.html` are present in the generated HTML) and the module reports
   `ENVIRONMENT_IS_WEB=true`, `ENVIRONMENT_IS_NODE=false`.
-- **Persistence proof.** The linked JavaScript contains **zero** occurrences of
-  `IDBFS`; its single `syncfs` occurrence is the `FS.syncfs` API definition, not
-  a call; its single `localStorage` occurrence is inside `ASM_CONSTS` — the
-  `fb_nickname` read from `mainmenu.cpp:163`. The `.wasm` binary contains the
-  `/libsdl/` and `frozen-bubble` pref-path literals. BUG-048 confirmed.
+- **Persistence proof.** Occurrence counts measured with
+  `grep -o <token> build-audit-wasm/frozen-bubble-sdl3.js | wc -l`, not with a
+  first-index probe: `IDBFS` **0**, `syncfs` **4**, `localStorage` **4**. All
+  four `syncfs` occurrences lie inside `FS.syncfs`'s own definition — the method
+  name, its own in-flight warning string, and the `mount.type.syncfs`
+  guard-and-dispatch pair that forwards to a mount backend — so **no call site
+  outside `FS.syncfs` exists** and the API is never entered. All four
+  `localStorage` occurrences are `ASM_CONSTS` entries for `fb_nickname`: one
+  `getItem` (from `mainmenu.cpp:163`) and three `setItem` (from
+  `mainmenu.cpp:264`, `mainmenu_netpanel.cpp:80`, `mainmenu_input.cpp:1507`),
+  keyed at `ASM_CONSTS` addresses 626508, 626690, 626749 and 626808. The
+  generated `.html` and `web/shell.html` each contain **0** occurrences of
+  `IDBFS`, `syncfs`, `localStorage` and `indexedDB`, and the `.wasm` binary
+  contains **0** `IDBFS`/`syncfs` strings, so no persistent mount is introduced
+  anywhere in the artifact set. The `.wasm` binary does contain the `/libsdl/`
+  and `frozen-bubble` pref-path literals. BUG-048 confirmed.
 - **`cmake/Emscripten.cmake` re-test.** The command `WASM_PORT.md:65`
   documents (`emcmake cmake -DCMAKE_TOOLCHAIN_FILE=../cmake/Emscripten.cmake ..`)
   was run in a throwaway directory and **succeeded** (exit 0): CMake's
@@ -487,7 +505,7 @@ Every candidate raised in this gate reached a terminal state; none remains open.
 |---|---|
 | `InitDataDir` ignores the installed asset prefix on macOS | confirmed — REL-008 (reproduced, layout C) |
 | CWD-relative log path with launch-count naming and ignored init failure | confirmed — BUG-047 (both halves reproduced) |
-| Android extraction caches a partial/failed copy permanently | confirmed — BUG-046 (complete code-supported chain) |
+| Android extraction caches a partial/failed copy permanently, and never refreshes a changed asset on update | confirmed — BUG-046, both consequences of `AssetExtractor.java:106` (complete code-supported chain) |
 | WASM preferences and highscores never persist | confirmed — BUG-048 (proved in the linked artifact) |
 | 97 dangling absolute symlinks tracked under `jni/include/SDL2` | confirmed — REL-005 |
 | `CMakeListsEmscripten.txt` cannot link; WASM/Android docs contradict the build | confirmed — REL-006 |
@@ -506,25 +524,48 @@ Every candidate raised in this gate reached a terminal state; none remains open.
 
 ## Confirmed findings
 
-### BUG-046 — a failed or partial Android asset extraction is cached forever
+### BUG-046 — `extractFile`'s exists-and-non-empty skip caches a partial extraction forever and never refreshes a changed asset
 
 `AssetExtractor.extractAll` (`AssetExtractor.java:39-78`) writes the
 `.assets_version` marker unconditionally after `extractDir` returns (`:68-74`),
 and `extractDir`/`extractFile` convert every `Exception` into a `Log.e` and
-return normally (`:98-100`, `:115-117`). `extractFile` additionally skips any
-destination that already exists with non-zero length (`:106`). So if a copy is
-interrupted — device full, process killed mid-write — the destination is left
-truncated but non-empty, the marker is still written, and every subsequent
-launch takes the early return at `:53-61` and never re-extracts. The truncated
-file survives until the app version changes or app data is cleared.
+return normally (`:98-100`, `:115-117`). The load-bearing line is
+`extractFile:106` — `if (dest.exists() && dest.length() > 0) return;` — which
+skips **any** destination that already exists with non-zero length, with no
+size, timestamp, or content comparison against the APK asset.
 
-The consequence is unbounded on Android specifically, because Android is the one
-platform where `VerifyAssetDirectory` is compiled out (`frozenbubble.cpp:102`):
-nothing checks the tree before use. A truncated PNG makes `IMG_Load` return
-null, which is the same unchecked-load class already confirmed as BUG-001 and
-BUG-044. Severity Medium. Not reproduced on a device — no Android hardware or
-emulator was driven — so this is a complete code-supported causal argument, not
-an observed runtime fact.
+Two consequences follow from that one line.
+
+**1. A partial extraction is cached permanently, and a version bump does not
+repair it.** If a copy is interrupted — device full, process killed mid-write —
+the destination is left truncated but non-empty, the marker is still written at
+`:68-74`, and every subsequent launch takes the early return at `:53-61` and
+never re-extracts. A new app version defeats the marker check, but only the
+marker: `extractAll` then re-enters `extractDir`, `extractFile:106` sees the
+truncated file as "already extracted" and skips it again, and `:68-74` rewrites
+the marker with the new version code. **The claim that the truncated file
+survives "until the app version changes" is wrong and is corrected here: a
+version change does not repair it.** The only repairs are clearing app data or
+uninstalling — nothing the app itself does, and nothing a shipped update does.
+
+**2. An app update never refreshes an asset whose content changed.** The same
+skip means that on every upgrade only *newly added* asset paths are written.
+Any level file, graphic, sound, or font that changed between releases while
+keeping its path retains the previous release's bytes indefinitely. This is the
+larger of the two consequences in practice, because it needs no interruption or
+error to occur: it is the normal, error-free upgrade path. It is recorded under
+BUG-046 rather than as a new ID because it is the identical root cause — the
+unconditional exists-and-non-empty short-circuit at `:106` — and any fix for one
+half (compare against the asset, or extract to a temp path and rename, or clear
+`destDir` when the marker mismatches) fixes the other.
+
+The first consequence is unbounded on Android specifically, because Android is
+the one platform where `VerifyAssetDirectory` is compiled out
+(`frozenbubble.cpp:102`): nothing checks the tree before use. A truncated PNG
+makes `IMG_Load` return null, which is the same unchecked-load class already
+confirmed as BUG-001 and BUG-044. Severity Medium. Not reproduced on a device —
+no Android hardware or emulator was driven — so this is a complete
+code-supported causal argument, not an observed runtime fact.
 
 ### BUG-047 — CWD-relative log naming counts launches, and its failure is ignored
 
@@ -560,16 +601,23 @@ reproduced against the production `logger.cpp` object.
 `:259-260`). SDL3's Emscripten implementation returns `/libsdl/<org>/<app>/`
 created with plain `mkdir`
 (`android/app/jni/SDL3/src/filesystem/emscripten/SDL_sysfilesystem.c:40-79`),
-which is MEMFS. The linked WASM artifact contains **zero** `IDBFS` references,
-its only `syncfs` occurrence is the unused API definition, and its only
-`localStorage` occurrence is the `fb_nickname` `EM_ASM` read. Nothing mounts a
-persistent filesystem and nothing calls `FS.syncfs`.
+which is MEMFS. Measured on the linked artifact with
+`grep -o <token> build-audit-wasm/frozen-bubble-sdl3.js | wc -l`: `IDBFS` **0**,
+`syncfs` **4**, `localStorage` **4**. All four `syncfs` occurrences are inside
+`FS.syncfs`'s own definition (method name, in-flight warning string, and the
+`mount.type.syncfs` guard-and-dispatch pair), so no call site outside the
+definition exists and the API is never entered; all four `localStorage`
+occurrences are `fb_nickname` `ASM_CONSTS` entries — **one `getItem` and three
+`setItem`**. Nothing mounts a persistent filesystem, and the only thing that
+writes to persistent browser storage is the nickname.
 
 Therefore, on every page load the browser build starts from defaults: key
 bindings, sound and graphics settings, the speed multiplier, the mouse/touch aim
 flag, and both highscore files are gone. Only the network nickname survives,
-through the four `localStorage` `fb_nickname` sites. `WASM_PORT.md:209` lists
-High Scores as working. Severity Medium.
+because it alone is written through `localStorage.setItem` — at
+`mainmenu.cpp:264`, `mainmenu_netpanel.cpp:80` and `mainmenu_input.cpp:1507` —
+and read back at `mainmenu.cpp:163`. `WASM_PORT.md:209` lists High Scores as
+working. Severity Medium.
 
 The finding compounds with the shutdown gap: on WASM `RunForEver` returns
 immediately after `emscripten_set_main_loop` (`frozenbubble.cpp:238-239`), so
@@ -615,8 +663,10 @@ Four artifacts describe or define a build that does not exist:
    glue; the real build uses the four SDL3 submodules
    (`android/app/CMakeLists.txt:54-57`). Following it cannot produce a build.
 4. `web/index.html` is an unreferenced page titled "Frozen Bubble SDL2" whose
-   only script tag loads `frozen-bubble-sdl2.js`, which no build emits; CI
-   overwrites `dist-wasm/index.html` with the generated shell instead.
+   sole *external* script tag (`:136`; the page's other `<script>` is the inline
+   `Module` setup block at `:89-135`) loads `frozen-bubble-sdl2.js`, which no
+   build emits; CI overwrites `dist-wasm/index.html` with the generated shell
+   instead.
 
 Corroborating stale state: `.gitignore:25-26` still ignores
 `android/app/jni/SDL2_mixer/external/{ogg,vorbis}/`, directories the tree no
@@ -677,8 +727,42 @@ BUG-034 indeterminate-member dereference.
 Two smaller members of the same family, traced but not separately reproduced:
 the Linux heuristic also falls through for prefixes with no `/bin/` component
 (for example a Debian `/usr/games/` install), and the Windows branch falls
-through whenever `GetModuleFileNameA` fails. Severity High for the macOS
-`make install` path; Medium overall. Remediation belongs with Task 9.
+through whenever `GetModuleFileNameA` fails.
+
+**Two mitigating facts, both verified, that bound the blast radius:**
+
+- **No shipped artifact is affected.** The macOS release is not a `make install`
+  layout at all: `.github/workflows/build.yml:155-163` builds the `.app` bundle
+  by hand, copying the binary to `Contents/MacOS/` and `cp -r share
+  "$APP/Resources/share"` — that is exactly the harness's layout D, the one case
+  `platform.cpp:109-121` handles, so the DMG resolves assets correctly on any
+  machine. The other two shipped desktop layouts also avoid the fall-through:
+  the Linux AppImage installs to `AppDir/usr/bin` with assets at
+  `AppDir/usr/share/frozen-bubble` (`build.yml:75-81`), which the
+  `/proc/self/exe` + `/bin/` heuristic recovers, and the Windows package copies
+  `share` beside the `.exe` (`build.yml:255-260`), which the
+  `GetModuleFileNameA` branch recovers. The defect is reachable through the
+  project's own `install()` rules, not through anything it publishes.
+- **The project's own Nix packaging already works around it.**
+  `default.nix:50` configures with `-DASSET_PATH="$out/share"`, overriding the
+  `${CMAKE_SOURCE_DIR}/share` default so `DATA_DIR` bakes the store path rather
+  than the builder's checkout. That a downstream packaging file must supply this
+  flag by hand is itself evidence that `INSTALLED_ASSET_PATH` was meant to do
+  the job and does not.
+
+**Severity reassessment (fix round).** The gate originally recorded "High for
+the macOS `make install` path; Medium overall" in this notebook while the
+registry cell read a bare `High` — an inconsistency in itself. Re-judged against
+the rubric with the two facts above: `High` is reserved for "a shipped platform
+rendered unusable", and no shipped platform is affected, because all three
+desktop release layouts hit a branch that resolves correctly. What remains is a
+`make install`/source-packaging path that produces a binary unusable off the
+build machine — squarely the `Medium` definition, "meaningful portability or
+release defect". **Severity is therefore recorded as Medium, in both this
+notebook and the registry**, with the qualifier that the *consequence* on the
+affected path is severe (the game cannot start, and it enters BUG-034's
+indeterminate-member dereference through the failing `VerifyAssetDirectory`).
+Remediation belongs with Task 9.
 
 ### IMP-014 — the release APK ships a duplicate and an unused native library
 
@@ -868,6 +952,22 @@ No file in Task 8's scope is left pending.
   keystore password and unpinned Gradle distribution (REL-007), and the test
   AdMob identifiers are documented statically. The omitted checks are
   limitations, not passes.
+- **Brief Step 6's dynamic-library independence was not confirmed.** No
+  packaged layout was checked for library resolution: the macOS build links
+  Homebrew SDL3 by rpath on this host, the Windows CI job's DLL copy and the
+  AppImage's bundling were read from the workflow only, and only the Android
+  `lib/<abi>/*.so` layout was inspected — statically, inside the APK, never
+  loaded. Dynamic-library independence is therefore **untested**, not passed.
+- **The shipped binary was never launched from a staged or bundle layout.**
+  Brief Step 6 asked for the native binary to be run from the build tree and
+  from a staged install/app-bundle layout; what was run instead is a test-only
+  harness linking the unchanged production `platform.cpp.o` and `logger.cpp.o`
+  (Dynamic evidence, Step 6). That harness exercises the real `InitDataDir()`
+  and `Logger::Initialize()` — which is what REL-008 and BUG-047 rest on — but
+  it constructs no `FrozenBubble`, creates no window, loads no asset, and opens
+  no real preference file. Whole-program packaged-layout startup is
+  **unexercised**; only the path-resolution and logger-initialization slices of
+  it were reproduced.
 - **No sanitizer was used in this gate.** The packaged-path harness linked the
   warnings-strict (`build-audit-werror`) production objects, not the
   ASan+UBSan ones, because every finding here is a path-resolution or
@@ -893,6 +993,27 @@ whose proposed failure chain was directly disproved by running the command.
 No candidate remains open, no scoped or vendored file is undispositioned, and
 every omitted platform or scenario is recorded above as a limitation rather than
 as a pass.
+
+**Fix Round 1** (independent review of `6c859034`) accepted all seven findings
+raised, none disputed: BUG-048's `syncfs`/`localStorage` counts were corrected
+from "single" to **4 each** — the original evidence measured first-occurrence
+indices, not counts — and its causal statement rewritten around the three
+`setItem` writes rather than the one `getItem` read; BUG-046 was extended with
+the two consequences of `AssetExtractor.java:106` that the gate had missed or
+misstated (a version bump does **not** repair a truncated file, and an app
+update never refreshes a changed asset); REL-008's severity was made identical
+in both documents and reassessed **High → Medium** on the verified facts that no
+shipped artifact takes the fall-through path and that `default.nix:50` already
+works around it; the coverage header's bootstrap count was corrected 20 → 21;
+the two brief Step 6 substitutions (no dynamic-library confirmation, no launch
+of the shipped binary from a packaged layout) were added to Limitations; and the
+`web/index.html` "only script tag" wording was corrected. A sweep of every
+occurrence, site, and instance count in the four Task 8 documents re-derived
+twenty quantities with commands that measure the claim; eighteen reproduced
+exactly and two were wrong — the `syncfs`/`localStorage` counts above and the
+recursive submodule count (37 recorded, **38** actual, `plutovg` appearing at
+two paths). Full record in the
+[status ledger](../SDL3_REVIEW_STATUS.md#task-8-fix-round-1).
 
 Next gate: Task 9 (build, tests, packaging, CI, deployment, tooling, and
 operations).
