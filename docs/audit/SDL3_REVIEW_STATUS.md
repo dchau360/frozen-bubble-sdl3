@@ -13,7 +13,7 @@
 
 | Component | Recorded value |
 |---|---|
-| Agent | Codex subagents `task_1_implementer` (bootstrap), `task_2_implementer` (baselines), `task_3a_static` (server static review), `task_3c_synthesis` (static Task 3 closure), `task_4_implementer` (client/synchronization review), and `task_5_implementer` (gameplay review), plus the Task 6 (lobby/settings/input), Task 7 (render/audio), and Task 8 (platform ports) implementer agents |
+| Agent | Codex subagents `task_1_implementer` (bootstrap), `task_2_implementer` (baselines), `task_3a_static` (server static review), `task_3c_synthesis` (static Task 3 closure), `task_4_implementer` (client/synchronization review), and `task_5_implementer` (gameplay review), plus the Task 6 (lobby/settings/input), Task 7 (render/audio), Task 8 (platform ports), and Task 9 (build/release/tooling) implementer agents |
 | Model | Unknown; the dispatcher did not expose a model identifier |
 | Host | macOS 26.5.2 (build 25F84), Darwin 25.5.0, arm64 |
 | Compiler | Apple clang 21.0.0 (`clang-2100.1.1.101`), target `arm64-apple-darwin25.5.0` |
@@ -31,8 +31,8 @@
 ## Current state
 
 - Phase: Phase 2 — subsystem review
-- Active gate: Task 9 (pending)
-- Exact next action: Begin Task 9, Step 1: compare all build source lists and definitions.
+- Active gate: Task 10 (pending)
+- Exact next action: Begin Task 10, Step 1: define the recorded matrix before launching processes.
 
 ## Gate checklist
 
@@ -46,7 +46,7 @@
 | Task 6 | Lobby, settings, persistence, and input | complete (static review plus isolated-preferences runtime matrix; security runtime and live-server lobby transitions omitted) |
 | Task 7 | Rendering, transitions, fonts, and audio lifecycle | complete (Fix Round 1 corrected BUG-001's leak quantity, BUG-041's trigger set, the pixel-format claim, and IMP-013's attribution; reopened IMP-005's render slice into BUG-043 and registered BUG-044, both reproduced against production objects. Fix Round 2 corrected the `TTFText` instance count Fix Round 1 had misread from a comment — 38 fixed members, not 23 — plus the `MainMenu` texture and `cell()` churn counts, completed the `idleSPButtons` dismissal with a full consequence trace that disproves the proposed indeterminate-rect mechanism, and registered BUG-045, reproduced against the production `ttftext.cpp` object; dummy-driver-only rendering and full-client navigation omissions recorded) |
 | Task 8 | Native, WASM, and Android platform integration | complete (Android release APK built locally with zero tracked-file drift; WASM linked in full against a disposable port-patched Emscripten copy; packaged-path, logger, and preference behavior reproduced against unchanged production objects. Browser runtime, Android device runtime, Linux/Windows execution, whole-program packaged-layout startup, and dynamic-library independence recorded as unavailable, not passed. Fix Round 1 applied seven accepted review findings: BUG-048's occurrence counts and characterization corrected, BUG-046 extended with the version-bump and stale-asset-on-update consequences, REL-008 reassessed High → Medium with two mitigating facts, the coverage bootstrap count corrected 20 → 21, two brief Step 6 substitutions added to Limitations, the `web/index.html` script-tag wording corrected, and a full count sweep that found two wrong quantities of twenty re-derived. Fix Round 2 applied one accepted Important and six accepted Minor findings: the REL-008 "highest-impact" superlative re-anchored to name what actually reaches shipped artifacts, the Fix Round 1 opening summary's review-coverage and attribution wording corrected, the count-sweep enumeration reconciled to its stated eighteen, eleven bundled-command ledger rows split to one command per row with two non-integer exit cells resolved, the gate-conclusion completion claim qualified against its recorded substitutions, the `syncfs` "own body" wording corrected to "own definition", and the WASM nickname read corrected from `EM_ASM` to `EM_ASM_PTR`) |
-| Task 9 | Build, tests, packaging, CI, deployment, tooling, and operations | pending |
+| Task 9 | Build, tests, packaging, CI, deployment, tooling, and operations | complete (all five build definitions compared and reconciled; workflow, Compose, CMake, Gradle and Python configurations parsed locally; every confirmed defect from Tasks 3-9 mapped to a test, a dynamic case, or a registered gap; all 21 remaining pending coverage rows dispositioned. Fourteen IDs registered — REL-009..014 and IMP-016..023 — four entries extended (REL-004 severity Low → Medium, REL-006, REL-007, REL-008), IMP-008 closed, four candidates dismissed with counter-evidence including one disproved by running the command it doubted. The gate also corrected an inherited premise: `CLAUDE.md`'s claim that four of five platform build jobs are disabled with `if: false` is false at the pinned baseline — 0 of 11 jobs carry it — so Task 8's CI-reachability clause is corrected here and in the registry. No workflow was executed, no container started, and no external network operation performed; those are recorded as limitations, not passes) |
 | Task 10 | Cross-subsystem dynamic integration matrix | pending |
 | Task 11 | Complete file coverage and prioritized improvements | pending |
 | Task 12 | Independent final challenge | pending |
@@ -67,12 +67,22 @@
   by extending REL-003, REL-004 and BUG-033, and six were dismissed with
   counter-evidence that traces the consequence rather than noting the absence of
   a failure.
-- IMP-008 — selective API/const/cast/parser cleanup now has only the **Task 9**
-  files left open; Task 8 closed its platform slice without promotion (the
-  platform sources declare no uninitialized state-bearing member, perform no
+- No Task 9 candidate remains open. Fourteen were promoted to new IDs
+  (REL-009..014, IMP-016..023), four were recorded by extending REL-004, REL-006,
+  REL-007 and REL-008, one — REL-002's remediation — was discharged as a design
+  rather than a code change, and four were dismissed with counter-evidence that
+  traces each consequence.
+- **IMP-008 is closed** and confirmed as an improvement with no defect promoted
+  from any of its families. Task 8 closed its platform slice without promotion
+  (the platform sources declare no uninitialized state-bearing member, perform no
   narrowing conversion, and their only cleanup surface is the dead code captured
-  as IMP-015). The slices belonging to already-closed gates, including Task 7's
-  render slice, are dispositioned in their notebooks.
+  as IMP-015). Task 9 closed the last slice: neither cppcheck nor clang-tidy
+  analyses CMake, YAML, shell, Python, Nix, TOML or Markdown, so **0** diagnostics
+  of any IMP-008 family have a path among Task 9's 21 files, and the twelve
+  non-`SEC-003` `bugprone-unchecked-string-to-number-conversion` sites all lie in
+  files that closed gates already dispositioned. The boundary Task 9 did own —
+  the vendored dependency Task 2 deferred — produced IMP-023 and REL-014
+  instead.
 - Task 7 added BUG-041 (confirmed, runtime-reproduced transition texture
   leak), BUG-042 (confirmed, static-proven per-match penguin/hurry texture
   reload leak), and IMP-013 (confirmed improvement: off-by-one clamp bounds —
@@ -106,8 +116,28 @@
   assets to the build machine's source tree), IMP-014 (2,666,728 bytes of
   duplicate and unreferenced native libraries in the release APK), and IMP-015
   (the dead platform layer). It extended REL-003, REL-004 and BUG-033 rather
-  than duplicating them. The registry now holds **78 unique IDs**:
-  BUG-001..048, SEC-001..007, REL-001..008, IMP-001..015.
+  than duplicating them. At the close of Task 8 the registry held 78 unique IDs.
+- Task 9 added REL-009 (maintained documentation contradicts the shipped system:
+  `CLAUDE.md`'s CI section against a workflow with 0 of 11 jobs disabled, and
+  `README.md`'s public-server-list format against `curlFetch`'s parser),
+  REL-010 (`docker/setup.sh`'s `openssl rsa -check` gate rejects certbot's
+  default ECDSA key — reproduced, exit 1 on two OpenSSL implementations — and
+  the script then overwrites the operator's real certificate and key, while
+  `SetupServer.md`'s renewal block copies to a path that does not exist from its
+  own working directory), REL-011 (0 of 27 `uses:` commit-pinned, 5 on `@master`
+  and each carrying the itch.io deploy secret, `latest` Emscripten, and an SDL3
+  version matrix in which only Linux, Windows and Android agree), REL-012 (the
+  macOS DMG is single-architecture, with no architecture in its name and no
+  universal-binary setting anywhere), REL-013 (a 20-DLL copy loop that cannot
+  fail and an NDK cache path that interpolates an undefined `env` value to
+  empty), REL-014 (the vendored iniparser ships in every artifact with no
+  licence, version, or provenance), and IMP-016 through IMP-023 (run the
+  registered checks in CI; settings/persistence, gameplay-rules,
+  protocol-parser, packaged-artifact and resource-lifetime suites; unify warning
+  flags; constrain the iniparser dependency boundary). It extended REL-004
+  (severity Low → Medium), REL-006, REL-007 and REL-008 rather than duplicating
+  them, and closed IMP-008. The registry now holds **92 unique IDs**:
+  BUG-001..048, SEC-001..007, REL-001..014, IMP-001..023.
 
 ## Confirmed findings
 
@@ -179,14 +209,41 @@
   BUG-046, whose `AssetExtractor.java:106` skip fires on the normal
   error-free Android upgrade path of a shipped APK (freezing a partial
   extraction permanently and never refreshing a changed asset), and BUG-048,
-  which fires on every page load of the WASM build — per `CLAUDE.md` the only
-  platform CI currently ships, since the Linux, macOS, Windows and Android
-  build jobs are disabled with `if: false`. Guard selection itself is sound:
+  which fires on every page load of the WASM build. **Task 9 corrected the CI
+  clause that sentence originally carried.** It read "per `CLAUDE.md` the only
+  platform CI currently ships, since the Linux, macOS, Windows and Android build
+  jobs are disabled with `if: false`" — measured at the pinned baseline, **0** of
+  **11** jobs carry `if: false`, the `release` job `needs` all five build jobs
+  and attaches **5** files, and `CHANGELOG.md`'s `v2.4.27` entry records the
+  restoration explicitly. BUG-048 still fires on every WASM page load, but WASM
+  is one of five platforms CI builds and releases, so BUG-046, REL-007 and
+  REL-012 reach shipped Android and macOS artifacts as well. The documentation
+  drift itself is registered as REL-009. Guard selection itself is sound:
   every Android-only SDL entry point is guarded, the Android source list is
   set-equal to the native one at 28 files, and a full WASM link plus an
   `llvm-nm --extern-only` comparison proved the two network-client translation
   units share no `NetworkClient` definition. See the
   [platform notebook](subsystems/06-platform-ports.md).
+- Task 9 confirmed REL-009 through REL-014 and IMP-016 through IMP-023, closed
+  IMP-008 as a confirmed improvement, and resolved the packaging side of
+  REL-004, REL-006, REL-007 and REL-008 by extension. The findings that reach a
+  shipped artifact are REL-011 (the WASM build ships SDL3 3.4.2 and SDL3_image
+  **3.2.4** where Linux, Windows and Android all ship 3.4.4/3.4.2, and macOS
+  ships whatever Homebrew has), REL-012 (the DMG is single-architecture and
+  unlabelled), REL-013's DLL loop (a missing load-time DLL still produces a
+  green job, a signed-off installer, a GitHub release asset and an itch.io
+  push), and REL-004's literal `versionCode 10`, which together with REL-007's
+  per-run keystore gives two independent reasons a shipped APK cannot upgrade
+  another. REL-010 is the operational one: reproduced on two OpenSSL
+  implementations, `docker/setup.sh` discards a certbot ECDSA certificate and
+  key and serves a self-signed pair instead. REL-009 is the one whose cost this
+  audit itself paid — stale CI documentation led Task 8 to under-weight four
+  shipped platforms. Every confirmed defect from Tasks 3-9 (68 IDs) is mapped in
+  the notebook to an existing test, an audit dynamic case, or a registered gap;
+  the dominant conclusion of that mapping is that **no CI job runs any test at
+  all** (0 invocations across 11 jobs, 5 tests registered), which IMP-016
+  addresses. See the
+  [build/release/tooling notebook](subsystems/07-build-release-tooling.md).
 
 ## Task 3 closure provenance
 
@@ -616,6 +673,76 @@ fifth Minor finding had called for.
   count; those 11 lines are 9 call sites plus 2 comment lines (12 name
   occurrences), and all 9 call sites are inside `#ifdef __ANDROID__` as claimed.
 
+## Task 9 closure provenance
+
+- Every file named by the Task 9 brief received a final disposition, and all
+  **21** rows that still carried a pending disposition after Task 8 were
+  dispositioned in this gate. The coverage ledger remains **237** rows, exactly
+  equal to the pinned-tree filter of `09d6c7bf`, with **0** pending.
+- The gate is a static and configuration-level review. **No GitHub Actions
+  workflow was executed, triggered, or dispatched; no container was started; no
+  release, artifact, itch.io channel, dependency download, or external host was
+  touched; no listener, socket, or server process was created.** Every CI
+  conclusion is a reading of `.github/workflows/build.yml` against documented
+  Actions semantics, and every dependency version was read from a file rather
+  than confirmed upstream.
+- Four of the brief's five Step 4 validators ran to a clean exit; two of those
+  needed a substitution, both recorded with the exact command and its exit.
+  `ruby … YAML.load_file(…, aliases: true)` exited **1** because macOS ships
+  Ruby 2.6.10, whose Psych predates the `aliases:` keyword; the same call
+  without the keyword exited **0**, and the document contains no anchors.
+  `./android/gradlew tasks --all --no-daemon` exited **1** because the wrapper
+  takes its project directory from the CWD and the repository root has no
+  `settings.gradle`; `--project-dir android` exited **0** and listed 329 task
+  lines. `docker compose -f docker/docker-compose.yml config` exited **0** as a
+  local parse — the daemon was not required, and `docker compose up` was
+  deliberately not run. `cmake -S . -B build-audit-config -G Ninja
+  -DCMAKE_BUILD_TYPE=Release` exited **0** into a directory added to the
+  untracked `.git/info/exclude` *before* creation. `python3 -m py_compile` over
+  `tools/net_bots.py`, `tests/*.py` and `tools/server_tests/*.py` exited **0**,
+  as did a separate run over the two Emscripten port files.
+- Gradle drift control: `git status --short` (0 lines), a SHA-256 manifest of
+  all **134** tracked `android/` paths, and the SHA-256 of `git ls-files -s
+  android` were captured before the first Gradle invocation and re-derived after
+  the last. Both diffs were empty and the index hash was identical
+  (`e7f56a3342a1e48c27c88386e7fa8763f509d14eafdc4f5adc83c57f25ed3b74`). **No
+  path was restored, because none was modified.**
+- One finding was reproduced rather than argued: REL-010's `key_ok` predicate.
+  `openssl rsa -in <prime256v1 key> -check -noout` exited **1** under the system
+  LibreSSL 3.3 and again under Homebrew OpenSSL 3.6.3. The destructive
+  `openssl req -x509` branch that follows it was **not** executed against any
+  certificate pair, so the overwrite is a code-supported consequence of a
+  reproduced predicate, not an observed deletion.
+- One candidate was disproved by running the command it doubted:
+  `cmake_uninstall.cmake.in`'s `exec_program` is deprecated, not removed —
+  `cmake -P` on a minimal `exec_program` script exited **0** on CMake 4.3.4 with
+  only a `CMP0153` developer warning.
+- A count sweep re-derived every quantity this gate states with a command that
+  measures that claim, not a first-occurrence index or a line count standing in
+  for an occurrence count. Twenty-four quantities were re-derived and **all
+  twenty-four reproduced exactly**: (1) 11 jobs / 0 `if: false` / 5
+  `release_files` / 5 `release_needs`, (2) 27 `uses:`, (3) 0 SHA-pinned, (4) 5
+  branch-pinned, (5) 5 of those being the butler action, (6) 5
+  `BUTLER_CREDENTIALS` references, (7) 20 DLL names in the copy loop, (8) 3
+  `|| true`, (9) 1 `permissions:` block, (10) 0 test invocations, (11) 1
+  workflow file, (12) 0 architecture settings in either file, (13) 0
+  `versionCode`/`versionName` occurrences in the workflow, (14) 0 `VERSIONINFO`
+  in `share/icons/fb.rc`, (15) 4 vendored iniparser files, (16) 1 licence file
+  in the repository, (17) 0 tracked `dist-wasm/` paths, (18) the source-set
+  parity 28 native / 29 Emscripten / 28 Android set-equal / 15 Emscripten-file
+  omitting 14, and 7 server sources equal to the 7 on disk, (19) the WASM port
+  versions 3.4.2 / 3.2.2 / 3.2.4 / 3.2.0 read from the emsdk copy that linked
+  the artifact, (20) the CI-pinned 3.4.4 / 3.4.2 / 3.2.0 / 3.2.2, (21) 134
+  tracked `android/` files, (22) the unchanged android index hash, (23) 237
+  coverage rows with 0 pending, and (24) 92 unique, per-class contiguous
+  registry IDs.
+- Per the user's scope restriction no security-specific runtime test was run.
+  The `@master` action pin holding a deploy secret, the repo-visible keystore
+  password, the unverified MinGW downloads, the absent commit pins, and the
+  mutable base-image tags are documented statically from the workflow text
+  alone; the omitted supply-chain and credential-exposure checks are
+  limitations, not passes.
+
 ## Commands and evidence
 
 Each row records exactly one top-level shell command. A shell loop remains one
@@ -627,14 +754,14 @@ below; the files they read are listed in the
 [Task 6 notebook scope](subsystems/04-lobby-settings-input.md#scope) and the
 [Task 8 notebook scope](subsystems/06-platform-ports.md#scope).
 
-**Canonical log cutoff:** completed Task 8's guard/source-list review, Android
-release build, disposable-Emscripten WASM build, packaged-path and logger
-harness runs, vendored boundary verification, ledger updates, and the Fix
-Round 1 re-derivations and count sweep. Task 8's final validation, staging,
-commit, and post-commit checks — for the original gate and for Fix Round 1 —
+**Canonical log cutoff:** completed Task 9's build-definition parity
+measurements, Step 4 validators and their two recorded substitutions, the
+REL-010 predicate reproduction, the `exec_program` disproof, the Gradle drift
+manifests, and the 24-quantity count sweep — plus everything through Task 8's
+Fix Round 2. Task 9's final validation, staging, commit, and post-commit checks
 belong in its ignored controller report, preventing a false claim that a commit
 records itself. The same exclusion already covers Task 2, the Task 5 fix round,
-Task 6, and Task 7.
+Task 6, Task 7, and Task 8 including both of its fix rounds.
 
 | Timestamp (UTC) | Command | Exit | Concise result | Evidence |
 |---|---|---:|---|---|
@@ -1146,13 +1273,55 @@ finding did not reproduce against that file's current content.
 | 2026-07-29T07:23:24Z | <code>git diff --stat 09d6c7bfcd864a0ad3951b87d16a88dc770392a3 -- src server android web cmake tools tests third_party CMakeLists.txt CMakeListsEmscripten.txt .github</code> | 0 | No output; production source, the Android project, the web shell, and every build file remain identical to the pinned baseline after Fix Round 2's doc-only edits | Audit baseline above |
 | 2026-07-29T07:23:24Z | <code>git diff --check</code> | 0 | No output; no whitespace/conflict-marker defect in the Fix Round 2 diff | Fix Round 2 diff |
 
+### Task 9
+
+| 2026-07-29T07:46:13Z | <code>ruby -e 'require "yaml"; YAML.load_file(".github/workflows/build.yml", aliases: true)'</code> | 1 | The brief's exact command. `unknown keyword: aliases (ArgumentError)` — macOS ships Ruby 2.6.10, whose Psych predates the keyword. A host limitation, **not** a YAML defect | [subsystems/07-build-release-tooling.md#dynamic-evidence](subsystems/07-build-release-tooling.md#dynamic-evidence) |
+| 2026-07-29T07:46:16Z | <code>ruby -e 'require "yaml"; d=YAML.load_file(".github/workflows/build.yml"); puts d["jobs"].keys.length'</code> | 0 | Accepted substitute. **11** jobs parsed; the document contains no YAML anchors, so the omitted keyword was immaterial | [subsystems/07-build-release-tooling.md#dynamic-evidence](subsystems/07-build-release-tooling.md#dynamic-evidence) |
+| 2026-07-29T07:46:20Z | <code>docker compose -f docker/docker-compose.yml config</code> | 0 | Local parse only; the daemon was not required and no container was created. Resolved to 2 services, ports 1511/80/443, 3 read-only bind mounts, `depends_on: service_started`. `docker compose up` was deliberately not run | [subsystems/07-build-release-tooling.md#dynamic-evidence](subsystems/07-build-release-tooling.md#dynamic-evidence) |
+| 2026-07-29T07:46:40Z | <code>printf '/build-audit-config/&#92;n' &gt;&gt; .git/info/exclude</code> | 0 | No output; the build directory was locally excluded **before** it was created, so it can never appear as drift | Processes and cleanup below |
+| 2026-07-29T07:46:51Z | <code>cmake -S . -B build-audit-config -G Ninja -DCMAKE_BUILD_TYPE=Release</code> | 0 | `iniparser system package not found, building from bundled source`; `Found glib-2.0, version 2.88.2`; `Asset path is: …/frozen-bubble-sdl3/share`; `Installed assets will be at: /usr/local/share/frozen-bubble` — REL-008's message about a variable nothing consumes | [subsystems/07-build-release-tooling.md#dynamic-evidence](subsystems/07-build-release-tooling.md#dynamic-evidence) |
+| 2026-07-29T07:46:58Z | <code>ctest -N</code> | 0 | `Total Tests: 5` in the fresh configure — the five registrations at `CMakeLists.txt:160-197` | [subsystems/07-build-release-tooling.md#test-coverage-against-discovered-risks-step-5](subsystems/07-build-release-tooling.md#test-coverage-against-discovered-risks-step-5) |
+| 2026-07-29T07:47:05Z | <code>git ls-files android &#124; while read -r f; do shasum -a 256 "$f"; done &gt; android-manifest-before.txt</code> | 0 | Pre-Gradle drift manifest: **134** tracked `android/` paths hashed; manifest SHA-256 `d1bd0edf…92dd1` | Processes and cleanup below |
+| 2026-07-29T07:47:08Z | <code>git ls-files -s android &#124; shasum -a 256</code> | 0 | Pre-Gradle index hash `e7f56a3342a1e48c27c88386e7fa8763f509d14eafdc4f5adc83c57f25ed3b74` | Processes and cleanup below |
+| 2026-07-29T07:47:15Z | <code>./android/gradlew tasks --all --no-daemon</code> | 1 | The brief's exact command. `Directory '/Users/dchau/gr/frozen-bubble-sdl3' does not contain a Gradle build` — the wrapper takes its project directory from the CWD. A CWD limitation, **not** a repository defect | [subsystems/07-build-release-tooling.md#dynamic-evidence](subsystems/07-build-release-tooling.md#dynamic-evidence) |
+| 2026-07-29T07:47:22Z | <code>./android/gradlew --project-dir android tasks --all --no-daemon</code> | 0 | Accepted substitute. `BUILD SUCCESSFUL`, 329 task lines including `app:assembleRelease`, `app:bundleRelease`, `app:lintVitalRelease`, `app:testDebugUnitTest`, `app:testReleaseUnitTest` | [subsystems/07-build-release-tooling.md#dynamic-evidence](subsystems/07-build-release-tooling.md#dynamic-evidence) |
+| 2026-07-29T07:47:31Z | <code>./android/gradlew --project-dir android :app:signingReport --no-daemon</code> | 0 | `Variant: release / Config: null / Store: null / Alias: null` — direct confirmation that the release build type declares no `signingConfig` (REL-007) | [subsystems/07-build-release-tooling.md#release-version-signing-and-artifact-flow-step-3](subsystems/07-build-release-tooling.md#release-version-signing-and-artifact-flow-step-3) |
+| 2026-07-29T07:47:45Z | <code>diff -u android-manifest-before.txt android-manifest-after.txt</code> | 0 | No output. Post-Gradle manifest identical across all 134 tracked `android/` paths; the index hash re-derived to the same `e7f56a33…5ed3b74`. **No path was restored, because none was modified** | Processes and cleanup below |
+| 2026-07-29T07:47:50Z | <code>python3 -m py_compile tools/net_bots.py tests/*.py tools/server_tests/*.py</code> | 0 | No output; all four Python files compile | [subsystems/07-build-release-tooling.md#dynamic-evidence](subsystems/07-build-release-tooling.md#dynamic-evidence) |
+| 2026-07-29T07:47:52Z | <code>python3 -m py_compile tools/ports/sdl3_image.py tools/ports/sdl3_mixer.py</code> | 0 | No output; both Emscripten port files compile | [subsystems/07-build-release-tooling.md#dynamic-evidence](subsystems/07-build-release-tooling.md#dynamic-evidence) |
+| 2026-07-29T07:48:10Z | <code>openssl ecparam -name prime256v1 -genkey -noout -out ec_privkey.pem</code> | 0 | No output; an ECDSA private key of certbot's default type was generated under `/tmp/fb-sdl3-audit/task9/` | [subsystems/07-build-release-tooling.md#confirmed-findings](subsystems/07-build-release-tooling.md#confirmed-findings) |
+| 2026-07-29T07:48:12Z | <code>openssl rsa -in ec_privkey.pem -check -noout</code> | 1 | `expecting an rsa key` (system LibreSSL 3.3). This is `docker/setup.sh:23`'s `key_ok` predicate verbatim — REL-010's regenerate branch is taken | [subsystems/07-build-release-tooling.md#confirmed-findings](subsystems/07-build-release-tooling.md#confirmed-findings) |
+| 2026-07-29T07:48:14Z | <code>/opt/homebrew/opt/openssl@3/bin/openssl rsa -in ec_privkey.pem -check -noout</code> | 1 | `Not an RSA key` (OpenSSL 3.6.3). The predicate fails on the implementation the documented Ubuntu target uses too, so REL-010 is not a LibreSSL artefact | [subsystems/07-build-release-tooling.md#confirmed-findings](subsystems/07-build-release-tooling.md#confirmed-findings) |
+| 2026-07-29T07:48:30Z | <code>cmake -P exec_program_probe.cmake</code> | 0 | `out=hi rv=0` with only a `CMP0153` developer warning on CMake 4.3.4 — `exec_program` is deprecated, **not** removed, disproving the `cmake_uninstall.cmake.in` candidate | [subsystems/07-build-release-tooling.md#dismissed-candidates](subsystems/07-build-release-tooling.md#dismissed-candidates) |
+| 2026-07-29T08:06:20Z | <code>ruby -e '…count jobs, jobs with if:false, release files and release needs…'</code> | 0 | `jobs=11 if_false=0 release_files=5 release_needs=5`. Count sweep — contradicts `CLAUDE.md`'s CI section (REL-009) | [subsystems/07-build-release-tooling.md#operational-documentation-against-actual-commands-step-6](subsystems/07-build-release-tooling.md#operational-documentation-against-actual-commands-step-6) |
+| 2026-07-29T08:06:20Z | <code>grep -c 'uses:' .github/workflows/build.yml</code> | 0 | **27** action references. Count sweep — the denominator for the pinning claim | [subsystems/07-build-release-tooling.md#dependency-and-action-pinning-step-2](subsystems/07-build-release-tooling.md#dependency-and-action-pinning-step-2) |
+| 2026-07-29T08:06:20Z | <code>grep -cE 'uses: [^ ]+@[0-9a-f]{40}' .github/workflows/build.yml</code> | 1 | **0** commit-pinned references (`grep -c` exits 1 because the pattern matches zero lines). Count sweep — measured, not inferred | [subsystems/07-build-release-tooling.md#dependency-and-action-pinning-step-2](subsystems/07-build-release-tooling.md#dependency-and-action-pinning-step-2) |
+| 2026-07-29T08:06:20Z | <code>grep -cE 'uses: [^ ]+@(master&#124;main)' .github/workflows/build.yml</code> | 0 | **5** branch-pinned references. Count sweep | [subsystems/07-build-release-tooling.md#dependency-and-action-pinning-step-2](subsystems/07-build-release-tooling.md#dependency-and-action-pinning-step-2) |
+| 2026-07-29T08:06:20Z | <code>grep -c 'josephbmanley/butler-publish-itchio-action@master' .github/workflows/build.yml</code> | 0 | **5** — all five branch-pinned references are the butler action. Count sweep | [subsystems/07-build-release-tooling.md#dependency-and-action-pinning-step-2](subsystems/07-build-release-tooling.md#dependency-and-action-pinning-step-2) |
+| 2026-07-29T08:06:20Z | <code>grep -c 'secrets.BUTLER_CREDENTIALS' .github/workflows/build.yml</code> | 0 | **5** — every branch-pinned step also receives the itch.io deploy secret. Count sweep | [subsystems/07-build-release-tooling.md#dependency-and-action-pinning-step-2](subsystems/07-build-release-tooling.md#dependency-and-action-pinning-step-2) |
+| 2026-07-29T08:06:20Z | <code>sed -n '261,268p' .github/workflows/build.yml &#124; tr -s ' &#92;&#92;' '&#92;n&#92;n' &#124; grep -c '&#92;.dll$'</code> | 0 | **20** DLL names in the suppressed copy loop. Count sweep — corrects an earlier working estimate of 21 | [subsystems/07-build-release-tooling.md#confirmed-findings](subsystems/07-build-release-tooling.md#confirmed-findings) |
+| 2026-07-29T08:06:20Z | <code>grep -c '&#124;&#124; true' .github/workflows/build.yml</code> | 0 | **3** failure suppressions; two are benign optional `fb-server` copies. Count sweep | [subsystems/07-build-release-tooling.md#confirmed-findings](subsystems/07-build-release-tooling.md#confirmed-findings) |
+| 2026-07-29T08:06:20Z | <code>grep -c 'permissions:' .github/workflows/build.yml</code> | 0 | **1** — only `release` declares a token scope; the other 10 jobs inherit the repository default. Count sweep | [subsystems/07-build-release-tooling.md#release-version-signing-and-artifact-flow-step-3](subsystems/07-build-release-tooling.md#release-version-signing-and-artifact-flow-step-3) |
+| 2026-07-29T08:06:20Z | <code>grep -cE 'ctest&#124;BUILD_TESTING&#124;--target test&#124;gradlew test&#124;pytest' .github/workflows/build.yml</code> | 1 | **0** test invocations across all 11 jobs (`grep -c` exits 1 on zero matches). Count sweep — the basis of IMP-016 | [subsystems/07-build-release-tooling.md#test-coverage-against-discovered-risks-step-5](subsystems/07-build-release-tooling.md#test-coverage-against-discovered-risks-step-5) |
+| 2026-07-29T08:06:20Z | <code>ls .github/workflows &#124; wc -l</code> | 0 | **1** workflow file, so the zero-test-invocation count is repository-wide. Count sweep | [subsystems/07-build-release-tooling.md#test-coverage-against-discovered-risks-step-5](subsystems/07-build-release-tooling.md#test-coverage-against-discovered-risks-step-5) |
+| 2026-07-29T08:06:20Z | <code>grep -cE 'CMAKE_OSX_ARCHITECTURES&#124;universal&#124;[^-]-arch ' CMakeLists.txt .github/workflows/build.yml</code> | 1 | **0** in each file. Count sweep — the macOS artifact is single-architecture by omission (REL-012) | [subsystems/07-build-release-tooling.md#confirmed-findings](subsystems/07-build-release-tooling.md#confirmed-findings) |
+| 2026-07-29T08:06:20Z | <code>grep -cE 'versionCode&#124;versionName' .github/workflows/build.yml</code> | 1 | **0** — no workflow step overrides the literal `versionCode 10`. Count sweep (REL-004) | [subsystems/07-build-release-tooling.md#release-version-signing-and-artifact-flow-step-3](subsystems/07-build-release-tooling.md#release-version-signing-and-artifact-flow-step-3) |
+| 2026-07-29T08:06:20Z | <code>grep -c 'VERSIONINFO' share/icons/fb.rc</code> | 1 | **0** — the Windows resource file holds only an `ICON` statement, so the shipped `.exe` carries no version resource. Count sweep (REL-004) | [subsystems/07-build-release-tooling.md#release-version-signing-and-artifact-flow-step-3](subsystems/07-build-release-tooling.md#release-version-signing-and-artifact-flow-step-3) |
+| 2026-07-29T08:06:20Z | <code>git ls-files third_party/iniparser &#124; wc -l</code> | 0 | **4** tracked files — two `.c`, two `.h`, and no licence, README, or version marker. Count sweep (REL-014) | [subsystems/07-build-release-tooling.md#imp-008-closure](subsystems/07-build-release-tooling.md#imp-008-closure) |
+| 2026-07-29T08:06:20Z | <code>git ls-files &#124; grep -icE '^(LICENSE&#124;COPYING&#124;NOTICE)'</code> | 0 | **1** licence file in the whole repository (`COPYING`), which does not mention iniparser. Count sweep (REL-014) | [subsystems/07-build-release-tooling.md#imp-008-closure](subsystems/07-build-release-tooling.md#imp-008-closure) |
+| 2026-07-29T08:06:20Z | <code>git ls-files &#124; grep -c '^dist-wasm/'</code> | 1 | **0** tracked paths under `dist-wasm/` — the input to the `netlify.toml` question, which was dismissed rather than promoted. Count sweep | [subsystems/07-build-release-tooling.md#dismissed-candidates](subsystems/07-build-release-tooling.md#dismissed-candidates) |
+| 2026-07-29T08:06:34Z | <code>python3 -c "…extract src/*.cpp per build file, compare as sets, and count server sources…"</code> | 0 | `native=28 emscripten=29 android=28 android_eq_native=True emsc_file=15 missing=14`; `server_srcs=7 ondisk=7`. Count sweep — reproduces Task 8's parity numbers exactly | [subsystems/07-build-release-tooling.md#build-definition-parity-step-1](subsystems/07-build-release-tooling.md#build-definition-parity-step-1) |
+| 2026-07-29T08:06:34Z | <code>for p in sdl3 sdl3_ttf sdl3_image sdl3_mixer; do grep -m1 -oE 'release-[0-9.]+…' …task8/emsdk/libexec/tools/ports/$p.py; done</code> | 0 | `sdl3=3.4.2 sdl3_ttf=release-3.2.2 sdl3_image=release-3.2.4 sdl3_mixer=3.2.0`, read from the disposable emsdk copy that actually linked the Task 8 WASM artifact. Count sweep (REL-011) | [subsystems/07-build-release-tooling.md#dependency-and-action-pinning-step-2](subsystems/07-build-release-tooling.md#dependency-and-action-pinning-step-2) |
+| 2026-07-29T08:06:34Z | <code>sed -n '43,46p' .github/workflows/build.yml</code> | 0 | `SDL release-3.4.4`, `SDL_image release-3.4.2`, `SDL_mixer release-3.2.0`, `SDL_ttf release-3.2.2` — the pins the WASM row is skewed against. Count sweep (REL-011) | [subsystems/07-build-release-tooling.md#dependency-and-action-pinning-step-2](subsystems/07-build-release-tooling.md#dependency-and-action-pinning-step-2) |
+| 2026-07-29T08:06:34Z | <code>git ls-files android &#124; wc -l</code> | 0 | **134** tracked `android/` paths — the manifest denominator. Count sweep — re-derived unchanged from Task 8 | [subsystems/07-build-release-tooling.md#dynamic-evidence](subsystems/07-build-release-tooling.md#dynamic-evidence) |
+
 ## Limitations
 
 - Emscripten, cppcheck, and clang-tidy were absent at bootstrap and installed successfully in Task 2. Homebrew LLVM remains keg-only, so the audit invokes clang-tidy by its absolute `$(brew --prefix llvm)/bin` path.
 - The default Release build is successful but not warning-clean: AppleClang emitted 51 server warning instances from 27 unique locations. Task 3A confirmed IMP-001 through IMP-004 as implementation improvements; the audit itself intentionally leaves production code unchanged.
 - The strict Debug build cannot complete until IMP-001 through IMP-004 are resolved in a future remediation task. Its subsequent 3/5 not-run CTest result is a downstream missing-executable consequence, not an independent candidate.
 - Apple ASan does not support leak detection on this host. The required leak-enabled run is recorded as an environment limitation; the accepted leak-disabled verification passed four unaffected tests plus the isolated foreground server-list assertions with no sanitizer diagnostic.
-- The sanitizer build's two `sprintf` deprecation warnings are in bundled `third_party/iniparser`, classified as vendored dependency noise pending Task 9 boundary/version review.
+- The sanitizer build's two `sprintf` deprecation warnings are in bundled `third_party/iniparser`, classified as vendored dependency noise. Task 9 completed the deferred boundary/version review: the vendored copy has no licence, README, or version marker (REL-014) and the build silently prefers an unconstrained system copy over it (IMP-023). Its internals remain outside the project-owned source audit.
 - The exact clang-tidy helper command was not directly usable with keg-only LLVM 22: it needed an explicit binary, explicit check families, and an Xcode SDK sysroot. All failed attempts and the successful reproducible fallback are retained.
 - Cppcheck and clang-tidy are broad signal sources, not test or proof substitutes. Task 2 triaged every project-owned diagnostic by counted family, but assigned subsystem gates still own semantic confirmation or dismissal.
 - REL-002 prevents the registered server-list CTest result from proving which binary served the request on POSIX. Task 2 therefore records the raw result but accepts only the supplemental dynamic-port, foreground, live-child-verified runs as Release/sanitizer server evidence.
@@ -1264,6 +1433,48 @@ finding did not reproduce against that file's current content.
   test AdMob identifiers are documented statically, and the omitted checks are
   limitations, not passes.
 
+- Task 9 executed, triggered, or dispatched **no GitHub Actions workflow**.
+  Every CI conclusion is a reading of `.github/workflows/build.yml` against
+  documented Actions semantics. Specifically unexamined: which architecture
+  `macos-latest` currently resolves to (REL-012 is therefore stated
+  architecture-agnostically), whether `upload-artifact` preserves the AppImage
+  executable bit through the itch.io path, which Emscripten release
+  `version: 'latest'` resolves to, whether all 20 named MinGW DLLs exist on the
+  runner, and the repository's default `GITHUB_TOKEN` scope. These are
+  **unexamined, not passed**.
+- Task 9 started **no container**. `docker compose config` is a local parse; no
+  image was built, no service started, no port bound, and `docker compose up`
+  was deliberately not run. `docker/Dockerfile`, `docker/nginx.conf` and the
+  compose service wiring are static readings.
+- Task 9 performed **no external network operation**: no release, no artifact
+  upload, no itch.io channel, no server contact, no dependency download. Every
+  version pin was read from a file; upstream tag existence and content were not
+  confirmed.
+- `python3 -c "import yaml"` is unavailable on this host, so the workflow was
+  confirmed by a single YAML implementation (Ruby 2.6 Psych) rather than two.
+  Two of the brief's Step 4 commands — the exact `ruby … aliases: true` and
+  `./android/gradlew tasks --all --no-daemon` — exited 1 for host and CWD
+  reasons; both exact commands and both accepted substitutes are recorded with
+  exits, and neither exact failure indicates a repository defect.
+- REL-010's destructive `openssl req -x509` branch was **not** executed against
+  any certificate pair. Only its `key_ok` gate was reproduced, so the overwrite
+  is a code-supported consequence of a reproduced predicate rather than an
+  observed deletion. certbot's ECDSA default was taken from its documented
+  behaviour since 2.0 and not verified by installing certbot.
+- `netlify.toml`'s effective publish directory depends on Netlify site settings
+  outside the repository, so that deployment question is **unresolvable from
+  repository evidence** and was dismissed rather than promoted — not resolved in
+  the project's favour.
+- Per the user's scope restriction Task 9 ran **no security-specific runtime
+  test**. The `@master` action pin holding a deploy secret, the repo-visible
+  keystore password, the unverified MinGW downloads, the absent commit pins, and
+  the mutable base-image tags are documented statically from the workflow text;
+  the omitted supply-chain and credential-exposure checks are limitations, not
+  passes.
+- Task 9 read `CLAUDE.md` and `CHANGELOG.md` as evidence for REL-009. Neither is
+  part of the 237-row coverage inventory, so REL-009's `CLAUDE.md` half is
+  registered without a coverage row of its own.
+
 ## Processes and cleanup
 
 - REL-002's first reproduction created Task 2-owned daemon PID 95766 on temporary port 25512; it was identified by exact command/start time, terminated, and the port was verified closed. The preliminary hardcoded-port reruns were not accepted as ownership evidence. The accepted dynamic-port foreground reruns asserted the exact child alive and cleaned up normally.
@@ -1316,9 +1527,21 @@ finding did not reproduce against that file's current content.
   installation was never modified, the four SDL submodules were never
   initialized or updated by this gate, and the user's three real preference
   files were hashed before and verified byte-identical after.
+- Task 9 started no listener, server, client connection, proxy, container, or
+  background process, and killed no process. It created one lasting local
+  artifact inside the repository: the `build-audit-config/` CMake tree, added to
+  the untracked `.git/info/exclude` **before** it was created so it could never
+  appear as drift. Three read-only Gradle invocations ran with `--no-daemon`;
+  a before/after SHA-256 manifest of all 134 tracked `android/` paths and of
+  `git ls-files -s android` proved zero drift, so no path needed restoring. The
+  disposable EC key, the `exec_program` probe script, the validator logs, and
+  the Gradle manifests live under `/tmp/fb-sdl3-audit/task9/` as local
+  regenerable evidence owning no external state; the EC key is a throwaway test
+  key that protects nothing and was never used for anything. No preference file
+  was opened, so none needed hashing. No production or test file was modified.
 - Temporary files include the Task 1 inventory files and Task 2 analyzer logs/triage artifacts under `/tmp/fb-sdl3-audit/`; all are local, regenerable evidence and contain no credentials.
-- Five generated audit build directories are now retained for Tasks 3, 9 and 10
+- Six generated audit build directories are now retained for Tasks 3 and 10
   (the four from Task 2, especially the sanitized server, plus Task 8's
-  `build-audit-wasm/`) and are locally excluded through untracked
-  `.git/info/exclude` entries. Remove them after the complete audit; no listener
+  `build-audit-wasm/` and Task 9's `build-audit-config/`) and are locally
+  excluded through untracked `.git/info/exclude` entries. Remove them after the complete audit; no listener
   or child process remains.
