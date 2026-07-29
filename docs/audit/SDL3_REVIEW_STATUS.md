@@ -46,7 +46,7 @@
 | Task 6 | Lobby, settings, persistence, and input | complete (static review plus isolated-preferences runtime matrix; security runtime and live-server lobby transitions omitted) |
 | Task 7 | Rendering, transitions, fonts, and audio lifecycle | complete (Fix Round 1 corrected BUG-001's leak quantity, BUG-041's trigger set, the pixel-format claim, and IMP-013's attribution; reopened IMP-005's render slice into BUG-043 and registered BUG-044, both reproduced against production objects. Fix Round 2 corrected the `TTFText` instance count Fix Round 1 had misread from a comment — 38 fixed members, not 23 — plus the `MainMenu` texture and `cell()` churn counts, completed the `idleSPButtons` dismissal with a full consequence trace that disproves the proposed indeterminate-rect mechanism, and registered BUG-045, reproduced against the production `ttftext.cpp` object; dummy-driver-only rendering and full-client navigation omissions recorded) |
 | Task 8 | Native, WASM, and Android platform integration | complete (Android release APK built locally with zero tracked-file drift; WASM linked in full against a disposable port-patched Emscripten copy; packaged-path, logger, and preference behavior reproduced against unchanged production objects. Browser runtime, Android device runtime, Linux/Windows execution, whole-program packaged-layout startup, and dynamic-library independence recorded as unavailable, not passed. Fix Round 1 applied seven accepted review findings: BUG-048's occurrence counts and characterization corrected, BUG-046 extended with the version-bump and stale-asset-on-update consequences, REL-008 reassessed High → Medium with two mitigating facts, the coverage bootstrap count corrected 20 → 21, two brief Step 6 substitutions added to Limitations, the `web/index.html` script-tag wording corrected, and a full count sweep that found two wrong quantities of twenty re-derived. Fix Round 2 applied one accepted Important and six accepted Minor findings: the REL-008 "highest-impact" superlative re-anchored to name what actually reaches shipped artifacts, the Fix Round 1 opening summary's review-coverage and attribution wording corrected, the count-sweep enumeration reconciled to its stated eighteen, eleven bundled-command ledger rows split to one command per row with two non-integer exit cells resolved, the gate-conclusion completion claim qualified against its recorded substitutions, the `syncfs` "own body" wording corrected to "own definition", and the WASM nickname read corrected from `EM_ASM` to `EM_ASM_PTR`) |
-| Task 9 | Build, tests, packaging, CI, deployment, tooling, and operations | complete (all five build definitions compared and reconciled; workflow, Compose, CMake, Gradle and Python configurations parsed locally; every confirmed defect from Tasks 3-9 mapped to a test, a dynamic case, or a registered gap; all 21 remaining pending coverage rows dispositioned. Fourteen IDs registered — REL-009..014 and IMP-016..023 — four entries extended (REL-004 severity Low → Medium, REL-006, REL-007, REL-008), IMP-008 closed, four candidates dismissed with counter-evidence including one disproved by running the command it doubted. The gate also corrected an inherited premise: `CLAUDE.md`'s claim that four of five platform build jobs are disabled with `if: false` is false at the pinned baseline — 0 of 11 jobs carry it — so Task 8's CI-reachability clause is corrected here and in the registry. No workflow was executed, no container started, and no external network operation performed; those are recorded as limitations, not passes) |
+| Task 9 | Build, tests, packaging, CI, deployment, tooling, and operations | complete (all five build definitions compared and reconciled; workflow, Compose, CMake, Gradle and Python configurations parsed locally; every confirmed defect from Tasks 3-9 mapped to a test, a dynamic case, or a registered gap; all 21 remaining pending coverage rows dispositioned. Fourteen IDs registered — REL-009..014 and IMP-016..023 — four entries extended (REL-004 severity Low → Medium, REL-006, REL-007, REL-008), IMP-008 closed, four candidates dismissed with counter-evidence including one disproved by running the command it doubted. The gate also corrected an inherited premise: `CLAUDE.md`'s claim that four of five platform build jobs are disabled with `if: false` is false at the pinned baseline — 0 of 11 jobs carry it — so Task 8's CI-reachability clause is corrected here and in the registry. No workflow was executed, no container started, and no external network operation performed; those are recorded as limitations, not passes. Fix Round 1 applied two accepted Important and two accepted Minor findings: REL-013's DLL count corrected 20 → 21 with the `tr`/undercount root cause recorded, REL-007's citation split across the two workflow steps its four password instances actually span, FILE_COVERAGE.md's inventory rule corrected to stop claiming a second `pending` location that does not exist, the "ten headings, each once" phrasing restated to name the subsystem notebooks it actually governs, and a re-run count sweep that found only the DLL count reproduced differently) |
 | Task 10 | Cross-subsystem dynamic integration matrix | pending |
 | Task 11 | Complete file coverage and prioritized improvements | pending |
 | Task 12 | Independent final challenge | pending |
@@ -128,7 +128,7 @@
   and each carrying the itch.io deploy secret, `latest` Emscripten, and an SDL3
   version matrix in which only Linux, Windows and Android agree), REL-012 (the
   macOS DMG is single-architecture, with no architecture in its name and no
-  universal-binary setting anywhere), REL-013 (a 20-DLL copy loop that cannot
+  universal-binary setting anywhere), REL-013 (a 21-DLL copy loop that cannot
   fail and an NDK cache path that interpolates an undefined `env` value to
   empty), REL-014 (the vendored iniparser ships in every artifact with no
   licence, version, or provenance), and IMP-016 through IMP-023 (run the
@@ -719,11 +719,13 @@ fifth Minor finding had called for.
   only a `CMP0153` developer warning.
 - A count sweep re-derived every quantity this gate states with a command that
   measures that claim, not a first-occurrence index or a line count standing in
-  for an occurrence count. Twenty-four quantities were re-derived and **all
-  twenty-four reproduced exactly**: (1) 11 jobs / 0 `if: false` / 5
+  for an occurrence count. Twenty-four quantities were re-derived; **twenty-three
+  reproduced exactly and one was wrong**: (1) 11 jobs / 0 `if: false` / 5
   `release_files` / 5 `release_needs`, (2) 27 `uses:`, (3) 0 SHA-pinned, (4) 5
   branch-pinned, (5) 5 of those being the butler action, (6) 5
-  `BUTLER_CREDENTIALS` references, (7) 20 DLL names in the copy loop, (8) 3
+  `BUTLER_CREDENTIALS` references, (7) **wrong** — 20 DLL names in the copy
+  loop, corrected to **21** in Fix Round 1 (the sweep command undercounted; see
+  below), (8) 3
   `|| true`, (9) 1 `permissions:` block, (10) 0 test invocations, (11) 1
   workflow file, (12) 0 architecture settings in either file, (13) 0
   `versionCode`/`versionName` occurrences in the workflow, (14) 0 `VERSIONINFO`
@@ -742,6 +744,78 @@ fifth Minor finding had called for.
   mutable base-image tags are documented statically from the workflow text
   alone; the omitted supply-chain and credential-exposure checks are
   limitations, not passes.
+
+### Task 9 Fix Round 1
+
+An independent review of commit `efc5ba3b` raised two Important and two Minor
+findings. **All four were accepted; none was disputed**, and each was
+re-verified against the pinned baseline before being applied.
+
+- **REL-013's DLL count was wrong, and the error is explained rather than
+  silently swapped.** The gate stated **20** named DLLs in the Windows
+  packaging loop; the true count is **21**. The recorded sweep command, `sed -n
+  '261,268p' .github/workflows/build.yml | tr -s ' \\' '\n\n' | grep -c
+  '\.dll$'`, undercounts because the loop's last entry on line 267,
+  `libpcre2-8-0.dll;`, has its trailing semicolon glued directly to the
+  filename with no space or backslash between them for `tr -s ' \\'` to split
+  on — the resulting token `libpcre2-8-0.dll;` fails the `\.dll$`-anchored
+  `grep`. A regex extraction (`grep -oE '[A-Za-z0-9_.+-]+\.dll'`) over the same
+  lines finds all 21. The `:261-269` line range the gate cited for the loop
+  (`for dll in \` at `:261` through `done` at `:269`) was already correct and
+  is unchanged; only the count was wrong. REL-013's substance — the copy loop
+  cannot fail — is unaffected. The **24-quantity count-sweep claim is
+  corrected** from "all twenty-four reproduced exactly" to twenty-three
+  reproduced exactly and one (the DLL count) wrong, now fixed.
+- **REL-007's citation range was incomplete.** The gate cited
+  `.github/workflows/build.yml:390-398` for "a literal password appearing four
+  times", but the four occurrences are at `:396` and `:397` (inside "Generate
+  release keystore", `:390-398`) and `:404` and `:406` (inside the *next*
+  step's `env:` block, "Build release APK", `:400-413`) — two of the four sit
+  outside the cited range. The aggregate count of four was already correct; the
+  citation now names both steps and all four line numbers so each instance is
+  verifiable in place.
+- **FILE_COVERAGE.md's inventory rule gestured at a location that does not
+  exist.** Its closing sentence claimed the word `pending` "now appears in this
+  file only in this rule and in prose describing not-yet-merged upstream
+  work". A full-file case-insensitive search finds `pending` nowhere else in
+  the file — the second location was never real. Corrected to state plainly
+  that the rule paragraph is the only place the word appears. The 237-row /
+  0-pending count itself did not change.
+- **The "ten headings, each once" phrasing invited a wrong reading.** That
+  invariant (`Scope`, `Trust boundaries and invariants`, `Static review`,
+  `Dynamic evidence`, `Candidates`, `Confirmed findings`, `Dismissed
+  candidates`, `Coverage`, `Limitations`, `Gate conclusion`, in order, each
+  exactly once) applies to the **nine subsystem notebooks** under
+  `docs/audit/subsystems/`, `07-build-release-tooling.md` included — not to
+  this file. This file's own `##` heading structure is different by design: it
+  recurs a `## Task N closure provenance` heading once per task (Tasks 3
+  through 9) plus `Audit baseline`, `Session environment`, `Current state`,
+  `Gate checklist`, `Active candidates`, `Confirmed findings`, `Commands and
+  evidence`, `Limitations`, and `Processes and cleanup` — a literal `grep -c
+  '^## '` count of **16**, not 10, and that is correct for this file; it was
+  never subject to the ten-heading invariant.
+- **Re-run count sweep for the Important-1 error class.** Every Task 9 count
+  whose original command relied on whitespace splitting, `tr`, a line count
+  standing in for an occurrence count, or a first-occurrence index was
+  re-derived directly against the pinned-baseline workflow file (which carries
+  no drift from `09d6c7bf`): `uses:` **27**, commit-pinned **0**, branch-pinned
+  **5**, butler `@master` **5**, `BUTLER_CREDENTIALS` **5**, `|| true` **3**,
+  `permissions:` **1**, test-invocation tokens **0**, workflow files **1**,
+  architecture settings **0** in both files, `versionCode`/`versionName` in the
+  workflow **0**, `VERSIONINFO` **0**, vendored iniparser files **4**, licence
+  files **1**, tracked `dist-wasm/` paths **0**, tracked `android/` paths
+  **134**, and server sources **7** declared / **7** on disk — all
+  re-derived unchanged, each independently confirmed with `grep -o` (occurrence
+  count) equal to `grep -c` (line count) wherever a line could in principle
+  hold more than one match. **Only the DLL count reproduced differently** (21,
+  not 20), because it was the only one of these built on a `tr`-based
+  whitespace split rather than a direct pattern match. The ruby one-liner
+  (`jobs=11 if_false=0 release_files=5 release_needs=5`) was independently
+  re-run in Ruby with the same result.
+
+Full findings-registry text for REL-007 and REL-013 is corrected in
+[FINDINGS.md](FINDINGS.md) and in the notebook's own
+[Fix Round 1 addendum](subsystems/07-build-release-tooling.md#gate-conclusion).
 
 ## Commands and evidence
 
@@ -1299,7 +1373,7 @@ finding did not reproduce against that file's current content.
 | 2026-07-29T08:06:20Z | <code>grep -cE 'uses: [^ ]+@(master&#124;main)' .github/workflows/build.yml</code> | 0 | **5** branch-pinned references. Count sweep | [subsystems/07-build-release-tooling.md#dependency-and-action-pinning-step-2](subsystems/07-build-release-tooling.md#dependency-and-action-pinning-step-2) |
 | 2026-07-29T08:06:20Z | <code>grep -c 'josephbmanley/butler-publish-itchio-action@master' .github/workflows/build.yml</code> | 0 | **5** — all five branch-pinned references are the butler action. Count sweep | [subsystems/07-build-release-tooling.md#dependency-and-action-pinning-step-2](subsystems/07-build-release-tooling.md#dependency-and-action-pinning-step-2) |
 | 2026-07-29T08:06:20Z | <code>grep -c 'secrets.BUTLER_CREDENTIALS' .github/workflows/build.yml</code> | 0 | **5** — every branch-pinned step also receives the itch.io deploy secret. Count sweep | [subsystems/07-build-release-tooling.md#dependency-and-action-pinning-step-2](subsystems/07-build-release-tooling.md#dependency-and-action-pinning-step-2) |
-| 2026-07-29T08:06:20Z | <code>sed -n '261,268p' .github/workflows/build.yml &#124; tr -s ' &#92;&#92;' '&#92;n&#92;n' &#124; grep -c '&#92;.dll$'</code> | 0 | **20** DLL names in the suppressed copy loop. Count sweep — corrects an earlier working estimate of 21 | [subsystems/07-build-release-tooling.md#confirmed-findings](subsystems/07-build-release-tooling.md#confirmed-findings) |
+| 2026-07-29T08:06:20Z | <code>sed -n '261,268p' .github/workflows/build.yml &#124; tr -s ' &#92;&#92;' '&#92;n&#92;n' &#124; grep -c '&#92;.dll$'</code> | 0 | **Undercounted — corrected in Fix Round 1.** Reported 20 DLL names, but this command splits only on space/backslash, and the loop's final entry, `libpcre2-8-0.dll;`, has its trailing semicolon glued directly to the filename with no space or backslash for `tr` to split on, so the `&#92;.dll$`-anchored `grep` never matched it. The true count is **21**, re-derived by regex extraction in the Fix Round 1 row below; the "corrects an earlier working estimate of 21" note this row originally carried had it backwards — that estimate was correct | [subsystems/07-build-release-tooling.md#confirmed-findings](subsystems/07-build-release-tooling.md#confirmed-findings) |
 | 2026-07-29T08:06:20Z | <code>grep -c '&#124;&#124; true' .github/workflows/build.yml</code> | 0 | **3** failure suppressions; two are benign optional `fb-server` copies. Count sweep | [subsystems/07-build-release-tooling.md#confirmed-findings](subsystems/07-build-release-tooling.md#confirmed-findings) |
 | 2026-07-29T08:06:20Z | <code>grep -c 'permissions:' .github/workflows/build.yml</code> | 0 | **1** — only `release` declares a token scope; the other 10 jobs inherit the repository default. Count sweep | [subsystems/07-build-release-tooling.md#release-version-signing-and-artifact-flow-step-3](subsystems/07-build-release-tooling.md#release-version-signing-and-artifact-flow-step-3) |
 | 2026-07-29T08:06:20Z | <code>grep -cE 'ctest&#124;BUILD_TESTING&#124;--target test&#124;gradlew test&#124;pytest' .github/workflows/build.yml</code> | 1 | **0** test invocations across all 11 jobs (`grep -c` exits 1 on zero matches). Count sweep — the basis of IMP-016 | [subsystems/07-build-release-tooling.md#test-coverage-against-discovered-risks-step-5](subsystems/07-build-release-tooling.md#test-coverage-against-discovered-risks-step-5) |
@@ -1314,6 +1388,24 @@ finding did not reproduce against that file's current content.
 | 2026-07-29T08:06:34Z | <code>for p in sdl3 sdl3_ttf sdl3_image sdl3_mixer; do grep -m1 -oE 'release-[0-9.]+…' …task8/emsdk/libexec/tools/ports/$p.py; done</code> | 0 | `sdl3=3.4.2 sdl3_ttf=release-3.2.2 sdl3_image=release-3.2.4 sdl3_mixer=3.2.0`, read from the disposable emsdk copy that actually linked the Task 8 WASM artifact. Count sweep (REL-011) | [subsystems/07-build-release-tooling.md#dependency-and-action-pinning-step-2](subsystems/07-build-release-tooling.md#dependency-and-action-pinning-step-2) |
 | 2026-07-29T08:06:34Z | <code>sed -n '43,46p' .github/workflows/build.yml</code> | 0 | `SDL release-3.4.4`, `SDL_image release-3.4.2`, `SDL_mixer release-3.2.0`, `SDL_ttf release-3.2.2` — the pins the WASM row is skewed against. Count sweep (REL-011) | [subsystems/07-build-release-tooling.md#dependency-and-action-pinning-step-2](subsystems/07-build-release-tooling.md#dependency-and-action-pinning-step-2) |
 | 2026-07-29T08:06:34Z | <code>git ls-files android &#124; wc -l</code> | 0 | **134** tracked `android/` paths — the manifest denominator. Count sweep — re-derived unchanged from Task 8 | [subsystems/07-build-release-tooling.md#dynamic-evidence](subsystems/07-build-release-tooling.md#dynamic-evidence) |
+
+### Task 9 Fix Round 1
+
+| 2026-07-29T13:21:12Z | <code>sed -n '261,269p' .github/workflows/build.yml &#124; grep -oE '[A-Za-z0-9_.+-]+&#92;.dll' &#124; wc -l</code> | 0 | **21** — a regex extraction over the loop's own line range finds all 21 DLL names, correcting REL-013's 20 | [subsystems/07-build-release-tooling.md#confirmed-findings](subsystems/07-build-release-tooling.md#confirmed-findings) |
+| 2026-07-29T13:21:17Z | <code>sed -n '261p;269p' .github/workflows/build.yml</code> | 0 | `for dll in &#92;` at `:261`, `done` at `:269` — the loop's line range was already correct; only the count inside it was wrong | [subsystems/07-build-release-tooling.md#confirmed-findings](subsystems/07-build-release-tooling.md#confirmed-findings) |
+| 2026-07-29T13:21:20Z | <code>grep -nE 'storepass&#124;keypass&#124;KEYSTORE_PASSWORD&#124;KEY_PASSWORD' .github/workflows/build.yml</code> | 0 | Six lines: `:396,397` (`-storepass`/`-keypass` literals in "Generate release keystore"), `:404,406` (`KEYSTORE_PASSWORD`/`KEY_PASSWORD` literals in "Build release APK"'s `env:` block), and `:411,413` (the same two names read back as `$VAR`, not new literal instances) — confirms REL-007's four literal occurrences span two steps, two of them outside the gate's original `:390-398` citation | [subsystems/07-build-release-tooling.md#confirmed-findings](subsystems/07-build-release-tooling.md#confirmed-findings) |
+| 2026-07-29T13:21:26Z | <code>grep -in 'pending' docs/audit/FILE_COVERAGE.md</code> | 0 | One match: line 5, the inventory rule paragraph itself. Corrects the rule's own claim that a second, prose location exists — it does not | [FILE_COVERAGE.md](FILE_COVERAGE.md) |
+| 2026-07-29T13:21:31Z | <code>python3 -c "…extract '## ' headings from docs/audit/subsystems/07-build-release-tooling.md and compare to the ten required, in order…"</code> | 0 | `headings=10 match=True each_once=True` — the ten-heading invariant holds for this notebook, unaffected by the Fix Round 1 prose appended to its Gate conclusion section | [07-build-release-tooling.md](subsystems/07-build-release-tooling.md#gate-conclusion) |
+| 2026-07-29T13:21:35Z | <code>grep -c '^## ' docs/audit/SDL3_REVIEW_STATUS.md</code> | 0 | **16** — this file's own level-2 heading count, unaffected by this round's `###`-level Fix Round subsection; the ten-heading invariant was never claimed for this file (it applies to the nine subsystem notebooks only) | [SDL3_REVIEW_STATUS.md](SDL3_REVIEW_STATUS.md) |
+| 2026-07-29T13:23:21Z | <code>{ grep -c 'uses:' .github/workflows/build.yml; grep -cE 'uses: [^ ]+@[0-9a-f]{40}' .github/workflows/build.yml; grep -cE 'uses: [^ ]+@(master&#124;main)' .github/workflows/build.yml; grep -c 'josephbmanley/butler-publish-itchio-action@master' .github/workflows/build.yml; grep -c 'secrets.BUTLER_CREDENTIALS' .github/workflows/build.yml; grep -c '&#124;&#124; true' .github/workflows/build.yml; grep -c 'permissions:' .github/workflows/build.yml; grep -cE 'ctest&#124;BUILD_TESTING&#124;--target test&#124;gradlew test&#124;pytest' .github/workflows/build.yml; ls .github/workflows &#124; wc -l; grep -cE 'CMAKE_OSX_ARCHITECTURES&#124;universal&#124;[^-]-arch ' CMakeLists.txt .github/workflows/build.yml; grep -cE 'versionCode&#124;versionName' .github/workflows/build.yml; grep -c 'VERSIONINFO' share/icons/fb.rc; git ls-files third_party/iniparser &#124; wc -l; git ls-files &#124; grep -icE '^(LICENSE&#124;COPYING&#124;NOTICE)'; git ls-files &#124; grep -c '^dist-wasm/'; git ls-files android &#124; wc -l; }</code> | 0 | Every one of the fourteen simple `grep`/`wc` quantities this gate stated reproduced unchanged: 27, 0, 5, 5, 5, 3, 1, 0, 1, 0/0, 0, 0, 4, 1, 0, 134. None of them used a `tr`-based whitespace split, so none was exposed to the DLL row's error class | [subsystems/07-build-release-tooling.md#dependency-and-action-pinning-step-2](subsystems/07-build-release-tooling.md#dependency-and-action-pinning-step-2) |
+| 2026-07-29T13:22:00Z | <code>python3 -c "…extract BUG/SEC/REL/IMP IDs from FINDINGS.md and check uniqueness and per-class contiguity from 1…"</code> | 0 | `total=92 unique=92 contiguous=True counts={'IMP': 23, 'BUG': 48, 'SEC': 7, 'REL': 14}` — no ID recycled or renumbered by this round's doc-only edits | [FINDINGS.md](FINDINGS.md) |
+| 2026-07-29T13:21:54Z | <code>python3 -c "…extract path column from FILE_COVERAGE.md, count and dedupe…" &amp;&amp; diff -u /private/tmp/fb-sdl3-audit/task1-expected-paths.txt &lt;(sort /tmp/fb-sdl3-fixround-final-paths.txt)</code> | 0 | `rows=237 unique=237`; empty diff against the Task 1 cached expected-path set for the pinned tree `09d6c7bf` — inventory-equality holds | [FILE_COVERAGE.md](FILE_COVERAGE.md) |
+| 2026-07-29T13:22:00Z | <code>awk -F'&#124;' '/^&#124; &#96;/{if (tolower($0) ~ /pending/) c++} END{print c+0}' docs/audit/FILE_COVERAGE.md</code> | 0 | **0** — no coverage row carries a pending disposition | [FILE_COVERAGE.md](FILE_COVERAGE.md) |
+| 2026-07-29T13:24:30Z | <code>grep -c '^- Exact next action:' docs/audit/SDL3_REVIEW_STATUS.md</code> | 0 | **1** — the exact-next-action bullet appears exactly once, unchanged: "Begin Task 10, Step 1: define the recorded matrix before launching processes." | [SDL3_REVIEW_STATUS.md](SDL3_REVIEW_STATUS.md) |
+| 2026-07-29T13:24:30Z | <code>grep -c '^&#124; Task 9 &#124;' docs/audit/SDL3_REVIEW_STATUS.md</code> | 0 | **1** — the Task 9 gate row appears exactly once and reads `complete (...)` with the Fix Round 1 summary appended | [SDL3_REVIEW_STATUS.md](SDL3_REVIEW_STATUS.md) |
+| 2026-07-29T13:24:30Z | <code>git diff --stat 09d6c7bfcd864a0ad3951b87d16a88dc770392a3 -- src server android web cmake tools tests third_party share CMakeLists.txt CMakeListsEmscripten.txt .github docker README.md SetupServer.md CLAUDE.md netlify.toml default.nix shell.nix flake.nix flake.lock start-server.sh</code> | 0 | No output; every production, build, and documentation path outside `docs/audit/` remains byte-identical to the pinned baseline after Fix Round 1's doc-only edits | Audit baseline above |
+| 2026-07-29T13:24:30Z | <code>git diff --check &amp;&amp; git diff --cached --check</code> | 0 | No output from either; no whitespace or conflict-marker defect in the Fix Round 1 diff | Fix Round 1 diff |
+| 2026-07-29T13:24:53Z | <code>python3 -c "…split every &#96;&#124; 2026-…&#96; command-table row on '&#124;' and check 7 cells and an integer exit cell…"</code> | 0 | `rows=531 malformed=0 bad_exit=0` at the time of this check — every command-table row in `SDL3_REVIEW_STATUS.md` has exactly 7 pipe-separated cells and a single-integer exit cell after this round's additions | [SDL3_REVIEW_STATUS.md](SDL3_REVIEW_STATUS.md) |
 
 ## Limitations
 
@@ -1439,7 +1531,7 @@ finding did not reproduce against that file's current content.
   `macos-latest` currently resolves to (REL-012 is therefore stated
   architecture-agnostically), whether `upload-artifact` preserves the AppImage
   executable bit through the itch.io path, which Emscripten release
-  `version: 'latest'` resolves to, whether all 20 named MinGW DLLs exist on the
+  `version: 'latest'` resolves to, whether all 21 named MinGW DLLs exist on the
   runner, and the repository's default `GITHUB_TOKEN` scope. These are
   **unexamined, not passed**.
 - Task 9 started **no container**. `docker compose config` is a local parse; no

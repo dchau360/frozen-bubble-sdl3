@@ -262,9 +262,13 @@ Signing and secrets:
   `signingConfig`; `:app:signingReport` reports `Variant: release / Config: null
   / Store: null / Alias: null`, which is direct confirmation of Task 8's
   `app-release-unsigned.apk` observation. CI supplies a keystore generated fresh
-  in the job (`:390-398`) with the literal password `frozenbubble` appearing
-  four times in the public workflow. → REL-007, already registered; this gate
-  adds the `signingReport` evidence and corrects its reachability (below).
+  in the job with the literal password `frozenbubble` appearing four times in
+  the public workflow, split across two consecutive steps: `-storepass` at
+  `:396` and `-keypass` at `:397` inside "Generate release keystore" (`:390-398`),
+  and `KEYSTORE_PASSWORD` at `:404` and `KEY_PASSWORD` at `:406` inside the
+  `env:` block of the next step, "Build release APK" (`:400-413`). → REL-007,
+  already registered; this gate adds the `signingReport` evidence and corrects
+  its reachability (below).
 - **macOS.** Ad-hoc `codesign --sign -` over the Frameworks and then
   `--deep` over the bundle (`:186-190`), no notarization, no Developer ID. This
   is **documented**: `README.md:318-326` tells users how to strip quarantine and
@@ -302,7 +306,7 @@ Artifact naming, nesting, and permissions:
 Failure propagation:
 
 - Three `|| true` suppressions exist. Two are benign optional copies of
-  `fb-server`. The third (`:261-269`) wraps a loop over **20** named DLLs with
+  `fb-server`. The third (`:261-269`) wraps a loop over **21** named DLLs with
   `cp /mingw64/bin/$dll pkg/ 2>/dev/null || true`, so no missing runtime library
   can fail the job. `SDL3.dll`, `libstdc++-6.dll` and `libwinpthread-1.dll` are
   not optional; if any is absent the NSIS installer is still built, uploaded,
@@ -695,7 +699,7 @@ download an app that cannot launch. Contrast the Linux job, which correctly
 names `frozen-bubble-linux-x86_64.AppImage`.
 
 **REL-013 — Medium. Two CI steps cannot signal failure or cannot take effect.**
-*(a)* The Windows packaging loop (`:261-269`) iterates **20** DLL names and
+*(a)* The Windows packaging loop (`:261-269`) iterates **21** DLL names and
 copies each with `cp /mingw64/bin/$dll pkg/ 2>/dev/null || true`. Genuinely
 optional libraries motivated the suppression, but `SDL3.dll`,
 `libstdc++-6.dll` and `libwinpthread-1.dll` are load-time requirements of the
@@ -981,7 +985,7 @@ disposition after this gate.
   to an arm64 or x86_64 runner (REL-012 is stated architecture-agnostically for
   that reason), whether `upload-artifact` preserves the AppImage executable bit
   through the itch.io deploy path, which Emscripten release `version: 'latest'`
-  resolves to, whether the 20 named MinGW DLLs are all present on the runner,
+  resolves to, whether the 21 named MinGW DLLs are all present on the runner,
   and the repository's default `GITHUB_TOKEN` permission scope. These are
   **unexamined, not passed**.
 - **No container was started.** `docker compose config` is a local parse; the
@@ -1041,3 +1045,20 @@ rows with none pending. The most consequential correction this gate makes is not
 one of its own findings: `CLAUDE.md`'s claim that four of five platform build
 jobs are disabled is false at the pinned baseline, and Task 8's reachability
 statements that relied on it are corrected in the registry and the status file.
+
+**Fix Round 1** (independent review of `efc5ba3b`) accepted two Important and
+two Minor findings, none disputed. **REL-013's DLL count was wrong**: the
+Windows packaging loop copies **21** named DLLs, not 20 — the original sweep
+command (`sed -n '261,268p' | tr -s ' \\' '\n\n' | grep -c '\.dll$'`) undercounted
+because the loop's final entry, `libpcre2-8-0.dll;`, has its trailing semicolon
+glued directly to the filename with no space or backslash for `tr` to split on,
+so the `\.dll$`-anchored `grep` never matched it; the `:261-269` line range
+itself was already correct. **REL-007's citation range was incomplete**: the
+literal password appears four times, but two of the four (`:404`, `:406`) sit
+in the *next* step's `env:` block, outside the originally cited `:390-398`
+range — the citation now names both steps explicitly. Neither finding's
+conclusion or severity changed. A re-run count sweep re-derived every Task 9
+quantity that depended on whitespace splitting, `tr`, a line count standing in
+for an occurrence count, or a first-occurrence index; only the DLL count
+reproduced differently (21, not 20). Full record in the
+[status ledger](../SDL3_REVIEW_STATUS.md#task-9-fix-round-1).
