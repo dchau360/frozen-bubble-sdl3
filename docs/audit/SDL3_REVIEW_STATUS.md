@@ -48,7 +48,7 @@
 | Task 8 | Native, WASM, and Android platform integration | complete (Android release APK built locally with zero tracked-file drift; WASM linked in full against a disposable port-patched Emscripten copy; packaged-path, logger, and preference behavior reproduced against unchanged production objects. Browser runtime, Android device runtime, Linux/Windows execution, whole-program packaged-layout startup, and dynamic-library independence recorded as unavailable, not passed. Fix Round 1 applied seven accepted review findings: BUG-048's occurrence counts and characterization corrected, BUG-046 extended with the version-bump and stale-asset-on-update consequences, REL-008 reassessed High → Medium with two mitigating facts, the coverage bootstrap count corrected 20 → 21, two brief Step 6 substitutions added to Limitations, the `web/index.html` script-tag wording corrected, and a full count sweep that found two wrong quantities of twenty re-derived. Fix Round 2 applied one accepted Important and six accepted Minor findings: the REL-008 "highest-impact" superlative re-anchored to name what actually reaches shipped artifacts, the Fix Round 1 opening summary's review-coverage and attribution wording corrected, the count-sweep enumeration reconciled to its stated eighteen, eleven bundled-command ledger rows split to one command per row with two non-integer exit cells resolved, the gate-conclusion completion claim qualified against its recorded substitutions, the `syncfs` "own body" wording corrected to "own definition", and the WASM nickname read corrected from `EM_ASM` to `EM_ASM_PTR`) |
 | Task 9 | Build, tests, packaging, CI, deployment, tooling, and operations | complete (all five build definitions compared and reconciled; workflow, Compose, CMake, Gradle and Python configurations parsed locally; every confirmed defect from Tasks 3-9 mapped to a test, a dynamic case, or a registered gap; all 21 remaining pending coverage rows dispositioned. Fourteen IDs registered — REL-009..014 and IMP-016..023 — four entries extended (REL-004 severity Low → Medium, REL-006, REL-007, REL-008), IMP-008 closed, four candidates dismissed with counter-evidence including one disproved by running the command it doubted. The gate also corrected an inherited premise: `CLAUDE.md`'s claim that four of five platform build jobs are disabled with `if: false` is false at the pinned baseline — 0 of 11 jobs carry it — so Task 8's CI-reachability clause is corrected here and in the registry. No workflow was executed, no container started, and no external network operation performed; those are recorded as limitations, not passes. Fix Round 1 applied two accepted Important and two accepted Minor findings: REL-013's DLL count corrected 20 → 21 with the `tr`/undercount root cause recorded, REL-007's citation split across the two workflow steps its four password instances actually span, FILE_COVERAGE.md's inventory rule corrected to stop claiming a second `pending` location that does not exist, the "ten headings, each once" phrasing restated to name the subsystem notebooks it actually governs, and a re-run count sweep that found only the DLL count reproduced differently. Fix Round 2 applied two accepted Important and one accepted Minor finding: a Fix Round 1 ledger row that bundled sixteen independent commands under one non-representative exit was removed and split into sixteen individually re-run rows with honest exits, that same row's mislabeled "fourteen" quantity count corrected to sixteen commands (seventeen quantities), and the two identical "Task 9 Fix Round 1" headings disambiguated into "Findings" and "Ledger" with both misdirected cross-links retargeted to the ledger) |
 | Task 10 | Cross-subsystem dynamic integration matrix | complete (41 matrix rows recorded before any process launched — the original 38-row matrix's bundled row 38 was split in Fix Round 1 into 4 individually countable manual-observation rows; **31 executed, 10 recorded as not performed** — the six hostile-transport rows because the user restricted security-specific runtime testing, four manual visual/audio rows (clear-win banner and sound, spectator pinning, >5-player paging, malus/attack visuals) because no display, audio device or input-injection path existed). First gate to run real client code against a real server over a real socket: 24 `fb-server` instances (23 ASan+UBSan, 1 Release), each on its own dedicated port from a 24-port reserved range, driving rooms at 2/3/4/5/6/10/20 seats plus the 20-seat admission boundary and its boundary+1, normal/team/clear modes, rounds 1-3, member and creator departure both during and before a round, mid-game reconnect, `PART`/rejoin, and `SIGTERM` shutdown. Relay invariants re-derived from 11 saved journals: 4,990 frames delivered, 0 self-echoes, 0 unknown senders, all seat maps identical. Two defects and one improvement registered — **BUG-049** (High: recursive `player_part_game_` teardown frees the game and the outer frame reads it at `server/game.c:1051`; 11 identical ASan reproductions, minimum 3 seats, triggered by ordinary simultaneous disconnects, and **silent** on the uninstrumented Release build), **BUG-050** (Low: `LIST`'s `free:` counter contradicts its own open-player list) and **IMP-024** (unvalidated `CREATE` room cap). BUG-015 gained its first runtime reproduction; BUG-005 is recorded as entangled with BUG-049 and not independently measurable; BUG-013, BUG-021 and BUG-040 gained server-side runtime measurements with no severity change; three candidates dismissed with counter-evidence. No leak claim is made — Apple ASan requires `detect_leaks=0`. All 24 ports read free afterwards and the `fb-server` process list is byte-identical to the pre-launch baseline, so the four unrelated servers belonging to the user's own environment were neither touched nor counted. **Fix Round 1** corrected a false cleanup-proof claim and registered a fourth finding, **REL-015** (Medium): `fb-server`'s stats-file path is derived from `$HOME` unconditionally with no isolation mechanism, and this gate's own 24 launches — which isolated `joiners.log` by working directory but never set `HOME` — read from and wrote to the operator's real `~/.fb-server/stats.dat` for the entire gate, discovered in independent review rather than prevented; the off-by-one `networkclient.cpp:1306` citation was also corrected to `:1307`) |
-| Task 11 | Complete file coverage and prioritized improvements | complete (237-row pinned-commit inventory reconciled exactly, diff-empty against a fresh regeneration of Task 1 Step 4's own selection command; cross-cutting searches over unchecked indices, raw copies, allocation/SDL create-destroy pairing, ignored returns, singleton lifetime, compile guards, hardcoded capacities/versions, and filesystem/`getenv` assumptions found no new candidate — every hit already traces to a registered finding; one stale "Investigating" candidate row in the server notebook corrected to its already-confirmed disposition, leaving zero open `suspected`/`investigating` states across the 96-ID registry; all 24 `IMP` entries confirmed to share one benefit/effort/risk vocabulary; all five Task 6/Task 4/Task 10 deferred items resolved with re-derived evidence, not re-deferred; notebooks 01-08 reconfirmed at ten headings each with an explicit gate conclusion and no unresolved action) |
+| Task 11 | Complete file coverage and prioritized improvements | complete (237-row pinned-commit inventory reconciled exactly, diff-empty against a fresh regeneration of Task 1 Step 4's own selection command; **Fix Round 1** re-ran all eleven Step 2 cross-cutting categories as individually commanded, individually exited ledger rows against project-owned `src`/`server` — raw copies (3 hits), allocation/free (11 `malloc`/`calloc`/`realloc`, 44 `free(`), SDL create/destroy pairing (15 `SDL_Create*`, 37 `SDL_Destroy*`), hardcoded versions (reproduces REL-004's five), filesystem/`getenv(HOME)`/`SDL_GetPrefPath`/`SDL_GetBasePath` (5 hits, all already covered), **unchecked indices** (30 hits — one new candidate, **BUG-051**, an unguarded `std::array` write in `LoadLevelset`, unreachable with the shipped 10-line-per-block asset), **signed/unsigned conversions** (36 hits, all bounds-safe), **ignored return values** (19 statement-level hits, all idiomatic or already covered by BUG-033/BUG-047), **global/singleton lifetime** (33 `ptrInstance` hits, exactly matching IMP-007's four-singleton leak pattern plus two confirmed-safe outliers, `NetworkClient` and `FrozenBubble`), and **network lengths/opcodes** (46 hits, all covered by SEC-002/SEC-006/BUG-006 or independently verified safe in `ws_decode_inplace`) — the two previously-unevidenced categories that lacked even a real command now have one each; the **compile-guard sweep was rerun with a token-enumerating pattern and corrected**: seven guard tokens exist in `src` (`__ANDROID__`, `__ANDROID_PORT__`, `__WASM_PORT__`, `_WIN32`, `__APPLE__`, `__MINGW32__`, `__linux__`), not two, and only the first three are the ones CLAUDE.md's Platform abstraction section names — the four OS-detection macros in `platform.cpp` are real and correctly used but undocumented by CLAUDE.md, which is now stated honestly rather than claimed as an exact match; a mis-cited ledger command (`task6_settings_harness probe`, which could not match either probe row's actual text) was replaced with one that matches both; the `getenv("USER")` sweep was widened to the six sites the independent review found unswept, all dispositioned as benign bounded nickname fallbacks; and the "36/15/28" duplicate-platform-source-list counts were given their own reproducible per-file commands and reconfirmed unchanged. One stale "Investigating" candidate row in the server notebook corrected to its already-confirmed disposition, leaving zero open `suspected`/`investigating` states across the 97-ID registry; all 24 `IMP` entries confirmed to share one benefit/effort/risk vocabulary; all five Task 6/Task 4/Task 10 deferred items resolved with re-derived evidence, not re-deferred; notebooks 01-08 reconfirmed at ten headings each with an explicit gate conclusion and no unresolved action) |
 | Task 12 | Independent final challenge | pending |
 | Task 13 | Complete repository review report | pending |
 
@@ -955,20 +955,63 @@ sections.
   `09d6c7bfcd864a0ad3951b87d16a88dc770392a3`: **237** paths, `diff`-identical
   (exit 0, no output) to `FILE_COVERAGE.md`'s 237 rows. No path was added,
   removed, or found missing an evidence/exclusion disposition.
-- **Step 2 — cross-cutting searches.** Searched project-owned `src/`/`server/`
-  (vendored SDL/iniparser internals excluded per the audit's standing
-  boundary) for raw string copies, allocation patterns, SDL create/destroy
-  pairing, compile guards, hardcoded version literals, and
-  filesystem/`getenv` assumptions. Every hit reconciled to an existing
-  notebook disposition — the three `strcpy`/`strcat`/`sprintf` hits are
-  bounds-safe (one is a comment), the `malloc`/`free` sites map to Task 3's
-  server allocation-owner table and Task 7's render ownership table, the
-  version-literal sweep found no string beyond REL-004's already-catalogued
-  five, the compile-guard sweep found only the two documented macros
-  (`__ANDROID__`, `__WASM_PORT__`), and the `getenv("HOME")`/CWD sweep found
-  only REL-015's already-registered site. TODO/FIXME/XXX/HACK markers exist
-  only inside vendored `org/libsdl/app/` files, out of scope. **No new
-  candidate was opened.**
+- **Step 2 — cross-cutting searches (as corrected in Fix Round 1; see below).**
+  The original gate ran and recorded only six of the brief's eleven named
+  categories with a real command; five — unchecked indices, signed/unsigned
+  conversions, ignored return values, global/singleton lifetime, and network
+  lengths/opcodes — were claimed complete with no supporting command anywhere.
+  Fix Round 1 ran all eleven against project-owned `src/`/`server/` (vendored
+  SDL/iniparser internals excluded per the audit's standing boundary), each as
+  its own ledger row with its own real exit code (full table:
+  [Task 11 Fix Round 1 ledger](#task-11-fix-round-1-ledger)). Results: raw string
+  copies (`strcpy|strcat|sprintf|gets`) — 3 hits, bounds-safe, one a comment;
+  allocation/free (`malloc|calloc|realloc`, `free\(`) — 11 and 44 hits, mapping
+  to Task 3's server allocation-owner table and Task 7's render ownership
+  table; SDL create/destroy pairing (`SDL_Create[A-Za-z]+\(`,
+  `SDL_Destroy[A-Za-z]+\(`) — 15 and 37 call sites, matching Task 7's
+  exhaustive ownership table; hardcoded version literals — reproduces exactly
+  REL-004's already-catalogued five (`2.2.1`, `2.4.9`, `v2.4.26`, `2.4.27`,
+  `0.1.0`) among IP-address and third-party-dependency-pin noise;
+  filesystem/`getenv` assumptions (`getenv\("HOME"\)|SDL_GetPrefPath|SDL_GetBasePath`)
+  — 5 hits, all already covered by REL-015, REL-008, and Task 6's persistence
+  review; **unchecked indices**
+  (`\[(team|scancode|senderId|playerId|slot|idx|index|cellIndex|button|sc)\b[^]]*\]`)
+  — 30 hits, 29 bounds-safe (loop-bounded, `%`-wrapped, or already-registered
+  under BUG-035/BUG-036/SEC-007) and **one new candidate**: `BubbleGame::LoadLevelset`
+  (`src/bubblegame_level.cpp:67`) writes `level[idx]` into a fixed
+  `std::array<std::vector<int>, 10>` with no `idx < 10` guard, unlike the
+  sibling `HighscoreManager::LoadLevelsetHighscores` loader for the same file
+  format, which does guard it — registered as **BUG-051** (Low; the shipped
+  `data/levels` asset cannot trigger it, confirmed by a line-count showing all
+  100 blocks are exactly 10 lines); **signed/unsigned conversions**
+  (casts to `unsigned`/`size_t`/`uintN_t`) — 36 hits, all bounds-safe pointer-
+  difference or byte-extraction patterns already within IMP-002/REL-001/SEC-002/
+  SEC-006/BUG-035/BUG-036's territory; **ignored return values** (statement-level
+  `system|fwrite|fread|write|read|remove|rename|fclose|unlink|SDL_RenderCopy|SDL_RenderPresent|chdir|mkdir`)
+  — 19 hits, the `system()` and `Logger::Initialize` ones already BUG-033/
+  BUG-047, the remaining `fclose`/`mkdir`/`SDL_RenderPresent` ignores are
+  idiomatic with no established resource or security consequence beyond what
+  REL-015 already characterizes for `ensure_stats_dir`'s `mkdir`; **global/
+  singleton lifetime** (`ptrInstance\b`) — 33 hits across the six singletons
+  with `ptrInstance` fields, exactly reproducing IMP-007's pattern: `AudioMixer`,
+  `TransitionManager`, `HighscoreManager`, and `GameSettings`'s `Dispose()`
+  methods free members but never null `ptrInstance` (IMP-007's already-registered
+  defect), while `NetworkClient::Dispose()` correctly nulls it after `delete`
+  and `FrozenBubble` has no `Dispose()` at all (a true program-lifetime
+  singleton) — both confirmed as the non-matching, safe outliers, no new
+  candidate; and **network lengths/opcodes**
+  (`plen|hdr_len|Content-Length|content_length|opcode|recvBufferLen|msgLen|payload_len|framelen|frame_len`)
+  — 46 hits, the `Content-Length` site already SEC-002, the client `msgLen`/
+  `recvBufferLen` framing already within BUG-006/SEC-006's territory, and
+  `server/ws.c`'s `ws_decode_inplace` frame-length/opcode handling (`plen`,
+  `hdr_len`) independently re-read line-by-line and confirmed safe: the
+  64-bit-length case is rejected (`plen == 127` returns `-1`), the extended
+  16-bit length is read before use, and the frame-completeness check
+  (`total - pos < hdr_len + plen`) gates the `memmove` that follows it — no new
+  candidate. TODO/FIXME/XXX/HACK markers exist only inside vendored
+  `org/libsdl/app/` files, out of scope. **One new candidate (BUG-051) was
+  opened and confirmed; the other ten categories closed with no new
+  candidate.**
 - **Step 3 — candidate registry.** One stale "Investigating" candidate row
   survived in `subsystems/01-server-protocol.md` (IMP-010), left over from
   before Task 7 closed its cross-owner half; corrected to "Confirmed
@@ -1040,6 +1083,86 @@ sections.
      rows.
 - **No production source was touched.** Every edit in this gate is confined
   to `docs/audit/`; the final drift check below confirms it.
+
+### Task 11 Fix Round 1 Findings
+
+An independent review of commit `03421bb3` raised one Critical, two Important
+and two Minor finding; **all five were accepted, none disputed.**
+
+- **Critical — five of Step 2's eleven cross-cutting categories had no
+  supporting command anywhere.** Unchecked indices, signed/unsigned
+  conversions, ignored return values, global/singleton lifetime, and network
+  lengths/opcodes were asserted complete (in the gate-checklist sentence, the
+  closure-provenance narrative, and the report) with zero grep, pattern, hit,
+  or reconciliation on record. Fixed: all eleven categories, including the six
+  that already had real evidence, were re-run as individually commanded,
+  individually exited rows in the
+  [Task 11 Fix Round 1 Ledger](#task-11-fix-round-1-ledger) below, with the
+  exact pattern stated for each so it can be re-run. The unchecked-indices
+  sweep surfaced one genuine new candidate — **BUG-051** — registered in
+  `FINDINGS.md`, `subsystems/03-gameplay.md`'s Candidates and Confirmed
+  findings, and `FILE_COVERAGE.md`'s `bubblegame_level.cpp` row; the other four
+  previously-missing categories, and the six that already had partial
+  evidence, closed with no new candidate, each with its stated pattern and
+  count. No hostile-traffic or runtime security probing was performed for the
+  network lengths/opcodes category, per the user's standing restriction; its
+  disposition (`ws_decode_inplace`'s frame-length handling) is static
+  line-by-line reading only.
+- **Important — the compile-guards claim was false.** The gate claimed only
+  `__ANDROID__` and `__WASM_PORT__` appear as `#if`/`#ifdef` targets in `src/`,
+  contradicted by its own cited evidence: `gamesettings.h:86` reads
+  `#if defined(__ANDROID__) || defined(__ANDROID_PORT__)`, and CLAUDE.md's own
+  Platform abstraction section names `__ANDROID_PORT__` explicitly. Fixed: a
+  token-enumerating sweep
+  (`grep -rhoE '#\s*(if|ifdef|ifndef|elif)\b.*' src | grep -oE '__[A-Za-z0-9_]+__|_WIN32|__linux__' | sort -u`)
+  finds **seven** guard tokens, not two: `__ANDROID__`, `__ANDROID_PORT__`,
+  `__WASM_PORT__`, `_WIN32`, `__APPLE__`, `__MINGW32__`, `__linux__`. Only the
+  first three are the ones CLAUDE.md's Platform abstraction section names; the
+  other four are standard OS-detection macros used in `platform.cpp` for
+  asset/path resolution (`_WIN32`/`__MINGW32__` at `:22,98`, `__linux__` at
+  `:24,122`, `__APPLE__` at `:109`) and in `mainmenu_server.cpp`'s local-server
+  stubs (`_WIN32`) — real, correctly used, and simply not named by CLAUDE.md's
+  Platform abstraction paragraph, which is a narrower documentation gap, not a
+  functional defect. The false "matches CLAUDE.md's documented guard set
+  exactly" claim is removed everywhere it appeared (the Step 2 narrative above
+  and the gate-checklist sentence); the true set and the true (partial)
+  overlap with CLAUDE.md are now stated directly.
+- **Important — a ledger row's command did not support its own claimed
+  result.** The row with command
+  `grep -n "task6/real-prefs-baseline\|task6_settings_harness probe"` claimed
+  to confirm the Task 6 13:38Z (exit 4) and 13:39Z (`ISOLATION=OK`) probe rows,
+  but neither alternation term matches either row's actual command text (both
+  contain `task6_settings_harness` followed by a path argument, then a
+  trailing ` probe` argument — `task6_settings_harness probe` as a contiguous
+  substring never occurs). Fixed: replaced with
+  `grep -nE '2026-07-28T13:3[89]Z' docs/audit/SDL3_REVIEW_STATUS.md`, verified
+  to match exactly the two probe rows and nothing else (re-run: exit 0, two
+  lines, `:1404` and `:1405`). See the
+  [Task 11 Fix Round 1 Ledger](#task-11-fix-round-1-ledger) for the re-run.
+- **Minor — the filesystem/`getenv` sweep was narrower than its own claimed
+  scope.** The Step 2 closure text framed the sweep as covering
+  "filesystem/`getenv` assumptions" broadly, but it was scoped only to
+  `getenv("HOME")`, `SDL_GetPrefPath`, and `SDL_GetBasePath`, missing six
+  `getenv("USER")` sites (`mainmenu_netpanel.cpp:70,1010,1012,1092,1094`,
+  `mainmenu_input.cpp:1495`). Fixed: widened with
+  `grep -rn 'getenv("USER")' src` (6 hits, exit 0) and inspected each; all six
+  follow the identical pattern
+  `getenv("USER") ? getenv("USER") : "<fallback>"` feeding a bounded
+  `snprintf` into a fixed buffer as a nickname default — benign, no new
+  candidate. The Step 2 narrative above now names both `getenv` patterns
+  actually searched rather than describing the narrower one broadly.
+- **Minor — the "duplicate platform source lists" 36/15/28 counts were
+  unreproducible.** No ledger row recorded the command or filtering logic
+  behind them. Fixed: three individually commanded, individually exited rows
+  in the [ledger](#task-11-fix-round-1-ledger) reproduce all three counts
+  unchanged, with the filter stated precisely — comment lines excluded, then
+  literal `.cpp` occurrences counted: `grep -vE '^\s*#' CMakeLists.txt | grep -oE '\.cpp' | wc -l`
+  → **36** (a naive `grep -oE '\.cpp' CMakeLists.txt | wc -l` over the same
+  file returns 37, the extra one being `.cpp` inside line 55's comment);
+  `grep -oE '\.cpp' CMakeListsEmscripten.txt | wc -l` → **15** (no comment
+  lines contain `.cpp` in this file); `grep -oE '\.cpp' android/app/CMakeLists.txt | wc -l`
+  → **28** (same). No number differed from what was previously stated; only
+  the reproducing command was missing.
 
 ## Commands and evidence
 
@@ -1821,13 +1944,46 @@ with its own real exit code, re-run against the pinned baseline and the live
 | 2026-07-30T00:06:30Z | <code>for f in docs/audit/subsystems/0{1,2,3,4,5,6,7,8}-*.md; do for h in 'Scope' 'Trust boundaries and invariants' 'Static review' 'Dynamic evidence' 'Candidates' 'Confirmed findings' 'Dismissed candidates' 'Coverage' 'Limitations' 'Gate conclusion'; do c=$(grep -c "^## ${h}\$" "$f"); if [ "$c" != "1" ]; then echo "MISMATCH $f $h count=$c"; fi; done; done; echo SWEEP_DONE</code> | 0 | `SWEEP_DONE` with no `MISMATCH` line — all eight subsystem notebooks still carry exactly the ten required headings, each exactly once | [subsystems/](subsystems/) |
 | 2026-07-30T00:06:45Z | <code>python3 -c "…extract BUG IDs from notebook 04's persistence-matrix table and full-client-run section and union them…"</code> | 0 | `['BUG-026', 'BUG-027', 'BUG-028', 'BUG-029', 'BUG-030', 'BUG-031', 'BUG-032', 'BUG-034'] 8` — the notebook's own evidence tables name exactly eight runtime-reproduced IDs, resolving the "six" vs "eight" inconsistency (deferred item 1) in favor of **eight** | [subsystems/04-lobby-settings-input.md#dynamic-evidence](subsystems/04-lobby-settings-input.md#dynamic-evidence) |
 | 2026-07-30T00:07:00Z | <code>sed -n '384,388p;334,347p' src/frozenbubble.cpp; sed -n '498,513p' src/mainmenu_input.cpp; sed -n '50,54p' src/gamesettings.h</code> | 0 | Confirms all four hops of BUG-035's completed trace (deferred item 2) at their cited lines: `frozenbubble.cpp:384-388` (bind-capture emits the derived code), `frozenbubble.cpp:334-347` (`PushScancode`'s raw-event fallback, guarded only by `IsVirtualScancode`, not by `skipEvent`), `mainmenu_input.cpp:498-513` (`KeysPanelKey` stores `e->key.scancode` into `PlayerKeys` unchecked), `gamesettings.h:50-54` (`IsKeyPressed` falls to the unguarded `SDL_GetKeyboardState(NULL)[sc]` index) | [subsystems/04-lobby-settings-input.md#keyboard-controller-and-mouse-bounds-step-4](subsystems/04-lobby-settings-input.md#keyboard-controller-and-mouse-bounds-step-4) |
-| 2026-07-30T00:07:15Z | <code>grep -n "task6/real-prefs-baseline\|task6_settings_harness probe" docs/audit/SDL3_REVIEW_STATUS.md</code> | 0 | Confirms the Task 6 isolation ledger order (deferred item 3): 13:38Z probe without `CFFIXED_USER_HOME` (exit 4, no file opened), 13:39Z probe with it (`ISOLATION=OK`), 13:40Z hash baseline recorded, 13:50Z stateful matrix run, 13:55Z hash re-verified — the hash postdates the risky 13:38Z probe, so "hashed beforehand" overstated the probe-window protection; corrected to name the listing/timestamp protection the probe window actually had | [SDL3_REVIEW_STATUS.md#task-6-closure-provenance](SDL3_REVIEW_STATUS.md#task-6-closure-provenance) |
+| 2026-07-30T00:07:15Z | <code>grep -nE '2026-07-28T13:3[89]Z' docs/audit/SDL3_REVIEW_STATUS.md</code> | 0 | Matches exactly the two Task 6 probe rows at `:1404` (13:38Z, exit 4, `HOME` alone still resolved to the user's real directory, no file opened) and `:1405` (13:39Z, exit 0, `ISOLATION=OK` with `CFFIXED_USER_HOME` added) and nothing else. (Fix Round 1: the original command here, `grep -n "task6/real-prefs-baseline\|task6_settings_harness probe"`, did not match either probe row's actual command text — both contain `task6_settings_harness` followed by a path argument, then a separate trailing ` probe` argument, so the substring `task6_settings_harness probe` never occurs; it matched only later hash-related lines and this ledger row's own prose, not the two probe rows it was cited to confirm. This replacement command is the one that actually demonstrates the 13:38Z/13:39Z ordering deferred item 3 relies on.) The hash baseline at `:1406` (13:40Z) postdates both probes, so "hashed beforehand" overstated the probe-window protection; corrected to name the listing/timestamp protection the probe window actually had | [SDL3_REVIEW_STATUS.md#task-6-closure-provenance](SDL3_REVIEW_STATUS.md#task-6-closure-provenance) |
 | 2026-07-30T00:07:30Z | <code>python3 - &lt;&lt;'PY'\nfrom pathlib import Path\nimport re\nfiles=[Path('docs/audit/FINDINGS.md'),Path('docs/audit/FILE_COVERAGE.md'),Path('docs/audit/SDL3_REVIEW_STATUS.md'),Path('docs/audit/subsystems/02-network-client-sync.md')]\nfor f in files:\n for target in re.findall(r'\[[^]]+\]\(([^)]+)\)',f.read_text()):\n  if target.startswith(('http:','https:','#')): continue\n  base,_,anchor=target.partition('#'); p=(f.parent/base).resolve(); assert p.exists(),(f,target)\n  if anchor:\n   anchors=[]\n   for h in re.findall(r'^#{1,6} +(.*)$',p.read_text().lower(),re.M):\n    a=re.sub(r'[^a-z0-9 _-]','',h).strip().replace(' ','-'); anchors.append(re.sub(r'-+','-',a))\n   assert anchor.lower() in anchors,(f,target)\nprint('notebook_schema_and_links=PASS')\nPY</code> | 0 | `notebook_schema_and_links=PASS` — Task 4's fix-round link/schema check still passes today against the current anchor set (deferred item 4); the original failing command's exact text was not preserved in `task-4-report.md`, only its output, and there is no longer a stale anchor to reproduce it against, so this is documented as a closed historical gap in [subsystems/02-network-client-sync.md#limitations](subsystems/02-network-client-sync.md#limitations) rather than re-derived verbatim | [subsystems/02-network-client-sync.md#limitations](subsystems/02-network-client-sync.md#limitations) |
 | 2026-07-30T00:07:45Z | <code>python3 -c "…count rows 1-41 in notebook 08's matrix table and how many have a verdict cell starting '**Not performed'…"</code> | 0 | `total=41 not_performed=10 executed=31` reconfirmed unchanged; row 11's team-banner aside (deferred item 5) sits inside one of the 31 executed rows, so adding it to Limitations item 4's canonical list does not change this count | [subsystems/08-dynamic-integration.md#limitations](subsystems/08-dynamic-integration.md#limitations) |
 | 2026-07-30T00:08:00Z | <code>grep -rnE '\b(strcpy&#124;strcat&#124;sprintf&#124;gets)\s*\(' src server</code> | 0 | Three hits: a comment (`bubblegame_net.cpp:50`), a length-checked `strcat` into `chatInputBuf` (`bubblegame_input.cpp:174`, guarded by `curLen + addLen < sizeof(chatInputBuf) - 1`), and a fixed 9-byte literal `strcpy` into a 256-byte `networkHost` (`mainmenu_server.cpp:150`). Both real call sites are bounds-safe; no new candidate | [subsystems/04-lobby-settings-input.md#static-review](subsystems/04-lobby-settings-input.md#static-review) |
 | 2026-07-30T00:08:15Z | <code>grep -rnE 'TODO&#124;FIXME&#124;XXX&#124;HACK' src server tools tests android/app/src/main/java</code> | 0 | Every hit lives under vendored `org/libsdl/app/` (excluded by the audit's vendored-boundary rule) or is a comment describing an AppImage mount-point pattern, not a marker of incomplete project logic; no new candidate | [SDL3_REVIEW_STATUS.md#task-11-closure-provenance](SDL3_REVIEW_STATUS.md#task-11-closure-provenance) |
 | 2026-07-30T00:08:30Z | <code>python3 -c "…parse FINDINGS.md's IMP rows and check every Severity/Priority cell matches '(Low&#124;Medium&#124;High) benefit / (Low&#124;Medium&#124;High) effort / (Low&#124;Medium&#124;High) risk'…"</code> | 0 | `total_imp_rows 24 nonconforming []` — all 24 `IMP` entries already share one consistent benefit/effort/risk vocabulary; no duplicate normalization needed | [FINDINGS.md](FINDINGS.md) |
 | 2026-07-30T00:08:45Z | <code>git diff --name-only 09d6c7bfcd864a0ad3951b87d16a88dc770392a3 HEAD -- src server tests tools android web cmake docker .github CMakeLists.txt CMakeListsEmscripten.txt README.md SetupServer.md WASM_PORT.md start-server.sh netlify.toml default.nix flake.nix shell.nix CLAUDE.md</code> | 0 | No output — zero production drift going into Task 11's doc-only edits | [SDL3_REVIEW_STATUS.md#audit-baseline](SDL3_REVIEW_STATUS.md#audit-baseline) |
+
+### Task 11 Fix Round 1 Ledger
+
+An independent review of commit `03421bb3` raised one Critical, two Important
+and two Minor finding; all five accepted (see
+[Task 11 Fix Round 1 Findings](#task-11-fix-round-1-findings)). Each row below
+is its own top-level command, independently re-run against the pinned
+baseline and the live `docs/audit/`/`src`/`server` tree; the corrected probe
+row appears in place, above, at its original `T00:07:15Z` timestamp.
+
+| Time (UTC) | Command | Exit | Result | Evidence |
+|---|---|---:|---|---|
+| 2026-07-30T01:00:00Z | <code>grep -rnE '\[(team&#124;scancode&#124;senderId&#124;playerId&#124;slot&#124;idx&#124;index&#124;cellIndex&#124;button&#124;sc)\b[^]]*\]' src server</code> | 0 | **30** hits (unchecked indices, previously-missing category 1 of 5). 29 are bounds-safe (loop-`.size()`-bounded, `%4`/`%20`-wrapped, or already BUG-035/BUG-036/SEC-007); one is new: `src/bubblegame_level.cpp:67`'s `level[idx] = line` has no `idx < 10` guard against the fixed `std::array<std::vector<int>, 10>`, unlike `src/highscoremanager.cpp:132-134`'s `if (idx < 10) level[idx] = line` for the identical file format | [subsystems/03-gameplay.md#confirmed-findings](subsystems/03-gameplay.md#confirmed-findings) |
+| 2026-07-30T01:00:15Z | <code>python3 -c "print(open('share/data/levels').read())" &#124; awk 'BEGIN{c=0;m=0;n=0}/^$/{if(c>0){print c; if(n==0&#124;&#124;c&lt;n)n=c; if(c&gt;m)m=c}; c=0; next}{c++}END{if(c&gt;0){if(n==0&#124;&#124;c&lt;n)n=c; if(c&gt;m)m=c}}' &#124; sort -n &#124; uniq -c</code> | 0 | Confirms BUG-051 is not reachable with the shipped asset: every one of the **100** level blocks in `share/data/levels` has exactly **10** lines (min = max = 10), so `idx` never exceeds 9 with the current file | [subsystems/03-gameplay.md#confirmed-findings](subsystems/03-gameplay.md#confirmed-findings) |
+| 2026-07-30T01:00:30Z | <code>grep -rn "SaveLevelset" src</code> | 1 | No output — no Level Editor (or any other) write path exists in the pinned source that could author a level block exceeding 10 lines, confirming BUG-051 has no in-app trigger today either | [subsystems/03-gameplay.md#confirmed-findings](subsystems/03-gameplay.md#confirmed-findings) |
+| 2026-07-30T01:01:00Z | <code>grep -rnE '\((unsigned( int&#124; long&#124; char&#124; short)?&#124;size_t&#124;uint8_t&#124;uint16_t&#124;uint32_t&#124;uint64_t)\)' src server</code> | 0 | **36** hits (signed/unsigned conversions, previously-missing category 2 of 5). All are bounds-safe: pointer-difference casts (`ws.c`), fixed-width protocol byte extraction already within SEC-002/SEC-006's territory (`networkclient.cpp:867,1213`, `networkclient_wasm.cpp:93` — each feeds a lookup loop, never a direct index), and `size_t`-vs-loop-index comparisons already IMP-002/REL-001's territory. No new candidate | [subsystems/01-server-protocol.md#task-2-candidate-dispositions](subsystems/01-server-protocol.md#task-2-candidate-dispositions) |
+| 2026-07-30T01:01:30Z | <code>grep -rnE '^\s*(system&#124;fwrite&#124;fread&#124;write&#124;read&#124;remove&#124;rename&#124;fclose&#124;unlink&#124;SDL_RenderCopy&#124;SDL_RenderPresent&#124;chdir&#124;mkdir)\(' src server</code> | 0 | **19** hits (ignored return values, previously-missing category 3 of 5). `mainmenu_server.cpp:93`'s `system(...)` is BUG-033; `server/stats.c:76`'s `mkdir(...)` failure surfaces downstream at the `fopen` REL-015 already characterizes; the remaining `fclose`/`SDL_RenderPresent` statement-level ignores are idiomatic with no established resource or security consequence. No new candidate | [FINDINGS.md](../audit/FINDINGS.md) |
+| 2026-07-30T01:02:00Z | <code>grep -rn "ptrInstance\b" src/*.h src/*.cpp</code> | 0 | **33** hits (global/singleton lifetime, previously-missing category 4 of 5), across the six singletons with a `ptrInstance` field. `AudioMixer::Dispose()`, `TransitionManager::Dispose()`, `HighscoreManager::Dispose()`, and `GameSettings::Dispose()` free members but never null `ptrInstance` — exactly IMP-007's already-registered pattern. `NetworkClient::Dispose()` (`networkclient.cpp:60-64`) correctly sets `ptrInstance = nullptr` after `delete`; `FrozenBubble` (`frozenbubble.h/.cpp`) declares `ptrInstance` but has no `Dispose()` at all — a true program-lifetime singleton, not the leaking pattern. Both confirmed as the non-matching, safe outliers. No new candidate | [FINDINGS.md](../audit/FINDINGS.md) |
+| 2026-07-30T01:02:30Z | <code>grep -rnE '\b(plen&#124;hdr_len&#124;Content-Length&#124;content_length&#124;opcode&#124;recvBufferLen&#124;msgLen&#124;payload_len&#124;framelen&#124;frame_len)\b' src server</code> | 0 | **46** hits (network lengths/opcodes, previously-missing category 5 of 5). `server/net.c:1133`'s `Content-Length` literal is SEC-002; the client-side `msgLen`/`recvBufferLen` framing sites are within BUG-006/SEC-006's territory; `server/ws.c`'s `ws_decode_inplace` `plen`/`hdr_len` frame-length handling was re-read line-by-line: the 64-bit length case is rejected (`plen == 127` returns `-1`, `:239`), the extended 16-bit length is read from both bytes before use (`:241-244`), and the frame-completeness gate (`total - pos < hdr_len + plen`, `:249`) runs before the `memmove` that follows it (`:259`). No hostile-traffic or runtime probing was performed, per the user's standing restriction; this disposition is static reading only. No new candidate | [subsystems/01-server-protocol.md#network-derived-length-and-index-trace](subsystems/01-server-protocol.md#network-derived-length-and-index-trace) |
+| 2026-07-30T01:03:00Z | <code>grep -rhoE '#\s*(if&#124;ifdef&#124;ifndef&#124;elif)\b.*' src &#124; grep -oE '__[A-Za-z0-9_]+__&#124;_WIN32&#124;__linux__' &#124; sort -u</code> | 0 | **Seven** guard tokens, not two: `__ANDROID__`, `__ANDROID_PORT__`, `__APPLE__`, `__MINGW32__`, `__WASM_PORT__`, `__linux__`, `_WIN32`. Confirms the Important 2 finding: `gamesettings.h:86` (`#if defined(__ANDROID__) \|\| defined(__ANDROID_PORT__)`), `platform.cpp:22,98` (`_WIN32`/`__MINGW32__`), `platform.cpp:24,122` (`__linux__`), `platform.cpp:109` (`__APPLE__`). Only the first three tokens are named by CLAUDE.md's Platform abstraction section; the false "matches exactly" claim is removed | [SDL3_REVIEW_STATUS.md#task-11-fix-round-1-findings](#task-11-fix-round-1-findings) |
+| 2026-07-30T01:03:15Z | <code>grep -rn "#\s*(if&#124;ifdef&#124;ifndef&#124;elif).*__ANDROID_PORT__" src</code> | 0 | One site: `src/gamesettings.h:86`, exactly the line the independent review cited | [SDL3_REVIEW_STATUS.md#task-11-fix-round-1-findings](#task-11-fix-round-1-findings) |
+| 2026-07-30T01:04:00Z | <code>grep -rn 'getenv("USER")' src</code> | 0 | **6** hits: `mainmenu_netpanel.cpp:70,1010,1012,1092,1094`, `mainmenu_input.cpp:1495` — exactly the six sites the independent review found unswept. Each follows `getenv("USER") ? getenv("USER") : "<fallback>"` feeding a bounded `snprintf` as a nickname default; benign, no new candidate | [SDL3_REVIEW_STATUS.md#task-11-fix-round-1-findings](#task-11-fix-round-1-findings) |
+| 2026-07-30T01:04:30Z | <code>grep -vE '^\s*#' CMakeLists.txt &#124; grep -oE '\.cpp' &#124; wc -l</code> | 0 | **36** — reproduces the "36" `CMakeLists.txt` count with its filter stated: exclude comment lines, then count literal `.cpp` occurrences (a naive count with no comment exclusion returns 37, the extra one being line 55's comment mentioning `networkclient.cpp`) | [FINDINGS.md](../audit/FINDINGS.md) |
+| 2026-07-30T01:04:45Z | <code>grep -oE '\.cpp' CMakeListsEmscripten.txt &#124; wc -l</code> | 0 | **15** — reproduces the "15" count; no comment line in this file contains `.cpp`, so no exclusion is needed | [FINDINGS.md](../audit/FINDINGS.md) |
+| 2026-07-30T01:05:00Z | <code>grep -oE '\.cpp' android/app/CMakeLists.txt &#124; wc -l</code> | 0 | **28** — reproduces the "28" count; same, no comment exclusion needed | [FINDINGS.md](../audit/FINDINGS.md) |
+| 2026-07-30T01:05:30Z | <code>grep -rnE '\b(malloc&#124;calloc&#124;realloc)\s*\(' src server &#124; wc -l</code> | 0 | **11** — re-derives the allocation count the original gate's Step 2 narrative stated with no ledger row of its own; unchanged | [subsystems/01-server-protocol.md#task-2-candidate-dispositions](subsystems/01-server-protocol.md#task-2-candidate-dispositions) |
+| 2026-07-30T01:05:45Z | <code>grep -rnE '\bfree\s*\(' src server &#124; wc -l</code> | 0 | **44** — re-derives the paired `free(` count with its own command; unchanged | [subsystems/01-server-protocol.md#task-2-candidate-dispositions](subsystems/01-server-protocol.md#task-2-candidate-dispositions) |
+| 2026-07-30T01:06:00Z | <code>grep -rnE 'SDL_Create[A-Za-z]+\(' src server &#124; wc -l</code> | 0 | **15** — re-derives the SDL create-call-site count with its own command; matches Task 7's ownership table | [subsystems/05-render-audio.md#confirmed-findings](subsystems/05-render-audio.md#confirmed-findings) |
+| 2026-07-30T01:06:15Z | <code>grep -rnE 'SDL_Destroy[A-Za-z]+\(' src server &#124; wc -l</code> | 0 | **37** — re-derives the SDL destroy-call-site count with its own command; matches Task 7's ownership table | [subsystems/05-render-audio.md#confirmed-findings](subsystems/05-render-audio.md#confirmed-findings) |
+| 2026-07-30T01:06:30Z | <code>grep -rnoE '"[^"]*[0-9]+\.[0-9]+\.[0-9]+[^"]*"' src server *.nix CMakeLists.txt CMakeListsEmscripten.txt android/app/build.gradle .github/workflows/build.yml</code> | 0 | Reproduces exactly REL-004's catalogued five version strings (`2.2.1`, embedded `v2.4.9`, `v2.4.26`, `2.4.27`, `0.1.0`) among IP-address literals and third-party dependency version pins (SDL/SDL_image/SDL_mixer/SDL_ttf tags, NDK version, AGP/CMake versions) — no new candidate | [FINDINGS.md](../audit/FINDINGS.md) |
+| 2026-07-30T01:06:45Z | <code>grep -rnE 'getenv\("HOME"\)&#124;SDL_GetPrefPath&#124;SDL_GetBasePath' src server &#124; wc -l</code> | 0 | **5** — re-derives the filesystem/`getenv(HOME)` count with its own command: `gamesettings.cpp:32`, `platform.h:29` (comment), `server/stats.c:87` (REL-015), `platform.cpp:110,113` (REL-008); unchanged | [FINDINGS.md](../audit/FINDINGS.md) |
+| 2026-07-30T01:07:00Z | <code>python3 -c "…extract BUG/SEC/REL/IMP IDs from FINDINGS.md and check uniqueness and per-class contiguity…"</code> | 0 | `total 97 unique 97 contiguous True counts {'IMP': 24, 'BUG': 51, 'SEC': 7, 'REL': 15}` — **97**, up from 96, after BUG-051; BUG-051 is the next free ID in its class, no existing ID renumbered or recycled | [FINDINGS.md](../audit/FINDINGS.md) |
+| 2026-07-30T01:07:15Z | <code>git diff --name-only 09d6c7bfcd864a0ad3951b87d16a88dc770392a3 HEAD -- src server tests tools android web cmake docker .github CMakeLists.txt CMakeListsEmscripten.txt README.md SetupServer.md WASM_PORT.md start-server.sh netlify.toml default.nix flake.nix shell.nix CLAUDE.md</code> | 0 | No output — zero production drift after Task 11 Fix Round 1's doc-only edits | [SDL3_REVIEW_STATUS.md#audit-baseline](SDL3_REVIEW_STATUS.md#audit-baseline) |
 
 ## Limitations
 

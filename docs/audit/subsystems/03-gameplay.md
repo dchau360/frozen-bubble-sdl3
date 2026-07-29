@@ -240,7 +240,11 @@ and the expected batched/departure rules.
 
 All Task 5 candidates are resolved. BUG-018 through BUG-025 are confirmed;
 full-board overwrite without a prior missed loss and remote malformed placement
-are not separate ordinary candidates.
+are not separate ordinary candidates. Task 11 Fix Round 1 added one further
+candidate from its cross-cutting "unchecked indices" sweep of `src`/`server`
+(`grep -rnE '\[(team|scancode|senderId|playerId|slot|idx|index|cellIndex|button|sc)\b[^]]*\]' src server`):
+`BubbleGame::LoadLevelset`'s unguarded `level[idx]` write. Confirmed and
+resolved below, not left open.
 
 ## Confirmed findings
 
@@ -264,6 +268,19 @@ are not separate ordinary candidates.
 - **IMP-005, IMP-006, IMP-009:** initialization, numeric-intent, and dead/control
   cleanup are confirmed improvements; no analyzer-only gameplay defect was
   inferred. IMP-008 remains a selective low-priority cleanup family.
+- **BUG-051 (Low, Task 11 Fix Round 1):** `BubbleGame::LoadLevelset`
+  (`src/bubblegame_level.cpp:38-70`) writes `level[idx]` into a fixed
+  `std::array<std::vector<int>, 10>` with no check that `idx < 10` before the
+  write (`:67-69`); `std::array::operator[]` does not bounds-check, so a level
+  block with more than 10 non-blank lines is an out-of-bounds write. The
+  sibling loader for the identical file format,
+  `HighscoreManager::LoadLevelsetHighscores` (`src/highscoremanager.cpp:132-134`),
+  guards the same write with `if (idx < 10)`; this one does not. Low, not
+  higher, because the only caller passes the bundled `ASSET("/data/levels")`
+  (`src/bubblegame.cpp:932`), a Python line-count of which confirms all 100
+  level blocks have exactly 10 lines (`min == max == 10`), and no
+  `SaveLevelset`/Level-Editor write path exists in the pinned source to author
+  a bad block — so the shipped asset cannot trigger it today.
 
 ## Dismissed candidates
 
@@ -312,9 +329,10 @@ maintained inventory and were not treated as production owners.
 
 ## Gate conclusion
 
-Complete. Every scoped file and candidate has a disposition, eight gameplay
-defects are confirmed with complete causal traces, existing helper tests and
-both the pure-helper oracle and production-object boundary harness are recorded,
-production code is unchanged, and security runtime work remains explicitly
-omitted. The exact next gate is Task 6, Step 1: map menu and room state
-transitions.
+Complete. Every scoped file and candidate has a disposition, nine gameplay
+defects are confirmed with complete causal traces (the ninth, BUG-051, added
+in Task 11 Fix Round 1 from the cross-cutting unchecked-indices sweep),
+existing helper tests and both the pure-helper oracle and production-object
+boundary harness are recorded, production code is unchanged, and security
+runtime work remains explicitly omitted. The exact next gate is Task 6, Step 1:
+map menu and room state transitions.
