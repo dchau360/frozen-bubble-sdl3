@@ -47,7 +47,7 @@
 | Task 7 | Rendering, transitions, fonts, and audio lifecycle | complete (Fix Round 1 corrected BUG-001's leak quantity, BUG-041's trigger set, the pixel-format claim, and IMP-013's attribution; reopened IMP-005's render slice into BUG-043 and registered BUG-044, both reproduced against production objects. Fix Round 2 corrected the `TTFText` instance count Fix Round 1 had misread from a comment — 38 fixed members, not 23 — plus the `MainMenu` texture and `cell()` churn counts, completed the `idleSPButtons` dismissal with a full consequence trace that disproves the proposed indeterminate-rect mechanism, and registered BUG-045, reproduced against the production `ttftext.cpp` object; dummy-driver-only rendering and full-client navigation omissions recorded) |
 | Task 8 | Native, WASM, and Android platform integration | complete (Android release APK built locally with zero tracked-file drift; WASM linked in full against a disposable port-patched Emscripten copy; packaged-path, logger, and preference behavior reproduced against unchanged production objects. Browser runtime, Android device runtime, Linux/Windows execution, whole-program packaged-layout startup, and dynamic-library independence recorded as unavailable, not passed. Fix Round 1 applied seven accepted review findings: BUG-048's occurrence counts and characterization corrected, BUG-046 extended with the version-bump and stale-asset-on-update consequences, REL-008 reassessed High → Medium with two mitigating facts, the coverage bootstrap count corrected 20 → 21, two brief Step 6 substitutions added to Limitations, the `web/index.html` script-tag wording corrected, and a full count sweep that found two wrong quantities of twenty re-derived. Fix Round 2 applied one accepted Important and six accepted Minor findings: the REL-008 "highest-impact" superlative re-anchored to name what actually reaches shipped artifacts, the Fix Round 1 opening summary's review-coverage and attribution wording corrected, the count-sweep enumeration reconciled to its stated eighteen, eleven bundled-command ledger rows split to one command per row with two non-integer exit cells resolved, the gate-conclusion completion claim qualified against its recorded substitutions, the `syncfs` "own body" wording corrected to "own definition", and the WASM nickname read corrected from `EM_ASM` to `EM_ASM_PTR`) |
 | Task 9 | Build, tests, packaging, CI, deployment, tooling, and operations | complete (all five build definitions compared and reconciled; workflow, Compose, CMake, Gradle and Python configurations parsed locally; every confirmed defect from Tasks 3-9 mapped to a test, a dynamic case, or a registered gap; all 21 remaining pending coverage rows dispositioned. Fourteen IDs registered — REL-009..014 and IMP-016..023 — four entries extended (REL-004 severity Low → Medium, REL-006, REL-007, REL-008), IMP-008 closed, four candidates dismissed with counter-evidence including one disproved by running the command it doubted. The gate also corrected an inherited premise: `CLAUDE.md`'s claim that four of five platform build jobs are disabled with `if: false` is false at the pinned baseline — 0 of 11 jobs carry it — so Task 8's CI-reachability clause is corrected here and in the registry. No workflow was executed, no container started, and no external network operation performed; those are recorded as limitations, not passes. Fix Round 1 applied two accepted Important and two accepted Minor findings: REL-013's DLL count corrected 20 → 21 with the `tr`/undercount root cause recorded, REL-007's citation split across the two workflow steps its four password instances actually span, FILE_COVERAGE.md's inventory rule corrected to stop claiming a second `pending` location that does not exist, the "ten headings, each once" phrasing restated to name the subsystem notebooks it actually governs, and a re-run count sweep that found only the DLL count reproduced differently. Fix Round 2 applied two accepted Important and one accepted Minor finding: a Fix Round 1 ledger row that bundled sixteen independent commands under one non-representative exit was removed and split into sixteen individually re-run rows with honest exits, that same row's mislabeled "fourteen" quantity count corrected to sixteen commands (seventeen quantities), and the two identical "Task 9 Fix Round 1" headings disambiguated into "Findings" and "Ledger" with both misdirected cross-links retargeted to the ledger) |
-| Task 10 | Cross-subsystem dynamic integration matrix | complete (38 matrix rows recorded before any process launched; **28 executed, 10 recorded as not performed** — the six hostile-transport rows because the user restricted security-specific runtime testing, four manual visual/audio rows because no display, audio device or input-injection path existed). First gate to run real client code against a real server over a real socket: 24 `fb-server` instances (23 ASan+UBSan, 1 Release), each on its own dedicated port from a 24-port reserved range, driving rooms at 2/3/4/5/6/10/20 seats plus the 20-seat admission boundary and its boundary+1, normal/team/clear modes, rounds 1-3, member and creator departure both during and before a round, mid-game reconnect, `PART`/rejoin, and `SIGTERM` shutdown. Relay invariants re-derived from 11 saved journals: 4,990 frames delivered, 0 self-echoes, 0 unknown senders, all seat maps identical. Two defects and one improvement registered — **BUG-049** (High: recursive `player_part_game_` teardown frees the game and the outer frame reads it at `server/game.c:1051`; 11 identical ASan reproductions, minimum 3 seats, triggered by ordinary simultaneous disconnects, and **silent** on the uninstrumented Release build), **BUG-050** (Low: `LIST`'s `free:` counter contradicts its own open-player list) and **IMP-024** (unvalidated `CREATE` room cap). BUG-015 gained its first runtime reproduction; BUG-005 is recorded as entangled with BUG-049 and not independently measurable; BUG-013, BUG-021 and BUG-040 gained server-side runtime measurements with no severity change; three candidates dismissed with counter-evidence. No leak claim is made — Apple ASan requires `detect_leaks=0`. All 24 ports read free afterwards and the `fb-server` process list is byte-identical to the pre-launch baseline, so the four unrelated servers belonging to the user's own environment were neither touched nor counted) |
+| Task 10 | Cross-subsystem dynamic integration matrix | complete (41 matrix rows recorded before any process launched — the original 38-row matrix's bundled row 38 was split in Fix Round 1 into 4 individually countable manual-observation rows; **31 executed, 10 recorded as not performed** — the six hostile-transport rows because the user restricted security-specific runtime testing, four manual visual/audio rows (clear-win banner and sound, spectator pinning, >5-player paging, malus/attack visuals) because no display, audio device or input-injection path existed). First gate to run real client code against a real server over a real socket: 24 `fb-server` instances (23 ASan+UBSan, 1 Release), each on its own dedicated port from a 24-port reserved range, driving rooms at 2/3/4/5/6/10/20 seats plus the 20-seat admission boundary and its boundary+1, normal/team/clear modes, rounds 1-3, member and creator departure both during and before a round, mid-game reconnect, `PART`/rejoin, and `SIGTERM` shutdown. Relay invariants re-derived from 11 saved journals: 4,990 frames delivered, 0 self-echoes, 0 unknown senders, all seat maps identical. Two defects and one improvement registered — **BUG-049** (High: recursive `player_part_game_` teardown frees the game and the outer frame reads it at `server/game.c:1051`; 11 identical ASan reproductions, minimum 3 seats, triggered by ordinary simultaneous disconnects, and **silent** on the uninstrumented Release build), **BUG-050** (Low: `LIST`'s `free:` counter contradicts its own open-player list) and **IMP-024** (unvalidated `CREATE` room cap). BUG-015 gained its first runtime reproduction; BUG-005 is recorded as entangled with BUG-049 and not independently measurable; BUG-013, BUG-021 and BUG-040 gained server-side runtime measurements with no severity change; three candidates dismissed with counter-evidence. No leak claim is made — Apple ASan requires `detect_leaks=0`. All 24 ports read free afterwards and the `fb-server` process list is byte-identical to the pre-launch baseline, so the four unrelated servers belonging to the user's own environment were neither touched nor counted. **Fix Round 1** corrected a false cleanup-proof claim and registered a fourth finding, **REL-015** (Medium): `fb-server`'s stats-file path is derived from `$HOME` unconditionally with no isolation mechanism, and this gate's own 24 launches — which isolated `joiners.log` by working directory but never set `HOME` — read from and wrote to the operator's real `~/.fb-server/stats.dat` for the entire gate, discovered in independent review rather than prevented; the off-by-one `networkclient.cpp:1306` citation was also corrected to `:1307`) |
 | Task 11 | Complete file coverage and prioritized improvements | pending |
 | Task 12 | Independent final challenge | pending |
 | Task 13 | Complete repository review report | pending |
@@ -823,11 +823,14 @@ Full findings-registry text for REL-007 and REL-013 is corrected in
   model id `claude-opus-5`), dispatched by the audit controller. Earlier gates
   ran under agents whose model the dispatcher did not expose; this is the first
   row in this file that records one.
-- **The matrix was written before any process was launched.** All 38 rows —
+- **The matrix was written before any process was launched.** All 41 rows —
   setup, expected observable, log evidence, sanitizer state, whether manual
   visual/audio observation is required, and result — are in the
-  [Task 10 notebook](subsystems/08-dynamic-integration.md#the-recorded-matrix-step-1-executed-before-any-process-was-launched).
-  **28** were executed and **10** are recorded as not performed.
+  [Task 10 notebook](subsystems/08-dynamic-integration.md#the-recorded-matrix-step-1-executed-before-any-process-was-launched)
+  (Fix Round 1 split the original matrix's bundled row 38 into four
+  individually countable manual-observation rows, 38-41, so every row's
+  Result is directly countable). **31** were executed and **10** are recorded
+  as not performed.
 - **Brief Step 5 was not executed, by standing user restriction.** The user
   explicitly restricted security-specific runtime testing for this audit. All
   six hostile transport scenarios — fragmentation/coalescing, mid-frame
@@ -876,7 +879,63 @@ Full findings-registry text for REL-007 and REL-013 is corrected in
   covered in two pieces (a whole-program startup/shutdown smoke and a
   production-object network harness) that together do not equal one
   human-driven session. It exercised macOS only, raw TCP only, and observed no
-  pixel or sound. All ten limitations are enumerated in the notebook.
+  pixel or sound. All eleven limitations are enumerated in the notebook.
+
+### Task 10 Fix Round 1
+
+An independent review of commit `f297dfc1` raised two Critical, one Important
+and one Minor finding. **All four were accepted; none was disputed.**
+
+- **Critical: the cleanup proof's "nothing outside `/tmp/fb-sdl3-audit/` was
+  written except the tracked audit documents" claim was false.**
+  `server/stats.c:82-91`'s `stats_init()` derives `stats_file_path` from
+  `getenv("HOME")` unconditionally — a mechanism independent of the server's
+  working directory, unlike `joiners.log`. `run_case.sh` never set `HOME` for
+  any of its 24 launches, so every `fb-server` instance this gate started
+  read from and wrote to the real `/Users/dchau/.fb-server/stats.dat`.
+  Verified directly against the pinned baseline and the preserved evidence
+  (ledger rows below) rather than taken on the reviewer's word. The false
+  claim is withdrawn and replaced with an accurate one in the notebook's
+  cleanup proof; the real file was left exactly as found. A new Limitation
+  (11) and finding (**REL-015**, Medium) are registered — `fb-server` has no
+  flag, cwd-relative path, or `HOME`-independent override to relocate this
+  file, which makes sandboxed or CI testing of the server structurally unsafe
+  against a real host's state.
+- **Critical: the "28 executed / 10 not performed" figure did not reconcile
+  with its own table.** The 38-row matrix had exactly 31 rows with a concrete
+  Pass/Fail/Mixed verdict and 7 rows reading "Not performed" (rows 32-37 plus
+  a row 38 that bundled four manual visual/audio observations into one row);
+  28/10 only followed by silently reclassifying rows 11, 12 and 14 as
+  not-performed for their embedded visual sub-component while their headline
+  Result still read a qualified "Pass", which also double-counted against row
+  38's own bundled list. Fixed by splitting row 38 into four individually
+  countable rows (38-41: clear-win banner and sound, spectator pinning,
+  >5-player paging, malus/attack visuals) and re-deriving the count directly:
+  **41** total rows, **31** executed (rows 1-31, none reclassified), **10**
+  not performed (rows 32-41). The "four manual visual/audio observations"
+  list is now identical everywhere — the notebook's matrix, its Limitations
+  section 4, `FINDINGS.md`, this file, and the task-10 report all name the
+  same four items; "full menu navigation into a network game" is no longer
+  listed among them, since it is a distinct, already fully-documented
+  omission (Limitation 5, about the absence of an input-injection path, not
+  about display/audio observation).
+- **Important: the `networkclient.cpp:1306-1360` citation was off by one.**
+  `ParseListResponse` begins at `:1307` at the pinned baseline, not `:1306`.
+  Corrected everywhere it appeared: the notebook (two places), `FINDINGS.md`'s
+  BUG-050 entry, and the task-10 report.
+- **Minor: the Coverage table over-credited Task 6.** Its "room lifecycle
+  transitions... driven end to end" credit is true only at the protocol
+  level, performed by this gate's own harness — not by Task 6's
+  `mainmenu_netpanel.cpp` UI, which the notebook's own Limitation 5 already
+  says was never exercised. Reworded so the two statements no longer
+  contradict each other.
+
+Full findings-registry text for REL-015 is in
+[FINDINGS.md](FINDINGS.md); the notebook's own corrections are in its
+[Cleanup proof](subsystems/08-dynamic-integration.md#cleanup-proof-step-6),
+[Limitations](subsystems/08-dynamic-integration.md#limitations) and
+[Confirmed findings](subsystems/08-dynamic-integration.md#new-reliabilitydeployment-defect-fix-round-1)
+sections.
 
 ## Commands and evidence
 
@@ -1621,6 +1680,26 @@ testing was excluded by user direction.
 | 2026-07-29T18:03:18Z | <code>python3 -c "…compare each subsystem notebook's '## ' headings to the ten required, in order…"</code> | 0 | `notebooks 9 mismatches 0` — the ten-heading invariant holds for all nine notebooks including the newly written `08-dynamic-integration.md` | [subsystems/08-dynamic-integration.md](subsystems/08-dynamic-integration.md) |
 | 2026-07-29T18:03:30Z | <code>python3 -c "…count &#96;&#124; &#96;&#96;&#96;&#96; rows and case-insensitive 'pending' occurrences in docs/audit/FILE_COVERAGE.md…"</code> | 0 | `rows 237` and **10** `pending` occurrences, all on line 5 — the inventory rule paragraph. Task 10 extended four rows' Notes and introduced no new row and no new pending state | [FILE_COVERAGE.md](FILE_COVERAGE.md) |
 
+### Task 10 Fix Round 1
+
+An independent review of commit `f297dfc1` raised two Critical, one Important
+and one Minor finding; all four accepted. Each row below is its own top-level
+command, independently re-run against the pinned baseline and the preserved
+`/tmp/fb-sdl3-audit/task10/` evidence, with its own real exit code.
+
+| Time (UTC) | Command | Exit | Result | Evidence |
+|---|---|---:|---|---|
+| 2026-07-29T18:25:03Z | <code>git show 09d6c7bfcd864a0ad3951b87d16a88dc770392a3:server/stats.c &#124; sed -n '82,91p'</code> | 0 | Confirms `stats_init()`'s unconditional `getenv("HOME")` derivation of `stats_file_path` at the pinned baseline, unchanged from what shipped | [subsystems/08-dynamic-integration.md#trust-boundaries-and-invariants](subsystems/08-dynamic-integration.md#trust-boundaries-and-invariants) |
+| 2026-07-29T18:25:19Z | <code>grep -c 'HOME=' /tmp/fb-sdl3-audit/task10/run_case.sh</code> | 1 | `0` matches — `run_case.sh` never sets `HOME` for any of its 24 launches (`grep -c` exits 1 on zero matches, recorded as-is, not normalized) | [subsystems/08-dynamic-integration.md#cleanup-proof-step-6](subsystems/08-dynamic-integration.md#cleanup-proof-step-6) |
+| 2026-07-29T18:25:34Z | <code>stat -f "%Sm %z %N" /Users/dchau/.fb-server/stats.dat</code> | 0 | `Jul 29 22:48:29 2026 1677 /Users/dchau/.fb-server/stats.dat` — the real, pre-existing file, confirmed untouched by this correction (read-only verification) | [subsystems/08-dynamic-integration.md#cleanup-proof-step-6](subsystems/08-dynamic-integration.md#cleanup-proof-step-6) |
+| 2026-07-29T18:25:50Z | <code>python3 -c "…compare stats.dat's mtime (UTC) against c22-shutdown.server.log's mtime (UTC)…"</code> | 0 | Both `2026-07-29T15:48:29Z` — the real stats file was modified the same second as the last matrix row's server log, squarely inside the gate's recorded execution window | [subsystems/08-dynamic-integration.md#cleanup-proof-step-6](subsystems/08-dynamic-integration.md#cleanup-proof-step-6) |
+| 2026-07-29T18:26:07Z | <code>grep -oE '(ml3_00&#124;ml4_02&#124;5d_03&#124;5c_00&#124;5t_00&#124;10_08&#124;20_00&#124;6_04&#124;2_00&#124;rc_01&#124;2sd_00&#124;2r3_00&#124;ml2_00&#124;ml5_00&#124;6d_00)' /Users/dchau/.fb-server/stats.dat &#124; sort -u &#124; wc -l</code> | 0 | **15** distinct Task-10-only nick prefixes found in the real file, confirming it was populated by this gate's own scenario runs | [subsystems/08-dynamic-integration.md#cleanup-proof-step-6](subsystems/08-dynamic-integration.md#cleanup-proof-step-6) |
+| 2026-07-29T18:26:25Z | <code>python3 -c "…extract BUG/SEC/REL/IMP IDs from FINDINGS.md and check uniqueness and per-class contiguity…"</code> | 0 | `total 96 unique 96 contiguous True counts {'BUG': 50, 'IMP': 24, 'REL': 15, 'SEC': 7}` — 95 before this round, **96** after; REL-015 is the next free ID in its class and no existing ID was renumbered or recycled | [FINDINGS.md](FINDINGS.md) |
+| 2026-07-29T18:26:40Z | <code>python3 -c "…count rows 1-41 in the notebook's matrix table by leading '&#124; N &#124;' and count how many have Result containing 'Not performed'…"</code> | 0 | `total=41 not_performed=10 executed=31` — measured directly from the corrected table, not hand-counted; matches the count stated in this file's gate row, `FINDINGS.md`, and the notebook's own matrix-summary line and Gate conclusion | [subsystems/08-dynamic-integration.md#the-recorded-matrix-step-1-executed-before-any-process-was-launched](subsystems/08-dynamic-integration.md#the-recorded-matrix-step-1-executed-before-any-process-was-launched) |
+| 2026-07-29T18:26:55Z | <code>git show 09d6c7bfcd864a0ad3951b87d16a88dc770392a3:src/networkclient.cpp &#124; sed -n '1306p;1307p'</code> | 0 | Line 1306 is blank (end of the previous function); line 1307 is `void NetworkClient::ParseListResponse(const char* listData) {` — confirms the corrected citation `:1307-1360` | [subsystems/08-dynamic-integration.md#static-review](subsystems/08-dynamic-integration.md#static-review) |
+| 2026-07-29T18:27:10Z | <code>grep -rln "1306-1360" docs/audit .superpowers/sdd/2026-07-28-complete-repository-audit/task-10-report.md</code> | 0 | Matches only inside this ledger's own and the report's own narrative describing the old (wrong) citation string — not a live citation. The notebook and `FINDINGS.md` citations are confirmed all `:1307-1360` by separate inspection | [FINDINGS.md](FINDINGS.md) |
+| 2026-07-29T18:27:24Z | <code>for h in 'Scope' 'Trust boundaries and invariants' 'Static review' 'Dynamic evidence' 'Candidates' 'Confirmed findings' 'Dismissed candidates' 'Coverage' 'Limitations' 'Gate conclusion'; do grep -c "^## ${h}\$" docs/audit/subsystems/08-dynamic-integration.md; done &#124; sort -u</code> | 0 | Prints `1` once — every one of the ten headings still appears exactly once after all Fix Round 1 edits | [subsystems/08-dynamic-integration.md](subsystems/08-dynamic-integration.md) |
+
 ## Limitations
 
 - Emscripten, cppcheck, and clang-tidy were absent at bootstrap and installed successfully in Task 2. Homebrew LLVM remains keg-only, so the audit invokes clang-tidy by its absolute `$(brew --prefix llvm)/bin` path.
@@ -1781,7 +1860,8 @@ testing was excluded by user direction.
   part of the 237-row coverage inventory, so REL-009's `CLAUDE.md` half is
   registered without a coverage row of its own.
 
-- Task 10 executed **28** of its **38** recorded matrix rows. The **10** it did not execute are: the six brief Step 5 hostile-transport scenarios (fragmentation/coalescing, mid-frame disconnect, frames claiming a foreign player id, duplicated `n`/`F`/`S` frames, reordered `b`/`N`/`T` sync frames, bounded flooding), **omitted because the user explicitly restricted security-specific runtime testing**, exactly as Task 3's runtime security matrix and Task 6's security runtime rows were omitted; and four manual visual/audio rows (the clear-win banner and its sound, spectator pinning on screen, the >5-player mini-board paging, and full menu navigation into a network game), omitted because no display, audio device, or input-injection path existed. These are limitations, not passes. SEC-002 through SEC-007 therefore still have no runtime evidence, and BUG-006, BUG-007, BUG-014 and BUG-017 remain statically argued.
+- Task 10 executed **31** of its **41** recorded matrix rows (Fix Round 1 split the original 38-row matrix's bundled row 38 into four individually countable manual-observation rows). The **10** it did not execute are: the six brief Step 5 hostile-transport scenarios (fragmentation/coalescing, mid-frame disconnect, frames claiming a foreign player id, duplicated `n`/`F`/`S` frames, reordered `b`/`N`/`T` sync frames, bounded flooding), **omitted because the user explicitly restricted security-specific runtime testing**, exactly as Task 3's runtime security matrix and Task 6's security runtime rows were omitted; and four manual visual/audio rows (the clear-win banner and its sound, spectator pinning on screen, the >5-player mini-board paging, and the malus/attack visuals), omitted because no display, audio device, or input-injection path existed. These are limitations, not passes. SEC-002 through SEC-007 therefore still have no runtime evidence, and BUG-006, BUG-007, BUG-014 and BUG-017 remain statically argued.
+- Task 10's stats-file isolation failed for the entire gate, and this was found in review, not prevented (Fix Round 1). `server/stats.c:82-91` derives `stats_file_path` from `getenv("HOME")` unconditionally, independent of working directory; `run_case.sh` isolated `joiners.log` by `cd`-ing into a scratch directory but never set `HOME`, so all 24 `fb-server` launches read from and wrote to the operator's real `~/.fb-server/stats.dat`. Registered as **REL-015**: the server has no flag, cwd-relative path, or `HOME`-independent override to relocate this file.
 - Task 10 never drove the shipped client through its menus. SDL's dummy video driver accepts no externally injected input and `src/main.cpp:27` takes no arguments, so the client layer was covered in two pieces — a whole-program startup/shutdown smoke and a production-object `NetworkClient` harness against a live server — which together do not equal one human-driven session. This is the same omission Task 7 recorded as "full-client navigation omitted". Single-player gameplay was likewise not played; its rules are covered by Task 5's harness, re-run here.
 - Task 10 exercised macOS and raw TCP only. No WebSocket transport was driven, so `server/ws.c`'s handshake and framing (BUG-006, SEC-002) went untested, and nothing in that gate speaks to WASM's `networkclient_wasm.cpp` (BUG-014), to Windows socket typing (REL-003), or to Android.
 - Task 10's harness is a faithful protocol peer, not a faithful game peer: its `f`/`s`/`S`/`F`/`n` payloads are well-formed and deterministic but do not simulate board physics, so its rows prove wire-level and lifecycle invariants, not that two real clients' boards would agree. Level synchronization (`b`/`N`/`T`) was not driven, because only a real leader generates it.

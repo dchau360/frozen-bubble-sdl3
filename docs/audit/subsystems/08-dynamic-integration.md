@@ -63,8 +63,13 @@ Boundaries crossed at runtime by this gate:
   a byte relay: one client's frame becomes every other client's input.
 - **Server-synthesised message → peer.** `GAME_CAN_START` (the seat map) and the
   `<id>l\n` leave frame are manufactured by the server, not by any client.
-- **Server disk.** `joiners.log` and the stats file are written to the server's
-  working directory.
+- **Server disk.** `joiners.log` is written relative to the server's current
+  working directory, so `cd`-ing into a scratch directory before launch
+  isolates it. The stats file is **not** on this boundary the same way:
+  `stats_init()` (`server/stats.c:82-91`) derives `stats_file_path` from
+  `getenv("HOME")` unconditionally, independent of the working directory, so
+  isolating cwd does not isolate stats persistence — see Limitations for the
+  consequence this had on this gate's own runs.
 - **Client → user preferences.** `SDL_GetPrefPath("", "frozen-bubble")` is the
   only path the client writes settings, highscores and level history to.
 
@@ -147,7 +152,7 @@ computed (`game.c:158`) and never emitted. The `-1` ("don't count myself") is
 coherent only when the requester is itself free.
 
 **No shipped client parses `free:`.** `NetworkClient::ParseListResponse`
-(`src/networkclient.cpp:1306-1360`) splits the open-player prefix on commas and
+(`src/networkclient.cpp:1307-1360`) splits the open-player prefix on commas and
 then scans bracketed rooms; it never reads `free:`, `games:` or `playing:`. That
 bounds BUG-050's impact to third-party/legacy clients and operator diagnostics.
 
@@ -189,7 +194,11 @@ the real `~/Library/Application Support/frozen-bubble` files still carry their
 
 ### The recorded matrix (Step 1, executed before any process was launched)
 
-38 rows: 28 executed, 10 recorded as limitations. "San." is the sanitizer state
+41 rows: 31 executed, 10 recorded as limitations. Row 38 of the original 38-row
+matrix bundled four manual visual/audio observations under one "not performed"
+result; it is split below into rows 38-41, one per observation, so every row's
+Result is directly countable (Fix Round 1 correction — see
+[Gate conclusion](#gate-conclusion)). "San." is the sanitizer state
 of the row's server (and, where a client ran, its client). Full per-row journals
 are JSON-lines under `/tmp/fb-sdl3-audit/task10/logs/`.
 
@@ -232,7 +241,10 @@ are JSON-lines under `/tmp/fb-sdl3-audit/task10/logs/`.
 | 35 | Duplicated `n` / `F` / `S` frames | — | — | — | — | — | **Not performed — user-restricted security runtime testing** |
 | 36 | Reordered `b`/`N`/`T` sync frames | — | — | — | — | — | **Not performed — user-restricted security runtime testing** |
 | 37 | Bounded local flooding | — | — | — | — | — | **Not performed — user-restricted security runtime testing** |
-| 38 | Manual visual/audio observation | Clear-win banner and sound, spectator pinning, >5-player paging, full menu navigation into a network game | — | — | — | Yes | **Not performed — no display, dummy drivers, no input-injection path** |
+| 38 | Manual observation — clear-win banner and its sound | Clear mode reaches a win with a human watching and listening | — | — | — | Yes | **Not performed — no display, dummy drivers, no input-injection path** |
+| 39 | Manual observation — spectator pinning on screen | A spectator's own board stays pinned/highlighted among the mini-boards | — | — | — | Yes | **Not performed — no display, dummy drivers, no input-injection path** |
+| 40 | Manual observation — >5-player mini-board paging | The mini-board display pages correctly beyond 5 players | — | — | — | Yes | **Not performed — no display, dummy drivers, no input-injection path** |
+| 41 | Manual observation — malus/attack visuals | Malus/attack animations render as expected | — | — | — | Yes | **Not performed — no display, dummy drivers, no input-injection path** |
 
 ### Aggregate relay measurements
 
@@ -340,8 +352,28 @@ Preserved artifacts (every log backing a finding, kept, not deleted):
 room journals and the remaining scenario journals as JSON lines, the client
 smoke log, the `NetworkClient` harness client log, and both `fb-server` process
 snapshots. The harness sources are `/tmp/fb-sdl3-audit/task10/fbharness.py`,
-`scenario.py`, `run_case.sh` and `task10_netclient_harness.cpp`. Nothing outside
-`/tmp/fb-sdl3-audit/` was written except the tracked audit documents. `fb-server`
+`scenario.py`, `run_case.sh` and `task10_netclient_harness.cpp`.
+**Correction (Fix Round 1): the original claim here — "Nothing outside
+`/tmp/fb-sdl3-audit/` was written except the tracked audit documents" — was
+false, and is withdrawn.** `run_case.sh` `cd`s into a scratch directory before
+every launch, which isolates `joiners.log` (below), but it never sets `HOME`,
+and `server/stats.c:82-91`'s `stats_init()` derives `stats_file_path` from
+`getenv("HOME")` unconditionally, independent of the working directory. All
+**24** `fb-server` instances this gate started therefore read from and wrote
+to the real `/Users/dchau/.fb-server/stats.dat` — the operator's own file, not
+a Task 10 artifact. This was confirmed after the fact by an independent
+reviewer and re-verified directly against the pinned baseline and the
+preserved evidence: `git show 09d6c7bf:server/stats.c` shows the unconditional
+`getenv("HOME")` derivation at `:82-91`; `run_case.sh` contains no `HOME=`
+assignment anywhere; and the real file's mtime (`2026-07-29T15:48:29Z`) lands
+in the same second as the last matrix row's server log
+(`c22-shutdown.server.log`) and its content carries nick prefixes
+(`ml3_00`, `ml4_02`, `5d_03`, `5c_00`, `5t_00`, `10_08`, `20_00`, `6_04`,
+`2_00`, `rc_01`, `2sd_00`, `2r3_00`, `ml2_00`, `ml5_00`, `6d_00`) that only
+`scenario.py`'s nick-generation scheme produces. The file was left exactly as
+found — not deleted, truncated, or modified by this correction, since it is
+the operator's data and is itself the evidence. See Limitations and
+**REL-015**. `fb-server`
 appends a `joiners.log` to its working directory on every `NICK`, which is why
 every instance was started from a directory under `/tmp/fb-sdl3-audit/task10/`:
 **25** such files exist there (one per server instance, the 24 matrix rows plus
@@ -378,7 +410,11 @@ belongs to an earlier task, not this one.
 No Task 10 candidate remains open. Every candidate this gate raised reached a
 terminal state:
 
-- Promoted to new IDs: **BUG-049**, **BUG-050**, **IMP-024**.
+- Promoted to new IDs: **BUG-049**, **BUG-050**, **IMP-024**. Fix Round 1 adds
+  a fourth: **REL-015** — `fb-server` has no way to relocate its stats-file
+  path away from `$HOME`, which is what let this gate's own runs read and
+  write the operator's real stats file undetected; see Confirmed findings and
+  Limitations.
 - Recorded by extending an existing entry rather than allocating a new ID:
   **BUG-015** (first runtime reproduction — `StartGame()` returns true on a
   server rejection), **BUG-005** (entanglement with BUG-049 recorded; its second
@@ -452,7 +488,7 @@ The enumerated open-player list has exactly **1** entry; `free:` says **3**;
 excluding the requester itself the correct value is **0**. `games_open` is
 computed at `game.c:158` and never emitted, so the field that would have made
 the message self-consistent is discarded. Severity is Low because
-`NetworkClient::ParseListResponse` (`src/networkclient.cpp:1306-1360`) never
+`NetworkClient::ParseListResponse` (`src/networkclient.cpp:1307-1360`) never
 reads `free:` — the shipped client builds its lobby entirely from the
 enumerated list, which is correct — so the impact is confined to third-party or
 legacy clients and to operators reading server output.
@@ -474,6 +510,47 @@ clamp to `MAX_PLAYERS_PER_GAME` and log it, so the created room's cap always
 either matches the request or is refused. *Assertion for a future test:*
 `CREATE r 21` must not produce a room whose advertised cap is 5 while the reply
 is `OK`. *Matrix:* Linux and macOS.
+
+### New reliability/deployment defect (Fix Round 1)
+
+**REL-015 — Medium. `fb-server` derives its stats-file path from `$HOME`
+unconditionally, with no flag, no cwd-relative fallback, and no override
+other than `HOME` itself, making sandboxed or CI testing of the server
+structurally unsafe against the operator's real host state.**
+`stats_init()` (`server/stats.c:82-91`) reads `getenv("HOME")` and, if set,
+builds `stats_file_path` as `<HOME>/.fb-server/stats.dat`, falling back to
+`/var/lib/fb-server/stats.dat` only when `HOME` is unset. Unlike
+`joiners.log`, which is opened relative to the process's current working
+directory and is therefore isolated by `cd`-ing into a scratch directory
+before launch, this path is independent of `chdir()` — no amount of working-
+directory isolation touches it. This gate's own `run_case.sh` `cd`s into a
+per-case scratch directory before every launch but never sets `HOME`, so all
+**24** `fb-server` instances it started inherited the operator's real `$HOME`
+and read from, and wrote to, the real `/Users/dchau/.fb-server/stats.dat`.
+
+*Reproduction/verification.* `git show
+09d6c7bfcd864a0ad3951b87d16a88dc770392a3:server/stats.c` confirms the
+unconditional `getenv("HOME")` derivation at the pinned baseline, unchanged
+from what shipped. `grep -n HOME /tmp/fb-sdl3-audit/task10/run_case.sh`
+matches nothing. The real file's mtime, `2026-07-29T15:48:29Z`, is the same
+second as the last matrix row's server log
+(`c22-shutdown.server.log`, `2026-07-29T15:48:29Z`), and its content contains
+nick prefixes (`ml3_00`, `ml4_02`, `5d_03`, `5c_00`, `5t_00`, `10_08`,
+`20_00`, `6_04`, `2_00`, `rc_01`, `2sd_00`, `2r3_00`, `ml2_00`, `ml5_00`,
+`6d_00`) that only this gate's own `scenario.py` nick-generation scheme
+produces. No flag, cwd-relative path, or environment variable other than
+`HOME` exists anywhere in `server/stats.c` to redirect this file.
+
+*Consequence.* Any sandboxed, containerized, or CI run of `fb-server` that
+does not separately override `HOME` will silently read and write the
+invoking user's real stats file, with no crash, error, or log message
+distinguishing a test run's writes from a real deployment's — exactly what
+happened here, undetected until independent review.
+
+*Fix shape (not applied — this audit changes no production source).* Add a
+`--stats-file <path>` flag, honor a dedicated environment variable
+independent of `HOME`, or default to a cwd-relative path the way
+`joiners.log` already behaves.
 
 ### Extensions to existing entries
 
@@ -546,7 +623,7 @@ Runtime coverage delivered, by subsystem:
 | Server protocol (Task 3) | Greeting, `NICK`, `CREATE`, `JOIN`, `SETOPTIONS`, `START`, `OK_GAME_START`, `LIST`, `PART`, binary relay, synthesized `l`, seat allocation, admission caps, room teardown, `SIGTERM` exit — with sanitizers on |
 | Network client (Task 4) | The production `networkclient.cpp` object over a real socket: connect/greeting, command correlation, `LIST` parsing including the `:N` cap suffix, leader detection, `PART`, disconnect, refused-connect probe |
 | Gameplay (Task 5) | Task 5's production-object harness re-run under ASan+UBSan; three consecutive rounds and per-round stats/readiness exercised on the wire |
-| Lobby/settings/input (Task 6) | Preference-path isolation proven before any client ran; room lifecycle transitions (create → join → part → rejoin → close) driven end to end |
+| Lobby/settings/input (Task 6) | Preference-path isolation proven before any client ran; room lifecycle transitions (create → join → part → rejoin → close) driven end to end **at the wire-protocol level, by this gate's own harness — not through the `mainmenu_netpanel.cpp` UI Task 6 owns, which Limitation 5 records as never exercised** |
 | Render/audio (Task 7) | Only indirectly: the client started, created a software renderer and shut down with no diagnostic. Visual and audio observation was not performed |
 | Platform ports (Task 8) | Native macOS only. No WASM, Android or Windows runtime |
 | Build/release (Task 9) | The Task 2 sanitizer and Release trees were re-used unchanged and both produced working binaries |
@@ -605,13 +682,30 @@ Runtime coverage delivered, by subsystem:
 10. **The 21-seat case is a server-side probe.** `CREATE r 21` cannot be produced
     by the shipped client, so IMP-024's row measures the server's protocol
     contract, not a reachable user action.
+11. **The server's stats file was not isolated, and this was not caught until
+    independent review (Fix Round 1).** `server/stats.c:82-91`'s `stats_init()`
+    derives `stats_file_path` from `getenv("HOME")` unconditionally, a
+    mechanism entirely independent of the server's working directory. This
+    gate's isolation strategy — `cd`-ing each `fb-server` instance into its own
+    scratch directory — correctly isolated `joiners.log`, which *is*
+    cwd-relative, but does nothing for the stats file, and `run_case.sh` never
+    set `HOME` for any of its **24** launches. Every one of them therefore read
+    from and wrote to the operator's real `/Users/dchau/.fb-server/stats.dat`.
+    This is registered as **REL-015**: `fb-server` offers no flag,
+    cwd-relative path, or `HOME`-independent environment override to relocate
+    this file, which makes sandboxed or CI testing of the server structurally
+    unsafe against a real host's state. The real file was left exactly as
+    found — not deleted, truncated, or modified — because it is the operator's
+    data and is itself the forensic evidence for this limitation.
 
 ## Gate conclusion
 
-Complete, with the executed/limitation split stated above: **28** of the 38
+Complete, with the executed/limitation split stated above: **31** of the 41
 recorded matrix rows were executed and **10** were recorded as not performed —
 six of them because the user restricted security-specific runtime testing, four
-because no display, audio device or input-injection path existed.
+(the split former row 38: clear-win banner and sound, spectator pinning,
+>5-player paging, malus/attack visuals) because no display, audio device or
+input-injection path existed.
 
 Two new defects and one improvement are registered: **BUG-049** (High), a
 deterministically reproduced heap-use-after-free in the server's recursive room
@@ -621,7 +715,11 @@ and that is *silent* in the shipped uninstrumented build; **BUG-050** (Low), a
 missing validation of the `CREATE` room-cap argument. **BUG-015** gains its
 first runtime reproduction, and BUG-005, BUG-013, BUG-021 and BUG-040 gain
 server-side runtime measurements without severity changes. Three candidates were
-dismissed with counter-evidence.
+dismissed with counter-evidence. Fix Round 1 registered a fourth finding,
+**REL-015** (Medium): `fb-server`'s stats-file path is derived from `$HOME`
+unconditionally with no isolation mechanism, and this gate's own 24 server
+launches never set `HOME`, so every one of them read from and wrote to the
+operator's real `~/.fb-server/stats.dat` — see Limitations.
 
 Every dedicated listener, client and harness process this gate started was
 stopped and proven gone: all **24** dedicated ports read free afterwards, and
