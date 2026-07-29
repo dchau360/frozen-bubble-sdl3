@@ -207,9 +207,9 @@ empirically in Dynamic evidence.
   `HighscoreManager` derives `highlevelshistory`/`highscores` from the same
   `prefPath` (`highscoremanager.cpp:225-226`, `:259-260`). On Emscripten that
   path is MEMFS. The only persistent store in the tree is the `fb_nickname`
-  `localStorage` entry, reached by four `EM_ASM` sites — **one read**
-  (`localStorage.getItem`, `mainmenu.cpp:163`) and **three writes**
-  (`localStorage.setItem` at `mainmenu.cpp:264`, `mainmenu_netpanel.cpp:80`,
+  `localStorage` entry, reached by four inline-JS sites — **one `EM_ASM_PTR`
+  read** (`localStorage.getItem`, `mainmenu.cpp:163`) and **three `EM_ASM`
+  writes** (`localStorage.setItem` at `mainmenu.cpp:264`, `mainmenu_netpanel.cpp:80`,
   `mainmenu_input.cpp:1507`). The three writes are what create the persistence;
   the read is what consumes it. That is exactly why the `Keys:Nickname`
   INI read/write is `#ifndef __WASM_PORT__` (`gamesettings.cpp:194-197`,
@@ -978,7 +978,12 @@ No file in Task 8's scope is left pending.
 
 ## Gate conclusion
 
-**Complete.** All eight brief steps executed. The Android release build ran
+**Complete.** All eight brief steps were executed, with the brief Step 5
+WebSocket-proxy connection skipped by direction and two brief Step 6
+requirements (dynamic-library independence; launching the shipped binary from
+a staged/bundle layout) substituted with a harness over the unchanged
+production `platform.cpp.o`/`logger.cpp.o` objects — see Limitations. The
+Android release build ran
 locally to success with zero tracked-file drift and required no restoration; the
 WASM build linked completely against a disposable, port-patched Emscripten copy
 that left the system installation untouched; the packaged-path, logger, and

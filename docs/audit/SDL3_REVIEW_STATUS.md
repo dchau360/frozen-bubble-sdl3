@@ -45,7 +45,7 @@
 | Task 5 | Gameplay rules, board algorithms, and round state | complete (Fix Round 1 added a core invariant ledger and exact maximum-delta production-object evidence) |
 | Task 6 | Lobby, settings, persistence, and input | complete (static review plus isolated-preferences runtime matrix; security runtime and live-server lobby transitions omitted) |
 | Task 7 | Rendering, transitions, fonts, and audio lifecycle | complete (Fix Round 1 corrected BUG-001's leak quantity, BUG-041's trigger set, the pixel-format claim, and IMP-013's attribution; reopened IMP-005's render slice into BUG-043 and registered BUG-044, both reproduced against production objects. Fix Round 2 corrected the `TTFText` instance count Fix Round 1 had misread from a comment — 38 fixed members, not 23 — plus the `MainMenu` texture and `cell()` churn counts, completed the `idleSPButtons` dismissal with a full consequence trace that disproves the proposed indeterminate-rect mechanism, and registered BUG-045, reproduced against the production `ttftext.cpp` object; dummy-driver-only rendering and full-client navigation omissions recorded) |
-| Task 8 | Native, WASM, and Android platform integration | complete (Android release APK built locally with zero tracked-file drift; WASM linked in full against a disposable port-patched Emscripten copy; packaged-path, logger, and preference behavior reproduced against unchanged production objects. Browser runtime, Android device runtime, Linux/Windows execution, whole-program packaged-layout startup, and dynamic-library independence recorded as unavailable, not passed. Fix Round 1 applied seven accepted review findings: BUG-048's occurrence counts and characterization corrected, BUG-046 extended with the version-bump and stale-asset-on-update consequences, REL-008 reassessed High → Medium with two mitigating facts, the coverage bootstrap count corrected 20 → 21, two brief Step 6 substitutions added to Limitations, the `web/index.html` script-tag wording corrected, and a full count sweep that found two wrong quantities of twenty re-derived) |
+| Task 8 | Native, WASM, and Android platform integration | complete (Android release APK built locally with zero tracked-file drift; WASM linked in full against a disposable port-patched Emscripten copy; packaged-path, logger, and preference behavior reproduced against unchanged production objects. Browser runtime, Android device runtime, Linux/Windows execution, whole-program packaged-layout startup, and dynamic-library independence recorded as unavailable, not passed. Fix Round 1 applied seven accepted review findings: BUG-048's occurrence counts and characterization corrected, BUG-046 extended with the version-bump and stale-asset-on-update consequences, REL-008 reassessed High → Medium with two mitigating facts, the coverage bootstrap count corrected 20 → 21, two brief Step 6 substitutions added to Limitations, the `web/index.html` script-tag wording corrected, and a full count sweep that found two wrong quantities of twenty re-derived. Fix Round 2 applied one accepted Important and six accepted Minor findings: the REL-008 "highest-impact" superlative re-anchored to name what actually reaches shipped artifacts, the Fix Round 1 opening summary's review-coverage and attribution wording corrected, the count-sweep enumeration reconciled to its stated eighteen, eleven bundled-command ledger rows split to one command per row with two non-integer exit cells resolved, the gate-conclusion completion claim qualified against its recorded substitutions, the `syncfs` "own body" wording corrected to "own definition", and the WASM nickname read corrected from `EM_ASM` to `EM_ASM_PTR`) |
 | Task 9 | Build, tests, packaging, CI, deployment, tooling, and operations | pending |
 | Task 10 | Cross-subsystem dynamic integration matrix | pending |
 | Task 11 | Complete file coverage and prioritized improvements | pending |
@@ -168,20 +168,22 @@
   [gameplay notebook](subsystems/03-gameplay.md).
 - Task 8 confirmed BUG-046, BUG-047, BUG-048, REL-005 through REL-008, IMP-014
   and IMP-015, and closed the platform side of REL-003, REL-004 and BUG-033 by
-  extension. The highest-impact platform path is REL-008: on macOS every layout
-  except a `.app` bundle falls through to the compile-time `DATA_DIR`, which is
-  the build machine's source `share/`, so a `make install` binary run anywhere
-  else reaches Task 6's reproduced BUG-034 through the failing
-  `VerifyAssetDirectory`. Fix Round 1 established that **no shipped artifact
-  takes that path** — all three desktop release layouts hit a branch that
-  resolves correctly — and reassessed REL-008 from High to Medium accordingly.
-  BUG-048 makes the browser build start from defaults on
-  every page load, and BUG-046's `AssetExtractor.java:106` skip both freezes a
-  partial Android extraction permanently (a version bump does not repair it) and
-  prevents any app update from refreshing an asset whose content changed. Guard
-  selection itself is sound: every
-  Android-only SDL entry point is guarded, the Android source list is set-equal
-  to the native one at 28 files, and a full WASM link plus an
+  extension. REL-008 has the most severe consequence *when reached* — on macOS
+  every layout except a `.app` bundle falls through to the compile-time
+  `DATA_DIR`, which is the build machine's source `share/`, so a `make install`
+  binary run anywhere else reaches Task 6's reproduced BUG-034 through the
+  failing `VerifyAssetDirectory` — but Fix Round 1 established that **no
+  shipped artifact takes that path**: all three desktop release layouts hit a
+  branch that resolves correctly, and REL-008 was reassessed from High to
+  Medium accordingly. The findings that do reach shipped artifacts are
+  BUG-046, whose `AssetExtractor.java:106` skip fires on the normal
+  error-free Android upgrade path of a shipped APK (freezing a partial
+  extraction permanently and never refreshing a changed asset), and BUG-048,
+  which fires on every page load of the WASM build — per `CLAUDE.md` the only
+  platform CI currently ships, since the Linux, macOS, Windows and Android
+  build jobs are disabled with `if: false`. Guard selection itself is sound:
+  every Android-only SDL entry point is guarded, the Android source list is
+  set-equal to the native one at 28 files, and a full WASM link plus an
   `llvm-nm --extern-only` comparison proved the two network-client translation
   units share no `NetworkClient` definition. See the
   [platform notebook](subsystems/06-platform-ports.md).
@@ -517,11 +519,15 @@
 
 ### Task 8 Fix Round 1
 
-An independent review of commit `6c859034` verified the gate extensively and
-re-derived every quantitative claim; all matched except the two corrected below.
-Two Important and five Minor findings were raised. **All seven were accepted;
-none was disputed.** Every one was re-verified against the real files and the
-retained artifacts before being applied.
+An independent review of commit `6c859034` raised two Important and five Minor
+findings, one of which called for a full count sweep. **All seven were
+accepted; none was disputed**, and every one was re-verified against the real
+files and the retained artifacts before being applied. Of the two quantitative
+corrections below, the review itself directly re-derived the `syncfs`/
+`localStorage` occurrence counts; the recursive submodule count (37 → 38) was
+not one of the review's findings — it was found afterward by the implementer's
+own follow-up count sweep (2026-07-29T02:11:10Z, row below), which the review's
+fifth Minor finding had called for.
 
 - **BUG-048's occurrence counts were wrong, and the evidence never measured
   them.** The gate stated a "single `syncfs` occurrence" and a "single
@@ -586,18 +592,21 @@ retained artifacts before being applied.
 - **Count sweep for the Important-1 error class.** Every occurrence, site, and
   instance count in the four Task 8 documents was re-derived with a command that
   actually measures the claim. Twenty quantities were re-derived; **eighteen
-  reproduced exactly** — the nine guard-token counts (91/26/22/2/2/1/1/0/0), the
-  source lists (27 explicit + 1 = 28 native / 29 Emscripten, Android 28
-  set-equal, Emscripten file 15 omitting exactly the 14 named), 7 `iconv`
-  matches, 0 live `catch` handlers, 3,352 preloaded files all under `/share/`
-  against 3,352 on disk, the APK's 37,290,226 bytes and 13 `.so` per ABI and
-  819,904 + 1,846,824 = 2,666,728 redundant bytes, the 62/30/8 `llvm-nm`
-  intersection with 0 `NetworkClient::` symbols in both, 29 compiled objects, 16
-  warnings in 5 families, `TOTAL_MEMORY` ×4 vs `INITIAL_MEMORY` ×1 on the
-  generated link line, 97/97 symlinks, 11 SDL Java files, 4 iniparser files, 4
-  gitlinks, 134 tracked `android/` paths of which 33 are regular files, 116
-  vendored coverage rows, 147 coverage rows updated, 237 total rows, 78 unique
-  IDs, and the single baked `DATA_DIR` literal. **Two were wrong**: the
+  reproduced exactly** — counted as one item each: (1) the nine guard-token
+  counts (91/26/22/2/2/1/1/0/0), (2) the source lists (27 explicit + 1 = 28
+  native / 29 Emscripten, Android 28 set-equal, Emscripten file 15 omitting
+  exactly the 14 named), (3) 7 `iconv` matches, (4) 0 live `catch` handlers,
+  (5) 0 `META-INF` v1 signature entries, (6) 3,352 preloaded files all under
+  `/share/` against 3,352 on disk, (7) the APK's 37,290,226 bytes and 13 `.so`
+  per ABI and 819,904 + 1,846,824 = 2,666,728 redundant bytes, (8) the 62/30/8
+  `llvm-nm` intersection with 0 `NetworkClient::` symbols in both, (9) 29
+  compiled objects, (10) 16 warnings in 5 families, (11) `TOTAL_MEMORY` ×4 vs
+  `INITIAL_MEMORY` ×1 on the generated link line, (12) 97/97 symlinks, (13) 11
+  SDL Java files, (14) 4 iniparser files, (15) 4 gitlinks, (16) 134 tracked
+  `android/` paths of which 33 are regular files, (17) the FILE_COVERAGE.md
+  inventory-equality check as a single re-derivation (116 vendored coverage
+  rows, 147 coverage rows updated, 237 total rows, 78 unique IDs), and (18) the
+  single baked `DATA_DIR` literal. **Two were wrong**: the
   `syncfs`/`localStorage` counts above, and the recursive submodule count,
   recorded as 37 and re-derived as **38** — the undercount is `plutovg`, which
   appears at two paths (`SDL3_ttf/external/plutovg` and
@@ -1063,26 +1072,79 @@ Task 6, and Task 7.
 | 2026-07-29 (Task 8 Step 7; exact time not captured) | <code>for f in dictionary.c dictionary.h iniparser.c iniparser.h; do cmp -s android/app/jni/iniparser/$f third_party/iniparser/$f; done</code> | 0 | All **4** report identical at this gate, not merely at bootstrap. They are compiled by two different targets (`iniparser` vs `iniparser-static`), so the copies can drift silently — Task 9 dependency boundary | [Vendored boundary](subsystems/06-platform-ports.md#dynamic-evidence) |
 | 2026-07-29 (Task 8 Step 7; exact time not captured) | <code>shasum -a 256 -c /tmp/fb-sdl3-audit/task8/real-prefs-baseline.txt</code> | 0 | All three real preference files reported `OK`; the user's preferences were never modified by this gate | [Task 8 limitations](subsystems/06-platform-ports.md#limitations) |
 | 2026-07-29 (Task 8 ledger; exact time not captured) | <code>git diff --stat 09d6c7bfcd864a0ad3951b87d16a88dc770392a3 -- src server android web cmake CMakeLists.txt CMakeListsEmscripten.txt</code> | 0 | No output; production source, the Android project, the web shell, and every build file remain identical to the pinned baseline after the Android and WASM builds | Audit baseline above |
-| 2026-07-29T02:11:02Z | <code>grep -o localStorage build-audit-wasm/frozen-bubble-sdl3.js &#124; wc -l</code>; same for <code>syncfs</code> and <code>IDBFS</code> | 0 | **`localStorage` 4, `syncfs` 4, `IDBFS` 0.** Corrects the "single occurrence" claims: the Step 5 evidence had reported first-occurrence indices only. `IDBFS` 0 confirms the original absence result | [BUG-048](subsystems/06-platform-ports.md#confirmed-findings) |
+| 2026-07-29T02:11:02Z | <code>grep -o localStorage build-audit-wasm/frozen-bubble-sdl3.js &#124; wc -l</code> | 0 | **`localStorage` 4.** Corrects the "single occurrence" claim: the Step 5 evidence had reported only the first-occurrence index | [BUG-048](subsystems/06-platform-ports.md#confirmed-findings) |
+| 2026-07-29T02:11:02Z | <code>grep -o syncfs build-audit-wasm/frozen-bubble-sdl3.js &#124; wc -l</code> | 0 | **`syncfs` 4.** Corrects the "single occurrence" claim the same way | [BUG-048](subsystems/06-platform-ports.md#confirmed-findings) |
+| 2026-07-29T02:11:02Z | <code>grep -o IDBFS build-audit-wasm/frozen-bubble-sdl3.js &#124; wc -l</code> | 0 | **`IDBFS` 0.** Confirms the original absence result | [BUG-048](subsystems/06-platform-ports.md#confirmed-findings) |
 | 2026-07-29T02:11:02Z | <code>grep -o 'localStorage&#92;.[a-zA-Z]*' build-audit-wasm/frozen-bubble-sdl3.js &#124; sort &#124; uniq -c</code> | 0 | `1 localStorage.getItem`, `3 localStorage.setItem`. The `ASM_CONSTS` keys are 626508 (get) and 626690 / 626749 / 626808 (set); all four are `fb_nickname`. **The three writes create the persistence** — the finding's "the `fb_nickname` `EM_ASM` read" characterization is corrected | [BUG-048](subsystems/06-platform-ports.md#confirmed-findings) |
-| 2026-07-29T02:11:10Z | <code>grep -o 'FS&#92;.syncfs&#92;&#124;mount&#92;.type&#92;.syncfs&#92;&#124;syncfs(' build-audit-wasm/frozen-bubble-sdl3.js &#124; sort &#124; uniq -c</code> | 0 | `1 syncfs(` (the method definition), `1 FS.syncfs` (inside its own in-flight warning string), `2 mount.type.syncfs` (the guard and the dispatch). All four occurrences are inside `FS.syncfs`'s own body, so **no `FS.syncfs(` invocation exists anywhere** and the API is never entered — BUG-048's conclusion stands on a measurement that supports it | [BUG-048](subsystems/06-platform-ports.md#confirmed-findings) |
+| 2026-07-29T02:11:10Z | <code>grep -o 'FS&#92;.syncfs&#92;&#124;mount&#92;.type&#92;.syncfs&#92;&#124;syncfs(' build-audit-wasm/frozen-bubble-sdl3.js &#124; sort &#124; uniq -c</code> | 0 | `1 syncfs(` (the method definition), `1 FS.syncfs` (inside its own in-flight warning string), `2 mount.type.syncfs` (the guard and the dispatch). All four occurrences are inside `FS.syncfs`'s own definition, so **no `FS.syncfs(` invocation exists anywhere** and the API is never entered — BUG-048's conclusion stands on a measurement that supports it | [BUG-048](subsystems/06-platform-ports.md#confirmed-findings) |
 | 2026-07-29T02:11:10Z | <code>for f in build-audit-wasm/frozen-bubble-sdl3.html web/shell.html; do for t in IDBFS syncfs localStorage indexedDB; do …; done; done</code> | 0 | All eight counts **0**. Neither the generated page nor the custom shell introduces a persistent mount, so the artifact set as a whole has no persistence path beyond `fb_nickname` | [BUG-048](subsystems/06-platform-ports.md#dynamic-evidence) |
-| 2026-07-29T02:11:10Z | <code>git submodule status --recursive &#124; wc -l</code> and <code>&#124; grep -c '^-'</code> | 0 / 1 | **38** entries, **0** uninitialized. Corrects the 37 recorded at 01:16:21Z; <code>&#124; awk '{print $1}' &#124; sort &#124; uniq -d</code> shows the cause — commit `3e6f922f` appears twice, as `SDL3_ttf/external/plutovg` and `SDL3_ttf/external/plutosvg/plutovg`. No conclusion changes: the build still ran against fully materialized sources | [Vendored boundary](subsystems/06-platform-ports.md#dynamic-evidence) |
+| 2026-07-29T02:11:10Z | <code>git submodule status --recursive &#124; wc -l</code> | 0 | **38** entries. Corrects the 37 recorded at 01:16:21Z | [Vendored boundary](subsystems/06-platform-ports.md#dynamic-evidence) |
+| 2026-07-29T02:11:10Z | <code>git submodule status --recursive &#124; grep -c '^-'</code> | 1 | **0** uninitialized (`grep -c` exits 1 because the pattern matches zero lines) | [Vendored boundary](subsystems/06-platform-ports.md#dynamic-evidence) |
+| 2026-07-29T02:11:10Z | <code>git submodule status --recursive &#124; awk '{print $1}' &#124; sort &#124; uniq -d</code> | 0 | Shows the cause of the 37→38 discrepancy: commit `3e6f922f` appears twice, as `SDL3_ttf/external/plutovg` and `SDL3_ttf/external/plutosvg/plutovg`. No conclusion changes: the build still ran against fully materialized sources | [Vendored boundary](subsystems/06-platform-ports.md#dynamic-evidence) |
 | 2026-07-29T02:11:12Z | <code>awk -F'&#124;' '/^&#124; `/{if (tolower($4) ~ /pending/) c++} END{print c}' docs/audit/FILE_COVERAGE.md</code> | 0 | **21** rows carry a pending disposition (20 `Pending review` + `CMakeLists.txt`'s `Baseline exercised; static review pending`); the gate column of all 21 is `Task 9`. Corrects the coverage header's 20 | [FILE_COVERAGE.md](FILE_COVERAGE.md) |
 | 2026-07-29T02:11:33Z | <code>for t in __WASM_PORT__ __ANDROID__ _WIN32 __linux__ __MINGW32__ __ANDROID_PORT__ __APPLE__ __EMSCRIPTEN__ WIN32; do grep -rho "&#92;b$t&#92;b" src/ &#124; wc -l; done</code> | 0 | Re-derived unchanged: 91, 26, 22, 2, 2, 1, 1, 0, 0. Count sweep — guard inventory verified | [Guard inventory](subsystems/06-platform-ports.md#static-review) |
-| 2026-07-29T02:11:33Z | <code>grep -rn iconv src/ &#124; wc -l</code> and <code>grep -rho iconv src/ &#124; wc -l</code> | 0 | Both **7** — lines and occurrences coincide here, so the recorded "7 hits" measures what it claims. Count sweep — no correction needed | [IMP-015](subsystems/06-platform-ports.md#confirmed-findings) |
-| 2026-07-29T02:11:33Z | <code>grep -rn 'SDL_GetAndroid&#92;&#124;SDL_SendAndroidMessage&#92;&#124;SDL_IsAndroidTV&#92;&#124;SDL_ShowAndroid' src/ &#124; wc -l</code> vs the <code>grep -rho</code> form | 0 | 11 lines vs **12** name occurrences: the comment at `networkclient.cpp:1612` names two. Of the 11 lines, **9 are call sites** and 2 are comments (`networkclient.cpp:1612`, `mainmenu_panels.cpp:390`); all 9 call sites sit inside `#ifdef __ANDROID__`. Count sweep — the row's wording is tightened, the conclusion is unchanged | [Guard inventory](subsystems/06-platform-ports.md#static-review) |
-| 2026-07-29T02:11:33Z | <code>python3 -c "…count filename: entries and remote_package_size in frozen-bubble-sdl3.js…"</code> and <code>find share -type f &#124; wc -l</code> | 0 | **3,352** `filename:` entries, **3,352** of them under `/share/`, `remote_package_size` 23,647,363, and **3,352** files on disk. Count sweep — re-derived unchanged | [WASM evidence](subsystems/06-platform-ports.md#dynamic-evidence) |
-| 2026-07-29T02:11:33Z | <code>stat -f%z</code> the APK, <code>unzip -l … &#124; grep -c "lib/$a/.*&#92;.so"</code> per ABI, and an <code>awk</code> sum of the two library sizes | 0 | 37,290,226 bytes; **13** `.so` in each of the three ABIs; libpng 819,904 + libvorbisenc 1,846,824 = **2,666,728**. Count sweep — re-derived unchanged | [IMP-014](subsystems/06-platform-ports.md#dynamic-evidence) |
-| 2026-07-29T02:11:33Z | <code>grep -o TOTAL_MEMORY … /wasm-doccmd/CMakeFiles/frozen-bubble-sdl3.dir/link.txt &#124; wc -l</code> and the `INITIAL_MEMORY` form | 0 | **4** and **1** on the generated link line. Count sweep — the ×4 / ×1 claim is measured, not inferred from the one occurrence each in `cmake/Emscripten.cmake:33` and `CMakeLists.txt:116` | [Dismissed candidates](subsystems/06-platform-ports.md#dismissed-candidates) |
-| 2026-07-29T02:11:33Z | <code>find build-audit-wasm -name '*.cpp.o' &#124; wc -l</code>; <code>grep -o '&#91;-W&#91;a-z-&#93;*&#93;' wasm-build.log &#124; sort &#124; uniq -c</code>; <code>grep -c 'warning:'</code> | 0 | **29** objects; **16** warnings in **5** families (7 / 4 / 2 / 2 / 1). Count sweep — re-derived unchanged | [WASM evidence](subsystems/06-platform-ports.md#dynamic-evidence) |
-| 2026-07-29T02:11:33Z | <code>git ls-files -s android/app/jni/include/</code>, <code>ls org/libsdl/app/</code>, <code>ls android/app/jni/iniparser/</code>, <code>git ls-files -s android &#124; awk '$1=="160000"'</code>, <code>git ls-files android</code> | 0 | 97 tracked entries, **97** of mode `120000`; **11** SDL Java files; **4** iniparser files; **4** gitlinks; **134** tracked `android/` paths. Count sweep — re-derived unchanged | [Vendored boundary](subsystems/06-platform-ports.md#dynamic-evidence) |
-| 2026-07-29T02:11:33Z | <code>wc -l</code> on the retained `nc-native-ext.syms` / `nc-wasm-ext.syms` / `nc-dup-ext.syms` and <code>grep -c NetworkClient</code> on the intersection | 0 / 1 | **62**, **30**, intersection **8**, and **0** `NetworkClient` symbols in the intersection. Count sweep — re-derived unchanged | [Source-list parity](subsystems/06-platform-ports.md#dynamic-evidence) |
+| 2026-07-29T02:11:33Z | <code>grep -rn iconv src/ &#124; wc -l</code> | 0 | **7** lines. Count sweep — measures the same thing the finding claims | [IMP-015](subsystems/06-platform-ports.md#confirmed-findings) |
+| 2026-07-29T02:11:33Z | <code>grep -rho iconv src/ &#124; wc -l</code> | 0 | **7** occurrences — coincides with the line count, so the recorded "7 hits" measures what it claims; no correction needed | [IMP-015](subsystems/06-platform-ports.md#confirmed-findings) |
+| 2026-07-29T02:11:33Z | <code>grep -rn 'SDL_GetAndroid&#92;&#124;SDL_SendAndroidMessage&#92;&#124;SDL_IsAndroidTV&#92;&#124;SDL_ShowAndroid' src/ &#124; wc -l</code> | 0 | **11** matching lines | [Guard inventory](subsystems/06-platform-ports.md#static-review) |
+| 2026-07-29T02:11:33Z | <code>grep -rho 'SDL_GetAndroid&#92;&#124;SDL_SendAndroidMessage&#92;&#124;SDL_IsAndroidTV&#92;&#124;SDL_ShowAndroid' src/ &#124; wc -l</code> | 0 | **12** name occurrences: the comment at `networkclient.cpp:1612` names two. Of the 11 lines, **9 are call sites** and 2 are comments (`networkclient.cpp:1612`, `mainmenu_panels.cpp:390`); all 9 call sites sit inside `#ifdef __ANDROID__`. Count sweep — the row's wording is tightened, the conclusion is unchanged | [Guard inventory](subsystems/06-platform-ports.md#static-review) |
+| 2026-07-29T02:11:33Z | <code>python3 -c "…count filename: entries and remote_package_size in frozen-bubble-sdl3.js…"</code> | 0 | **3,352** `filename:` entries, all under `/share/`, `remote_package_size` 23,647,363. Count sweep — re-derived unchanged | [WASM evidence](subsystems/06-platform-ports.md#dynamic-evidence) |
+| 2026-07-29T02:11:33Z | <code>find share -type f &#124; wc -l</code> | 0 | **3,352** files on disk, matching the preloaded count | [WASM evidence](subsystems/06-platform-ports.md#dynamic-evidence) |
+| 2026-07-29T02:11:33Z | <code>stat -f%z android/app/build/outputs/apk/release/app-release-unsigned.apk</code> | 0 | **37,290,226** bytes. Count sweep — re-derived unchanged | [IMP-014](subsystems/06-platform-ports.md#dynamic-evidence) |
+| 2026-07-29T02:11:33Z | <code>for a in arm64-v8a armeabi-v7a x86_64; do unzip -l … &#124; grep -c "lib/$a/.*&#92;.so"; done</code> | 0 | **13** `.so` in each of the three ABIs. Count sweep — re-derived unchanged | [IMP-014](subsystems/06-platform-ports.md#dynamic-evidence) |
+| 2026-07-29T02:11:33Z | <code>awk</code> sum of the two redundant library sizes from the `unzip -l` byte column | 0 | libpng 819,904 + libvorbisenc 1,846,824 = **2,666,728**. Count sweep — re-derived unchanged | [IMP-014](subsystems/06-platform-ports.md#dynamic-evidence) |
+| 2026-07-29T02:11:33Z | <code>grep -o TOTAL_MEMORY … /wasm-doccmd/CMakeFiles/frozen-bubble-sdl3.dir/link.txt &#124; wc -l</code> | 0 | **4** occurrences on the generated link line. Count sweep — the ×4 claim is measured, not inferred from the one occurrence in `cmake/Emscripten.cmake:33` | [Dismissed candidates](subsystems/06-platform-ports.md#dismissed-candidates) |
+| 2026-07-29T02:11:33Z | <code>grep -o INITIAL_MEMORY … /wasm-doccmd/CMakeFiles/frozen-bubble-sdl3.dir/link.txt &#124; wc -l</code> | 0 | **1** occurrence on the generated link line. Count sweep — the ×1 claim is measured, not inferred from the one occurrence in `CMakeLists.txt:116` | [Dismissed candidates](subsystems/06-platform-ports.md#dismissed-candidates) |
+| 2026-07-29T02:11:33Z | <code>find build-audit-wasm -name '*.cpp.o' &#124; wc -l</code> | 0 | **29** objects. Count sweep — re-derived unchanged | [WASM evidence](subsystems/06-platform-ports.md#dynamic-evidence) |
+| 2026-07-29T02:11:33Z | <code>grep -o '&#91;-W&#91;a-z-&#93;*&#93;' wasm-build.log &#124; sort &#124; uniq -c</code> | 0 | **16** warnings in **5** families (7 / 4 / 2 / 2 / 1). Count sweep — re-derived unchanged | [WASM evidence](subsystems/06-platform-ports.md#dynamic-evidence) |
+| 2026-07-29T02:11:33Z | <code>grep -c 'warning:' wasm-build.log</code> | 0 | **16** total warning lines, matching the family sum. Count sweep — re-derived unchanged | [WASM evidence](subsystems/06-platform-ports.md#dynamic-evidence) |
+| 2026-07-29T02:11:33Z | <code>git ls-files -s android/app/jni/include/</code> | 0 | 97 tracked entries, **97** of mode `120000`. Count sweep — re-derived unchanged | [Vendored boundary](subsystems/06-platform-ports.md#dynamic-evidence) |
+| 2026-07-29T02:11:33Z | <code>ls android/app/src/main/java/org/libsdl/app/</code> | 0 | **11** SDL Java files. Count sweep — re-derived unchanged | [Vendored boundary](subsystems/06-platform-ports.md#dynamic-evidence) |
+| 2026-07-29T02:11:33Z | <code>ls android/app/jni/iniparser/</code> | 0 | **4** iniparser files. Count sweep — re-derived unchanged | [Vendored boundary](subsystems/06-platform-ports.md#dynamic-evidence) |
+| 2026-07-29T02:11:33Z | <code>git ls-files -s android &#124; awk '$1=="160000"' &#124; wc -l</code> | 0 | **4** gitlinks. Count sweep — re-derived unchanged | [Vendored boundary](subsystems/06-platform-ports.md#dynamic-evidence) |
+| 2026-07-29T02:11:33Z | <code>git ls-files android &#124; wc -l</code> | 0 | **134** tracked `android/` paths. Count sweep — re-derived unchanged | [Vendored boundary](subsystems/06-platform-ports.md#dynamic-evidence) |
+| 2026-07-29T02:11:33Z | <code>wc -l nc-native-ext.syms</code> | 0 | **62**. Count sweep — re-derived unchanged | [Source-list parity](subsystems/06-platform-ports.md#dynamic-evidence) |
+| 2026-07-29T02:11:33Z | <code>wc -l nc-wasm-ext.syms</code> | 0 | **30**. Count sweep — re-derived unchanged | [Source-list parity](subsystems/06-platform-ports.md#dynamic-evidence) |
+| 2026-07-29T02:11:33Z | <code>wc -l nc-dup-ext.syms</code> | 0 | intersection **8**. Count sweep — re-derived unchanged | [Source-list parity](subsystems/06-platform-ports.md#dynamic-evidence) |
+| 2026-07-29T02:11:33Z | <code>grep -c NetworkClient nc-dup-ext.syms</code> | 1 | **0** `NetworkClient` symbols in the intersection (`grep -c` exits 1 because the pattern matches zero lines). Count sweep — re-derived unchanged | [Source-list parity](subsystems/06-platform-ports.md#dynamic-evidence) |
 | 2026-07-29T02:11:33Z | <code>strings build-audit-release/frozen-bubble-sdl3 &#124; grep -c -x '/Users/.*/share'</code> | 0 | **1** — the "single baked literal" claim now rests on a count, not on a one-line grep output. Count sweep — re-derived unchanged | [REL-008](subsystems/06-platform-ports.md#confirmed-findings) |
 | 2026-07-29T02:11:44Z | <code>python3 -c "…extract src/*.cpp from each add_executable/add_library block and compare as sets…"</code> | 0 | Root `CMakeLists.txt` **27** explicit + `${NETWORK_CLIENT_SRC}` → **28** native / **29** Emscripten; `android/app/CMakeLists.txt` **28**, set difference with the native effective set **empty**; `CMakeListsEmscripten.txt` **15**, omitting exactly the **14** files the notebook names and adding `networkclient_wasm.cpp`. Count sweep — re-derived unchanged | [Source-list parity](subsystems/06-platform-ports.md#static-review) |
 | 2026-07-29T02:13:33Z | <code>sed -n '104,108p;115,119p' android/app/src/main/java/org/frozenbubble/AssetExtractor.java</code> | 0 | `extractFile:106` is `if (dest.exists() &amp;&amp; dest.length() &gt; 0) return;` with no content, size, or timestamp comparison, and `extractAll:68-74` rewrites the marker unconditionally afterwards. Confirms both halves of the BUG-046 correction: a version bump re-enters `extractDir`, skips the truncated file again, and re-stamps the marker; and an update refreshes only absent-or-empty paths | [BUG-046](subsystems/06-platform-ports.md#confirmed-findings) |
-| 2026-07-29T02:13:33Z | <code>sed -n '155,163p;75,81p;255,260p' .github/workflows/build.yml</code> and <code>sed -n '49,52p' default.nix</code> | 0 | macOS: `cp -r share "$APP/Resources/share"` into a hand-built `.app` — the layout `platform.cpp:109-121` handles. Linux: assets at `AppDir/usr/share/frozen-bubble` with the binary in `AppDir/usr/bin`. Windows: `cp -r share pkg/` beside the `.exe`. `default.nix:50` configures `-DASSET_PATH="$out/share"`. **No shipped artifact takes REL-008's fall-through path**; severity reassessed High → Medium | [REL-008](subsystems/06-platform-ports.md#confirmed-findings) |
+| 2026-07-29T02:13:33Z | <code>sed -n '155,163p;75,81p;255,260p' .github/workflows/build.yml</code> | 0 | macOS: `cp -r share "$APP/Resources/share"` into a hand-built `.app` — the layout `platform.cpp:109-121` handles. Linux: assets at `AppDir/usr/share/frozen-bubble` with the binary in `AppDir/usr/bin`. Windows: `cp -r share pkg/` beside the `.exe` | [REL-008](subsystems/06-platform-ports.md#confirmed-findings) |
+| 2026-07-29T02:13:33Z | <code>sed -n '49,52p' default.nix</code> | 0 | `default.nix:50` configures `-DASSET_PATH="$out/share"`. **No shipped artifact takes REL-008's fall-through path**; severity reassessed High → Medium | [REL-008](subsystems/06-platform-ports.md#confirmed-findings) |
 | 2026-07-29T02:13:33Z | <code>grep -n '&lt;script' web/index.html</code> | 0 | Two tags: an inline block opening at `:89` (closing at `:135`) and the external `:136` `frozen-bubble-sdl2.js`. Corrects "only script tag" to "sole external script tag" in REL-006 | [REL-006](subsystems/06-platform-ports.md#confirmed-findings) |
+
+### Task 8 Fix Round 2
+
+An independent re-review of commit `90c3b8c7` approved the gate's substance —
+every corrected and re-derived quantity from Fix Round 1 reproduced exactly and
+Fix Round 1 introduced no new measurement error — but raised one Important and
+six Minor wording/ledger-hygiene findings. All seven were accepted; none was
+disputed. Verified against the real files: the REL-008 "highest-impact"
+superlative was stale against its own Fix Round 1 downgrade and is re-anchored
+to name the findings that actually reach shipped artifacts (BUG-046, BUG-048);
+the Fix Round 1 opening summary overstated review coverage and misattributed
+the submodule-count correction to the review rather than the implementer's
+follow-up sweep; the count-sweep enumeration named the wrong number of items
+against its stated "eighteen" and omitted the "0 v1 signature entries" item;
+eleven Fix Round 1 ledger rows bundled 2-5 commands under a single exit cell,
+two of them with non-integer "0 / 1" exit values, violating this file's own
+one-command-per-row convention; the gate conclusion's "All eight brief steps
+executed" did not qualify the recorded Step 5/Step 6 substitutions; the
+`syncfs` ledger row said "own body" where the notebook already said the
+accurate "own definition"; and the WASM nickname read was called `EM_ASM`
+where it is `EM_ASM_PTR` (`mainmenu.cpp:162`). FINDINGS.md's line 98 was
+checked against the same EM_ASM claim and found to already read `ASM_CONSTS`
+with no `EM_ASM` string present, so no edit was needed there — the review
+finding did not reproduce against that file's current content.
+
+| 2026-07-29T07:23:00Z | <code>python3 -c "…extract '## ' headings from docs/audit/subsystems/06-platform-ports.md and compare to the ten required, in order…"</code> | 0 | `headings=10 match=True each_once=True` — Scope, Trust boundaries and invariants, Static review, Dynamic evidence, Candidates, Confirmed findings, Dismissed candidates, Coverage, Limitations, Gate conclusion, each exactly once, in order | [06-platform-ports.md](subsystems/06-platform-ports.md) |
+| 2026-07-29T07:23:06Z | <code>test "$(awk -F'&#96;' '/^&#92;&#124; &#96;/ {count++} END {print count+0}' docs/audit/FILE_COVERAGE.md)" = "237" &amp;&amp; python3 -c '…extract path column…' &amp;&amp; diff -u /tmp/fb-sdl3-audit/task1-expected-paths.txt /tmp/fb-sdl3-fixround2-final.txt</code> | 0 | `rows=237 OK inventory-equality OK` — no diff output against the Task 1 cached expected-path set for the pinned tree `09d6c7bf` | [FILE_COVERAGE.md](FILE_COVERAGE.md) |
+| 2026-07-29T07:23:11Z | <code>python3 -c "…extract BUG/SEC/REL/IMP IDs from FINDINGS.md and check uniqueness and per-class contiguity from 1…"</code> | 0 | `total=78 unique=78 contiguous_all=True counts={'IMP': 15, 'BUG': 48, 'SEC': 7, 'REL': 8}` — no ID recycled or renumbered | [FINDINGS.md](FINDINGS.md) |
+| 2026-07-29T07:23:15Z | <code>python3 -c "…split every &#96;&#124; 2026-…&#96; command-table row on '&#124;' and check 7 cells and an integer exit cell…"</code> | 0 | `rows=474 malformed=0 bad_exit=0` — every command-table row in `SDL3_REVIEW_STATUS.md` has exactly 7 pipe-separated cells (no unescaped `&#124;`) and a single-integer exit cell, after this round's row-splitting | [SDL3_REVIEW_STATUS.md](SDL3_REVIEW_STATUS.md) |
+| 2026-07-29T07:23:19Z | <code>grep -c '^- Exact next action:' docs/audit/SDL3_REVIEW_STATUS.md</code> | 0 | **1** — this file's line-35 exact-next-action bullet appears exactly once | [SDL3_REVIEW_STATUS.md](SDL3_REVIEW_STATUS.md) |
+| 2026-07-29T07:23:19Z | <code>grep -c "^&#124; Task 8 &#124;" docs/audit/SDL3_REVIEW_STATUS.md</code> | 0 | **1** — the Task 8 gate row appears exactly once and reads `complete (...)` with the Fix Round 2 summary appended | [SDL3_REVIEW_STATUS.md](SDL3_REVIEW_STATUS.md) |
+| 2026-07-29T07:23:24Z | <code>git diff --stat 09d6c7bfcd864a0ad3951b87d16a88dc770392a3 -- src server android web cmake tools tests third_party CMakeLists.txt CMakeListsEmscripten.txt .github</code> | 0 | No output; production source, the Android project, the web shell, and every build file remain identical to the pinned baseline after Fix Round 2's doc-only edits | Audit baseline above |
+| 2026-07-29T07:23:24Z | <code>git diff --check</code> | 0 | No output; no whitespace/conflict-marker defect in the Fix Round 2 diff | Fix Round 2 diff |
 
 ## Limitations
 
