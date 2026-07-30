@@ -11,8 +11,8 @@ android {
         minSdk 21
         targetSdk 34
         ndkVersion "25.2.9519653"
-        versionCode 13
-        versionName "2.4.30"
+        versionCode 14
+        versionName "2.4.31"
 
         externalNativeBuild {
             cmake {

@@ -1,5 +1,17 @@
 # Changelog
 
+## v2.4.31
+
+- **macOS download is now labelled by architecture** — the macOS build is Apple Silicon only, but shipped as `frozen-bubble-macos.dmg` with nothing saying so, and Intel Macs downloaded an app that could not launch. It is now `frozen-bubble-macos-arm64.dmg`, and the build fails rather than publishing if the binary is not the architecture the name claims. Intel Macs can build from source or play in the browser.
+- **The version shown in-game is correct again** — the settings screen read v2.4.26 regardless of which release you were running. The version now comes from one place and matches the build on every platform, including the server's startup log.
+- **Windows installer can no longer ship missing libraries** — the packaging step copied a fixed list of DLLs and ignored every failure, so a missing one still produced a working-looking installer that failed on the player's machine. The required libraries are now determined from the program itself, and the build fails if any is missing.
+- **Server survives a busy discovery port** — if anything else was using the LAN discovery port, the server refused to start at all. It now starts, serves games normally, and explains that only broadcast discovery is unavailable.
+- **A real HTTPS certificate is no longer destroyed by the setup script** — the server setup script only recognised older RSA certificates, so a current Let's Encrypt certificate was treated as invalid and overwritten with a self-signed one that browsers reject. It now recognises both, and refuses to overwrite existing certificates outright. Renewal instructions corrected.
+- **Deployment credentials hardened** — the release workflow ran a third-party action from a moving branch while giving it the itch.io publishing credential. It is now pinned to a fixed, reviewed version.
+- **Installed macOS builds find their assets** — a build installed outside an app bundle looked for game files in the directory it was compiled in, and failed anywhere else.
+- **Android build docs match the actual build** — setup instructions described downloading SDL2 libraries by hand; the project builds SDL3 from submodules.
+- **Removed dead SDL2-era files** — 97 broken links and three stale build/documentation files describing a build that no longer exists.
+
 ## v2.4.30
 
 - **Desktop frame pacing fixed** — the frame limiter was measuring the wrong interval, so instead of holding a steady 60 fps it alternated a full-length pause with almost none, delivering frames in short/long pairs at roughly 107 fps. On a 60 Hz display about half of those were drawn and never shown, and the rest arrived out of step with the refresh, which read as stutter. Frames now arrive evenly.
