@@ -100,6 +100,7 @@ FrozenBubble::FrozenBubble() {
 
     // Verify asset directory exists before proceeding
 #ifndef __ANDROID__
+    LogDataDir();
     if (!VerifyAssetDirectory(g_dataDir.c_str())) {
         std::string msg = "Could not find game assets at: " + g_dataDir + "\n\nPlease ensure the game is installed correctly.";
         SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR,

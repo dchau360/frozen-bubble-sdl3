@@ -1,1 +1,0 @@
-/Users/dericchau/ai/fb2-port/frozen-bubble-sdl2/android/app/jni/SDL2_ttf/SDL_ttf.h

@@ -24,6 +24,8 @@
 #elif defined(__linux__)
 #include <unistd.h>
 #include <climits>
+#elif defined(__APPLE__)
+#include <sys/stat.h>   // probing for an installed <prefix>/share/frozen-bubble
 #endif
 
 std::string g_dataDir;
@@ -117,6 +119,22 @@ void InitDataDir() {
                 g_dataDir = b + "share";
                 return;
             }
+            // Not a bundle: an installed build sits at <prefix>/bin, with assets
+            // at <prefix>/share/frozen-bubble (see install(DIRECTORY …) in
+            // CMakeLists.txt). Without this, macOS fell through to the compiled-in
+            // DATA_DIR, which points at the *build machine's* source tree — so an
+            // installed copy resolved assets to a path that does not exist on any
+            // other machine (audit finding REL-008). Linux and Windows already
+            // recover a prefix this way; macOS was the gap.
+            size_t bin = b.rfind("/bin/");
+            if (bin != std::string::npos) {
+                std::string candidate = b.substr(0, bin) + "/share/frozen-bubble";
+                struct stat st;
+                if (stat(candidate.c_str(), &st) == 0 && S_ISDIR(st.st_mode)) {
+                    g_dataDir = candidate;
+                    return;
+                }
+            }
         }
     }
 #elif defined(__linux__)
@@ -136,6 +154,13 @@ void InitDataDir() {
     }
 #endif
     g_dataDir = DATA_DIR;
+}
+
+// Log the resolved directory on every platform, not just Android. When asset
+// loading fails the first question is always which directory was chosen, and
+// on desktop that was previously invisible (audit finding REL-008).
+void LogDataDir() {
+    SDL_Log("Asset data dir: %s", g_dataDir.c_str());
 }
 
 #endif

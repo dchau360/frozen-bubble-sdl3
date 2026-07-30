@@ -1,9 +1,9 @@
 # Based on the template from the sweepr repo: https://github.com/Grazen0/sweepr/blob/main/flake.nix
 {
-  description = "SDL2 C++ Port of Frozen-Bubble 2";
+  description = "SDL3 C++ Port of Frozen-Bubble 2";
 
   inputs = {
-    nixpkgs.url = "github:nixos/nixpkgs/nixos-24.11";
+    nixpkgs.url = "github:nixos/nixpkgs/nixos-26.05";  # 24.11 has no sdl3-ttf or sdl3-mixer
   };
 
   outputs =

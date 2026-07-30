@@ -54,6 +54,9 @@ inline std::string ASSET(const char* relpath) {
 // On Android: extracts APK assets to writable storage on first run.
 // On other platforms: uses DATA_DIR compile-time define.
 void InitDataDir();
+// Logs the resolved g_dataDir; call after InitDataDir() so asset-load failures
+// say which directory was actually chosen.
+void LogDataDir();
 
 #ifdef __WASM_PORT__
 // True when the browser reports touch capability (phones/tablets).

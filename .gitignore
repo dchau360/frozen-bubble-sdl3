@@ -9,7 +9,7 @@ CMakeLists.txt.user
 /result
 
 # Compiled binaries
-/frozen-bubble-sdl2
+/frozen-bubble-sdl3
 
 # Log files
 *.log
@@ -25,9 +25,9 @@ android/app/build/
 android/app/.cxx/
 android/.gradle/
 android/local.properties
-# Embedded git repos in SDL2 dependencies
-android/app/jni/SDL2_mixer/external/ogg/
-android/app/jni/SDL2_mixer/external/vorbis/
+# Embedded git repos in SDL3 dependencies
+android/app/jni/SDL3_mixer/external/ogg/
+android/app/jni/SDL3_mixer/external/vorbis/
 __pycache__/
 # Signing key material must never be committed. See docs/ANDROID_SIGNING.md --
 # the key belongs in a password manager and in repository secrets, not here.
