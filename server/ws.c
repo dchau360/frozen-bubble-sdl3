@@ -17,6 +17,7 @@
 #  include <arpa/inet.h>
 #endif
 
+#include <errno.h>
 #include <stdlib.h>
 #include <string.h>
 #include <stdint.h>
@@ -178,28 +179,54 @@ int ws_detect_and_upgrade(int fd)
 
 /* ── WebSocket frame send (server → client, no masking) ─────────────────── */
 
+/* Returns len when the whole frame reached the socket, -1 otherwise. Callers
+   treat any nonnegative result as "sent it all", so a partial result must never
+   be reported as success: the peer would be left mid-frame and every later
+   frame would be parsed at the wrong offset. */
 ssize_t ws_send(int fd, const char* data, int len)
 {
     /* Max game protocol message is well under 16 KB */
     unsigned char frame[16400];
     int hdr;
+    ssize_t sent;
+
+    if (len < 0)
+        return -1;
+    if (len <= 125)
+        hdr = 2;
+    else if (len <= 65535)
+        hdr = 4;
+    else
+        return -1;  /* shouldn't happen */
+    /* The header states the payload length, so the payload has to be all here.
+       Clamping it to fit while the header still advertises the original length
+       desynchronizes the peer's parser for the rest of the connection; refuse
+       to emit the frame at all instead. */
+    if ((size_t)len > sizeof(frame) - (size_t)hdr)
+        return -1;
+
     frame[0] = 0x82;            /* FIN=1, opcode=2 (binary) — avoids UTF-8 rejection
                                  * of GAME_CAN_START which embeds raw binary player IDs */
-    if (len <= 125) {
+    if (hdr == 2) {
         frame[1] = (unsigned char)len;
-        hdr = 2;
-    } else if (len <= 65535) {
+    } else {
         frame[1] = 126;
         frame[2] = (unsigned char)(len >> 8);
         frame[3] = (unsigned char)(len & 0xFF);
-        hdr = 4;
-    } else {
-        return -1;  /* shouldn't happen */
     }
-    if (len > (int)(sizeof(frame) - (size_t)hdr))
-        len = (int)(sizeof(frame) - (size_t)hdr);
     memcpy(frame + hdr, data, (size_t)len);
-    return send(fd, frame, (size_t)(hdr + len), MSG_NOSIGNAL);
+
+    for (sent = 0; sent < (ssize_t)(hdr + len); ) {
+        ssize_t n = send(fd, frame + sent, (size_t)((ssize_t)(hdr + len) - sent), MSG_NOSIGNAL);
+        if (n > 0) {
+            sent += n;
+            continue;
+        }
+        if (n < 0 && errno == EINTR)
+            continue;
+        return -1;
+    }
+    return len;
 }
 
 /* ── WebSocket frame decode (in-place, client → server) ─────────────────── *
