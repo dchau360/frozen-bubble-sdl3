@@ -83,13 +83,26 @@ void stats_init(void)
 {
     stats_table = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, g_free);
 
-    // Determine stats file path
+    // Determine stats file path.
+    //
+    // FB_SERVER_STATS_FILE takes precedence over $HOME so a sandboxed, CI or
+    // test run can redirect this file without having to fake the whole home
+    // directory. Previously $HOME was the only lever, and because this path is
+    // absolute it is immune to the chdir()-into-a-scratch-directory isolation
+    // that keeps joiners.log contained. The audit's own 24-instance test matrix
+    // consequently read and wrote the operator's real ~/.fb-server/stats.dat
+    // with no error, log line or crash to distinguish test writes from a live
+    // deployment's (audit finding REL-015).
+    const char* explicit_path = getenv("FB_SERVER_STATS_FILE");
     const char* home = getenv("HOME");
-    if (home) {
+    if (explicit_path && *explicit_path) {
+        stats_file_path = g_strdup(explicit_path);
+    } else if (home) {
         stats_file_path = g_strdup_printf("%s/.fb-server/stats.dat", home);
     } else {
         stats_file_path = g_strdup("/var/lib/fb-server/stats.dat");
     }
+    l1(OUTPUT_TYPE_INFO, "Stats file: %s", stats_file_path);
 
     ensure_stats_dir();
 

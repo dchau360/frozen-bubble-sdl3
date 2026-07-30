@@ -764,6 +764,13 @@ static void help(void)
         printf("     -t max_transmission_rate  set the maximum transmission rate, in bytes per second (defaults to %d)\n", DEFAULT_MAX_TRANSMISSION_RATE);
         printf("     -u user                   switch daemon to specified user\n");
         printf("     -z                        set that there is no preferred language for the server (see -a)\n");
+        printf("\n");
+        printf("   Environment:\n");
+        printf("     FB_SERVER_STATS_FILE      path to the persistent stats file; overrides the\n");
+        printf("                               default of $HOME/.fb-server/stats.dat. Set this for\n");
+        printf("                               sandboxed, containerized or CI runs — the default is\n");
+        printf("                               absolute, so running from a scratch directory does\n");
+        printf("                               not isolate it the way it does joiners.log.\n");
 }
 
 static void create_udp_server(void)

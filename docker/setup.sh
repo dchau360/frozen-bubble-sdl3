@@ -18,15 +18,43 @@ cd "$(dirname "$0")"
 CERT=ssl/fullchain.pem
 KEY=ssl/privkey.pem
 
-# Check whether valid PEM files already exist
-cert_ok() { openssl x509 -in "$CERT" -noout 2>/dev/null; }
-key_ok()  { openssl rsa  -in "$KEY"  -check -noout 2>/dev/null; }
+# Check whether valid PEM files already exist.
+#
+# `openssl pkey`, not `openssl rsa`: certbot issues ECDSA keys by default since
+# version 2.0, and `openssl rsa -check` rejects those outright ("Not an RSA
+# key"). The old check therefore classified a perfectly good Let's Encrypt key
+# as invalid and fell through to the self-signed branch below, which truncated
+# both of the operator's real files (audit finding REL-010).
+#
+# Parse-only, without -check: LibreSSL — which is what /usr/bin/openssl is on
+# macOS — does not implement -check for `pkey` and fails it even on a valid RSA
+# key. Parsing is enough to tell a real key from a missing or corrupt one.
+cert_ok() { openssl x509  -in "$CERT" -noout 2>/dev/null; }
+key_ok()  { openssl pkey  -in "$KEY"  -noout 2>/dev/null; }
 
 if cert_ok && key_ok; then
     echo "SSL certificates found — skipping generation."
+elif [ -s "$CERT" ] || [ -s "$KEY" ]; then
+    # Something is there but did not validate. Never overwrite it: these are
+    # the files the operator copied out of /etc/letsencrypt, and regenerating
+    # silently replaced a working public certificate with a self-signed
+    # CN=localhost one that every browser and WASM client rejects.
+    echo ""
+    echo "ERROR: docker/ssl/ already contains certificate material, but it did"
+    echo "       not validate:"
+    [ -s "$CERT" ] && { cert_ok || echo "         $CERT: not a readable X.509 certificate"; }
+    [ -s "$KEY"  ] && { key_ok  || echo "         $KEY: not a readable private key"; }
+    echo ""
+    echo "Refusing to overwrite it — a real certificate would be destroyed."
+    echo "Re-copy it, or move the existing files aside and re-run to generate"
+    echo "a self-signed certificate for local testing:"
+    echo ""
+    echo "    mv $CERT $CERT.bak && mv $KEY $KEY.bak"
+    echo ""
+    exit 1
 else
     echo ""
-    echo "WARNING: No valid SSL certificate found in docker/ssl/"
+    echo "WARNING: No SSL certificate found in docker/ssl/"
     echo "Generating a SELF-SIGNED certificate for local testing."
     echo ""
     echo "Self-signed certificates will NOT work for browser (WASM) clients"

@@ -610,6 +610,14 @@ jobs:
 
   # ────────────────────────────────────────────────────────────────
   # Itch.io — deploy each platform on tag push
+  #
+  # butler-publish-itchio-action is pinned to a commit, not @master. Every one
+  # of these five jobs passes it secrets.BUTLER_CREDENTIALS, so a force-push or
+  # account takeover on that third-party repository's default branch would have
+  # run attacker-chosen code in a job holding the itch.io deploy credential
+  # (audit finding REL-011). A tag would not fix this — tags are mutable too.
+  # 483157eb is what v1.2.0 and master both pointed at when this was pinned, so
+  # the pin changed nothing about what runs. To update, review the diff first.
   # ────────────────────────────────────────────────────────────────
   deploy-itchio-linux:
     name: Deploy Linux to Itch.io
@@ -621,7 +629,7 @@ jobs:
         with:
           name: Linux
           path: dist-linux
-      - uses: josephbmanley/butler-publish-itchio-action@master
+      - uses: josephbmanley/butler-publish-itchio-action@483157ebeeeb440e2fdc9f162f3fcfc27028c0ef  # v1.2.0
         env:
           BUTLER_CREDENTIALS: ${{ secrets.BUTLER_CREDENTIALS }}
           CHANNEL: linux
@@ -640,7 +648,7 @@ jobs:
         with:
           name: macOS
           path: dist-macos
-      - uses: josephbmanley/butler-publish-itchio-action@master
+      - uses: josephbmanley/butler-publish-itchio-action@483157ebeeeb440e2fdc9f162f3fcfc27028c0ef  # v1.2.0
         env:
           BUTLER_CREDENTIALS: ${{ secrets.BUTLER_CREDENTIALS }}
           CHANNEL: osx
@@ -659,7 +667,7 @@ jobs:
         with:
           name: Windows
           path: dist-windows
-      - uses: josephbmanley/butler-publish-itchio-action@master
+      - uses: josephbmanley/butler-publish-itchio-action@483157ebeeeb440e2fdc9f162f3fcfc27028c0ef  # v1.2.0
         env:
           BUTLER_CREDENTIALS: ${{ secrets.BUTLER_CREDENTIALS }}
           CHANNEL: windows
@@ -678,7 +686,7 @@ jobs:
         with:
           name: Android
           path: dist-android
-      - uses: josephbmanley/butler-publish-itchio-action@master
+      - uses: josephbmanley/butler-publish-itchio-action@483157ebeeeb440e2fdc9f162f3fcfc27028c0ef  # v1.2.0
         env:
           BUTLER_CREDENTIALS: ${{ secrets.BUTLER_CREDENTIALS }}
           CHANNEL: android
@@ -697,7 +705,7 @@ jobs:
         with:
           name: WASM
           path: artifact-wasm
-      - uses: josephbmanley/butler-publish-itchio-action@master
+      - uses: josephbmanley/butler-publish-itchio-action@483157ebeeeb440e2fdc9f162f3fcfc27028c0ef  # v1.2.0
         env:
           BUTLER_CREDENTIALS: ${{ secrets.BUTLER_CREDENTIALS }}
           CHANNEL: html5

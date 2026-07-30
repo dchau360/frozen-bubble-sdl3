@@ -168,11 +168,24 @@ cd ~/frozen-bubble-sdl3 && git pull && cd docker && docker compose up --build -d
 Let's Encrypt certificates expire after 90 days. To renew:
 
 ```bash
-cd docker && docker compose down     # free port 80
+cd ~/frozen-bubble-sdl3/docker
+docker compose down                  # free port 80
 sudo certbot renew
-sudo cp /etc/letsencrypt/live/yourdomain.com/fullchain.pem docker/ssl/fullchain.pem
-sudo cp /etc/letsencrypt/live/yourdomain.com/privkey.pem   docker/ssl/privkey.pem
+sudo cp /etc/letsencrypt/live/yourdomain.com/fullchain.pem ssl/fullchain.pem
+sudo cp /etc/letsencrypt/live/yourdomain.com/privkey.pem   ssl/privkey.pem
 ./setup.sh -d
+```
+
+The `cp` destinations are `ssl/…`, relative to `docker/`. They previously read
+`docker/ssl/…`, which does not exist once you have `cd`-ed into `docker` — both
+copies failed, and `./setup.sh -d` then restarted on the *old* certificate.
+Nothing reported this, because the validity check only confirms the file parses,
+not that it is still in date.
+
+Verify the renewal actually took effect before trusting it:
+
+```bash
+openssl x509 -in ssl/fullchain.pem -noout -enddate
 ```
 
 ---
