@@ -387,35 +387,76 @@ jobs:
           convert "$SRC" -resize 160x160 -background "#1A237E" \
             -gravity center -extent 320x180 "$RES/drawable/tv_banner.png"
 
-      - name: Generate release keystore
+      # Android identifies an app by its signing certificate. A keystore
+      # generated here would differ on every run, so each release would be
+      # signed by a different identity and Android would refuse to install it
+      # over the previous one. The key must outlive the workflow, so it comes
+      # from repository secrets. See docs/ANDROID_SIGNING.md to create one.
+      - name: Restore release keystore
+        id: keystore
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
         run: |
-          keytool -genkeypair -v \
-            -keystore android/release.keystore \
-            -alias frozenbubble \
-            -keyalg RSA -keysize 2048 -validity 10000 \
-            -storepass frozenbubble \
-            -keypass frozenbubble \
-            -dname "CN=Frozen Bubble, OU=Game, O=FrozenBubble, L=Unknown, S=Unknown, C=US"
+          if [ -z "$KEYSTORE_B64" ]; then
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::ANDROID_KEYSTORE_BASE64 is not set; building an unsigned APK."
+          else
+            printf '%s' "$KEYSTORE_B64" | base64 --decode > "$RUNNER_TEMP/release.keystore"
+            if [ ! -s "$RUNNER_TEMP/release.keystore" ]; then
+              echo "::error::ANDROID_KEYSTORE_BASE64 did not decode to a usable keystore."
+              exit 1
+            fi
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      # Fail rather than publish an installable-but-unupgradable artifact.
+      - name: Require a persistent signing key for tagged releases
+        if: startsWith(github.ref, 'refs/tags/') && steps.keystore.outputs.present != 'true'
+        run: |
+          echo "::error::A tagged release needs the ANDROID_KEYSTORE_BASE64, \
+          ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS and ANDROID_KEY_PASSWORD \
+          secrets. Without a stable key this APK cannot upgrade an installed one. \
+          See docs/ANDROID_SIGNING.md."
+          exit 1
 
       - name: Build release APK
         working-directory: android
         env:
-          KEYSTORE_PATH: ${{ github.workspace }}/android/release.keystore
-          KEYSTORE_PASSWORD: frozenbubble
-          KEY_ALIAS: frozenbubble
-          KEY_PASSWORD: frozenbubble
+          SIGNED: ${{ steps.keystore.outputs.present }}
+          KEYSTORE_PATH: ${{ runner.temp }}/release.keystore
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
           chmod +x gradlew
-          ./gradlew assembleRelease --no-daemon \
-            -Pandroid.injected.signing.store.file=$KEYSTORE_PATH \
-            -Pandroid.injected.signing.store.password=$KEYSTORE_PASSWORD \
-            -Pandroid.injected.signing.key.alias=$KEY_ALIAS \
-            -Pandroid.injected.signing.key.password=$KEY_PASSWORD
+          if [ "$SIGNED" = "true" ]; then
+            ./gradlew assembleRelease --no-daemon \
+              -Pandroid.injected.signing.store.file="$KEYSTORE_PATH" \
+              -Pandroid.injected.signing.store.password="$KEYSTORE_PASSWORD" \
+              -Pandroid.injected.signing.key.alias="$KEY_ALIAS" \
+              -Pandroid.injected.signing.key.password="$KEY_PASSWORD"
+          else
+            ./gradlew assembleRelease --no-daemon
+          fi
 
       - name: Rename APK
         run: |
-          mv android/app/build/outputs/apk/release/app-release.apk \
-             frozen-bubble-android-tv.apk
+          out=android/app/build/outputs/apk/release
+          # Gradle names the artifact differently depending on whether a
+          # signing config was injected.
+          if [ -f "$out/app-release.apk" ]; then
+            mv "$out/app-release.apk" frozen-bubble-android-tv.apk
+          elif [ -f "$out/app-release-unsigned.apk" ]; then
+            mv "$out/app-release-unsigned.apk" frozen-bubble-android-tv.apk
+          else
+            echo "::error::No release APK found in $out"
+            ls -la "$out" || true
+            exit 1
+          fi
+
+      - name: Delete decoded keystore
+        if: always()
+        run: rm -f "$RUNNER_TEMP/release.keystore"
 
       - uses: actions/upload-artifact@v4
         with:
