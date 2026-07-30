@@ -190,6 +190,15 @@ if(BUILD_TESTING AND NOT EMSCRIPTEN AND NOT ANDROID)
     target_include_directories(roundstats-color-test PRIVATE src)
     add_test(NAME roundstats-color-test COMMAND roundstats-color-test)
 
+    add_executable(teamclamp-test
+        tests/teamclamp_test.cpp
+    )
+    set_property(TARGET teamclamp-test PROPERTY CXX_STANDARD 17)
+    set_property(TARGET teamclamp-test PROPERTY CXX_EXTENSIONS OFF)
+    target_include_directories(teamclamp-test PRIVATE src)
+    target_link_libraries(teamclamp-test PRIVATE SDL3::SDL3)
+    add_test(NAME teamclamp-test COMMAND teamclamp-test)
+
     if(TARGET fb-server)
         add_test(NAME server-list-cap-test
             COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tests/server_list_cap_test.py $<TARGET_FILE:fb-server>)
@@ -200,6 +209,11 @@ if(BUILD_TESTING AND NOT EMSCRIPTEN AND NOT ANDROID)
         add_test(NAME server-udp-probe-test
             COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tests/server_udp_probe_test.py $<TARGET_FILE:fb-server>)
         set_tests_properties(server-udp-probe-test PROPERTIES RUN_SERIAL TRUE)
+        # Both detect the AddressSanitizer regressions they guard, so they skip
+        # on a plain build rather than passing vacuously. Surface that as SKIPPED
+        # instead of a green result that never ran anything.
+        set_tests_properties(server-massleave-test server-udp-probe-test
+            PROPERTIES SKIP_RETURN_CODE 77)
     endif()
 endif()
 

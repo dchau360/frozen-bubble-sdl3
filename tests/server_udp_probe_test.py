@@ -212,5 +212,24 @@ class ServerUdpProbeTest(unittest.TestCase):
                 )
 
 
+CTEST_SKIP_RETURN_CODE = 77
+
+
+def main():
+    """Run the suite, reporting a wholly-skipped run to ctest as a skip.
+
+    unittest exits 0 for a skipped test, which ctest would display as a pass --
+    reading as coverage that never actually ran. Exit 77 instead; CMake maps it
+    to SKIPPED via SKIP_RETURN_CODE.
+    """
+    suite = unittest.TestLoader().loadTestsFromTestCase(ServerUdpProbeTest)
+    result = unittest.TextTestRunner(verbosity=2).run(suite)
+    if result.failures or result.errors:
+        return 1
+    if result.skipped and len(result.skipped) == result.testsRun:
+        return CTEST_SKIP_RETURN_CODE
+    return 0
+
+
 if __name__ == "__main__":
-    unittest.main(argv=sys.argv[:1], verbosity=2)
+    sys.exit(main())
