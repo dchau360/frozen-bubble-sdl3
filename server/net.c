@@ -100,6 +100,11 @@ static int lan_game_mode = 0;
 
 static int tcp_server_socket;
 static int udp_server_socket = -1;
+/* Set once LAN mode has torn down its listeners because a game started. This
+ * is deliberately separate from `udp_server_socket == -1`: that sentinel also
+ * covers "discovery was never available", and the two must not be confused —
+ * the last-client-exit shutdown below is only correct for the retired case. */
+static int lan_listeners_retired = 0;
 
 static int quiet = 0;
 
@@ -233,7 +238,7 @@ void conn_terminated(int fd, char* reason)
                 player_disconnects(fd);
                 recalculate_list_games = 1;
                 interrupt_loop_processing = 1;
-                if (lan_game_mode && g_list_length(new_conns) == 0 && udp_server_socket == -1) {
+                if (lan_game_mode && g_list_length(new_conns) == 0 && lan_listeners_retired) {
                         l0(OUTPUT_TYPE_INFO, "LAN game mode server exiting on last client exit.");
                         exit(EXIT_SUCCESS);
                 }
@@ -688,10 +693,13 @@ void add_prio(int fd)
         conns_prio = g_list_append(conns_prio, GINT_TO_POINTER(fd));
         new_conns = g_list_remove(new_conns, GINT_TO_POINTER(fd));
         prio[fd] = 1;
-        if (lan_game_mode && g_list_length(conns_prio) > 0 && udp_server_socket != -1) {
-                SOCKET_CLOSE(tcp_server_socket);
-                SOCKET_CLOSE(udp_server_socket);
+        if (lan_game_mode && g_list_length(conns_prio) > 0 && !lan_listeners_retired) {
+                if (tcp_server_socket != -1)
+                        SOCKET_CLOSE(tcp_server_socket);
+                if (udp_server_socket != -1)
+                        SOCKET_CLOSE(udp_server_socket);
                 tcp_server_socket = udp_server_socket = -1;
+                lan_listeners_retired = 1;
         }
 }
 
@@ -764,18 +772,37 @@ static void create_udp_server(void)
 
         printf("-l: creating UDP server for answering broadcast server discover, on default port %d\n", DEFAULT_PORT);
 
+        /* Discovery is a convenience, not a precondition for serving games:
+         * clients can always connect by address. Failing to open it must not
+         * take the whole server down. It previously called exit(EXIT_FAILURE),
+         * so a single stale process holding UDP 1511 — an orphaned test server,
+         * or a second copy of this one — killed every subsequent `fb-server -l`
+         * on the host at startup, including start-server.sh and the client's
+         * own StartLocalServer path (audit finding REL-002).
+         *
+         * The port itself stays fixed: the client broadcasts to 1511
+         * unconditionally (src/networkclient.cpp), so it is a well-known port
+         * rather than something -p may move. */
         udp_server_socket = socket(AF_INET, SOCK_DGRAM, 0);
         if (udp_server_socket < 0) {
-                perror("socket");
-                exit(EXIT_FAILURE);
+                l1(OUTPUT_TYPE_ERROR, "-l: could not create the LAN discovery socket (%s). "
+                   "Continuing without broadcast discovery; clients must connect by address.",
+                   strerror(errno));
+                return;
         }
 
         server_addr.sin_family = AF_INET;
         server_addr.sin_addr.s_addr = htonl(INADDR_ANY);
         server_addr.sin_port = htons(DEFAULT_PORT);
         if (bind(udp_server_socket, (struct sockaddr *) &server_addr, sizeof(server_addr)) < 0) {
-                perror("bind UDP 1511");
-                exit(EXIT_FAILURE);
+                l4(OUTPUT_TYPE_ERROR, "-l: could not bind UDP port %d for LAN discovery (%s). "
+                   "Another process is most likely already listening on it — check for a stale "
+                   "fb-server with: lsof -iUDP:%d  (or: ss -lunp sport = :%d). Continuing without "
+                   "broadcast discovery; clients can still connect by address.",
+                   DEFAULT_PORT, strerror(errno), DEFAULT_PORT, DEFAULT_PORT);
+                SOCKET_CLOSE(udp_server_socket);
+                udp_server_socket = -1;
+                return;
         }
 }
 
