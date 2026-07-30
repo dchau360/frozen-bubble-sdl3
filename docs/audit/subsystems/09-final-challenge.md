@@ -82,15 +82,38 @@ symptom; is the platform applicability correct. Dispositions:
 
 | Disposition | Count | IDs |
 |---|---|---|
-| **upheld** (citations exact, claim stands as written) | 62 | BUG-001, 003, 004, 005, 006, 007, 008, 009, 010, 011, 013, 014, 015, 016, 017, 018, 019, 020, 021, 022, 023, 024, 025, 026, 027, 028, 029, 030, 031, 032, 033, 034, 035, 036, 037, 038, 039, 040, 042, 043, 044, 045, 046, 047, 048, 049, 050, 051; SEC-003, 006; REL-001, 003, 004, 005, 006, 007, 008, 011, 012, 013, 014, 015 |
+| **upheld** (citations exact, claim stands as written) | 63 | BUG-001, 003, 004, 005, 006, 007, 008, 009, 010, 011, 013, 014, 015, 016, 017, 018, 019, 020, 021, 022, 023, 024, 025, 026, 027, 028, 029, 030, 031, 032, 033, 034, 035, 036, 037, 038, 039, 040, 042, 043, 044, 045, 046, 047, 048, 049, 050, 051; SEC-003, 006; REL-001, 003, 004, 005, 006, 007, 008, **010**, 011, 012, 013, 014, 015 |
 | **revised** (defect stands; a stated element corrected) | 9 | BUG-002, BUG-041, SEC-001, SEC-002, SEC-004, SEC-005, SEC-007, REL-002, REL-009 |
 | **dismissed** (not a defect) | 0 | — |
+
+**Task 13 correction — the upheld count was 62 and is 63.** As originally
+written this table enumerated 62 upheld IDs, so its partition summed to
+62 + 9 + 0 = **71** against the 72 confirmed defects the same gate states it
+challenged. The missing ID is **REL-010**, absent from both the upheld and the
+revised enumeration. It was in fact challenged — the `Coverage` section below
+names it explicitly as retaining an un-re-derived certbot premise — and its
+registry row is unchanged `confirmed | Medium | High | Task 9` with no Task 12
+revision annotation, so it is neither revised nor dismissed and belongs in the
+upheld row. Added above and the count corrected to **63**, which makes the
+partition sum to 72. This was a plain enumeration omission, not two figures
+counting different things. Root cause: REL-010 is the one upheld defect whose
+disposition is qualified by a retained premise, and it was written up in prose
+in `Coverage` instead of being carried into the table. Full record in
+[SDL3_REVIEW_STATUS.md#task-13-corrections](../SDL3_REVIEW_STATUS.md#task-13-corrections).
 
 No confirmed defect was found to be a false positive. The nine revisions are
 recorded in full in `Confirmed findings` below and applied to the registry.
 
-Load-bearing verifications behind the 62 upheld dispositions (one line each,
-citations re-derived from the pinned source, not copied from the notebooks):
+Load-bearing verifications behind the upheld dispositions — **58** one-line
+entries covering 58 of the 63 upheld IDs, citations re-derived from the pinned
+source, not copied from the notebooks. (Task 13 correction: this sentence
+previously read "behind the 62 upheld dispositions (one line each)", which
+implied one entry per upheld ID; a count finds 58. The five upheld IDs with no
+entry here are BUG-001, BUG-015, BUG-019, BUG-025 and REL-010. BUG-019, BUG-025
+and REL-010 are covered by explicit `Limitations` entries recording that they
+were re-derived only to the level of their cited mechanism or retain a Task 9
+premise; BUG-001 and BUG-015 have no such entry, so their re-derivation is
+recorded as asserted rather than evidenced in this notebook.)
 
 - **BUG-003** `remove_prio` has exactly one caller, `game.c:838` (the `PART`
   branch). Neither `kick_player` (`:476-488`) nor the creator-left whole-room
@@ -563,21 +586,38 @@ them:
 
 ## Coverage
 
-- **Defects challenged:** 72 of 72 (100%). 62 upheld with citations re-derived
-  from the pinned source, 9 revised, 0 dismissed. One — REL-010 — retains a
-  premise this gate could not re-derive: certbot's ECDSA-by-default behaviour
-  was taken from documentation, not from an installed certbot, and its
-  destructive `openssl req -x509` branch remains unexecuted. That was already a
-  recorded Task 9 limitation and is unchanged.
+- **Defects challenged:** 72 of 72 (100%). **63** upheld with citations
+  re-derived from the pinned source, 9 revised, 0 dismissed — 63 + 9 + 0 = 72.
+  (Task 13 correction: this bullet and the disposition table above both read
+  **62**, a partition summing to 71; REL-010 was omitted from the upheld
+  enumeration despite being named in this very bullet. See the table's
+  correction note above.) One — REL-010 — retains a premise this gate could not
+  re-derive: certbot's ECDSA-by-default behaviour was taken from documentation,
+  not from an installed certbot, and its destructive `openssl req -x509` branch
+  remains unexecuted. That was already a recorded Task 9 limitation and is
+  unchanged.
 - **Improvements challenged:** 24 of 24 (100%). 0 rejected, 2 revised
   (IMP-013, IMP-021).
-- **Dismissals challenged:** all 43 explicit bullets read, 4 sampled in depth
-  (BUG-012, `idleSPButtons` `SDL_GetTextureSize`, `cmake_uninstall.cmake.in`
-  `exec_program`, `netlify.toml` publish-directory — see Step 5b above for the
-  one-line record of what was attempted against each and why the dismissal
-  held), 0 overturned; plus a bounded sweep of conceded-and-set-aside inline
-  observations across notebooks 01-08 — 6 found, 5 sound, 1 promoted to
-  BUG-052.
+- **Dismissals challenged:** all 43 explicit **bullet-form** dismissals read, 4
+  sampled in depth (BUG-012, `idleSPButtons` `SDL_GetTextureSize`,
+  `cmake_uninstall.cmake.in` `exec_program`, `netlify.toml` publish-directory —
+  see Step 5b above for the one-line record of what was attempted against each
+  and why the dismissal held), 0 overturned; plus a bounded sweep of
+  conceded-and-set-aside inline observations across notebooks 01-08 — 6 found,
+  5 sound, 1 promoted to BUG-052.
+  **Task 13 precision note — 43 and 47 count different things.** The 43 figure
+  is a count of bullet-form entries (`^- `) in the `Dismissed candidates`
+  sections, and all 43 live in notebooks 01-07. Notebook 08 formats its **4**
+  dismissals as bold paragraphs rather than bullets — *duplicate seat ids in
+  large rooms*, *trailing comma in the `LIST` open-player list*, *`games:0`
+  beside an open room*, and *mid-game reconnect refusal* — so they fall outside
+  a bullet-based count. The number of explicit dismissals across notebooks 01-08
+  is therefore **47**, of which this gate evidences 43 as read. Whether
+  notebook 08's four were also read is not recorded either way, so they are
+  carried forward as challenged-status-unevidenced rather than as challenged.
+  Separately, the Task 10 gate-checklist row states "three candidates dismissed"
+  where notebook 08 records four; the notebook is the evidence-bearing document
+  and its four entries each state a mechanism and trace a consequence.
 - **Cross-subsystem categories:** all 8 named in brief Step 4 executed; 1
   produced a new defect, 7 produced nothing beyond the existing registry.
 - **Coverage claim:** inventory reconciled at 237/237 with an empty `diff`;
@@ -648,11 +688,17 @@ them:
 ## Gate conclusion
 
 Task 12 is **complete**. The challenge examined all 72 confirmed defects, all
-24 improvements, all 43 explicit dismissals, all 8 cross-subsystem categories,
-and the complete-coverage claim, and it re-derived every quantity it relied on
-with a command that measures the claim rather than trusting a recorded figure.
+24 improvements, all 43 explicit bullet-form dismissals (of 47 explicit
+dismissals across notebooks 01-08 — see the `Coverage` precision note), all 8
+cross-subsystem categories, and the complete-coverage claim, and it re-derived
+every quantity it relied on with a command that measures the claim rather than
+trusting a recorded figure. Task 13 nonetheless found two of this gate's own
+recorded quantities wrong; both are corrected above and in
+[SDL3_REVIEW_STATUS.md#task-13-corrections](../SDL3_REVIEW_STATUS.md#task-13-corrections).
 
-Results: **0** confirmed defects dismissed, **9** revised, **62** upheld;
+Results: **0** confirmed defects dismissed, **9** revised, **63** upheld
+(corrected in Task 13 from a stated 62 that omitted REL-010 and left the
+partition summing to 71);
 **1** new defect registered — **BUG-052** (High) — promoted from an inline
 observation that notebook 02 conceded and set aside without ever opening it as a
 candidate; **2** improvements revised; **1** cross-notebook contradiction

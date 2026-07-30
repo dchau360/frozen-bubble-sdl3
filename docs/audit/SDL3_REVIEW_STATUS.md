@@ -30,9 +30,16 @@
 
 ## Current state
 
-- Phase: Phase 5 complete — independent final challenge closed
-- Active gate: Task 13
-- Exact next action: Begin Task 13 — write `docs/audit/SDL3_COMPLETE_REVIEW.md`. Final synthesis is **authorized** by Task 12; see [Task 12 closure provenance](#task-12-closure-provenance) for the corrections the report must carry and the three residual limitations it must reproduce verbatim.
+- Phase: **Complete** — all thirteen gates closed; the complete repository review report is published
+- Active gate: none
+- **Final report: [`SDL3_COMPLETE_REVIEW.md`](SDL3_COMPLETE_REVIEW.md)**
+- Independent final challenge notebook: [`subsystems/09-final-challenge.md`](subsystems/09-final-challenge.md)
+- Final audited production commit: `09d6c7bfcd864a0ad3951b87d16a88dc770392a3` (`v2.4.27`) — **zero production drift**, verified by `git diff --name-only <baseline> HEAD -- src server tests tools android web cmake docker .github CMakeLists.txt CMakeListsEmscripten.txt README.md SetupServer.md WASM_PORT.md start-server.sh netlify.toml default.nix flake.nix shell.nix CLAUDE.md` producing no output
+- Artifact commit: the commit carrying this line, subject `docs: publish complete SDL3 repository audit`, is the audit's final artifact commit. Its SHA cannot be written inside the file it commits — the same self-reference Task 12 Fix Round 1 recorded for its own final commit — so it is resolved with `git log --oneline -1` on branch `codex/sdl3-complete-audit`. No production path is touched by it; see the zero-drift verification on the line above.
+- **Exact next action: None — audit complete.**
+- Remediation is **not** started and is **not** proposed here. The audit is report-first and read-only; the decision of what to fix, in what order, and on what branch belongs to the user after reading the report. §9 of the report supplies a recommended order only.
+- Processes and listeners: **no temporary process, listener, port, server, client, proxy or background job created by any gate of this audit remains.** Task 13 launched nothing and killed nothing. Verified passively — see the Task 13 ledger and the `Processes and cleanup` section.
+- All environment limitations recorded in the `Limitations` section below are **retained**, not closed. They are carried into §8 of the report.
 
 ## Gate checklist
 
@@ -49,8 +56,8 @@
 | Task 9 | Build, tests, packaging, CI, deployment, tooling, and operations | complete (all five build definitions compared and reconciled; workflow, Compose, CMake, Gradle and Python configurations parsed locally; every confirmed defect from Tasks 3-9 mapped to a test, a dynamic case, or a registered gap; all 21 remaining pending coverage rows dispositioned. Fourteen IDs registered — REL-009..014 and IMP-016..023 — four entries extended (REL-004 severity Low → Medium, REL-006, REL-007, REL-008), IMP-008 closed, four candidates dismissed with counter-evidence including one disproved by running the command it doubted. The gate also corrected an inherited premise: `CLAUDE.md`'s claim that four of five platform build jobs are disabled with `if: false` is false at the pinned baseline — 0 of 11 jobs carry it — so Task 8's CI-reachability clause is corrected here and in the registry. No workflow was executed, no container started, and no external network operation performed; those are recorded as limitations, not passes. Fix Round 1 applied two accepted Important and two accepted Minor findings: REL-013's DLL count corrected 20 → 21 with the `tr`/undercount root cause recorded, REL-007's citation split across the two workflow steps its four password instances actually span, FILE_COVERAGE.md's inventory rule corrected to stop claiming a second `pending` location that does not exist, the "ten headings, each once" phrasing restated to name the subsystem notebooks it actually governs, and a re-run count sweep that found only the DLL count reproduced differently. Fix Round 2 applied two accepted Important and one accepted Minor finding: a Fix Round 1 ledger row that bundled sixteen independent commands under one non-representative exit was removed and split into sixteen individually re-run rows with honest exits, that same row's mislabeled "fourteen" quantity count corrected to sixteen commands (seventeen quantities), and the two identical "Task 9 Fix Round 1" headings disambiguated into "Findings" and "Ledger" with both misdirected cross-links retargeted to the ledger) |
 | Task 10 | Cross-subsystem dynamic integration matrix | complete (41 matrix rows recorded before any process launched — the original 38-row matrix's bundled row 38 was split in Fix Round 1 into 4 individually countable manual-observation rows; **31 executed, 10 recorded as not performed** — the six hostile-transport rows because the user restricted security-specific runtime testing, four manual visual/audio rows (clear-win banner and sound, spectator pinning, >5-player paging, malus/attack visuals) because no display, audio device or input-injection path existed). First gate to run real client code against a real server over a real socket: 24 `fb-server` instances (23 ASan+UBSan, 1 Release), each on its own dedicated port from a 24-port reserved range, driving rooms at 2/3/4/5/6/10/20 seats plus the 20-seat admission boundary and its boundary+1, normal/team/clear modes, rounds 1-3, member and creator departure both during and before a round, mid-game reconnect, `PART`/rejoin, and `SIGTERM` shutdown. Relay invariants re-derived from 11 saved journals: 4,990 frames delivered, 0 self-echoes, 0 unknown senders, all seat maps identical. Two defects and one improvement registered — **BUG-049** (High: recursive `player_part_game_` teardown frees the game and the outer frame reads it at `server/game.c:1051`; 11 identical ASan reproductions, minimum 3 seats, triggered by ordinary simultaneous disconnects, and **silent** on the uninstrumented Release build), **BUG-050** (Low: `LIST`'s `free:` counter contradicts its own open-player list) and **IMP-024** (unvalidated `CREATE` room cap). BUG-015 gained its first runtime reproduction; BUG-005 is recorded as entangled with BUG-049 and not independently measurable; BUG-013, BUG-021 and BUG-040 gained server-side runtime measurements with no severity change; three candidates dismissed with counter-evidence. No leak claim is made — Apple ASan requires `detect_leaks=0`. All 24 ports read free afterwards and the `fb-server` process list is byte-identical to the pre-launch baseline, so the four unrelated servers belonging to the user's own environment were neither touched nor counted. **Fix Round 1** corrected a false cleanup-proof claim and registered a fourth finding, **REL-015** (Medium): `fb-server`'s stats-file path is derived from `$HOME` unconditionally with no isolation mechanism, and this gate's own 24 launches — which isolated `joiners.log` by working directory but never set `HOME` — read from and wrote to the operator's real `~/.fb-server/stats.dat` for the entire gate, discovered in independent review rather than prevented; the off-by-one `networkclient.cpp:1306` citation was also corrected to `:1307`) |
 | Task 11 | Complete file coverage and prioritized improvements | complete (237-row pinned-commit inventory reconciled exactly, diff-empty against a fresh regeneration of Task 1 Step 4's own selection command; **Fix Round 1** re-ran all eleven Step 2 cross-cutting categories as individually commanded, individually exited ledger rows against project-owned `src`/`server` — raw copies (3 hits), allocation/free (11 `malloc`/`calloc`/`realloc`, 44 `free(`), SDL create/destroy pairing (15 `SDL_Create*`, 37 `SDL_Destroy*`), hardcoded versions (reproduces REL-004's five), filesystem/`getenv(HOME)`/`SDL_GetPrefPath`/`SDL_GetBasePath` (5 hits, all already covered), **unchecked indices** (30 hits — one new candidate, **BUG-051**, an unguarded `std::array` write in `LoadLevelset`, unreachable with the shipped 10-line-per-block asset), **signed/unsigned conversions** (36 hits, all bounds-safe), **ignored return values** (19 statement-level hits, all idiomatic or already covered by BUG-033/BUG-047), **global/singleton lifetime** (33 `ptrInstance` hits, exactly matching IMP-007's four-singleton leak pattern plus two confirmed-safe outliers, `NetworkClient` and `FrozenBubble`), and **network lengths/opcodes** (46 hits, all covered by SEC-002/SEC-006/BUG-006 or independently verified safe in `ws_decode_inplace`) — the two previously-unevidenced categories that lacked even a real command now have one each; the **compile-guard sweep was rerun with a token-enumerating pattern and corrected**: seven guard tokens exist in `src` (`__ANDROID__`, `__ANDROID_PORT__`, `__WASM_PORT__`, `_WIN32`, `__APPLE__`, `__MINGW32__`, `__linux__`), not two, and only the first three are the ones CLAUDE.md's Platform abstraction section names — the four OS-detection macros in `platform.cpp` are real and correctly used but undocumented by CLAUDE.md, which is now stated honestly rather than claimed as an exact match; a mis-cited ledger command (`task6_settings_harness probe`, which could not match either probe row's actual text) was replaced with one that matches both; the `getenv("USER")` sweep was widened to the six sites the independent review found unswept, all dispositioned as benign bounded nickname fallbacks; and the "36/15/28" duplicate-platform-source-list counts were given their own reproducible per-file commands and reconfirmed unchanged. One stale "Investigating" candidate row in the server notebook corrected to its already-confirmed disposition, leaving zero open `suspected`/`investigating` states across the 97-ID registry; all 24 `IMP` entries confirmed to share one benefit/effort/risk vocabulary; all five Task 6/Task 4/Task 10 deferred items resolved with re-derived evidence, not re-deferred; notebooks 01-08 reconfirmed at ten headings each with an explicit gate conclusion and no unresolved action) |
-| Task 12 | Independent final challenge | complete (independent challenger **Claude Opus**, model id `claude-opus-5`, fresh context. All **72** confirmed defects challenged on reachability, inputs, platform, impact and root cause: **62 upheld** with citations re-derived from the pinned source, **9 revised**, **0 dismissed** — no confirmed defect was a false positive. All **24** improvements challenged: 0 rejected, **2 revised** (IMP-013's clamp-site enumeration completed with `shaderstuff.cpp:1158`; IMP-021's transition driver corrected so its BUG-041 assertion can fail). All **43** explicit dismissal bullets in notebooks 01-08 read and 4 sampled in depth: **0 overturned**; BUG-012 stays dismissed and its ID stays retired. **One new defect: BUG-052 (High)** — `NetworkClient`'s receive-buffer append guard has no `else` and every `recvBufferLen` reduction sits inside its body, so a server line exceeding `BUFFER_SIZE` (4096) against the server's 16383-byte line ceiling puts the connection into a permanently deaf absorbing state on ordinary traffic. It came from an observation notebook 02 conceded at `:153` and set aside without ever opening it as a candidate. **One cross-notebook contradiction resolved** against the pinned source: notebook 04's trust table said "any room member can emit `SETOPTIONS`" where `server/game.c:405` enforces slot-zero creator authority, as notebook 01's own row correctly recorded — SEC-004 and SEC-007 re-scoped. **One Fix-Round correction reversed as itself wrong**: BUG-041's trigger set — `DoSnipIn` animates nothing, the leak is produced by `TakeSnipOut` at `bubblegame_render.cpp:1173`, and `QuitToTitle`'s `firstRenderDone` clear is what arms it, so menu return *is* a trigger. **One finding strengthened from static to observed**: REL-002, via a passive 1 d 21 h old orphan holding UDP 1511 and TCP 15113. **Four previously unstated reachability qualifications** recorded (BUG-002, SEC-001, SEC-002 — whose impact was also extended to a `bufsize == 0` / `recv` length `(size_t)-1` path — and SEC-005, which is *strengthened*, both documented launch paths passing `-l`). Coverage claim re-derived: 237/237 with an empty `diff`, 42 disposition strings summing to 237 with every class sampled (Fix Round 1 correction of a miscounted 41 — see [Task 12 Fix Round 1 Findings](#task-12-fix-round-1-findings)), 0 pending rows, 0 broken links and 0 broken anchors, notebooks 01-08 structurally conformant, registry with 0 duplicate IDs and 0 gaps. Started no process and killed none; security findings challenged **statically only** per the standing user restriction) |
-| Task 13 | Complete repository review report | pending |
+| Task 12 | Independent final challenge | complete (independent challenger **Claude Opus**, model id `claude-opus-5`, fresh context. All **72** confirmed defects challenged on reachability, inputs, platform, impact and root cause: **63 upheld** with citations re-derived from the pinned source, **9 revised**, **0 dismissed** (63+9+0=72; corrected in Task 13 from a stated 62 that omitted REL-010 and summed to 71) — no confirmed defect was a false positive. All **24** improvements challenged: 0 rejected, **2 revised** (IMP-013's clamp-site enumeration completed with `shaderstuff.cpp:1158`; IMP-021's transition driver corrected so its BUG-041 assertion can fail). All **43** explicit bullet-form dismissals in notebooks 01-08 read and 4 sampled in depth (Task 13: 43 counts bullet-form entries, all in notebooks 01-07; notebook 08 holds 4 more in paragraph form, so 47 exist and 43 are evidenced as read): **0 overturned**; BUG-012 stays dismissed and its ID stays retired. **One new defect: BUG-052 (High)** — `NetworkClient`'s receive-buffer append guard has no `else` and every `recvBufferLen` reduction sits inside its body, so a server line exceeding `BUFFER_SIZE` (4096) against the server's 16383-byte line ceiling puts the connection into a permanently deaf absorbing state on ordinary traffic. It came from an observation notebook 02 conceded at `:153` and set aside without ever opening it as a candidate. **One cross-notebook contradiction resolved** against the pinned source: notebook 04's trust table said "any room member can emit `SETOPTIONS`" where `server/game.c:405` enforces slot-zero creator authority, as notebook 01's own row correctly recorded — SEC-004 and SEC-007 re-scoped. **One Fix-Round correction reversed as itself wrong**: BUG-041's trigger set — `DoSnipIn` animates nothing, the leak is produced by `TakeSnipOut` at `bubblegame_render.cpp:1173`, and `QuitToTitle`'s `firstRenderDone` clear is what arms it, so menu return *is* a trigger. **One finding strengthened from static to observed**: REL-002, via a passive 1 d 21 h old orphan holding UDP 1511 and TCP 15113. **Four previously unstated reachability qualifications** recorded (BUG-002, SEC-001, SEC-002 — whose impact was also extended to a `bufsize == 0` / `recv` length `(size_t)-1` path — and SEC-005, which is *strengthened*, both documented launch paths passing `-l`). Coverage claim re-derived: 237/237 with an empty `diff`, 42 disposition strings summing to 237 with every class sampled (Fix Round 1 correction of a miscounted 41 — see [Task 12 Fix Round 1 Findings](#task-12-fix-round-1-findings)), 0 pending rows, 0 broken links and 0 broken anchors, notebooks 01-08 structurally conformant, registry with 0 duplicate IDs and 0 gaps. Started no process and killed none; security findings challenged **statically only** per the standing user restriction) |
+| Task 13 | Complete repository review report | complete (published [`SDL3_COMPLETE_REVIEW.md`](SDL3_COMPLETE_REVIEW.md) against the pinned baseline, following the approved design's nine-section structure. Every headline quantity re-derived with a command that measures the claim: **98** registry rows (52 BUG / 24 IMP / 15 REL / 7 SEC), **97** confirmed + **1** dismissed, **73** confirmed defects at **0** Critical / **15** High / **45** Medium / **13** Low, **24** improvements, **98** rows at High confidence, **237/237** coverage rows in exact set equality with a fresh regeneration of Task 1 Step 4's selection command, **42** disposition strings summing to 237, **0** pending rows, all 9 notebooks structurally conformant. Step 5 validation: all **98** cited finding IDs exist exactly once as registry rows and every registry row is cited; all **88** relative links resolve and every anchor resolves to exactly one heading; `git diff --check` exit 0; the marker sweep's 11 non-report hits individually judged, 0 unresolved work markers. **Three inconsistencies were found in the artifacts being synthesized and resolved rather than adopted** — see [Task 13 corrections](#task-13-corrections): Task 12's defect-disposition partition summed to 71 against its own stated 72 (REL-010 omitted from the upheld enumeration; corrected 62 → **63** in five places), the 43-vs-47 dismissal figures were shown to count different things and both are now stated, and a duplicate `### Task 10 Fix Round 1` heading was disambiguated. Task 13 compiled nothing, started no process and killed none) |
 
 ## Active candidates
 
@@ -902,7 +909,7 @@ Full findings-registry text for REL-007 and REL-013 is corrected in
   human-driven session. It exercised macOS only, raw TCP only, and observed no
   pixel or sound. All eleven limitations are enumerated in the notebook.
 
-### Task 10 Fix Round 1
+### Task 10 Fix Round 1 Findings
 
 An independent review of commit `f297dfc1` raised two Critical, one Important
 and one Minor finding. **All four were accepted; none was disputed.**
@@ -1192,8 +1199,14 @@ plan's Step 4 names; and the complete-coverage claim, re-derived rather than
 re-read. Every quantity relied on was re-measured with a command that measures
 the claim.
 
-**Defect dispositions.** 62 upheld, 9 revised, 0 dismissed. No confirmed defect
-was found to be a false positive. The nine revisions:
+**Defect dispositions.** **63** upheld, 9 revised, 0 dismissed (63 + 9 + 0 = 72).
+No confirmed defect was found to be a false positive. *Task 13 correction: this
+line and the gate-checklist row above read **62**, whose partition summed to 71
+against the 72 defects this gate states it challenged. REL-010 was omitted from
+the upheld enumeration in `subsystems/09-final-challenge.md`; it was challenged
+and is named in that notebook's own `Coverage` section, its registry row carries
+no Task 12 revision, and it is not dismissed — so it is upheld and the count is
+63. See [Task 13 corrections](#task-13-corrections).* The nine revisions:
 
 | ID | Revision |
 |---|---|
@@ -1344,6 +1357,153 @@ Minor findings; **all five were accepted, none disputed.**
 | 2026-07-30T00:21:15Z | <code>awk '/^### Task 12 independent final challenge/{f=1;next} /^## Limitations/{f=0} f' docs/audit/SDL3_REVIEW_STATUS.md &#124; grep -c '^&#124; 202'</code> | 0 | **36** timestamped ledger rows in this file's `### Task 12 independent final challenge` section — not the 20 `task-12-report.md` §7 stated | This file, `### Task 12 independent final challenge` |
 | 2026-07-30T00:21:30Z | <code>awk '/^## 2\. Commands/{f=1;next} /^## 3\./{f=0} f' task-12-report.md &#124; grep -oE '^&#124; [0-9]+[a-z]?' &#124; wc -l</code> | 0 | **38** rows total: numbers 1-37 plus one unnumbered `8b` sub-row — a different count than the 36 status-file ledger rows because it additionally includes the final `git commit` (item 36) and the post-commit drift check (item 37), neither loggable inside the file being committed | `task-12-report.md` §2 (gitignored) |
 | 2026-07-30T00:21:45Z | <code>python3 -c "import re,pathlib; t=pathlib.Path('docs/audit/subsystems/09-final-challenge.md').read_text(); print('confirmed-findings' in [re.sub(r'[^a-z0-9- ]','',h.lower()).strip().replace(' ','-') for h in re.findall(r'^##+ (.+)$', t, re.M)])"</code> | 0 | `True` — `subsystems/09-final-challenge.md#confirmed-findings` resolves to exactly one heading (`## Confirmed findings`, appears once), so both new BUG-041 cross-references are unambiguous | [subsystems/09-final-challenge.md](subsystems/09-final-challenge.md#confirmed-findings) |
+
+## Task 13 closure provenance
+
+Final synthesis and publication. Agent: **Claude Opus**, exact model id
+`claude-opus-5`. Task 13 **compiled nothing, started no process, bound no port,
+and killed nothing**; it is synthesis and validation over existing artifacts
+plus read-only `git show`/`git ls-tree` reads of the pinned tree.
+
+**Produced.** [`SDL3_COMPLETE_REVIEW.md`](SDL3_COMPLETE_REVIEW.md), following the
+approved design's nine-section structure: executive summary and
+release-readiness, confirmed defects by severity, security and protocol
+assessment, platform/build/release assessment, improvements ranked separately,
+commands with results, the coverage appendix, limitations and residual risks, and
+a recommended remediation order.
+
+**Every headline quantity was re-derived**, not copied. Registry: **98** rows
+(52 BUG / 24 IMP / 15 REL / 7 SEC), **97** confirmed + **1** dismissed, **0**
+duplicate IDs, **98** rows at High confidence. Confirmed defects: **73** at
+**0** Critical / **15** High / **45** Medium / **13** Low. Improvements: **24**.
+Coverage: **237** rows in exact set equality with a fresh regeneration of Task 1
+Step 4's own selection command (`diff` empty, exit 0), **42** disposition strings
+summing to **237**, **0** pending disposition cells. Structure: all **9**
+notebooks carry exactly the ten required headings, once each, in order.
+
+**Step 5 validation.** All **98** finding IDs cited in the report exist exactly
+once as registry table rows, and every registry row is cited. All **88** relative
+links resolve to an existing file and every anchor resolves to **exactly one**
+heading. `git diff --check` exit 0. The brief's marker sweep was judged rather
+than mechanically zeroed: **11** hits outside the report, **0** of them
+unresolved work markers — the lifecycle rule's own definition in `FINDINGS.md`,
+three `TODO` hits that describe *the project's* disclosed macOS/Windows signing
+TODOs (evidence for REL-007), and assertions/ledger rows recording that the sweep
+is clean.
+
+**Report content constraints honoured.** The report does not claim absence of
+undiscovered defects. It keeps improvements visibly separate from defects and
+assigns them no defect severity. It preserves the challenged-and-dismissed record
+(BUG-012 plus 47 notebook dismissals) so nothing is silently resurrected. It
+presents every unavailable platform or runtime check as a limitation, never as a
+pass. It carries the two superseded propositions as **rejected** — that a
+non-creator may push room `OPTIONS:` (`server/game.c:405` enforces creator-only)
+and that `DoSnipIn` produces the transition animation (it animates nothing;
+`QuitToTitle` **is** a trigger). It carries BUG-052 as **unreproduced** with its
+~165-connection threshold and its process-lifetime-permanent wedge, SEC-002's
+extended impact as **static-only and unresolved**, BUG-049 as ordinary-trigger
+and **silent on the shipping Release build**, REL-015 with the audit's own
+`~/.fb-server/stats.dat` writes disclosed as an audit limitation, and Apple
+ASan's inability to detect leaks wherever a leak is discussed. Its remediation
+order preserves the practical-likelihood distinction between SEC-005 (one LAN
+packet, live in every documented deployment) and BUG-052 (~165 concurrent
+lobby connections), rather than presenting all High findings as equally urgent.
+
+### Task 13 corrections
+
+Task 13 re-derived rather than trusted and found **three** problems in the
+artifacts it was synthesizing. All three are resolved in place; none was adopted
+into the report unexamined.
+
+- **Important — Task 12's defect-disposition partition did not sum to its own
+  stated total. Corrected 62 → 63.** The disposition table in
+  `subsystems/09-final-challenge.md` enumerated **62** upheld IDs against **9**
+  revised and **0** dismissed, a partition summing to **71**, while the same gate
+  states in four places that it challenged **72** confirmed defects. The missing
+  ID is **REL-010**, absent from *both* enumerations. It was in fact challenged —
+  that notebook's own `Coverage` section names it explicitly as retaining an
+  un-re-derived certbot premise — and its registry row is unchanged
+  `confirmed | Medium | High | Task 9` with **no** Task 12 revision annotation,
+  unlike all nine revised entries. Challenged, not revised, not dismissed ⇒
+  upheld. The correct count is **63**, and 63 + 9 + 0 = 72. This is a plain
+  enumeration omission, not two figures counting different things. Root cause:
+  REL-010 is the one upheld defect whose disposition carries a qualification, and
+  it was written up in `Coverage` prose instead of being carried into the table.
+  The wrong figure had propagated to **five** places — the disposition table, two
+  further sentences in the notebook, this file's gate-checklist row, this file's
+  Task 12 closure provenance, and `FINDINGS.md`'s Task 12 paragraph — all now
+  corrected with an inline note recording the former value, following the
+  convention already used for the 41 → 42 disposition census and the 20 → 21 DLL
+  count.
+- **Important — "43 explicit dismissal bullets" and "47 explicit dismissals"
+  count different things; both are now stated.** The 43 figure counts
+  **bullet-form** entries (`^- `) in the `Dismissed candidates` sections, and all
+  43 live in notebooks **01-07**. Notebook 08 formats its **4** dismissals as bold
+  paragraphs, so a bullet-based count cannot see them. Explicit dismissals across
+  notebooks 01-08 therefore number **47**, of which **43** are evidenced as read;
+  whether notebook 08's four were also read is not recorded either way, so they
+  are carried forward as challenged-status-unevidenced. Noted separately: Task
+  10's gate-checklist row says "three candidates dismissed" where its notebook
+  records four; the notebook is the evidence-bearing document.
+- **Minor — duplicate heading anchor.** This file carried two identical
+  `### Task 10 Fix Round 1` headings, producing an ambiguous
+  `#task-10-fix-round-1` anchor — the same defect class already fixed once for
+  Task 9. No document linked to it, so it was latent rather than live.
+  Disambiguated into `### Task 10 Fix Round 1 Findings` and
+  `### Task 10 Fix Round 1 Ledger`. A rescan finds **0** files with duplicate
+  anchors.
+- **Noted, not corrected beyond its own sentence.** The notebook's load-bearing
+  verification list is **58** one-line entries, not one per upheld ID as its
+  introductory sentence implied. The five upheld IDs without an entry are
+  BUG-001, BUG-015, BUG-019, BUG-025 and REL-010; BUG-019, BUG-025 and REL-010
+  are covered by explicit `Limitations` entries, while **BUG-001 and BUG-015 have
+  none**, so their independent re-derivation is asserted rather than evidenced.
+  The sentence now states 58, and the two under-evidenced re-derivations are
+  carried into the report's residual risks.
+
+### Task 13 ledger
+
+One top-level command per row; the `Exit` column is that command's own real
+integer exit status. `grep`/`rg`/`lsof` exit **1** on no match and that is
+recorded as 1, never normalized to 0.
+
+| Timestamp | Command | Exit | Result | Evidence |
+|---|---|---|---|---|
+| 2026-07-30T01:02:10Z | <code>grep -cE '^&#124; (BUG&#124;SEC&#124;REL&#124;IMP)-[0-9]{3} &#124;' docs/audit/FINDINGS.md</code> | 0 | **98** registry table rows — matches the expected census; a whole-file ID match would have wrongly returned 102 by picking up the unallocated-ID sentence | [FINDINGS.md](FINDINGS.md) |
+| 2026-07-30T01:02:25Z | <code>grep -oE '^&#124; (BUG&#124;SEC&#124;REL&#124;IMP)-[0-9]{3} &#124;' docs/audit/FINDINGS.md &#124; grep -oE '(BUG&#124;SEC&#124;REL&#124;IMP)' &#124; sort &#124; uniq -c</code> | 0 | **52** BUG, **24** IMP, **15** REL, **7** SEC | [FINDINGS.md](FINDINGS.md) |
+| 2026-07-30T01:02:40Z | <code>awk -F'&#124;' '/^&#124; (BUG&#124;SEC&#124;REL&#124;IMP)-[0-9]{3} &#124;/ {gsub(/ /,"",\$3); print \$3}' docs/audit/FINDINGS.md &#124; sort &#124; uniq -c</code> | 0 | **97** `confirmed` + **1** `dismissed`; no row in `suspected` or `investigating` | [FINDINGS.md](FINDINGS.md) |
+| 2026-07-30T01:02:52Z | <code>awk -F'&#124;' '/^&#124; (BUG&#124;SEC&#124;REL&#124;IMP)-[0-9]{3} &#124;/ {gsub(/ /,"",\$2); print \$2}' docs/audit/FINDINGS.md &#124; sort &#124; uniq -d</code> | 0 | No output — **0 duplicate IDs** | [FINDINGS.md](FINDINGS.md) |
+| 2026-07-30T01:03:10Z | <code>awk -F'&#124;' '/^&#124; (BUG&#124;SEC&#124;REL)-[0-9]{3} &#124;/ {…if(\$3=="confirmed") print \$4}' docs/audit/FINDINGS.md &#124; sort &#124; uniq -c</code> | 0 | **15** High, **13** Low, **45** Medium — **73** confirmed defects, **0** Critical | [FINDINGS.md](FINDINGS.md) |
+| 2026-07-30T01:03:25Z | <code>awk -F'&#124;' '/^&#124; (BUG&#124;SEC&#124;REL&#124;IMP)-[0-9]{3} &#124;/ {gsub(/^ +&#124; +\$/,"",\$5); print \$5}' docs/audit/FINDINGS.md &#124; sort &#124; uniq -c</code> | 0 | **98 High** — every registry row carries High confidence | [FINDINGS.md](FINDINGS.md) |
+| 2026-07-30T01:03:45Z | <code>grep -cE '^&#124; `[^`]+` &#124;' docs/audit/FILE_COVERAGE.md</code> | 0 | **237** coverage rows | [FILE_COVERAGE.md](FILE_COVERAGE.md) |
+| 2026-07-30T01:04:02Z | <code>awk -F'&#124;' '/^&#124; `[^`]+` &#124;/ {gsub(/^ +&#124; +\$/,"",\$4); print \$4}' docs/audit/FILE_COVERAGE.md &#124; sort &#124; uniq -c &#124; sort -rn &#124; awk '{s+=\$1; n++} END {print "distinct="n, "sum="s}'</code> | 0 | `distinct=42 sum=237` — reproduces the Task 12 Fix Round 1 census exactly | [FILE_COVERAGE.md](FILE_COVERAGE.md) |
+| 2026-07-30T01:04:20Z | <code>git ls-tree -r --name-only 09d6c7bfcd864a0ad3951b87d16a88dc770392a3 &#124; rg '&lt;Task 1 Step 4 pattern&gt;' &#124; sort &gt; inv.txt</code> | 0 | **237** paths regenerated from the pinned tree with Task 1 Step 4's own selection command | [FILE_COVERAGE.md](FILE_COVERAGE.md) |
+| 2026-07-30T01:04:35Z | <code>diff &lt;(grep -oE '^&#124; `[^`]+`' docs/audit/FILE_COVERAGE.md &#124; sed 's/^&#124; `//; s/`\$//' &#124; sort) inv.txt</code> | 0 | **No output** — exact set equality between the ledger's 237 paths and the regenerated 237 | [FILE_COVERAGE.md](FILE_COVERAGE.md) |
+| 2026-07-30T01:04:50Z | <code>awk -F'&#124;' '/^&#124; `[^`]+` &#124;/ {gsub(/^ +&#124; +\$/,"",\$4); print \$4}' docs/audit/FILE_COVERAGE.md &#124; grep -ci pending</code> | **1** | **0** disposition cells contain `pending`; exit 1 is `grep`'s no-match status, recorded as measured | [FILE_COVERAGE.md](FILE_COVERAGE.md) |
+| 2026-07-30T01:05:10Z | <code>for f in docs/audit/subsystems/*.md; do printf '%s: ' "\$f"; grep -E '^## ' "\$f" &#124; tr '\n' '&#124;'; echo; done</code> | 0 | All **9** notebooks carry exactly the ten required headings — Scope, Trust boundaries and invariants, Static review, Dynamic evidence, Candidates, Confirmed findings, Dismissed candidates, Coverage, Limitations, Gate conclusion — once each, in order | [subsystems/](subsystems/) |
+| 2026-07-30T01:05:30Z | <code>for f in docs/audit/subsystems/0[1-8]*.md; do n=\$(awk '/^## Dismissed candidates/{f=1;next} /^## /{f=0} f && /^- /' "\$f" &#124; wc -l); printf '%s %s\n' "\$f" "\$n"; done</code> | 0 | **43** bullet-form dismissals: 5/6/5/9/8/6/4 across notebooks 01-07 and **0** in notebook 08 | [subsystems/](subsystems/) |
+| 2026-07-30T01:05:45Z | <code>awk '/^## Dismissed candidates/{f=1;next} /^## /{f=0} f && /^\*\*/' docs/audit/subsystems/08-dynamic-integration.md &#124; wc -l</code> | 0 | **4** paragraph-form dismissals in notebook 08 → **47** explicit dismissals across 01-08, of which 43 are evidenced as read. Second Task 13 correction | [subsystems/08-dynamic-integration.md](subsystems/08-dynamic-integration.md#dismissed-candidates) |
+| 2026-07-30T01:06:05Z | <code>python3 - (reconcile Task 12's upheld enumeration against the 72 pre-Task-12 confirmed defects)</code> | 0 | Upheld enumerated **62**; upheld ∪ revised = **71** against **72**; `MISSING: ['REL-010']`; **0** duplicates in the enumeration. **The first Task 13 correction** — 62 → 63 | [subsystems/09-final-challenge.md](subsystems/09-final-challenge.md#step-2--challenge-of-every-confirmed-defect) |
+| 2026-07-30T01:06:20Z | <code>awk -F'&#124;' '/^&#124; REL-010 &#124;/ {gsub(/^ +&#124; +\$/,"",\$6); print \$6}' docs/audit/FINDINGS.md</code> | 0 | `Task 9` — REL-010's Gate cell carries **no** Task 12 revision annotation, unlike all nine revised entries, confirming it is upheld rather than revised | [FINDINGS.md](FINDINGS.md) |
+| 2026-07-30T01:06:35Z | <code>python3 - (count load-bearing verification bullets against the upheld set)</code> | 0 | **58** bullets, 58 distinct, for **63** upheld. Missing: BUG-001, BUG-015, BUG-019, BUG-025 (and REL-010). "one line each" corrected to 58 | [subsystems/09-final-challenge.md](subsystems/09-final-challenge.md#step-2--challenge-of-every-confirmed-defect) |
+| 2026-07-30T01:06:55Z | <code>python3 - (scan every docs/audit/**.md for duplicate heading anchors)</code> | 0 | One file with a duplicate: `SDL3_REVIEW_STATUS.md` → `task-10-fix-round-1` ×2. **Third Task 13 correction** | This file |
+| 2026-07-30T01:07:05Z | <code>grep -rn "task-10-fix-round-1" docs/audit/</code> | **1** | No match — **no document linked to the ambiguous anchor**, so it was latent rather than live | This file |
+| 2026-07-30T01:07:30Z | <code>python3 - (rescan for duplicate heading anchors after disambiguation)</code> | 0 | `files with duplicate anchors: 0` | This file |
+| 2026-07-30T01:07:50Z | <code>git grep -cn "NetworkClient::Dispose&#124;NetworkClient::Instance()-&gt;Dispose&#124;NetworkClient.*Dispose()" 09d6c7bfcd864a0ad3951b87d16a88dc770392a3 -- src server</code> | 0 | **1** occurrence, `src/networkclient.cpp:1` — the definition itself. **`Dispose()` has zero callers**, so the `NetworkClient` singleton is never destroyed and BUG-052's wedge is permanent for the process lifetime | [FINDINGS.md](FINDINGS.md) |
+| 2026-07-30T01:08:05Z | <code>git show 09d6c7bfcd864a0ad3951b87d16a88dc770392a3:src/networkclient.cpp &#124; awk '/^void NetworkClient::Disconnect/,/^}/' &#124; grep -n "recvBufferLen"</code> | **1** | No match — **`Disconnect` never resets `recvBufferLen`**, confirming the second half of BUG-052's permanence argument | [FINDINGS.md](FINDINGS.md) |
+| 2026-07-30T01:08:20Z | <code>git show 09d6c7bfcd864a0ad3951b87d16a88dc770392a3:src/networkclient.cpp &#124; sed -n '843p'</code> | 0 | `if (recvBufferLen + received < BUFFER_SIZE) {` — BUG-052's guard verbatim at the pinned commit | [FINDINGS.md](FINDINGS.md) |
+| 2026-07-30T01:08:32Z | <code>git show 09d6c7bfcd864a0ad3951b87d16a88dc770392a3:src/networkclient.h &#124; sed -n '36p'</code> | 0 | `#define BUFFER_SIZE 4096` — the 4096-vs-16383 mismatch BUG-052 rests on | [FINDINGS.md](FINDINGS.md) |
+| 2026-07-30T01:08:45Z | <code>git show 09d6c7bfcd864a0ad3951b87d16a88dc770392a3:server/game.c &#124; sed -n '405p;415p'</code> | 0 | `if (g->players_conn[0] == fd) {` / `send_line_log(fd, wn_not_creator, "SETOPTIONS");` — **`SETOPTIONS` is creator-only**, so the superseded "any room member" proposition is not restated in the report | [subsystems/09-final-challenge.md](subsystems/09-final-challenge.md#revisions-applied-to-existing-findings) |
+| 2026-07-30T01:09:00Z | <code>git show 09d6c7bfcd864a0ad3951b87d16a88dc770392a3:src/transitionmanager.cpp &#124; sed -n '48,75p'</code> | 0 | `DoSnipIn` captures `snapIn` and calls **no** `effect()`; `TakeSnipOut` ends with `effect(snapIn, snapOut, rend, transitionTexture)` — **`DoSnipIn` animates nothing**, so that superseded proposition is not restated either | [subsystems/09-final-challenge.md](subsystems/09-final-challenge.md#revisions-applied-to-existing-findings) |
+| 2026-07-30T01:09:30Z | <code>pgrep -alf fb-server</code> | 0 | **3** foreign `fb-server` processes (PIDs 22293, 22300 on 15511/15512 from a different repository; 76361 on 15998). **PID 74458 — Task 12's REL-002 orphan on 15113 holding UDP 1511 — is absent.** Task 13 killed nothing; it exited on its own | [Processes and cleanup](#processes-and-cleanup) |
+| 2026-07-30T01:09:40Z | <code>lsof -nP -iUDP:1511</code> | **1** | No match — **UDP 1511 is free**. The REL-002 orphan Task 12 observed is gone; the finding stands on Task 12's observation, which is retained | [Processes and cleanup](#processes-and-cleanup) |
+| 2026-07-30T01:09:48Z | <code>lsof -nP -iTCP:15113 -sTCP:LISTEN</code> | **1** | No match — no listener remains on 15113 | [Processes and cleanup](#processes-and-cleanup) |
+| 2026-07-30T01:09:58Z | <code>ps -o pid,etime,command -p 22293,22300,76361</code> | 0 | Elapsed `04-11:09:26`, `04-11:09:26`, `04-01:10:49` — all three predate this audit by days and are none of its business | [Processes and cleanup](#processes-and-cleanup) |
+| 2026-07-30T01:10:10Z | <code>pgrep -alf 'frozen-bubble-sdl3&#124;task1[0-9]&#124;scenario.py&#124;run_case.sh&#124;websockify' &#124; grep -v 'shell-snapshots'</code> | **1** | No match — **no audit-owned harness, scenario driver, client, server or proxy remains running** | [Processes and cleanup](#processes-and-cleanup) |
+| 2026-07-30T01:14:00Z | <code>python3 - (assert every finding ID cited in the report is a registry row exactly once)</code> | 0 | **98** distinct IDs cited; **0** cited-but-absent; **0** cited-with-duplicate-rows; **0** registry rows uncited | [SDL3_COMPLETE_REVIEW.md](SDL3_COMPLETE_REVIEW.md) |
+| 2026-07-30T01:14:20Z | <code>python3 - (resolve every relative link and anchor in the report against real headings)</code> | 0 | **88** relative links checked; **0** missing files; every anchor resolves to **exactly one** heading | [SDL3_COMPLETE_REVIEW.md](SDL3_COMPLETE_REVIEW.md) |
+| 2026-07-30T01:14:40Z | <code>rg -c -n 'TB[D]&#124;TO[D]O&#124;investigating&#124;suspected' docs/audit --glob '!SDL3_COMPLETE_REVIEW.md'</code> | 0 | **11** hits outside the report — `FINDINGS.md` 1 (the lifecycle rule's own definition), `09-final-challenge.md` 1, `07-build-release-tooling.md` 3 (all `TODO`, describing *the project's* disclosed macOS/Windows signing TODOs, evidence for REL-007), `SDL3_REVIEW_STATUS.md` 6. **0** are unresolved audit work markers; each was judged rather than mechanically required absent | [SDL3_COMPLETE_REVIEW.md](SDL3_COMPLETE_REVIEW.md) |
+| 2026-07-30T01:14:55Z | <code>git diff --check</code> | 0 | No output — no whitespace errors or conflict markers | [SDL3_COMPLETE_REVIEW.md](SDL3_COMPLETE_REVIEW.md) |
 
 ## Commands and evidence
 
@@ -2088,7 +2248,7 @@ testing was excluded by user direction.
 | 2026-07-29T18:03:18Z | <code>python3 -c "…compare each subsystem notebook's '## ' headings to the ten required, in order…"</code> | 0 | `notebooks 9 mismatches 0` — the ten-heading invariant holds for all nine notebooks including the newly written `08-dynamic-integration.md` | [subsystems/08-dynamic-integration.md](subsystems/08-dynamic-integration.md) |
 | 2026-07-29T18:03:30Z | <code>python3 -c "…count &#96;&#124; &#96;&#96;&#96;&#96; rows and case-insensitive 'pending' occurrences in docs/audit/FILE_COVERAGE.md…"</code> | 0 | `rows 237` and **10** `pending` occurrences, all on line 5 — the inventory rule paragraph. Task 10 extended four rows' Notes and introduced no new row and no new pending state | [FILE_COVERAGE.md](FILE_COVERAGE.md) |
 
-### Task 10 Fix Round 1
+### Task 10 Fix Round 1 Ledger
 
 An independent review of commit `f297dfc1` raised two Critical, one Important
 and one Minor finding; all four accepted. Each row below is its own top-level
@@ -2436,6 +2596,27 @@ killed none — the two `ps`/`lsof` rows observe processes that predate it by da
   header**, not from the pinned 3.4.4 submodule, when Task 12 confirmed
   BUG-036's 20-vs-26 stride. The value is 26 in both families, but the
   measurement is host-derived.
+- **Task 13 compiled nothing and launched nothing**, so it contributes no
+  dynamic, sanitizer or leak evidence of its own. Every limitation recorded above
+  is **retained**, not closed, and is carried into
+  [`SDL3_COMPLETE_REVIEW.md`](SDL3_COMPLETE_REVIEW.md) §8. In particular: no
+  security-specific runtime testing was performed anywhere in this audit, so
+  SEC-001..007 remain code-supported inferences and SEC-002's extended
+  heap-overflow consequence is **open, not resolved**; BUG-052 is **unreproduced**;
+  and because Apple ASan cannot detect leaks, **no leak conclusion anywhere in
+  this audit rests on a sanitizer pass**.
+- **Task 13 found that two of the final challenge's upheld re-derivations are
+  asserted rather than evidenced.** BUG-001 and BUG-015 have no one-line entry in
+  notebook 09's load-bearing verification list and no compensating `Limitations`
+  entry. Both retain reproductions from their originating gates, so the findings
+  themselves are not in doubt; the independent re-derivation is what is missing.
+  Recorded as a residual risk in the report rather than repaired, because
+  repairing it would mean performing the final challenge's work in the final
+  report.
+- **Four explicit dismissals in notebook 08 fall outside the final challenge's
+  bullet-based dismissal count**, so their challenged status is unevidenced. All
+  four are protocol observations that Task 10 reproduced at runtime, which bounds
+  the residual, but it is stated rather than smoothed.
 
 ## Processes and cleanup
 
@@ -2532,3 +2713,27 @@ killed none — the two `ps`/`lsof` rows observe processes that predate it by da
   it is reported for the operator to clear before any LAN-hosting test, since
   `create_udp_server`'s `exit(EXIT_FAILURE)` on a failed bind makes every later
   `fb-server -l` on this host die at startup while it lives.
+- **Task 13 started no server, listener, client, proxy, container, harness,
+  build or background process, and killed none.** It bound no port, opened no
+  preference file, compiled nothing and ran no sanitizer. Its only writes are the
+  tracked documents under `docs/audit/` and one scratch file, `inv.txt`, under
+  the session scratchpad — local regenerable evidence owning no external state
+  and containing no credentials.
+- **Task 13's runtime observations are entirely passive**, and one of them
+  updates Task 12's record. `pgrep -alf fb-server` reports **3** foreign
+  `fb-server` processes, not the 4 Tasks 10 and 12 enumerated: PIDs 22293 and
+  22300 (ports 15511/15512, from a different repository, elapsed `04-11:09:26`)
+  and PID 76361 (port 15998, `04-01:10:49`). **PID 74458 — the
+  `tools/server_tests` orphan that Task 12 recorded holding `UDP *:1511` and
+  `TCP *:15113`, and deliberately left untouched because it was not the audit's
+  process — has exited on its own.** `lsof -nP -iUDP:1511` and
+  `lsof -nP -iTCP:15113 -sTCP:LISTEN` both exit **1** with no output. Task 13
+  did not kill it. REL-002's observed-in-the-wild evidence stands on Task 12's
+  contemporaneous observation, which is retained unchanged; the orphan survived
+  roughly two days before ending, which is itself the point of the finding.
+- **No audit-owned process remains.** `pgrep -alf` for the harness, scenario,
+  client and proxy names exits **1** with no match. All temporary build trees,
+  harness sources, binaries, logs and journals under `/tmp/fb-sdl3-audit/`, plus
+  the locally-excluded `build-audit-wasm/` and `build-audit-config/` trees, are
+  local regenerable evidence owning no running process; they may be deleted
+  freely now that the audit is complete.

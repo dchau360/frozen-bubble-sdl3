@@ -124,12 +124,21 @@ Improvements are ranked separately by expected benefit, implementation effort, a
 | BUG-052 | confirmed | High | High | Task 12 | `NetworkClient`'s receive buffer has an **absorbing** full state: once it fills, the connection is permanently deaf. `ProcessIncomingData` appends under one guard, `if (recvBufferLen + received < BUFFER_SIZE)` (`src/networkclient.cpp:843`), with **no `else`** — and every statement that reduces `recvBufferLen` (`:894` in-game, `:914`/`:916` lobby) lives inside that guard's body. The constructor sets it to 0 (`:38`) and `Disconnect` never resets it (BUG-013). So once the guard fails it fails for every later `recv` with `received >= 1`: `Update`'s read loop (`:810-818`) spins its 100-iteration cap each frame discarding everything and reports only "network buffer was filling up". `BUFFER_SIZE` is **4096** (`networkclient.h:36`, buffer at `:213`), while the server emits single lines up to **16383** bytes — `send_line` formats into `static char buf[16384]` and sends `sizeof(buf)-1` (`server/net.c:126-146`), and the `LIST` reply is the `static char [16384]` `list_games_str` (`server/game.c:134`). No malformed or oversized input is needed: `list_open_nicks_aux` (`game.c:139-151`) appends `NICK[:GEOLOC],` per lobby connection — nick ≤ 10 (`game.c:615`), geoloc ≤ 13 (`:746-747`), i.e. up to **25** bytes each — and `max_users` defaults to **255** (`server/net.c:82`), so 255 idle lobby clients contribute up to 6,375 bytes before any room is listed; even with no geolocations, 255 nicks (2,805 B) plus 16 open rooms of 20 seats (the `games_open == 16` cap, `game.c:773`) exceeds 4,095. A legitimately busy public server of the kind this project deploys (`docker/docker-compose.yml`, `README.md`'s public server list) produces it. Impact: the lobby stops updating and every server push is dropped — `GAME_CAN_START`, `OPTIONS:`, `TALK`, `KICKED` — and in `IN_GAME` state every relayed peer frame is dropped, so boards diverge with no error shown; only a reconnect that also reconstructs the object clears it. **Not** memory corruption: the guard is a strict `<` and `recvBuffer[recvBufferLen]` (`:898`) stays inside the array. Not reproduced — that needs either ~165 concurrent lobby connections or a deliberately over-long server line, the latter barred by the standing security-runtime restriction — so this is a complete code-supported causal chain, recorded with reproduction as a limitation. Found by Task 12's server/client length-mismatch sweep, from an observation notebook 02 conceded at `:153` ("a chunk that would fill the buffer is silently skipped") and set aside as "Ordinary server messages fit the buffer … Overflow/flood behavior remains part of the untrusted-input limitation" without ever opening it as a candidate. Fix shape (not applied): grow `recvBuffer` to at least the server's 16,384-byte line ceiling **and** give the guard an `else` that reports and recovers — drain complete lines out of the full buffer, or treat an unterminated buffer-filling line as a protocol error and disconnect the way the server itself does (`net.c:331-334`) — and reset `recvBufferLen` in `Disconnect`. Verification: feed `ProcessIncomingData` a 5,000-byte line and assert the next well-formed line is still parsed (assertion belongs in IMP-019's `tests/netclient_parse_test.cpp`) | [Task 12 confirmed findings](subsystems/09-final-challenge.md#confirmed-findings) |
 
 Task 12, the independent final challenge, registered **BUG-052** and revised nine
-existing findings. It challenged all **72** confirmed defects (62 upheld with
-citations re-derived from the pinned source, **9** revised, **0** dismissed), all
-**24** improvements (0 rejected, 2 revised — IMP-013, IMP-021), all **43**
-explicit dismissal bullets in notebooks 01-08 (0 overturned, BUG-012 stays
-dismissed and its ID stays retired), and all **8** cross-subsystem categories the
-plan names. The nine revisions are BUG-002, SEC-001, SEC-002 and SEC-005
+existing findings. It challenged all **72** confirmed defects (**63** upheld with
+citations re-derived from the pinned source, **9** revised, **0** dismissed —
+63 + 9 + 0 = 72), all **24** improvements (0 rejected, 2 revised — IMP-013,
+IMP-021), all **43** explicit bullet-form dismissals in notebooks 01-08 (0
+overturned, BUG-012 stays dismissed and its ID stays retired), and all **8**
+cross-subsystem categories the plan names. *Task 13 corrected two of this
+paragraph's quantities.* The upheld figure read **62**, a partition summing to
+71 rather than 72, because REL-010 was omitted from the upheld enumeration
+despite being challenged and named in the gate's own `Coverage` section; it is
+neither revised nor dismissed, so it is upheld and the count is 63. And the 43
+dismissal figure counts **bullet-form** entries only — all 43 are in notebooks
+01-07, while notebook 08 records **4** more in bold-paragraph form, so there are
+**47** explicit dismissals across notebooks 01-08 and 43 of them are evidenced
+as read. See
+[SDL3_REVIEW_STATUS.md#task-13-corrections](SDL3_REVIEW_STATUS.md#task-13-corrections). The nine revisions are BUG-002, SEC-001, SEC-002 and SEC-005
 (previously unstated reachability qualifications, with SEC-002's impact extended
 and SEC-005's *strengthened* — both documented launch paths pass `-l`, so its UDP
 path is live in every documented deployment); SEC-004 and SEC-007 (threat model
