@@ -311,6 +311,17 @@ static struct game* find_game_by_fd(int fd)
         return GListp2data(g_list_find_custom(games, GINT_TO_POINTER(fd), find_game_by_fd_aux));
 }
 
+/* Is this game still in the games list, or has a re-entrant teardown freed it?
+   Every site that frees a game removes it from `games` immediately beforehand,
+   so list membership is the liveness test. Callers that relay to other players
+   must use this before touching a game pointer again: a failed send terminates
+   the destination connection, which re-enters player_part_game_ on the same
+   game and can free it underneath the caller. */
+static int game_is_live(const struct game *g)
+{
+        return g != NULL && g_list_find(games, g) != NULL;
+}
+
 int find_player_number(struct game *g, int fd)
 {
         int i;
@@ -1047,8 +1058,15 @@ void player_part_game_(int fd, char* reason)
                                 stats_record_loss(save_nick);
                                 l1(OUTPUT_TYPE_INFO, "Player %s left during game - recorded as loss", save_nick);
 
-                                // If this was the last player to leave (only 1 remains), the remaining player wins
-                                if (g->players_number == 1) {
+                                // The relay above can fail to send (ordinary EPIPE when several
+                                // clients drop at once), which appends the destination to
+                                // conn_to_terminate and runs conn_terminated -> player_part_game_
+                                // re-entrantly on this same game. That nested call can take the
+                                // players_number == 0 branch and free g, so g may be dangling
+                                // here. Re-validate against the games list before reading it; if
+                                // it is gone, the nested call already recorded the last player's
+                                // win and there is nothing left for this frame to do.
+                                if (game_is_live(g) && g->players_number == 1) {
                                         char* winner_nick = g->players_nick[0];
                                         stats_record_win(winner_nick);
                                         l1(OUTPUT_TYPE_INFO, "Game ended: %s wins (last player remaining)", winner_nick);

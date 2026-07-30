@@ -35,6 +35,22 @@
 #define PROTO_MINOR 3
 #define BUFFER_SIZE 4096
 
+// Highest team number a player may be assigned. Team numbers are one-based and
+// are used to index kTeamColors (bubblegame.h), which static_asserts that it
+// holds exactly this many entries. Peer-supplied team values are clamped to
+// [1, kMaxTeams] when OPTIONS is parsed.
+inline constexpr int kMaxTeams = 5;
+
+// Fold an untrusted team number into the range kTeamColors can be indexed with.
+// OPTIONS arrives from another client, so PLAYERTEAM_Pn is arbitrary until this
+// runs; 0 would index kTeamColors[-1] and anything above kMaxTeams would run off
+// the end.
+inline constexpr int ClampTeamNumber(int team) {
+    if (team < 1) return 1;
+    if (team > kMaxTeams) return kMaxTeams;
+    return team;
+}
+
 enum ConnectionState {
     DISCONNECTED,
     CONNECTING,
