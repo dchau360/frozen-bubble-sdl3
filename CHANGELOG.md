@@ -1,5 +1,20 @@
 # Changelog
 
+## v2.4.29
+
+Completes the high-severity fixes from the repository audit that v2.4.28 started.
+
+- **Players can no longer impersonate each other** — the server relayed each in-game message with the sender byte exactly as the sending client wrote it, so a client could claim to be any other player in its room, or the room leader. The server now stamps every relayed message with the seat it assigned that connection.
+- **A stray message no longer takes the server down** — a connection left in a room that had closed or kicked it could, with its next in-game message, terminate the whole server process and every unrelated game running on it. Only that connection is closed now.
+- **Server privilege drop fails loudly** — when started with `-u`, a failed switch to the requested user was ignored and the daemon carried on with its original privileges. It now refuses to start, and also drops supplementary groups, which it previously kept.
+- **Server rejects an implausible response length** — a hostile or broken master-server reply could steer the server's own buffer arithmetic; the value is now range-checked before use.
+- **The game starts even when its settings file cannot be written** — an unwritable preferences folder previously left the game retrying forever before any window appeared, so it looked frozen. It now starts with default settings and says so.
+- **A corrupt highscore or level file no longer prevents startup** — the bad entry is skipped and the rest of the file is kept, instead of the game closing during startup.
+- **Long lobby listings no longer break the connection** — on a busy server, a single large message could permanently wedge the client's receive buffer: the lobby stopped updating and, in a game, moves from other players were silently discarded while boards drifted apart. No error was shown.
+- **Windows: the game no longer stalls waiting for the network** — the client's per-frame receive was blocking on Windows, so the game could hang until the server sent something. *(Fixed by construction; not yet validated on Windows hardware.)*
+- **Stale attacks no longer carry into a new game** — starting a different match kept attacks and counters from the previous one, which could land on a board belonging to a player who is no longer in the game.
+- **WebSocket messages are sent whole** — a partially-sent message was reported as fully sent, which left browser clients misreading everything that followed on that connection.
+
 ## v2.4.28
 
 - **Server crash on simultaneous disconnects fixed** — when several players in the same room dropped at once, the server could keep using a game it had already torn down. On the shipping build this corrupted whichever branch it read next and could write a bogus win to the stats file; under a sanitizer it aborted the process, taking every other room on the server down with it.
