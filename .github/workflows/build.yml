@@ -80,6 +80,15 @@ jobs:
             -DCMAKE_INSTALL_PREFIX=/usr
           cmake --build build --parallel
 
+      # Until now compilation was the entire CI gate: every registered CTest
+      # test sat unrun, so each regression test written for an audit finding
+      # guarded nothing on any branch but the author's machine. The two
+      # sanitizer-only server tests report themselves SKIPPED here (they need an
+      # ASan build — see the test-server-sanitizer job) rather than passing
+      # vacuously.
+      - name: Run tests
+        run: ctest --test-dir build --output-on-failure
+
       - name: Install into AppDir
         run: |
           DESTDIR=$PWD/AppDir cmake --install build
@@ -133,7 +142,7 @@ jobs:
         id: package_version
         run: |
           version="${GITHUB_REF_NAME#v}"
-          if [[ "$GITHUB_REF" != refs/tags/v* ]]; then version="2.4.31"; fi
+          if [[ "$GITHUB_REF" != refs/tags/v* ]]; then version="2.4.32"; fi
           echo "value=$version" >> "$GITHUB_OUTPUT"
 
       - name: Install dependencies
@@ -257,7 +266,7 @@ jobs:
         id: package_version
         run: |
           version="${GITHUB_REF_NAME#v}"
-          if [[ "$GITHUB_REF" != refs/tags/v* ]]; then version="2.4.31"; fi
+          if [[ "$GITHUB_REF" != refs/tags/v* ]]; then version="2.4.32"; fi
           echo "value=$version" >> "$GITHUB_OUTPUT"
 
       - name: Download SDL3 prebuilt MinGW libs

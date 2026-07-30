@@ -156,14 +156,20 @@ void InitDataDir() {
     g_dataDir = DATA_DIR;
 }
 
-// Log the resolved directory on every platform, not just Android. When asset
-// loading fails the first question is always which directory was chosen, and
-// on desktop that was previously invisible (audit finding REL-008).
+#endif
+
+// Deliberately outside the per-platform #if chain above. Android, WASM and
+// desktop each define their own InitDataDir(), so a definition placed inside
+// any one of those branches exists only for that platform — putting this in the
+// desktop branch compiled fine on macOS and Linux and then failed to link for
+// WASM with "undefined symbol: LogDataDir()".
+//
+// Logs the resolved directory on every platform. When asset loading fails the
+// first question is always which directory was chosen, and outside Android that
+// was previously invisible (audit finding REL-008).
 void LogDataDir() {
     SDL_Log("Asset data dir: %s", g_dataDir.c_str());
 }
-
-#endif
 
 #ifdef __WASM_PORT__
 #include <emscripten.h>

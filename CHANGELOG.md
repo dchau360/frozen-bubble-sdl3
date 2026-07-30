@@ -1,5 +1,9 @@
 # Changelog
 
+## v2.4.32
+
+- **Fixes the browser build, which failed to link in v2.4.31** — a diagnostic added in v2.4.31 was defined only for desktop builds, so the WebAssembly build did not link and that release went out incomplete. v2.4.31's changes are listed below and are all included here.
+
 ## v2.4.31
 
 - **macOS download is now labelled by architecture** — the macOS build is Apple Silicon only, but shipped as `frozen-bubble-macos.dmg` with nothing saying so, and Intel Macs downloaded an app that could not launch. It is now `frozen-bubble-macos-arm64.dmg`, and the build fails rather than publishing if the binary is not the architecture the name claims. Intel Macs can build from source or play in the browser.
