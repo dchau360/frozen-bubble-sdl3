@@ -307,6 +307,26 @@ jobs:
             cp -v "$(cygpath -u "$dll")" pkg/
           done
 
+          # Union with the previous hand-maintained list, best-effort. The walk
+          # above is authoritative for load-time imports and is what makes a
+          # genuinely missing dependency fail the job — but it cannot see DLLs
+          # opened at runtime through LoadLibrary, which never appear in a PE
+          # import table. Copying these too costs a few hundred KB and keeps the
+          # package a superset of what shipped before, so replacing the list
+          # cannot regress the installer. Absent files are fine: the SDL3 MinGW
+          # release archives link most of these in statically, which is why the
+          # walk reports far fewer than this list names.
+          for dll in \
+            libpng16-16.dll libogg-0.dll libvorbis-0.dll libvorbisfile-3.dll \
+            libfreetype-6.dll libbrotlicommon.dll libbrotlidec.dll \
+            libharfbuzz-0.dll libgraphite2.dll zlib1.dll \
+            libglib-2.0-0.dll libintl-8.dll libiconv-2.dll libpcre2-8-0.dll; do
+              [ -f "pkg/$dll" ] && continue
+              cp "/mingw64/bin/$dll" pkg/ 2>/dev/null \
+                && echo "  (extra, not a load-time import) $dll" \
+                || true
+          done
+
           # Explicit backstop for the three the audit named, in case a future
           # walker change silently returns a short list.
           for required in SDL3.dll libstdc++-6.dll libwinpthread-1.dll; do
