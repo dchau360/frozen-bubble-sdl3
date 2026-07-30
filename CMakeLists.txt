@@ -195,6 +195,11 @@ if(BUILD_TESTING AND NOT EMSCRIPTEN AND NOT ANDROID)
             COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tests/server_list_cap_test.py $<TARGET_FILE:fb-server>)
         add_test(NAME server-massleave-test
             COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tests/server_massleave_test.py $<TARGET_FILE:fb-server>)
+        # Binds the hardcoded UDP discovery port, so it cannot run concurrently
+        # with another fb-server; it skips when that port is already in use.
+        add_test(NAME server-udp-probe-test
+            COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tests/server_udp_probe_test.py $<TARGET_FILE:fb-server>)
+        set_tests_properties(server-udp-probe-test PROPERTIES RUN_SERIAL TRUE)
     endif()
 endif()
 
