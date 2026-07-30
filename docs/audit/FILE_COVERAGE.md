@@ -20,9 +20,18 @@ re-derived the inventory rather than re-reading it. Task 1 Step 4's own
 selection command was re-run against the pinned tree (**3623** paths) and
 matched exactly **237**; `diff` against the 237 paths extracted from this
 file's own rows produced no output and exited **0**. Every disposition cell was
-tabulated: **41** distinct strings summing to **237**, and every class was
-sampled — including the 97 vendored-symlink rows, the 19 other vendored rows,
-and the 2 `Binary; validated through …` rows — not only the easy ones. A
+tabulated: **42** distinct strings summing to **237** (Fix Round 1 correction:
+originally miscounted as 41 — the census was tabulated before this same gate's
+own edit to the `src/networkclient.cpp` row landed, and that edit's disposition
+text, "Complete; native baseline, direct WASM compile, Task 10 live-socket
+runtime, and Task 12 length-boundary re-review", is a singleton class the
+pre-edit tabulation never saw; see
+[Task 12 Fix Round 1 Findings](SDL3_REVIEW_STATUS.md#task-12-fix-round-1-findings)),
+and every class was sampled — including the 97 vendored-symlink rows, the 19
+other vendored rows, the 2 `Binary; validated through …` rows, and (in Fix
+Round 1) the previously-unsampled `src/networkclient.cpp` singleton, whose
+BUG-052 citations (`:843`, `:894`, `:914`, `:916`) were re-verified line-by-line
+against the pinned source — not only the easy ones. A
 case-insensitive search over the ledger's **disposition cells** finds
 `pending` **0** times; its whole-file occurrences are prose only. All Markdown link references in this file, `FINDINGS.md`,
 `SDL3_REVIEW_STATUS.md` and notebooks 01-09 were resolved programmatically

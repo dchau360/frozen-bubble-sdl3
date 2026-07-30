@@ -147,7 +147,8 @@ hosting to every later `-l` server); and REL-009 (extended with a third
 20-element array). Task 12 started no process and killed none; its one runtime
 datum is a passive observation of processes predating the gate by days. The
 registry now holds **98 unique IDs**: BUG-001..052, SEC-001..007, REL-001..015,
-IMP-001..024. Next free IDs are BUG-053, SEC-008, REL-016, IMP-025.
+IMP-001..024. **Not yet allocated — do not count these as findings:** the next
+free ID in each series is BUG-053, SEC-008, REL-016, IMP-025.
 
 Task 11 Fix Round 1 registered **BUG-051** from the "unchecked indices" cross-cutting
 sweep the independent review found undocumented in the original gate (see

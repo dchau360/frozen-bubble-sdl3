@@ -327,12 +327,17 @@ Re-derived rather than re-read.
    re-run against the pinned tree (3623 paths) and diffed against the 237 paths
    extracted from `FILE_COVERAGE.md`'s own rows. `rg` matched exactly **237**;
    `diff` produced no output and exited **0**. The inventory claim holds.
-2. **Disposition census.** Every row's disposition cell was tabulated: **41**
-   distinct strings summing to **237**. The largest classes are 97
-   "Vendored; boundary reviewed — defect confirmed" (the REL-005 symlinks), 21
-   "Complete", 19 "Vendored; boundary reviewed", 15 "Reviewed; defect
-   confirmed", and 14 "Reviewed; no defect". Every class was sampled, including
-   the vendored and binary ones, not only the easy ones.
+2. **Disposition census.** Every row's disposition cell was tabulated: **42**
+   distinct strings summing to **237** (Fix Round 1 correction: originally
+   miscounted as 41 — the tabulation predated this same gate's own edit to the
+   `src/networkclient.cpp` row a few lines below, whose new disposition text is
+   a singleton class the pre-edit count never saw; re-verified in Fix Round 1,
+   see [Task 12 Fix Round 1 Findings](../SDL3_REVIEW_STATUS.md#task-12-fix-round-1-findings)).
+   The largest classes are 97 "Vendored; boundary reviewed — defect confirmed"
+   (the REL-005 symlinks), 21 "Complete", 19 "Vendored; boundary reviewed", 15
+   "Reviewed; defect confirmed", and 14 "Reviewed; no defect". Every class was
+   sampled, including the vendored and binary ones and (in Fix Round 1) the
+   `src/networkclient.cpp` singleton, not only the easy ones.
 3. **No hidden pending state.** At the time of measurement a case-insensitive
    whole-file search found the word `pending` **once**, inside the
    inventory-rule paragraph that defines it, so the "0 rows carry a pending
@@ -566,19 +571,26 @@ them:
   recorded Task 9 limitation and is unchanged.
 - **Improvements challenged:** 24 of 24 (100%). 0 rejected, 2 revised
   (IMP-013, IMP-021).
-- **Dismissals challenged:** all 43 explicit bullets read, 4 sampled in depth,
-  0 overturned; plus a bounded sweep of conceded-and-set-aside inline
+- **Dismissals challenged:** all 43 explicit bullets read, 4 sampled in depth
+  (BUG-012, `idleSPButtons` `SDL_GetTextureSize`, `cmake_uninstall.cmake.in`
+  `exec_program`, `netlify.toml` publish-directory — see Step 5b above for the
+  one-line record of what was attempted against each and why the dismissal
+  held), 0 overturned; plus a bounded sweep of conceded-and-set-aside inline
   observations across notebooks 01-08 — 6 found, 5 sound, 1 promoted to
   BUG-052.
 - **Cross-subsystem categories:** all 8 named in brief Step 4 executed; 1
   produced a new defect, 7 produced nothing beyond the existing registry.
 - **Coverage claim:** inventory reconciled at 237/237 with an empty `diff`;
-  disposition census summing to 237 across 41 strings with every class sampled;
+  disposition census summing to 237 across 42 strings with every class sampled
+  (Fix Round 1: corrected from a miscounted 41 — the census predated this
+  gate's own `src/networkclient.cpp` edit; see
+  [Task 12 Fix Round 1 Findings](../SDL3_REVIEW_STATUS.md#task-12-fix-round-1-findings));
   0 pending rows; 0 broken links and 0 broken anchors repository-wide across the
   audit documents; notebooks 01-08 structurally conformant; registry with 0
   duplicate IDs and 0 gaps.
 - **Registry after this gate:** **98** unique IDs — BUG-001..052, SEC-001..007,
-  REL-001..015, IMP-001..024. Next free IDs are BUG-053, SEC-008, REL-016,
+  REL-001..015, IMP-001..024. **Not yet allocated — do not count these as
+  findings:** the next free ID in each series is BUG-053, SEC-008, REL-016,
   IMP-025.
 
 ## Limitations

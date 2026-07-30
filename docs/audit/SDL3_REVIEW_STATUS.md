@@ -49,7 +49,7 @@
 | Task 9 | Build, tests, packaging, CI, deployment, tooling, and operations | complete (all five build definitions compared and reconciled; workflow, Compose, CMake, Gradle and Python configurations parsed locally; every confirmed defect from Tasks 3-9 mapped to a test, a dynamic case, or a registered gap; all 21 remaining pending coverage rows dispositioned. Fourteen IDs registered — REL-009..014 and IMP-016..023 — four entries extended (REL-004 severity Low → Medium, REL-006, REL-007, REL-008), IMP-008 closed, four candidates dismissed with counter-evidence including one disproved by running the command it doubted. The gate also corrected an inherited premise: `CLAUDE.md`'s claim that four of five platform build jobs are disabled with `if: false` is false at the pinned baseline — 0 of 11 jobs carry it — so Task 8's CI-reachability clause is corrected here and in the registry. No workflow was executed, no container started, and no external network operation performed; those are recorded as limitations, not passes. Fix Round 1 applied two accepted Important and two accepted Minor findings: REL-013's DLL count corrected 20 → 21 with the `tr`/undercount root cause recorded, REL-007's citation split across the two workflow steps its four password instances actually span, FILE_COVERAGE.md's inventory rule corrected to stop claiming a second `pending` location that does not exist, the "ten headings, each once" phrasing restated to name the subsystem notebooks it actually governs, and a re-run count sweep that found only the DLL count reproduced differently. Fix Round 2 applied two accepted Important and one accepted Minor finding: a Fix Round 1 ledger row that bundled sixteen independent commands under one non-representative exit was removed and split into sixteen individually re-run rows with honest exits, that same row's mislabeled "fourteen" quantity count corrected to sixteen commands (seventeen quantities), and the two identical "Task 9 Fix Round 1" headings disambiguated into "Findings" and "Ledger" with both misdirected cross-links retargeted to the ledger) |
 | Task 10 | Cross-subsystem dynamic integration matrix | complete (41 matrix rows recorded before any process launched — the original 38-row matrix's bundled row 38 was split in Fix Round 1 into 4 individually countable manual-observation rows; **31 executed, 10 recorded as not performed** — the six hostile-transport rows because the user restricted security-specific runtime testing, four manual visual/audio rows (clear-win banner and sound, spectator pinning, >5-player paging, malus/attack visuals) because no display, audio device or input-injection path existed). First gate to run real client code against a real server over a real socket: 24 `fb-server` instances (23 ASan+UBSan, 1 Release), each on its own dedicated port from a 24-port reserved range, driving rooms at 2/3/4/5/6/10/20 seats plus the 20-seat admission boundary and its boundary+1, normal/team/clear modes, rounds 1-3, member and creator departure both during and before a round, mid-game reconnect, `PART`/rejoin, and `SIGTERM` shutdown. Relay invariants re-derived from 11 saved journals: 4,990 frames delivered, 0 self-echoes, 0 unknown senders, all seat maps identical. Two defects and one improvement registered — **BUG-049** (High: recursive `player_part_game_` teardown frees the game and the outer frame reads it at `server/game.c:1051`; 11 identical ASan reproductions, minimum 3 seats, triggered by ordinary simultaneous disconnects, and **silent** on the uninstrumented Release build), **BUG-050** (Low: `LIST`'s `free:` counter contradicts its own open-player list) and **IMP-024** (unvalidated `CREATE` room cap). BUG-015 gained its first runtime reproduction; BUG-005 is recorded as entangled with BUG-049 and not independently measurable; BUG-013, BUG-021 and BUG-040 gained server-side runtime measurements with no severity change; three candidates dismissed with counter-evidence. No leak claim is made — Apple ASan requires `detect_leaks=0`. All 24 ports read free afterwards and the `fb-server` process list is byte-identical to the pre-launch baseline, so the four unrelated servers belonging to the user's own environment were neither touched nor counted. **Fix Round 1** corrected a false cleanup-proof claim and registered a fourth finding, **REL-015** (Medium): `fb-server`'s stats-file path is derived from `$HOME` unconditionally with no isolation mechanism, and this gate's own 24 launches — which isolated `joiners.log` by working directory but never set `HOME` — read from and wrote to the operator's real `~/.fb-server/stats.dat` for the entire gate, discovered in independent review rather than prevented; the off-by-one `networkclient.cpp:1306` citation was also corrected to `:1307`) |
 | Task 11 | Complete file coverage and prioritized improvements | complete (237-row pinned-commit inventory reconciled exactly, diff-empty against a fresh regeneration of Task 1 Step 4's own selection command; **Fix Round 1** re-ran all eleven Step 2 cross-cutting categories as individually commanded, individually exited ledger rows against project-owned `src`/`server` — raw copies (3 hits), allocation/free (11 `malloc`/`calloc`/`realloc`, 44 `free(`), SDL create/destroy pairing (15 `SDL_Create*`, 37 `SDL_Destroy*`), hardcoded versions (reproduces REL-004's five), filesystem/`getenv(HOME)`/`SDL_GetPrefPath`/`SDL_GetBasePath` (5 hits, all already covered), **unchecked indices** (30 hits — one new candidate, **BUG-051**, an unguarded `std::array` write in `LoadLevelset`, unreachable with the shipped 10-line-per-block asset), **signed/unsigned conversions** (36 hits, all bounds-safe), **ignored return values** (19 statement-level hits, all idiomatic or already covered by BUG-033/BUG-047), **global/singleton lifetime** (33 `ptrInstance` hits, exactly matching IMP-007's four-singleton leak pattern plus two confirmed-safe outliers, `NetworkClient` and `FrozenBubble`), and **network lengths/opcodes** (46 hits, all covered by SEC-002/SEC-006/BUG-006 or independently verified safe in `ws_decode_inplace`) — the two previously-unevidenced categories that lacked even a real command now have one each; the **compile-guard sweep was rerun with a token-enumerating pattern and corrected**: seven guard tokens exist in `src` (`__ANDROID__`, `__ANDROID_PORT__`, `__WASM_PORT__`, `_WIN32`, `__APPLE__`, `__MINGW32__`, `__linux__`), not two, and only the first three are the ones CLAUDE.md's Platform abstraction section names — the four OS-detection macros in `platform.cpp` are real and correctly used but undocumented by CLAUDE.md, which is now stated honestly rather than claimed as an exact match; a mis-cited ledger command (`task6_settings_harness probe`, which could not match either probe row's actual text) was replaced with one that matches both; the `getenv("USER")` sweep was widened to the six sites the independent review found unswept, all dispositioned as benign bounded nickname fallbacks; and the "36/15/28" duplicate-platform-source-list counts were given their own reproducible per-file commands and reconfirmed unchanged. One stale "Investigating" candidate row in the server notebook corrected to its already-confirmed disposition, leaving zero open `suspected`/`investigating` states across the 97-ID registry; all 24 `IMP` entries confirmed to share one benefit/effort/risk vocabulary; all five Task 6/Task 4/Task 10 deferred items resolved with re-derived evidence, not re-deferred; notebooks 01-08 reconfirmed at ten headings each with an explicit gate conclusion and no unresolved action) |
-| Task 12 | Independent final challenge | complete (independent challenger **Claude Opus**, model id `claude-opus-5`, fresh context. All **72** confirmed defects challenged on reachability, inputs, platform, impact and root cause: **62 upheld** with citations re-derived from the pinned source, **9 revised**, **0 dismissed** — no confirmed defect was a false positive. All **24** improvements challenged: 0 rejected, **2 revised** (IMP-013's clamp-site enumeration completed with `shaderstuff.cpp:1158`; IMP-021's transition driver corrected so its BUG-041 assertion can fail). All **43** explicit dismissal bullets in notebooks 01-08 read and 4 sampled in depth: **0 overturned**; BUG-012 stays dismissed and its ID stays retired. **One new defect: BUG-052 (High)** — `NetworkClient`'s receive-buffer append guard has no `else` and every `recvBufferLen` reduction sits inside its body, so a server line exceeding `BUFFER_SIZE` (4096) against the server's 16383-byte line ceiling puts the connection into a permanently deaf absorbing state on ordinary traffic. It came from an observation notebook 02 conceded at `:153` and set aside without ever opening it as a candidate. **One cross-notebook contradiction resolved** against the pinned source: notebook 04's trust table said "any room member can emit `SETOPTIONS`" where `server/game.c:405` enforces slot-zero creator authority, as notebook 01's own row correctly recorded — SEC-004 and SEC-007 re-scoped. **One Fix-Round correction reversed as itself wrong**: BUG-041's trigger set — `DoSnipIn` animates nothing, the leak is produced by `TakeSnipOut` at `bubblegame_render.cpp:1173`, and `QuitToTitle`'s `firstRenderDone` clear is what arms it, so menu return *is* a trigger. **One finding strengthened from static to observed**: REL-002, via a passive 1 d 21 h old orphan holding UDP 1511 and TCP 15113. **Four previously unstated reachability qualifications** recorded (BUG-002, SEC-001, SEC-002 — whose impact was also extended to a `bufsize == 0` / `recv` length `(size_t)-1` path — and SEC-005, which is *strengthened*, both documented launch paths passing `-l`). Coverage claim re-derived: 237/237 with an empty `diff`, 41 disposition strings summing to 237 with every class sampled, 0 pending rows, 0 broken links and 0 broken anchors, notebooks 01-08 structurally conformant, registry with 0 duplicate IDs and 0 gaps. Started no process and killed none; security findings challenged **statically only** per the standing user restriction) |
+| Task 12 | Independent final challenge | complete (independent challenger **Claude Opus**, model id `claude-opus-5`, fresh context. All **72** confirmed defects challenged on reachability, inputs, platform, impact and root cause: **62 upheld** with citations re-derived from the pinned source, **9 revised**, **0 dismissed** — no confirmed defect was a false positive. All **24** improvements challenged: 0 rejected, **2 revised** (IMP-013's clamp-site enumeration completed with `shaderstuff.cpp:1158`; IMP-021's transition driver corrected so its BUG-041 assertion can fail). All **43** explicit dismissal bullets in notebooks 01-08 read and 4 sampled in depth: **0 overturned**; BUG-012 stays dismissed and its ID stays retired. **One new defect: BUG-052 (High)** — `NetworkClient`'s receive-buffer append guard has no `else` and every `recvBufferLen` reduction sits inside its body, so a server line exceeding `BUFFER_SIZE` (4096) against the server's 16383-byte line ceiling puts the connection into a permanently deaf absorbing state on ordinary traffic. It came from an observation notebook 02 conceded at `:153` and set aside without ever opening it as a candidate. **One cross-notebook contradiction resolved** against the pinned source: notebook 04's trust table said "any room member can emit `SETOPTIONS`" where `server/game.c:405` enforces slot-zero creator authority, as notebook 01's own row correctly recorded — SEC-004 and SEC-007 re-scoped. **One Fix-Round correction reversed as itself wrong**: BUG-041's trigger set — `DoSnipIn` animates nothing, the leak is produced by `TakeSnipOut` at `bubblegame_render.cpp:1173`, and `QuitToTitle`'s `firstRenderDone` clear is what arms it, so menu return *is* a trigger. **One finding strengthened from static to observed**: REL-002, via a passive 1 d 21 h old orphan holding UDP 1511 and TCP 15113. **Four previously unstated reachability qualifications** recorded (BUG-002, SEC-001, SEC-002 — whose impact was also extended to a `bufsize == 0` / `recv` length `(size_t)-1` path — and SEC-005, which is *strengthened*, both documented launch paths passing `-l`). Coverage claim re-derived: 237/237 with an empty `diff`, 42 disposition strings summing to 237 with every class sampled (Fix Round 1 correction of a miscounted 41 — see [Task 12 Fix Round 1 Findings](#task-12-fix-round-1-findings)), 0 pending rows, 0 broken links and 0 broken anchors, notebooks 01-08 structurally conformant, registry with 0 duplicate IDs and 0 gaps. Started no process and killed none; security findings challenged **statically only** per the standing user restriction) |
 | Task 13 | Complete repository review report | pending |
 
 ## Active candidates
@@ -173,7 +173,13 @@
   The highest-impact render paths are BUG-041 (every transition animation
   frame leaks a 640×480 texture — reproduced at exactly 1.2 MB/frame through
   linked production objects, ~40-50 MB per game start and per round reload,
-  the only two `DoSnipIn` producers; menu return is not a trigger) and BUG-042
+  the only two `DoSnipIn` producers; menu return is not a trigger — **Task 12
+  correction: this trigger-set claim was itself wrong. `DoSnipIn` animates
+  nothing at all; the leak is produced solely by `TakeSnipOut`
+  (`bubblegame_render.cpp:1173`), armed by `firstRenderDone == false`, which
+  `QuitToTitle` clears — so menu return *is* a trigger. See
+  [Task 12 confirmed findings](subsystems/09-final-challenge.md#confirmed-findings).**)
+  and BUG-042
   (every `NewGame` reloads 394 penguin textures per player plus its 17
   `hurryTexture` load sites, with no destroy site). BUG-001's two null-deref
   orderings were reproduced under UBSan at `shaderstuff.h:55` and `:67`; only
@@ -411,7 +417,13 @@
   `mainmenu.cpp:497` inside `SetupNewGame`, which *is* the game-start trigger
   and had been misattributed to menu return, and `bubblegame.cpp:1012` in
   `ReloadGame`; `QuitToTitle` at `bubblegame.cpp:1363` clears
-  `firstRenderDone` with no `DoSnipIn`, so menu return produces no animation);
+  `firstRenderDone` with no `DoSnipIn`, so menu return produces no animation —
+  **superseded in Task 12: this correction was itself backwards. `DoSnipIn`
+  calls no `effect()` and animates nothing regardless of caller; the leak comes
+  from `TakeSnipOut` (`bubblegame_render.cpp:1173`), which runs whenever
+  `firstRenderDone == false`, and `QuitToTitle` clearing that flag is exactly
+  what arms it — so menu return *is* a BUG-041 trigger. See
+  [Task 12 confirmed findings](subsystems/09-final-challenge.md#confirmed-findings).**);
   the pixel-format claim (this gate's own `formats.log` lists
   `back_one_player.png` as RGB24 bpp=3, so seven of eight, not all eight, are
   4 bpp — the safety argument now rests on that file being blit-only at
@@ -1230,7 +1242,9 @@ window, `playerCount`-bounded peer fan-out, `bubbleArrays[20]` capacity,
 `IsVirtualScancode`'s `[300,400)` window, single renderer create/destroy pair).
 
 **Coverage-claim audit.** 237/237 inventory reconciliation with an empty `diff`;
-41 disposition strings summing to 237 with every class sampled; `pending` appears
+42 disposition strings summing to 237 with every class sampled (Fix Round 1
+correction of a miscounted 41 — see
+[Task 12 Fix Round 1 Findings](#task-12-fix-round-1-findings)); `pending` appears
 once, in its own rule paragraph; 0 broken links and 0 broken anchors across all
 audit documents; notebooks 01-08 carry exactly ten headings each, once, in order;
 registry has 97→**98** IDs with 0 duplicates and 0 gaps and states 97 `confirmed`
@@ -1255,6 +1269,81 @@ High defect), not swept exhaustively, so it stands as the residual risk with the
 highest demonstrated yield in this audit. The report must not restate the two
 propositions this gate dismissed: that a non-creator can push room `OPTIONS:`,
 and that `DoSnipIn` produces the transition animation.
+
+### Task 12 Fix Round 1 Findings
+
+An independent review of commit `0c2aa97a` raised three Important and two
+Minor findings; **all five were accepted, none disputed.**
+
+- **Important — disposition-census miscount (41 stated, 42 actual).** The
+  census in `FILE_COVERAGE.md`, this gate's notebook (twice — the Step 5
+  narrative and the Coverage section), and both places in this file (the
+  gate-checklist row and this closure-provenance section) all stated **41**
+  distinct disposition strings summing to 237. Re-running the same command
+  (see the [ledger](#task-12-fix-round-1-ledger) below) finds **42**, still
+  summing to **237** — the sum was never wrong. Root cause: the census was
+  tabulated *before* this same gate's own edit to the `src/networkclient.cpp`
+  row (made to register BUG-052) landed in the same commit; that edit's new
+  disposition text, "Complete; native baseline, direct WASM compile, Task 10
+  live-socket runtime, and Task 12 length-boundary re-review", is a singleton
+  class the pre-edit tabulation never saw. Fixed in all five places, each now
+  reading **42**. The "every class sampled" claim is otherwise intact but was
+  necessarily one class short of complete for the same reason; the missed
+  class — the `src/networkclient.cpp` row itself — was sampled in this fix
+  round by re-deriving its BUG-052 citations (`:843`, `:894`, `:914`, `:916`)
+  against the pinned source, and they hold exactly as stated.
+- **Important — ledger-row undercount in the gitignored `task-12-report.md`
+  (20 stated, 36 actual).** Section 7's "Corrections applied" table stated
+  "20 ledger rows" were added to this file's
+  `### Task 12 independent final challenge` section. A direct count (see the
+  ledger below) finds **36** timestamped rows in that section. Section 2's
+  table, separately, lists **37** numbered commands — a different, larger
+  count than the 36 ledger rows, because it additionally includes the final
+  `git add`/`git commit` (item 36) and the post-commit production-drift
+  verification (item 37), neither of which could be logged as a timestamped
+  ledger row inside the file being committed. Fixed in `task-12-report.md`
+  (gitignored, so this correction is not part of this commit) with both
+  figures stated and reconciled.
+- **Important — the BUG-041 reversal was not propagated into two historical
+  narrative sections.** `subsystems/05-render-audio.md:239` (approximate) and
+  `FINDINGS.md:90` correctly annotate that Task 12 reversed Task 7 Fix Round
+  1's claim that `DoSnipIn` is the only trigger and that menu return is not
+  one. This file's "Confirmed findings" summary (the BUG-041 bullet under the
+  Task 7 paragraph) and its own "Task 7 Fix Round 1" section still asserted
+  the falsified claims verbatim, with no annotation. Fixed: both now carry an
+  inline "Task 12 correction"/"superseded in Task 12" parenthetical, following
+  the model already used for the Task 6 "hashed beforehand" parenthetical (see
+  Task 6 closure provenance) and the REL-013 "Undercounted — corrected in Fix
+  Round 1" ledger rows — the original claim is left in place, not rewritten,
+  and a pointer to
+  [Task 12 confirmed findings](subsystems/09-final-challenge.md#confirmed-findings)
+  is added; that anchor was checked to resolve unambiguously (see ledger).
+- **Minor — unevidenced "4 sampled in depth" dismissal claim.** The
+  notebook's Coverage section and this file's gate-checklist/closure-provenance
+  prose stated "4 sampled in depth" without naming them, even though
+  Step 5b of the same notebook already names and evidences all four (BUG-012,
+  `idleSPButtons` `SDL_GetTextureSize`, `cmake_uninstall.cmake.in`
+  `exec_program`, `netlify.toml` publish-directory). Fixed: the notebook's
+  Coverage bullet now names the four and points to Step 5b's one-line record
+  for each; no new sampling was needed since Step 5b already supplied it.
+- **Minor — ambiguous "Next free IDs" sentence.** `FINDINGS.md:150` and the
+  notebook's matching "Registry after this gate" bullet read "...IMP-001..024.
+  Next free IDs are BUG-053, SEC-008, REL-016, IMP-025," which scans as a
+  continuation of the findings list. Fixed in both places with a "Not yet
+  allocated — do not count these as findings" label immediately before the
+  four IDs.
+
+### Task 12 Fix Round 1 Ledger
+
+| Timestamp | Command | Exit | Result | Evidence |
+|---|---|---|---|---|
+| 2026-07-30T00:20:05Z | <code>awk -F'&#124;' 'NF&gt;4 &amp;&amp; \$2 ~ /`/ {print \$4}' docs/audit/FILE_COVERAGE.md &#124; sed 's/^ *//; s/ *\$//' &#124; sort &#124; uniq -c &#124; wc -l</code> | 0 | **42** — corrects the "41" stated in `FILE_COVERAGE.md`, this notebook (twice) and this file (twice) | [FILE_COVERAGE.md](FILE_COVERAGE.md) |
+| 2026-07-30T00:20:22Z | <code>awk -F'&#124;' 'NF&gt;4 &amp;&amp; \$2 ~ /`/ {print \$4}' docs/audit/FILE_COVERAGE.md &#124; sed 's/^ *//; s/ *\$//' &#124; sort &#124; uniq -c &#124; awk '{s+=\$1} END{print s}'</code> | 0 | **237** — unchanged; the sum half of the original claim was never wrong | [FILE_COVERAGE.md](FILE_COVERAGE.md) |
+| 2026-07-30T00:20:40Z | <code>git log --oneline --all -S 'Task 12 length-boundary re-review' -- docs/audit/FILE_COVERAGE.md</code> | 0 | `0c2aa97a` only — the singleton disposition class causing the 41→42 discrepancy was introduced by this gate's own commit, after its internal census was already written | [FILE_COVERAGE.md](FILE_COVERAGE.md) |
+| 2026-07-30T00:20:55Z | <code>git show 09d6c7bfcd864a0ad3951b87d16a88dc770392a3:src/networkclient.cpp \| sed -n '843p;894p;914p;916p'</code> | 0 | `if (recvBufferLen + received < BUFFER_SIZE) {` / `recvBufferLen = remaining;` (×2) / `recvBufferLen = 0;` — samples the previously-uncounted class and confirms BUG-052's citations against the pinned source | [FINDINGS.md](FINDINGS.md) |
+| 2026-07-30T00:21:15Z | <code>awk '/^### Task 12 independent final challenge/{f=1;next} /^## Limitations/{f=0} f' docs/audit/SDL3_REVIEW_STATUS.md &#124; grep -c '^&#124; 202'</code> | 0 | **36** timestamped ledger rows in this file's `### Task 12 independent final challenge` section — not the 20 `task-12-report.md` §7 stated | This file, `### Task 12 independent final challenge` |
+| 2026-07-30T00:21:30Z | <code>awk '/^## 2\. Commands/{f=1;next} /^## 3\./{f=0} f' task-12-report.md &#124; grep -oE '^&#124; [0-9]+[a-z]?' &#124; wc -l</code> | 0 | **38** rows total: numbers 1-37 plus one unnumbered `8b` sub-row — a different count than the 36 status-file ledger rows because it additionally includes the final `git commit` (item 36) and the post-commit drift check (item 37), neither loggable inside the file being committed | `task-12-report.md` §2 (gitignored) |
+| 2026-07-30T00:21:45Z | <code>python3 -c "import re,pathlib; t=pathlib.Path('docs/audit/subsystems/09-final-challenge.md').read_text(); print('confirmed-findings' in [re.sub(r'[^a-z0-9- ]','',h.lower()).strip().replace(' ','-') for h in re.findall(r'^##+ (.+)$', t, re.M)])"</code> | 0 | `True` — `subsystems/09-final-challenge.md#confirmed-findings` resolves to exactly one heading (`## Confirmed findings`, appears once), so both new BUG-041 cross-references are unambiguous | [subsystems/09-final-challenge.md](subsystems/09-final-challenge.md#confirmed-findings) |
 
 ## Commands and evidence
 
