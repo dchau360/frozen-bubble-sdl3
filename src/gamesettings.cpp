@@ -109,6 +109,7 @@ void GameSettings::CreateDefaultSettings()
         EvalIniResult(rval, dict, "GFX:WindowWidth", "640");
         EvalIniResult(rval, dict, "GFX:WindowHeight", "480");
         EvalIniResult(rval, dict, "GFX:ColorblindBubbles", "false");
+        EvalIniResult(rval, dict, "GFX:ShowFPS", "false");
 
         EvalIniResult(rval, dict, "Sound", NULL);
         EvalIniResult(rval, dict, "Sound:EnableMusic", "true");
@@ -195,6 +196,7 @@ void GameSettings::ReadSettings()
     windowWidth = iniparser_getint(optDict, "GFX:WindowWidth", 640);
     windowHeight = iniparser_getint(optDict, "GFX:WindowHeight", 480);
     colorblindBubbles = iniparser_getboolean(optDict, "GFX:ColorblindBubbles", false);
+    showFps = iniparser_getboolean(optDict, "GFX:ShowFPS", false);
     if (gfxQuality > 3 || gfxQuality < 1) gfxQuality = 3;
     if (windowWidth < 640 || windowWidth > 9999) windowWidth = 640;
     if (windowHeight < 480 || windowWidth > 9999) windowHeight = 480;
@@ -335,6 +337,11 @@ void GameSettings::SetValue(const char* option, const char* value)
     else if (strcmp(option, "GFX:Fullscreen") == 0) {
         useFullscreen = !useFullscreen;
         iniparser_set(optDict, option, useFullscreen ? "true" : "false");
+        return;
+    }
+    else if (strcmp(option, "GFX:ShowFPS") == 0) {
+        showFps = !showFps;
+        iniparser_set(optDict, option, showFps ? "true" : "false");
         return;
     }
     else if (strcmp(option, "GFX:ColorblindBubbles") == 0) {

@@ -98,14 +98,34 @@ private:
 
     HighscoreManager *hiscoreManager = nullptr;
 
-    TTFText menuText;
-
     void HandleInput(SDL_Event *e);
+
+    // ---- F3 performance overlay ----------------------------------------
+    // Toggled by F3, persisted as GFX:ShowFPS. Draws bottom-right over every
+    // screen. Reports frame pacing *and* effective game speed, because the two
+    // fail independently: a wrong speedMultiplier changes speed while fps stays
+    // a healthy 60, and a broken frame limiter changes fps while the intended
+    // speed is preserved by deltaScale. One number cannot show both.
+    TTFText fpsText;
+    void AccumulateFrameStats(float elapsedMs);
+    void RenderFpsOverlay();
+
+    unsigned int fpsWindowStart = 0;   // ms, start of the current sampling window
+    int   fpsFrames = 0;               // frames counted in this window
+    float fpsSumMs = 0.0f;             // wall time accumulated in this window
+    float fpsMinMs = 0.0f;             // shortest / longest frame seen, to expose
+    float fpsMaxMs = 0.0f;             //   pacing jitter that an average hides
+    float fpsSumDelta = 0.0f;          // summed deltaScale, for effective speed
+    std::string fpsOverlayText;        // last formatted overlay string
 
     // Frame timing — used by RunOneFrame (persist across calls in WASM)
     unsigned int frameTicks = 0;
     unsigned int frameLastTick = 0;
     float frameTime = 1000.0f / 60.0f;
+    // Absolute time the current frame should end, advanced by frameTime each
+    // frame. Kept in float so the fractional part of a 60 fps frame is not lost.
+    // Native only; WASM is paced by requestAnimationFrame.
+    float frameDeadline = 0.0f;
 
     static FrozenBubble* ptrInstance;
     FrozenBubble();

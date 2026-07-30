@@ -153,6 +153,21 @@ FrozenBubble::FrozenBubble() {
     // Suppress SDL_LOG_CATEGORY_ERROR debug-level messages (SDL Metal renderer emits
     // "Parameter 'texture' is invalid" at DEBUG priority during internal initialization).
     SDL_SetLogPriority(SDL_LOG_CATEGORY_ERROR, SDL_LOG_PRIORITY_WARN);
+
+#ifndef __WASM_PORT__
+    // Present in step with the display instead of free-running on a timer. SDL3
+    // defaults this off. Without it the frame limiter in RunOneFrame holds 60 fps
+    // by the clock, which drifts against a panel refreshing at ~59.94 Hz and drops
+    // or doubles a frame every few seconds. The limiter stays in place regardless:
+    // vsync is a request, and some drivers, remote-desktop sessions and headless
+    // backends silently ignore it, which would otherwise leave the loop uncapped.
+    // Native only — the browser is already paced by requestAnimationFrame, and
+    // stacking a second sync source on top of it would only add latency.
+    if (renderer && !SDL_SetRenderVSync(renderer, 1)) {
+        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
+            "VSync unavailable, falling back to the frame limiter: %s", SDL_GetError());
+    }
+#endif
     SDL_SetRenderLogicalPresentation(renderer, 640, 480, SDL_LOGICAL_PRESENTATION_LETTERBOX);
 
     if(!renderer) {
@@ -171,6 +186,11 @@ FrozenBubble::FrozenBubble() {
     init_effects((char*)g_dataDir.c_str());
     mainMenu = new MainMenu(renderer);
     mainGame = new BubbleGame(renderer);
+
+    // F3 overlay font. White on black so UpdateText's built-in 1px shadow blit
+    // keeps it legible over both the pale menu art and the dark playfield.
+    fpsText.LoadFont(ASSET("/gfx/DroidSans.ttf").c_str(), 12);
+    fpsText.UpdateColor({255, 255, 255, 255}, {0, 0, 0, 255});
 
     // Initialize game controller support.
     // SDL_INIT_JOYSTICK is needed explicitly on Emscripten (browser Gamepad API)
@@ -231,6 +251,7 @@ uint8_t FrozenBubble::RunForEver()
 
     frameLastTick = SDL_GetTicks();
     frameTicks    = frameLastTick;
+    frameDeadline = (float)frameLastTick;
 
     SDL_Log("RunForEver: starting loop");
 
@@ -248,6 +269,76 @@ uint8_t FrozenBubble::RunForEver()
     this->~FrozenBubble();
     return 0;
 #endif
+}
+
+// Fold one frame into the current sampling window and, twice a second, reformat
+// the overlay string. Sampling over a window rather than per frame keeps the
+// numbers readable; min/max are carried alongside the average because the
+// average alone hides alternating short/long frames entirely — a loop delivering
+// 2ms and 17ms frames in pairs and one delivering a steady 9.5ms both average
+// 9.5ms, and only one of them looks correct on screen.
+void FrozenBubble::AccumulateFrameStats(float elapsedMs)
+{
+    if (fpsFrames == 0) {
+        fpsMinMs = elapsedMs;
+        fpsMaxMs = elapsedMs;
+    } else {
+        if (elapsedMs < fpsMinMs) fpsMinMs = elapsedMs;
+        if (elapsedMs > fpsMaxMs) fpsMaxMs = elapsedMs;
+    }
+    fpsFrames++;
+    fpsSumMs += elapsedMs;
+    fpsSumDelta += deltaScale;
+
+    if (frameTicks - fpsWindowStart < 500) return;
+    fpsWindowStart = frameTicks;
+
+    if (fpsSumMs > 0.0f && fpsFrames > 0) {
+        const float avgMs = fpsSumMs / (float)fpsFrames;
+        const float fps   = 1000.0f / avgMs;
+        // Effective speed: deltaScale actually accumulated per 60 frames' worth of
+        // wall time. This is the number that is directly comparable across builds
+        // — it reads 3.00 on a healthy browser build, and it stays 3.00 on native
+        // only if neither the deltaScale clamps nor the frame limiter are
+        // distorting things. Divergence from the configured value is the tell.
+        const float effective = fpsSumDelta / ((fpsSumMs / 1000.0f) * 60.0f);
+#ifdef __WASM_PORT__
+        const float configured = 3.0f;  // hardcoded in RunOneFrame for browsers
+#else
+        const float configured = GameSettings::Instance()->speedMultiplier;
+#endif
+        char buf[128];
+        snprintf(buf, sizeof(buf),
+                 "%.1f fps  %.1fms [%.0f-%.0f]\nspeed %.2fx  set %.2fx",
+                 fps, avgMs, fpsMinMs, fpsMaxMs, effective, configured);
+        fpsOverlayText = buf;
+        fpsText.UpdateText(renderer, fpsOverlayText.c_str(), 0);
+    }
+
+    fpsFrames = 0;
+    fpsSumMs = 0.0f;
+    fpsSumDelta = 0.0f;
+}
+
+void FrozenBubble::RenderFpsOverlay()
+{
+    if (!fpsText.Texture()) return;
+
+    SDL_Rect *c = fpsText.Coords();
+    fpsText.UpdatePosition({WINDOW_W - c->w - 6, WINDOW_H - c->h - 4});
+
+    // Dim the area under the text so it stays readable over bright artwork.
+    SDL_FRect bg = {(float)(c->x - 4), (float)(c->y - 2),
+                    (float)(c->w + 8), (float)(c->h + 4)};
+    SDL_BlendMode prev = SDL_BLENDMODE_NONE;
+    SDL_GetRenderDrawBlendMode(renderer, &prev);
+    SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 150);
+    SDL_RenderFillRect(renderer, &bg);
+    SDL_SetRenderDrawBlendMode(renderer, prev);
+
+    SDL_FRect fr = ToFRect(*c);
+    SDL_RenderTexture(renderer, fpsText.Texture(), nullptr, &fr);
 }
 
 void FrozenBubble::RunOneFrame()
@@ -274,6 +365,8 @@ void FrozenBubble::RunOneFrame()
     }
 #endif
 
+    if (gameOptions && gameOptions->showFpsOverlay()) AccumulateFrameStats(elapsed);
+
     // handle input
     SDL_Event e;
     while (SDL_PollEvent(&e)) {
@@ -282,6 +375,9 @@ void FrozenBubble::RunOneFrame()
             // huge elapsed, which would make deltaScale spike on native adaptive builds.
             frameTicks = SDL_GetTicks();
             frameLastTick = frameTicks;
+            // Same reason for the pacing deadline: it is far in the past after a
+            // long suspend, and would otherwise be resynced one frame later.
+            frameDeadline = (float)frameTicks;
         }
         if (e.type == SDL_EVENT_QUIT || e.type == SDL_EVENT_TERMINATING ||
             e.type == SDL_EVENT_WINDOW_CLOSE_REQUESTED ||
@@ -307,10 +403,12 @@ void FrozenBubble::RunOneFrame()
             if (hiscoreManager->lastState == 1) mainGame->Render();
             hiscoreManager->RenderScoreScreen();
         }
+        if (gameOptions && gameOptions->showFpsOverlay()) RenderFpsOverlay();
         SDL_RenderPresent(renderer);
     } else {
         if (currentState == MainGame) {
             mainGame->RenderPaused();
+            if (gameOptions && gameOptions->showFpsOverlay()) RenderFpsOverlay();
             SDL_RenderPresent(renderer);
         }
     }
@@ -318,8 +416,24 @@ void FrozenBubble::RunOneFrame()
 #ifndef __WASM_PORT__
     // On native, cap frame rate manually. In WASM the browser's
     // requestAnimationFrame already limits to the display refresh rate.
-    if (elapsed < frameTime) {
-        SDL_Delay((Uint32)(frameTime - elapsed));
+    //
+    // Sleep against an absolute deadline, not against `elapsed`. `elapsed` is the
+    // gap between the previous two frame starts, so it already contains that
+    // frame's own sleep; feeding it back in here double-counts and gives
+    // D(n) = frameTime - work - D(n-1), a recurrence with eigenvalue -1. It never
+    // settles — it alternates a full-length delay with a near-zero one, so frames
+    // arrive in short/long pairs at roughly double the intended rate.
+    // A deadline also preserves the 0.667ms per frame that SDL_Delay's integer
+    // argument would otherwise truncate away.
+    frameDeadline += frameTime;
+    float nowMs = (float)SDL_GetTicks();
+    if (frameDeadline < nowMs) {
+        // Ran long (asset load, transition, window drag). Resync to now rather
+        // than trying to claw back the missed frames with a burst of zero-delay
+        // ones, which is the behavior this fix exists to remove.
+        frameDeadline = nowMs;
+    } else if (frameDeadline > nowMs) {
+        SDL_Delay((Uint32)(frameDeadline - nowMs));
     }
 #endif
 }
@@ -506,6 +620,16 @@ void FrozenBubble::HandleInput(SDL_Event *e) {
                     // Always let mainMenu/mainGame handle it too (closes panels, cancels, etc.)
                     break;
                 }
+                case SDLK_F3:
+                    // Performance overlay. F11 is mute and F12 is fullscreen.
+                    gameOptions->SetValue("GFX:ShowFPS", "");
+                    // Start a clean sampling window so the first reading is not
+                    // an average over however long the overlay was hidden.
+                    fpsFrames = 0;
+                    fpsSumMs = 0.0f;
+                    fpsSumDelta = 0.0f;
+                    fpsWindowStart = SDL_GetTicks();
+                    break;
                 case SDLK_F12:
                     gameOptions->SetValue("GFX:Fullscreen", "");
                     SDL_SetWindowFullscreen(window, gameOptions->fullscreenMode());

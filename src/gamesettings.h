@@ -77,6 +77,7 @@ public:
     bool soundEnabled() { return playMusic && playSfx; }
     void setSoundEnabled(bool on);
     bool colorBlind() { return colorblindBubbles; }
+    bool showFpsOverlay() { return showFps; }
 
     PlayerKeys player1Keys, player2Keys, player3Keys, player4Keys, player5Keys;
     void LoadDefaultKeys();
@@ -104,6 +105,7 @@ private:
 
     int gfxQuality, windowWidth, windowHeight;
     bool useFullscreen, colorblindBubbles, playMusic, playSfx, classicSound;
+    bool showFps = false;
 
     GameSettings(){};
     ~GameSettings();
