@@ -815,7 +815,7 @@ normalized.
 | 28 | `lsof -nP -iTCP:15113 -sTCP:LISTEN` | **1** | No match — no listener on 15113 |
 | 29 | `ps -o pid,etime,command -p 22293,22300,76361` | 0 | Elapsed 4d11h, 4d11h, 4d01h — all predate the audit |
 | 30 | `pgrep -alf 'frozen-bubble-sdl3\|task1[0-9]\|scenario.py\|run_case.sh\|websockify'` | **1** | No match — **no audit-owned process remains** |
-| 31 | `rg -c -n 'TB[D]\|TO[D]O\|investigating\|suspected' docs/audit --glob '!SDL3_COMPLETE_REVIEW.md'` | 0 | **11** hits outside this report, all judged and retained; **0** are unresolved work markers — see §6.4 |
+| 31 | `rg -c -n 'TB[D]\|TO[D]O\|investigating\|suspected' docs/audit --glob '!SDL3_COMPLETE_REVIEW.md'` | 0 | **13** hits outside this report, all judged and retained; **0** are unresolved work markers — see §6.4 |
 | 32 | `git diff --check` | 0 | No whitespace or conflict-marker errors |
 | 33 | `python3` — every finding ID cited in this report exists exactly once in `FINDINGS.md` | 0 | See §6.4 |
 | 34 | `python3` — every relative link and anchor in this report resolves to exactly one target | 0 | See §6.4 |
@@ -865,10 +865,18 @@ as **REL-010**, absent from *both* enumerations.
 This is a plain enumeration omission, not two figures counting different things.
 The evidence that REL-010 belongs in the upheld row: (i) the same notebook's
 `Coverage` section names REL-010 explicitly as challenged, recording that it
-retains an un-re-derived certbot premise; (ii) its registry row is unchanged
-`confirmed | Medium | High | Task 9` with **no** Task 12 revision annotation,
-unlike all nine revised entries; (iii) it is not dismissed. Not-revised and
-not-dismissed and challenged ⇒ upheld. The correct count is **63**, and
+retains an un-re-derived certbot premise (`subsystems/09-final-challenge.md:594`);
+(ii) its registry row's **Evidence** column carries no `[Task 12 revisions]`
+link, unlike all nine actually-revised entries — `grep -n '^| REL-010 |'
+docs/audit/FINDINGS.md | grep -c 'Task 12 revisions\]'` exits **1** with output
+`0`, while `grep -nE '^\| (BUG|SEC|REL|IMP)-[0-9]{3} \|.*\[Task 12 revisions\]'
+docs/audit/FINDINGS.md | wc -l` counts exactly **9** rows, none of them REL-010.
+(An earlier draft of this correction cited the **Gate** column instead —
+"unchanged `confirmed | Medium | High | Task 9`" — but that test is false:
+REL-009, one of the nine revised entries, also carries Gate `Task 9`
+(`FINDINGS.md:104`); the Gate column does not distinguish REL-010 from the
+revised set. The Evidence column does.); (iii) it is not dismissed. Not-revised
+and not-dismissed and challenged ⇒ upheld. The correct count is **63**, and
 63 + 9 + 0 = 72.
 
 Root cause: REL-010 is the one upheld defect whose disposition carries a
@@ -920,34 +928,63 @@ are carried into §8.4 as a residual risk.
 
 ### 6.4 Step 5 validation
 
-**Marker sweep.** `rg -n 'TB[D]|TO[D]O|investigating|suspected' docs/audit`
-(exit 0) returns hits. **Zero are unresolved work markers.** The brief's check is
-not a mechanical zero-requirement, so each hit was judged. Excluding this
-report's own text, there are **11**, distributed as
+**Marker sweep.** `rg -c -n 'TB[D]|TO[D]O|investigating|suspected' docs/audit
+--glob '!SDL3_COMPLETE_REVIEW.md'` (exit 0) returns **13** hits, distributed
 `FINDINGS.md` 1, `subsystems/09-final-challenge.md` 1,
-`subsystems/07-build-release-tooling.md` 3, `SDL3_REVIEW_STATUS.md` 6:
+`subsystems/07-build-release-tooling.md` 3, `SDL3_REVIEW_STATUS.md` 8.
+**Zero are unresolved work markers.** The brief's check is not a mechanical
+zero-requirement, so each hit was judged, not assumed clean. (A prior published
+draft of this section stated **11**, with `SDL3_REVIEW_STATUS.md` at 6 — wrong.
+Re-deriving it found 15 at first, because correcting the false 11 into a longer
+explanation itself added two more hits to `SDL3_REVIEW_STATUS.md`; that
+explanation was then rewritten to describe the added categories without
+repeating the swept-for words, which brought the true, stable count to 13 —
+`SDL3_REVIEW_STATUS.md` at 8. See the recursion note below for why this number
+moves and this report's own text does not.)
 
-- **`FINDINGS.md:3` — the rule itself.** The words `suspected` and
-  `investigating` appear in the *definition* of the candidate lifecycle
-  (`suspected -> investigating -> confirmed/dismissed`). Retained: deleting the
-  convention would remove the definition that makes every other state meaningful.
-- **`07-build-release-tooling.md`'s three hits are all `TODO`, and none is the
-  audit's.** They record that `README.md:339-340` lists macOS and Windows code
-  signing as the *project's own* disclosed open TODOs — evidence for REL-007's
-  scope, not outstanding audit work.
-- **`09-final-challenge.md:381` and four of the status file's six** are assertions
-  that the sweep is clean — e.g. "no `suspected` or `investigating` remains" —
-  plus the ledger rows recording the sweeps that established it.
-- **`SDL3_REVIEW_STATUS.md`'s Task 11 row** records that one stale
-  "Investigating" candidate row was *corrected* to its already-confirmed
-  disposition, "leaving zero open `suspected`/`investigating` states".
+The 13 split into two kinds:
 
-The remaining hits are in §6.4 of this report — the sentences you are reading,
-which necessarily quote the words they are about.
+- **5 are evidence about the *project's* own disclosed or actual `TODO`
+  markers, not the audit's.** `07-build-release-tooling.md`'s three hits record
+  that `README.md:339-340` lists macOS and Windows code signing as the
+  *project's own* disclosed open TODOs — evidence for REL-007's scope.
+  `SDL3_REVIEW_STATUS.md` contributes two more of the same kind: its Task 11
+  gate-checklist row noting "`TODO`/`FIXME`/`XXX`/`HACK` markers exist only
+  inside vendored `org/libsdl/app/` files" and its Task 11 closure-provenance
+  ledger row recording the same `grep -rnE 'TODO|FIXME|XXX|HACK' src server
+  tools tests android/app/src/main/java` sweep of *project source* — neither is
+  a sweep of `docs/audit`, and neither is outstanding audit work.
+- **8 are this audit's own convention text or self-referential narration about
+  a sweep's result, not outstanding work.** `FINDINGS.md:3` is the candidate
+  lifecycle rule's own definition (`suspected -> investigating ->
+  confirmed/dismissed`) — retained, because deleting the convention would
+  remove the definition that makes every other state meaningful.
+  `09-final-challenge.md:381` is one such assertion. The remaining six are all
+  in `SDL3_REVIEW_STATUS.md`: the Task 11 gate-checklist row and its Step 3
+  candidate-registry paragraph, both stating that a `suspected`/`investigating`
+  sweep of the registry or of `docs/audit` came back clean; two earlier ledger
+  rows checking the registry's `confirmed`/`dismissed` disposition column and
+  noting no row sits in `suspected` or `investigating`; one still-earlier
+  ledger row recording that only `FINDINGS.md`'s own rule definition remained
+  after a prior `suspected`/`investigating` grep; and, unavoidably, the ledger
+  row for this very command (row #31) — each is a record of a sweep, not a
+  marker left by one.
 
-The check that actually matters is the machine-readable one: **no registry row is
-in a `suspected` or `investigating` state** — command 3 measures **97 confirmed +
-1 dismissed = 98**, with no third state.
+**Recursion, stated explicitly.** This report is excluded from the command by
+`--glob '!SDL3_COMPLETE_REVIEW.md'`, but `SDL3_REVIEW_STATUS.md` is not, and it
+necessarily narrates this sweep in the words the sweep searches for. Every edit
+to that narration can change `SDL3_REVIEW_STATUS.md`'s hit count again — this
+correction's own drafting did so twice before landing on 13, as recorded above
+— so a "re-run and write the number" fix is stale the moment its own prose is
+committed. **13** was re-verified against the tree actually committed for this
+correction, not only the working tree beforehand; if it has since moved, the
+committed ledger row (§6.4, row #31, and the status file's own copy) carries
+whatever superseding note was needed to keep the three in agreement.
+
+The check that does not move under this recursion, because it is
+machine-readable rather than narrated, is the one that actually matters: **no
+registry row is in a `suspected` or `investigating` state** — command 3
+measures **97 confirmed + 1 dismissed = 98**, with no third state.
 
 **`git diff --check`** exits **0** with no output.
 
