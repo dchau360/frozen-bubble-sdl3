@@ -78,6 +78,12 @@ static char fl_client_blacklisted[] = "YOU_ARE_BLACKLISTED";
 
 static double date_amount_transmitted_reset;
 
+/* Ceiling on a body this server will accept from the master server. The real
+   payloads are a server list of a few kilobytes; this only has to be generous
+   enough never to reject a legitimate one while keeping an attacker-supplied
+   Content-Length away from the arithmetic that sizes the receive buffer. */
+#define HTTP_GET_MAX_BODY (4 * 1024 * 1024)
+
 #define DEFAULT_PORT 1511  // a.k.a 0xF 0xB thx misc
 #define DEFAULT_MAX_USERS 255
 #define DEFAULT_INTERVAL_REREGISTER 60
@@ -1246,6 +1252,18 @@ static char * http_get(char * host, int port, char * path)
 
         if ((buf = strstr(headers, header_content_length))) {
                 size = charstar_to_int(buf + strlen(header_content_length));
+                /* Content-Length comes from the remote end. charstar_to_int
+                   yields an int, so a large decimal wraps: "4294967295" lands on
+                   exactly -1, which makes bufsize 0 and turns the recv length
+                   below -- bufsize - (ptr - buf) - 1 -- into (size_t)-1 against a
+                   zero-sized allocation. -1 is also this function's sentinel for
+                   "no Content-Length", so it must never arrive from the header.
+                   Bound it on both ends before it is used for arithmetic. */
+                if (size < 0 || size > HTTP_GET_MAX_BODY) {
+                        SOCKET_CLOSE(sock);
+                        l3(OUTPUT_TYPE_ERROR, "HTTP_GET: refusing implausible Content-Length %d retrieving http://%s%s", size, host, path);
+                        return NULL;
+                }
                 bufsize = size + 1;
         } else {
                 size = -1;

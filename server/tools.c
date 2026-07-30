@@ -34,6 +34,7 @@
 #  include <sys/wait.h>
 #  include <fcntl.h>
 #  include <pwd.h>
+#  include <grp.h>
 #endif
 
 #include "tools.h"
@@ -280,10 +281,29 @@ void daemonize() {
         if (user_to_switch != NULL) {
                 struct passwd* user = getpwnam(user_to_switch);
                 if (user) {
-                        setgid(user->pw_gid);
-                        setuid(user->pw_uid);
+                        /* A privilege drop that quietly fails is worse than not
+                           attempting one: the operator asked to run as this user
+                           and would go on believing it happened while the daemon
+                           kept the privileges it started with. Refuse to run
+                           instead. Order matters -- the group calls have to
+                           happen while the uid is still privileged -- and
+                           initgroups is part of it, since dropping uid alone
+                           leaves the invoking user's supplementary groups. */
+                        if (initgroups(user_to_switch, user->pw_gid) != 0) {
+                                l2(OUTPUT_TYPE_ERROR, "Cannot set supplementary groups for %s: %s", user_to_switch, strerror(errno));
+                                exit(EXIT_FAILURE);
+                        }
+                        if (setgid(user->pw_gid) != 0) {
+                                l2(OUTPUT_TYPE_ERROR, "Cannot setgid to %s: %s", user_to_switch, strerror(errno));
+                                exit(EXIT_FAILURE);
+                        }
+                        if (setuid(user->pw_uid) != 0) {
+                                l2(OUTPUT_TYPE_ERROR, "Cannot setuid to %s: %s", user_to_switch, strerror(errno));
+                                exit(EXIT_FAILURE);
+                        }
                 } else {
                         l2(OUTPUT_TYPE_ERROR, "Cannot switch user to %s: %s", user_to_switch, strerror(errno));
+                        exit(EXIT_FAILURE);
                 }
         }
 
