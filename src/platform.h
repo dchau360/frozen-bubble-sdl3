@@ -20,7 +20,13 @@
 #ifndef PLATFORM_H
 #define PLATFORM_H
 
-#define APP_VERSION "v2.4.26"
+// Supplied by CMake from project(... VERSION ...) — see CMakeLists.txt. The
+// literal fallback only applies to builds that bypass CMake; keeping it in step
+// is not relied on, which is why it is deliberately marked as unknown rather
+// than carrying a number that will silently rot (audit finding REL-004).
+#ifndef APP_VERSION
+#define APP_VERSION "v0.0.0-nocmake"
+#endif
 
 #include <string>
 

@@ -25,7 +25,14 @@ add_executable(fb-server
     ws.c
 )
 
-target_compile_definitions(fb-server PUBLIC VERSION="2.2.1")
+# Inherited from the top-level project(... VERSION ...) rather than restated.
+# This reaches users: net.c sends it as the master-server user agent and prints
+# it at startup (audit finding REL-004).
+#
+# CMAKE_PROJECT_VERSION, not PROJECT_VERSION: this directory calls its own
+# project(fb-server C) above, which resets PROJECT_VERSION to empty and would
+# silently bake in "fb-server v" with no number.
+target_compile_definitions(fb-server PUBLIC VERSION="${CMAKE_PROJECT_VERSION}")
 
 target_include_directories(fb-server
     PRIVATE ${GLIB2_INCLUDE_DIRS}

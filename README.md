@@ -3,7 +3,9 @@
   <img src="https://github.com/user-attachments/assets/c68db5c9-7e72-4d19-8e98-c598a3f5e54e">
 </p>
 
-A C++ / SDL3 port of the classic [Frozen Bubble 2](http://www.frozen-bubble.org/), reimplementing its gameplay, network multiplayer, and chain reaction system. The original was Linux-only; this port targets **Linux, macOS, Windows, Android TV, and WebAssembly (including iPhone/mobile browsers)**.
+A C++ / SDL3 port of the classic [Frozen Bubble 2](http://www.frozen-bubble.org/), reimplementing its gameplay, network multiplayer, and chain reaction system. The original was Linux-only; this port targets **Linux, macOS (Apple Silicon), Windows, Android TV, and WebAssembly (including iPhone/mobile browsers)**.
+
+> **macOS builds are Apple Silicon (arm64) only.** The released `frozen-bubble-macos-arm64.dmg` will not launch on an Intel Mac. Intel users can still build from source (see [Building from Source](#building-from-source)) or play the browser build. Universal binaries would require building SDL3 and every dependency for both architectures, since Homebrew ships single-architecture bottles.
 
 > **Note:** The original game was written in Perl. This is a full rewrite in C++. While core gameplay and network protocol are faithfully reproduced, there may be inconsistencies and bugs compared to the original — particularly in edge-case game mechanics. Bug reports are welcome via [GitHub Issues](https://github.com/dchau360/frozen-bubble-sdl3/issues).
 
@@ -381,3 +383,8 @@ Features ported from the original Frozen Bubble 2 Perl source:
 
 Original Frozen Bubble by [Guillaume Cottenceau et al.](http://www.frozen-bubble.org/) — GPL licensed.
 This port is independently developed and not affiliated with the original project.
+
+### Third-party components
+
+- [iniparser](https://github.com/ndevilla/iniparser) by Nicolas Devillard — MIT licensed, vendored in `third_party/iniparser/` and compiled into every release artifact. See [LICENSE](third_party/iniparser/LICENSE) and [PROVENANCE.md](third_party/iniparser/PROVENANCE.md).
+- SDL3, SDL3_image, SDL3_mixer, SDL3_ttf — zlib licensed, linked at build time.

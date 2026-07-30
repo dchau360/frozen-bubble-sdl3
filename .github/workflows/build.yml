@@ -154,11 +154,29 @@ jobs:
             sudo cmake --install /tmp/SDL_mixer/build
           )
 
+      # Apple Silicon only, and deliberately so. Homebrew ships single-arch
+      # bottles, so a universal binary would require building SDL3 and every
+      # dependency for both architectures and lipo-ing them. State the target
+      # explicitly rather than inheriting whatever the runner happens to be —
+      # the artifact name (frozen-bubble-macos-arm64.dmg) has to keep matching
+      # what is actually built. GitHub retires x86_64 macOS runners in 2027.
       - name: Configure & build
-        run: cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+        run: |
+          cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_OSX_ARCHITECTURES=arm64
 
       - name: Build
         run: cmake --build build --parallel
+
+      - name: Verify the binary is the architecture we claim to ship
+        run: |
+          set -euo pipefail
+          archs=$(lipo -archs build/frozen-bubble-sdl3)
+          echo "built for: $archs"
+          if [ "$archs" != "arm64" ]; then
+            echo "::error::expected arm64, got '$archs' — the DMG name would be wrong"
+            exit 1
+          fi
 
       - name: Create .app bundle
         run: |
@@ -205,13 +223,13 @@ jobs:
             --icon-size 128 \
             --icon "FrozenBubble.app" 140 190 \
             --app-drop-link 400 190 \
-            "frozen-bubble-macos.dmg" \
+            "frozen-bubble-macos-arm64.dmg" \
             "dist/"
 
       - uses: actions/upload-artifact@v4
         with:
           name: macOS
-          path: frozen-bubble-macos.dmg
+          path: frozen-bubble-macos-arm64.dmg
 
   # ────────────────────────────────────────────────────────────────
   # Windows → NSIS installer (.exe)
@@ -233,6 +251,7 @@ jobs:
             mingw-w64-x86_64-cmake
             mingw-w64-x86_64-ninja
             mingw-w64-x86_64-glib2
+            mingw-w64-x86_64-ntldd
 
       - name: Determine package version
         id: package_version
@@ -262,19 +281,41 @@ jobs:
 
       - name: Collect binary + DLLs
         run: |
+          set -euo pipefail
           mkdir -p pkg
           cp build/frozen-bubble-sdl3.exe pkg/
+          # Genuinely optional: CMakeLists.txt excludes server/ on MinGW, so
+          # this file is not expected to exist in the Windows package.
           cp build/server/fb-server.exe pkg/ 2>/dev/null || true
           cp -r share pkg/
-          for dll in \
-            SDL3.dll SDL3_image.dll SDL3_mixer.dll SDL3_ttf.dll \
-            libgcc_s_seh-1.dll libstdc++-6.dll libwinpthread-1.dll \
-            libpng16-16.dll libogg-0.dll libvorbis-0.dll libvorbisfile-3.dll \
-            libfreetype-6.dll libbrotlicommon.dll libbrotlidec.dll \
-            libharfbuzz-0.dll libgraphite2.dll zlib1.dll \
-            libglib-2.0-0.dll libintl-8.dll libiconv-2.dll libpcre2-8-0.dll; do
-              cp /mingw64/bin/$dll pkg/ 2>/dev/null || true
+
+          # Resolve the real dependency closure instead of copying a
+          # hand-maintained list. The old loop applied `cp ... || true` to 21
+          # named DLLs, so a missing load-time requirement (SDL3.dll,
+          # libstdc++-6.dll and libwinpthread-1.dll are not optional) still
+          # produced a green job, a packaged installer, a release asset and an
+          # itch.io push, with the first symptom a loader error on a user's
+          # machine. A fixed list could also go stale silently the moment an
+          # SDL upgrade introduced a new transitive dependency.
+          deps=$(ntldd -R pkg/frozen-bubble-sdl3.exe | awk '/=>/ { print $3 }' \
+                 | grep -i 'mingw64' | sort -u)
+          if [ -z "$deps" ]; then
+            echo "::error::dependency walk produced no results; refusing to ship an unverified package"
+            exit 1
+          fi
+          for dll in $deps; do
+            cp -v "$(cygpath -u "$dll")" pkg/
           done
+
+          # Explicit backstop for the three the audit named, in case a future
+          # walker change silently returns a short list.
+          for required in SDL3.dll libstdc++-6.dll libwinpthread-1.dll; do
+            if [ ! -f "pkg/$required" ]; then
+              echo "::error::$required is missing from the package"
+              exit 1
+            fi
+          done
+          echo "Packaged $(echo "$deps" | wc -l) dependency DLLs."
 
       - name: Write NSIS script
         run: |
@@ -347,10 +388,20 @@ jobs:
           distribution: temurin
           java-version: '17'
 
+      # ANDROID_SDK_ROOT is set in the runner's environment, but the `env`
+      # expression context is populated only from workflow/job/step `env:`
+      # maps, so `${{ env.ANDROID_SDK_ROOT }}` interpolated to the empty string
+      # and the cache path became the absolute `/ndk/25.2.9519653`. The cache
+      # never hit and every Android run re-downloaded the NDK. Resolve the path
+      # in a shell, where the variable really is defined.
+      - name: Resolve NDK path
+        id: ndk
+        run: echo "path=$ANDROID_SDK_ROOT/ndk/25.2.9519653" >> "$GITHUB_OUTPUT"
+
       - name: Cache NDK
         uses: actions/cache@v4
         with:
-          path: ${{ env.ANDROID_SDK_ROOT }}/ndk/25.2.9519653
+          path: ${{ steps.ndk.outputs.path }}
           key: ndk-25.2.9519653
 
       - name: Cache Gradle
@@ -552,7 +603,7 @@ jobs:
           generate_release_notes: true
           files: |
             Linux/frozen-bubble-linux-x86_64.AppImage
-            macOS/frozen-bubble-macos.dmg
+            macOS/frozen-bubble-macos-arm64.dmg
             Windows/frozen-bubble-windows-setup.exe
             Android/frozen-bubble-android-tv.apk
             WASM/frozen-bubble-wasm.zip

@@ -79,7 +79,7 @@ void * malloc_(size_t size)
 {
         void * ret = malloc(size);
         if (ret == NULL) {
-                fprintf(stderr, "Out of memory, exiting - size was %zd.\n", size);
+                fprintf(stderr, "Out of memory, exiting - size was %zu.\n", size);
                 exit(EXIT_FAILURE);
         }
         return ret;
@@ -89,7 +89,7 @@ void * realloc_(void * ptr, size_t size)
 {
         void * ret = realloc(ptr, size);
         if (ret == NULL) {
-                fprintf(stderr, "Out of memory, exiting - size was %zd.\n", size);
+                fprintf(stderr, "Out of memory, exiting - size was %zu.\n", size);
                 exit(EXIT_FAILURE);
         }
         return ret;

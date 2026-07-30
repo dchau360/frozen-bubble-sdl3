@@ -1105,7 +1105,7 @@ void create_server(int argc, char **argv)
         // Binded correctly, now we can init logging specifying the port (useful for multiple servers)
         logging_init(port);
 
-        l4(OUTPUT_TYPE_INFO, "fb-server v2.4.9 (protocol FB/%d.%d) started on port %d. Servername is '%s'.", proto_major, proto_minor, port, servername);
+        l4(OUTPUT_TYPE_INFO, "fb-server v" VERSION " (protocol FB/%d.%d) started on port %d. Servername is '%s'.", proto_major, proto_minor, port, servername);
 
         signal(SIGTERM, sigterm_catcher);
 }

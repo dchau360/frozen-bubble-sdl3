@@ -1,6 +1,16 @@
 cmake_minimum_required(VERSION 3.13)
 
-project(frozen-bubble-sdl3 CXX C)
+# Single source of truth for the version. Audit finding REL-004 recorded five
+# distinct hand-maintained strings across build inputs (2.2.1, 2.4.9, v2.4.26,
+# 2.4.27, 0.1.0), four of which reached a runtime or artifact surface — the
+# in-game menu was showing v2.4.26 while the release was several versions on.
+# Anything that can read CMake now derives its version from here.
+#
+# Two mirrors cannot: android/app/build.gradle (versionName/versionCode, which
+# Android requires to advance per release) and the off-tag fallback in
+# .github/workflows/build.yml. Both are listed in the release checklist in
+# CLAUDE.md and must be bumped together with this line.
+project(frozen-bubble-sdl3 VERSION 2.4.30 LANGUAGES CXX C)
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/cmake")
 
@@ -139,6 +149,11 @@ elseif(EMSCRIPTEN)
 else()
     target_compile_definitions(frozen-bubble-sdl3 PRIVATE DATA_DIR=\"${ASSET_PATH}\")
 endif()
+
+# Applies to every platform, including Android and WASM, so the version shown
+# in the menu always matches the tag this was built from (REL-004).
+target_compile_definitions(frozen-bubble-sdl3
+    PRIVATE APP_VERSION=\"v${PROJECT_VERSION}\")
 
 # SDL3 uses modern cmake targets — include dirs come from target properties
 

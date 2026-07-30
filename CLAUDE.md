@@ -127,4 +127,19 @@ Key line references: malus formula (line 958), chain reactions (819–841), win 
 
 Android releases are signed with a persistent key held in repository secrets, and a tagged build fails outright rather than shipping an APK that cannot be upgraded — see `docs/ANDROID_SIGNING.md`.
 
+### Cutting a release
+
+Three files carry the version and must be bumped together:
+
+1. `CMakeLists.txt` — `project(... VERSION x.y.z ...)`. Authoritative: the game's
+   `APP_VERSION` (shown in the menu), the server's startup log and its
+   master-server user agent all derive from it.
+2. `android/app/build.gradle` — `versionName`, and `versionCode` must strictly
+   increase or Android refuses the upgrade.
+3. `.github/workflows/build.yml` — the two off-tag `version="x.y.z"` fallbacks.
+
+`default.nix` carries a copy too, but nothing ships from it. Then update
+`CHANGELOG.md`, commit, and push an annotated `vx.y.z` tag — the tag is what
+triggers the release and the itch.io deploys.
+
 Automated tests run under `ctest` (`ctest --test-dir build`). Two of them need a sanitizer build and report themselves as skipped otherwise via `SKIP_RETURN_CODE 77`, rather than passing without running. Gameplay itself is still verified manually.
