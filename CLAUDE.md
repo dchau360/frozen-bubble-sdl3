@@ -17,6 +17,21 @@ cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug
 cmake --build build --parallel
 ```
 
+**Tests:**
+```bash
+ctest --test-dir build --output-on-failure
+```
+Two server tests exercise memory-safety fixes and need a sanitizer build; on an
+ordinary build they report as skipped rather than passing without running. To
+actually run them:
+```bash
+cmake -B build-asan -G Ninja -DCMAKE_BUILD_TYPE=Debug \
+  -DCMAKE_C_FLAGS=-fsanitize=address,undefined \
+  -DCMAKE_CXX_FLAGS=-fsanitize=address,undefined
+cmake --build build-asan --parallel
+ctest --test-dir build-asan --output-on-failure
+```
+
 **Server (Linux/macOS only, built alongside game automatically):**
 ```bash
 ./start-server.sh          # default port 1511
@@ -31,9 +46,10 @@ emcmake cmake .. -DCMAKE_BUILD_TYPE=Release
 emmake make -j$(nproc)
 ```
 
-Serve WASM with COOP/COEP headers (required for audio):
+Serve WASM with COOP/COEP headers (required for audio — without them the page
+loads but is silent):
 ```bash
-python3 dist-wasm/serve.py   # or the inline python3 snippet in README
+python3 tools/serve-wasm.py   # finds build-wasm/ or dist-wasm/, prints the URL
 ```
 
 **Android:** `cd android && ./gradlew assembleRelease` — requires SDL3 git submodules initialized (`git submodule update --init --recursive android/app/jni/SDL3*`).
@@ -107,4 +123,8 @@ Key line references: malus formula (line 958), chain reactions (819–841), win 
 
 ### CI / release
 
-`.github/workflows/build.yml` normally builds Linux (AppImage), macOS (DMG), Windows (NSIS installer), Android (APK), and WASM on every push to `main`, on PRs to `main`, and on `v*.*.*` tags, then deploys each platform to itch.io via Butler on tag pushes. **The Linux, macOS, Windows, and Android build jobs (and their itch.io deploy jobs) are currently disabled with `if: false` to cut Actions usage — only the WASM build and deploy run.** The `release` job currently needs/packages only the WASM zip; to re-enable a platform, remove its build job's `if: false`, restore it in the `release` job's `needs` list and `files` block, and restore its deploy job's tag condition. No automated tests — verification is manual gameplay testing.
+`.github/workflows/build.yml` builds Linux (AppImage), macOS (DMG), Windows (NSIS installer), Android (APK), and WASM on every push to `main`, on PRs to `main`, and on `v*.*.*` tags, then deploys each platform to itch.io via Butler on tag pushes. All five build jobs are enabled; the `release` job `needs` all five and packages each one's artifact. Only the `release` and `deploy-itchio-*` jobs are tag-gated (`startsWith(github.ref, 'refs/tags/')`), so pushes and PRs build without publishing anything.
+
+Android releases are signed with a persistent key held in repository secrets, and a tagged build fails outright rather than shipping an APK that cannot be upgraded — see `docs/ANDROID_SIGNING.md`.
+
+Automated tests run under `ctest` (`ctest --test-dir build`). Two of them need a sanitizer build and report themselves as skipped otherwise via `SKIP_RETURN_CODE 77`, rather than passing without running. Gameplay itself is still verified manually.
