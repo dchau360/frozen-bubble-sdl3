@@ -194,7 +194,9 @@ void MainMenu::CandyRender() {
 void MainMenu::SPPanelRender() {
     if (!showingSPPanel) return;
 
-    if(overlookSfc == nullptr) {
+    // activeSPButtons[0] may be null if its asset failed to load; dereferencing
+    // it here crashed the client as soon as the panel opened (BUG-044).
+    if(overlookSfc == nullptr && activeSPButtons[0] != nullptr) {
         overlookSfc = SDL_CreateSurface(activeSPButtons[0]->w, activeSPButtons[0]->h, SURF_FORMAT);
         overlook_init_(overlookSfc);
     }
@@ -204,12 +206,16 @@ void MainMenu::SPPanelRender() {
     SDL_Rect spPanelRct = {(640/2) - (341/2), (480/2) - (320/2), 341, 320};
     { SDL_FRect fr = ToFRect(spPanelRct); SDL_RenderTexture(const_cast<SDL_Renderer*>(renderer), singlePanelBG, nullptr, &fr); }
     for (int i = 0; i < SP_OPT; i++){
-        int w, h;
-        { float fw, fh; SDL_GetTextureSize(idleSPButtons[i], &fw, &fh); w = (int)fw; h = (int)fh; }
+        int w = 0, h = 0;
+        { float fw = 0, fh = 0; SDL_GetTextureSize(idleSPButtons[i], &fw, &fh); w = (int)fw; h = (int)fh; }
         SDL_Rect entryRct = {(640/2)-(298/2), ((480/2)-90)+(41 * (i + 1)), 298, 37};
         SDL_Rect subRct = {(640/2)-(298/2), ((480/2)-90)+(41 * (i + 1)), w, h};
         if(i == activeSPIdx) {
-            if (GameSettings::Instance()->gfxLevel() <= 2) {
+            // overlook_ reads orig->format, and overlookSfc is null when the
+            // asset that sizes it failed to load. Fall back to the plain
+            // highlight instead of dereferencing either (BUG-044).
+            if (GameSettings::Instance()->gfxLevel() <= 2
+                && overlookSfc != nullptr && activeSPButtons[i] != nullptr) {
                 overlook_(overlookSfc, activeSPButtons[i], overlookIndex, spOptions[i].pivot);
                 SDL_Rect miniRct = {(640/2)-(298/2), ((480/2)-90)+(41 * (i + 1)), overlookSfc->w, overlookSfc->h};
                 SDL_Texture *miniOverlook = SDL_CreateTextureFromSurface(const_cast<SDL_Renderer*>(renderer), overlookSfc);

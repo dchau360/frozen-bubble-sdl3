@@ -119,6 +119,14 @@ BubbleGame::BubbleGame(const SDL_Renderer *renderer)
     inGameText.UpdateAlignment(TTF_HORIZONTAL_ALIGN_CENTER);
     inGameText.UpdateColor({255, 255, 255, 255}, {0, 0, 0, 255});
 
+    // Without a font, UpdateText early-returns before creating outTexture or
+    // writing coords.w/h, so the multiplayer targeting indicator rendered a null
+    // texture through an indeterminate rect and never appeared at all
+    // (audit finding BUG-043). Smaller than inGameText: it sits just above or
+    // below a player's shooter and has to fit beside the mini boards.
+    targetingText.LoadFont(ASSET("/gfx/DroidSans.ttf").c_str(), 12);
+    targetingText.UpdateColor({255, 255, 255, 255}, {0, 0, 0, 255});
+
     winsP1Text.LoadFont(ASSET("/gfx/DroidSans.ttf").c_str(), 20);
     winsP1Text.UpdateAlignment(TTF_HORIZONTAL_ALIGN_CENTER);
     winsP1Text.UpdateColor({255, 255, 255, 255}, {0, 0, 0, 255});

@@ -122,6 +122,18 @@ MainMenu::MainMenu(const SDL_Renderer *renderer)
         std::string activePath = ASSET("/gfx/menu/txt_") + spOptions[i].option + "_text.png";
         idleSPButtons[i] = IMG_LoadTexture(rend, idlePath.c_str());
         activeSPButtons[i] = IMG_Load(activePath.c_str());
+        // Both were stored unchecked. SPPanelRender dereferences
+        // activeSPButtons[0] for its surface size and passes activeSPButtons[i]
+        // into overlook_, which reads orig->format — so one missing
+        // single-player button asset crashed the client the moment the panel
+        // opened (audit finding BUG-044). Log here; the render path now skips
+        // whatever is missing instead of dereferencing null.
+        if (!idleSPButtons[i])
+            SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Missing menu asset: %s (%s)",
+                         idlePath.c_str(), SDL_GetError());
+        if (!activeSPButtons[i])
+            SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Missing menu asset: %s (%s)",
+                         activePath.c_str(), SDL_GetError());
     }
     singlePanelBG = IMG_LoadTexture(rend, ASSET("/gfx/menu/1p_panel.png").c_str());
     singleButtonAct = IMG_LoadTexture(rend, ASSET("/gfx/menu/txt_menu_1p_over.png").c_str());
@@ -272,6 +284,9 @@ void MainMenu::SavePreNick() {
 
 void restartOverlook(SDL_Surface *overlookSfc, int &overlookIndex){
     if(GameSettings::Instance()->gfxLevel() > 2) return;
+    // overlook_init_ dereferences surf->format immediately, and overlookSfc is
+    // null whenever the asset that sizes it failed to load (BUG-044).
+    if(overlookSfc == nullptr) return;
     overlook_init_(overlookSfc);
     overlookIndex = 0;
 }
