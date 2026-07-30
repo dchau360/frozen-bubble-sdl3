@@ -1,5 +1,12 @@
 # Changelog
 
+## v2.4.30
+
+- **Desktop frame pacing fixed** — the frame limiter was measuring the wrong interval, so instead of holding a steady 60 fps it alternated a full-length pause with almost none, delivering frames in short/long pairs at roughly 107 fps. On a 60 Hz display about half of those were drawn and never shown, and the rest arrived out of step with the refresh, which read as stutter. Frames now arrive evenly.
+- **Desktop now runs at exactly browser speed** — a side effect of the pacing bug was that the very short frames hit an internal lower limit, quietly adding about 6% to the game speed on desktop that the browser build never had. Desktop and browser now run identically at the same speed setting.
+- **Display sync enabled on desktop** — the game now presents in step with the monitor instead of on its own clock, which removes a dropped or doubled frame every few seconds. Falls back to the frame limiter where the display driver does not support it.
+- **Performance overlay** — press **F3** to show frames per second, frame-time range, and effective game speed against the configured speed, in the bottom-right corner. Off by default, remembered between sessions. Useful for comparing desktop against the browser build, and for telling a frame-rate problem apart from a game-speed one — they look the same while playing but have different causes.
+
 ## v2.4.29
 
 Completes the high-severity fixes from the repository audit that v2.4.28 started.
