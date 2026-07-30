@@ -281,6 +281,11 @@ inline constexpr SDL_Color kTeamColors[5] = {
     {255, 112, 112, 255}, {92, 184, 255, 255}, {255, 211, 66, 255},
     {132, 220, 130, 255}, {205, 139, 255, 255}
 };
+// NetworkClient clamps peer-supplied team numbers to [1, kMaxTeams] before they
+// reach these indexing sites; keep the two in step or that clamp stops covering
+// the whole array.
+static_assert(std::size(kTeamColors) == static_cast<size_t>(kMaxTeams),
+              "kTeamColors must have one entry per team that OPTIONS can assign");
 
 struct BubbleArray {
     std::array<std::vector<Bubble>, 13> bubbleMap;
@@ -402,8 +407,18 @@ struct BubbleArray {
         }
     }
 
+    // row/col reach here from a peer's `s`, `m`/`M` and malus payloads, none of
+    // which are range-checked upstream, so this is the choke point that keeps an
+    // arbitrary cell reference off the board. Drop an out-of-range placement:
+    // a sender following the protocol never produces one, and a malformed one
+    // must not index outside bubbleMap or the row's vector.
     void PlacePlayerBubble(int bubbleId, int row, int col) {
-        Bubble &bubble = bubbleMap[row][col];
+        if (row < 0 || row >= static_cast<int>(bubbleMap.size()))
+            return;
+        std::vector<Bubble> &cells = bubbleMap[row];
+        if (col < 0 || col >= static_cast<int>(cells.size()))
+            return;
+        Bubble &bubble = cells[col];
         bubble.bubbleId = bubbleId;
         bubble.playerBubble = true;
     }

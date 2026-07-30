@@ -25,6 +25,7 @@
 #include <netdb.h>
 #endif
 #include <sstream>
+#include <stdexcept>
 #include <stdio.h>
 #ifdef __ANDROID__
 #include <jni.h>
@@ -1160,7 +1161,16 @@ void NetworkClient::HandlePushMessage(const std::string& pushMsg) {
             std::string search = std::string(key) + ":";
             size_t p = opts.find(search);
             if (p == std::string::npos) return def;
-            return std::stoi(opts.substr(p + search.size()));
+            // OPTIONS arrives from another client. std::stoi throws
+            // std::invalid_argument on a non-numeric value and std::out_of_range
+            // on one too large for int; uncaught, either terminates the process.
+            // Fall back to the default so a malformed push cannot kill the game.
+            try {
+                return std::stoi(opts.substr(p + search.size()));
+            } catch (const std::logic_error &) {
+                SDL_Log("Ignoring malformed OPTIONS value for %s", key);
+                return def;
+            }
         };
         rcvChainReaction = parseVal("CHAINREACTION", 1) != 0;
         rcvContinueLeave = parseVal("CONTINUEGAMEWHENPLAYERSLEAVE", 1) != 0;
@@ -1191,7 +1201,11 @@ void NetworkClient::HandlePushMessage(const std::string& pushMsg) {
         for (int i = 0; i < 5; i++) {
             char key[32];
             snprintf(key, sizeof(key), "PLAYERTEAM_P%d", i + 1);
-            rcvPlayerTeams[i] = parseVal(key, i + 1);
+            // Clamp here, at the trust boundary: this value comes from another
+            // client's OPTIONS push and is used one-based to index kTeamColors,
+            // which has kMaxTeams entries. Unclamped, PLAYERTEAM_Pn=0 reads
+            // kTeamColors[-1] and a large value reads off the end.
+            rcvPlayerTeams[i] = ClampTeamNumber((int)parseVal(key, i + 1));
         }
         pendingOptions = true;
     } else if (pushMsg.find("GAME_CAN_START:") == 0) {
