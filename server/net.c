@@ -443,11 +443,15 @@ static void handle_udp_request(void)
                 fl_unrecognized = asprintf_(fl_unrecognized_base, proto_major, proto_minor);
 
         memset(msg, 0, sizeof(msg));
-        n = recvfrom(udp_server_socket, msg, sizeof(msg), 0, (struct sockaddr *) &client_addr, &client_len);
+        /* Reserve the last byte for the terminator: recvfrom does not NUL-terminate,
+           so a full-length datagram would overwrite every zero left by the memset and
+           the unbounded strstr below would then read past the end of this buffer. */
+        n = recvfrom(udp_server_socket, msg, sizeof(msg) - 1, 0, (struct sockaddr *) &client_addr, &client_len);
         if (n == -1) {
                 l1(OUTPUT_TYPE_ERROR, "recvfrom: %s", strerror(errno));
                 return;
         }
+        msg[n] = '\0';
 
         l2(OUTPUT_TYPE_DEBUG, "UDP server receives %d bytes from %s.", n, inet_ntoa(client_addr.sin_addr));
         if (strncmp(msg, ok_input_beginning, strlen(ok_input_beginning)) || !strstr(msg, ok_input_end) || (lan_game_mode && g_list_length(conns_prio) > 0)) {
