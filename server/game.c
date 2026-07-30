@@ -322,14 +322,27 @@ static int game_is_live(const struct game *g)
         return g != NULL && g_list_find(games, g) != NULL;
 }
 
-int find_player_number(struct game *g, int fd)
+/* Seat of this connection, or -1 if it does not hold one. Callers that can
+   legitimately ask about a connection already removed from the game -- the
+   departure relay does exactly that -- must use this rather than
+   find_player_number, which treats absence as fatal. */
+static int find_player_slot(const struct game *g, int fd)
 {
         int i;
         for (i = 0; i < g->players_number; i++)
                 if (g->players_conn[i] == fd)
                         return i;
-        l0(OUTPUT_TYPE_ERROR, "Internal error");
-        exit(EXIT_FAILURE);
+        return -1;
+}
+
+int find_player_number(struct game *g, int fd)
+{
+        int i = find_player_slot(g, fd);
+        if (i < 0) {
+                l0(OUTPUT_TYPE_ERROR, "Internal error");
+                exit(EXIT_FAILURE);
+        }
+        return i;
 }
 
 static void real_start_game(struct game* g)
@@ -944,6 +957,20 @@ void process_msg_prio_(int fd, char* msg, ssize_t len, struct game* g)
                 g = find_game_by_fd(fd);
         if (g) {
                 int i;
+                /* Stamp the sender byte with the seat this server assigned, so a
+                   client cannot claim to be another player. Peers read msg[0] as
+                   the originating seat and act on it, and everything below this
+                   point relays msg verbatim.
+
+                   A negative slot means the sender no longer holds one: the
+                   departure relay announces a player the caller has already
+                   removed from the game, and supplies the correct id itself.
+                   Leave that message alone. */
+                {
+                        int sender_slot = find_player_slot(g, fd);
+                        if (sender_slot >= 0 && len > 0)
+                                msg[0] = g->players_id[sender_slot];
+                }
                 for (i = 0; i < g->players_number; i++) {
                         // Pings are for the server only. Don't broadcast them to save bandwidth.
                         if (len == 3 && msg[1] == 'p') {
@@ -994,8 +1021,14 @@ void process_msg_prio_(int fd, char* msg, ssize_t len, struct game* g)
                         g_list_free(conn_to_terminate);
                 }
         } else {
-                l1(OUTPUT_TYPE_ERROR, "Internal error: could not find game by fd: %d", fd);
-                exit(EXIT_FAILURE);
+                /* A connection can sit in priority mode with no game behind it:
+                   being kicked from a playing room, or the room closing after
+                   the round started, both leave the fd live while its game is
+                   gone. Its next binary line used to land here and take the
+                   whole server -- every other room included -- down with it.
+                   Close just this connection instead. */
+                l1(OUTPUT_TYPE_ERROR, "[%d] priority message with no game behind it; closing this connection", fd);
+                conn_terminated(fd, "in-game message from a connection that is no longer in a game");
         }
 }
 
