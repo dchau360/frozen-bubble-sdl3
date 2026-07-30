@@ -194,6 +194,11 @@ void NetworkClient::Disconnect() {
     gameList.clear();
     messageQueue.clear();
     syncQueue.clear();
+    // Without this the next connection inherits whatever partial line was in
+    // flight when this one dropped, so it starts parsing at the wrong offset --
+    // and a buffer left full stayed full, carrying the deaf state across the
+    // reconnect that was supposed to clear it.
+    recvBufferLen = 0;
     SDL_Log("Disconnected from server");
 }
 
@@ -841,7 +846,22 @@ bool NetworkClient::ProcessIncomingData() {
     }
 
     // Append to buffer (don't null-terminate yet for binary data)
-    if (recvBufferLen + received < BUFFER_SIZE) {
+    if (recvBufferLen + received >= RECV_BUFFER_SIZE) {
+        // Every statement that shrinks recvBufferLen lives inside the append
+        // branch below, so without this the full state was absorbing: once the
+        // buffer filled, the connection was deaf for the rest of its life and
+        // every later read was silently discarded -- the lobby stopped updating
+        // and, in game, peer frames vanished while boards quietly diverged.
+        // A line this long with no newline in it is not something this protocol
+        // produces, so treat it the way the server treats the same condition and
+        // drop the connection rather than pretending to be connected.
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
+                     "Receive buffer overflowed with no complete line (%d + %d >= %d); disconnecting",
+                     recvBufferLen, (int)received, RECV_BUFFER_SIZE);
+        Disconnect();
+        return false;
+    }
+    {
         memcpy(recvBuffer + recvBufferLen, tempBuffer, received);
         recvBufferLen += received;
 
@@ -869,7 +889,16 @@ bool NetworkClient::ProcessIncomingData() {
                     int msgStart = processed + 1;
                     int msgLen = msgEnd - msgStart;
 
-                    if (msgLen > 0) {
+                    // recvBuffer is larger than gameMsg, so this bound is what
+                    // keeps a long line from running off the end of a stack
+                    // buffer. In-game frames are a few bytes; anything near this
+                    // is not one, so skip it rather than truncate it into
+                    // something that parses as a different message.
+                    if (msgLen >= BUFFER_SIZE) {
+                        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
+                                    "Dropping oversized in-game message from player %d (%d bytes)",
+                                    (int)senderId, msgLen);
+                    } else if (msgLen > 0) {
                         char gameMsg[BUFFER_SIZE];
                         memcpy(gameMsg, recvBuffer + msgStart, msgLen);
                         gameMsg[msgLen] = '\0';

@@ -204,9 +204,11 @@ FrozenBubble::~FrozenBubble() {
         window = nullptr;
     }
 
-    hiscoreManager->Dispose();
-    audMixer->Dispose();
-    gameOptions->Dispose();
+    // Any of these can still be null: the constructor returns early when SDL,
+    // the window or the renderer fails, and this destructor runs regardless.
+    if (hiscoreManager) hiscoreManager->Dispose();
+    if (audMixer) audMixer->Dispose();
+    if (gameOptions) gameOptions->Dispose();
 
     TTF_Quit();
     SDL_Quit();

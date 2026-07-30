@@ -25,6 +25,7 @@
 
 #include <fstream>
 #include <sstream>
+#include <stdexcept>
 #include <string>
 
 struct HighscoreData {
@@ -78,16 +79,30 @@ void HighscoreManager::LoadLevelsetHighscores(const char *path) {
             {
                 std::stringstream ss(curLine);
                 HighscoreData hs;
-                while(std::getline(ss, curChar, ','))
+                // stoi/stof throw on a non-numeric or out-of-range field. This
+                // runs during construction, so an uncaught throw took the whole
+                // client down before the window appeared -- over a corrupt file
+                // in the user's own preferences directory. Drop the bad line and
+                // keep the rest of the table instead. The entry is only appended
+                // once every field has parsed, so a partial row is not stored.
+                try
                 {
-                    if (task == 0) hs.level = stoi(curChar);
-                    else if (task == 1) hs.name = curChar;
-                    else if (task == 2) hs.time = stof(curChar);
-                    else if (task == 3) {
-                        hs.picId = stoi(curChar);
-                        levelsetScores.push_back(hs);
+                    while(std::getline(ss, curChar, ','))
+                    {
+                        if (task == 0) hs.level = stoi(curChar);
+                        else if (task == 1) hs.name = curChar;
+                        else if (task == 2) hs.time = stof(curChar);
+                        else if (task == 3) {
+                            hs.picId = stoi(curChar);
+                            levelsetScores.push_back(hs);
+                        }
+                        task++;
                     }
-                    task++;
+                }
+                catch (const std::logic_error &)
+                {
+                    SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
+                                "Skipping malformed highscore entry in %s: '%s'", path, curLine.c_str());
                 }
                 task = 0;
             }
@@ -121,13 +136,23 @@ void HighscoreManager::LoadHighscoreLevels(const char *path) {
             }
             else {
                 std::stringstream ss(curLine);
-                while(std::getline(ss, curChar, ' '))
+                // As above: a non-numeric cell must not abort construction.
+                try
                 {
-                    if(curChar.empty()) continue;
-                    else if(curChar == "-") line.push_back(-1);
-                    else {
-                        line.push_back(stoi(curChar));
+                    while(std::getline(ss, curChar, ' '))
+                    {
+                        if(curChar.empty()) continue;
+                        else if(curChar == "-") line.push_back(-1);
+                        else {
+                            line.push_back(stoi(curChar));
+                        }
                     }
+                }
+                catch (const std::logic_error &)
+                {
+                    SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
+                                "Skipping malformed level row in %s: '%s'", path, curLine.c_str());
+                    line.clear();
                 }
 
                 if (idx < 10) {

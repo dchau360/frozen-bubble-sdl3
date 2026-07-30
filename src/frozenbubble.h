@@ -82,16 +82,21 @@ private:
     void HandleControllerEvent(SDL_Event *e);
     static void PushKey(SDL_Keycode key, bool down);
     static void PushScancode(SDL_Scancode sc, bool down, bool skipEvent = false);
-    SDL_Window *window;
-    SDL_Renderer *renderer;
+    // Initialized here rather than only in the constructor: the constructor has
+    // early-return paths (a failed SDL init, a window or renderer that will not
+    // create), and RunForEver and ~FrozenBubble still run afterwards and
+    // dereference these. Without initializers those paths read indeterminate
+    // pointers; nullptr at least makes the guards and SDL_Destroy* calls safe.
+    SDL_Window *window = nullptr;
+    SDL_Renderer *renderer = nullptr;
 
-    GameSettings *gameOptions;
-    AudioMixer *audMixer;
+    GameSettings *gameOptions = nullptr;
+    AudioMixer *audMixer = nullptr;
 
-    MainMenu *mainMenu;
-    BubbleGame *mainGame;
+    MainMenu *mainMenu = nullptr;
+    BubbleGame *mainGame = nullptr;
 
-    HighscoreManager *hiscoreManager;
+    HighscoreManager *hiscoreManager = nullptr;
 
     TTFText menuText;
 

@@ -165,11 +165,28 @@ void GameSettings::ReadSettings()
 
     optDict = iniparser_load(setPath);
 
-    while (optDict == NULL)
+    // A missing or malformed settings file is repairable: write defaults and
+    // reload. An unwritable preferences directory is not, and this used to
+    // retry forever -- before any window exists, so the game simply appears to
+    // hang instead of reporting a settings problem. Bound the attempts, then
+    // carry on with an empty in-memory dictionary: every getter below supplies
+    // its own default, so the game starts with default settings rather than not
+    // at all.
+    constexpr int kMaxSettingsRepairAttempts = 3;
+    for (int attempt = 0; optDict == NULL && attempt < kMaxSettingsRepairAttempts; attempt++)
     {
-        SDL_LogWarn(1, "Settings file failed to load (or doesn't exist). Creating default fallback...");
+        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
+                    "Settings file failed to load (or doesn't exist). Creating default fallback (attempt %d of %d)...",
+                    attempt + 1, kMaxSettingsRepairAttempts);
         CreateDefaultSettings();
         optDict = iniparser_load(setPath);
+    }
+    if (optDict == NULL)
+    {
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
+                     "Could not read or create '%s' after %d attempts. Starting with default settings; "
+                     "changes will not be saved.", setPath, kMaxSettingsRepairAttempts);
+        optDict = dictionary_new(0);
     }
 
     gfxQuality = iniparser_getint(optDict, "GFX:Quality", 1);

@@ -35,6 +35,14 @@
 #define PROTO_MINOR 3
 #define BUFFER_SIZE 4096
 
+// The accumulation buffer has to be able to hold one whole server line. The
+// server formats each line into a 16384-byte buffer and can emit up to
+// sizeof(buf)-1 of it (server/net.c send_line), and the LIST reply is built in a
+// 16384-byte list_games_str, so a busy lobby legitimately produces lines far
+// past BUFFER_SIZE. Sized above that ceiling with room for a partial line still
+// waiting in front of the next one.
+#define RECV_BUFFER_SIZE 32768
+
 // Highest team number a player may be assigned. Team numbers are one-based and
 // are used to index kTeamColors (bubblegame.h), which static_asserts that it
 // holds exactly this many entries. Peer-supplied team values are clamped to
@@ -226,7 +234,7 @@ private:
     GameRoom* currentGame;
 
 #ifndef __WASM_PORT__
-    char recvBuffer[BUFFER_SIZE];
+    char recvBuffer[RECV_BUFFER_SIZE];
     int recvBufferLen;
 #endif
 
