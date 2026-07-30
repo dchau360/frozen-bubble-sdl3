@@ -193,6 +193,8 @@ if(BUILD_TESTING AND NOT EMSCRIPTEN AND NOT ANDROID)
     if(TARGET fb-server)
         add_test(NAME server-list-cap-test
             COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tests/server_list_cap_test.py $<TARGET_FILE:fb-server>)
+        add_test(NAME server-massleave-test
+            COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tests/server_massleave_test.py $<TARGET_FILE:fb-server>)
     endif()
 endif()
 
