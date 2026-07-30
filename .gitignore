@@ -25,3 +25,9 @@ android/local.properties
 android/app/jni/SDL2_mixer/external/ogg/
 android/app/jni/SDL2_mixer/external/vorbis/
 __pycache__/
+# Signing key material must never be committed. See docs/ANDROID_SIGNING.md --
+# the key belongs in a password manager and in repository secrets, not here.
+*.keystore
+*.jks
+*.p12
+keystore.properties
