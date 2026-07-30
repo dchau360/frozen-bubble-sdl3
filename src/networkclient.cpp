@@ -35,6 +35,37 @@
 NetworkClient* NetworkClient::ptrInstance = nullptr;
 
 #ifndef __WASM_PORT__
+namespace {
+// Write the whole buffer, or report failure. On Windows the socket is
+// non-blocking (see Connect), so send() may accept only part of a message.
+// This protocol is newline-framed, so a half-written line does not merely go
+// missing -- it leaves the server parsing the next one at the wrong offset.
+// Returns len, or -1.
+ssize_t SendAll(int fd, const char* data, size_t len) {
+    size_t offset = 0;
+    int stalls = 0;
+    while (offset < len) {
+        ssize_t n = send(fd, data + offset, len - offset, MSG_NOSIGNAL);
+        if (n > 0) {
+            offset += (size_t)n;
+            stalls = 0;
+            continue;
+        }
+#ifdef _WIN32
+        const bool retryable = (n < 0 && SOCK_ERRNO == WSAEWOULDBLOCK);
+#else
+        const bool retryable = (n < 0 && (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR));
+#endif
+        // Give a briefly-full send buffer time to drain, but never spin
+        // indefinitely on a peer that has stopped reading.
+        if (!retryable || ++stalls > 500)
+            return -1;
+        SDL_Delay(1);
+    }
+    return (ssize_t)len;
+}
+}  // namespace
+
 NetworkClient::NetworkClient()
     : sockfd(-1), state(DISCONNECTED), currentGame(nullptr), recvBufferLen(0), myPlayerId(0) {
     SDL_Log("NetworkClient constructor called");
@@ -122,6 +153,21 @@ bool NetworkClient::Connect(const char* host, int port) {
         state = DISCONNECTED;
         return false;
     }
+
+#ifdef _WIN32
+    // Winsock has no MSG_DONTWAIT, so the flag passed to every recv() below
+    // compiles to 0 there and the per-frame receive blocks the render loop
+    // until the server happens to say something. Put the socket itself in
+    // non-blocking mode instead, which is how Winsock expresses this.
+    // POSIX is deliberately left alone: MSG_DONTWAIT already does the job
+    // per-call, and switching the socket would make send() non-blocking too.
+    {
+        u_long nonblocking = 1;
+        if (ioctlsocket(sockfd, FIONBIO, &nonblocking) != 0)
+            SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
+                         "Could not set the connection non-blocking: %d", SOCK_ERRNO);
+    }
+#endif
 
     // Wait for and consume all initial server messages. Poll in short slices
     // but judge "no more data" against an overall deadline, not the first
@@ -211,7 +257,7 @@ bool NetworkClient::SendCommand(const char* command) {
     char buffer[BUFFER_SIZE];
     snprintf(buffer, sizeof(buffer), "FB/%d.%d %s\n", PROTO_MAJOR, PROTO_MINOR, command);
 
-    ssize_t sent = send(sockfd, buffer, strlen(buffer), MSG_NOSIGNAL);
+    ssize_t sent = SendAll(sockfd, buffer, strlen(buffer));
     if (sent < 0) {
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to send command: %s", strerror(errno));
         Disconnect();
@@ -584,7 +630,7 @@ bool NetworkClient::SendGameData(const char* data) {
                 (int)myPlayerId, data, len, msgLen);
     }
 
-    ssize_t sent = send(sockfd, buffer, len, MSG_NOSIGNAL);
+    ssize_t sent = SendAll(sockfd, buffer, len);
     if (sent < 0) {
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to send game data: %s", strerror(errno));
         Disconnect();
@@ -1309,7 +1355,7 @@ void NetworkClient::HandlePushMessage(const std::string& pushMsg) {
             while (attempts < 50) { // up to 5 seconds
                 char buf[BUFFER_SIZE];
                 snprintf(buf, sizeof(buf), "FB/%d.%d LEADER_CHECK_GAME_START\n", PROTO_MAJOR, PROTO_MINOR);
-                send(sockfd, buf, strlen(buf), MSG_NOSIGNAL);
+                SendAll(sockfd, buf, strlen(buf));
 
                 // Wait for server response
                 fd_set readfds; struct timeval tv;
