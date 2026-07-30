@@ -925,8 +925,18 @@ void BubbleGame::NewGame(SetupSettings setup) {
 
     SetupGameMetrics(bubbleArrays, currentSettings.playerCount, lowGfx);
 
-    // Clear any remaining single bubbles from previous game
+    // Clear transient round state carried over from a previous match. Starting a
+    // distinct match reuses these owners, and a new match can have fewer players
+    // than the last one, so anything left here may still be addressed to an array
+    // that is now inactive and whose rows RemoveArray has cleared. ReloadGame
+    // clears the same set between rounds; only singleBubbles was cleared here.
     singleBubbles.clear();
+    malusBubbles.clear();
+    for (int i = 0; i < currentSettings.playerCount; i++) {
+        bubbleArrays[i].malusQueue.clear();
+        bubbleArrays[i].malusAlerts.clear();
+    }
+    frameCount = 0;
 
     if (!currentSettings.randomLevels) {
         LoadLevelset(ASSET("/data/levels").c_str());
