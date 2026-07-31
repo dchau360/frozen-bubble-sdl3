@@ -618,7 +618,7 @@ std::vector<int> autopseudocrop(SDL_Surface* orig) {
     int Adec = fmt->Ashift / 8; // Adec is non-standard from sdlpango_draw* output
 
     if (fmt->bytes_per_pixel != 4) {
-        SDL_LogError(1, "autocrop - orig surface must be 32bpp!");
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "autocrop - orig surface must be 32bpp!");
         std::abort();
     }
 

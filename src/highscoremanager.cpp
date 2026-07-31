@@ -109,7 +109,7 @@ void HighscoreManager::LoadLevelsetHighscores(const char *path) {
         }
     }
     else {
-        SDL_LogError(1, "Could not load highscore levels (%s).", path);
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Could not load highscore levels (%s).", path);
     }
 }
 
@@ -168,7 +168,7 @@ void HighscoreManager::LoadHighscoreLevels(const char *path) {
         }
     }
     else {
-        SDL_LogError(1, "Could not load highscore levels (%s).", path);
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Could not load highscore levels (%s).", path);
     }
 }
 

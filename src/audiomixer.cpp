@@ -44,7 +44,7 @@ AudioMixer::AudioMixer()
     gameSettings = GameSettings::Instance();
 
     if (!MIX_Init()) {
-        SDL_LogError(1, "MIX_Init failed: %s", SDL_GetError());
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "MIX_Init failed: %s", SDL_GetError());
         mixerEnabled = false;
         return;
     }
@@ -54,7 +54,7 @@ AudioMixer::AudioMixer()
 
     mixer = MIX_CreateMixerDevice(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, &spec);
     if (!mixer) {
-        SDL_LogError(1, "Could not open audio mixer! Music will be disabled. (%s)", SDL_GetError());
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Could not open audio mixer! Music will be disabled. (%s)", SDL_GetError());
         mixerEnabled = false;
         return;
     }
@@ -159,7 +159,7 @@ void AudioMixer::PlaySFX(const char *sfx)
 
     MIX_Audio* audio = GetSFX(sfx);
     if (!audio) {
-        SDL_LogError(1, "Could not load SFX '%s': %s", sfx, SDL_GetError());
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Could not load SFX '%s': %s", sfx, SDL_GetError());
         return;
     }
 
@@ -174,7 +174,7 @@ void AudioMixer::PlaySFX(const char *sfx)
     if (!track) {
         track = MIX_CreateTrack(mixer);
         if (!track) {
-            SDL_LogError(1, "Could not create SFX track: %s", SDL_GetError());
+            SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Could not create SFX track: %s", SDL_GetError());
             return;
         }
         sfxTracks.push_back(track);

@@ -44,12 +44,16 @@ void GameSettings::Dispose() {
 int WriteToIni(dictionary *ini, const char *key, const char *value){
     int a = iniparser_set(ini, key, value);
     if (a != 0) {
-        SDL_LogWarn(1, "Could not write %s %s to ini file!", key, value == NULL ? " header" : "");
+        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "Could not write %s %s to ini file!", key, value == NULL ? " header" : "");
     }
     return a;
 }
 
-#define EvalIniResult(a,ini,k,v) a = WriteToIni(ini, k, v)
+// Accumulates failure rather than overwriting: each call previously assigned its
+// own result to `a`, so only the *last* write's status survived and a failure
+// partway through was erased by any later success (audit finding BUG-031).
+#define EvalIniResult(a,ini,k,v) \
+    do { int evalIniRv_ = WriteToIni(ini, k, v); if (evalIniRv_ < 0) (a) = evalIniRv_; } while (0)
 
 bool EnsureDirectoryExists(const char* path) {
     struct stat st;
@@ -57,7 +61,7 @@ bool EnsureDirectoryExists(const char* path) {
         if (S_ISDIR(st.st_mode)) {
             return true; // Directory already exists
         } else {
-            SDL_LogError(1, "Path exists but is not a directory: %s", path);
+            SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Path exists but is not a directory: %s", path);
             return false;
         }
     }
@@ -68,7 +72,7 @@ bool EnsureDirectoryExists(const char* path) {
 #else
     if (mkdir(path, 0755) != 0) {
 #endif
-        SDL_LogError(1, "Failed to create directory %s: %s", path, strerror(errno));
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to create directory %s: %s", path, strerror(errno));
         return false;
     }
 
@@ -81,7 +85,7 @@ void GameSettings::CreateDefaultSettings()
     InitPrefPath();
     // Ensure configuration directory exists
     if (!EnsureDirectoryExists(prefPath)) {
-        SDL_LogError(1, "Cannot create configuration directory. Settings will not be saved.");
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Cannot create configuration directory. Settings will not be saved.");
         return;
     }
 
@@ -92,7 +96,7 @@ void GameSettings::CreateDefaultSettings()
 
     if((setFile = fopen(setPath, "w")) == NULL)
     {
-        SDL_LogError(1, "Could not create default settings file at %s: %s", setPath, strerror(errno));
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Could not create default settings file at %s: %s", setPath, strerror(errno));
         return;
     }
     fclose(setFile);
@@ -135,19 +139,22 @@ void GameSettings::CreateDefaultSettings()
         EvalIniResult(rval, dict, "Keys:P2Fire", "6");       // SDL_SCANCODE_C
         EvalIniResult(rval, dict, "Keys:P2Center", "7");     // SDL_SCANCODE_D
 
-        //break while
-        rval = 1;
+        // Leave the loop. Only promote to the "done" sentinel when nothing
+        // failed — EvalIniResult now leaves rval negative if any write did, and
+        // that has to survive to the check below, which was previously
+        // unreachable because this line ran unconditionally (BUG-031).
+        if (rval >= 0) rval = 1;
     }
 
     if (rval < 0) {
-        SDL_LogError(1, "Failed to populate default settings");
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to populate default settings");
         iniparser_freedict(dict);
         return;
     }
 
     if((setFile = fopen(setPath, "w+")) == NULL)
     {
-        SDL_LogError(1, "Could not write default settings file at %s: %s", setPath, strerror(errno));
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Could not write default settings file at %s: %s", setPath, strerror(errno));
         iniparser_freedict(dict);
         return;
     }
@@ -199,7 +206,7 @@ void GameSettings::ReadSettings()
     showFps = iniparser_getboolean(optDict, "GFX:ShowFPS", false);
     if (gfxQuality > 3 || gfxQuality < 1) gfxQuality = 3;
     if (windowWidth < 640 || windowWidth > 9999) windowWidth = 640;
-    if (windowHeight < 480 || windowWidth > 9999) windowHeight = 480;
+    if (windowHeight < 480 || windowHeight > 9999) windowHeight = 480;
 
     playMusic = iniparser_getboolean(optDict, "Sound:EnableMusic", true);
     playSfx = iniparser_getboolean(optDict, "Sound:EnableSFX", true);
@@ -307,7 +314,7 @@ void GameSettings::SaveSettings()
 
     if((setFile = fopen(setPath, "w+")) == NULL)
     {
-        SDL_LogWarn(1, "Could not save settings to %s: %s", setPath, strerror(errno));
+        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "Could not save settings to %s: %s", setPath, strerror(errno));
         return;
     }
     iniparser_dump_ini(optDict, setFile);

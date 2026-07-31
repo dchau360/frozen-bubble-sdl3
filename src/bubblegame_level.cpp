@@ -76,7 +76,7 @@ void BubbleGame::LoadLevelset(const char *path) {
         if (idx > 0) loadedLevels.push_back(level);
     }
     else {
-        SDL_LogError(1, "No such levelset (%s).", path);
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "No such levelset (%s).", path);
     }
 }
 

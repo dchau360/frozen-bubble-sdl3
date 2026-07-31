@@ -1669,6 +1669,28 @@ int NetworkClient::MeasureLatency(const char* host, int port, int timeoutMs) {
     fd_set wfds; FD_ZERO(&wfds); FD_SET(s, &wfds);
     struct timeval tv{ timeoutMs / 1000, (timeoutMs % 1000) * 1000 };
     bool ok = (select(s + 1, nullptr, &wfds, nullptr, &tv) > 0);
+
+    // select() reporting the socket writable only means the connect attempt
+    // finished — it says nothing about whether it succeeded. A refused
+    // connection also completes and also becomes writable, so treating
+    // writability alone as success listed dead servers as online, with a
+    // plausible-looking latency (audit finding BUG-016). The outcome lives in
+    // SO_ERROR, which is zero only on an actual connection.
+    if (ok) {
+        int soErr = 0;
+        socklen_t soErrLen = sizeof(soErr);
+        // Not SETSOCKOPT_OPTVAL: that yields a const char* for setsockopt, and
+        // getsockopt writes through this pointer.
+#ifdef _WIN32
+        char* soErrPtr = reinterpret_cast<char*>(&soErr);
+#else
+        void* soErrPtr = &soErr;
+#endif
+        if (getsockopt(s, SOL_SOCKET, SO_ERROR, soErrPtr, &soErrLen) != 0 || soErr != 0) {
+            ok = false;
+        }
+    }
+
     SOCKET_CLOSE(s);
 
     if (!ok) return -1;

@@ -47,14 +47,14 @@ struct TextureEx {
     void LoadTextureData(SDL_Renderer* renderer, const char* path){
         rend = renderer;
         sfc = IMG_Load(path); 
-        if(!sfc) SDL_LogWarn(1, "Failed to init SDL_Surface");
+        if(!sfc) SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "Failed to init SDL_Surface");
     };
 
     void LoadFromSurface(SDL_Surface *img, SDL_Renderer* renderer){
         rend = renderer;
         sfc = SDL_CreateSurface(img->w, img->h, SDL_PIXELFORMAT_ARGB8888);
         SDL_SetSurfaceBlendMode(sfc, SDL_BLENDMODE_BLEND);
-        if(!sfc || !img) SDL_LogWarn(1, "Failed to init SDL_Surface");
+        if(!sfc || !img) SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "Failed to init SDL_Surface");
         SDL_BlitSurface(img, NULL, sfc, NULL);
     };
 
@@ -63,7 +63,7 @@ struct TextureEx {
         sfc = SDL_CreateSurface(sz->w, sz->h, SDL_PIXELFORMAT_ARGB8888);
         SDL_SetSurfaceBlendMode(sfc, SDL_BLENDMODE_BLEND);
         SDL_Surface *img = IMG_Load(path); 
-        if(!sfc || !img) SDL_LogWarn(1, "Failed to init SDL_Surface");
+        if(!sfc || !img) SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "Failed to init SDL_Surface");
         SDL_BlitSurface(img, new SDL_Rect{0, 0, img->w, img->h}, sfc, new SDL_Rect{sz->x, sz->y, img->w, img->h});
         SDL_DestroySurface(img);
     };
