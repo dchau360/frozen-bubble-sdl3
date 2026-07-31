@@ -60,10 +60,35 @@ void BubbleGame::LoadLevelset(const char *path) {
                     if(curChar.empty()) continue;
                     else if(curChar == "-") line.push_back(-1);
                     else {
-                        line.push_back(stoi(curChar));
+                        // Unguarded stoi throws on a non-numeric or oversized
+                        // token and would terminate the game while loading a
+                        // level file — the same failure BUG-032 fixed for the
+                        // highscore loader. Treat a bad token as an empty cell.
+                        try {
+                            line.push_back(std::stoi(curChar));
+                        } catch (const std::logic_error &) {
+                            SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
+                                        "Bad value '%s' in %s; treating as empty",
+                                        curChar.c_str(), path);
+                            line.push_back(-1);
+                        }
                     }
                 }
 
+                // std::array::operator[] does no bounds checking, and idx only
+                // resets on a blank line, so any level block with more than 10
+                // non-blank rows wrote past the end of `level` — an
+                // out-of-bounds write on a fixed-size member, i.e. undefined
+                // behaviour driven purely by file content (audit finding
+                // BUG-051). Drop the excess rows and say so, rather than
+                // corrupting whatever follows.
+                if (idx >= (int)level.size()) {
+                    SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
+                                "Level block in %s has more than %d rows; ignoring the extra ones",
+                                path, (int)level.size());
+                    line.clear();
+                    continue;
+                }
                 level[idx] = line;
                 line.clear();
                 idx++;

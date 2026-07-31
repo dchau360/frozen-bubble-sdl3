@@ -134,6 +134,13 @@ static char* list_game_with_geolocation(const struct game * g)
 static char list_games_str[16384] __attribute__((aligned(4096))) = "";
 static char list_playing_geolocs_str[16384] __attribute__((aligned(4096))) = "";
 static int players_in_game;
+/* Players seated in rooms that have not started. Counted separately from
+ * players_in_game, which feeds the `playing:` field and must keep meaning
+ * "in a running game" — but both have to come off the `free:` count, which
+ * previously subtracted only players_in_game and so reported everyone waiting
+ * in an open room as free, contradicting the open-player list in the same
+ * message (audit finding BUG-050). */
+static int players_seated_open;
 static int games_open;
 static int games_running;
 static void list_open_nicks_aux(gpointer data, gpointer user_data)
@@ -156,6 +163,7 @@ static void list_games_aux(gpointer data, gpointer user_data)
                 char* game;
                 char* cap;
                 games_open++;
+                players_seated_open += g->players_number;
                 strconcat(list_games_str, "[", sizeof(list_games_str));
                 game = list_game(g);
                 strconcat(list_games_str, game, sizeof(list_games_str));
@@ -194,12 +202,13 @@ void calculate_list_games(void)
         list_games_str[0] = '\0';
         list_playing_geolocs_str[0] = '\0';
         players_in_game = 0;
+        players_seated_open = 0;
         games_open = 0;
         games_running = 0;
         g_list_foreach(open_players, list_open_nicks_aux, NULL);
         strconcat(list_games_str, " ", sizeof(list_games_str));
         g_list_foreach(games, list_games_aux, NULL);
-        free_players = asprintf_(" free:%d games:%d playing:%d at:%s", conns_nb() - players_in_game - 1, games_running, players_in_game, list_playing_geolocs_str);  // 1: don't count myself
+        free_players = asprintf_(" free:%d games:%d playing:%d at:%s", conns_nb() - players_in_game - players_seated_open - 1, games_running, players_in_game, list_playing_geolocs_str);  // 1: don't count myself
         strconcat(list_games_str, free_players, sizeof(list_games_str));
         free(free_players);
 }
