@@ -27,6 +27,7 @@
 #include <sstream>
 #include <stdexcept>
 #include <string>
+#include <utility>
 
 struct HighscoreData {
     int level;
@@ -94,7 +95,7 @@ void HighscoreManager::LoadLevelsetHighscores(const char *path) {
                         else if (task == 2) hs.time = stof(curChar);
                         else if (task == 3) {
                             hs.picId = stoi(curChar);
-                            levelsetScores.push_back(hs);
+                            levelsetScores.push_back(std::move(hs));
                         }
                         task++;
                     }
@@ -194,7 +195,7 @@ bool HighscoreManager::CheckAndAddScore(int level, float time) {
     newEntry.picId = rand() % 5 + 1;
     newEntry.newHighscore = true;
     newEntry.RefreshTextStatus(rend, highscoreFont);
-    levelsetScores.push_back(newEntry);
+    levelsetScores.push_back(std::move(newEntry));
 
     // Sort: higher level first, then faster time
     std::sort(levelsetScores.begin(), levelsetScores.end(), [](const HighscoreData& a, const HighscoreData& b) {

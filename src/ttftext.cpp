@@ -18,14 +18,45 @@
  */
 
 #include "ttftext.h"
-
-TTFText::TTFText(){
-
-}
+#include <utility>
 
 TTFText::~TTFText(){
-    if (ownsFont) TTF_CloseFont(textFont);
-    SDL_DestroyTexture(outTexture);
+    if (ownsFont && textFont) TTF_CloseFont(textFont);
+    if (outTexture) SDL_DestroyTexture(outTexture);
+}
+
+TTFText::TTFText(TTFText&& other) noexcept
+    : curText(std::move(other.curText)),
+      coords(other.coords),
+      forecolor(other.forecolor),
+      backcolor(other.backcolor),
+      textFont(other.textFont),
+      ownsFont(other.ownsFont),
+      outTexture(other.outTexture)
+{
+    other.textFont = nullptr;
+    other.ownsFont = false;
+    other.outTexture = nullptr;
+}
+
+TTFText& TTFText::operator=(TTFText&& other) noexcept {
+    if (this == &other) return *this;
+
+    if (ownsFont && textFont) TTF_CloseFont(textFont);
+    if (outTexture) SDL_DestroyTexture(outTexture);
+
+    curText = std::move(other.curText);
+    coords = other.coords;
+    forecolor = other.forecolor;
+    backcolor = other.backcolor;
+    textFont = other.textFont;
+    ownsFont = other.ownsFont;
+    outTexture = other.outTexture;
+
+    other.textFont = nullptr;
+    other.ownsFont = false;
+    other.outTexture = nullptr;
+    return *this;
 }
 
 void TTFText::LoadFont(const char *path, int size) {
@@ -46,7 +77,7 @@ void TTFText::LoadFont(TTF_Font *fnt) {
 void TTFText::UpdateText(const SDL_Renderer *rend, const char *txt, int wrapLength) {
     if (outTexture != nullptr) { SDL_DestroyTexture(outTexture); outTexture = nullptr; }
     if (!textFont || !txt) return;
-    curText = const_cast<char *>(txt);
+    curText = txt;
     SDL_Surface *front = TTF_RenderText_Blended_Wrapped(textFont, txt, 0, forecolor, wrapLength);
     if (!front) return;
     SDL_Surface *back = TTF_RenderText_Blended_Wrapped(textFont, txt, 0, backcolor, wrapLength);

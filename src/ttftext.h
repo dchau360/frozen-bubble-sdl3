@@ -43,19 +43,30 @@ public:
     void UpdateStyle(int style);
     void UpdatePosition(SDL_Point xy);
 
-    const char *Text() { return curText; };
+    const char *Text() { return curText.c_str(); };
     SDL_Rect *Coords() { return &coords; };
     SDL_Texture *Texture() { return outTexture; };
-    
-    TTFText();
-    ~TTFText();
-    TTFText(const TTFText&) : curText(nullptr), coords{}, forecolor{}, backcolor{}, textFont(nullptr), ownsFont(false), outTexture(nullptr) {}
-    TTFText& operator=(const TTFText&) { return *this; }
-private:
-    char *curText;
 
-    SDL_Rect coords;
-    SDL_Color forecolor, backcolor;
+    TTFText() = default;
+    ~TTFText();
+
+    // Owns a font (maybe) and a rendered texture, so a copy would either
+    // double-free or need to duplicate the GPU texture with no renderer
+    // guaranteed to be on hand at copy time. The previous copy constructor
+    // silently reset the copy to empty and the copy assignment silently did
+    // nothing -- neither freed anything, but a HighscoreData stored by value
+    // in a std::vector lost its just-rendered text on every push_back
+    // (BUG-045). Nothing needs an actual copy: HighscoreData only needs to
+    // relocate this into the vector, so move is enough.
+    TTFText(const TTFText&) = delete;
+    TTFText& operator=(const TTFText&) = delete;
+    TTFText(TTFText&& other) noexcept;
+    TTFText& operator=(TTFText&& other) noexcept;
+private:
+    std::string curText;
+
+    SDL_Rect coords{};
+    SDL_Color forecolor{}, backcolor{};
 
     TTF_Font *textFont = nullptr;
     bool ownsFont = false;

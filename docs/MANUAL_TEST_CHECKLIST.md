@@ -53,6 +53,26 @@ single-player targeting enabled. Expected: a small `> nickname` label appears
 near the shooter. It has **never** appeared before, so its absence is not a
 regression — but its position and size are unverified and may need nudging.
 
+### BUG-045 — levelset highscore text lost on insert
+
+`HighscoreData` stored a `TTFText` by value, and `TTFText`'s copy constructor
+and copy assignment silently discarded the rendered font/texture instead of
+copying or freeing it. Every `push_back` into `levelsetScores` — and, it turns
+out, every `std::vector` reallocation of it — blanked the text on whichever
+rows got copied. Fixed by making `TTFText` move-only with real ownership
+transfer, so relocating an entry now carries its texture along instead of
+losing it.
+
+**Why untested:** the path only fires when a new levelset high score is set
+and the score screen renders it, not at launch.
+
+**To check:** play a level to completion with a time/level that qualifies for
+the levelset high score table (fewer than 10 entries so far, or better than
+the current 10th), then open the levelset high score screen. Expected: the
+new entry and every existing entry shows its name, level, and time text — none
+render as a blank tile. Previously the rendered text was silently dropped on
+insert.
+
 ---
 
 ## 2. Behaviour changes you should sanity-check
