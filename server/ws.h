@@ -15,11 +15,15 @@ void    ws_reset(int fd);
 int     ws_detect_and_upgrade(int fd);
 
 /* Try to complete a WebSocket upgrade from already-received data.
- * data[0..len-1] is the first chunk received from a newly accepted
- * connection. Returns the number of bytes consumed (the HTTP request)
- * if upgraded, 0 if the data does not contain a valid upgrade request,
- * -1 on error. On success, the caller must treat the fd as WebSocket
- * and send the greeting as a WS frame. */
+ * data[0..len-1] is the data received so far from a newly accepted
+ * connection. Returns:
+ *   >0  bytes consumed (the HTTP request) — upgrade completed;
+ *        caller must treat the fd as WebSocket and send greeting as WS frame
+ *    0  definitely not a WebSocket request (at least 4 bytes seen
+ *        and they don't start with "GET ") — classify as plain TCP
+ *   -1  incomplete — the data so far is consistent with a WebSocket
+ *        handshake (starts with "GET " or fewer than 4 bytes yet) but
+ *        \r\n\r\n hasn't arrived; caller must keep accumulating */
 int     ws_try_upgrade_from_data(int fd, const char* data, int len);
 
 /* Send data wrapped in a WebSocket text frame. */

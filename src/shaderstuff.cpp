@@ -356,6 +356,7 @@ void plasma_init(char *datapath)
 
 void plasma_effect(SDL_Surface *s, SDL_Surface *img, SDL_Renderer *rend, SDL_Texture *tex)
 {
+    if (!plasma) return;  // plasma_init() failed or hasn't run; nothing to animate
     int step = 0;
     const SDL_PixelFormatDetails *fmt = SDL_GetPixelFormatDetails(img->format);
     int bpp = fmt->bytes_per_pixel;

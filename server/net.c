@@ -282,43 +282,81 @@ static void handle_incoming_data_generic(gpointer data, gpointer user_data, int 
          * Moves the detection out of the synchronous accept path into the
          * event loop so accept never blocks (IMP-011). */
         if (ws_pending[fd]) {
-                ws_pending[fd] = 0;
-                ws_pending_count--;
-
                 if (!interrupt_loop_processing
                     && FD_ISSET(fd, (fd_set *) user_data)) {
-                        /* Data arrived — try WebSocket upgrade */
-                        char peekbuf[INCOMING_DATA_BUFSIZE];
-                        ssize_t peeklen = recv(fd, peekbuf, sizeof(peekbuf) - 1, MSG_DONTWAIT);
-                        if (peeklen > 0) {
-                                peekbuf[peeklen] = '\0';
-                                int consumed = ws_try_upgrade_from_data(fd, peekbuf, (int)peeklen);
-                                if (consumed > 0) {
-                                        /* WebSocket upgrade completed; send greeting as WS frame */
-                                        send_line_log_push(fd, get_greets_msg());
-                                        if (peeklen > consumed) {
-                                                memcpy(incoming_data_buffers[fd], peekbuf + consumed,
-                                                       (size_t)(peeklen - consumed));
-                                                incoming_data_buffers_count[fd] = (int)(peeklen - consumed);
-                                        }
-                                        return;
-                                }
-                        }
+                        /* Data arrived — accumulate and try WebSocket upgrade.
+                         * incoming_data_buffers[fd] is unused before classification
+                         * completes — reuse it as scratch for the handshake
+                         * accumulator. Read new bytes directly after the old ones. */
+                        int acc_len = incoming_data_buffers_count[fd];
+                        ssize_t peeklen = recv(fd, incoming_data_buffers[fd] + acc_len,
+                                               INCOMING_DATA_BUFSIZE - 1 - acc_len, MSG_DONTWAIT);
                         if (peeklen == 0) {
                                 conn_terminated(fd, "peer shutdown during classification");
                                 return;
                         }
-                        /* Not a WebSocket upgrade — plain TCP. Send greeting and
-                         * buffer any data we already read so the normal path picks
-                         * it up on the next iteration. */
-                        send_line_log_push(fd, get_greets_msg());
-                        if (peeklen > 0) {
-                                memcpy(incoming_data_buffers[fd], peekbuf, (size_t)peeklen);
-                                incoming_data_buffers_count[fd] = (int)peeklen;
+                        if (peeklen < 0)
+                                peeklen = 0;
+                        int total = acc_len + (int)peeklen;
+                        if (total >= INCOMING_DATA_BUFSIZE) {
+                                conn_terminated(fd, "handshake data exceeds buffer");
+                                return;
                         }
-                        return;
+                        incoming_data_buffers[fd][total] = '\0';
+
+                        int result = ws_try_upgrade_from_data(fd, incoming_data_buffers[fd], total);
+                        if (result > 0) {
+                                /* Upgrade completed — send greeting as WS frame.
+                                 * Route leftover bytes (pipelined WS frames) to
+                                 * ws_raw_frame_buf so ws_decode_inplace processes
+                                 * them on the next read, preserving the invariant
+                                 * that incoming_data_buffers holds only decoded bytes. */
+                                ws_pending[fd] = 0;
+                                ws_pending_count--;
+                                incoming_data_buffers_count[fd] = 0;
+                                send_line_log_push(fd, get_greets_msg());
+                                if (total > result) {
+                                        memcpy(ws_raw_frame_buf[fd],
+                                               incoming_data_buffers[fd] + result,
+                                               (size_t)(total - result));
+                                        ws_raw_frame_len[fd] = total - result;
+                                }
+                                return;
+                        } else if (result == 0) {
+                                /* Definitely not a WebSocket request (4+ bytes seen
+                                 * that don't start with "GET "). Classify as plain
+                                 * TCP, send greeting. Data is already in
+                                 * incoming_data_buffers — the normal path picks it
+                                 * up on the next iteration. */
+                                ws_pending[fd] = 0;
+                                ws_pending_count--;
+                                incoming_data_buffers_count[fd] = total;
+                                send_line_log_push(fd, get_greets_msg());
+                                return;
+                        } else {
+                                /* result == -1: incomplete — handshake looks like
+                                 * WebSocket but \r\n\r\n hasn't arrived yet. Data
+                                 * is already in incoming_data_buffers[fd] at the
+                                 * next read offset. Leave ws_pending set so the
+                                 * next read for this fd retries with more data. */
+                                incoming_data_buffers_count[fd] = total;
+                                /* Cap accumulation so a stalled partial header
+                                 * doesn't grow forever. */
+                                if (total > 4096) {
+                                        conn_terminated(fd, "WebSocket handshake too large");
+                                        return;
+                                }
+                                return;
+                        }
                 } else {
-                        /* No data yet — native TCP client waiting for greeting */
+                        /* No data yet. If we already have accumulated handshake
+                         * bytes (incomplete WS upgrade in progress), don't
+                         * classify yet — wait for more data on the next pass. */
+                        if (incoming_data_buffers_count[fd] > 0)
+                                return;
+                        /* Native TCP client waiting for greeting */
+                        ws_pending[fd] = 0;
+                        ws_pending_count--;
                         send_line_log_push(fd, get_greets_msg());
                         return;
                 }

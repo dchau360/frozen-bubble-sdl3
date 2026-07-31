@@ -804,8 +804,10 @@ int process_msg(int fd, char* msg)
                                 int mp = charstar_to_int(ptr + 1);
                                 if (mp >= 2 && mp <= MAX_PLAYERS_PER_GAME)
                                         max_players = mp;
-                                else if (mp > MAX_PLAYERS_PER_GAME)
+                                else if (mp > MAX_PLAYERS_PER_GAME) {
+                                        max_players = MAX_PLAYERS_PER_GAME;
                                         l2(OUTPUT_TYPE_INFO, "CREATE room cap %d clamped to %d", mp, MAX_PLAYERS_PER_GAME);
+                                }
                                 else
                                         l1(OUTPUT_TYPE_INFO, "CREATE room cap %d ignored (minimum 2)", mp);
                                 *ptr = '\0';

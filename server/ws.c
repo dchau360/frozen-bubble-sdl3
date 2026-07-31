@@ -181,14 +181,16 @@ int ws_detect_and_upgrade(int fd)
 
 int ws_try_upgrade_from_data(int fd, const char* data, int len)
 {
-    /* Must start with "GET " */
-    if (len < 4 || strncmp(data, "GET ", 4) != 0)
+    /* Must start with "GET " — if we have at least 4 bytes and they
+     * don't match, this is definitely not a WebSocket upgrade. */
+    if (len >= 4 && strncmp(data, "GET ", 4) != 0)
         return 0;
 
-    /* Need the full header up to \r\n\r\n */
+    /* Fewer than 4 bytes, or starts with "GET " — could be a WebSocket
+     * handshake in progress. Need the full header up to \r\n\r\n. */
     const char* end = strstr(data, "\r\n\r\n");
     if (!end)
-        return 0;
+        return -1;  /* incomplete — caller must accumulate more data */
     end += 4;  /* include the terminator */
 
     /* Locate Sec-WebSocket-Key header */
