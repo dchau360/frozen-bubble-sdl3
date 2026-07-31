@@ -36,36 +36,73 @@
 #include <SDL3_image/SDL_image.h>
 
 struct TextureEx {
-    SDL_Renderer *rend;
-    SDL_Surface *sfc;
+    SDL_Renderer *rend = nullptr;
+    SDL_Surface *sfc = nullptr;
     Uint32 *pixels = nullptr;
     Uint32 format;
     SDL_PixelFormat pixelFormat;
     int w, h, pitch;
     SDL_Texture *tex = nullptr;
 
+    TextureEx() = default;
+    ~TextureEx() {
+        SDL_DestroySurface(sfc);
+        if (tex) SDL_DestroyTexture(tex);
+    }
+    // Owns sfc/tex; a shallow copy would double-free both on destruction.
+    // Nothing copies a TextureEx today (candyOrig/candyModif/logoMask are
+    // plain MainMenu members), so deleting is free.
+    TextureEx(const TextureEx&) = delete;
+    TextureEx& operator=(const TextureEx&) = delete;
+
     void LoadTextureData(SDL_Renderer* renderer, const char* path){
         rend = renderer;
-        sfc = IMG_Load(path); 
-        if(!sfc) SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "Failed to init SDL_Surface");
+        SDL_Surface *loaded = IMG_Load(path);
+        if (!loaded) {
+            SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "Failed to init SDL_Surface");
+            return;
+        }
+        SDL_DestroySurface(sfc);
+        sfc = loaded;
     };
 
     void LoadFromSurface(SDL_Surface *img, SDL_Renderer* renderer){
         rend = renderer;
-        sfc = SDL_CreateSurface(img->w, img->h, SDL_PIXELFORMAT_ARGB8888);
-        SDL_SetSurfaceBlendMode(sfc, SDL_BLENDMODE_BLEND);
-        if(!sfc || !img) SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "Failed to init SDL_Surface");
-        SDL_BlitSurface(img, NULL, sfc, NULL);
+        if (!img) {
+            SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "Failed to init SDL_Surface");
+            return;
+        }
+        SDL_Surface *created = SDL_CreateSurface(img->w, img->h, SDL_PIXELFORMAT_ARGB8888);
+        if (!created) {
+            SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "Failed to init SDL_Surface");
+            return;
+        }
+        SDL_SetSurfaceBlendMode(created, SDL_BLENDMODE_BLEND);
+        SDL_BlitSurface(img, NULL, created, NULL);
+        SDL_DestroySurface(sfc);
+        sfc = created;
     };
 
     void LoadEmptyAndApply(SDL_Rect *sz, SDL_Renderer* renderer, const char* path){
         rend = renderer;
-        sfc = SDL_CreateSurface(sz->w, sz->h, SDL_PIXELFORMAT_ARGB8888);
-        SDL_SetSurfaceBlendMode(sfc, SDL_BLENDMODE_BLEND);
-        SDL_Surface *img = IMG_Load(path); 
-        if(!sfc || !img) SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "Failed to init SDL_Surface");
-        SDL_BlitSurface(img, new SDL_Rect{0, 0, img->w, img->h}, sfc, new SDL_Rect{sz->x, sz->y, img->w, img->h});
+        SDL_Surface *created = SDL_CreateSurface(sz->w, sz->h, SDL_PIXELFORMAT_ARGB8888);
+        if (!created) {
+            SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "Failed to init SDL_Surface");
+            return;
+        }
+        SDL_SetSurfaceBlendMode(created, SDL_BLENDMODE_BLEND);
+        SDL_Surface *img = IMG_Load(path);
+        if (!img) {
+            SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "Failed to init SDL_Surface");
+            SDL_DestroySurface(created);
+            return;
+        }
+        SDL_Rect srcRect{0, 0, img->w, img->h};
+        SDL_Rect dstRect{sz->x, sz->y, img->w, img->h};
+        SDL_BlitSurface(img, &srcRect, created, &dstRect);
         SDL_DestroySurface(img);
+        SDL_DestroySurface(sfc);
+        sfc = created;
     };
 
     SDL_Texture *OutputTexture() {

@@ -218,20 +218,26 @@ void MainMenu::InitCandy() {
         candy_fb_rect.y -= (int)(fb_logo_rect.h * 0.05);
         tmpRct = {(int)(fb_logo_rect.w * 0.05), (int)(fb_logo_rect.h * 0.05), (int)(fb_logo_rect.w * 1.1), (int)(fb_logo_rect.h * 1.1)};
         candyModif.LoadEmptyAndApply(&tmpRct, const_cast<SDL_Renderer*>(renderer), ASSET("/gfx/menu/fblogo.png").c_str());
-        SDL_DestroySurface(candyOrig.sfc);
         candyOrig.LoadFromSurface(candyModif.sfc, const_cast<SDL_Renderer*>(renderer));
-        candy_fb_rect.w = candyOrig.sfc->w;
-        candy_fb_rect.h = candyOrig.sfc->h;
+        // A missing/corrupt fblogo.png now degrades (TextureEx logs and bails)
+        // instead of crashing, so candyOrig.sfc can legitimately still be
+        // null here -- keep the previous candy_fb_rect size rather than
+        // dereference it (BUG-001).
+        if (candyOrig.sfc) {
+            candy_fb_rect.w = candyOrig.sfc->w;
+            candy_fb_rect.h = candyOrig.sfc->h;
+        }
     }
     else if (candyMethod == 4) { // tilt
         candy_fb_rect.x -= (int)(fb_logo_rect.w * 0.05);
         candy_fb_rect.y -= (int)(fb_logo_rect.h * 0.025);
         tmpRct = {(int)(fb_logo_rect.w * 0.05), (int)(fb_logo_rect.h * 0.025), (int)(fb_logo_rect.w * 1.1), (int)(fb_logo_rect.h * 1.05)};
         candyModif.LoadEmptyAndApply(&tmpRct, const_cast<SDL_Renderer*>(renderer), ASSET("/gfx/menu/fblogo.png").c_str());
-        SDL_DestroySurface(candyOrig.sfc);
         candyOrig.LoadFromSurface(candyModif.sfc, const_cast<SDL_Renderer*>(renderer));
-        candy_fb_rect.w = candyOrig.sfc->w;
-        candy_fb_rect.h = candyOrig.sfc->h;
+        if (candyOrig.sfc) {
+            candy_fb_rect.w = candyOrig.sfc->w;
+            candy_fb_rect.h = candyOrig.sfc->h;
+        }
     }
     else if (candyMethod == 5) {
         candyModif.LoadTextureData(const_cast<SDL_Renderer*>(renderer), ASSET("/gfx/menu/fblogo.png").c_str());
@@ -241,11 +247,12 @@ void MainMenu::InitCandy() {
         candy_fb_rect.x -= (int)(fb_logo_rect.w * 0.05);
         tmpRct = {(int)(fb_logo_rect.w * 0.05), candy_fb_rect.y, (int)(fb_logo_rect.w * 1.1), fb_logo_rect.h + candy_fb_rect.y};
         candyModif.LoadEmptyAndApply(&tmpRct, const_cast<SDL_Renderer*>(renderer), ASSET("/gfx/menu/fblogo.png").c_str());
-        SDL_DestroySurface(candyOrig.sfc);
         candyOrig.LoadFromSurface(candyModif.sfc, const_cast<SDL_Renderer*>(renderer));
         candy_fb_rect.y = 0;
-        candy_fb_rect.w = candyOrig.sfc->w;
-        candy_fb_rect.h = candyOrig.sfc->h;
+        if (candyOrig.sfc) {
+            candy_fb_rect.w = candyOrig.sfc->w;
+            candy_fb_rect.h = candyOrig.sfc->h;
+        }
     }
     else candyModif.LoadTextureData(const_cast<SDL_Renderer*>(renderer), ASSET("/gfx/menu/fblogo.png").c_str());
 
