@@ -500,7 +500,7 @@ void FrozenBubble::HandleControllerEvent(SDL_Event *e) {
 
         // If the Keys panel is waiting for a binding, emit a virtual scancode
         if (down && mainMenu->IsAwaitingKeyBind()) {
-            SDL_Scancode vsc = (SDL_Scancode)(300 + playerIdx * 20 + e->gbutton.button);
+            SDL_Scancode vsc = VirtualScancode(playerIdx, e->gbutton.button);
             PushScancode(vsc, true);
             return;
         }
@@ -520,7 +520,7 @@ void FrozenBubble::HandleControllerEvent(SDL_Event *e) {
                 PushKey(SDLK_SPACE, down);
             }
             else {
-                SDL_Scancode vsc = (SDL_Scancode)(CTRL_SC_BASE + playerIdx * 20 + btn);
+                SDL_Scancode vsc = VirtualScancode(playerIdx, btn);
                 PushScancode(vsc, down, true);
             }
         } else {
@@ -546,16 +546,16 @@ void FrozenBubble::HandleControllerEvent(SDL_Event *e) {
             bool wantLeft  = val < -DEAD;
             bool wantRight = val >  DEAD;
             if (inGame) {
-                SDL_Scancode scLeft  = (SDL_Scancode)(CTRL_SC_BASE + playerIdx * 20 + SDL_GAMEPAD_BUTTON_DPAD_LEFT);
-                SDL_Scancode scRight = (SDL_Scancode)(CTRL_SC_BASE + playerIdx * 20 + SDL_GAMEPAD_BUTTON_DPAD_RIGHT);
+                SDL_Scancode scLeft  = VirtualScancode(playerIdx, SDL_GAMEPAD_BUTTON_DPAD_LEFT);
+                SDL_Scancode scRight = VirtualScancode(playerIdx, SDL_GAMEPAD_BUTTON_DPAD_RIGHT);
                 if (wantLeft  != cs->axisLeftHeld)  { PushScancode(scLeft,  wantLeft,  true); cs->axisLeftHeld  = wantLeft;  }
                 if (wantRight != cs->axisRightHeld) { PushScancode(scRight, wantRight, true); cs->axisRightHeld = wantRight; }
             } else {
                 SDL_Scancode scLeft  = mainMenu->IsAwaitingKeyBind()
-                    ? (SDL_Scancode)(300 + playerIdx * 20 + SDL_GAMEPAD_BUTTON_DPAD_LEFT)
+                    ? VirtualScancode(playerIdx, SDL_GAMEPAD_BUTTON_DPAD_LEFT)
                     : SDL_SCANCODE_LEFT;
                 SDL_Scancode scRight = mainMenu->IsAwaitingKeyBind()
-                    ? (SDL_Scancode)(300 + playerIdx * 20 + SDL_GAMEPAD_BUTTON_DPAD_RIGHT)
+                    ? VirtualScancode(playerIdx, SDL_GAMEPAD_BUTTON_DPAD_RIGHT)
                     : SDL_SCANCODE_RIGHT;
                 if (wantLeft  && !cs->axisLeftHeld)  { PushScancode(scLeft,  true);  cs->axisLeftHeld  = true;  }
                 if (!wantLeft &&  cs->axisLeftHeld)  { PushScancode(scLeft,  false); cs->axisLeftHeld  = false; }
@@ -567,16 +567,16 @@ void FrozenBubble::HandleControllerEvent(SDL_Event *e) {
             bool wantUp   = val < -DEAD;
             bool wantDown = val >  DEAD;
             if (inGame) {
-                SDL_Scancode scUp   = (SDL_Scancode)(CTRL_SC_BASE + playerIdx * 20 + SDL_GAMEPAD_BUTTON_DPAD_UP);
-                SDL_Scancode scDown = (SDL_Scancode)(CTRL_SC_BASE + playerIdx * 20 + SDL_GAMEPAD_BUTTON_DPAD_DOWN);
+                SDL_Scancode scUp   = VirtualScancode(playerIdx, SDL_GAMEPAD_BUTTON_DPAD_UP);
+                SDL_Scancode scDown = VirtualScancode(playerIdx, SDL_GAMEPAD_BUTTON_DPAD_DOWN);
                 if (wantUp   != cs->axisUpHeld)   { PushScancode(scUp,   wantUp,   true); cs->axisUpHeld   = wantUp;   }
                 if (wantDown != cs->axisDownHeld)  { PushScancode(scDown, wantDown, true); cs->axisDownHeld = wantDown; }
             } else {
                 SDL_Scancode scUp   = mainMenu->IsAwaitingKeyBind()
-                    ? (SDL_Scancode)(300 + playerIdx * 20 + SDL_GAMEPAD_BUTTON_DPAD_UP)
+                    ? VirtualScancode(playerIdx, SDL_GAMEPAD_BUTTON_DPAD_UP)
                     : SDL_SCANCODE_UP;
                 SDL_Scancode scDown = mainMenu->IsAwaitingKeyBind()
-                    ? (SDL_Scancode)(300 + playerIdx * 20 + SDL_GAMEPAD_BUTTON_DPAD_DOWN)
+                    ? VirtualScancode(playerIdx, SDL_GAMEPAD_BUTTON_DPAD_DOWN)
                     : SDL_SCANCODE_DOWN;
                 if (wantUp   && !cs->axisUpHeld)   { PushScancode(scUp,   true);  cs->axisUpHeld   = true;  }
                 if (!wantUp  &&  cs->axisUpHeld)   { PushScancode(scUp,   false); cs->axisUpHeld   = false; }

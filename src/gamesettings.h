@@ -27,9 +27,16 @@
 #include <string>
 
 // Virtual scancode base for controller button bindings.
-// Virtual scancode = CTRL_SC_BASE + playerSlot * 20 + SDL_GameControllerButton
+// Virtual scancode = CTRL_SC_BASE + playerSlot * CTRL_SC_PER_PLAYER + button.
+//
+// The stride was a hardcoded 20, but SDL3 defines 26 gamepad buttons, so any
+// button index of 20 or above aliased into the *next* player's slot — one
+// player's controller pressing another player's bindings (audit finding
+// BUG-036). Derive the stride from SDL so it cannot drift again.
 #define CTRL_SC_BASE 300
-#define CTRL_SC_COUNT 100  // 5 players * 20 buttons each
+#define CTRL_SC_PLAYERS 5
+#define CTRL_SC_PER_PLAYER ((int)SDL_GAMEPAD_BUTTON_COUNT)
+#define CTRL_SC_COUNT (CTRL_SC_PLAYERS * CTRL_SC_PER_PLAYER)
 
 // Shared virtual key state written by frozenbubble.cpp, read by bubblegame.cpp.
 // Index = (virtualScancode - CTRL_SC_BASE)
@@ -44,6 +51,18 @@ extern ControllerInput controllerInputs[5];
 
 inline bool IsVirtualScancode(SDL_Scancode sc) {
     return sc >= CTRL_SC_BASE && sc < (SDL_Scancode)(CTRL_SC_BASE + CTRL_SC_COUNT);
+}
+
+// Build a virtual scancode for a controller slot, rejecting out-of-range input.
+// Controller slots are assigned from a vector index that is never released, so a
+// user who plugs and unplugs pads can reach slot 5+ — which previously produced
+// a scancode past virtualKeyState[], and from slot 11 past SDL's 512-entry
+// keyboard array (audit finding BUG-035). Returns false rather than producing an
+// out-of-bounds index.
+inline SDL_Scancode VirtualScancode(int playerSlot, int button) {
+    if (playerSlot < 0 || playerSlot >= CTRL_SC_PLAYERS) return SDL_SCANCODE_UNKNOWN;
+    if (button < 0 || button >= CTRL_SC_PER_PLAYER) return SDL_SCANCODE_UNKNOWN;
+    return (SDL_Scancode)(CTRL_SC_BASE + playerSlot * CTRL_SC_PER_PLAYER + button);
 }
 
 // Poll either real keyboard or virtual (controller) key state

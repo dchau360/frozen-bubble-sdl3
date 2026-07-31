@@ -214,6 +214,12 @@ void GameSettings::ReadSettings()
 
     speedMultiplier = (float)iniparser_getdouble(
         optDict, "Keys:SpeedMultiplier", DEFAULT_SPEED_MULTIPLIER);
+    // NaN compares false against both bounds, so an ini value of "nan" passed
+    // straight through these ordered clamps and propagated into deltaScale and
+    // from there into every per-frame movement, where all comparisons against
+    // it also fail (audit finding BUG-030). Test for NaN explicitly — the
+    // self-comparison is the standard form and does not rely on <cmath>.
+    if (!(speedMultiplier == speedMultiplier)) speedMultiplier = DEFAULT_SPEED_MULTIPLIER;
     if (speedMultiplier < 1.0f) speedMultiplier = 1.0f;
     if (speedMultiplier > 5.0f) speedMultiplier = 5.0f;
 
@@ -231,35 +237,55 @@ void GameSettings::ReadSettings()
     LoadDefaultKeys();
 }
 
+// Key bindings were cast straight from the ini integer to SDL_Scancode with no
+// validation, so a stored 99999 reached PlayerKeys and IsKeyPressed then indexed
+// SDL's 512-entry keyboard array far out of bounds (audit finding BUG-028). Two
+// ranges are legitimate: a real scancode, or one of the virtual controller
+// scancodes IsVirtualScancode recognises. Anything else falls back to the
+// binding's own default.
+static SDL_Scancode LoadScancode(dictionary* dict, const char* key, SDL_Scancode fallback)
+{
+    const int raw = iniparser_getint(dict, key, (int)fallback);
+    const bool realKey    = raw > 0 && raw < SDL_SCANCODE_COUNT;
+    const bool virtualKey = raw >= CTRL_SC_BASE && raw < CTRL_SC_BASE + CTRL_SC_COUNT;
+    if (!realKey && !virtualKey) {
+        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
+                    "Ignoring out-of-range key binding %s=%d; using default %d",
+                    key, raw, (int)fallback);
+        return fallback;
+    }
+    return static_cast<SDL_Scancode>(raw);
+}
+
 void GameSettings::LoadDefaultKeys()
 {
-    player1Keys.left = static_cast<SDL_Scancode>(iniparser_getint(optDict, "Keys:P1Left", SDL_SCANCODE_LEFT));
-    player1Keys.right = static_cast<SDL_Scancode>(iniparser_getint(optDict, "Keys:P1Right", SDL_SCANCODE_RIGHT));
-    player1Keys.fire = static_cast<SDL_Scancode>(iniparser_getint(optDict, "Keys:P1Fire", SDL_SCANCODE_UP));
-    player1Keys.center = static_cast<SDL_Scancode>(iniparser_getint(optDict, "Keys:P1Center", SDL_SCANCODE_DOWN));
+    player1Keys.left = LoadScancode(optDict, "Keys:P1Left", SDL_SCANCODE_LEFT);
+    player1Keys.right = LoadScancode(optDict, "Keys:P1Right", SDL_SCANCODE_RIGHT);
+    player1Keys.fire = LoadScancode(optDict, "Keys:P1Fire", SDL_SCANCODE_UP);
+    player1Keys.center = LoadScancode(optDict, "Keys:P1Center", SDL_SCANCODE_DOWN);
 
-    player2Keys.left = static_cast<SDL_Scancode>(iniparser_getint(optDict, "Keys:P2Left", SDL_SCANCODE_X));
-    player2Keys.right = static_cast<SDL_Scancode>(iniparser_getint(optDict, "Keys:P2Right", SDL_SCANCODE_V));
-    player2Keys.fire = static_cast<SDL_Scancode>(iniparser_getint(optDict, "Keys:P2Fire", SDL_SCANCODE_C));
-    player2Keys.center = static_cast<SDL_Scancode>(iniparser_getint(optDict, "Keys:P2Center", SDL_SCANCODE_D));
+    player2Keys.left = LoadScancode(optDict, "Keys:P2Left", SDL_SCANCODE_X);
+    player2Keys.right = LoadScancode(optDict, "Keys:P2Right", SDL_SCANCODE_V);
+    player2Keys.fire = LoadScancode(optDict, "Keys:P2Fire", SDL_SCANCODE_C);
+    player2Keys.center = LoadScancode(optDict, "Keys:P2Center", SDL_SCANCODE_D);
 
     // P3: WASD
-    player3Keys.left = static_cast<SDL_Scancode>(iniparser_getint(optDict, "Keys:P3Left", SDL_SCANCODE_A));
-    player3Keys.right = static_cast<SDL_Scancode>(iniparser_getint(optDict, "Keys:P3Right", SDL_SCANCODE_D));
-    player3Keys.fire = static_cast<SDL_Scancode>(iniparser_getint(optDict, "Keys:P3Fire", SDL_SCANCODE_W));
-    player3Keys.center = static_cast<SDL_Scancode>(iniparser_getint(optDict, "Keys:P3Center", SDL_SCANCODE_S));
+    player3Keys.left = LoadScancode(optDict, "Keys:P3Left", SDL_SCANCODE_A);
+    player3Keys.right = LoadScancode(optDict, "Keys:P3Right", SDL_SCANCODE_D);
+    player3Keys.fire = LoadScancode(optDict, "Keys:P3Fire", SDL_SCANCODE_W);
+    player3Keys.center = LoadScancode(optDict, "Keys:P3Center", SDL_SCANCODE_S);
 
     // P4: IJKL
-    player4Keys.left = static_cast<SDL_Scancode>(iniparser_getint(optDict, "Keys:P4Left", SDL_SCANCODE_J));
-    player4Keys.right = static_cast<SDL_Scancode>(iniparser_getint(optDict, "Keys:P4Right", SDL_SCANCODE_L));
-    player4Keys.fire = static_cast<SDL_Scancode>(iniparser_getint(optDict, "Keys:P4Fire", SDL_SCANCODE_I));
-    player4Keys.center = static_cast<SDL_Scancode>(iniparser_getint(optDict, "Keys:P4Center", SDL_SCANCODE_K));
+    player4Keys.left = LoadScancode(optDict, "Keys:P4Left", SDL_SCANCODE_J);
+    player4Keys.right = LoadScancode(optDict, "Keys:P4Right", SDL_SCANCODE_L);
+    player4Keys.fire = LoadScancode(optDict, "Keys:P4Fire", SDL_SCANCODE_I);
+    player4Keys.center = LoadScancode(optDict, "Keys:P4Center", SDL_SCANCODE_K);
 
     // P5: Numpad 4/6/8/5
-    player5Keys.left = static_cast<SDL_Scancode>(iniparser_getint(optDict, "Keys:P5Left", SDL_SCANCODE_KP_4));
-    player5Keys.right = static_cast<SDL_Scancode>(iniparser_getint(optDict, "Keys:P5Right", SDL_SCANCODE_KP_6));
-    player5Keys.fire = static_cast<SDL_Scancode>(iniparser_getint(optDict, "Keys:P5Fire", SDL_SCANCODE_KP_8));
-    player5Keys.center = static_cast<SDL_Scancode>(iniparser_getint(optDict, "Keys:P5Center", SDL_SCANCODE_KP_5));
+    player5Keys.left = LoadScancode(optDict, "Keys:P5Left", SDL_SCANCODE_KP_4);
+    player5Keys.right = LoadScancode(optDict, "Keys:P5Right", SDL_SCANCODE_KP_6);
+    player5Keys.fire = LoadScancode(optDict, "Keys:P5Fire", SDL_SCANCODE_KP_8);
+    player5Keys.center = LoadScancode(optDict, "Keys:P5Center", SDL_SCANCODE_KP_5);
 }
 
 void GameSettings::SaveKeys()

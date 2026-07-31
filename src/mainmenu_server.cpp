@@ -87,16 +87,24 @@ void MainMenu::StartLocalServer() {
         return;
     }
 
-    // If port is already in use by a leftover process, kill it first
+    // If the port is already in use, refuse rather than clearing it.
+    //
+    // This used to run `pkill -x fb-server`, which kills *every* fb-server
+    // process the user owns — not just an orphan of this client. A developer
+    // running a second server for another project, or an intentionally hosted
+    // game on a different port, was terminated without warning or confirmation
+    // (audit finding BUG-033). The port being busy does not identify whose
+    // process holds it, and this code cannot tell an orphan of its own from
+    // someone else's live server.
+    //
+    // Report it instead and let the user decide. The message names the port so
+    // they can find the holder themselves (lsof -iTCP:<port>).
     if (portInUse(networkPort)) {
-        SDL_Log("Port %d already in use — killing orphaned fb-server...", networkPort);
-        system("pkill -x fb-server 2>/dev/null");
-        SDL_Delay(300);
-        if (portInUse(networkPort)) {
-            SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Port %d still in use after kill attempt", networkPort);
-            connectErrorMsg = "Port " + std::to_string(networkPort) + " is already in use";
-            return;
-        }
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
+                     "Port %d is already in use by another process; not starting a local server. "
+                     "Stop whatever is holding it, or choose a different port.", networkPort);
+        connectErrorMsg = "Port " + std::to_string(networkPort) + " is already in use";
+        return;
     }
 
     SDL_Log("Starting local server on port %d...", networkPort);
