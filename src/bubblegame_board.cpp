@@ -417,31 +417,6 @@ void BubbleGame::CheckPossibleDestroy(BubbleArray &bArray){
     }
 }
 
-bool isAttached(BubbleArray &bArray, int row, int col) {
-    bool biggerThan = (bArray.bubbleMap[row].size() > bArray.bubbleMap[row - 1].size()) ? true : false;
-    if(biggerThan) {
-        if (col > 0) { if (bArray.bubbleMap[row-1][col-1].bubbleId != -1) return true; }
-        if ((size_t)col < bArray.bubbleMap[row].size() - 1) { if (bArray.bubbleMap[row-1][col].bubbleId != -1) return true; }
-    }
-    else {
-        if (bArray.bubbleMap[row-1][col].bubbleId != -1) return true;
-        if (bArray.bubbleMap[row-1][col+1].bubbleId != -1) return true;
-    }
-    return false;
-}
-
-void CheckIfAttached(BubbleArray &bArray, int row, int col, int fc, bool *attached) {
-    *attached = isAttached(bArray, row, col);
-    if (*attached != true && bArray.bubbleMap[row][col].bubbleId != -1) { //if atp attached is still false, try the others!
-        if (col > 0) {
-            if (col-1 != fc && bArray.bubbleMap[row][col - 1].bubbleId != -1) CheckIfAttached(bArray, row, col - 1, col, attached);
-        }
-        if (*attached != true && (size_t)col < bArray.bubbleMap[row].size() - 1) {
-            if (col+1 != fc && bArray.bubbleMap[row][col + 1].bubbleId != -1) CheckIfAttached(bArray, row, col + 1, col, attached);
-        }
-    }
-}
-
 void DoFalling(std::vector<SDL_Point> &map, std::vector<SingleBubble> &bubbles, bool &lowGfx) {
     if (map.size() < 1 || bubbles.size() < 1) return;
     SDL_Log("DoFalling called: %d bubbles to fall, lowGfx=%d", (int)bubbles.size(), lowGfx);

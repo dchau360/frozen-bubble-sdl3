@@ -73,7 +73,7 @@ private:
 
     // Per-controller state: joystick instance ID + axis hold flags
     struct ControllerState {
-        SDL_JoystickID id;
+        SDL_JoystickID id = 0;
         bool axisLeftHeld = false, axisRightHeld = false;
         bool axisUpHeld   = false, axisDownHeld  = false;
     };

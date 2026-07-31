@@ -398,7 +398,7 @@ void MainMenu::OptPanelRender() {
 #endif
 
     if(awaitKp == false && lastOptInput != SDLK_UNKNOWN && !runDelay) { // we got our response
-        chainReaction = lastOptInput == SDLK_Y ? true : false;
+        chainReaction = (lastOptInput == SDLK_Y);
 
         char pnltxt[256];
         snprintf(pnltxt, sizeof(pnltxt), "Random level\n\n\nEnable chain reaction?\n\n\nY or N?:        %s\n\n\n\n\nEnjoy the game!", SDL_GetKeyName(lastOptInput));
@@ -554,7 +554,7 @@ void MainMenu::NetSetupPanelRender() {
     if (!showingNetSetupPanel) return;
 
     if(awaitKp == false && lastOptInput != SDLK_UNKNOWN && !runDelay) { // we got our response
-        chainReaction = lastOptInput == SDLK_Y ? true : false;
+        chainReaction = (lastOptInput == SDLK_Y);
 
         char pnltxt[256];
         snprintf(pnltxt, sizeof(pnltxt), "Network game\n\n\nEnable chain reaction?\n\n\nY or N?:        %s\n\n\n\n\nConnecting...", SDL_GetKeyName(lastOptInput));

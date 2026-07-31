@@ -43,6 +43,7 @@ TransitionManager::~TransitionManager(){
 
 void TransitionManager::Dispose(){
     this->~TransitionManager();
+    ptrInstance = nullptr;
 }
 
 void TransitionManager::DoSnipIn(SDL_Renderer *rend)

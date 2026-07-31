@@ -264,6 +264,7 @@ HighscoreManager::~HighscoreManager(){
 void HighscoreManager::Dispose(){
     SaveNewHighscores();
     this->~HighscoreManager();
+    ptrInstance = nullptr;
 }
 
 std::string levelToData(std::array<std::vector<int>, 10> lvl) {

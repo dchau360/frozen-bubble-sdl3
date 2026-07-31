@@ -99,8 +99,8 @@ struct Penguin {
     int curAnimation = 0, curFrame = 1, waitFrame = 0;
     int sleeping = 0;
     bool invertAnimation = false;
-    SDL_Renderer *rend;
-    SDL_Rect rect;
+    SDL_Renderer *rend = nullptr;
+    SDL_Rect rect = {};
 
     void LoadPenguin(SDL_Renderer* renderer, const char *whichOne, SDL_Rect rct) {
         rend = renderer;
@@ -201,8 +201,8 @@ struct Penguin {
 };
 
 struct Bubble {
-    int bubbleId; // id to use bubble image
-    SDL_Point pos; // current position, top left aligned
+    int bubbleId = -1; // id to use bubble image
+    SDL_Point pos = {}; // current position, top left aligned
     bool playerBubble = false; // if bubble was launched by player
     bool shining = false; // doing that shiny animation
     bool frozen = false; // frozen (game over)
@@ -231,8 +231,8 @@ struct Bubble {
 };
 
 struct Shooter {
-    SDL_Texture *texture;
-    SDL_Renderer *renderer;
+    SDL_Texture *texture = nullptr;
+    SDL_Renderer *renderer = nullptr;
     float angle = PI/2.0f;
     SDL_Rect rect = {};
     SDL_Rect lowRct = {};
@@ -292,7 +292,7 @@ struct BubbleArray {
     SDL_Point bubbleOffset;
     Penguin penguinSprite;
     Shooter shooterSprite;
-    int playerAssigned, nextBubble, curLaunch, leftLimit, rightLimit, topLimit, numSeparators, turnsToCompress = 9, dangerZone = 12, explodeWait = EXPLODE_FRAMEWAIT,
+    int playerAssigned = 0, nextBubble = 0, curLaunch = 0, leftLimit = 0, rightLimit = 0, topLimit = 0, numSeparators = 0, turnsToCompress = 9, dangerZone = 12, explodeWait = EXPLODE_FRAMEWAIT,
         frozenWait = FROZEN_FRAMEWAIT, waitPrelight = PRELIGHT_SLOW, prelightTime = waitPrelight, framePrelight = PRELIGHT_FRAMEWAIT, hurryTimer = 0, warnTimer = 0, alertColumn = 0;
     int score = 0, chainLevel = 0;  // Score tracking and chain reaction multiplier
     bool shooterLeft = false, shooterRight = false, shooterCenter = false, shooterAction = false, newShoot = true, mpWinner = false, mpDone = false;
@@ -337,8 +337,8 @@ struct BubbleArray {
     int stickAnimSlowdown = 0;
     SDL_Point stickAnimPos = {0, 0};
 
-    SDL_Rect compressorRct, lGfxShooterRct, curLaunchRct, nextBubbleRct, onTopRct, frozenBottomRct, hurryRct;
-    SDL_Texture *hurryTexture;
+    SDL_Rect compressorRct = {}, lGfxShooterRct = {}, curLaunchRct = {}, nextBubbleRct = {}, onTopRct = {}, frozenBottomRct = {}, hurryRct = {};
+    SDL_Texture *hurryTexture = nullptr;
     SDL_Point scorePos = {10, 10};  // Score display position (original: $POS{scores})
 
     // Malus/attack system for multiplayer
@@ -459,7 +459,7 @@ public:
     // not treat the tap as "next round").
     bool HandleFinishedTap(float lx, float ly);
 private:
-    const SDL_Renderer *renderer;
+    const SDL_Renderer *renderer = nullptr;
     SDL_Texture *background = nullptr, *pauseBackground = nullptr, *prePauseBackground = nullptr;
 
     SDL_Texture *imgColorblindBubbles[BUBBLE_STYLES];
@@ -542,7 +542,7 @@ private:
     std::array<std::vector<int>, 10> savedLevelGrid;  // Level grid saved at load time for highscore display
 
     SetupSettings currentSettings;
-    AudioMixer *audMixer;
+    AudioMixer *audMixer = nullptr;
 
     TTFText inGameText, winsP1Text, winsP2Text, scoreText, comboText, finalScoreText, mpTrainText;
     TTFText clearWinText;    // "Board Cleared — <Name> Wins!" banner, shown when wonByClearing

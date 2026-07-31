@@ -39,6 +39,7 @@ GameSettings::~GameSettings() {
 void GameSettings::Dispose() {
     SaveSettings();
     this->~GameSettings();
+    ptrInstance = nullptr;
 }
 
 int WriteToIni(dictionary *ini, const char *key, const char *value){

@@ -40,18 +40,24 @@ Uint32 to_wait;
 
 void set_pixel(SDL_Surface *s, int x, int y, Uint8 r, Uint8 g, Uint8 b, Uint8 a) // only 32bit surfaces yet
 {
+    /* Tight-pitch 32-bpp contract: every caller in this file writes 4-byte
+     * pixels through a Uint32*, so the surface must be tightly packed. */
     const SDL_PixelFormatDetails *fmt = SDL_GetPixelFormatDetails(s->format);
+    SDL_assert(fmt->bits_per_pixel == 32);
+    SDL_assert(s->pitch == s->w * 4);
+    x = CLAMP(x, 0, s->w - 1);
+    y = CLAMP(y, 0, s->h - 1);
     ((Uint32 *)s->pixels)[x + y * s->w] = SDL_MapRGBA(fmt, NULL, r, g, b, a);
 }
 
 void get_pixel(SDL_Surface *s, int x, int y, Uint8 *r, Uint8 *g, Uint8 *b, Uint8 *a)
 {
-    SDL_GetRGBA(((Uint32 *)s->pixels)[CLAMP(x, 0, s->w) + CLAMP(y, 0, s->h) * s->w], SDL_GetPixelFormatDetails(s->format), NULL, r, g, b, a);
+    SDL_GetRGBA(((Uint32 *)s->pixels)[CLAMP(x, 0, s->w - 1) + CLAMP(y, 0, s->h - 1) * s->w], SDL_GetPixelFormatDetails(s->format), NULL, r, g, b, a);
 }
 
 void myLockSurface(SDL_Surface *s)
 {
-    while (!SDL_LockSurface(s))
+    for (int retry = 0; !SDL_LockSurface(s) && retry < 100; retry++)
         SDL_Delay(10);
 }
 void myUnlockSurface(SDL_Surface *s)
@@ -301,17 +307,24 @@ void plasma_init(char *datapath)
 
     if (!f)
     {
-        fprintf(stderr, "Ouch, could not open plasma.raw for reading\n");
-        exit(1);
+        fprintf(stderr, "Warning: could not open plasma.raw — plasma effect disabled\n");
+        return;
     }
 
     plasma = (unsigned char *)malloc(XRES * YRES);
     if (!plasma)
-        fb__out_of_memory();
+    {
+        fprintf(stderr, "Out of memory for plasma buffer — plasma effect disabled\n");
+        fclose(f);
+        return;
+    }
     if (fread(plasma, 1, XRES * YRES, f) != XRES * YRES)
     {
-        fprintf(stderr, "Ouch, could not read %d bytes from plasma file\n", XRES * YRES);
-        exit(1);
+        fprintf(stderr, "Warning: could not read plasma.raw — plasma effect disabled\n");
+        free(plasma);
+        plasma = NULL;
+        fclose(f);
+        return;
     }
 
     fclose(f);
@@ -473,7 +486,7 @@ void shrink_(SDL_Surface *dest, SDL_Surface *orig, int xpos, int ypos, SDL_Rect 
                 {
                     for (j = 0; j < factor; j++)
                     {
-                        SDL_GetRGBA(((Uint32 *)orig->pixels)[CLAMP(x * factor + i, 0, orig->w) + CLAMP(y * factor + j, 0, orig->h) * orig->w],
+                        SDL_GetRGBA(((Uint32 *)orig->pixels)[CLAMP(x * factor + i, 0, orig->w - 1) + CLAMP(y * factor + j, 0, orig->h - 1) * orig->w],
                                     orig_fmt, NULL, &r_, &g_, &b_, &a_);
                         r += r_;
                         g += g_;
@@ -485,7 +498,7 @@ void shrink_(SDL_Surface *dest, SDL_Surface *orig, int xpos, int ypos, SDL_Rect 
                 g /= factor * factor;
                 b /= factor * factor;
                 a /= factor * factor;
-                set_pixel(dest, CLAMP(xpos + x, 0, dest->w), CLAMP(ypos + y, 0, dest->h), (Uint8)r, (Uint8)g, (Uint8)b, (Uint8)a);
+                set_pixel(dest, CLAMP(xpos + x, 0, dest->w - 1), CLAMP(ypos + y, 0, dest->h - 1), (Uint8)r, (Uint8)g, (Uint8)b, (Uint8)a);
             } /* else {
                      // there is a palette... I don't care of the bloody oldskoolers who still use
                      //   8-bit displays & al, they can suffer and die ;p
@@ -750,7 +763,7 @@ void rotate_bicubic_(SDL_Surface *dest, SDL_Surface *orig, double angle)
                 {
                     for (x___ = x_; x___ < x_ + 4; x___++)
                     {
-                        SDL_GetRGBA(((Uint32 *)orig->pixels)[CLAMP(x___, 0, dest->w) + CLAMP(y___, 0, dest->h) * dest->w],
+                        SDL_GetRGBA(((Uint32 *)orig->pixels)[CLAMP(x___, 0, dest->w - 1) + CLAMP(y___, 0, dest->h - 1) * dest->w],
                                     orig_fmt, NULL, &(r_[i]), &(g_[i]), &(b_[i]), &(a_[i]));
                         i++;
                     }
@@ -1130,7 +1143,7 @@ void points_(SDL_Surface *dest, SDL_Surface *orig, SDL_Surface *mask)
             {
                 points[i].x = rand_(dest->w / 2) + dest->w / 4;
                 points[i].y = rand_(dest->h / 2) + dest->h / 4;
-                SDL_GetRGBA(((Uint32 *)mask->pixels)[CLAMP((int)points[i].x, 0, mask->w) + CLAMP((int)points[i].y, 0, mask->h) * mask->w],
+                SDL_GetRGBA(((Uint32 *)mask->pixels)[CLAMP((int)points[i].x, 0, mask->w - 1) + CLAMP((int)points[i].y, 0, mask->h - 1) * mask->w],
                             mask_fmt, NULL, &r, &g, &b, &a);
                 if (r == 255 && g == 255 && b == 255)
                     break;
@@ -1145,17 +1158,17 @@ void points_(SDL_Surface *dest, SDL_Surface *orig, SDL_Surface *mask)
     {
         for (y = 0; y < dest->h; y++)
         {
-            SDL_GetRGBA(((Uint32 *)orig->pixels)[CLAMP(x, 0, orig->w) + CLAMP(y, 0, orig->h) * orig->w], orig_fmt, NULL, &r, &g, &b, &a);
+            SDL_GetRGBA(((Uint32 *)orig->pixels)[CLAMP(x, 0, orig->w - 1) + CLAMP(y, 0, orig->h - 1) * orig->w], orig_fmt, NULL, &r, &g, &b, &a);
             set_pixel(dest, x, y, r, g, b, a);
         }
     }
     for (i = 0; i < amount; i++)
     {
         double angle_distance = 0;
-        set_pixel(dest, CLAMP((int)points[i].x, 0, dest->w), CLAMP((int)points[i].y, 0, dest->h), 0xFF, 0xCC, 0xCC, 0xCC);
+        set_pixel(dest, CLAMP((int)points[i].x, 0, dest->w - 1), CLAMP((int)points[i].y, 0, dest->h - 1), 0xFF, 0xCC, 0xCC, 0xCC);
         points[i].x += cos(points[i].angle);
         points[i].y += sin(points[i].angle);
-        SDL_GetRGBA(((Uint32 *)mask->pixels)[CLAMP((int)points[i].x, 0, mask->w) + CLAMP((int)points[i].y, 0, mask->h) * mask->w],
+        SDL_GetRGBA(((Uint32 *)mask->pixels)[CLAMP((int)points[i].x, 0, mask->w - 1) + CLAMP((int)points[i].y, 0, mask->h - 1) * mask->w],
                     mask_fmt, NULL, &r, &g, &b, &a);
         if (r != 255 || g != 255 || b != 255)
         {
@@ -1167,7 +1180,7 @@ void points_(SDL_Surface *dest, SDL_Surface *orig, SDL_Surface *mask)
                 angle_distance += 2 * M_PI / 100;
                 points[i].x += cos(points[i].angle + angle_distance);
                 points[i].y += sin(points[i].angle + angle_distance);
-                SDL_GetRGBA(((Uint32 *)mask->pixels)[CLAMP((int)points[i].x, 0, mask->w) + CLAMP((int)points[i].y, 0, mask->h) * mask->w],
+                SDL_GetRGBA(((Uint32 *)mask->pixels)[CLAMP((int)points[i].x, 0, mask->w - 1) + CLAMP((int)points[i].y, 0, mask->h - 1) * mask->w],
                             mask_fmt, NULL, &r, &g, &b, &a);
                 if (r == 255 && g == 255 && b == 255)
                 {
@@ -1178,7 +1191,7 @@ void points_(SDL_Surface *dest, SDL_Surface *orig, SDL_Surface *mask)
                 points[i].y -= sin(points[i].angle + angle_distance);
                 points[i].x += cos(points[i].angle - angle_distance);
                 points[i].y += sin(points[i].angle - angle_distance);
-                SDL_GetRGBA(((Uint32 *)mask->pixels)[CLAMP((int)points[i].x, 0, mask->w) + CLAMP((int)points[i].y, 0, mask->h) * mask->w],
+                SDL_GetRGBA(((Uint32 *)mask->pixels)[CLAMP((int)points[i].x, 0, mask->w - 1) + CLAMP((int)points[i].y, 0, mask->h - 1) * mask->w],
                             mask_fmt, NULL, &r, &g, &b, &a);
                 if (r == 255 && g == 255 && b == 255)
                 {
@@ -1220,6 +1233,14 @@ void waterize_(SDL_Surface *dest, SDL_Surface *orig, int offset)
         int i;
         precalc_cos = (double *)malloc(200 * sizeof(double));
         precalc_sin = (double *)malloc(200 * sizeof(double));
+        if (!precalc_cos || !precalc_sin) {
+            fprintf(stderr, "Out of memory for waterize precalc buffers\n");
+            free(precalc_cos);
+            free(precalc_sin);
+            precalc_cos = NULL;
+            precalc_sin = NULL;
+            return;
+        }
         for (i = 0; i < 200; i++)
         {
             precalc_cos[i] = cos(i * 2 * M_PI / 200.0) * 2;

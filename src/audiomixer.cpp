@@ -65,10 +65,18 @@ AudioMixer::AudioMixer()
 MIX_Audio* AudioMixer::GetSFX(const char *sfx){
     std::string key(sfx);
     auto it = sfxFiles.find(key);
-    if(it == sfxFiles.end()) {
+    if(it == sfxFiles.end() || it->second == nullptr) {
         char rel[128];
         snprintf(rel, sizeof(rel), "/snd/%s.ogg", sfx);
         MIX_Audio* audio = MIX_LoadAudio(mixer, ASSET(rel).c_str(), true);
+        if (!audio) {
+            fprintf(stderr, "Warning: failed to load sound /snd/%s.ogg\n", sfx);
+            /* Don't cache nullptr — retry on next call in case the asset
+             * becomes available (e.g. after a data-dir change or a re-extract). */
+            if (it != sfxFiles.end())
+                sfxFiles.erase(it);
+            return nullptr;
+        }
         sfxFiles[key] = audio;
         return audio;
     }
@@ -111,6 +119,7 @@ void AudioMixer::Dispose(){
 
     MIX_Quit();
     this->~AudioMixer();
+    ptrInstance = nullptr;
 }
 
 void AudioMixer::PlayMusic(const char *track)
@@ -146,6 +155,8 @@ void AudioMixer::PlayMusic(const char *track)
     }
 
     curMusicAudio = MIX_LoadAudio(mixer, path.c_str(), false);
+    if (!curMusicAudio)
+        fprintf(stderr, "Warning: failed to load music %s\n", path.c_str());
     if(curMusicAudio && musicTrack) {
         MIX_SetTrackAudio(musicTrack, curMusicAudio);
         MIX_SetTrackLoops(musicTrack, -1);
