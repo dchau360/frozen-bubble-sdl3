@@ -10,7 +10,7 @@ cmake_minimum_required(VERSION 3.13)
 # Android requires to advance per release) and the off-tag fallback in
 # .github/workflows/build.yml. Both are listed in the release checklist in
 # CLAUDE.md and must be bumped together with this line.
-project(frozen-bubble-sdl3 VERSION 2.4.32 LANGUAGES CXX C)
+project(frozen-bubble-sdl3 VERSION 2.4.33 LANGUAGES CXX C)
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/cmake")
 

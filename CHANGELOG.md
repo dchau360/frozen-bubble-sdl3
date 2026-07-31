@@ -1,5 +1,20 @@
 # Changelog
 
+## v2.4.33
+
+- **Levelset high scores no longer go blank** — a new high score, or just the table reflowing to fit one in, could silently wipe the name/level/time text of any entry copied in the process. Text now travels with the entry instead of being dropped.
+- **Multiplayer targeting indicator now actually renders** — it never received a font, so it silently failed to draw every time.
+- **Server list no longer shows dead servers as online** — a closed port could still read as a successful connection; latency checks now confirm the connection actually succeeded.
+- **Fixed several settings/diagnostic messages being silently discarded** — a logging category mistake meant warnings about e.g. an unwritable settings file never appeared anywhere.
+- **Hardened against corrupt or malicious input**: out-of-range window height, NaN/infinite speed multiplier, out-of-range saved key bindings, and a server-side integer overflow are all now rejected or clamped instead of propagating.
+- **Fixed a gamepad button-to-player mapping bug** — the button stride was smaller than SDL3's button count, so some buttons could control the wrong player's ship. Note: this changes the stored binding layout for players 2–5, who will need to rebind their controllers once.
+- **Hosting a LAN server no longer kills unrelated `fb-server` processes** on a busy port — it now reports the conflict and lets you find the real owner.
+- **Client no longer crashes if a menu image asset is missing** — failures are now logged with the missing path instead of crashing the moment the panel opens.
+- **Fixed a memory leak during menu background animations** and a second leak in level-editor-era candy image handling.
+- **Server-side memory and correctness fixes**: an empty room name could consume a game slot invisibly and unjoinably; closing a room could leak a small allocation per remaining player; the lobby's free-player count could disagree with its own player list.
+- **CI now runs the test suite under AddressSanitizer/UndefinedBehaviorSanitizer on Linux**, closing a gap where memory-safety fixes were unverifiable on macOS.
+- Numerous internal hardening and cleanup changes: WebSocket handshake edge cases, a crash in the plasma menu transition when its asset is missing, dead menu code removed, and singleton lifetime/initialization cleanups.
+
 ## v2.4.32
 
 - **Fixes the browser build, which failed to link in v2.4.31** — a diagnostic added in v2.4.31 was defined only for desktop builds, so the WebAssembly build did not link and that release went out incomplete. v2.4.31's changes are listed below and are all included here.
