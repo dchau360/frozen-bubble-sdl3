@@ -636,6 +636,14 @@ static int already_in_game(int fd)
 static int is_nick_ok(char* nick)
 {
         int i;
+        /* An empty nick passed: the character loop below runs zero times and
+         * falls through to success. `CREATE ` therefore allocated a room with an
+         * empty name, which known LIST parsers cannot enumerate — the room
+         * exists and occupies one of the 16 open slots but no client can see or
+         * join it (audit finding BUG-009). Applies to NICK as well, which shares
+         * this validator. */
+        if (nick[0] == '\0')
+                return 0;
         if (strlen(nick) > 10)
                 return 0;
         for (i = 0; i < strlen(nick); i++) {
@@ -1118,6 +1126,14 @@ void player_part_game_(int fd, char* reason)
                                 for (j = 0; j < g->players_number; j++) {
                                         send_line_log_push(g->players_conn[j], room_closed_msg);
                                         open_players = g_list_append(open_players, GINT_TO_POINTER(g->players_conn[j]));
+                                        /* Each seat owns its own strdup'd nick (create_game and
+                                         * the join path both hand one over). Freeing the game
+                                         * without these leaked one allocation per surviving
+                                         * player on every creator-led room closure (audit
+                                         * finding BUG-008). The departing player's nick is
+                                         * save_nick, freed below — do not free it twice. */
+                                        free(g->players_nick[j]);
+                                        g->players_nick[j] = NULL;
                                 }
                                 games = g_list_remove(games, g);
                                 free(g);

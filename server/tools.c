@@ -22,6 +22,7 @@
 #include <stdarg.h>
 #include <string.h>
 #include <ctype.h>
+#include <limits.h>   /* INT_MAX, for the saturating charstar_to_int */
 #include <errno.h>
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -44,11 +45,21 @@
 // converts a char* to the number it represents, with:
 // - when failing it returns 0
 // - it stops on first non-digit char
+/* Saturates instead of overflowing. The digit run comes straight off the wire
+ * and was multiplied out with no bound, so a long enough run executed signed
+ * integer overflow — undefined behaviour — before any protocol or cap check
+ * could reject the value (audit finding SEC-006). Callers compare the result
+ * against their own limits, and every such limit is far below INT_MAX, so
+ * clamping at INT_MAX preserves every accept/reject decision they make while
+ * removing the UB. */
 int charstar_to_int(const char * s)
 {
         int number = 0;
         while (*s && isdigit(*s)) {
-                number = (number * 10) + (*s - '0');
+                int digit = *s - '0';
+                if (number > (INT_MAX - digit) / 10)
+                        return INT_MAX;
+                number = (number * 10) + digit;
                 s++;
         }
         return number;
