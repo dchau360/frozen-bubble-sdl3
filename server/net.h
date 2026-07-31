@@ -44,14 +44,14 @@ ssize_t send_line_log_push(int fd, char* dest_msg);
 ssize_t send_line_log_push_binary(int fd, char* dest_msg, char* printable_msg);
 ssize_t send_ok(int fd, char* inco_msg);
 
-void connections_manager();
+void connections_manager(void);
 void conn_terminated(int fd, char* reason);
 int conn_recently_active(int fd);
 void create_server(int argc, char **argv);
 void register_server(int silent);
-void unregister_server();
-void close_server();
-void reread();
+void unregister_server(void);
+void close_server(void);
+void reread(void);
 
 int conns_nb(void);
 void add_prio(int fd);

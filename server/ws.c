@@ -177,6 +177,59 @@ int ws_detect_and_upgrade(int fd)
     return 1;
 }
 
+/* ── Upgrade from already-received data (event-loop path) ─────────────── */
+
+int ws_try_upgrade_from_data(int fd, const char* data, int len)
+{
+    /* Must start with "GET " */
+    if (len < 4 || strncmp(data, "GET ", 4) != 0)
+        return 0;
+
+    /* Need the full header up to \r\n\r\n */
+    const char* end = strstr(data, "\r\n\r\n");
+    if (!end)
+        return 0;
+    end += 4;  /* include the terminator */
+
+    /* Locate Sec-WebSocket-Key header */
+    const char* key_hdr = strstr(data, "Sec-WebSocket-Key:");
+    if (!key_hdr || key_hdr >= end)
+        key_hdr = strstr(data, "Sec-Websocket-Key:"); /* fallback */
+    if (!key_hdr || key_hdr >= end)
+        return 0;
+    key_hdr += 18;
+    while (*key_hdr == ' ' && key_hdr < end) key_hdr++;
+    const char* key_end = key_hdr;
+    while (key_end < end && *key_end != '\r' && *key_end != '\n') key_end++;
+    int klen = (int)(key_end - key_hdr);
+    if (klen <= 0 || klen > 64)
+        return 0;
+
+    /* Compute SHA-1(key + WS_MAGIC) and Base64-encode */
+    char combined[128];
+    memcpy(combined, key_hdr, (size_t)klen);
+    memcpy(combined + klen, WS_MAGIC, sizeof(WS_MAGIC)-1);
+
+    uint8_t digest[20];
+    sha1((uint8_t*)combined, (size_t)(klen + (int)(sizeof(WS_MAGIC)-1)), digest);
+
+    char accept_key[32];
+    base64_encode(digest, 20, accept_key);
+
+    /* Send HTTP 101 Switching Protocols */
+    char response[256];
+    int rlen = snprintf(response, sizeof(response),
+        "HTTP/1.1 101 Switching Protocols\r\n"
+        "Upgrade: websocket\r\n"
+        "Connection: Upgrade\r\n"
+        "Sec-WebSocket-Accept: %s\r\n\r\n",
+        accept_key);
+    send(fd, response, (size_t)rlen, MSG_NOSIGNAL);
+
+    is_ws[fd] = 1;
+    return (int)(end - data);  /* bytes consumed: the full HTTP request */
+}
+
 /* ── WebSocket frame send (server → client, no masking) ─────────────────── */
 
 /* Returns len when the whole frame reached the socket, -1 otherwise. Callers

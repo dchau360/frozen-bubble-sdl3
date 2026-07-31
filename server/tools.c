@@ -128,7 +128,7 @@ void * memdup(void *src, size_t size)
 size_t strconcat(char *dst, const char *src, size_t size)
 {
         char *ptr = dst + strlen(dst);
-        while (ptr - dst < size - 1 && *src) {
+        while ((size_t)(ptr - dst) < size - 1 && *src) {
                 *ptr = *src;
                 ptr++;
                 src++;
@@ -184,12 +184,13 @@ gboolean g_list_any(GList * list, GTruthFunc func, gpointer user_data)
 
 static void close_fds(gpointer data, gpointer user_data)
 {
+        (void)user_data;
         close(GPOINTER_TO_INT(data));
 }
 
 static time_t last_server_register = -1;
 
-void reregister_server_if_needed() {
+void reregister_server_if_needed(void) {
         time_t current_time;
 
         if (last_server_register == -1 || interval_reregister == 0)
@@ -223,7 +224,7 @@ void reregister_server_if_needed() {
         }
 }
 
-void daemonize() {
+void daemonize(void) {
 #ifdef _WIN32
         // No daemon support on Windows — server runs in the foreground.
         // Force debug_mode so logging goes to stderr rather than syslog.

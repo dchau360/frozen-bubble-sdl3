@@ -113,7 +113,6 @@ void stats_init(void)
         return;
     }
 
-    time_t today = get_today_midnight();
     char line[1024];
     int loaded = 0;
 

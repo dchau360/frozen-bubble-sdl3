@@ -124,6 +124,13 @@ static GList * conns_prio = NULL;
 #define INCOMING_DATA_BUFSIZE 16384
 static char * incoming_data_buffers[256];
 static int incoming_data_buffers_count[256];
+/* WebSocket classification state for newly accepted connections.
+ * 1 = pending (not yet known whether WebSocket or plain TCP).
+ * Replaces the synchronous 50 ms accept-time sniff with event-loop
+ * upgrade detection. */
+static int ws_pending[256];
+static int ws_pending_count;
+
 /* For WebSocket fds: partial WS frame bytes waiting for the rest of the frame.
  * Kept separate from incoming_data_buffers, which may hold already-decoded game bytes. */
 static char * ws_raw_frame_buf[256];
@@ -142,8 +149,8 @@ static ssize_t send_line(int fd, char* msg)
                 size = snprintf(buf, sizeof(buf), "FB/%d.%d %s: %s\n", proto_major, proto_minor, current_command, msg);
         else
                 size = snprintf(buf, sizeof(buf), "FB/%d.%d ???: %s\n", proto_major, proto_minor, msg);
-        if (size > sizeof(buf)-1) {
-                size = sizeof(buf)-1;
+        if (size > (int)(sizeof(buf)-1)) {
+                size = (int)(sizeof(buf)-1);
                 buf[sizeof(buf)-2] = '\n';
         }
         if (size > 0) {
@@ -210,6 +217,10 @@ void conn_terminated(int fd, char* reason)
                 l2(OUTPUT_TYPE_CONNECT, "[%d] Closing connection: %s", fd, reason);
                 SOCKET_CLOSE(fd);
                 ws_reset(fd);
+                if (ws_pending[fd]) {
+                        ws_pending[fd] = 0;
+                        ws_pending_count--;
+                }
                 free(incoming_data_buffers[fd]);
                 free(ws_raw_frame_buf[fd]);
                 ws_raw_frame_buf[fd] = NULL;
@@ -260,10 +271,58 @@ int conn_recently_active(int fd)
         return (current_time - last_data_in[fd]) < 2;
 }
 
+static char * get_greets_msg(void);
+
 static int need_another_run;
 static void handle_incoming_data_generic(gpointer data, gpointer user_data, int prio)
 {
         int fd = GPOINTER_TO_INT(data);
+
+        /* Classify newly accepted connections: WebSocket upgrade or plain TCP.
+         * Moves the detection out of the synchronous accept path into the
+         * event loop so accept never blocks (IMP-011). */
+        if (ws_pending[fd]) {
+                ws_pending[fd] = 0;
+                ws_pending_count--;
+
+                if (!interrupt_loop_processing
+                    && FD_ISSET(fd, (fd_set *) user_data)) {
+                        /* Data arrived — try WebSocket upgrade */
+                        char peekbuf[INCOMING_DATA_BUFSIZE];
+                        ssize_t peeklen = recv(fd, peekbuf, sizeof(peekbuf) - 1, MSG_DONTWAIT);
+                        if (peeklen > 0) {
+                                peekbuf[peeklen] = '\0';
+                                int consumed = ws_try_upgrade_from_data(fd, peekbuf, (int)peeklen);
+                                if (consumed > 0) {
+                                        /* WebSocket upgrade completed; send greeting as WS frame */
+                                        send_line_log_push(fd, get_greets_msg());
+                                        if (peeklen > consumed) {
+                                                memcpy(incoming_data_buffers[fd], peekbuf + consumed,
+                                                       (size_t)(peeklen - consumed));
+                                                incoming_data_buffers_count[fd] = (int)(peeklen - consumed);
+                                        }
+                                        return;
+                                }
+                        }
+                        if (peeklen == 0) {
+                                conn_terminated(fd, "peer shutdown during classification");
+                                return;
+                        }
+                        /* Not a WebSocket upgrade — plain TCP. Send greeting and
+                         * buffer any data we already read so the normal path picks
+                         * it up on the next iteration. */
+                        send_line_log_push(fd, get_greets_msg());
+                        if (peeklen > 0) {
+                                memcpy(incoming_data_buffers[fd], peekbuf, (size_t)peeklen);
+                                incoming_data_buffers_count[fd] = (int)peeklen;
+                        }
+                        return;
+                } else {
+                        /* No data yet — native TCP client waiting for greeting */
+                        send_line_log_push(fd, get_greets_msg());
+                        return;
+                }
+        }
 
         if (!interrupt_loop_processing
             && (FD_ISSET(fd, (fd_set *) user_data)
@@ -473,7 +532,7 @@ static void handle_udp_request(void)
                 l0(OUTPUT_TYPE_DEBUG, "Valid FB server probe, answering.");
         }
 
-        if (sendto(udp_server_socket, answer, strlen(answer), 0, (struct sockaddr *) &client_addr, sizeof(client_addr)) != strlen(answer)) {
+        if (sendto(udp_server_socket, answer, strlen(answer), 0, (struct sockaddr *) &client_addr, sizeof(client_addr)) != (ssize_t)strlen(answer)) {
                 l1(OUTPUT_TYPE_ERROR, "sendto: %s", strerror(errno));
         }
 }
@@ -488,7 +547,7 @@ static char * get_greets_msg(void)
 }
 
 static char * http_get(char* host, int port, char* path);
-static void download_blacklisted_IPs()
+static void download_blacklisted_IPs(void)
 {
         char* doc = http_get("www.frozen-bubble.org", 80, "/servers/blacklisted_IPs");
         if (doc) {
@@ -542,8 +601,17 @@ void connections_manager(void)
                         if (udp_server_socket != -1)
                                 FD_SET(udp_server_socket, &conns_set);
 
-                        tv.tv_sec = 30;
-                        tv.tv_usec = 0;
+                        /* When connections are waiting for WebSocket-vs-TCP
+                         * classification, use a short timeout so native clients
+                         * receive the server greeting promptly instead of waiting
+                         * for the full gracetime interval. */
+                        if (ws_pending_count > 0) {
+                                tv.tv_sec = 0;
+                                tv.tv_usec = 200000;
+                        } else {
+                                tv.tv_sec = 30;
+                                tv.tv_usec = 0;
+                        }
 
                         if ((retval = select(FD_SETSIZE, &conns_set, NULL, NULL, &tv)) == -1) {
                                 l1(OUTPUT_TYPE_ERROR, "select: %s", strerror(errno));
@@ -662,11 +730,13 @@ void connections_manager(void)
                         IP[fd] = strdup_(inet_ntoa(client_addr.sin_addr));
                         prio[fd] = 0;
                         remote_proto_minor[fd] = -1;
-                        // Detect browser WebSocket clients (they send HTTP upgrade immediately).
-                        // Native TCP clients wait for the server greeting, so ws_detect_and_upgrade
-                        // will time out quickly and return 0 for them.
-                        ws_detect_and_upgrade(fd);
-                        send_line_log_push(fd, get_greets_msg());
+                        // Defer WebSocket detection to the event loop so the
+                        // accept path never blocks. Browser clients send their
+                        // HTTP upgrade immediately and will be picked up on the
+                        // next select() pass; native TCP clients wait for the
+                        // greeting, which is sent on the first gracetime pass.
+                        ws_pending[fd] = 1;
+                        ws_pending_count++;
                         conns = g_list_append(conns, GINT_TO_POINTER(fd));
                         player_connects(fd);
                         incoming_data_buffers[fd] = malloc_(sizeof(char) * INCOMING_DATA_BUFSIZE);
@@ -730,7 +800,7 @@ void remove_prio(int fd)
         conns = g_list_append(conns, GINT_TO_POINTER(fd));
 }
 
-void close_server() {
+void close_server(void) {
         if (tcp_server_socket != -1) {
                 SOCKET_CLOSE(tcp_server_socket);
         }
@@ -815,6 +885,7 @@ static void create_udp_server(void)
 
 static void cleanup_alert_words(gpointer data, gpointer user_data)
 {
+        (void)user_data;
         regex_t* preg = data;
         regfree(preg);
         free(preg);
@@ -857,7 +928,7 @@ static char* read_alert_words(char* file)
         return NULL;
 }
 
-void reread()
+void reread(void)
 {
         if (alert_words_file) {
                 char* response;
@@ -958,7 +1029,7 @@ static void handle_parameter(char command, char * param) {
                         fprintf(stderr, "-n: name is too long, maximum is 12 characters\n");
                         exit(EXIT_FAILURE);
                 } else {
-                        int i;
+                        size_t i;
                         for (i = 0; i < strlen(param); i++) {
                                 if (!((param[i] >= 'a' && param[i] <= 'z')
                                       || (param[i] >= 'A' && param[i] <= 'Z')
@@ -1038,6 +1109,7 @@ static void handle_parameter(char command, char * param) {
 }
 
 void sigterm_catcher(int signum) {
+        (void)signum;
         l0(OUTPUT_TYPE_INFO, "Received SIGTERM, terminating.");
         close_server();
         unregister_server();
@@ -1092,7 +1164,7 @@ void create_server(int argc, char **argv)
                 // Fallback to hostname
                 char hostname[128];
                 if (!gethostname(hostname, 127)) {
-                        int i;
+                        size_t i;
                         hostname[127] = '\0';  // manpage says "It is unspecified whether the truncated hostname will be null-terminated"
                         servername = g_strndup(hostname, 12);
                         for (i = 0; i < strlen(servername); i++) {
@@ -1383,7 +1455,7 @@ void register_server(int silent) {
         }
 }
 
-void unregister_server() {
+void unregister_server(void) {
         if (!quiet && !lan_game_mode) {
                 char* path = asprintf_("/servers/servers.php?server-remove=%s&server-remove-port=%d", external_hostname, external_port);
                 char* doc = http_get("www.frozen-bubble.org", 80, path);

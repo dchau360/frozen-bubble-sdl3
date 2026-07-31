@@ -14,6 +14,14 @@ void    ws_reset(int fd);
  * Returns 1 if upgraded, 0 if plain TCP (leaves fd untouched). */
 int     ws_detect_and_upgrade(int fd);
 
+/* Try to complete a WebSocket upgrade from already-received data.
+ * data[0..len-1] is the first chunk received from a newly accepted
+ * connection. Returns the number of bytes consumed (the HTTP request)
+ * if upgraded, 0 if the data does not contain a valid upgrade request,
+ * -1 on error. On success, the caller must treat the fd as WebSocket
+ * and send the greeting as a WS frame. */
+int     ws_try_upgrade_from_data(int fd, const char* data, int len);
+
 /* Send data wrapped in a WebSocket text frame. */
 ssize_t ws_send(int fd, const char* data, int len);
 

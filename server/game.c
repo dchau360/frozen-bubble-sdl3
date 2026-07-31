@@ -145,6 +145,7 @@ static int games_open;
 static int games_running;
 static void list_open_nicks_aux(gpointer data, gpointer user_data)
 {
+        (void)user_data;
         char* n = nick[GPOINTER_TO_INT(data)];
         if (n == NULL)
                 return;
@@ -158,6 +159,7 @@ static void list_open_nicks_aux(gpointer data, gpointer user_data)
 }
 static void list_games_aux(gpointer data, gpointer user_data)
 {
+        (void)user_data;
         const struct game* g = data;
         if (g->status == GAME_STATUS_OPEN) {
                 char* game;
@@ -360,7 +362,7 @@ static void real_start_game(struct game* g)
         char mapping_str[4096] = "";
         char can_start_msg[1000];
         for (i = 0; i < g->players_number; i++) {
-                int len = strlen(mapping_str);
+                size_t len = strlen(mapping_str);
                 if (len >= sizeof(mapping_str)-1)
                         return;
                 mapping_str[len] = g->players_id[i];
@@ -644,7 +646,7 @@ static int already_in_game(int fd)
 
 static int is_nick_ok(char* nick)
 {
-        int i;
+        size_t i;
         /* An empty nick passed: the character loop below runs zero times and
          * falls through to success. `CREATE ` therefore allocated a room with an
          * empty name, which known LIST parsers cannot enumerate — the room
@@ -964,6 +966,7 @@ ssize_t get_reset_amount_transmitted(void)
 
 static void conn_to_terminate_helper(gpointer data, gpointer user_data)
 {
+        (void)user_data;
         conn_terminated(GPOINTER_TO_INT(data), "system error on send (probably peer shutdown or try again)");
 }
 
@@ -1082,10 +1085,8 @@ void player_part_game_(int fd, char* reason)
 
                 // completely remove game if empty
                 if (g->players_number == 0) {
-                        int was_running = g->status == GAME_STATUS_PLAYING;
-
                         // Record win for the last remaining player (if game was in progress)
-                        if (was_running && g->players_number == 0 && leaving_player_index >= 0) {
+                        if (was_playing && g->players_number == 0 && leaving_player_index >= 0) {
                                 // This was the last player - they win by default (others already left)
                                 stats_record_win(save_nick);
                                 l1(OUTPUT_TYPE_INFO, "Game ended: %s wins (last player remaining)", save_nick);
@@ -1094,11 +1095,11 @@ void player_part_game_(int fd, char* reason)
                         games = g_list_remove(games, g);
                         free(g);
                         calculate_list_games();
-                        if (was_running)
+                        if (was_playing)
                                 l2(OUTPUT_TYPE_INFO, "running games decrements to: %d (%d players)", games_running, players_in_game);
 
                 } else {
-                        if (g->status == GAME_STATUS_PLAYING) {
+                        if (was_playing) {
                                 // inform other players, playing state
                                 char leave_player_prio_msg[] = "?l\n";
                                 leave_player_prio_msg[0] = save_id;
