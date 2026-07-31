@@ -23,7 +23,7 @@
 #include <cerrno>
 #include <cstring>
 
-GameSettings *GameSettings::ptrInstance = new GameSettings();
+GameSettings *GameSettings::ptrInstance = nullptr;
 bool virtualKeyState[CTRL_SC_COUNT] = {};
 ControllerInput controllerInputs[5] = {};
 

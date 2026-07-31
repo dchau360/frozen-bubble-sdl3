@@ -69,9 +69,8 @@ MainMenu::MainMenu(const SDL_Renderer *renderer)
         {"1pgame", "1pgame", 30}, 
         {"2pgame", "p1p2", 30}, 
         {"langame", "langame", 70}, 
-        {"netgame", "netgame", 89}, 
-        {"editor", "editor", 67}, 
-        {"graphics", "graphics", 30}, 
+        {"netgame", "netgame", 89},
+        {"graphics", "graphics", 30},
         {"keys", "keys", 80}, 
         {"highscores", "highscore", 89}
     };

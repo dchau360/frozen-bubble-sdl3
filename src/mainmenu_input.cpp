@@ -50,30 +50,6 @@
 #include "mainmenu_internal.h"
 
 void MainMenu::HandleInput(SDL_Event *e){
-    // Map gamepad/D-pad to keyboard-equivalent actions for TV remotes
-    if (e->type == SDL_EVENT_GAMEPAD_BUTTON_DOWN) {
-        SDL_KeyboardEvent fake{};
-        fake.type = SDL_EVENT_KEY_DOWN;
-        fake.down = true;
-        switch (e->gbutton.button) {
-            case SDL_GAMEPAD_BUTTON_DPAD_UP:    fake.key = SDLK_UP; break;
-            case SDL_GAMEPAD_BUTTON_DPAD_DOWN:  fake.key = SDLK_DOWN; break;
-            case SDL_GAMEPAD_BUTTON_DPAD_LEFT:  fake.key = SDLK_LEFT; break;
-            case SDL_GAMEPAD_BUTTON_DPAD_RIGHT: fake.key = SDLK_RIGHT; break;
-            case SDL_GAMEPAD_BUTTON_SOUTH:          fake.key = SDLK_RETURN; break;
-            case SDL_GAMEPAD_BUTTON_EAST:          fake.key = SDLK_ESCAPE; break;
-            case SDL_GAMEPAD_BUTTON_START:      fake.key = SDLK_RETURN; break;
-            case SDL_GAMEPAD_BUTTON_WEST:          fake.key = SDLK_T; break; // X=Chat
-            case SDL_GAMEPAD_BUTTON_NORTH:          fake.key = SDLK_R; break; // Y=Remove Ads (Android opts panel)
-            default: return;
-        }
-        SDL_Event fakeEvent;
-        fakeEvent.type = SDL_EVENT_KEY_DOWN;
-        fakeEvent.key = fake;
-        HandleInput(&fakeEvent);
-        return;
-    }
-
     switch(e->type) {
         case SDL_EVENT_TEXT_INPUT:
             MenuTextInputEvent(e);
