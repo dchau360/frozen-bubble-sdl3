@@ -25,7 +25,6 @@
 #define bzero(b,len) (memset((b), '\0', (len)), (void) 0)
 #endif
 
-#include <iconv.h>
 #include <math.h>
 #include <time.h>
 #include <unistd.h>

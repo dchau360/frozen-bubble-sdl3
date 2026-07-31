@@ -802,7 +802,12 @@ int process_msg(int fd, char* msg)
                         int max_players = 5;  // legacy default: clients that don't ask get classic rooms
                         if ((ptr = strchr(args, ' '))) {
                                 int mp = charstar_to_int(ptr + 1);
-                                if (mp >= 2 && mp <= MAX_PLAYERS_PER_GAME) max_players = mp;
+                                if (mp >= 2 && mp <= MAX_PLAYERS_PER_GAME)
+                                        max_players = mp;
+                                else if (mp > MAX_PLAYERS_PER_GAME)
+                                        l2(OUTPUT_TYPE_INFO, "CREATE room cap %d clamped to %d", mp, MAX_PLAYERS_PER_GAME);
+                                else
+                                        l1(OUTPUT_TYPE_INFO, "CREATE room cap %d ignored (minimum 2)", mp);
                                 *ptr = '\0';
                         }
                         if (strlen(args) > 10)

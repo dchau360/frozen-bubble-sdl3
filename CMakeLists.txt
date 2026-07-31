@@ -31,17 +31,16 @@ if(NOT EMSCRIPTEN)
     find_package(SDL3_ttf REQUIRED)
 endif()
 
-find_package(iniparser QUIET COMPONENTS static)
-if(NOT iniparser_FOUND OR NOT TARGET iniparser-static)
-    message(STATUS "iniparser system package not found, building from bundled source")
-    add_library(iniparser-static STATIC
-        "${CMAKE_SOURCE_DIR}/third_party/iniparser/iniparser.c"
-        "${CMAKE_SOURCE_DIR}/third_party/iniparser/dictionary.c"
-    )
-    target_include_directories(iniparser-static PUBLIC
-        "${CMAKE_SOURCE_DIR}/third_party/iniparser"
-    )
-endif()
+# Always build iniparser from the bundled source (vendored iniparser 4.x, MIT).
+# Avoids silently preferring any system iniparser — the parser implementation
+# the build uses is a property of the repository, not the host (IMP-023).
+add_library(iniparser-static STATIC
+    "${CMAKE_SOURCE_DIR}/third_party/iniparser/iniparser.c"
+    "${CMAKE_SOURCE_DIR}/third_party/iniparser/dictionary.c"
+)
+target_include_directories(iniparser-static PUBLIC
+    "${CMAKE_SOURCE_DIR}/third_party/iniparser"
+)
 
 # REQUIRED on find_package handles missing libraries
 

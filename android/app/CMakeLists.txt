@@ -4,6 +4,12 @@ project(frozen-bubble CXX C)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+# Match the warning configuration of the top-level CMakeLists.txt so the
+# NDK toolchain (including 32-bit armeabi-v7a where narrowing and pointer-
+# width diagnostics are most informative) sees the same diagnostics as the
+# native build (IMP-022).
+add_compile_options(-Wall -Wextra -pedantic -Wno-pointer-arith)
+
 # SDL3 and extension libs built from source in jni/ (git submodules)
 set(JNI_DIR "${CMAKE_SOURCE_DIR}/jni")
 

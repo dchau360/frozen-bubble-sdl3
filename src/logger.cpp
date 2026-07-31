@@ -21,11 +21,6 @@
 #include <string.h>
 #include <sys/stat.h>
 
-#ifdef _WIN32
-#include <direct.h>
-#define mkdir(dir, mode) _mkdir(dir)
-#endif
-
 FILE* Logger::logFile = nullptr;
 bool Logger::initialized = false;
 
