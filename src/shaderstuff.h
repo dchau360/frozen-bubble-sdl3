@@ -117,7 +117,7 @@ void get_pixel(SDL_Surface *s, int x, int y, Uint8 *r, Uint8 *g, Uint8 *b, Uint8
 void myLockSurface(SDL_Surface *s);
 void myUnlockSurface(SDL_Surface *s);
 void synchro_before(SDL_Surface *s);
-void synchro_after(SDL_Surface *s, SDL_Renderer *rend, SDL_Texture *tex);
+void synchro_after(SDL_Surface *s, SDL_Renderer *rend, SDL_Texture *&tex);
 
 void fb__out_of_memory(void);
 
@@ -140,30 +140,30 @@ void fb__out_of_memory(void);
 void copy_line(int l, SDL_Surface *s, SDL_Surface *img);
 void copy_column(int c, SDL_Surface *s, SDL_Surface *img);
 
-void store_effect(SDL_Surface *s, SDL_Surface *img, SDL_Renderer *rend, SDL_Texture *tex);
+void store_effect(SDL_Surface *s, SDL_Surface *img, SDL_Renderer *rend, SDL_Texture *&tex);
 
 /* -------------- Bars ------------------ */
 
-void bars_effect(SDL_Surface *s, SDL_Surface *img, SDL_Renderer *rend, SDL_Texture *tex);
+void bars_effect(SDL_Surface *s, SDL_Surface *img, SDL_Renderer *rend, SDL_Texture *&tex);
 
 /* -------------- Squares ------------------ */
 int fillrect(int i, int j, SDL_Surface *s, SDL_Surface *img, int bpp, const int squares_size);
 
-void squares_effect(SDL_Surface *s, SDL_Surface *img, SDL_Renderer *rend, SDL_Texture *tex);
+void squares_effect(SDL_Surface *s, SDL_Surface *img, SDL_Renderer *rend, SDL_Texture *&tex);
 
 /* -------------- Circle ------------------ */
 
 void circle_init(void);
 
-void circle_effect(SDL_Surface *s, SDL_Surface *img, SDL_Renderer *rend, SDL_Texture *tex);
+void circle_effect(SDL_Surface *s, SDL_Surface *img, SDL_Renderer *rend, SDL_Texture *&tex);
 
 /* -------------- Plasma ------------------ */
 
 void plasma_init(char *datapath);
 
-void plasma_effect(SDL_Surface *s, SDL_Surface *img, SDL_Renderer *rend, SDL_Texture *tex);
+void plasma_effect(SDL_Surface *s, SDL_Surface *img, SDL_Renderer *rend, SDL_Texture *&tex);
 
-void effect(SDL_Surface *s, SDL_Surface *img, SDL_Renderer *rend, SDL_Texture *tex);
+void effect(SDL_Surface *s, SDL_Surface *img, SDL_Renderer *rend, SDL_Texture *&tex);
 
 void shrink_(SDL_Surface *dest, SDL_Surface *orig, int xpos, int ypos, SDL_Rect *orig_rect, int factor);
 

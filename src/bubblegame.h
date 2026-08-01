@@ -91,16 +91,26 @@
 
 //hardcoded framecount, theres like a ton of frames here
 struct Penguin {
-    SDL_Texture* handle[PENGUIN_HANDLEFC];
-    SDL_Texture* wait[PENGUIN_WAITFC];
-    SDL_Texture* win[PENGUIN_WINFC];
-    SDL_Texture* lose[PENGUIN_LOSEFC];
+    SDL_Texture* handle[PENGUIN_HANDLEFC] = {};
+    SDL_Texture* wait[PENGUIN_WAITFC] = {};
+    SDL_Texture* win[PENGUIN_WINFC] = {};
+    SDL_Texture* lose[PENGUIN_LOSEFC] = {};
     // curAnimation up to 13 values
     int curAnimation = 0, curFrame = 1, waitFrame = 0;
     int sleeping = 0;
     bool invertAnimation = false;
     SDL_Renderer *rend = nullptr;
     SDL_Rect rect = {};
+
+    Penguin() = default;
+    Penguin(const Penguin&) = delete;
+    Penguin& operator=(const Penguin&) = delete;
+    ~Penguin() {
+        for (int i = 0; i < PENGUIN_HANDLEFC; i++) if (handle[i]) SDL_DestroyTexture(handle[i]);
+        for (int i = 0; i < PENGUIN_WAITFC; i++) if (wait[i]) SDL_DestroyTexture(wait[i]);
+        for (int i = 0; i < PENGUIN_WINFC; i++) if (win[i]) SDL_DestroyTexture(win[i]);
+        for (int i = 0; i < PENGUIN_LOSEFC; i++) if (lose[i]) SDL_DestroyTexture(lose[i]);
+    }
 
     void LoadPenguin(SDL_Renderer* renderer, const char *whichOne, SDL_Rect rct) {
         rend = renderer;
@@ -109,18 +119,22 @@ struct Penguin {
         char rel[256];
         for (int i = 0; i < PENGUIN_HANDLEFC; i++) {
             snprintf(rel, sizeof(rel), "/gfx/pinguins/anime-shooter_%s_%04d.png", whichOne, i + 1);
+            if (handle[i]) SDL_DestroyTexture(handle[i]);
             handle[i] = IMG_LoadTexture(renderer, ASSET(rel).c_str());
         }
         for (int i = 0; i < PENGUIN_WAITFC; i++) {
             snprintf(rel, sizeof(rel), "/gfx/pinguins/wait_%s_%04d.png", whichOne, i + 1);
+            if (wait[i]) SDL_DestroyTexture(wait[i]);
             wait[i] = IMG_LoadTexture(renderer, ASSET(rel).c_str());
         }
         for (int i = 0; i < PENGUIN_WINFC; i++) {
             snprintf(rel, sizeof(rel), "/gfx/pinguins/win_%s_%04d.png", whichOne, i + 1);
+            if (win[i]) SDL_DestroyTexture(win[i]);
             win[i] = IMG_LoadTexture(renderer, ASSET(rel).c_str());
         }
         for (int i = 0; i < PENGUIN_LOSEFC; i++) {
             snprintf(rel, sizeof(rel), "/gfx/pinguins/loose_%s_%04d.png", whichOne, i + 1);
+            if (lose[i]) SDL_DestroyTexture(lose[i]);
             lose[i] = IMG_LoadTexture(renderer, ASSET(rel).c_str());
         }
     }

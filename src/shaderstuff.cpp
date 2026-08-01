@@ -69,7 +69,7 @@ void synchro_before(SDL_Surface *s)
     ticks = SDL_GetTicks();
     myLockSurface(s);
 }
-void synchro_after(SDL_Surface *s, SDL_Renderer *rend, SDL_Texture *tex)
+void synchro_after(SDL_Surface *s, SDL_Renderer *rend, SDL_Texture *&tex)
 {
     myUnlockSurface(s);
     SDL_RenderClear(rend);
@@ -119,7 +119,7 @@ void copy_column(int c, SDL_Surface *s, SDL_Surface *img)
         memcpy((Uint8 *)s->pixels + y * img->pitch + c * bpp, (Uint8 *)img->pixels + y * img->pitch + c * bpp, bpp);
 }
 
-void store_effect(SDL_Surface *s, SDL_Surface *img, SDL_Renderer *rend, SDL_Texture *tex)
+void store_effect(SDL_Surface *s, SDL_Surface *img, SDL_Renderer *rend, SDL_Texture *&tex)
 {
 
     int step = 0;
@@ -171,7 +171,7 @@ void store_effect(SDL_Surface *s, SDL_Surface *img, SDL_Renderer *rend, SDL_Text
 
 /* -------------- Bars ------------------ */
 
-void bars_effect(SDL_Surface *s, SDL_Surface *img, SDL_Renderer *rend, SDL_Texture *tex)
+void bars_effect(SDL_Surface *s, SDL_Surface *img, SDL_Renderer *rend, SDL_Texture *&tex)
 {
     int bpp = SDL_GetPixelFormatDetails(img->format)->bytes_per_pixel;
     const int bars_max_steps = 40;
@@ -207,7 +207,7 @@ int fillrect(int i, int j, SDL_Surface *s, SDL_Surface *img, int bpp, const int 
     return 1;
 }
 
-void squares_effect(SDL_Surface *s, SDL_Surface *img, SDL_Renderer *rend, SDL_Texture *tex)
+void squares_effect(SDL_Surface *s, SDL_Surface *img, SDL_Renderer *rend, SDL_Texture *&tex)
 {
     int bpp = SDL_GetPixelFormatDetails(img->format)->bytes_per_pixel;
     const int squares_size = 32;
@@ -254,7 +254,7 @@ void circle_init(void)
         }
 }
 
-void circle_effect(SDL_Surface *s, SDL_Surface *img, SDL_Renderer *rend, SDL_Texture *tex)
+void circle_effect(SDL_Surface *s, SDL_Surface *img, SDL_Renderer *rend, SDL_Texture *&tex)
 {
     int step = circle_max_steps;
     int bpp = SDL_GetPixelFormatDetails(img->format)->bytes_per_pixel;
@@ -354,7 +354,7 @@ void plasma_init(char *datapath)
         fb__out_of_memory();
 }
 
-void plasma_effect(SDL_Surface *s, SDL_Surface *img, SDL_Renderer *rend, SDL_Texture *tex)
+void plasma_effect(SDL_Surface *s, SDL_Surface *img, SDL_Renderer *rend, SDL_Texture *&tex)
 {
     if (!plasma) return;  // plasma_init() failed or hasn't run; nothing to animate
     int step = 0;
@@ -450,7 +450,7 @@ void plasma_effect(SDL_Surface *s, SDL_Surface *img, SDL_Renderer *rend, SDL_Tex
     }
 }
 
-void effect(SDL_Surface *s, SDL_Surface *img, SDL_Renderer *rend, SDL_Texture *tex)
+void effect(SDL_Surface *s, SDL_Surface *img, SDL_Renderer *rend, SDL_Texture *&tex)
 {
     int randvalue = rand_(8);
     if (randvalue == 1 || randvalue == 2) store_effect(s, img, rend, tex);

@@ -187,6 +187,9 @@ BubbleGame::~BubbleGame() {
         SDL_DestroyTexture(imgMiniBubbles[i]);
         SDL_DestroyTexture(imgMiniColorblindBubbles[i]);
     }
+    for (int i = 0; i < MAX_NET_PLAYERS; i++) {
+        if (bubbleArrays[i].hurryTexture) SDL_DestroyTexture(bubbleArrays[i].hurryTexture);
+    }
 }
 
 
@@ -359,6 +362,17 @@ void BubbleGame::NewGame(SetupSettings setup) {
             lowGfx, GameSettings::Instance()->gfxLevel());
 
     if (background != nullptr) SDL_DestroyTexture(background);
+
+    // Every switch case below reloads hurry_pN.png into whichever player slots
+    // it uses; destroy the previous match's textures first so restarting a
+    // game (or shrinking the player count) doesn't leak one per player per
+    // match start (BUG-042).
+    for (int i = 0; i < MAX_NET_PLAYERS; i++) {
+        if (bubbleArrays[i].hurryTexture) {
+            SDL_DestroyTexture(bubbleArrays[i].hurryTexture);
+            bubbleArrays[i].hurryTexture = nullptr;
+        }
+    }
 
     // Reset game state flags
     gameFinish = gameWon = gameLost = gameMatchOver = false;

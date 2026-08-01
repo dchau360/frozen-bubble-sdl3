@@ -5,17 +5,17 @@ Generated from the ledger cross-referenced against commit messages since
 `v2.4.27`, so a finding counts as fixed only if a commit cites its ID and the
 citing commit actually resolves it (not just references it as rationale).
 
-**As of `f616fe98`.** Last release: `v2.4.33` (all five platforms green,
-itch.io deploys succeeded).
+**As of the BUG-041/042 fix (uncommitted).** Last release: `v2.4.33` (all five
+platforms green, itch.io deploys succeeded).
 
 ## Position
 
 | | Total | Fixed | Open |
 |---|---|---|---|
 | High | 15 | 15 | 0 |
-| Medium | 45 | 23 | 22 |
+| Medium | 45 | 25 | 20 |
 | Low | 13 | 9 | 4 |
-| **Defects** | **73** | **47** | **26** |
+| **Defects** | **73** | **49** | **24** |
 | Improvements | 24 | 16 done, 1 moot | 7 |
 
 All High-severity findings are fixed. Two caveats:
@@ -41,13 +41,38 @@ All High-severity findings are fixed. Two caveats:
   room-cap clamp that logged but didn't clamp) — all four found by direct
   empirical reproduction, not by inspection, and fixed in `f96b316c`.
 - **Linux ASan/UBSan CI job** — not a finding fix, but the prerequisite
-  IMP-016/IMP-021 named: `dde25951`. This is what makes BUG-041/042 provable
-  going forward, since Apple's ASan has no leak detection.
+  IMP-016/IMP-021 named: `dde25951`. This is what made BUG-041/042 provable.
+- **BUG-041** — `synchro_after` and the five `*_effect` functions
+  (`shaderstuff.h`/`.cpp`) passed their texture pointer by value all the way
+  up from `TransitionManager::transitionTexture`, so no frame's texture was
+  ever visible to the next frame or to the caller: every single animation
+  frame leaked one 640×480 texture, not just one per transition. Fixed by
+  threading `tex` through the whole chain as `SDL_Texture*&`; `TakeSnipOut`
+  now destroys the final frame's texture once the animation completes.
+  Verified via RSS-growth measurement (macOS has no LeakSanitizer): pre-fix
+  leaked ~6.7 MB per transition animation over 60 repeated calls, post-fix
+  flat at ~127 KB/animation (measurement noise). Confirmed against the
+  pre-fix code via `git stash`, not just against the fixed version alone.
+- **BUG-042** — `Penguin::LoadPenguin` reloaded all 394 animation textures
+  (`handle`/`wait`/`win`/`lose`) every call with no destroy of the previous
+  set, and `bubbleArrays[i].hurryTexture` was reassigned the same way inside
+  `NewGame`'s switch statement (up to `MAX_NET_PLAYERS` in the battle-royale
+  branch) — both leaked their previous contents on every match start.
+  Fixed: `Penguin` gained a destructor (so `BubbleGame`'s own shutdown, which
+  never touched `penguinSprite`, doesn't leak the final match's set either)
+  and destroy-before-reload guards in `LoadPenguin`; `NewGame` now destroys
+  every `hurryTexture` up front, mirroring the existing `background` cleanup
+  that was already there. Verified via RSS-growth measurement, isolating
+  `Penguin` directly (it needs nothing from `BubbleGame`/`FrozenBubble`):
+  pre-fix ~3.8 MB/call, post-fix exactly 0 KB/call over 40 calls. Note: an
+  ASan build of the *same* harness showed spurious growth from ASan's
+  quarantine (redzone retention) even on the fixed code — a real gotcha,
+  resolved by cross-checking against a plain (non-sanitized) build instead.
 
 ## Open defects
 
-**Medium (22)** — BUG-002, 004, 006, 011, 013, 014, 015, 017, 018, 019, 021,
-022, 023, 024, 025, 027, 037, 040, 041, 042, 046, 048
+**Medium (20)** — BUG-002, 004, 006, 011, 013, 014, 015, 017, 018, 019, 021,
+022, 023, 024, 025, 027, 037, 040, 046, 048
 
 **Low (4)** — BUG-010, 038, 039, 047
 
@@ -65,20 +90,13 @@ All High-severity findings are fixed. Two caveats:
 
 ## Suggested next order
 
-### 1. Lifetime/ownership cluster — BUG-041, 042
-
-Same root cause as the now-fixed BUG-001/BUG-045 (`TextureEx`/`TTFText`
-ownership). The Linux sanitizer CI job now exists specifically to prove these,
-so this is the first cluster where a fix can actually be verified rather than
-argued from ownership tables.
-
-### 2. Round and match state — BUG-018, 019, 021, 022, 023, 024, 025
+### 1. Round and match state — BUG-018, 019, 021, 022, 023, 024, 025
 
 Self-contained but only observable by playing: win conditions, draw
 resolution, victories limits, chain-target parity. Expect to verify by
 actually running matches rather than by harness.
 
-### 3. Protocol and lobby — BUG-002, 004, 006, 011, 013, 014, 015, 017, 037, 040
+### 2. Protocol and lobby — BUG-002, 004, 006, 011, 013, 014, 015, 017, 037, 040
 
 Server-side, and the protocol harness works — see the client shape in
 `tools/server_tests/test_room_caps.py`. Two gotchas that cost time:
@@ -86,12 +104,12 @@ the server pushes `SERVER_READY` on connect (drain it before reading a reply),
 and it has a multi-second grace period before acting on a dropped socket, so use
 an explicit `PART` when testing departure paths.
 
-### 4. Platform — BUG-046, 048
+### 3. Platform — BUG-046, 048
 
 Android asset extraction and WASM persistence (settings and highscores are
 written to MEMFS and lost on reload). Both need their platform to verify.
 
-### 5. Lows, then the remaining improvements (IMP-006, 015 leftovers, 016-021)
+### 4. Lows, then the remaining improvements (IMP-006, 015 leftovers, 016-021)
 
 ## Things to know before continuing
 

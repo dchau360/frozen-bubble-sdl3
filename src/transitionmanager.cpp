@@ -39,6 +39,7 @@ TransitionManager::TransitionManager()
 TransitionManager::~TransitionManager(){
     SDL_DestroySurface(snapIn);
     SDL_DestroySurface(snapOut);
+    if (transitionTexture) SDL_DestroyTexture(transitionTexture);
 }
 
 void TransitionManager::Dispose(){
@@ -73,5 +74,9 @@ void TransitionManager::TakeSnipOut(SDL_Renderer *rend)
     SDL_BlitSurfaceScaled(sfc, NULL, snapOut, &dstSize, SDL_SCALEMODE_LINEAR);
     SDL_DestroySurface(sfc);
     effect(snapIn, snapOut, rend, transitionTexture);
+    if (transitionTexture) {
+        SDL_DestroyTexture(transitionTexture);
+        transitionTexture = nullptr;
+    }
 }
 
