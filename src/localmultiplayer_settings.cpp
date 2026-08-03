@@ -4,6 +4,51 @@
 
 #include <algorithm>
 
+bool ApplyLocalMultiplayerVictoriesInput(
+    int menuIndex,
+    LocalMultiplayerMenuCommand command,
+    int& victoriesIndex) {
+    if (menuIndex != 6) return false;
+
+    if (command == LocalMultiplayerMenuCommand::Left) {
+        --victoriesIndex;
+        if (victoriesIndex < 0) {
+            victoriesIndex = static_cast<int>(kVictoriesLimits.size()) - 1;
+        }
+    } else {
+        ++victoriesIndex;
+        if (victoriesIndex >= static_cast<int>(kVictoriesLimits.size())) {
+            victoriesIndex = 0;
+        }
+    }
+    return true;
+}
+
+LocalMultiplayerOptions BuildLocalMultiplayerOptions(
+    int playerCount,
+    bool chainReaction,
+    bool noCompression,
+    bool clearMode,
+    bool disableMalus,
+    bool teamMode,
+    int victoriesIndex,
+    const int colors[5],
+    const bool aimGuide[5]) {
+    LocalMultiplayerOptions options;
+    options.playerCount = playerCount;
+    options.chainReaction = chainReaction;
+    options.noCompression = noCompression;
+    options.clearMode = clearMode;
+    options.disableMalus = disableMalus;
+    options.teamMode = teamMode;
+    options.victoriesIndex = victoriesIndex;
+    for (int i = 0; i < 5; ++i) {
+        options.colors[i] = colors[i];
+        options.aimGuide[i] = aimGuide[i];
+    }
+    return options;
+}
+
 SetupSettings BuildLocalMultiplayerSettings(
     const LocalMultiplayerOptions& options) {
     SetupSettings settings;

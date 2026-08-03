@@ -21,6 +21,28 @@ struct LocalMultiplayerOptions {
     std::array<bool, 5> aimGuide = {};
 };
 
+enum class LocalMultiplayerMenuCommand {
+    Left,
+    Right,
+    Enter,
+};
+
+bool ApplyLocalMultiplayerVictoriesInput(
+    int menuIndex,
+    LocalMultiplayerMenuCommand command,
+    int& victoriesIndex);
+
+LocalMultiplayerOptions BuildLocalMultiplayerOptions(
+    int playerCount,
+    bool chainReaction,
+    bool noCompression,
+    bool clearMode,
+    bool disableMalus,
+    bool teamMode,
+    int victoriesIndex,
+    const int colors[5],
+    const bool aimGuide[5]);
+
 SetupSettings BuildLocalMultiplayerSettings(
     const LocalMultiplayerOptions& options);
 

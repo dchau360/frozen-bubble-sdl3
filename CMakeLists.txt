@@ -203,6 +203,23 @@ if(BUILD_TESTING AND NOT EMSCRIPTEN AND NOT ANDROID)
     endif()
     add_test(NAME bubblegame-rules-test COMMAND bubblegame-rules-test)
 
+    add_executable(localmultiplayer-settings-test
+        tests/localmultiplayer_settings_test.cpp
+        src/localmultiplayer_settings.cpp
+    )
+    set_property(TARGET localmultiplayer-settings-test PROPERTY CXX_STANDARD 17)
+    set_property(TARGET localmultiplayer-settings-test PROPERTY CXX_EXTENSIONS OFF)
+    target_include_directories(localmultiplayer-settings-test PRIVATE src)
+    target_compile_definitions(localmultiplayer-settings-test PRIVATE
+        DATA_DIR="${ASSET_PATH}"
+    )
+    target_link_libraries(localmultiplayer-settings-test PRIVATE
+        SDL3::SDL3
+        SDL3_image::SDL3_image
+        iniparser-static
+    )
+    add_test(NAME localmultiplayer-settings-test COMMAND localmultiplayer-settings-test)
+
     add_executable(netview-test
         tests/netview_test.cpp
         src/netview.cpp

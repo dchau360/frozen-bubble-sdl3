@@ -639,6 +639,16 @@ bool MainMenu::LocalMPPanelKey(SDL_Event *e) {
                     AudioMixer::Instance()->PlaySFX("menu_change");
                     return true;
                 } else if (e->key.key == SDLK_LEFT || e->key.key == SDLK_RIGHT) {
+                    LocalMultiplayerMenuCommand command =
+                        e->key.key == SDLK_LEFT
+                            ? LocalMultiplayerMenuCommand::Left
+                            : LocalMultiplayerMenuCommand::Right;
+                    if (ApplyLocalMultiplayerVictoriesInput(
+                            localMPMenuIndex, command,
+                            localMPVictoriesIndex)) {
+                        AudioMixer::Instance()->PlaySFX("menu_change");
+                        return true;
+                    }
                     if (localMPMenuIndex == 0) {
                         if (e->key.key == SDLK_LEFT) {
                             localMPPlayerCount--;
@@ -673,21 +683,6 @@ bool MainMenu::LocalMPPanelKey(SDL_Event *e) {
                     } else if (localMPMenuIndex == 5) {
                         localMPTeamMode = !localMPTeamMode;
                         AudioMixer::Instance()->PlaySFX("menu_change");
-                    } else if (localMPMenuIndex == 6) {
-                        if (e->key.key == SDLK_LEFT) {
-                            localMPVictoriesIndex--;
-                            if (localMPVictoriesIndex < 0) {
-                                localMPVictoriesIndex =
-                                    static_cast<int>(kVictoriesLimits.size()) - 1;
-                            }
-                        } else {
-                            localMPVictoriesIndex++;
-                            if (localMPVictoriesIndex >=
-                                static_cast<int>(kVictoriesLimits.size())) {
-                                localMPVictoriesIndex = 0;
-                            }
-                        }
-                        AudioMixer::Instance()->PlaySFX("menu_change");
                     } else if (localMPMenuIndex >= 7 && localMPMenuIndex < 7 + localMPPlayerCount) {
                         int pi = localMPMenuIndex - 7;
                         localMPAimGuide[pi] = !localMPAimGuide[pi];
@@ -705,6 +700,13 @@ bool MainMenu::LocalMPPanelKey(SDL_Event *e) {
                     }
                     return true;
                 } else if (e->key.key == SDLK_RETURN) {
+                    if (ApplyLocalMultiplayerVictoriesInput(
+                            localMPMenuIndex,
+                            LocalMultiplayerMenuCommand::Enter,
+                            localMPVictoriesIndex)) {
+                        AudioMixer::Instance()->PlaySFX("menu_change");
+                        return true;
+                    }
                     if (localMPMenuIndex == 0) {
                         localMPPlayerCount++;
                         if (localMPPlayerCount > 4) localMPPlayerCount = 2;
@@ -733,13 +735,6 @@ bool MainMenu::LocalMPPanelKey(SDL_Event *e) {
                         AudioMixer::Instance()->PlaySFX("menu_change");
                     } else if (localMPMenuIndex == 5) {
                         localMPTeamMode = !localMPTeamMode;
-                        AudioMixer::Instance()->PlaySFX("menu_change");
-                    } else if (localMPMenuIndex == 6) {
-                        localMPVictoriesIndex++;
-                        if (localMPVictoriesIndex >=
-                            static_cast<int>(kVictoriesLimits.size())) {
-                            localMPVictoriesIndex = 0;
-                        }
                         AudioMixer::Instance()->PlaySFX("menu_change");
                     } else if (localMPMenuIndex >= 7 && localMPMenuIndex < 7 + localMPPlayerCount) {
                         int pi = localMPMenuIndex - 7;

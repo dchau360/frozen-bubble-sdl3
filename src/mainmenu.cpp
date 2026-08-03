@@ -595,18 +595,16 @@ void MainMenu::SetupNewGame(int mode) {
             FrozenBubble::Instance()->bubbleGame()->NewGame({chainReaction, 1, false, true, false, 1, true});
             break;
         case 7: { // Local multiplayer (controller-based, 2-4 players)
-            LocalMultiplayerOptions options;
-            options.playerCount = localMPPlayerCount;
-            options.chainReaction = localMPCR;
-            options.noCompression = localMPNoCompress;
-            options.clearMode = localMPClearMode;
-            options.disableMalus = localMPDisableMalus;
-            options.teamMode = localMPTeamMode;
-            options.victoriesIndex = localMPVictoriesIndex;
-            for (int i = 0; i < 5; i++) {
-                options.colors[i] = playerColorCounts[i];
-                options.aimGuide[i] = localMPAimGuide[i];
-            }
+            LocalMultiplayerOptions options = BuildLocalMultiplayerOptions(
+                localMPPlayerCount,
+                localMPCR,
+                localMPNoCompress,
+                localMPClearMode,
+                localMPDisableMalus,
+                localMPTeamMode,
+                localMPVictoriesIndex,
+                playerColorCounts,
+                localMPAimGuide);
             FrozenBubble::Instance()->bubbleGame()->NewGame(
                 BuildLocalMultiplayerSettings(options));
             break;
