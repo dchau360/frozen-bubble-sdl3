@@ -205,19 +205,26 @@ if(BUILD_TESTING AND NOT EMSCRIPTEN AND NOT ANDROID)
 
     add_executable(localmultiplayer-settings-test
         tests/localmultiplayer_settings_test.cpp
-        src/localmultiplayer_settings.cpp
+        ${FROZEN_BUBBLE_CORE_SOURCES}
     )
     set_property(TARGET localmultiplayer-settings-test PROPERTY CXX_STANDARD 17)
     set_property(TARGET localmultiplayer-settings-test PROPERTY CXX_EXTENSIONS OFF)
     target_include_directories(localmultiplayer-settings-test PRIVATE src)
     target_compile_definitions(localmultiplayer-settings-test PRIVATE
+        FROZEN_BUBBLE_TEST_ACCESS
         DATA_DIR="${ASSET_PATH}"
+        APP_VERSION="v${PROJECT_VERSION}"
     )
     target_link_libraries(localmultiplayer-settings-test PRIVATE
         SDL3::SDL3
         SDL3_image::SDL3_image
+        SDL3_mixer::SDL3_mixer
+        SDL3_ttf::SDL3_ttf
         iniparser-static
     )
+    if(WIN32 OR MINGW)
+        target_link_libraries(localmultiplayer-settings-test PRIVATE ws2_32)
+    endif()
     add_test(NAME localmultiplayer-settings-test COMMAND localmultiplayer-settings-test)
 
     add_executable(netview-test

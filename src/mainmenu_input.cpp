@@ -646,7 +646,7 @@ bool MainMenu::LocalMPPanelKey(SDL_Event *e) {
                     if (ApplyLocalMultiplayerVictoriesInput(
                             localMPMenuIndex, command,
                             localMPVictoriesIndex)) {
-                        AudioMixer::Instance()->PlaySFX("menu_change");
+                        PlayLocalMPMenuSFX("menu_change");
                         return true;
                     }
                     if (localMPMenuIndex == 0) {
@@ -704,7 +704,7 @@ bool MainMenu::LocalMPPanelKey(SDL_Event *e) {
                             localMPMenuIndex,
                             LocalMultiplayerMenuCommand::Enter,
                             localMPVictoriesIndex)) {
-                        AudioMixer::Instance()->PlaySFX("menu_change");
+                        PlayLocalMPMenuSFX("menu_change");
                         return true;
                     }
                     if (localMPMenuIndex == 0) {
@@ -759,6 +759,13 @@ bool MainMenu::LocalMPPanelKey(SDL_Event *e) {
                 }
             }
     return false;
+}
+
+void MainMenu::PlayLocalMPMenuSFX(const char *name) {
+#ifdef FROZEN_BUBBLE_TEST_ACCESS
+    if (headlessTestMode) return;
+#endif
+    AudioMixer::Instance()->PlaySFX(name);
 }
 
 void MainMenu::MenuUpKey() {

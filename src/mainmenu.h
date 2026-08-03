@@ -27,6 +27,9 @@
 #include <map>
 #include <mutex>
 #include <string>
+#ifdef FROZEN_BUBBLE_TEST_ACCESS
+#include <functional>
+#endif
 
 #include "menubutton.h"
 #include "networkclient.h"
@@ -69,6 +72,14 @@ public:
     void ReturnToMenu();
     void ReturnToNetLobby();  // Return to network lobby after quitting a network game
 private:
+#ifdef FROZEN_BUBBLE_TEST_ACCESS
+    friend struct MainMenuTestAccess;
+    struct HeadlessTestTag {};
+    MainMenu(const SDL_Renderer *renderer, HeadlessTestTag);
+    bool headlessTestMode = false;
+    std::function<void(const SetupSettings&)> testLocalGameStart;
+#endif
+
     const SDL_Renderer *renderer;
     std::vector<MenuButton> buttons;
     SDL_Texture *background;
@@ -107,6 +118,7 @@ private:
     bool KeysPanelKey(SDL_Event *e);
     bool LobbyChatTypingKey(SDL_Event *e);
     bool LocalMPPanelKey(SDL_Event *e);
+    void PlayLocalMPMenuSFX(const char *name);
     void MenuUpKey();
     void MenuDownKey();
     void MenuLeftRightKey(SDL_Event *e);
@@ -250,6 +262,8 @@ private:
     //game setup defines
     bool chainReaction = false;
     int selectedMode;
+    void BeginGameTransition();
+    void StartLocalGame(const SetupSettings& settings);
 
     // Local multiplayer setup panel
     bool showingLocalMPPanel = false;

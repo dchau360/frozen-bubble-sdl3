@@ -192,6 +192,21 @@ MainMenu::MainMenu(const SDL_Renderer *renderer)
 #endif
 }
 
+#ifdef FROZEN_BUBBLE_TEST_ACCESS
+MainMenu::MainMenu(const SDL_Renderer *renderer, HeadlessTestTag)
+    : renderer(renderer), background(nullptr), fbLogo(nullptr),
+      active_button_index(0)
+{
+    headlessTestMode = true;
+    SDL_Renderer *rend = const_cast<SDL_Renderer*>(renderer);
+    voidPanelBG = IMG_LoadTexture(
+        rend, ASSET("/gfx/menu/void_panel.png").c_str());
+    panelText.LoadFont(ASSET("/gfx/DroidSans.ttf").c_str(), 15);
+    panelText.UpdateAlignment(TTF_HORIZONTAL_ALIGN_CENTER);
+    panelText.UpdateColor({255, 255, 255, 255}, {0, 0, 0, 255});
+}
+#endif
+
 
 MainMenu::~MainMenu() {
 #ifndef __WASM_PORT__
@@ -515,8 +530,28 @@ void MainMenu::ShowPanel(int which) {
 }
 
 
+void MainMenu::BeginGameTransition() {
+#ifdef FROZEN_BUBBLE_TEST_ACCESS
+    if (headlessTestMode) return;
+#endif
+    TransitionManager::Instance()->DoSnipIn(
+        const_cast<SDL_Renderer*>(renderer));
+}
+
+
+void MainMenu::StartLocalGame(const SetupSettings& settings) {
+#ifdef FROZEN_BUBBLE_TEST_ACCESS
+    if (headlessTestMode) {
+        if (testLocalGameStart) testLocalGameStart(settings);
+        return;
+    }
+#endif
+    FrozenBubble::Instance()->bubbleGame()->NewGame(settings);
+}
+
+
 void MainMenu::SetupNewGame(int mode) {
-    TransitionManager::Instance()->DoSnipIn(const_cast<SDL_Renderer*>(renderer));
+    BeginGameTransition();
     switch(mode){
         case 1:
             // Classic campaign ("Play All Levels") always has chain reaction off,
@@ -605,8 +640,7 @@ void MainMenu::SetupNewGame(int mode) {
                 localMPVictoriesIndex,
                 playerColorCounts,
                 localMPAimGuide);
-            FrozenBubble::Instance()->bubbleGame()->NewGame(
-                BuildLocalMultiplayerSettings(options));
+            StartLocalGame(BuildLocalMultiplayerSettings(options));
             break;
         }
         default:
