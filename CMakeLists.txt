@@ -67,9 +67,8 @@ else()
     set(NETWORK_CLIENT_SRC src/networkclient.cpp)
 endif()
 
-add_executable(frozen-bubble-sdl3
+set(FROZEN_BUBBLE_CORE_SOURCES
     src/frozenbubble.cpp
-    src/main.cpp
     src/menubutton.cpp
     src/mainmenu.cpp
     src/mainmenu_input.cpp
@@ -96,6 +95,11 @@ add_executable(frozen-bubble-sdl3
     ${NETWORK_CLIENT_SRC}
     src/logger.cpp
     src/platform.cpp
+)
+
+add_executable(frozen-bubble-sdl3
+    src/main.cpp
+    ${FROZEN_BUBBLE_CORE_SOURCES}
     ${RES_FILES}
 )
 
@@ -173,6 +177,30 @@ endif()
 include(CTest)
 if(BUILD_TESTING AND NOT EMSCRIPTEN AND NOT ANDROID)
     find_package(Python3 COMPONENTS Interpreter REQUIRED)
+
+    add_executable(bubblegame-rules-test
+        tests/bubblegame_rules_test.cpp
+        ${FROZEN_BUBBLE_CORE_SOURCES}
+    )
+    set_property(TARGET bubblegame-rules-test PROPERTY CXX_STANDARD 17)
+    set_property(TARGET bubblegame-rules-test PROPERTY CXX_EXTENSIONS OFF)
+    target_include_directories(bubblegame-rules-test PRIVATE src)
+    target_compile_definitions(bubblegame-rules-test PRIVATE
+        FROZEN_BUBBLE_TEST_ACCESS
+        DATA_DIR="${ASSET_PATH}"
+        APP_VERSION="v${PROJECT_VERSION}"
+    )
+    target_link_libraries(bubblegame-rules-test PRIVATE
+        SDL3::SDL3
+        SDL3_image::SDL3_image
+        SDL3_mixer::SDL3_mixer
+        SDL3_ttf::SDL3_ttf
+        iniparser-static
+    )
+    if(WIN32 OR MINGW)
+        target_link_libraries(bubblegame-rules-test PRIVATE ws2_32)
+    endif()
+    add_test(NAME bubblegame-rules-test COMMAND bubblegame-rules-test)
 
     add_executable(netview-test
         tests/netview_test.cpp

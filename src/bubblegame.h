@@ -326,7 +326,7 @@ struct BubbleArray {
     int mFired = 0, mPopped = 0, mSent = 0, mRecv = 0, mKills = 0;
     // Array index of whoever last sent this player malus (-1 = never attacked this
     // round). Set at every real malus send site (network and local multiplayer);
-    // HandlePlayerLoss credits this player's attacker with a kill on death. Not
+    // ApplyPlayerLoss credits this player's attacker with a kill on death. Not
     // reset by who's currently ALIVE -- an attacker who has since died still gets
     // credit, matching "last attacker gets the kill" with no time limit.
     int lastAttackerIdx = -1;
@@ -473,6 +473,10 @@ public:
     // not treat the tap as "next round").
     bool HandleFinishedTap(float lx, float ly);
 private:
+#ifdef FROZEN_BUBBLE_TEST_ACCESS
+    friend struct BubbleGameTestAccess;
+#endif
+
     const SDL_Renderer *renderer = nullptr;
     SDL_Texture *background = nullptr, *pauseBackground = nullptr, *prePauseBackground = nullptr;
 
@@ -507,10 +511,13 @@ private:
 
     bool lowGfx = false, gameWon = false, gameLost = false, gameFinish = false, firstRenderDone = false, gameMpDone = false;
     bool gameMatchOver = false; // Victories limit reached - match is over, return to lobby
+    enum class RoundWinCause { Elimination, Clear, Departure, Remote };
+
     // True only when this round's win came from clearing the board (CheckGameState's
     // allClear() branch, or its network-derived equivalent) rather than from
-    // HandlePlayerLoss's elimination paths. Drives the clear-win banner/sound.
+    // an elimination path. Drives the clear-win banner/sound.
     bool wonByClearing = false;
+    int roundWinnerIdx = -1;
     bool roundStatsFinalized = false; // Per-round stats rolled into match totals (and 'S' broadcast) once per round
     int roundsPlayed = 0;       // Completed rounds this match (gates the lobby summary)
     bool waitingForOpponentNewGame = false; // Waiting for opponents to press key for new game
@@ -558,6 +565,10 @@ private:
     SetupSettings currentSettings;
     AudioMixer *audMixer = nullptr;
 
+    void PlaySFX(const char* id) {
+        if (audMixer != nullptr) audMixer->PlaySFX(id);
+    }
+
     TTFText inGameText, winsP1Text, winsP2Text, scoreText, comboText, finalScoreText, mpTrainText;
     TTFText clearWinText;    // "Board Cleared — <Name> Wins!" banner, shown when wonByClearing
     TTFText playerNameWinText[MAX_NET_PLAYERS];  // "PlayerName: WinCount" for each player (3-5 player mode)
@@ -604,7 +615,17 @@ private:
     void FinishInGameChat(bool sendMessage);
     int CountLivingPlayers();  // Count players still alive (original: living_players() at line 600)
     int CountLivingTeams();   // Count distinct teams with at least one alive player
-    void HandlePlayerLoss(BubbleArray &bArray);  // Handle player death and check win conditions
+    void ApplyPlayerLoss(BubbleArray& player);
+    void ResolveDangerZoneLosses();
+    void ResolveRoundOutcome(
+        int assertedWinnerIdx = -1,
+        RoundWinCause cause = RoundWinCause::Elimination,
+        bool sendNetworkFinish = false);
+    void CommitRoundWin(int winnerIdx, RoundWinCause cause, bool sendNetworkFinish);
+    void FinishRoundAsDraw();
+    bool HasDepartedPlayers() const;
+    int CountConnectedPlayers() const;
+    int CountConnectedTeams() const;
 
     void DoFrozenAnimation(BubbleArray &bArray, int &waitTime);
     void DoWinAnimation(BubbleArray &bArray, int &waitTime);

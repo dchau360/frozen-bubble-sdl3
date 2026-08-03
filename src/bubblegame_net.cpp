@@ -429,48 +429,11 @@ void BubbleGame::ProcessNetworkMessages() {
                         if (winnerPlayer >= 0 && winnerPlayer < currentSettings.playerCount) {
                             // Guard: only process the first 'F' per round (multiple clients may send it)
                             if (!gameFinish) {
-                                gameFinish = true;
-                                bubbleArrays[winnerPlayer].mpWinner = true;
-                                bubbleArrays[winnerPlayer].penguinSprite.PlayAnimation(10);
-
-                                // Every client already tracks a synced copy of every player's
-                                // board, so a clear win can be derived here without a protocol
-                                // change — the 'F' message itself doesn't say how the round was won.
-                                if (bubbleArrays[winnerPlayer].allClear()) {
-                                    wonByClearing = true;
-                                    audMixer->PlaySFX("applause");
-                                }
-
-                                if (winnerPlayer == 0) {
-                                    winsP1++;
-                                    SDL_Log("Win counter updated: We won! winsP1=%d", winsP1);
-                                } else {
-                                    winsP2++;
-                                    SDL_Log("Win counter updated: Opponent won! winsP2=%d", winsP2);
-                                }
-                                bubbleArrays[winnerPlayer].winCount++;
-                                // Every living teammate shares the win, matching the local
-                                // elimination-win handling in HandlePlayerLoss.
-                                if (currentSettings.teamMode) {
-                                    int winTeam = currentSettings.playerTeams[winnerPlayer];
-                                    for (int i = 0; i < currentSettings.playerCount; i++) {
-                                        if (i != winnerPlayer && bubbleArrays[i].playerState == BubbleArray::PlayerState::ALIVE
-                                            && currentSettings.playerTeams[i] == winTeam) {
-                                            bubbleArrays[i].mpWinner = true;
-                                            bubbleArrays[i].winCount++;
-                                        }
-                                    }
-                                }
-                                Update2PText();
-                                panelRct = {SCREEN_CENTER_X - 173, 480 - 289, 329, 159};
-
-                                // Check victories limit
-                                if (currentSettings.victoriesLimit > 0 &&
-                                    bubbleArrays[winnerPlayer].winCount >= currentSettings.victoriesLimit) {
-                                    gameMatchOver = true;
-                                    SDL_Log("Match over! Player %d reached %d victories",
-                                            winnerPlayer, currentSettings.victoriesLimit);
-                                }
+                                RoundWinCause cause =
+                                    currentSettings.clearMode && bubbleArrays[winnerPlayer].allClear()
+                                        ? RoundWinCause::Clear
+                                        : RoundWinCause::Remote;
+                                ResolveRoundOutcome(winnerPlayer, cause, false);
                             }
                         } else {
                             SDL_Log("ERROR: Could not identify winner from F message: '%s'", winnerNick.c_str());
@@ -511,7 +474,7 @@ void BubbleGame::ProcessNetworkMessages() {
                         inGameChatMessages.push_back(chatMsg);
                         if (inGameChatMessages.size() > 10)
                             inGameChatMessages.erase(inGameChatMessages.begin());
-                        audMixer->PlaySFX("chatted");
+                        PlaySFX("chatted");
                         break;
                     }
                     case 'l': {
@@ -562,7 +525,7 @@ void BubbleGame::ProcessNetworkMessages() {
                                         else winsP2++;
                                         bubbleArrays[w].winCount++;
                                         // Every living teammate shares the win, matching
-                                        // HandlePlayerLoss's elimination-win handling.
+                                        // ResolveRoundOutcome's elimination-win handling.
                                         if (currentSettings.teamMode) {
                                             int winTeam = currentSettings.playerTeams[w];
                                             for (int t = 0; t < currentSettings.playerCount; t++) {

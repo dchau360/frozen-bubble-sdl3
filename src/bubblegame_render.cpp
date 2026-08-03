@@ -996,39 +996,7 @@ void BubbleGame::Render() {
         // counter), so this every-frame sweep is the only way to catch a local player pushed into
         // the danger zone by incoming malus between their own shots.
         if (!gameFinish && currentSettings.playerCount >= 2) {
-            static int checkCounter = 0;
-            checkCounter++;
-            for (int i = 0; i < currentSettings.playerCount; i++) {
-                BubbleArray &checkArray = bubbleArrays[i];
-                // Check if player is alive AND has bubbles in danger zone (cy > 11 means row 12+)
-                bool inDanger = checkArray.bubbleOnDanger();
-                bool isAlive = (checkArray.playerState == BubbleArray::PlayerState::ALIVE);
-
-                // Edge-detect danger transitions for the >5-player auto view
-                // (ReRankNetView no-ops in every other mode).
-                if (inDanger != checkArray.wasInDanger) {
-                    checkArray.wasInDanger = inDanger;
-                    ReRankNetView();
-                }
-
-                // Log every 60 frames (once per second at 60fps) for debugging
-                if (checkCounter % 60 == 0 && i < 3) {
-                    SDL_Log("Player %d: alive=%d, inDanger=%d, lobbyId=%d",
-                            i, isAlive, inDanger, checkArray.lobbyPlayerId);
-                }
-
-                if (isAlive && inDanger) {
-                    SDL_Log("!!! Player %d hit danger zone!", i);
-                    // In network games only the local player's HUD (index 0) reflects here; in
-                    // local multiplayer every board is local so each losing player's HUD updates.
-                    if (!currentSettings.networkGame || i == 0) {
-                        panelRct = {SCREEN_CENTER_X - 173, 480 - 248, 345, 124};
-                        checkArray.curLaunchRct = {checkArray.curLaunchRct.x - 1, checkArray.curLaunchRct.y - 1, 34, 48};
-                    }
-                    checkArray.penguinSprite.PlayAnimation(11);
-                    HandlePlayerLoss(checkArray);
-                }
-            }
+            ResolveDangerZoneLosses();
         }
 
         if (gameFinish) {
@@ -1181,7 +1149,7 @@ void BubbleGame::RenderPaused() {
 
     if(!playedPause) {
         audMixer->PauseMusic();
-        audMixer->PlaySFX("pause");
+        PlaySFX("pause");
         playedPause = true;
         pauseFrame = 0;
 

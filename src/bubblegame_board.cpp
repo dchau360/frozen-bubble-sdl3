@@ -305,7 +305,7 @@ void BubbleGame::CheckPossibleDestroy(BubbleArray &bArray){
                 GetGroupedCount(bArray, &bubbleCount, i, j, &groupedCount);
                 if (groupedCount >= 2) {
                     SDL_Log("Match found: %d bubbles (chainReaction=%d)", groupedCount + 1, currentSettings.chainReaction);
-                    audMixer->PlaySFX("destroy_group");
+                    PlaySFX("destroy_group");
 
                     // Calculate score: 10 points per bubble (groupedCount+1 = total including activator), with chain multiplier
                     int baseScore = (groupedCount + 1) * 10;
@@ -537,7 +537,7 @@ void BubbleGame::DoFrozenAnimation(BubbleArray &bArray, int &waitTime){
             }
         }
         if (currentSettings.playerCount < 2) {
-            audMixer->PlaySFX("noh");
+            PlaySFX("noh");
             gameLost = true;
         }
         else bArray.mpDone = true;

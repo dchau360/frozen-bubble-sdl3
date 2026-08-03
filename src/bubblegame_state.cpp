@@ -399,7 +399,7 @@ void BubbleGame::ProcessMalusQueue(BubbleArray &bArray, int currentFrame) {
         }
     }
 
-    audMixer->PlaySFX("malus");
+    PlaySFX("malus");
 }
 
 void BubbleGame::SubmitScore(BubbleArray &bArray) {
@@ -452,196 +452,183 @@ int BubbleGame::CountLivingTeams() {
     return (int)aliveTeams.size();
 }
 
-// Handle player loss and check win conditions (original: sub lose() at line 1906-1968)
-void BubbleGame::HandlePlayerLoss(BubbleArray &bArray) {
-    SDL_Log("HandlePlayerLoss: player %d lost", bArray.playerAssigned);
+bool BubbleGame::HasDepartedPlayers() const {
+    for (int i = 0; i < currentSettings.playerCount; ++i) {
+        if (bubbleArrays[i].playerState == BubbleArray::PlayerState::LEFT)
+            return true;
+    }
+    return false;
+}
 
-    // Mark player as lost (original line 1926: $pdata{$player}{state} = 'lost')
-    bArray.playerState = BubbleArray::PlayerState::LOST;
+int BubbleGame::CountConnectedPlayers() const {
+    int connected = 0;
+    for (int i = 0; i < currentSettings.playerCount; ++i) {
+        if (bubbleArrays[i].playerState != BubbleArray::PlayerState::LEFT)
+            ++connected;
+    }
+    return connected;
+}
 
-    // Play lose sound
-    audMixer->PlaySFX("lose");
+int BubbleGame::CountConnectedTeams() const {
+    std::set<int> connectedTeams;
+    for (int i = 0; i < currentSettings.playerCount; ++i) {
+        if (bubbleArrays[i].playerState != BubbleArray::PlayerState::LEFT)
+            connectedTeams.insert(currentSettings.playerTeams[i]);
+    }
+    return static_cast<int>(connectedTeams.size());
+}
 
-    // Credit a kill to whoever last attacked this player (network and local
-    // multiplayer both set lastAttackerIdx at their real malus-send sites; -1
-    // means this player was never attacked, i.e. a self-inflicted overflow, so
-    // no kill is credited to anyone).
-    if (bArray.lastAttackerIdx >= 0 && bArray.lastAttackerIdx < currentSettings.playerCount) {
-        bubbleArrays[bArray.lastAttackerIdx].rKills++;
+void BubbleGame::ApplyPlayerLoss(BubbleArray& player) {
+    if (player.playerState != BubbleArray::PlayerState::ALIVE) return;
+
+    SDL_Log("ApplyPlayerLoss: player %d lost", player.playerAssigned);
+    player.playerState = BubbleArray::PlayerState::LOST;
+    player.penguinSprite.PlayAnimation(11);
+    PlaySFX("lose");
+
+    if (player.lastAttackerIdx >= 0 &&
+        player.lastAttackerIdx < currentSettings.playerCount) {
+        bubbleArrays[player.lastAttackerIdx].rKills++;
     }
 
-    // >5 royale: a dead target reverts targeting to random-per-attack (mirrors
-    // the 'l' handler's clear for departed targets), and the auto view re-ranks.
     if (currentSettings.networkGame && currentSettings.playerCount > 5 &&
-        sendMalusToOne == bArray.playerAssigned) {
+        sendMalusToOne == player.playerAssigned) {
         SetSendMalusToOne(-1);
     }
     ReRankNetView();
+}
 
-    if (currentSettings.networkGame && currentSettings.playerCount >= 2) {
-        // NOTE: Don't send death notification - in the original, each client independently
-        // detects deaths by checking synchronized bubble positions via 's' messages.
-        // The 'l' message means "left" (disconnected), not "lost" (died).
-        // Original: frozen-bubble lines 1925-1960
-        // Multiplayer network game
-        int livingCount = CountLivingPlayers();
-        SDL_Log("Living players: %d", livingCount);
-
-        bool roundOver = (livingCount == 1) ||
-                         (currentSettings.teamMode && livingCount > 0 && CountLivingTeams() == 1);
-
-        if (roundOver) {
-            // Find the winner (the last living player)
-            int winnerIdx = -1;
-            for (int i = 0; i < currentSettings.playerCount; i++) {
-                if (bubbleArrays[i].playerState == BubbleArray::PlayerState::ALIVE) {
-                    winnerIdx = i;
-                    break;
-                }
-            }
-
-            if (winnerIdx >= 0) {
-                // We have a winner! Game ends immediately (original lines 1933-1944)
-                SDL_Log("Winner found: player %d", winnerIdx);
-                bubbleArrays[winnerIdx].mpWinner = true;
-                bubbleArrays[winnerIdx].penguinSprite.PlayAnimation(10);
-                if (currentSettings.teamMode) {
-                    int winTeam = currentSettings.playerTeams[winnerIdx];
-                    for (int i = 0; i < currentSettings.playerCount; i++) {
-                        if (i != winnerIdx && bubbleArrays[i].playerState == BubbleArray::PlayerState::ALIVE
-                            && currentSettings.playerTeams[i] == winTeam)
-                            bubbleArrays[i].mpWinner = true;
-                    }
-                }
-
-                // Guard: only process once per round.
-                // Multiple clients independently detect the same winner and each send 'F'.
-                // The server relays each 'F' to the *other* players (not back to sender).
-                // So if we get here first (before receiving any 'F'), we count locally and
-                // the incoming 'F' from the other client is blocked by the !gameFinish guard
-                // in the 'F' handler. If 'F' somehow arrived first, gameFinish is already
-                // set and we skip the increment here.
-                if (!gameFinish) {
-                    gameFinish = true;
-
-                    if (winnerIdx == 0) {
-                        winsP1++;
-                    } else {
-                        winsP2++;
-                    }
-                    bubbleArrays[winnerIdx].winCount++;
-                    // Every living teammate shares the win, not just the specific array
-                    // that happened to trigger elimination detection — otherwise the
-                    // scoreboard only ticks up for whichever teammate was found first.
-                    if (currentSettings.teamMode) {
-                        int winTeam = currentSettings.playerTeams[winnerIdx];
-                        for (int i = 0; i < currentSettings.playerCount; i++) {
-                            if (i != winnerIdx && bubbleArrays[i].playerState == BubbleArray::PlayerState::ALIVE
-                                && currentSettings.playerTeams[i] == winTeam)
-                                bubbleArrays[i].winCount++;
-                        }
-                    }
-                    Update2PText();
-
-                    // Check victories limit
-                    if (currentSettings.victoriesLimit > 0 &&
-                        bubbleArrays[winnerIdx].winCount >= currentSettings.victoriesLimit) {
-                        gameMatchOver = true;
-                        SDL_Log("Match over! Player %d reached %d victories",
-                                winnerIdx, currentSettings.victoriesLimit);
-                    }
-
-                    // Send 'F' to notify other clients (original line 1943)
-                    NetworkClient* netClient = NetworkClient::Instance();
-                    if (netClient && netClient->IsConnected() && netClient->GetState() == IN_GAME && bubbleArrays[winnerIdx].playerState != BubbleArray::PlayerState::LEFT) {
-                        char msg[128];
-                        snprintf(msg, sizeof(msg), "F%s", bubbleArrays[winnerIdx].playerNickname.c_str());
-                        netClient->SendGameData(msg);
-                        SDL_Log("Sent win notification: %s", bubbleArrays[winnerIdx].playerNickname.c_str());
-                    }
-                }
-            }
-        } else if (livingCount == 0) {
-            // All players dead - draw game (no winner)
-            // Original handles this in the 'finished' state processing (line 2336, 2353)
-            SDL_Log("Draw game - all players are dead!");
-            gameFinish = true;
-            gameLost = true;  // Mark as lost (no winner)
-
-            // Don't send F message since there's no winner
-            // Each client will independently detect all players are dead
-        } else if (livingCount > 1) {
-            // More players still alive, game continues (original lines 1946-1950)
-            SDL_Log("Game continues, %d players still alive", livingCount);
+void BubbleGame::ResolveDangerZoneLosses() {
+    bool changed = false;
+    for (int i = 0; i < currentSettings.playerCount; ++i) {
+        BubbleArray& player = bubbleArrays[i];
+        if (!player.bubbleOnDanger() ||
+            player.playerState != BubbleArray::PlayerState::ALIVE) {
+            continue;
         }
-    } else if (currentSettings.playerCount == 2 && !currentSettings.networkGame) {
-        // Local 2-player game
-        int winnerIdx = bArray.playerAssigned == 0 ? 1 : 0;
-        gameFinish = true;
-        bubbleArrays[winnerIdx].mpWinner = true;
-        bubbleArrays[winnerIdx].penguinSprite.PlayAnimation(10);
 
-        if (winnerIdx == 0) winsP1++;
-        else winsP2++;
-        Update2PText();
-    } else if (currentSettings.playerCount >= 3 && !currentSettings.networkGame) {
-        // Local (controller-based) 3-4 player multiplayer: elimination-detection mirroring the
-        // networkGame branch above, minus the network broadcast. Without this branch, a local
-        // 3-4P round never actually finishes when reduced to one survivor.
-        int livingCount = CountLivingPlayers();
-        SDL_Log("Local multiplayer (%dP): living players: %d", currentSettings.playerCount, livingCount);
-
-        bool roundOver = (livingCount == 1) ||
-                         (currentSettings.teamMode && livingCount > 0 && CountLivingTeams() == 1);
-
-        if (roundOver) {
-            int winnerIdx = -1;
-            for (int i = 0; i < currentSettings.playerCount; i++) {
-                if (bubbleArrays[i].playerState == BubbleArray::PlayerState::ALIVE) {
-                    winnerIdx = i;
-                    break;
-                }
-            }
-
-            if (winnerIdx >= 0 && !gameFinish) {
-                SDL_Log("Local multiplayer winner found: player %d", winnerIdx);
-                gameFinish = true;
-                bubbleArrays[winnerIdx].mpWinner = true;
-                bubbleArrays[winnerIdx].penguinSprite.PlayAnimation(10);
-                bubbleArrays[winnerIdx].winCount++;
-                if (currentSettings.teamMode) {
-                    int winTeam = currentSettings.playerTeams[winnerIdx];
-                    for (int i = 0; i < currentSettings.playerCount; i++) {
-                        if (i != winnerIdx && bubbleArrays[i].playerState == BubbleArray::PlayerState::ALIVE
-                            && currentSettings.playerTeams[i] == winTeam) {
-                            bubbleArrays[i].mpWinner = true;
-                            // Every living teammate shares the win, not just the specific
-                            // array that happened to trigger elimination detection.
-                            bubbleArrays[i].winCount++;
-                        }
-                    }
-                }
-
-                if (currentSettings.victoriesLimit > 0 &&
-                    bubbleArrays[winnerIdx].winCount >= currentSettings.victoriesLimit) {
-                    gameMatchOver = true;
-                    SDL_Log("Match over! Player %d reached %d victories",
-                            winnerIdx, currentSettings.victoriesLimit);
-                }
-            }
-        } else if (livingCount == 0) {
-            // All players dead - draw game (no winner)
-            SDL_Log("Draw game - all local players are dead!");
-            gameFinish = true;
-            gameLost = true;
-        } else {
-            SDL_Log("Local multiplayer game continues, %d players still alive", livingCount);
+        SDL_Log("Player %d hit danger zone", i);
+        if (!currentSettings.networkGame || i == 0) {
+            panelRct = {SCREEN_CENTER_X - 173, 480 - 248, 345, 124};
+            player.curLaunchRct = {
+                player.curLaunchRct.x - 1, player.curLaunchRct.y - 1, 34, 48};
         }
-    } else if (currentSettings.playerCount == 1) {
-        // Single player: original line 1964 — $pdata{state} = "lost $player"
-        gameFinish = true;
-        gameLost = true;
+        ApplyPlayerLoss(player);
+        changed = true;
     }
+
+    if (changed) {
+        ResolveRoundOutcome(
+            -1, RoundWinCause::Elimination, currentSettings.networkGame);
+    }
+}
+
+void BubbleGame::ResolveRoundOutcome(int assertedWinnerIdx,
+                                     RoundWinCause cause,
+                                     bool sendNetworkFinish) {
+    if (gameFinish) {
+        // A later clear observation may enrich the presentation metadata, but
+        // no later observation may replace or re-credit a committed outcome.
+        if (assertedWinnerIdx >= 0)
+            CommitRoundWin(assertedWinnerIdx, cause, false);
+        return;
+    }
+
+    if (assertedWinnerIdx >= 0) {
+        CommitRoundWin(assertedWinnerIdx, cause, sendNetworkFinish);
+        return;
+    }
+
+    const int living = CountLivingPlayers();
+    if (living == 0) {
+        FinishRoundAsDraw();
+        return;
+    }
+
+    const bool onePlayer = living == 1;
+    const bool oneTeam = currentSettings.teamMode && CountLivingTeams() == 1;
+    if (!onePlayer && !oneTeam) return;
+
+    for (int i = 0; i < currentSettings.playerCount; ++i) {
+        if (bubbleArrays[i].playerState == BubbleArray::PlayerState::ALIVE) {
+            CommitRoundWin(i, cause, sendNetworkFinish);
+            return;
+        }
+    }
+}
+
+void BubbleGame::CommitRoundWin(int winnerIdx,
+                                RoundWinCause cause,
+                                bool sendNetworkFinish) {
+    if (gameFinish) {
+        if (roundWinnerIdx == winnerIdx && cause == RoundWinCause::Clear)
+            wonByClearing = true;
+        return;
+    }
+
+    gameFinish = true;
+    roundWinnerIdx = winnerIdx;
+    wonByClearing = cause == RoundWinCause::Clear;
+    panelRct = {SCREEN_CENTER_X - 173, 480 - 289, 329, 159};
+
+    if (cause == RoundWinCause::Clear) {
+        PlaySFX("lose");
+        PlaySFX("applause");
+    }
+
+    std::vector<int> winners;
+    if (currentSettings.teamMode) {
+        const int winningTeam = currentSettings.playerTeams[winnerIdx];
+        for (int i = 0; i < currentSettings.playerCount; ++i) {
+            if (bubbleArrays[i].playerState == BubbleArray::PlayerState::ALIVE &&
+                currentSettings.playerTeams[i] == winningTeam) {
+                winners.push_back(i);
+            }
+        }
+    } else {
+        winners.push_back(winnerIdx);
+    }
+
+    for (int idx : winners) {
+        BubbleArray& winner = bubbleArrays[idx];
+        winner.mpWinner = true;
+        winner.penguinSprite.PlayAnimation(10);
+        winner.winCount++;
+    }
+
+    if (winnerIdx == 0) winsP1++;
+    else winsP2++;
+    Update2PText();
+    UpdatePlayerNameWinText();
+
+    if (currentSettings.victoriesLimit > 0) {
+        for (int idx : winners) {
+            if (bubbleArrays[idx].winCount >= currentSettings.victoriesLimit) {
+                gameMatchOver = true;
+                SDL_Log("Match over! Player %d reached %d victories",
+                        idx, currentSettings.victoriesLimit);
+                break;
+            }
+        }
+    }
+
+    if (sendNetworkFinish &&
+        bubbleArrays[winnerIdx].playerState != BubbleArray::PlayerState::LEFT) {
+        NetworkClient* netClient = NetworkClient::Instance();
+        if (netClient && netClient->IsConnected() && netClient->GetState() == IN_GAME) {
+            std::string finishMessage = "F" + bubbleArrays[winnerIdx].playerNickname;
+            netClient->SendGameData(finishMessage.c_str());
+            SDL_Log("Sent win notification: %s",
+                    bubbleArrays[winnerIdx].playerNickname.c_str());
+        }
+    }
+}
+
+void BubbleGame::FinishRoundAsDraw() {
+    SDL_Log("Draw game - all players are dead!");
+    gameFinish = true;
+    gameLost = true;
+    roundWinnerIdx = -1;
 }
 
 void BubbleGame::CheckGameState(BubbleArray &bArray, bool countForRoot) {
@@ -660,16 +647,17 @@ void BubbleGame::CheckGameState(BubbleArray &bArray, bool countForRoot) {
                 bArray.numSeparators++;
                 bArray.ExpandOffset(0, 28);
                 bArray.compressorRct.y += 28;
-                audMixer->PlaySFX("newroot_solo");
+                PlaySFX("newroot_solo");
             }
             else {
                 ExpandNewLane(bArray);
                 bArray.turnsToCompress = 12;
-                audMixer->PlaySFX("newroot");
+                PlaySFX("newroot");
             }
         }
     }
-    if (bArray.allClear()) {
+    if (bArray.allClear() &&
+        (currentSettings.playerCount < 2 || currentSettings.clearMode)) {
         // Award bonus for clearing the level!
         if (currentSettings.playerCount < 2) {
             int clearBonus = 1000;
@@ -679,58 +667,17 @@ void BubbleGame::CheckGameState(BubbleArray &bArray, bool countForRoot) {
             SubmitScore(bArray);
         }
 
-        gameFinish = true;
-        if (currentSettings.playerCount < 2) gameWon = true;
-        else {
-            audMixer->PlaySFX("lose");
-            audMixer->PlaySFX("applause");
-            bArray.mpWinner = true;
-            wonByClearing = true;
-            // Every living teammate shares the win, matching the elimination-win paths'
-            // team handling — otherwise a teammate's scoreboard entry never moves when
-            // their partner is the one who happens to clear the board.
-            if (currentSettings.teamMode) {
-                int winTeam = currentSettings.playerTeams[bArray.playerAssigned];
-                for (int i = 0; i < currentSettings.playerCount; i++) {
-                    if (i != bArray.playerAssigned && bubbleArrays[i].playerState == BubbleArray::PlayerState::ALIVE
-                        && currentSettings.playerTeams[i] == winTeam) {
-                        bubbleArrays[i].mpWinner = true;
-                        bubbleArrays[i].winCount++;
-                    }
-                }
-            }
-
-            // In network games, only local player (array 0) processes wins
-            if (currentSettings.networkGame && bArray.playerAssigned == 0) {
-                // Local player cleared all bubbles - we won!
-                // Count locally: server does NOT relay our own 'F' back to us.
-                winsP1++;
-                bArray.winCount++;
-                Update2PText();
-
-                if (currentSettings.victoriesLimit > 0 &&
-                    bArray.winCount >= currentSettings.victoriesLimit) {
-                    gameMatchOver = true;
-                    SDL_Log("Match over! Local player reached %d victories",
-                            currentSettings.victoriesLimit);
-                }
-
-                // Send 'F' to inform opponents (original line 1943)
-                NetworkClient* netClient = NetworkClient::Instance();
-                if (netClient && netClient->IsConnected() && netClient->GetState() == IN_GAME) {
-                    std::string fMsg = "F" + netClient->GetPlayerNick();
-                    netClient->SendGameData(fMsg.c_str());
-                    SDL_Log("Sent win notification: F%s", netClient->GetPlayerNick().c_str());
-                }
-            } else if (!currentSettings.networkGame) {
-                // Non-network multiplayer (local 2P)
-                if (bArray.playerAssigned == 0) winsP1++;
-                else winsP2++;
-                Update2PText();
-            }
+        if (currentSettings.playerCount < 2) {
+            gameFinish = true;
+            gameWon = true;
+            panelRct = {SCREEN_CENTER_X - 173, 480 - 289, 329, 159};
+            bArray.penguinSprite.PlayAnimation(10);
+        } else {
+            ResolveRoundOutcome(
+                bArray.playerAssigned,
+                RoundWinCause::Clear,
+                currentSettings.networkGame && bArray.playerAssigned == 0);
         }
-        panelRct = {SCREEN_CENTER_X - 173, 480 - 289, 329, 159};
-        bArray.penguinSprite.PlayAnimation(10);
     }
     // Check if ANY player hit the danger zone (original: verify_if_end() at line 1970-1975)
     // The original runs this sweep every frame over ALL players regardless of network vs.
@@ -738,27 +685,16 @@ void BubbleGame::CheckGameState(BubbleArray &bArray, bool countForRoot) {
     // otherwise a local player pushed into the danger zone purely by incoming malus (rather
     // than their own shot) wouldn't be flagged lost until they next fired themselves.
     if (currentSettings.playerCount >= 2) {
-        // Check all players for danger zone (original: iter_players with cy > 11 check)
-        for (int i = 0; i < currentSettings.playerCount; i++) {
-            BubbleArray &checkArray = bubbleArrays[i];
-            if (checkArray.bubbleOnDanger() && checkArray.playerState == BubbleArray::PlayerState::ALIVE) {
-                if (!currentSettings.networkGame || i == 0) {
-                    // Local player lost (network games only show this HUD cue for the local
-                    // player; local multiplayer shows it for whichever board actually lost)
-                    panelRct = {SCREEN_CENTER_X - 173, 480 - 248, 345, 124};
-                    checkArray.curLaunchRct = {checkArray.curLaunchRct.x - 1, checkArray.curLaunchRct.y - 1, 34, 48};
-                }
-                checkArray.penguinSprite.PlayAnimation(11);
-                HandlePlayerLoss(checkArray);
-            }
-        }
+        ResolveDangerZoneLosses();
     } else {
         // Single player - only check the current (only) player
         if (bArray.bubbleOnDanger() && bArray.playerState == BubbleArray::PlayerState::ALIVE) {
             panelRct = {SCREEN_CENTER_X - 173, 480 - 248, 345, 124};
             bArray.curLaunchRct = {bArray.curLaunchRct.x - 1, bArray.curLaunchRct.y - 1, 34, 48};
-            bArray.penguinSprite.PlayAnimation(11);
-            HandlePlayerLoss(bArray);
+            ApplyPlayerLoss(bArray);
+            gameFinish = true;
+            gameLost = true;
+            roundWinnerIdx = -1;
         }
     }
 }

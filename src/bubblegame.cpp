@@ -377,6 +377,7 @@ void BubbleGame::NewGame(SetupSettings setup) {
     // Reset game state flags
     gameFinish = gameWon = gameLost = gameMatchOver = false;
     wonByClearing = false;
+    roundWinnerIdx = -1;
     gameMpDone = false;
     sendMalusToOne = -1;
     attackingMe.clear();
@@ -1046,6 +1047,7 @@ void BubbleGame::ReloadGame(int level) {
 
     gameFinish = gameWon = gameLost = gameMatchOver = false;
     wonByClearing = false;
+    roundWinnerIdx = -1;
     gameMpDone = false;
     sendMalusToOne = -1;
     attackingMe.clear();
@@ -1334,7 +1336,7 @@ void BubbleGame::CycleNetViewPage() {
         netViewPage++;
         ApplyNetViewPage();
     }
-    audMixer->PlaySFX("menu_change");
+    PlaySFX("menu_change");
 }
 
 void BubbleGame::ApplyNetViewAuto() {
@@ -1394,4 +1396,3 @@ void BubbleGame::QuitToTitle() {
     }
     firstRenderDone = false;
 }
-

@@ -36,7 +36,7 @@
 #include "bubblegame_internal.h"
 
 void BubbleGame::LaunchBubble(BubbleArray &bArray) {
-    audMixer->PlaySFX("launch");
+    PlaySFX("launch");
     SDL_Log("Launching bubble at angle: %.4f radians (%.2f degrees from center), lowGfx=%d, cos=%.4f",
             bArray.shooterSprite.angle,
             (bArray.shooterSprite.angle - PI/2.0f) * 180.0f / PI,
@@ -158,7 +158,7 @@ void BubbleGame::UpdatePenguin(BubbleArray &bArray) {
         if (isClassicCampaign) {
             if (bArray.hurryTimer >= TIME_HURRY_WARN) {
                 if (bArray.warnTimer <= HURRY_WARN_FC / 2){
-                    if(bArray.warnTimer == 0) audMixer->PlaySFX("hurry");
+                    if(bArray.warnTimer == 0) PlaySFX("hurry");
                     { SDL_FRect fr = ToFRect(bArray.hurryRct); SDL_RenderTexture(const_cast<SDL_Renderer*>(renderer), bArray.hurryTexture, nullptr, &fr); }
                 }
                 bArray.warnTimer++;
@@ -173,7 +173,7 @@ void BubbleGame::UpdatePenguin(BubbleArray &bArray) {
         else {
             if (bArray.hurryTimer >= TIME_HURRY_WARN_MP) {
                 if (bArray.warnTimer <= HURRY_WARN_MP_FC / 2){
-                    if(bArray.warnTimer == 0) audMixer->PlaySFX("hurry");
+                    if(bArray.warnTimer == 0) PlaySFX("hurry");
                     { SDL_FRect fr = ToFRect(bArray.hurryRct); SDL_RenderTexture(const_cast<SDL_Renderer*>(renderer), bArray.hurryTexture, nullptr, &fr); }
                 }
                 bArray.warnTimer++;
@@ -475,7 +475,7 @@ void BubbleGame::UpdateSingleBubbles(int /*id*/) {
                     sBubble.bubbleId, sBubble.chainRow, sBubble.chainCol);
             bArray->PlacePlayerBubble(sBubble.bubbleId, sBubble.chainRow, sBubble.chainCol);
             bArray->newShoot = true;
-            audMixer->PlaySFX("stick");
+            PlaySFX("stick");
             bArray->stickAnimActive = true; bArray->stickAnimFrame = 0; bArray->stickAnimSlowdown = 0;
             bArray->stickAnimPos = {(int)sBubble.pos.x, (int)sBubble.pos.y};
             sBubble.shouldClear = true; // Now clear it
@@ -510,7 +510,7 @@ void BubbleGame::UpdateSingleBubbles(int /*id*/) {
                 launchArray->mpStickPending = false;  // Clear flag (original line 2191)
 
                 sBubble.shouldClear = true;
-                audMixer->PlaySFX("stick");
+                PlaySFX("stick");
                 launchArray->stickAnimActive = true; launchArray->stickAnimFrame = 0; launchArray->stickAnimSlowdown = 0;
                 launchArray->stickAnimPos = {(int)sBubble.pos.x, (int)sBubble.pos.y};
                 CheckPossibleDestroy(*launchArray);
@@ -541,7 +541,7 @@ void BubbleGame::UpdateSingleBubbles(int /*id*/) {
                 }
                 bArray->PlacePlayerBubble(sBubble.bubbleId, row, col);
                 bArray->newShoot = true;
-                audMixer->PlaySFX("stick");
+                PlaySFX("stick");
                 bArray->stickAnimActive = true; bArray->stickAnimFrame = 0; bArray->stickAnimSlowdown = 0;
                 bArray->stickAnimPos = {(int)sBubble.pos.x, (int)sBubble.pos.y};
                 sBubble.shouldClear = true;
@@ -578,7 +578,7 @@ void BubbleGame::UpdateSingleBubbles(int /*id*/) {
 
                         bArray->PlacePlayerBubble(sBubble.bubbleId, row, col);
                         bArray->newShoot = true;
-                        audMixer->PlaySFX("stick");
+                        PlaySFX("stick");
                         bArray->stickAnimActive = true; bArray->stickAnimFrame = 0; bArray->stickAnimSlowdown = 0;
                         bArray->stickAnimPos = {(int)sBubble.pos.x, (int)sBubble.pos.y};
                         sBubble.shouldClear = true;
