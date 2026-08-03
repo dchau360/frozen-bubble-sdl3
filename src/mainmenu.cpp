@@ -20,6 +20,7 @@
 #include "mainmenu.h"
 #include "audiomixer.h"
 #include "frozenbubble.h"
+#include "localmultiplayer_settings.h"
 #include "transitionmanager.h"
 #include "networkclient.h"
 #include "netteams.h"
@@ -299,7 +300,7 @@ void restartOverlook(SDL_Surface *overlookSfc, int &overlookIndex){
 
 
 void MainMenu::press() {
-    if (showingOptPanel || showing2PPanel || showingLocalMPPanel || showingKeysPanel || showingNetSetupPanel || showingLevelPanel) return;
+    if (showingOptPanel || showingLocalMPPanel || showingKeysPanel || showingNetSetupPanel || showingLevelPanel) return;
     AudioMixer::Instance()->PlaySFX("menu_selected");
 
     if (showingSPPanel) {
@@ -343,7 +344,7 @@ void MainMenu::press() {
 
 void MainMenu::down()
 {
-    if (showingOptPanel || showing2PPanel || showingLocalMPPanel || showingKeysPanel || showingNetSetupPanel || showingLevelPanel) return;
+    if (showingOptPanel || showingLocalMPPanel || showingKeysPanel || showingNetSetupPanel || showingLevelPanel) return;
     AudioMixer::Instance()->PlaySFX("menu_change");
 
     if (showingSPPanel) {
@@ -366,7 +367,7 @@ void MainMenu::down()
 
 void MainMenu::up()
 {
-    if (showingOptPanel || showing2PPanel || showingLocalMPPanel || showingKeysPanel || showingNetSetupPanel || showingLevelPanel) return;
+    if (showingOptPanel || showingLocalMPPanel || showingKeysPanel || showingNetSetupPanel || showingLevelPanel) return;
     AudioMixer::Instance()->PlaySFX("menu_change");
 
     if (showingSPPanel) {
@@ -521,20 +522,11 @@ void MainMenu::SetupNewGame(int mode) {
             // Classic campaign ("Play All Levels") always has chain reaction off,
             // per bin/frozen-bubble ~3327 ($chainreaction = 0 unless level is
             // 'random' or 'mp_train'). `chainReaction` is a scratch member written
-            // by other modes' own Y/N prompts (2P setup, Random Levels, MP
+            // by other modes' own Y/N prompts (Random Levels, MP
             // Training, Network); this path shows no such prompt, so it must not
             // read their leftover value.
             FrozenBubble::Instance()->bubbleGame()->NewGame({false, 1, false});
             break;
-        case 2: {
-            SetupSettings ns2p;
-            ns2p.chainReaction = chainReaction;
-            ns2p.playerCount = 2;
-            ns2p.randomLevels = true;
-            for (int i = 0; i < 5; i++) ns2p.playerColors[i] = playerColorCounts[i];
-            FrozenBubble::Instance()->bubbleGame()->NewGame(ns2p);
-            break;
-        }
         case 3:
             FrozenBubble::Instance()->bubbleGame()->NewGame({chainReaction, 1, false, true});
             break;
@@ -603,21 +595,20 @@ void MainMenu::SetupNewGame(int mode) {
             FrozenBubble::Instance()->bubbleGame()->NewGame({chainReaction, 1, false, true, false, 1, true});
             break;
         case 7: { // Local multiplayer (controller-based, 2-4 players)
-            SetupSettings ns7;
-            ns7.chainReaction = localMPCR;
-            ns7.playerCount = localMPPlayerCount;
-            ns7.randomLevels = true;
-            ns7.localMultiplayer = true;
-            ns7.clearMode = localMPClearMode;
-            ns7.disableMalus = localMPDisableMalus;
-            ns7.teamMode = localMPTeamMode;
+            LocalMultiplayerOptions options;
+            options.playerCount = localMPPlayerCount;
+            options.chainReaction = localMPCR;
+            options.noCompression = localMPNoCompress;
+            options.clearMode = localMPClearMode;
+            options.disableMalus = localMPDisableMalus;
+            options.teamMode = localMPTeamMode;
+            options.victoriesIndex = localMPVictoriesIndex;
             for (int i = 0; i < 5; i++) {
-                ns7.playerTeams[i] = localMPTeamMode ? (i % 2) + 1 : i + 1;
-                ns7.playerColors[i] = playerColorCounts[i];
-                ns7.disableCompression[i] = localMPNoCompress;
-                ns7.aimGuide[i] = localMPAimGuide[i];
+                options.colors[i] = playerColorCounts[i];
+                options.aimGuide[i] = localMPAimGuide[i];
             }
-            FrozenBubble::Instance()->bubbleGame()->NewGame(ns7);
+            FrozenBubble::Instance()->bubbleGame()->NewGame(
+                BuildLocalMultiplayerSettings(options));
             break;
         }
         default:
@@ -633,7 +624,6 @@ void MainMenu::ReturnToMenu() {
     candyIndex = 0;
     bannerCurpos = 0;
     showingSPPanel = false;
-    showing2PPanel = false;
     showingLocalMPPanel = false;
     showingOptPanel = false;
     showingLevelPanel = false;
@@ -691,4 +681,3 @@ void MainMenu::ReturnToNetLobby() {
     SDL_SendAndroidMessage(0x8001, 0); // show lobby ad on return from game
 #endif
 }
-

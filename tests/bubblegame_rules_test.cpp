@@ -2,6 +2,7 @@
 
 #include "bubblegame.h"
 #include "bubblegame_internal.h"
+#include "localmultiplayer_settings.h"
 #include "platform.h"
 
 #include <cstdio>
@@ -89,6 +90,56 @@ int main() {
 
     {
         BubbleGame game(renderer);
+
+        LocalMultiplayerOptions options;
+        options.playerCount = 4;
+        options.chainReaction = true;
+        options.victoriesIndex = 15;
+        options.clearMode = false;
+        options.disableMalus = true;
+        options.teamMode = true;
+        options.colors = {5, 6, 7, 8, 8};
+        options.aimGuide = {true, false, true, false, false};
+
+        SetupSettings built = BuildLocalMultiplayerSettings(options);
+        CHECK(built.localMultiplayer);
+        CHECK(built.playerCount == 4);
+        CHECK(built.victoriesLimit == 30);
+        CHECK(built.playerTeams[0] == 1 && built.playerTeams[1] == 2);
+        CHECK(built.playerColors[2] == 7);
+        CHECK(built.aimGuide[2]);
+
+        LocalMultiplayerOptions limited2P;
+        limited2P.playerCount = 2;
+        limited2P.victoriesIndex = 2;  // first to 2
+        BubbleGameTestAccess::reset(game, 2, false, false);
+        BubbleGameTestAccess::settings(game) =
+            BuildLocalMultiplayerSettings(limited2P);
+        BubbleGameTestAccess::player(game, 0).winCount = 1;
+        BubbleGameTestAccess::announce(game, 0, false);
+        CHECK(BubbleGameTestAccess::player(game, 0).winCount == 2);
+        CHECK(BubbleGameTestAccess::matchOver(game));
+
+        LocalMultiplayerOptions limited4P;
+        limited4P.playerCount = 4;
+        limited4P.victoriesIndex = 1;  // first to 1
+        BubbleGameTestAccess::reset(game, 4, false, false);
+        BubbleGameTestAccess::settings(game) =
+            BuildLocalMultiplayerSettings(limited4P);
+        BubbleGameTestAccess::announce(game, 3, false);
+        CHECK(BubbleGameTestAccess::player(game, 3).winCount == 1);
+        CHECK(BubbleGameTestAccess::matchOver(game));
+
+        LocalMultiplayerOptions unlimited;
+        unlimited.playerCount = 2;
+        unlimited.victoriesIndex = 0;
+        BubbleGameTestAccess::reset(game, 2, false, false);
+        BubbleGameTestAccess::settings(game) =
+            BuildLocalMultiplayerSettings(unlimited);
+        BubbleGameTestAccess::player(game, 0).winCount = 99;
+        BubbleGameTestAccess::announce(game, 0, false);
+        CHECK(BubbleGameTestAccess::player(game, 0).winCount == 100);
+        CHECK(!BubbleGameTestAccess::matchOver(game));
 
         BubbleGameTestAccess::reset(game, 2, false, false);
         BubbleGameTestAccess::check(game, 0);

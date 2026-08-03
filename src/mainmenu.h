@@ -61,7 +61,7 @@ public:
     bool IsAwaitingKeyBind() const { return showingKeysPanel && awaitKp; }
     bool IsTextEditActive() const { return networkFieldEditing; }
     bool HasAnyPanelOpen() const {
-        return showingKeysPanel || showingSPPanel || showing2PPanel || showingOptPanel
+        return showingKeysPanel || showingSPPanel || showingOptPanel
             || showingNetPanel || showingLevelPanel || showingLocalMPPanel || showingNetSetupPanel;
     }
     void SetupNewGame(int mode);
@@ -107,7 +107,6 @@ private:
     bool KeysPanelKey(SDL_Event *e);
     bool LobbyChatTypingKey(SDL_Event *e);
     bool LocalMPPanelKey(SDL_Event *e);
-    bool TwoPPanelKey(SDL_Event *e);
     void MenuUpKey();
     void MenuDownKey();
     void MenuLeftRightKey(SDL_Event *e);
@@ -129,7 +128,7 @@ private:
     SDL_Surface *overlookSfc = nullptr;
     SDL_Texture *idleSPButtons[SP_OPT];
     int activeSPIdx = 0, overlookIndex = 0;
-    bool showingSPPanel = false, showing2PPanel = false;
+    bool showingSPPanel = false;
     const struct spPanelEntry {
         std::string option;
         int pivot;
@@ -137,7 +136,6 @@ private:
     
     SDL_Rect voidPanelRct = {(640/2) - (341/2), (480/2) - (280/2), 341, 280};
     void SPPanelRender();
-    void TPPanelRender();
 
     //Options panel render
     bool showingOptPanel = false, awaitKp = false, runDelay = false;
@@ -253,20 +251,16 @@ private:
     bool chainReaction = false;
     int selectedMode;
 
-    // 2-player game setup menu
-    int twoPlayerMenuIndex = 0; // Currently selected menu item in 2P setup
-    bool twoPlayerCR = true; // Chain reaction for 2P game
-    int twoPlayerVictoriesIndex = 5; // Victories limit for 2P game (same as network)
-
     // Local multiplayer setup panel
     bool showingLocalMPPanel = false;
-    int localMPMenuIndex = 0;       // 0=players, 1=CR, 2=row collapse, 3=mode, 4=malus, 5=team mode, 6..6+N-1=aim guide per player, 6+N..6+2N-1=colors per player, 6+2N=start
-    int localMPPlayerCount = 2;     // 2-5 players
+    int localMPMenuIndex = 0;       // 0=players, 1=CR, 2=row collapse, 3=mode, 4=malus, 5=team mode, 6=victories, 7..7+N-1=aim guide per player, 7+N..7+2N-1=colors per player, 7+2N=start
+    int localMPPlayerCount = 2;     // 2-4 players
     bool localMPCR = true;          // Chain reaction enabled
     bool localMPNoCompress = false;  // Disable row compression for all players
     bool localMPClearMode = false;   // Clear Mode (win by clearing board; defaults compression+malus off)
     bool localMPDisableMalus = false; // Disable malus attacks
     bool localMPTeamMode = false;    // Team Mode (P1+P3 vs P2+P4, etc.)
+    int localMPVictoriesIndex = 5;   // Index into kVictoriesLimits
     // Snapshot taken when Clear Mode is switched on, restored when switching away
     // from it (see the matching netPreClear* fields above for why).
     bool localMPPreClearNoCompress = false;

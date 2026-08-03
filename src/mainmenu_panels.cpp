@@ -20,6 +20,7 @@
 #include "mainmenu.h"
 #include "audiomixer.h"
 #include "frozenbubble.h"
+#include "localmultiplayer_settings.h"
 #include "transitionmanager.h"
 #include "networkclient.h"
 #include "platform.h"
@@ -72,7 +73,6 @@ void MainMenu::Render(void) {
     BlinkRender();
     CandyRender();
     SPPanelRender();
-    TPPanelRender();
     LocalMPPanelRender();
     OptPanelRender();
     LevelPanelRender();
@@ -237,46 +237,6 @@ void MainMenu::SPPanelRender() {
 }
 
 
-void MainMenu::TPPanelRender() {
-    if (!showing2PPanel) return;
-
-    if (runDelay){
-        if (delayTime == 0) SetupNewGame(selectedMode);
-        else delayTime--;
-    }
-
-    { SDL_FRect fr = ToFRect(voidPanelRct); SDL_RenderTexture(const_cast<SDL_Renderer*>(renderer), voidPanelBG, nullptr, &fr); };
-
-    // Menu-based 2P setup like network lobby
-    const char* victoriesLimits[] = {"none (unlimited)", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "15", "20", "30", "50", "100"};
-
-    char pnltxt[512];
-    snprintf(pnltxt, sizeof(pnltxt),
-        "2-player game\n\n"
-        "%s Chain-reaction: %s\n"
-        "%s Victories limit: %s\n"
-        "%s Max colors P1: %d\n"
-        "%s Max colors P2: %d\n"
-        "%s Start game!\n\n\n"
-        "Use UP/DOWN to select\n"
-        "LEFT/RIGHT or ENTER to change\n"
-        "Press ESC to cancel",
-        twoPlayerMenuIndex == 0 ? ">" : " ",
-        twoPlayerCR ? "enabled" : "disabled",
-        twoPlayerMenuIndex == 1 ? ">" : " ",
-        victoriesLimits[twoPlayerVictoriesIndex],
-        twoPlayerMenuIndex == 2 ? ">" : " ",
-        playerColorCounts[0],
-        twoPlayerMenuIndex == 3 ? ">" : " ",
-        playerColorCounts[1],
-        twoPlayerMenuIndex == 4 ? ">" : " ");
-
-    panelText.UpdateText(const_cast<SDL_Renderer *>(renderer), pnltxt, 0);
-    panelText.UpdatePosition({(640/2) - (panelText.Coords()->w / 2), (480/2) - 120});
-    { SDL_FRect fr = ToFRect(*panelText.Coords()); SDL_RenderTexture(const_cast<SDL_Renderer*>(renderer), panelText.Texture(), nullptr, &fr); };
-}
-
-
 void MainMenu::LocalMPPanelRender() {
     if (!showingLocalMPPanel) return;
 
@@ -294,6 +254,14 @@ void MainMenu::LocalMPPanelRender() {
             connected, localMPPlayerCount);
     }
 
+    char victoriesText[32];
+    if (localMPVictoriesIndex == 0) {
+        snprintf(victoriesText, sizeof(victoriesText), "none (unlimited)");
+    } else {
+        snprintf(victoriesText, sizeof(victoriesText), "%d",
+            kVictoriesLimits[localMPVictoriesIndex]);
+    }
+
     // Exactly one blank line separates the header (title + optional warning)
     // from the settings list, whether or not the warning is shown.
     char pnltxt[1024];
@@ -306,7 +274,8 @@ void MainMenu::LocalMPPanelRender() {
         "%s Row collapse: %s\n"
         "%s Mode: %s\n"
         "%s Malus: %s\n"
-        "%s Team Mode: %s\n",
+        "%s Team Mode: %s\n"
+        "%s Victories limit: %s\n",
         warningText,
         localMPMenuIndex == 0 ? ">" : " ",
         localMPPlayerCount,
@@ -319,7 +288,9 @@ void MainMenu::LocalMPPanelRender() {
         localMPMenuIndex == 4 ? ">" : " ",
         localMPDisableMalus ? "disabled" : "enabled",
         localMPMenuIndex == 5 ? ">" : " ",
-        localMPTeamMode ? "ON (P1+P3 vs P2+P4)" : "OFF");
+        localMPTeamMode ? "ON (P1+P3 vs P2+P4)" : "OFF",
+        localMPMenuIndex == 6 ? ">" : " ",
+        victoriesText);
 
     // Per-player rows are collapsed onto one line each (instead of one line
     // per player) so the panel's height stays constant regardless of player
@@ -327,14 +298,14 @@ void MainMenu::LocalMPPanelRender() {
     // leading "> " marker, since a whole line can no longer stand for one item.
     pos += snprintf(pnltxt + pos, sizeof(pnltxt) - pos, "  Aim guide:");
     for (int pi = 0; pi < localMPPlayerCount && pi < 5; pi++) {
-        bool sel = localMPMenuIndex == 6 + pi;
+        bool sel = localMPMenuIndex == 7 + pi;
         pos += snprintf(pnltxt + pos, sizeof(pnltxt) - pos,
             sel ? " [P%d:%s]" : " P%d:%s",
             pi + 1, localMPAimGuide[pi] ? "on" : "off");
     }
     pos += snprintf(pnltxt + pos, sizeof(pnltxt) - pos, "\n  Max colors:");
     for (int pi = 0; pi < localMPPlayerCount && pi < 5; pi++) {
-        bool sel = localMPMenuIndex == 6 + localMPPlayerCount + pi;
+        bool sel = localMPMenuIndex == 7 + localMPPlayerCount + pi;
         pos += snprintf(pnltxt + pos, sizeof(pnltxt) - pos,
             sel ? " [P%d:%d]" : " P%d:%d",
             pi + 1, playerColorCounts[pi]);
@@ -345,7 +316,7 @@ void MainMenu::LocalMPPanelRender() {
         "Use UP/DOWN to select\n"
         "LEFT/RIGHT or ENTER to change\n"
         "Press ESC to cancel",
-        localMPMenuIndex == 6 + 2 * localMPPlayerCount ? ">" : " ");
+        localMPMenuIndex == 7 + 2 * localMPPlayerCount ? ">" : " ");
 
     panelText.UpdateText(const_cast<SDL_Renderer *>(renderer), pnltxt, 0);
 
@@ -582,4 +553,3 @@ void MainMenu::NetSetupPanelRender() {
     { SDL_FRect fr = ToFRect(voidPanelRct); SDL_RenderTexture(const_cast<SDL_Renderer*>(renderer), voidPanelBG, nullptr, &fr); };
     { SDL_FRect fr = ToFRect(*panelText.Coords()); SDL_RenderTexture(const_cast<SDL_Renderer*>(renderer), panelText.Texture(), nullptr, &fr); };
 }
-

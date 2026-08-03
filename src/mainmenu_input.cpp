@@ -21,6 +21,7 @@
 #include "netteams.h"
 #include "audiomixer.h"
 #include "frozenbubble.h"
+#include "localmultiplayer_settings.h"
 #include "transitionmanager.h"
 #include "networkclient.h"
 #include "platform.h"
@@ -137,8 +138,6 @@ void MainMenu::HandleInput(SDL_Event *e){
             if (LobbyChatTypingKey(e)) break;
 
             if (LocalMPPanelKey(e)) break;
-
-            if (TwoPPanelKey(e)) break;
 
             switch(e->key.key) {
                 case SDLK_UP:
@@ -626,8 +625,9 @@ bool MainMenu::LobbyChatTypingKey(SDL_Event *e) {
 bool MainMenu::LocalMPPanelKey(SDL_Event *e) {
             if (showingLocalMPPanel && !runDelay) {
                 // 0=Players, 1=CR, 2=Row collapse, 3=Mode, 4=Malus, 5=Team mode,
-                // 6..6+N-1=Aim guide per player, 6+N..6+2N-1=Colors per player, 6+2N=Start
-                int localMaxIdx = 6 + 2 * localMPPlayerCount;
+                // 6=Victories, 7..7+N-1=Aim guide per player,
+                // 7+N..7+2N-1=Colors per player, 7+2N=Start
+                int localMaxIdx = 7 + 2 * localMPPlayerCount;
                 if (e->key.key == SDLK_UP) {
                     localMPMenuIndex--;
                     if (localMPMenuIndex < 0) localMPMenuIndex = localMaxIdx;
@@ -673,12 +673,27 @@ bool MainMenu::LocalMPPanelKey(SDL_Event *e) {
                     } else if (localMPMenuIndex == 5) {
                         localMPTeamMode = !localMPTeamMode;
                         AudioMixer::Instance()->PlaySFX("menu_change");
-                    } else if (localMPMenuIndex >= 6 && localMPMenuIndex < 6 + localMPPlayerCount) {
-                        int pi = localMPMenuIndex - 6;
+                    } else if (localMPMenuIndex == 6) {
+                        if (e->key.key == SDLK_LEFT) {
+                            localMPVictoriesIndex--;
+                            if (localMPVictoriesIndex < 0) {
+                                localMPVictoriesIndex =
+                                    static_cast<int>(kVictoriesLimits.size()) - 1;
+                            }
+                        } else {
+                            localMPVictoriesIndex++;
+                            if (localMPVictoriesIndex >=
+                                static_cast<int>(kVictoriesLimits.size())) {
+                                localMPVictoriesIndex = 0;
+                            }
+                        }
+                        AudioMixer::Instance()->PlaySFX("menu_change");
+                    } else if (localMPMenuIndex >= 7 && localMPMenuIndex < 7 + localMPPlayerCount) {
+                        int pi = localMPMenuIndex - 7;
                         localMPAimGuide[pi] = !localMPAimGuide[pi];
                         AudioMixer::Instance()->PlaySFX("menu_change");
-                    } else if (localMPMenuIndex >= 6 + localMPPlayerCount && localMPMenuIndex < 6 + 2 * localMPPlayerCount) {
-                        int pi = localMPMenuIndex - 6 - localMPPlayerCount;
+                    } else if (localMPMenuIndex >= 7 + localMPPlayerCount && localMPMenuIndex < 7 + 2 * localMPPlayerCount) {
+                        int pi = localMPMenuIndex - 7 - localMPPlayerCount;
                         if (e->key.key == SDLK_LEFT) {
                             playerColorCounts[pi]--;
                             if (playerColorCounts[pi] < 5) playerColorCounts[pi] = 8;
@@ -719,18 +734,24 @@ bool MainMenu::LocalMPPanelKey(SDL_Event *e) {
                     } else if (localMPMenuIndex == 5) {
                         localMPTeamMode = !localMPTeamMode;
                         AudioMixer::Instance()->PlaySFX("menu_change");
-                    } else if (localMPMenuIndex >= 6 && localMPMenuIndex < 6 + localMPPlayerCount) {
-                        int pi = localMPMenuIndex - 6;
+                    } else if (localMPMenuIndex == 6) {
+                        localMPVictoriesIndex++;
+                        if (localMPVictoriesIndex >=
+                            static_cast<int>(kVictoriesLimits.size())) {
+                            localMPVictoriesIndex = 0;
+                        }
+                        AudioMixer::Instance()->PlaySFX("menu_change");
+                    } else if (localMPMenuIndex >= 7 && localMPMenuIndex < 7 + localMPPlayerCount) {
+                        int pi = localMPMenuIndex - 7;
                         localMPAimGuide[pi] = !localMPAimGuide[pi];
                         AudioMixer::Instance()->PlaySFX("menu_change");
-                    } else if (localMPMenuIndex >= 6 + localMPPlayerCount && localMPMenuIndex < 6 + 2 * localMPPlayerCount) {
-                        int pi = localMPMenuIndex - 6 - localMPPlayerCount;
+                    } else if (localMPMenuIndex >= 7 + localMPPlayerCount && localMPMenuIndex < 7 + 2 * localMPPlayerCount) {
+                        int pi = localMPMenuIndex - 7 - localMPPlayerCount;
                         playerColorCounts[pi]++;
                         if (playerColorCounts[pi] > 8) playerColorCounts[pi] = 5;
                         AudioMixer::Instance()->PlaySFX("menu_change");
                     } else if (localMPMenuIndex == localMaxIdx) {
                         // Start game!
-                        chainReaction = localMPCR;
                         AudioMixer::Instance()->PlaySFX("menu_selected");
                         delayTime = 60;
                         runDelay = true;
@@ -739,70 +760,6 @@ bool MainMenu::LocalMPPanelKey(SDL_Event *e) {
                 } else if (e->key.key == SDLK_ESCAPE) {
                     showingLocalMPPanel = false;
                     AudioMixer::Instance()->PlaySFX("menu_change");
-                    return true;
-                }
-            }
-    return false;
-}
-
-bool MainMenu::TwoPPanelKey(SDL_Event *e) {
-            if (showing2PPanel && !awaitKp) {
-                // 0=CR, 1=Victories, 2=Colors P1, 3=Colors P2, 4=Start
-                if (e->key.key == SDLK_UP) {
-                    twoPlayerMenuIndex--;
-                    if (twoPlayerMenuIndex < 0) twoPlayerMenuIndex = 4;
-                    AudioMixer::Instance()->PlaySFX("menu_change");
-                    return true;
-                } else if (e->key.key == SDLK_DOWN) {
-                    twoPlayerMenuIndex++;
-                    if (twoPlayerMenuIndex > 4) twoPlayerMenuIndex = 0;
-                    AudioMixer::Instance()->PlaySFX("menu_change");
-                    return true;
-                } else if (e->key.key == SDLK_LEFT || e->key.key == SDLK_RIGHT) {
-                    if (twoPlayerMenuIndex == 0) {
-                        twoPlayerCR = !twoPlayerCR;
-                        AudioMixer::Instance()->PlaySFX("menu_change");
-                    } else if (twoPlayerMenuIndex == 1) {
-                        if (e->key.key == SDLK_LEFT) {
-                            twoPlayerVictoriesIndex--;
-                            if (twoPlayerVictoriesIndex < 0) twoPlayerVictoriesIndex = 17;
-                        } else {
-                            twoPlayerVictoriesIndex++;
-                            if (twoPlayerVictoriesIndex > 17) twoPlayerVictoriesIndex = 0;
-                        }
-                        AudioMixer::Instance()->PlaySFX("menu_change");
-                    } else if (twoPlayerMenuIndex == 2 || twoPlayerMenuIndex == 3) {
-                        int pi = twoPlayerMenuIndex - 2;
-                        if (e->key.key == SDLK_LEFT) {
-                            playerColorCounts[pi]--;
-                            if (playerColorCounts[pi] < 5) playerColorCounts[pi] = 8;
-                        } else {
-                            playerColorCounts[pi]++;
-                            if (playerColorCounts[pi] > 8) playerColorCounts[pi] = 5;
-                        }
-                        AudioMixer::Instance()->PlaySFX("menu_change");
-                    }
-                    return true;
-                } else if (e->key.key == SDLK_RETURN) {
-                    if (twoPlayerMenuIndex == 0) {
-                        twoPlayerCR = !twoPlayerCR;
-                        AudioMixer::Instance()->PlaySFX("menu_change");
-                    } else if (twoPlayerMenuIndex == 1) {
-                        twoPlayerVictoriesIndex++;
-                        if (twoPlayerVictoriesIndex > 17) twoPlayerVictoriesIndex = 0;
-                        AudioMixer::Instance()->PlaySFX("menu_change");
-                    } else if (twoPlayerMenuIndex == 2 || twoPlayerMenuIndex == 3) {
-                        int pi = twoPlayerMenuIndex - 2;
-                        playerColorCounts[pi]++;
-                        if (playerColorCounts[pi] > 8) playerColorCounts[pi] = 5;
-                        AudioMixer::Instance()->PlaySFX("menu_change");
-                    } else if (twoPlayerMenuIndex == 4) {
-                        // Start game!
-                        chainReaction = twoPlayerCR;
-                        AudioMixer::Instance()->PlaySFX("menu_selected");
-                        delayTime = 60;
-                        runDelay = true;
-                    }
                     return true;
                 }
             }
@@ -1616,11 +1573,6 @@ void MainMenu::MenuEscapeKey() {
                         AudioMixer::Instance()->PlaySFX("cancel");
                         showingKeysPanel = false;
                         GameSettings::Instance()->SaveKeys();
-                        return;
-                    }
-                    if (showing2PPanel) {
-                        AudioMixer::Instance()->PlaySFX("cancel");
-                        showing2PPanel = false;
                         return;
                     }
                     if (showingLocalMPPanel) {

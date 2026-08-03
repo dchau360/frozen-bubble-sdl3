@@ -75,6 +75,7 @@ set(FROZEN_BUBBLE_CORE_SOURCES
     src/mainmenu_netpanel.cpp
     src/mainmenu_panels.cpp
     src/mainmenu_server.cpp
+    src/localmultiplayer_settings.cpp
     src/gamesettings.cpp
     src/audiomixer.cpp
     src/shaderstuff.cpp
