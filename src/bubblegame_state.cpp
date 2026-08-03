@@ -478,6 +478,28 @@ int BubbleGame::CountConnectedTeams() const {
     return static_cast<int>(connectedTeams.size());
 }
 
+void BubbleGame::HandlePlayerDeparture(int playerIdx) {
+    if (playerIdx < 0 || playerIdx >= currentSettings.playerCount) return;
+
+    BubbleArray& player = bubbleArrays[playerIdx];
+    if (player.playerState == BubbleArray::PlayerState::LEFT) return;
+
+    SDL_Log("Marking player array %d (lobbyId=%d) as LEFT (disconnected)",
+            playerIdx, player.lobbyPlayerId);
+    player.playerState = BubbleArray::PlayerState::LEFT;
+    player.penguinSprite.PlayAnimation(11);
+
+    if (sendMalusToOne == playerIdx) SetSendMalusToOne(-1);
+    attackingMe.erase(std::remove(attackingMe.begin(), attackingMe.end(), playerIdx),
+                      attackingMe.end());
+    playerTargeting[playerIdx] = -1;
+
+    if (connectedPlayerCount > 0) --connectedPlayerCount;
+    SDL_Log("connectedPlayerCount now %d", connectedPlayerCount);
+    ReRankNetView();
+    ResolveRoundOutcome(-1, RoundWinCause::Departure, false);
+}
+
 void BubbleGame::ApplyPlayerLoss(BubbleArray& player) {
     if (player.playerState != BubbleArray::PlayerState::ALIVE) return;
 
@@ -589,19 +611,28 @@ void BubbleGame::CommitRoundWin(int winnerIdx,
         winners.push_back(winnerIdx);
     }
 
+    const bool abandonedRound =
+        !currentSettings.continueWhenPlayersLeave && HasDepartedPlayers();
+    const bool insufficientOpponents = currentSettings.teamMode
+        ? CountConnectedTeams() < 2
+        : CountConnectedPlayers() < 2;
+
     for (int idx : winners) {
         BubbleArray& winner = bubbleArrays[idx];
         winner.mpWinner = true;
         winner.penguinSprite.PlayAnimation(10);
-        winner.winCount++;
+        if (!abandonedRound) winner.winCount++;
     }
 
-    if (winnerIdx == 0) winsP1++;
-    else winsP2++;
+    if (!abandonedRound) {
+        if (winnerIdx == 0) winsP1++;
+        else winsP2++;
+    }
     Update2PText();
     UpdatePlayerNameWinText();
 
-    if (currentSettings.victoriesLimit > 0) {
+    gameMatchOver = abandonedRound || insufficientOpponents;
+    if (!abandonedRound && currentSettings.victoriesLimit > 0) {
         for (int idx : winners) {
             if (bubbleArrays[idx].winCount >= currentSettings.victoriesLimit) {
                 gameMatchOver = true;

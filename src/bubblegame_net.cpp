@@ -481,10 +481,6 @@ void BubbleGame::ProcessNetworkMessages() {
                         // Player-left notification: a remote player disconnected mid-game
                         SDL_Log("Received player-left ('l') from lobby player ID %d", senderId);
 
-                        // Track that one fewer player is connected (for new-game sync threshold)
-                        if (connectedPlayerCount > 1) connectedPlayerCount--;
-                        SDL_Log("connectedPlayerCount now %d", connectedPlayerCount);
-
                         // Find which player array this senderId corresponds to
                         int playerIdx = -1;
                         for (int i = 0; i < currentSettings.playerCount; i++) {
@@ -495,52 +491,7 @@ void BubbleGame::ProcessNetworkMessages() {
                         }
 
                         if (playerIdx >= 0) {
-                            SDL_Log("Marking player array %d (lobbyId=%d) as LEFT (disconnected)", playerIdx, senderId);
-                            bubbleArrays[playerIdx].playerState = BubbleArray::PlayerState::LEFT;
-                            bubbleArrays[playerIdx].penguinSprite.PlayAnimation(11);
-                            ReRankNetView();  // departed board should leave the auto view
-
-                            // Clear targeting if targeted player died (original: set_sendmalustoone(undef) at line 1947)
-                            if (sendMalusToOne == playerIdx) {
-                                SetSendMalusToOne(-1);
-                            }
-                            // Remove from attackingMe if they were targeting us
-                            attackingMe.erase(std::remove(attackingMe.begin(), attackingMe.end(), playerIdx),
-                                              attackingMe.end());
-
-                            // Check if we have a winner now
-                            int livingCount = CountLivingPlayers();
-                            SDL_Log("After remote disconnect: %d players alive", livingCount);
-
-                            if (livingCount == 1) {
-                                // Find winner
-                                for (int w = 0; w < currentSettings.playerCount; w++) {
-                                    if (bubbleArrays[w].playerState == BubbleArray::PlayerState::ALIVE) {
-                                        SDL_Log("Winner found: player %d", w);
-                                        gameFinish = true;
-                                        bubbleArrays[w].mpWinner = true;
-                                        bubbleArrays[w].penguinSprite.PlayAnimation(10);
-
-                                        if (w == 0) winsP1++;
-                                        else winsP2++;
-                                        bubbleArrays[w].winCount++;
-                                        // Every living teammate shares the win, matching
-                                        // ResolveRoundOutcome's elimination-win handling.
-                                        if (currentSettings.teamMode) {
-                                            int winTeam = currentSettings.playerTeams[w];
-                                            for (int t = 0; t < currentSettings.playerCount; t++) {
-                                                if (t != w && bubbleArrays[t].playerState == BubbleArray::PlayerState::ALIVE
-                                                    && currentSettings.playerTeams[t] == winTeam) {
-                                                    bubbleArrays[t].mpWinner = true;
-                                                    bubbleArrays[t].winCount++;
-                                                }
-                                            }
-                                        }
-                                        Update2PText();
-                                        break;
-                                    }
-                                }
-                            }
+                            HandlePlayerDeparture(playerIdx);
                         } else {
                             SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
                                        "Received player-left from unknown player ID %d", senderId);

@@ -286,6 +286,7 @@ struct SetupSettings {
     // start (menu fills it), so the static initializer is just a placeholder.
     int playerTeams[MAX_NET_PLAYERS] = {1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1};
     int teamCount = 2;  // number of teams (2..5); meaningful when teamMode
+    bool continueWhenPlayersLeave = true;
 };
 
 // Shared between the lobby/game-room team UI and in-gameplay team indicators
@@ -623,6 +624,7 @@ private:
         bool sendNetworkFinish = false);
     void CommitRoundWin(int winnerIdx, RoundWinCause cause, bool sendNetworkFinish);
     void FinishRoundAsDraw();
+    void HandlePlayerDeparture(int playerIdx);
     bool HasDepartedPlayers() const;
     int CountConnectedPlayers() const;
     int CountConnectedTeams() const;

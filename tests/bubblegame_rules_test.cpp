@@ -31,6 +31,7 @@ struct BubbleGameTestAccess {
             clear ? BubbleGame::RoundWinCause::Clear : BubbleGame::RoundWinCause::Remote,
             false);
     }
+    static void depart(BubbleGame& game, int idx) { game.HandlePlayerDeparture(idx); }
 
     static void reset(BubbleGame& game, int players, bool network, bool clearMode) {
         singleBubbles.clear();
@@ -135,6 +136,43 @@ int main() {
         CHECK(BubbleGameTestAccess::player(game, 2).winCount == 1);
         CHECK(BubbleGameTestAccess::player(game, 1).winCount == 0);
         CHECK(BubbleGameTestAccess::player(game, 3).winCount == 0);
+
+        // Continue enabled: the sole survivor receives one win, but a 2P match cannot restart alone.
+        BubbleGameTestAccess::reset(game, 2, true, false);
+        BubbleGameTestAccess::settings(game).continueWhenPlayersLeave = true;
+        BubbleGameTestAccess::depart(game, 1);
+        CHECK(BubbleGameTestAccess::player(game, 0).winCount == 1);
+        CHECK(BubbleGameTestAccess::matchOver(game));
+
+        // Continue disabled: show the survivor, do not credit the abandoned round.
+        BubbleGameTestAccess::reset(game, 2, true, false);
+        BubbleGameTestAccess::settings(game).continueWhenPlayersLeave = false;
+        BubbleGameTestAccess::depart(game, 1);
+        CHECK(BubbleGameTestAccess::player(game, 0).mpWinner);
+        CHECK(BubbleGameTestAccess::player(game, 0).winCount == 0);
+        CHECK(BubbleGameTestAccess::matchOver(game));
+
+        // Four players on two teams: departure leaving one team resolves both teammates as winners.
+        BubbleGameTestAccess::reset(game, 4, true, false);
+        SetupSettings& departureTeamSettings = BubbleGameTestAccess::settings(game);
+        departureTeamSettings.continueWhenPlayersLeave = true;
+        departureTeamSettings.teamMode = true;
+        departureTeamSettings.playerTeams[0] = departureTeamSettings.playerTeams[2] = 1;
+        departureTeamSettings.playerTeams[1] = departureTeamSettings.playerTeams[3] = 2;
+        BubbleGameTestAccess::depart(game, 1);
+        BubbleGameTestAccess::depart(game, 3);
+        CHECK(BubbleGameTestAccess::player(game, 0).winCount == 1);
+        CHECK(BubbleGameTestAccess::player(game, 2).winCount == 1);
+
+        // A credited departure win reaches the configured limit.
+        BubbleGameTestAccess::reset(game, 2, true, false);
+        SetupSettings& limitSettings = BubbleGameTestAccess::settings(game);
+        limitSettings.continueWhenPlayersLeave = true;
+        limitSettings.victoriesLimit = 2;
+        BubbleGameTestAccess::player(game, 0).winCount = 1;
+        BubbleGameTestAccess::depart(game, 1);
+        CHECK(BubbleGameTestAccess::player(game, 0).winCount == 2);
+        CHECK(BubbleGameTestAccess::matchOver(game));
     }
 
     SDL_DestroyRenderer(renderer);

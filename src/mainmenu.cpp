@@ -565,6 +565,7 @@ void MainMenu::SetupNewGame(int mode) {
                 ns.clearMode = netClearMode;
                 ns.disableMalus = netDisableMalus;
                 ns.teamMode = netTeamMode;
+                ns.continueWhenPlayersLeave = continueWhenPlayersLeave;
                 static const int vLimits[] = {0,1,2,3,4,5,6,7,8,9,10,11,12,15,20,30,50,100};
                 ns.victoriesLimit = vLimits[victoriesLimitIndex];
                 for (int i = 0; i < 5; i++) {
