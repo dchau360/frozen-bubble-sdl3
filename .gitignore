@@ -6,6 +6,7 @@ CMakeLists.txt.user
 /.vscode
 /.claude
 /.cache
+/.worktrees
 /result
 
 # Compiled binaries
