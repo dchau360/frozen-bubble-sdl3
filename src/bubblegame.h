@@ -593,6 +593,7 @@ private:
     void PickNextBubble(BubbleArray &bArray);
     void LaunchBubble(BubbleArray &bArray);
     void UpdateSingleBubbles(int id);
+    void UpdateSingleBubblesAtScale(float deltaScale);
 
     void ExpandNewLane(BubbleArray &bArray);
     void Update2PText();

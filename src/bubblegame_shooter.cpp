@@ -440,6 +440,10 @@ void GetClosestFreeCell(SingleBubble &sBubble, BubbleArray &bArray, int *row, in
 }
 
 void BubbleGame::UpdateSingleBubbles(int /*id*/) {
+    UpdateSingleBubblesAtScale(FrozenBubble::Instance()->deltaScale);
+}
+
+void BubbleGame::UpdateSingleBubblesAtScale(float deltaScale) {
     // Original: iter_players processes ALL players in one loop (line 2105)
     // We process ALL bubbles from ALL players together, like the original
 
@@ -461,12 +465,17 @@ void BubbleGame::UpdateSingleBubbles(int /*id*/) {
         BubbleArray *bArray = &bubbleArrays[sBubble.assignedArray];
         bool isMini = (currentSettings.playerCount >= 3 && bArray->playerAssigned >= 1);
 
-        // For chain reaction bubbles, update position FIRST to set chainReachedDest flag
+        const bool locallySimulatedLaunch =
+            sBubble.launching &&
+            (!currentSettings.networkGame || sBubble.assignedArray == 0);
+
+        // Local launches are advanced below in collision-safe substeps. Everything
+        // else retains one full-scale position update per frame, including remote
+        // launch animation and falling, chained, and exploding bubbles.
         if (sBubble.chainExists && !sBubble.chainReachedDest) {
-            sBubble.UpdatePosition();
-        } else if (!sBubble.chainExists) {
-            // For non-chain bubbles, update as normal
-            sBubble.UpdatePosition();
+            sBubble.UpdatePosition(deltaScale);
+        } else if (!sBubble.chainExists && !locallySimulatedLaunch) {
+            sBubble.UpdatePosition(deltaScale);
         }
 
         // NOW check if chain reaction completed (after UpdatePosition set the flag)
@@ -525,78 +534,84 @@ void BubbleGame::UpdateSingleBubbles(int /*id*/) {
                 continue;
             }
 
-            // Original line 2195: ceiling check FIRST, independent of existing bubbles
-            if (sBubble.pos.y <= bArray->topLimit) {
-                int row, col;
-                GetClosestFreeCell(sBubble, *bArray, &row, &col, -1, -1, isMini);
-                SDL_Log("Ceiling hit: placing at row=%d col=%d pos=(%.1f,%.1f)", row, col, (float)sBubble.pos.x, (float)sBubble.pos.y);
-                if (currentSettings.networkGame && sBubble.assignedArray == 0) {
-                    NetworkClient* netClient = NetworkClient::Instance();
-                    if (netClient->IsConnected() && netClient->GetState() == IN_GAME) {
-                        char stickData[128];
-                        snprintf(stickData, sizeof(stickData), "s%d:%d:%d:%s", col, row, sBubble.bubbleId,
-                                 BuildNextColorsStr(*bArray).c_str());
-                        netClient->SendGameData(stickData);
+            const int substeps = LaunchSubstepCount(sBubble.bubbleSize, deltaScale);
+            const float subscale = deltaScale / static_cast<float>(substeps);
+            for (int substep = 0; substep < substeps; ++substep) {
+                sBubble.UpdatePosition(subscale);
+
+                // Original line 2195: ceiling check FIRST, independent of existing bubbles
+                if (sBubble.pos.y <= bArray->topLimit) {
+                    int row, col;
+                    GetClosestFreeCell(sBubble, *bArray, &row, &col, -1, -1, isMini);
+                    SDL_Log("Ceiling hit: placing at row=%d col=%d pos=(%.1f,%.1f)", row, col, (float)sBubble.pos.x, (float)sBubble.pos.y);
+                    if (currentSettings.networkGame && sBubble.assignedArray == 0) {
+                        NetworkClient* netClient = NetworkClient::Instance();
+                        if (netClient->IsConnected() && netClient->GetState() == IN_GAME) {
+                            char stickData[128];
+                            snprintf(stickData, sizeof(stickData), "s%d:%d:%d:%s", col, row, sBubble.bubbleId,
+                                     BuildNextColorsStr(*bArray).c_str());
+                            netClient->SendGameData(stickData);
+                        }
                     }
+                    bArray->PlacePlayerBubble(sBubble.bubbleId, row, col);
+                    bArray->newShoot = true;
+                    PlaySFX("stick");
+                    bArray->stickAnimActive = true; bArray->stickAnimFrame = 0; bArray->stickAnimSlowdown = 0;
+                    bArray->stickAnimPos = {(int)sBubble.pos.x, (int)sBubble.pos.y};
+                    sBubble.shouldClear = true;
+                    CheckPossibleDestroy(*bArray);
+                    // Original: the ceiling-stick branch (~2195-2204) has no malus generation at all —
+                    // only the collision-stick and chain-landing branches release queued malus.
+                    CheckGameState(*bArray);
+                    goto STOP_ITER;
                 }
-                bArray->PlacePlayerBubble(sBubble.bubbleId, row, col);
-                bArray->newShoot = true;
-                PlaySFX("stick");
-                bArray->stickAnimActive = true; bArray->stickAnimFrame = 0; bArray->stickAnimSlowdown = 0;
-                bArray->stickAnimPos = {(int)sBubble.pos.x, (int)sBubble.pos.y};
-                sBubble.shouldClear = true;
-                CheckPossibleDestroy(*bArray);
-                // Original: the ceiling-stick branch (~2195-2204) has no malus generation at all —
-                // only the collision-stick and chain-landing branches release queued malus.
-                CheckGameState(*bArray);
-                goto STOP_ITER;
-            }
 
-            for (int hitRow = 0; hitRow < (int)bArray->bubbleMap.size(); hitRow++) {
-                for (int hitCol = 0; hitCol < (int)bArray->bubbleMap[hitRow].size(); hitCol++) {
-                    Bubble &bubble = bArray->bubbleMap[hitRow][hitCol];
-                    if (sBubble.IsCollision(&bubble)) {
-                        int row, col;
-                        GetClosestFreeCell(sBubble, *bArray, &row, &col, hitRow, hitCol, isMini);
-                        SDL_Log("Bubble stuck at row=%d, col=%d, position=(%.1f, %.1f)",
-                                row, col, (float)sBubble.pos.x, (float)sBubble.pos.y);
+                for (int hitRow = 0; hitRow < (int)bArray->bubbleMap.size(); hitRow++) {
+                    for (int hitCol = 0; hitCol < (int)bArray->bubbleMap[hitRow].size(); hitCol++) {
+                        Bubble &bubble = bArray->bubbleMap[hitRow][hitCol];
+                        if (sBubble.IsCollision(&bubble)) {
+                            int row, col;
+                            GetClosestFreeCell(sBubble, *bArray, &row, &col, hitRow, hitCol, isMini);
+                            SDL_Log("Bubble stuck at row=%d, col=%d, position=(%.1f, %.1f)",
+                                    row, col, (float)sBubble.pos.x, (float)sBubble.pos.y);
 
-                        // In network game, send stick position to opponent
-                        if (currentSettings.networkGame && sBubble.assignedArray == 0) {
-                            NetworkClient* netClient = NetworkClient::Instance();
-                            if (netClient->IsConnected() && netClient->GetState() == IN_GAME) {
-                                // Send: s{cx}:{cy}:{bubbleColor}:{nextcolors...}
-                                // Perl format (frozen-bubble line 2199): "s$cx:$cy:$col:@{nextcolors}"
-                                char stickData[256];
-                                snprintf(stickData, sizeof(stickData), "s%d:%d:%d:%s",
-                                    col, row, sBubble.bubbleId, BuildNextColorsStr(*bArray).c_str());
-                                SDL_Log("Sending stick: col=%d row=%d color=%d nextColors=%s",
+                            // In network game, send stick position to opponent
+                            if (currentSettings.networkGame && sBubble.assignedArray == 0) {
+                                NetworkClient* netClient = NetworkClient::Instance();
+                                if (netClient->IsConnected() && netClient->GetState() == IN_GAME) {
+                                    // Send: s{cx}:{cy}:{bubbleColor}:{nextcolors...}
+                                    // Perl format (frozen-bubble line 2199): "s$cx:$cy:$col:@{nextcolors}"
+                                    char stickData[256];
+                                    snprintf(stickData, sizeof(stickData), "s%d:%d:%d:%s",
                                         col, row, sBubble.bubbleId, BuildNextColorsStr(*bArray).c_str());
-                                netClient->SendGameData(stickData);
+                                    SDL_Log("Sending stick: col=%d row=%d color=%d nextColors=%s",
+                                            col, row, sBubble.bubbleId, BuildNextColorsStr(*bArray).c_str());
+                                    netClient->SendGameData(stickData);
+                                }
                             }
-                        }
 
-                        bArray->PlacePlayerBubble(sBubble.bubbleId, row, col);
-                        bArray->newShoot = true;
-                        PlaySFX("stick");
-                        bArray->stickAnimActive = true; bArray->stickAnimFrame = 0; bArray->stickAnimSlowdown = 0;
-                        bArray->stickAnimPos = {(int)sBubble.pos.x, (int)sBubble.pos.y};
-                        sBubble.shouldClear = true;
-                        CheckPossibleDestroy(*bArray);
-                        // Release queued malus at stick time (original line 2218-2250)
-                        // Use bArray->playerAssigned (not sBubble.assignedArray) — see note above.
-                        {
-                            int arr = bArray->playerAssigned;
-                            bool chainInFlight = false;
-                            for (const auto& sb : singleBubbles)
-                                if (sb.assignedArray == arr && sb.chainExists && !sb.chainReachedDest) { chainInFlight = true; break; }
-                            if (!chainInFlight && (currentSettings.networkGame ? arr == 0 : (currentSettings.playerCount >= 2 || currentSettings.mpTraining)))
-                                ProcessMalusQueue(bubbleArrays[arr], frameCount);
+                            bArray->PlacePlayerBubble(sBubble.bubbleId, row, col);
+                            bArray->newShoot = true;
+                            PlaySFX("stick");
+                            bArray->stickAnimActive = true; bArray->stickAnimFrame = 0; bArray->stickAnimSlowdown = 0;
+                            bArray->stickAnimPos = {(int)sBubble.pos.x, (int)sBubble.pos.y};
+                            sBubble.shouldClear = true;
+                            CheckPossibleDestroy(*bArray);
+                            // Release queued malus at stick time (original line 2218-2250)
+                            // Use bArray->playerAssigned (not sBubble.assignedArray) — see note above.
+                            {
+                                int arr = bArray->playerAssigned;
+                                bool chainInFlight = false;
+                                for (const auto& sb : singleBubbles)
+                                    if (sb.assignedArray == arr && sb.chainExists && !sb.chainReachedDest) { chainInFlight = true; break; }
+                                if (!chainInFlight && (currentSettings.networkGame ? arr == 0 : (currentSettings.playerCount >= 2 || currentSettings.mpTraining)))
+                                    ProcessMalusQueue(bubbleArrays[arr], frameCount);
+                            }
+                            CheckGameState(*bArray);
+                            goto STOP_ITER;
                         }
-                        CheckGameState(*bArray);
-                        goto STOP_ITER;
-                    }
-                };
+                    };
+                }
             }
         }
         // Handle falling bubbles without chain reactions
@@ -616,7 +631,7 @@ void BubbleGame::UpdateSingleBubbles(int /*id*/) {
     // Update malus bubbles (they rise upward to stick position)
     // Original port used 2.0 px/frame; increased 25% to 2.5 for better feel.
     // Multiplied by deltaScale so speed is frame-rate-independent.
-    const float MALUS_SPEED = 2.5f * FrozenBubble::Instance()->deltaScale;
+    const float MALUS_SPEED = 2.5f * deltaScale;
     for (auto &malus : malusBubbles) {
         if (malus.shouldClear) continue;
 

@@ -6,6 +6,8 @@
 #include "platform.h"
 
 #include <cstdio>
+#include <set>
+#include <utility>
 
 static int failures = 0;
 #define CHECK(expression) do { \
@@ -41,6 +43,9 @@ struct BubbleGameTestAccess {
     static void depart(BubbleGame& game, int idx) { game.HandlePlayerDeparture(idx); }
     static void assignChains(BubbleGame& game, int idx) {
         game.AssignChainReactions(game.bubbleArrays[idx]);
+    }
+    static void updateAtScale(BubbleGame& game, float scale) {
+        game.UpdateSingleBubblesAtScale(scale);
     }
 
     static void reset(BubbleGame& game, int players, bool network, bool clearMode) {
@@ -89,6 +94,47 @@ static SingleBubble FallingBubble(int array, int color, int y) {
     bubble.pos.y = y;
     bubble.falling = true;
     return bubble;
+}
+
+static SingleBubble VerticalLaunch(int array, int color, int x, int y,
+                                   int size, int left, int right, int top) {
+    SingleBubble bubble{};
+    bubble.assignedArray = array;
+    bubble.bubbleId = color;
+    bubble.posX = bubble.oldPosX = static_cast<float>(x);
+    bubble.posY = bubble.oldPosY = static_cast<float>(y);
+    bubble.pos = bubble.oldpos = {x, y};
+    bubble.direction = PI / 2.0f;
+    bubble.launching = true;
+    bubble.leftLimit = left;
+    bubble.rightLimit = right;
+    bubble.topLimit = top;
+    bubble.bubbleSize = size;
+    return bubble;
+}
+
+static std::pair<int, int> FindUniqueBubbleByColor(const BubbleArray& board,
+                                                   int color) {
+    for (int row = 0; row < 13; ++row)
+        for (int col = 0;
+             col < static_cast<int>(board.bubbleMap[row].size()); ++col)
+            if (board.bubbleMap[row][col].bubbleId == color) return {row, col};
+    return {-1, -1};
+}
+
+static int CountBubblesForColor(const BubbleArray& board, int color) {
+    int count = 0;
+    for (const auto& row : board.bubbleMap)
+        for (const Bubble& bubble : row)
+            if (bubble.bubbleId == color) ++count;
+    return count;
+}
+
+static bool IsExpectedNeighbor(std::pair<int, int> cell) {
+    static const std::set<std::pair<int, int>> expected = {
+        {1, 2}, {1, 3}, {2, 2}, {2, 4}, {3, 2}, {3, 3}
+    };
+    return expected.count(cell) == 1;
 }
 
 static int CountChainsForColor(int color) {
@@ -336,6 +382,44 @@ int main() {
         BubbleGameTestAccess::assignChains(game, 0);
         CHECK(CountChainsForColor(0) == 1);
         CHECK(CountChainsForColor(1) == 0);
+
+        // Maximum frame deltas must not tunnel a full-size launch through a bubble.
+        BubbleGameTestAccess::reset(game, 2, false, false);
+        BubbleArray& full = BubbleGameTestAccess::player(game, 0);
+        ShapeBoard(full, false);
+        full.bubbleOffset = {354, 40};
+        full.leftLimit = 354;
+        full.rightLimit = 610;
+        full.topLimit = 40;
+        full.bubbleMap[2][3].bubbleId = 0;
+        full.bubbleMap[2][3].pos = {450, 96};
+        singleBubbles = {VerticalLaunch(0, 1, 450, 136, 32, 354, 610, 40)};
+        for (int frame = 0; frame < 2 && !singleBubbles.empty(); ++frame)
+            BubbleGameTestAccess::updateAtScale(game, 15.0f);
+        const auto fullLanding = FindUniqueBubbleByColor(full, 1);
+        CHECK(CountBubblesForColor(full, 1) == 1);
+        CHECK(IsExpectedNeighbor(fullLanding));
+        CHECK(fullLanding.first != 0);
+        CHECK(full.bubbleMap[2][3].bubbleId == 0);
+
+        // The same maximum delta must remain collision-safe on a mini board.
+        BubbleGameTestAccess::reset(game, 3, false, false);
+        BubbleArray& mini = BubbleGameTestAccess::player(game, 1);
+        ShapeBoard(mini, false);
+        mini.bubbleOffset = {20, 19};
+        mini.leftLimit = 20;
+        mini.rightLimit = 148;
+        mini.topLimit = 19;
+        mini.bubbleMap[2][3].bubbleId = 0;
+        mini.bubbleMap[2][3].pos = {68, 47};
+        singleBubbles = {VerticalLaunch(1, 1, 68, 67, 16, 20, 148, 19)};
+        for (int frame = 0; frame < 2 && !singleBubbles.empty(); ++frame)
+            BubbleGameTestAccess::updateAtScale(game, 15.0f);
+        const auto miniLanding = FindUniqueBubbleByColor(mini, 1);
+        CHECK(CountBubblesForColor(mini, 1) == 1);
+        CHECK(IsExpectedNeighbor(miniLanding));
+        CHECK(miniLanding.first != 0);
+        CHECK(mini.bubbleMap[2][3].bubbleId == 0);
     }
 
     SDL_DestroyRenderer(renderer);

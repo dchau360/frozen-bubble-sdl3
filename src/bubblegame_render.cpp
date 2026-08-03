@@ -212,12 +212,14 @@ static void DrawAimGuide(SDL_Renderer* rend, const BubbleArray& bArray, bool isM
     // pacing variance, the guide's wall-bounce and grid-collision checks run at a
     // different granularity than actual gameplay and can predict the wrong landing cell.
     const float ds = FrozenBubble::Instance()->deltaScale;
-    float dx = speed * cosf(angle) * ds;
-    float dy = speed * sinf(angle) * ds;
+    const int substeps = LaunchSubstepCount(BUBBLE_SIZE, ds);
+    const float subscale = ds / static_cast<float>(substeps);
+    float dx = speed * cosf(angle) * subscale;
+    float dy = speed * sinf(angle) * subscale;
 
     SDL_SetRenderDrawBlendMode(rend, SDL_BLENDMODE_BLEND);
 
-    for (int step = 0; step < 400; step++) {
+    for (int step = 0; step < 400 * substeps; step++) {
         px += dx;
         py -= dy;  // Negative = move up
 
@@ -248,8 +250,8 @@ static void DrawAimGuide(SDL_Renderer* rend, const BubbleArray& bArray, bool isM
 
         // Draw a two-tone marker every 8 steps.  The dark rim and warm center
         // stay readable over both light and dark skin backgrounds.
-        if (step % 8 == 0) {
-            int alpha = 200 - step / 2;
+        if (step % (8 * substeps) == 0) {
+            int alpha = 200 - step / (2 * substeps);
             if (alpha < 30) alpha = 30;
             SDL_Rect rim = {(int)px + BUBBLE_SIZE / 2 - 4,
                             (int)py + BUBBLE_SIZE / 2 - 4, 8, 8};

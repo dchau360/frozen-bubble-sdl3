@@ -27,12 +27,21 @@
 #include "bubblegame.h"
 #include "audiomixer.h"
 
+#include <algorithm>
+#include <cmath>
 #include <string>
 #include <utility>
 #include <vector>
 
 inline int ranrange(int a, int b) { return a + rand() % ((b - a ) + 1); }
 inline float ranrange(float b) { return rand() / (static_cast<float>(RAND_MAX) / b); }
+
+inline int LaunchSubstepCount(int bubbleSize, float deltaScale) {
+    if (!std::isfinite(deltaScale) || deltaScale <= 0.0f) return 1;
+    const float distance = static_cast<float>(BUBBLE_SPEED) * deltaScale;
+    const float collisionRadius = static_cast<float>(bubbleSize) * 0.82f;
+    return std::max(1, static_cast<int>(std::ceil(distance / collisionRadius)));
+}
 
 struct SingleBubble {
     int assignedArray; // assigned board to use
@@ -82,8 +91,8 @@ struct SingleBubble {
         return (xs + pow(bubble->pos.y - pos.y, 2)) < distanceCollision; 
     }
 
-    void UpdatePosition() {
-        float ds = FrozenBubble::Instance()->deltaScale;
+    void UpdatePosition(float deltaScale) {
+        const float ds = deltaScale;
         if (launching) {
             // Update old positions
             oldPosX = posX;
