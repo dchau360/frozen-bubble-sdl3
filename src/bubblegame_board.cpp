@@ -54,12 +54,123 @@ void GetGroupedCount(BubbleArray &bArray, std::vector<Bubble*> *bubbleCount, int
     }
 }
 
+static std::set<std::pair<int, int>> CollectColorGroup(
+    const BubbleArray &bArray, int destRow, int destCol, int bubbleId, int oddswap) {
+    std::set<std::pair<int, int>> group;
+    std::queue<std::pair<int, int>> queue;
+
+    for (auto [dr, dc] : GridNeighborOffsets(destRow, oddswap)) {
+        int row = destRow + dr;
+        int col = destCol + dc;
+        if (row < 0 || row >= (int)bArray.bubbleMap.size()) continue;
+        if (col < 0 || col >= (int)bArray.bubbleMap[row].size()) continue;
+        if (bArray.bubbleMap[row][col].bubbleId != bubbleId) continue;
+        if (group.insert({row, col}).second) queue.push({row, col});
+    }
+
+    while (!queue.empty()) {
+        auto [row, col] = queue.front();
+        queue.pop();
+
+        for (auto [dr, dc] : GridNeighborOffsets(row, oddswap)) {
+            int nextRow = row + dr;
+            int nextCol = col + dc;
+            if (nextRow < 0 || nextRow >= (int)bArray.bubbleMap.size()) continue;
+            if (nextCol < 0 || nextCol >= (int)bArray.bubbleMap[nextRow].size()) continue;
+            if (bArray.bubbleMap[nextRow][nextCol].bubbleId != bubbleId) continue;
+            if (group.insert({nextRow, nextCol}).second)
+                queue.push({nextRow, nextCol});
+        }
+    }
+
+    return group;
+}
+
+static std::set<std::pair<int, int>> CollectRootReachable(
+    const BubbleArray &bArray,
+    const std::set<std::pair<int, int>> &excluded,
+    int oddswap) {
+    std::set<std::pair<int, int>> reachable;
+    std::queue<std::pair<int, int>> queue;
+
+    for (int col = 0; col < (int)bArray.bubbleMap[0].size(); ++col) {
+        std::pair<int, int> position{0, col};
+        if (bArray.bubbleMap[0][col].bubbleId == -1 || excluded.count(position) > 0)
+            continue;
+        reachable.insert(position);
+        queue.push(position);
+    }
+
+    while (!queue.empty()) {
+        auto [row, col] = queue.front();
+        queue.pop();
+
+        for (auto [dr, dc] : GridNeighborOffsets(row, oddswap)) {
+            int nextRow = row + dr;
+            int nextCol = col + dc;
+            std::pair<int, int> next{nextRow, nextCol};
+            if (nextRow < 0 || nextRow >= (int)bArray.bubbleMap.size()) continue;
+            if (nextCol < 0 || nextCol >= (int)bArray.bubbleMap[nextRow].size()) continue;
+            if (bArray.bubbleMap[nextRow][nextCol].bubbleId == -1) continue;
+            if (excluded.count(next) > 0) continue;
+            if (reachable.insert(next).second) queue.push(next);
+        }
+    }
+
+    return reachable;
+}
+
+static void ValidateAssignedChains(BubbleArray &bArray, int oddswap) {
+    std::vector<SingleBubble*> assignedChains;
+    for (SingleBubble &chain : singleBubbles) {
+        if (chain.falling && chain.chainExists &&
+            chain.assignedArray == bArray.playerAssigned &&
+            chain.chainRow != -1 && chain.chainCol != -1) {
+            assignedChains.push_back(&chain);
+        }
+    }
+
+    std::stable_sort(
+        assignedChains.begin(), assignedChains.end(),
+        [](const SingleBubble *left, const SingleBubble *right) {
+            return left->pos.y > right->pos.y;
+        });
+
+    for (SingleBubble *chain : assignedChains) {
+        if (!chain->chainExists) continue;
+
+        std::set<std::pair<int, int>> otherGroups;
+        for (const SingleBubble *other : assignedChains) {
+            if (other == chain || !other->chainExists) continue;
+            const auto group = CollectColorGroup(
+                bArray, other->chainRow, other->chainCol, other->bubbleId, oddswap);
+            otherGroups.insert(group.begin(), group.end());
+        }
+
+        const auto targetGroup = CollectColorGroup(
+            bArray, chain->chainRow, chain->chainCol, chain->bubbleId, oddswap);
+        const auto rootReachable = CollectRootReachable(bArray, otherGroups, oddswap);
+        int reachableTargetCount = 0;
+        for (const auto &position : targetGroup) {
+            if (rootReachable.count(position) > 0) ++reachableTargetCount;
+        }
+
+        if (reachableTargetCount < 2) {
+            chain->chainExists = false;
+            chain->chainRow = -1;
+            chain->chainCol = -1;
+            chain->chainDest = {};
+        }
+    }
+}
+
 void BubbleGame::AssignChainReactions(BubbleArray &bArray) {
     // Assign chain reaction targets to falling bubbles ONCE when they're created
     // Original: frozen-bubble line 814-865 in stick_bubble function
     // This creates the cascading chain reaction effect when chain bubbles land and trigger more groups
 
     SDL_Log("AssignChainReactions: Checking %zu falling bubbles for chain targets", singleBubbles.size());
+    const int oddswap = bArray.bubbleMap[0].size() == 8 ? 0 : 1;
 
     // Track positions already reserved by chain reactions to prevent conflicts
     std::set<std::pair<int, int>> occupiedPositions;
@@ -116,8 +227,6 @@ void BubbleGame::AssignChainReactions(BubbleArray &bArray) {
         queue.pop();
         int currentDistance = distanceToRoot[{row, col}];
 
-        // Get neighbor offsets — use oddswap to handle both r=0 and r=1 grid orientations
-        int oddswap = (bArray.bubbleMap[0].size() == 8) ? 0 : 1;
         for (auto [dr, dc] : GridNeighborOffsets(row, oddswap)) {
             int nr = row + dr;
             int nc = col + dc;
@@ -148,7 +257,6 @@ void BubbleGame::AssignChainReactions(BubbleArray &bArray) {
 
             // Check if this bubble has a neighbor of the same color (part of a group)
             bool hasNeighborSameColor = false;
-            int oddswap = (bArray.bubbleMap[0].size() == 8) ? 0 : 1;
             for (auto [dr, dc] : GridNeighborOffsets(row, oddswap)) {
                 int nr = row + dr;
                 int nc = col + dc;
@@ -193,11 +301,9 @@ void BubbleGame::AssignChainReactions(BubbleArray &bArray) {
 
         // Find free adjacent positions for this target
         // Original line 830: next_positions($pos, $player)
-        int oddswap2 = (bArray.bubbleMap[0].size() == 8) ? 0 : 1;
-
         // Find first free position adjacent to this target
         int freeRow = -1, freeCol = -1;
-        for (auto [dr, dc] : GridNeighborOffsets(row, oddswap2)) {
+        for (auto [dr, dc] : GridNeighborOffsets(row, oddswap)) {
             int nr = row + dr;
             int nc = col + dc;
             if (nr < 0 || nr >= (int)bArray.bubbleMap.size()) continue;
@@ -253,36 +359,9 @@ void BubbleGame::AssignChainReactions(BubbleArray &bArray) {
             // Mark all bubbles in this group as "chained" to prevent other chains from targeting them
             // Original line 846-858: calculates chained_bubbles group
             // When this chain lands and explodes the group, these bubbles won't exist anymore
-            std::set<std::pair<int, int>> visited;
-            std::queue<std::pair<int, int>> queue;
-            queue.push({row, col});
-            visited.insert({row, col});
-
-            while (!queue.empty()) {
-                auto [r, c] = queue.front();
-                queue.pop();
-                chainedGroupBubbles.insert({r, c});
-
-                // Find all neighbors of same color
-                std::vector<std::pair<int, int>> neighborOffsets;
-                if (r % 2 == 0) {
-                    neighborOffsets = {{-1,-1}, {-1,0}, {0,-1}, {0,1}, {1,-1}, {1,0}};
-                } else {
-                    neighborOffsets = {{-1,0}, {-1,1}, {0,-1}, {0,1}, {1,0}, {1,1}};
-                }
-
-                for (auto [dr, dc] : neighborOffsets) {
-                    int nr = r + dr;
-                    int nc = c + dc;
-                    if (nr < 0 || nr >= (int)bArray.bubbleMap.size()) continue;
-                    if (nc < 0 || nc >= (int)bArray.bubbleMap[nr].size()) continue;
-                    if (visited.count({nr, nc}) > 0) continue;
-                    if (bArray.bubbleMap[nr][nc].bubbleId == sBubble.bubbleId) {
-                        visited.insert({nr, nc});
-                        queue.push({nr, nc});
-                    }
-                }
-            }
+            const auto group = CollectColorGroup(
+                bArray, freeRow, freeCol, sBubble.bubbleId, oddswap);
+            chainedGroupBubbles.insert(group.begin(), group.end());
 
             SDL_Log("    Marked %zu bubbles in chain target group as unavailable", chainedGroupBubbles.size());
 
@@ -291,6 +370,8 @@ void BubbleGame::AssignChainReactions(BubbleArray &bArray) {
             break;
         }
     }
+
+    ValidateAssignedChains(bArray, oddswap);
 }
 
 void BubbleGame::CheckPossibleDestroy(BubbleArray &bArray){

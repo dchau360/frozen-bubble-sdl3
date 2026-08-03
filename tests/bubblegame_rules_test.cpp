@@ -39,6 +39,9 @@ struct BubbleGameTestAccess {
             false);
     }
     static void depart(BubbleGame& game, int idx) { game.HandlePlayerDeparture(idx); }
+    static void assignChains(BubbleGame& game, int idx) {
+        game.AssignChainReactions(game.bubbleArrays[idx]);
+    }
 
     static void reset(BubbleGame& game, int players, bool network, bool clearMode) {
         singleBubbles.clear();
@@ -69,6 +72,30 @@ struct BubbleGameTestAccess {
 
 static void PutDangerBubble(BubbleArray& player, int col = 0) {
     player.bubbleMap[12][col].bubbleId = 0;
+}
+
+static void ShapeBoard(BubbleArray& board, bool flipped) {
+    for (int row = 0; row < 13; ++row) {
+        const bool eightCells = ((row + (flipped ? 1 : 0)) % 2) == 0;
+        board.bubbleMap[row].assign(eightCells ? 8 : 7, Bubble{});
+    }
+}
+
+static SingleBubble FallingBubble(int array, int color, int y) {
+    SingleBubble bubble{};
+    bubble.assignedArray = array;
+    bubble.bubbleId = color;
+    bubble.posY = static_cast<float>(y);
+    bubble.pos.y = y;
+    bubble.falling = true;
+    return bubble;
+}
+
+static int CountChainsForColor(int color) {
+    int count = 0;
+    for (const SingleBubble& bubble : singleBubbles)
+        if (bubble.bubbleId == color && bubble.chainExists) ++count;
+    return count;
 }
 
 int main() {
@@ -280,6 +307,35 @@ int main() {
         CHECK(BubbleGameTestAccess::matchOver(game));
         CHECK(BubbleGameTestAccess::player(game, 0).winCount == 1);
         CHECK(BubbleGameTestAccess::player(game, 2).winCount == 1);
+
+        // A flipped grid reserves the whole adjacent color group for one chain.
+        BubbleGameTestAccess::reset(game, 2, false, false);
+        BubbleArray& flipped = BubbleGameTestAccess::player(game, 0);
+        ShapeBoard(flipped, true);
+        flipped.bubbleMap[0][0].bubbleId = 2;
+        flipped.bubbleMap[1][1].bubbleId = 2;
+        singleBubbles = {
+            FallingBubble(0, 2, 200),
+            FallingBubble(0, 2, 180),
+        };
+        BubbleGameTestAccess::assignChains(game, 0);
+        CHECK(CountChainsForColor(2) == 1);
+
+        // Removing the root chain's target group invalidates its dependent chain.
+        BubbleGameTestAccess::reset(game, 2, false, false);
+        BubbleArray& standard = BubbleGameTestAccess::player(game, 0);
+        ShapeBoard(standard, false);
+        standard.bubbleMap[0][0].bubbleId = 0;
+        standard.bubbleMap[0][1].bubbleId = 0;
+        standard.bubbleMap[1][1].bubbleId = 1;
+        standard.bubbleMap[1][2].bubbleId = 1;
+        singleBubbles = {
+            FallingBubble(0, 0, 200),
+            FallingBubble(0, 1, 180),
+        };
+        BubbleGameTestAccess::assignChains(game, 0);
+        CHECK(CountChainsForColor(0) == 1);
+        CHECK(CountChainsForColor(1) == 0);
     }
 
     SDL_DestroyRenderer(renderer);
