@@ -2,6 +2,20 @@
 
 ## v2.4.33
 
+- **Classic, Clear, and Team matches now use the correct win conditions** — an
+  empty board no longer ends Classic or Team play by itself, while Clear Mode
+  reliably awards exactly one win to the player who cleared their board.
+- **Simultaneous final losses now resolve as a draw** without briefly or
+  permanently crediting either player with a win.
+- **Player departures now honor the room's continuation, surviving-team, and
+  victories-limit rules**, including when a departure makes an in-progress
+  next-round wait terminal.
+- **Local 2–4 player setup now exposes a reachable victories-limit setting**
+  and carries the selected value into the match.
+- **Chain reactions now choose valid targets on flipped boards**, reserving the
+  complete connected group and cancelling invalid cross-chains.
+- **High-speed shots no longer tunnel through occupied bubbles** on full-size
+  or mini boards, and now attach at their first collision.
 - **Levelset high scores no longer go blank** — a new high score, or just the table reflowing to fit one in, could silently wipe the name/level/time text of any entry copied in the process. Text now travels with the entry instead of being dropped.
 - **Multiplayer targeting indicator now actually renders** — it never received a font, so it silently failed to draw every time.
 - **Server list no longer shows dead servers as online** — a closed port could still read as a successful connection; latency checks now confirm the connection actually succeeded.

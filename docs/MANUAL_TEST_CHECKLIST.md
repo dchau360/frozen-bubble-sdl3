@@ -1,15 +1,47 @@
 # Manual test checklist
 
-Fixes that could not be verified automatically, and what to do to confirm each.
-
-Everything here is **already committed and pushed** to `main`. Nothing is
-released — the last tag is `v2.4.32`, and these land in whatever tag comes next.
+Fixes with a remaining hands-on or platform-specific verification gap, and what
+to do to confirm each. An unchecked box means the procedure has not been run;
+automated test coverage does not imply that the visual or multi-client check
+was performed.
 
 Grouped by how much effort the check takes.
 
 ---
 
-## 1. Verified in code but never executed
+## 1. Round and match state cluster
+
+None of these procedures was executed during the automated remediation work.
+
+- [ ] **Local victories row, keyboard and controller:** open Local Multiplayer
+  setup with 2–4 players, navigate to **Victories limit**, and use Left, Right,
+  and confirm/Enter through the available values and both wrap points. Repeat
+  with a controller and confirm the selected row and value remain visibly in
+  sync with each input.
+- [ ] **Classic continuation and Clear Mode win:** empty a local multiplayer
+  board in Classic mode and confirm the round continues. Repeat in Clear Mode
+  and confirm exactly one win, the correct winner presentation, and the
+  expected win SFX.
+- [ ] **Simultaneous local loss draw:** arrange for the final surviving local
+  players to cross the danger line in the same frame. Confirm the round is
+  presented as a draw and neither player receives a transient or lasting win.
+- [ ] **Team Mode survivor:** eliminate players until exactly one team remains.
+  Confirm the surviving team receives the intended winner presentation and
+  teammate credit without ending merely because one board was cleared.
+- [ ] **Native departure continuation:** connect two native clients, exercise a
+  player departure with **Continue game when players leave** both enabled and
+  disabled, and confirm the remaining client continues or ends the match as
+  configured without an unintended next-round restart.
+- [ ] **Remote clear ordering:** with two native clients, exercise both visible
+  remote-clear orders (win announcement before replicated stick resolution,
+  then replicated stick resolution before the announcement). Confirm each
+  order shows one clear win and increments the remote winner exactly once.
+- [ ] **Maximum-speed occupied-bubble collisions:** at maximum game speed, fire
+  both bank shots and vertical shots toward occupied bubbles on full-size and
+  mini boards. Confirm every shot attaches at first contact and none tunnels
+  through to a ceiling or non-neighboring cell.
+
+## 2. Verified in code but never executed
 
 These have a correct fix and a clean build, but the code path was not reached
 during testing. They are the ones most worth your attention.
@@ -75,7 +107,7 @@ insert.
 
 ---
 
-## 2. Behaviour changes you should sanity-check
+## 3. Behaviour changes you should sanity-check
 
 ### BUG-036 / BUG-035 — controller bindings (⚠ known consequence)
 
@@ -109,17 +141,7 @@ port; only the UI path is unverified.)
 
 ---
 
-## 3. Cannot be verified on macOS at all
-
-### BUG-041, BUG-042 — texture leaks — **NOT YET FIXED**
-
-Still open. BUG-041 leaks a 1.2 MB texture per transition frame (~40–50 MB per
-animation); BUG-042 leaks the penguin animation set on every `NewGame`.
-
-These are deliberately not attempted yet: **Apple's AddressSanitizer has no leak
-detection**, so a fix cannot be proven on this machine. The audit flags the same
-constraint. They need the Linux sanitizer CI job first, otherwise the fix ships
-unverified.
+## 4. Cannot be verified on macOS at all
 
 ### REL-003 — Windows non-blocking receive
 
@@ -130,7 +152,7 @@ waiting for the server.
 
 ---
 
-## 4. Also worth a quick look
+## 5. Also worth a quick look
 
 - **BUG-030** — a `nan` speed multiplier no longer breaks all movement. Clamp
   logic proven in isolation; the in-game path is inferred.

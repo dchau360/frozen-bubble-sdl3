@@ -5,18 +5,22 @@ Generated from the ledger cross-referenced against commit messages since
 `v2.4.27`, so a finding counts as fixed only if a commit cites its ID and the
 citing commit actually resolves it (not just references it as rationale).
 
-**As of the BUG-041/042 fix (uncommitted).** Last release: `v2.4.33` (all five
-platforms green, itch.io deploys succeeded).
+**As of the round and match state remediation through `a0f9b4b5`.** Last
+release: `v2.4.33` (all five platforms green, itch.io deploys succeeded).
 
 ## Position
 
 | | Total | Fixed | Open |
 |---|---|---|---|
 | High | 15 | 15 | 0 |
-| Medium | 45 | 25 | 20 |
+| Medium | 45 | 32 | 13 |
 | Low | 13 | 9 | 4 |
-| **Defects** | **73** | **49** | **24** |
-| Improvements | 24 | 16 done, 1 moot | 7 |
+| **Defects** | **73** | **56** | **17** |
+| Improvements | 24 | 17 done/partial, 1 moot | 6 |
+
+The improvement tally retains partially completed IMP-015 in the
+done/partial column. The six fully open improvements are IMP-006, IMP-016,
+IMP-017, IMP-019, IMP-020, and IMP-021.
 
 All High-severity findings are fixed. Two caveats:
 
@@ -31,6 +35,38 @@ All High-severity findings are fixed. Two caveats:
 
 ## Fixed since the last refresh
 
+- **BUG-018** — Classic games no longer end merely because one board is empty,
+  while Clear Mode commits one canonical clear win; `f5ec0509`. Verified by
+  production-object CTest fixtures; presentation and SFX remain unchecked in
+  the manual checklist.
+- **BUG-019** — simultaneous final danger-zone losses now resolve as a draw
+  without transient winner credit; `f5ec0509`. Verified by a production-object
+  CTest fixture; the rendered draw presentation remains unchecked.
+- **BUG-021** — departures now honor continuation, team survival,
+  connected-opponent, victories-limit, and terminal ready-wait rules;
+  `1db437b4`, with terminal-state follow-up `1050b6c0`. Verified by departure,
+  late-departure, draw, team, and restart-wait CTest fixtures; no two-client
+  manual session was run.
+- **BUG-022** — flipped boards reserve complete chain target groups and cancel
+  invalid cross-chains; `171847bf`. Verified by focused parity and cross-chain
+  CTest fixtures; no visual chain-reaction match was run.
+- **BUG-023** — the active local 2–4 player panel now renders, edits, and
+  propagates its victories limit; `ae3d3c20`, with coverage in `edfcf492` and
+  `e7f025a2`. Verified through the real headless `MainMenu` render, input, and
+  setup path plus controlled regression mutations; keyboard/controller visual
+  navigation remains unchecked.
+- **BUG-024** — remote clear wins now commit once regardless of whether the
+  win announcement or replicated stick resolution is processed first;
+  `f5ec0509`. Verified by both message-order CTest fixtures; no two-client
+  visual session was run.
+- **BUG-025** — maximum-delta local full-size and mini shots now substep their
+  collision checks instead of tunneling through occupied bubbles; `f2f7692f`,
+  with strengthened contact-local fixtures in `a0f9b4b5`. Verified by both
+  production-object fixtures and a one-step mutation; bank and vertical shots
+  remain unchecked in live gameplay.
+- **IMP-018** — complete: the permanent production-object gameplay harness is
+  registered as `bubblegame-rules-test` in CTest and covers the round/match,
+  chain-topology, and maximum-delta regressions above.
 - **BUG-045** — `TTFText` copy semantics; `aca2b403`.
 - **BUG-001** — `TextureEx` lifetime/leak; `9f3fdc1f`.
 - **IMP-001..005, 007, 009..015 (partial), 022, 023, 024** — the 24-item
@@ -71,32 +107,25 @@ All High-severity findings are fixed. Two caveats:
 
 ## Open defects
 
-**Medium (20)** — BUG-002, 004, 006, 011, 013, 014, 015, 017, 018, 019, 021,
-022, 023, 024, 025, 027, 037, 040, 046, 048
+**Medium (13)** — BUG-002, 004, 006, 011, 013, 014, 015, 017, 027, 037, 040,
+046, 048
 
 **Low (4)** — BUG-010, 038, 039, 047
 
-## Open improvements
+## Open and partial improvements
 
 - **IMP-006** — bounded numeric conversions/integer-division intent (High
   effort; no proven defect, pure code-quality).
 - **IMP-015 (partial)** — see caveat above.
-- **IMP-016..021** — test-infrastructure items (register the harnesses that
-  already exist as CTest targets, protocol/parser unit tests, packaged-artifact
-  smoke tests, the Linux leak-regression job). Explicitly excluded from the
-  IMP delegation on request; not started.
+- **IMP-016, IMP-017, IMP-019..021** — the remaining test-infrastructure items:
+  protocol/parser unit tests, packaged-artifact smoke tests, and the Linux
+  leak-regression job. IMP-018's CTest gameplay harness is now complete.
 - **IMP-008** — effectively closed, not "done": Task 9 found zero actionable
   diagnostics in-scope and promoted nothing. No code change needed.
 
 ## Suggested next order
 
-### 1. Round and match state — BUG-018, 019, 021, 022, 023, 024, 025
-
-Self-contained but only observable by playing: win conditions, draw
-resolution, victories limits, chain-target parity. Expect to verify by
-actually running matches rather than by harness.
-
-### 2. Protocol and lobby — BUG-002, 004, 006, 011, 013, 014, 015, 017, 037, 040
+### 1. Protocol and lobby — BUG-002, 004, 006, 011, 013, 014, 015, 017, 037, 040
 
 Server-side, and the protocol harness works — see the client shape in
 `tools/server_tests/test_room_caps.py`. Two gotchas that cost time:
@@ -104,12 +133,13 @@ the server pushes `SERVER_READY` on connect (drain it before reading a reply),
 and it has a multi-second grace period before acting on a dropped socket, so use
 an explicit `PART` when testing departure paths.
 
-### 3. Platform — BUG-046, 048
+### 2. Platform — BUG-046, 048
 
 Android asset extraction and WASM persistence (settings and highscores are
 written to MEMFS and lost on reload). Both need their platform to verify.
 
-### 4. Lows, then the remaining improvements (IMP-006, 015 leftovers, 016-021)
+### 3. Lows, then the remaining improvements (IMP-006, IMP-015 leftovers,
+IMP-016, IMP-017, IMP-019..021)
 
 ## Things to know before continuing
 
