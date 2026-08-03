@@ -5,8 +5,9 @@ Generated from the ledger cross-referenced against commit messages since
 `v2.4.27`, so a finding counts as fixed only if a commit cites its ID and the
 citing commit actually resolves it (not just references it as rationale).
 
-**As of the round and match state remediation through `a0f9b4b5`.** Last
-release: `v2.4.33` (all five platforms green, itch.io deploys succeeded).
+**As of the round and match state remediation through `a0f9b4b5`, plus the
+final-review follow-up on this branch.** Last release: `v2.4.33` (all five
+platforms green, itch.io deploys succeeded).
 
 ## Position
 
@@ -16,11 +17,12 @@ release: `v2.4.33` (all five platforms green, itch.io deploys succeeded).
 | Medium | 45 | 32 | 13 |
 | Low | 13 | 9 | 4 |
 | **Defects** | **73** | **56** | **17** |
-| Improvements | 24 | 17 done/partial, 1 moot | 6 |
+| Improvements | 24 | 15 done, 2 partial, 1 moot | 6 fully open |
 
-The improvement tally retains partially completed IMP-015 in the
-done/partial column. The six fully open improvements are IMP-006, IMP-016,
-IMP-017, IMP-019, IMP-020, and IMP-021.
+The two partial improvements are IMP-015 and IMP-018. Together with the six
+fully open improvements (IMP-006, IMP-016, IMP-017, IMP-019, IMP-020, and
+IMP-021), eight improvements still have work remaining. The mutually
+exclusive arithmetic is 15 done + 2 partial + 1 moot + 6 fully open = 24.
 
 All High-severity findings are fixed. Two caveats:
 
@@ -41,7 +43,9 @@ All High-severity findings are fixed. Two caveats:
   the manual checklist.
 - **BUG-019** — simultaneous final danger-zone losses now resolve as a draw
   without transient winner credit; `f5ec0509`. Verified by a production-object
-  CTest fixture; the rendered draw presentation remains unchecked.
+  CTest fixture and a render-facing regression that proves a draw cannot select
+  either two-player winner texture; the live visual presentation remains
+  unchecked.
 - **BUG-021** — departures now honor continuation, team survival,
   connected-opponent, victories-limit, and terminal ready-wait rules;
   `1db437b4`, with terminal-state follow-up `1050b6c0`. Verified by departure,
@@ -53,8 +57,10 @@ All High-severity findings are fixed. Two caveats:
 - **BUG-023** — the active local 2–4 player panel now renders, edits, and
   propagates its victories limit; `ae3d3c20`, with coverage in `edfcf492` and
   `e7f025a2`. Verified through the real headless `MainMenu` render, input, and
-  setup path plus controlled regression mutations; keyboard/controller visual
-  navigation remains unchecked.
+  setup path plus the real local post-round Enter consumer: reached finite
+  limits return to the menu, while below-limit 3P/4P rounds wait for all
+  animations and advance. Keyboard/controller visual navigation remains
+  unchecked.
 - **BUG-024** — remote clear wins now commit once regardless of whether the
   win announcement or replicated stick resolution is processed first;
   `f5ec0509`. Verified by both message-order CTest fixtures; no two-client
@@ -64,9 +70,12 @@ All High-severity findings are fixed. Two caveats:
   with strengthened contact-local fixtures in `a0f9b4b5`. Verified by both
   production-object fixtures and a one-step mutation; bank and vertical shots
   remain unchecked in live gameplay.
-- **IMP-018** — complete: the permanent production-object gameplay harness is
-  registered as `bubblegame-rules-test` in CTest and covers the round/match,
-  chain-topology, and maximum-delta regressions above.
+- **IMP-018 (partial)** — the permanent production-object gameplay harness is
+  registered as `bubblegame-rules-test` in CTest and covers the focused
+  round/match, chain-topology, and maximum-delta regressions above. The
+  canonical matrix in FINDINGS.md remains open: it still lacks the complete
+  1/2/5/6/20-player, 1–5-team, 5/8-colour, both-orientation, three-round,
+  shrink/new-match, stale-malus/BUG-020, normal-plus-sanitized lifecycle gate.
 - **BUG-045** — `TTFText` copy semantics; `aca2b403`.
 - **BUG-001** — `TextureEx` lifetime/leak; `9f3fdc1f`.
 - **IMP-001..005, 007, 009..015 (partial), 022, 023, 024** — the 24-item
@@ -117,9 +126,11 @@ All High-severity findings are fixed. Two caveats:
 - **IMP-006** — bounded numeric conversions/integer-division intent (High
   effort; no proven defect, pure code-quality).
 - **IMP-015 (partial)** — see caveat above.
-- **IMP-016, IMP-017, IMP-019..021** — the remaining test-infrastructure items:
-  protocol/parser unit tests, packaged-artifact smoke tests, and the Linux
-  leak-regression job. IMP-018's CTest gameplay harness is now complete.
+- **IMP-018 (partial)** — the focused CTest harness is permanent, but the
+  canonical matrix and lifecycle coverage listed above remain outstanding.
+- **IMP-016, IMP-017, IMP-019..021** — the remaining fully open
+  test-infrastructure items: protocol/parser unit tests, packaged-artifact
+  smoke tests, and the Linux leak-regression job.
 - **IMP-008** — effectively closed, not "done": Task 9 found zero actionable
   diagnostics in-scope and promoted nothing. No code change needed.
 

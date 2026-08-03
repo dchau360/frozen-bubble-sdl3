@@ -227,6 +227,23 @@ if(BUILD_TESTING AND NOT EMSCRIPTEN AND NOT ANDROID)
     endif()
     add_test(NAME localmultiplayer-settings-test COMMAND localmultiplayer-settings-test)
 
+    add_executable(localmultiplayer-header-compile-test
+        tests/localmultiplayer_header_compile_test.cpp
+        src/localmultiplayer_settings.cpp
+    )
+    set_property(TARGET localmultiplayer-header-compile-test PROPERTY CXX_STANDARD 17)
+    set_property(TARGET localmultiplayer-header-compile-test PROPERTY CXX_EXTENSIONS OFF)
+    target_include_directories(localmultiplayer-header-compile-test PRIVATE src)
+    target_link_libraries(localmultiplayer-header-compile-test PRIVATE
+        SDL3::SDL3
+        SDL3_image::SDL3_image
+        SDL3_mixer::SDL3_mixer
+        SDL3_ttf::SDL3_ttf
+        iniparser-static
+    )
+    add_test(NAME localmultiplayer-header-compile-test
+        COMMAND localmultiplayer-header-compile-test)
+
     add_executable(netview-test
         tests/netview_test.cpp
         src/netview.cpp

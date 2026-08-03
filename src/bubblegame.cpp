@@ -1035,6 +1035,12 @@ void RemoveArray(BubbleArray *bArray, int playerCount) {
 
 
 void BubbleGame::ReloadGame(int level) {
+#ifdef FROZEN_BUBBLE_TEST_ACCESS
+    if (testCapturePostRoundTransition) {
+        testReloadLevel = level;
+        return;
+    }
+#endif
     if (level >= (int)loadedLevels.size() && !currentSettings.randomLevels){
         QuitToTitle();
         return;
@@ -1372,6 +1378,12 @@ void BubbleGame::ReRankNetView() {
 
 
 void BubbleGame::QuitToTitle() {
+#ifdef FROZEN_BUBBLE_TEST_ACCESS
+    if (testCapturePostRoundTransition) {
+        testQuitToTitleRequested = true;
+        return;
+    }
+#endif
     SDL_Log("!!! QuitToTitle() called - returning to menu (gameFinish=%d, gameWon=%d, gameLost=%d)",
             gameFinish, gameWon, gameLost);
     // Clear shared controller input state so stale presses don't carry into menus

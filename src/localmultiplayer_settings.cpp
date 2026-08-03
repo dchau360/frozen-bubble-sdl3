@@ -1,5 +1,3 @@
-#include <SDL3_image/SDL_image.h>
-
 #include "localmultiplayer_settings.h"
 
 #include <algorithm>

@@ -47,6 +47,39 @@ struct BubbleGameTestAccess {
     static void updateAtScale(BubbleGame& game, float scale) {
         game.UpdateSingleBubblesAtScale(scale);
     }
+    static void capturePostRoundTransition(BubbleGame& game) {
+        game.testCapturePostRoundTransition = true;
+        game.testQuitToTitleRequested = false;
+        game.testReloadLevel = -1;
+    }
+    static bool quitRequested(const BubbleGame& game) {
+        return game.testQuitToTitleRequested;
+    }
+    static int reloadLevel(const BubbleGame& game) {
+        return game.testReloadLevel;
+    }
+    static void setLevel(BubbleGame& game, int level) { game.curLevel = level; }
+    static void setDone(BubbleGame& game, int idx, bool done) {
+        game.bubbleArrays[idx].mpDone = done;
+    }
+    static void pressContinue(BubbleGame& game) {
+        SDL_Event event{};
+        event.type = SDL_EVENT_KEY_DOWN;
+        event.key.key = SDLK_RETURN;
+        game.HandleInput(&event);
+    }
+    static void finishAsDraw(BubbleGame& game) { game.FinishRoundAsDraw(); }
+    static void setAnimationsDone(BubbleGame& game) { game.gameMpDone = true; }
+    static void useResultPanel(BubbleGame& game, int idx, SDL_Texture* texture) {
+        game.multiStatePanels[idx] = texture;
+        game.panelRct = {0, 0, 1, 1};
+    }
+    static SDL_Texture* resultPanel(const BubbleGame& game, int idx) {
+        return game.multiStatePanels[idx];
+    }
+    static void renderResultPanel(BubbleGame& game, SDL_Renderer* renderer) {
+        game.RenderMultiplayerResultPanel(renderer);
+    }
 
     static void reset(BubbleGame& game, int players, bool network, bool clearMode) {
         singleBubbles.clear();
@@ -56,10 +89,15 @@ struct BubbleGameTestAccess {
         game.currentSettings.networkGame = network;
         game.currentSettings.clearMode = clearMode;
         game.gameFinish = game.gameLost = game.gameMatchOver = false;
+        game.gameMpDone = false;
         game.wonByClearing = false;
         game.roundWinnerIdx = -1;
         game.connectedPlayerCount = players;
+        game.curLevel = 1;
         game.winsP1 = game.winsP2 = 0;
+        game.testCapturePostRoundTransition = false;
+        game.testQuitToTitleRequested = false;
+        game.testReloadLevel = -1;
         for (int i = 0; i < players; ++i) {
             BubbleArray& p = game.bubbleArrays[i];
             p.playerAssigned = i;
@@ -213,6 +251,75 @@ int main() {
         BubbleGameTestAccess::announce(game, 0, false);
         CHECK(BubbleGameTestAccess::player(game, 0).winCount == 100);
         CHECK(!BubbleGameTestAccess::matchOver(game));
+
+        // The real local post-round Enter consumer must return from a finite
+        // match instead of reloading and clearing gameMatchOver.
+        BubbleGameTestAccess::reset(game, 2, false, false);
+        BubbleGameTestAccess::settings(game).localMultiplayer = true;
+        BubbleGameTestAccess::settings(game).randomLevels = true;
+        BubbleGameTestAccess::settings(game).victoriesLimit = 1;
+        BubbleGameTestAccess::announce(game, 0, false);
+        BubbleGameTestAccess::setDone(game, 0, true);
+        BubbleGameTestAccess::setDone(game, 1, true);
+        BubbleGameTestAccess::capturePostRoundTransition(game);
+        BubbleGameTestAccess::pressContinue(game);
+        CHECK(BubbleGameTestAccess::quitRequested(game));
+        CHECK(BubbleGameTestAccess::reloadLevel(game) == -1);
+
+        // Local 3P and 4P rounds advance only after every participant's end
+        // animation has completed. This drives the real HandleInput consumer,
+        // with only ReloadGame's transition/board generation captured.
+        for (int players : {3, 4}) {
+            BubbleGameTestAccess::reset(game, players, false, false);
+            BubbleGameTestAccess::settings(game).localMultiplayer = true;
+            BubbleGameTestAccess::settings(game).randomLevels = true;
+            BubbleGameTestAccess::settings(game).victoriesLimit = 2;
+            BubbleGameTestAccess::setLevel(game, 6);
+            BubbleGameTestAccess::announce(game, players - 1, false);
+            CHECK(!BubbleGameTestAccess::matchOver(game));
+            for (int i = 0; i < players; ++i) {
+                BubbleGameTestAccess::setDone(game, i, i != players - 1);
+            }
+            BubbleGameTestAccess::capturePostRoundTransition(game);
+            BubbleGameTestAccess::pressContinue(game);
+            CHECK(BubbleGameTestAccess::reloadLevel(game) == -1);
+
+            BubbleGameTestAccess::setDone(game, players - 1, true);
+            BubbleGameTestAccess::pressContinue(game);
+            CHECK(BubbleGameTestAccess::reloadLevel(game) == 7);
+            CHECK(!BubbleGameTestAccess::quitRequested(game));
+        }
+
+        // A simultaneous draw has no winner texture. Exercise the render-facing
+        // production method with a literal one-pixel panel and verify that it
+        // leaves the render target untouched.
+        BubbleGameTestAccess::reset(game, 2, false, false);
+        BubbleGameTestAccess::finishAsDraw(game);
+        BubbleGameTestAccess::setAnimationsDone(game);
+        SDL_Texture* oldPanel = BubbleGameTestAccess::resultPanel(game, 0);
+        SDL_Texture* redPanel = SDL_CreateTexture(
+            renderer, SDL_PIXELFORMAT_RGBA8888,
+            SDL_TEXTUREACCESS_TARGET, 1, 1);
+        SDL_SetRenderTarget(renderer, redPanel);
+        SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255);
+        SDL_RenderClear(renderer);
+        SDL_SetRenderTarget(renderer, nullptr);
+        BubbleGameTestAccess::useResultPanel(game, 0, redPanel);
+        SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
+        SDL_RenderClear(renderer);
+        BubbleGameTestAccess::renderResultPanel(game, renderer);
+        SDL_Rect sampleRect{0, 0, 1, 1};
+        SDL_Surface* sample = SDL_RenderReadPixels(renderer, &sampleRect);
+        Uint8 red = 255, green = 255, blue = 255, alpha = 255;
+        CHECK(sample != nullptr);
+        if (sample != nullptr) {
+            CHECK(SDL_ReadSurfacePixel(
+                sample, 0, 0, &red, &green, &blue, &alpha));
+            CHECK(red == 0 && green == 0 && blue == 0);
+            SDL_DestroySurface(sample);
+        }
+        BubbleGameTestAccess::useResultPanel(game, 0, oldPanel);
+        SDL_DestroyTexture(redPanel);
 
         BubbleGameTestAccess::reset(game, 2, false, false);
         BubbleGameTestAccess::check(game, 0);

@@ -515,6 +515,36 @@ void BubbleGame::RenderRoundStats(SDL_Renderer *rend) {
     }
 }
 
+void BubbleGame::RenderMultiplayerResultPanel(SDL_Renderer *rend) {
+    // Only two-player layouts have a winner-panel texture. A draw has no
+    // roundWinnerIdx and must not fall back to the P1 texture.
+    if (gameMpDone && currentSettings.playerCount == 2 &&
+        roundWinnerIdx >= 0 && roundWinnerIdx < 2) {
+        SDL_FRect fr = ToFRect(panelRct);
+        SDL_RenderTexture(rend, multiStatePanels[roundWinnerIdx], nullptr, &fr);
+    }
+}
+
+void BubbleGame::UpdateMultiplayerCompletionState() {
+    if (!gameFinish || currentSettings.playerCount < 2) return;
+
+    // Network rendering historically aggregates the two-player animation
+    // pair. Local multiplayer extends the same rule to every reachable 2-4P
+    // setup so HandleInput can consume the finished round.
+    const bool supported = currentSettings.playerCount == 2 ||
+        (!currentSettings.networkGame && currentSettings.localMultiplayer &&
+         currentSettings.playerCount <= 4);
+    if (!supported) return;
+
+    gameMpDone = true;
+    for (int i = 0; i < currentSettings.playerCount; ++i) {
+        if (!bubbleArrays[i].mpDone) {
+            gameMpDone = false;
+            break;
+        }
+    }
+}
+
 
 void BubbleGame::Render() {
     SDL_Renderer *rend = const_cast<SDL_Renderer*>(renderer);
@@ -805,7 +835,6 @@ void BubbleGame::Render() {
                 if (!curArray.mpWinner) DoFrozenAnimation(curArray, curArray.frozenWait);
                 else {
                     DoWinAnimation(curArray, curArray.explodeWait);
-                    idxMPWinner = i;
                 }
             } else if (curArray.playerState == BubbleArray::PlayerState::LOST) {
                 // Player died mid-round while others are still playing (3-5 player games):
@@ -1002,17 +1031,9 @@ void BubbleGame::Render() {
         }
 
         if (gameFinish) {
-            if (currentSettings.playerCount == 2) {
-                if (gameMpDone) { SDL_FRect fr = ToFRect(panelRct); SDL_RenderTexture(rend, multiStatePanels[idxMPWinner], nullptr, &fr); }
-                else {
-                    for (int i = 0; i < currentSettings.playerCount; i++) {
-                        if (bubbleArrays[i].mpDone == false) {
-                            gameMpDone = false;
-                            break;
-                        } else gameMpDone = true;
-                    }
-                }
-            }
+            UpdateMultiplayerCompletionState();
+            if (currentSettings.playerCount == 2)
+                RenderMultiplayerResultPanel(rend);
         }
 
         if(singleBubbles.size() > 0) {

@@ -340,7 +340,16 @@ void BubbleGame::HandleInput(SDL_Event *e) {
                         }
                     } else {
                         // Single player or local multiplayer
-                        if (currentSettings.mpTraining && mpTrainDone) {
+                        if (gameMatchOver && currentSettings.localMultiplayer) {
+                            SDL_Log("Local match over - victories limit reached, returning to menu");
+                            QuitToTitle();
+                        } else {
+                            UpdateMultiplayerCompletionState();
+                        }
+
+                        if (gameMatchOver && currentSettings.localMultiplayer) {
+                            break;
+                        } else if (currentSettings.mpTraining && mpTrainDone) {
                             // Training ended: show highscores or return to title
                             if (pendingHighscore) {
                                 pendingHighscore = false;

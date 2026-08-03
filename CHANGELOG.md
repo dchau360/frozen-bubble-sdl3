@@ -6,12 +6,15 @@
   empty board no longer ends Classic or Team play by itself, while Clear Mode
   reliably awards exactly one win to the player who cleared their board.
 - **Simultaneous final losses now resolve as a draw** without briefly or
-  permanently crediting either player with a win.
+  permanently crediting either player with a win or showing player one's
+  winner panel.
 - **Player departures now honor the room's continuation, surviving-team, and
   victories-limit rules**, including when a departure makes an in-progress
   next-round wait terminal.
 - **Local 2–4 player setup now exposes a reachable victories-limit setting**
-  and carries the selected value into the match.
+  and carries the selected value into the match. Finite matches return to the
+  menu when the limit is reached, while unfinished 3- and 4-player matches can
+  advance after every player's round-end animation completes.
 - **Chain reactions now choose valid targets on flipped boards**, reserving the
   complete connected group and cancelling invalid cross-chains.
 - **High-speed shots no longer tunnel through occupied bubbles** on full-size

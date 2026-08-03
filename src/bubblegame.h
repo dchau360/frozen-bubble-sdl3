@@ -25,6 +25,7 @@
 #define PI 3.1415926535897932384626433832795028841972
 
 #include <SDL3/SDL.h>
+#include <SDL3_image/SDL_image.h>
 #include "sdl3_compat.h"
 #include "ttftext.h"
 #include "networkclient.h"
@@ -476,6 +477,12 @@ public:
 private:
 #ifdef FROZEN_BUBBLE_TEST_ACCESS
     friend struct BubbleGameTestAccess;
+
+    // Keep the post-round decision path real in production-object tests while
+    // stopping immediately before the expensive screen transition/board load.
+    bool testCapturePostRoundTransition = false;
+    bool testQuitToTitleRequested = false;
+    int testReloadLevel = -1;
 #endif
 
     const SDL_Renderer *renderer = nullptr;
@@ -529,7 +536,7 @@ private:
     Uint32 wasmRoundSyncWaitStart = 0; // WASM joiner: timestamp when waiting for Round 2+ sync messages
 #endif
 
-    int curLevel = 1, pauseFrame = 0, nextPauseUpd = 2, idxMPWinner = 0;
+    int curLevel = 1, pauseFrame = 0, nextPauseUpd = 2;
     int winsP1 = 0, winsP2 = 0; // 2p mode stuff
     Uint32 timePaused = 0;
     int comboDisplayTimer = 0; // Timer for showing combo text
@@ -612,6 +619,8 @@ private:
     void RenderMalusAlerts(SDL_Renderer *rend);  // Draw + age the incoming-malus toasts
     void FinalizeRoundStats();   // Roll per-round stats into match totals; broadcast 'S' in network games
     void RenderRoundStats(SDL_Renderer *rend);  // Post-round per-player stats table overlay
+    void RenderMultiplayerResultPanel(SDL_Renderer *rend);
+    void UpdateMultiplayerCompletionState();
     void SendLobbyMatchSummary();  // Leader posts the match summary to the lobby chatroom
     void StartInGameChat();
     void FinishInGameChat(bool sendMessage);
