@@ -401,6 +401,7 @@ int main() {
         CHECK(IsExpectedNeighbor(fullLanding));
         CHECK(fullLanding.first != 0);
         CHECK(full.bubbleMap[2][3].bubbleId == 0);
+        CHECK(full.stickAnimPos.y > full.topLimit);
 
         // The same maximum delta must remain collision-safe on a mini board.
         BubbleGameTestAccess::reset(game, 3, false, false);
@@ -420,6 +421,7 @@ int main() {
         CHECK(IsExpectedNeighbor(miniLanding));
         CHECK(miniLanding.first != 0);
         CHECK(mini.bubbleMap[2][3].bubbleId == 0);
+        CHECK(mini.stickAnimPos.y > mini.topLimit);
     }
 
     SDL_DestroyRenderer(renderer);
