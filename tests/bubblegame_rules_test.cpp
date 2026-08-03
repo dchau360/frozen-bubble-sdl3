@@ -24,6 +24,12 @@ struct BubbleGameTestAccess {
     static bool matchOver(const BubbleGame& game) { return game.gameMatchOver; }
     static int winsP1(const BubbleGame& game) { return game.winsP1; }
     static int winsP2(const BubbleGame& game) { return game.winsP2; }
+    static bool waiting(const BubbleGame& game) { return game.waitingForOpponentNewGame; }
+    static void beginWaiting(BubbleGame& game) {
+        game.waitingForOpponentNewGame = true;
+        game.opponentReadyForNewGame = false;
+        game.opponentsReadyCount = 0;
+    }
     static void check(BubbleGame& game, int idx) { game.CheckGameState(game.bubbleArrays[idx]); }
     static void announce(BubbleGame& game, int winner, bool clear) {
         game.ResolveRoundOutcome(
@@ -173,6 +179,56 @@ int main() {
         BubbleGameTestAccess::depart(game, 1);
         CHECK(BubbleGameTestAccess::player(game, 0).winCount == 2);
         CHECK(BubbleGameTestAccess::matchOver(game));
+
+        // An abandoned round that ends in a draw still ends the match.
+        BubbleGameTestAccess::reset(game, 3, true, false);
+        BubbleGameTestAccess::settings(game).continueWhenPlayersLeave = false;
+        BubbleGameTestAccess::depart(game, 2);
+        PutDangerBubble(BubbleGameTestAccess::player(game, 0));
+        PutDangerBubble(BubbleGameTestAccess::player(game, 1));
+        BubbleGameTestAccess::check(game, 0);
+        CHECK(BubbleGameTestAccess::lost(game));
+        CHECK(BubbleGameTestAccess::matchOver(game));
+        CHECK(BubbleGameTestAccess::player(game, 0).winCount == 0);
+        CHECK(BubbleGameTestAccess::player(game, 1).winCount == 0);
+
+        // A late departure ends an already-finished match when continuation is disabled.
+        BubbleGameTestAccess::reset(game, 3, true, false);
+        BubbleGameTestAccess::settings(game).continueWhenPlayersLeave = false;
+        BubbleGameTestAccess::announce(game, 0, false);
+        CHECK(!BubbleGameTestAccess::matchOver(game));
+        CHECK(BubbleGameTestAccess::player(game, 0).winCount == 1);
+        BubbleGameTestAccess::depart(game, 2);
+        CHECK(BubbleGameTestAccess::matchOver(game));
+        CHECK(BubbleGameTestAccess::player(game, 0).winCount == 1);
+
+        // A late departure cannot restart an already-finished 2P match alone.
+        BubbleGameTestAccess::reset(game, 2, true, false);
+        BubbleGameTestAccess::settings(game).continueWhenPlayersLeave = true;
+        BubbleGameTestAccess::announce(game, 0, false);
+        CHECK(!BubbleGameTestAccess::matchOver(game));
+        CHECK(BubbleGameTestAccess::player(game, 0).winCount == 1);
+        BubbleGameTestAccess::beginWaiting(game);
+        BubbleGameTestAccess::depart(game, 1);
+        CHECK(BubbleGameTestAccess::matchOver(game));
+        CHECK(!BubbleGameTestAccess::waiting(game));
+        CHECK(BubbleGameTestAccess::player(game, 0).winCount == 1);
+
+        // Late departures cannot restart an already-finished match with one connected team.
+        BubbleGameTestAccess::reset(game, 4, true, false);
+        SetupSettings& lateTeamSettings = BubbleGameTestAccess::settings(game);
+        lateTeamSettings.continueWhenPlayersLeave = true;
+        lateTeamSettings.teamMode = true;
+        lateTeamSettings.playerTeams[0] = lateTeamSettings.playerTeams[2] = 1;
+        lateTeamSettings.playerTeams[1] = lateTeamSettings.playerTeams[3] = 2;
+        BubbleGameTestAccess::announce(game, 0, false);
+        CHECK(!BubbleGameTestAccess::matchOver(game));
+        BubbleGameTestAccess::depart(game, 1);
+        CHECK(!BubbleGameTestAccess::matchOver(game));
+        BubbleGameTestAccess::depart(game, 3);
+        CHECK(BubbleGameTestAccess::matchOver(game));
+        CHECK(BubbleGameTestAccess::player(game, 0).winCount == 1);
+        CHECK(BubbleGameTestAccess::player(game, 2).winCount == 1);
     }
 
     SDL_DestroyRenderer(renderer);

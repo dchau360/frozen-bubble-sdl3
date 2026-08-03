@@ -478,6 +478,19 @@ int BubbleGame::CountConnectedTeams() const {
     return static_cast<int>(connectedTeams.size());
 }
 
+void BubbleGame::UpdateDepartureMatchTermination() {
+    const bool abandonedRound =
+        !currentSettings.continueWhenPlayersLeave && HasDepartedPlayers();
+    const bool insufficientOpponents = currentSettings.teamMode
+        ? CountConnectedTeams() < 2
+        : CountConnectedPlayers() < 2;
+    if (abandonedRound || insufficientOpponents) {
+        gameMatchOver = true;
+        waitingForOpponentNewGame = false;
+        opponentReadyForNewGame = false;
+    }
+}
+
 void BubbleGame::HandlePlayerDeparture(int playerIdx) {
     if (playerIdx < 0 || playerIdx >= currentSettings.playerCount) return;
 
@@ -553,6 +566,7 @@ void BubbleGame::ResolveRoundOutcome(int assertedWinnerIdx,
         // no later observation may replace or re-credit a committed outcome.
         if (assertedWinnerIdx >= 0)
             CommitRoundWin(assertedWinnerIdx, cause, false);
+        UpdateDepartureMatchTermination();
         return;
     }
 
@@ -613,9 +627,6 @@ void BubbleGame::CommitRoundWin(int winnerIdx,
 
     const bool abandonedRound =
         !currentSettings.continueWhenPlayersLeave && HasDepartedPlayers();
-    const bool insufficientOpponents = currentSettings.teamMode
-        ? CountConnectedTeams() < 2
-        : CountConnectedPlayers() < 2;
 
     for (int idx : winners) {
         BubbleArray& winner = bubbleArrays[idx];
@@ -631,7 +642,7 @@ void BubbleGame::CommitRoundWin(int winnerIdx,
     Update2PText();
     UpdatePlayerNameWinText();
 
-    gameMatchOver = abandonedRound || insufficientOpponents;
+    UpdateDepartureMatchTermination();
     if (!abandonedRound && currentSettings.victoriesLimit > 0) {
         for (int idx : winners) {
             if (bubbleArrays[idx].winCount >= currentSettings.victoriesLimit) {
@@ -660,6 +671,7 @@ void BubbleGame::FinishRoundAsDraw() {
     gameFinish = true;
     gameLost = true;
     roundWinnerIdx = -1;
+    UpdateDepartureMatchTermination();
 }
 
 void BubbleGame::CheckGameState(BubbleArray &bArray, bool countForRoot) {

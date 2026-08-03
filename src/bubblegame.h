@@ -624,6 +624,7 @@ private:
         bool sendNetworkFinish = false);
     void CommitRoundWin(int winnerIdx, RoundWinCause cause, bool sendNetworkFinish);
     void FinishRoundAsDraw();
+    void UpdateDepartureMatchTermination();
     void HandlePlayerDeparture(int playerIdx);
     bool HasDepartedPlayers() const;
     int CountConnectedPlayers() const;
