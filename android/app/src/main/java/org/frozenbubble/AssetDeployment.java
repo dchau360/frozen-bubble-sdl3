@@ -152,8 +152,7 @@ final class AssetDeployment {
         if (parent == null) {
             return false;
         }
-        File canonicalParent = parent.getCanonicalFile();
-        File canonicalFile = file.getCanonicalFile();
-        return !canonicalParent.equals(canonicalFile.getParentFile());
+        File expectedCanonicalPath = new File(parent.getCanonicalFile(), file.getName());
+        return !expectedCanonicalPath.equals(file.getCanonicalFile());
     }
 }

@@ -179,6 +179,22 @@ public class AssetDeploymentTest {
         assertFileBytes(new File(deployed, "gfx/red.png"), "new-asset");
     }
 
+    @Test
+    public void rebuildUnlinksSiblingTargetSymlinkWithoutDeletingTarget() throws Exception {
+        File filesDir = temporaryDirectory();
+        File siblingDirectory = new File(filesDir, "other");
+        writeFile(new File(siblingDirectory, "must-survive.txt"), "sibling-data");
+        File share = new File(filesDir, "share");
+        Files.createSymbolicLink(share.toPath(), siblingDirectory.toPath());
+        writeFile(new File(filesDir, ".assets_version"), "schema-2:41");
+
+        File deployed = AssetDeployment.deploy(sourceOf("gfx/blue.png", "new-asset"), filesDir, 42L);
+
+        assertFileBytes(new File(siblingDirectory, "must-survive.txt"), "sibling-data");
+        assertFalse(Files.isSymbolicLink(deployed.toPath()));
+        assertFileBytes(new File(deployed, "gfx/blue.png"), "new-asset");
+    }
+
     private File temporaryDirectory() throws IOException {
         File directory = Files.createTempDirectory("asset-deployment-test").toFile();
         temporaryDirectories.add(directory);
