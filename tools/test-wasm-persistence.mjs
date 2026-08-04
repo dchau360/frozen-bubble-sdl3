@@ -95,6 +95,13 @@ function waitForMatch(stream, pattern, description, timeoutMs = TIMEOUT_MS) {
   });
 }
 
+function waitForSpawn(child) {
+  return new Promise((resolveSpawn, rejectSpawn) => {
+    child.once('spawn', resolveSpawn);
+    child.once('error', rejectSpawn);
+  });
+}
+
 function getJson(url) {
   return new Promise((resolveJson, rejectJson) => {
     const request = httpGet(url, (response) => {
@@ -261,15 +268,20 @@ async function waitForPersistenceReady(page) {
 }
 
 async function stopChild(child) {
-  if (!child || child.exitCode !== null || child.signalCode !== null) return;
+  if (!child || child.pid === undefined ||
+      child.exitCode !== null || child.signalCode !== null) return;
   await new Promise((resolveExit) => {
+    const settle = () => {
+      clearTimeout(forceTimer);
+      child.off('error', settle);
+      child.off('close', settle);
+      resolveExit();
+    };
     const forceTimer = setTimeout(() => {
       if (child.exitCode === null && child.signalCode === null) child.kill('SIGKILL');
     }, 5_000);
-    child.once('exit', () => {
-      clearTimeout(forceTimer);
-      resolveExit();
-    });
+    child.once('error', settle);
+    child.once('close', settle);
     child.kill('SIGTERM');
   });
 }
@@ -286,6 +298,7 @@ async function main() {
     server = spawn('python3', [
       'tools/serve-wasm.py', buildDirectory, '--port', '0',
     ], {stdio: ['ignore', 'pipe', 'pipe']});
+    await waitForSpawn(server);
     server.stderr.resume();
     const serverUrl = await waitForMatch(
         server.stdout, /\s(http:\/\/localhost:\d+\/\S*)/, 'WASM server URL');
@@ -300,6 +313,7 @@ async function main() {
       '--no-default-browser-check',
       'about:blank',
     ], {stdio: ['ignore', 'ignore', 'pipe']});
+    await waitForSpawn(chrome);
     const browserWebSocketUrl = await waitForMatch(
         chrome.stderr, /(ws:\/\/[^\s]+\/devtools\/browser\/[^\s]+)/,
         'Chrome DevTools endpoint');
