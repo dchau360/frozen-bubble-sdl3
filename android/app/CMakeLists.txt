@@ -79,6 +79,7 @@ add_library(main SHARED
     ../../src/mainmenu_netpanel.cpp
     ../../src/mainmenu_panels.cpp
     ../../src/mainmenu_server.cpp
+    ../../src/localmultiplayer_settings.cpp
     ../../src/gamesettings.cpp
     ../../src/audiomixer.cpp
     ../../src/shaderstuff.cpp
