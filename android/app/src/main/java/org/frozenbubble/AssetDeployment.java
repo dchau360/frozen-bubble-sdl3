@@ -32,7 +32,8 @@ final class AssetDeployment {
         String wanted = MARKER_PREFIX + versionCode;
         String installed = marker.isFile() ? readUtf8(marker).trim() : "";
 
-        if (wanted.equals(installed) && managedRoot.isDirectory()) {
+        if (wanted.equals(installed) && !isSymbolicLink(managedRoot)
+                && managedRoot.isDirectory()) {
             return managedRoot;
         }
 
@@ -123,6 +124,12 @@ final class AssetDeployment {
     }
 
     private static void deleteTree(File file) throws IOException {
+        if (isSymbolicLink(file)) {
+            if (!file.delete()) {
+                throw new IOException("Could not unlink symbolic link: " + file);
+            }
+            return;
+        }
         if (!file.exists()) {
             return;
         }
@@ -138,5 +145,15 @@ final class AssetDeployment {
         if (!file.delete()) {
             throw new IOException("Could not delete: " + file);
         }
+    }
+
+    private static boolean isSymbolicLink(File file) throws IOException {
+        File parent = file.getParentFile();
+        if (parent == null) {
+            return false;
+        }
+        File canonicalParent = parent.getCanonicalFile();
+        File canonicalFile = file.getCanonicalFile();
+        return !canonicalParent.equals(canonicalFile.getParentFile());
     }
 }
