@@ -79,7 +79,8 @@ def main():
 
     socketserver.TCPServer.allow_reuse_address = True
     with socketserver.TCPServer(("127.0.0.1", args.port), Handler) as httpd:
-        url = f"http://localhost:{args.port}/{landing or ''}"
+        actual_port = httpd.server_address[1]
+        url = f"http://localhost:{actual_port}/{landing or ''}"
         # flush: stdout block-buffers when redirected, and this line is the only
         # confirmation the server came up when it is run in the background.
         print(f"Serving {root}", flush=True)

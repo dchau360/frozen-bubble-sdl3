@@ -129,11 +129,13 @@ if(EMSCRIPTEN)
         -sWASM=1
         -sINITIAL_MEMORY=16777216
         -lwebsocket.js
+        -lidbfs.js
         "SHELL:-sENVIRONMENT=web"
         "SHELL:-sSDL3_IMAGE_FORMATS=['png','gif']"
         "SHELL:-sSDL3_MIXER_FORMATS=['ogg']"
+        "SHELL:--pre-js ${CMAKE_SOURCE_DIR}/web/persistence.js"
         "SHELL:--preload-file ${CMAKE_SOURCE_DIR}/share@/share"
-        "SHELL:-sEXPORTED_RUNTIME_METHODS=['cwrap','ccall','setValue','getValue','UTF8ToString','stringToUTF8']"
+        "SHELL:-sEXPORTED_RUNTIME_METHODS=['cwrap','ccall','setValue','getValue','UTF8ToString','stringToUTF8','FS']"
         "SHELL:--shell-file ${CMAKE_SOURCE_DIR}/web/shell.html"
     )
 endif()
