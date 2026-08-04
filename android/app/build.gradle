@@ -72,6 +72,7 @@ android {
 }
 
 dependencies {
+    testImplementation 'junit:junit:4.13.2'
     // Google AdMob
     implementation 'com.google.android.gms:play-services-ads:23.3.0'
     // Google Play Billing (for "Remove Ads" IAP)

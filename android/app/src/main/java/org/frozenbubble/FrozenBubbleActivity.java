@@ -11,7 +11,9 @@ package org.frozenbubble;
 
 import org.libsdl.app.SDLActivity;
 import android.os.Bundle;
+import android.util.Log;
 import android.view.KeyEvent;
+import android.widget.Toast;
 
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
@@ -38,12 +40,17 @@ public class FrozenBubbleActivity extends SDLActivity {
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
-        // Extract APK assets to writable internal storage BEFORE SDL starts.
-        // C++ code uses fopen() which cannot read APK assets directly — they
-        // must be copied to the filesystem first. This is fast on subsequent
-        // launches (version marker detected, extraction skipped).
-        // Store the result so C++ can read the exact same path via JNI.
-        sExtractedDataDir = AssetExtractor.extractAll(this);
+        try {
+            sExtractedDataDir = AssetExtractor.extractAll(this);
+        } catch (Exception e) {
+            sExtractedDataDir = "";
+            Log.e("FBubble.Assets", "Asset deployment failed; SDL will not start", e);
+            Toast.makeText(this,
+                    "Game assets could not be prepared. Restart or reinstall the app.",
+                    Toast.LENGTH_LONG).show();
+            finish();
+            return;
+        }
 
         super.onCreate(savedInstanceState);
 
