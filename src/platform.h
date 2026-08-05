@@ -62,6 +62,13 @@ void LogDataDir();
 // filesystem state. Native platforms write directly to disk, so this is a no-op.
 void RequestPersistentStorageFlush();
 
+// Moves tempPath onto finalPath, replacing it if it exists. Callers write the
+// complete new contents to tempPath first, so an interrupted save leaves the
+// previous file intact instead of a truncated one. Returns false and removes
+// tempPath if the move fails, leaving finalPath untouched.
+bool ReplaceFileAtomically(const std::string& tempPath,
+                           const std::string& finalPath);
+
 #ifdef __WASM_PORT__
 // True when the browser reports touch capability (phones/tablets).
 // SDL3's Emscripten backend has no screen-keyboard support, so touch devices

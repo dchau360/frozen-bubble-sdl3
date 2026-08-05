@@ -289,21 +289,31 @@ void HighscoreManager::SaveNewHighscores() {
     std::string historypath = gameSettings->prefPath + std::string("highlevelshistory");
     std::string levelsetpath = gameSettings->prefPath + std::string("highscores");
 
-    std::ofstream historyFile(historypath);
+    // Every completed level and every qualifying score rewrites both tables, so
+    // truncating them in place would repeatedly expose the whole table to a
+    // crash mid-write. Write each one out in full first, then swap it in.
+    const std::string historytemp = historypath + ".tmp";
+    const std::string levelsettemp = levelsetpath + ".tmp";
+
+    std::ofstream historyFile(historytemp);
     for (size_t i = 0; i < highscoreLevels.size(); i++)
     {
         historyFile << levelToData(highscoreLevels[i]);
     }
     historyFile.close();
+    const bool historySaved =
+        historyFile.good() && ReplaceFileAtomically(historytemp, historypath);
 
-    std::ofstream levelsetFile(levelsetpath);
+    std::ofstream levelsetFile(levelsettemp);
     for (size_t i = 0; i < levelsetScores.size(); i++) {
         HighscoreData &a = levelsetScores[i];
-        levelsetFile << a.level << "," << a.name << "," << a.time << "," << a.picId << "\n"; 
+        levelsetFile << a.level << "," << a.name << "," << a.time << "," << a.picId << "\n";
     }
     levelsetFile.close();
+    const bool levelsetSaved =
+        levelsetFile.good() && ReplaceFileAtomically(levelsettemp, levelsetpath);
 
-    RequestPersistentStorageFlush();
+    if (historySaved || levelsetSaved) RequestPersistentStorageFlush();
 }
 
 void HighscoreManager::CreateLevelImages() {

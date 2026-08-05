@@ -19,6 +19,8 @@
 
 #include "platform.h"
 #include <SDL3/SDL.h>
+#include <filesystem>
+#include <system_error>
 #if defined(_WIN32) || defined(__MINGW32__)
 #include <windows.h>
 #elif defined(__linux__)
@@ -176,6 +178,23 @@ bool WasmPromptText(const char* title, const char* current, char* out, int outLe
     return got == 1;
 }
 #endif
+
+bool ReplaceFileAtomically(const std::string& tempPath,
+                           const std::string& finalPath) {
+    std::error_code error;
+    // std::filesystem::rename replaces an existing destination, and does so as
+    // one filesystem operation, so no reader ever observes a partial file.
+    std::filesystem::rename(tempPath, finalPath, error);
+    if (!error) return true;
+
+    SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
+                "Could not replace %s with %s: %s",
+                finalPath.c_str(), tempPath.c_str(), error.message().c_str());
+
+    std::error_code cleanupError;
+    std::filesystem::remove(tempPath, cleanupError);
+    return false;
+}
 
 void RequestPersistentStorageFlush() {
 #ifdef __WASM_PORT__

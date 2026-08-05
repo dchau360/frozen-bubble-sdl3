@@ -81,6 +81,16 @@ static bool csvHasLevelAndTime(const std::filesystem::path& path,
     return false;
 }
 
+static int countCsvRows(const std::filesystem::path& path) {
+    std::ifstream input(path);
+    std::string line;
+    int rows = 0;
+    while (std::getline(input, line)) {
+        if (!line.empty()) ++rows;
+    }
+    return rows;
+}
+
 static std::filesystem::path createTemporaryPreferenceDirectory() {
     const auto seed = std::chrono::high_resolution_clock::now()
                           .time_since_epoch().count();
@@ -159,6 +169,35 @@ int main() {
 
     CHECK(manager->CheckAndAddScore(17, 12.5f));
     CHECK(csvHasLevelAndTime(scorePath, 17, 12.5f));
+
+    // Each save now stages a .tmp file beside the real one. Leaving those
+    // behind would litter the preferences directory on every toggle and score,
+    // so every completed save must have consumed its staging file.
+    CHECK(!std::filesystem::exists(settingsPath.string() + ".tmp"));
+    CHECK(!std::filesystem::exists(historyPath.string() + ".tmp"));
+    CHECK(!std::filesystem::exists(scorePath.string() + ".tmp"));
+
+    // A save replaces the table rather than appending to it, so a second score
+    // must not leave the first one duplicated.
+    CHECK(manager->CheckAndAddScore(18, 9.0f));
+    CHECK(csvHasLevelAndTime(scorePath, 18, 9.0f));
+    CHECK(countCsvRows(scorePath) == 2);
+
+    // The swap itself must replace the destination outright, not merge into it.
+    const std::filesystem::path replaceTarget = prefDir / "replace-target";
+    const std::filesystem::path replaceSource = prefDir / "replace-target.tmp";
+    { std::ofstream(replaceTarget) << "stale contents that must not survive\n"; }
+    { std::ofstream(replaceSource) << "fresh\n"; }
+    CHECK(ReplaceFileAtomically(replaceSource.string(), replaceTarget.string()));
+    CHECK(fileContains(replaceTarget, "fresh"));
+    CHECK(!fileContains(replaceTarget, "stale"));
+    CHECK(!std::filesystem::exists(replaceSource));
+
+    // A failed swap must leave the destination untouched rather than destroying
+    // it, and must not strand the staging file.
+    const std::filesystem::path missingSource = prefDir / "absent.tmp";
+    CHECK(!ReplaceFileAtomically(missingSource.string(), replaceTarget.string()));
+    CHECK(fileContains(replaceTarget, "fresh"));
 
     manager->Dispose();
     settings->Dispose();

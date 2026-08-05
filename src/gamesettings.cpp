@@ -338,15 +338,21 @@ void GameSettings::SaveSettings()
     InitPrefPath();
     FILE *setFile;
     char setPath[256];
+    char tempPath[256];
     snprintf(setPath, sizeof(setPath), "%ssettings.ini", prefPath);
+    // Settings are now rewritten on every toggle, so the old truncate-in-place
+    // save exposed the real file to a crash far more often. Build the new file
+    // beside it and swap it in once it is complete.
+    snprintf(tempPath, sizeof(tempPath), "%ssettings.ini.tmp", prefPath);
 
-    if((setFile = fopen(setPath, "w+")) == NULL)
+    if((setFile = fopen(tempPath, "w+")) == NULL)
     {
-        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "Could not save settings to %s: %s", setPath, strerror(errno));
+        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "Could not save settings to %s: %s", tempPath, strerror(errno));
         return;
     }
     iniparser_dump_ini(optDict, setFile);
     fclose(setFile);
+    if (!ReplaceFileAtomically(tempPath, setPath)) return;
     RequestPersistentStorageFlush();
     SDL_Log("Settings saved to %s", setPath);
 }
