@@ -199,7 +199,27 @@ int main() {
     CHECK(!ReplaceFileAtomically(missingSource.string(), replaceTarget.string()));
     CHECK(fileContains(replaceTarget, "fresh"));
 
+    // A save must rewrite only the table that changed. Planting a sentinel in
+    // the history file makes that observable: adding a score touches the score
+    // table alone, so a save that still rewrites both would erase the sentinel.
+    { std::ofstream(historyPath) << "SENTINEL-HISTORY-UNTOUCHED\n"; }
+    CHECK(manager->CheckAndAddScore(19, 7.5f));
+    CHECK(csvHasLevelAndTime(scorePath, 19, 7.5f));
+    CHECK(fileContains(historyPath, "SENTINEL-HISTORY-UNTOUCHED"));
+
+    // The mirror of the same rule: appending a level must not rewrite scores.
+    { std::ofstream(scorePath) << "SENTINEL-SCORES-UNTOUCHED\n"; }
+    manager->AppendToLevels(literalGrid, 21);
+    CHECK(fileContains(historyPath, "1   2   3"));
+    CHECK(fileContains(scorePath, "SENTINEL-SCORES-UNTOUCHED"));
+
+    // And with nothing changed since the last save, shutdown must write nothing
+    // at all rather than rewriting both tables on the way out.
+    { std::ofstream(historyPath) << "SENTINEL-DISPOSE-HISTORY\n"; }
+    { std::ofstream(scorePath) << "SENTINEL-DISPOSE-SCORES\n"; }
     manager->Dispose();
+    CHECK(fileContains(historyPath, "SENTINEL-DISPOSE-HISTORY"));
+    CHECK(fileContains(scorePath, "SENTINEL-DISPOSE-SCORES"));
     settings->Dispose();
     SDL_DestroyRenderer(renderer);
     SDL_DestroyWindow(window);

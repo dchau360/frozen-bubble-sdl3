@@ -26,6 +26,7 @@
 #include <vector>
 #include <array>
 #include <map>
+#include <string>
 
 #include "gamesettings.h"
 #include "ttftext.h"
@@ -55,6 +56,12 @@ private:
     SDL_Renderer *rend;
 
     std::map<int, std::array<std::vector<int>,10>> highscoreLevels;
+
+    // What SaveNewHighscores() last put on disk, so a save can skip the table
+    // that has not changed. Empty until the first save, which therefore always
+    // writes both files.
+    std::string lastSavedHistory, lastSavedLevelset;
+
     void SaveNewHighscores();
     void LoadLevelsetHighscores(const char *path);
     void LoadHighscoreLevels(const char *path);

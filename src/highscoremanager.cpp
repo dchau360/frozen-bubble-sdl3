@@ -23,9 +23,11 @@
 #include "ttftext.h"
 #include "platform.h"
 
+#include <filesystem>
 #include <fstream>
 #include <sstream>
 #include <stdexcept>
+#include <system_error>
 #include <string>
 #include <utility>
 
@@ -285,35 +287,62 @@ std::string levelToData(std::array<std::vector<int>, 10> lvl) {
     return current;
 }
 
+// Writes contents to path without ever truncating the real file: the whole
+// thing is staged beside it and swapped in, so a crash mid-write leaves the
+// previous table intact rather than a half-written one.
+static bool writeFileAtomically(const std::string &path, const std::string &contents) {
+    const std::string temp = path + ".tmp";
+
+    std::ofstream out(temp);
+    out << contents;
+    out.close();
+    if (!out.good()) {
+        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "Could not stage %s", temp.c_str());
+        std::error_code ignored;
+        std::filesystem::remove(temp, ignored);
+        return false;
+    }
+
+    return ReplaceFileAtomically(temp, path);
+}
+
 void HighscoreManager::SaveNewHighscores() {
-    std::string historypath = gameSettings->prefPath + std::string("highlevelshistory");
-    std::string levelsetpath = gameSettings->prefPath + std::string("highscores");
+    const std::string historypath = gameSettings->prefPath + std::string("highlevelshistory");
+    const std::string levelsetpath = gameSettings->prefPath + std::string("highscores");
 
-    // Every completed level and every qualifying score rewrites both tables, so
-    // truncating them in place would repeatedly expose the whole table to a
-    // crash mid-write. Write each one out in full first, then swap it in.
-    const std::string historytemp = historypath + ".tmp";
-    const std::string levelsettemp = levelsetpath + ".tmp";
-
-    std::ofstream historyFile(historytemp);
+    std::string historyContents;
     for (size_t i = 0; i < highscoreLevels.size(); i++)
     {
-        historyFile << levelToData(highscoreLevels[i]);
+        historyContents += levelToData(highscoreLevels[i]);
     }
-    historyFile.close();
-    const bool historySaved =
-        historyFile.good() && ReplaceFileAtomically(historytemp, historypath);
 
-    std::ofstream levelsetFile(levelsettemp);
+    std::ostringstream levelsetStream;
     for (size_t i = 0; i < levelsetScores.size(); i++) {
         HighscoreData &a = levelsetScores[i];
-        levelsetFile << a.level << "," << a.name << "," << a.time << "," << a.picId << "\n";
+        levelsetStream << a.level << "," << a.name << "," << a.time << "," << a.picId << "\n";
     }
-    levelsetFile.close();
-    const bool levelsetSaved =
-        levelsetFile.good() && ReplaceFileAtomically(levelsettemp, levelsetpath);
+    const std::string levelsetContents = levelsetStream.str();
 
-    if (historySaved || levelsetSaved) RequestPersistentStorageFlush();
+    // Saving eagerly means this runs on every mutation, but a given mutation
+    // only ever touches one of the two tables -- finishing a level appends to
+    // the history, beating a score appends to the scores. Comparing against
+    // what was last written keeps each save to the file that actually changed
+    // instead of rewriting both, and makes the save at shutdown a no-op when
+    // nothing happened since. Each mutation still persists on its own, so no
+    // caller has to save on another's behalf.
+    bool wrote = false;
+    if (historyContents != lastSavedHistory &&
+        writeFileAtomically(historypath, historyContents)) {
+        lastSavedHistory = historyContents;
+        wrote = true;
+    }
+    if (levelsetContents != lastSavedLevelset &&
+        writeFileAtomically(levelsetpath, levelsetContents)) {
+        lastSavedLevelset = levelsetContents;
+        wrote = true;
+    }
+
+    if (wrote) RequestPersistentStorageFlush();
 }
 
 void HighscoreManager::CreateLevelImages() {
