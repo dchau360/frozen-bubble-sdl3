@@ -205,6 +205,30 @@ if(BUILD_TESTING AND NOT EMSCRIPTEN AND NOT ANDROID)
     endif()
     add_test(NAME bubblegame-rules-test COMMAND bubblegame-rules-test)
 
+    add_executable(persistence-save-test
+        tests/persistence_save_test.cpp
+        ${FROZEN_BUBBLE_CORE_SOURCES}
+    )
+    set_property(TARGET persistence-save-test PROPERTY CXX_STANDARD 17)
+    set_property(TARGET persistence-save-test PROPERTY CXX_EXTENSIONS OFF)
+    target_include_directories(persistence-save-test PRIVATE src)
+    target_compile_definitions(persistence-save-test PRIVATE
+        FROZEN_BUBBLE_TEST_ACCESS
+        DATA_DIR="${ASSET_PATH}"
+        APP_VERSION="v${PROJECT_VERSION}"
+    )
+    target_link_libraries(persistence-save-test PRIVATE
+        SDL3::SDL3
+        SDL3_image::SDL3_image
+        SDL3_mixer::SDL3_mixer
+        SDL3_ttf::SDL3_ttf
+        iniparser-static
+    )
+    if(WIN32 OR MINGW)
+        target_link_libraries(persistence-save-test PRIVATE ws2_32)
+    endif()
+    add_test(NAME persistence-save-test COMMAND persistence-save-test)
+
     add_executable(localmultiplayer-settings-test
         tests/localmultiplayer_settings_test.cpp
         ${FROZEN_BUBBLE_CORE_SOURCES}

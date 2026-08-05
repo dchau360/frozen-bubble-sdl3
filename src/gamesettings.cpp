@@ -18,6 +18,7 @@
  */
 
 #include "gamesettings.h"
+#include "platform.h"
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <cerrno>
@@ -346,6 +347,7 @@ void GameSettings::SaveSettings()
     }
     iniparser_dump_ini(optDict, setFile);
     fclose(setFile);
+    RequestPersistentStorageFlush();
     SDL_Log("Settings saved to %s", setPath);
 }
 
@@ -366,24 +368,29 @@ void GameSettings::SetValue(const char* option, const char* value)
 
         // gfxQuality needs a hot reload
         iniparser_set(optDict, option, std::to_string(gfxQuality).c_str());
+        SaveSettings();
         return;
     }
     else if (strcmp(option, "GFX:Fullscreen") == 0) {
         useFullscreen = !useFullscreen;
         iniparser_set(optDict, option, useFullscreen ? "true" : "false");
+        SaveSettings();
         return;
     }
     else if (strcmp(option, "GFX:ShowFPS") == 0) {
         showFps = !showFps;
         iniparser_set(optDict, option, showFps ? "true" : "false");
+        SaveSettings();
         return;
     }
     else if (strcmp(option, "GFX:ColorblindBubbles") == 0) {
         colorblindBubbles = (strcmp(value, "true") == 0);
         iniparser_set(optDict, option, value);
+        SaveSettings();
         return;
     }
 
     //update ini file set
     iniparser_set(optDict, option, value);
+    SaveSettings();
 }

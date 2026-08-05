@@ -58,6 +58,10 @@ void InitDataDir();
 // say which directory was actually chosen.
 void LogDataDir();
 
+// Requests that persistent browser storage capture the current virtual
+// filesystem state. Native platforms write directly to disk, so this is a no-op.
+void RequestPersistentStorageFlush();
+
 #ifdef __WASM_PORT__
 // True when the browser reports touch capability (phones/tablets).
 // SDL3's Emscripten backend has no screen-keyboard support, so touch devices

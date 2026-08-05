@@ -176,6 +176,7 @@ void HighscoreManager::LoadHighscoreLevels(const char *path) {
 void HighscoreManager::AppendToLevels(std::array<std::vector<int>, 10> lvl, int id){
     highscoreLevels[id] = lvl;
     CreateLevelImages();
+    SaveNewHighscores();
 }
 
 bool HighscoreManager::CheckAndAddScore(int level, float time) {
@@ -203,6 +204,8 @@ bool HighscoreManager::CheckAndAddScore(int level, float time) {
         return a.time < b.time;
     });
     if (levelsetScores.size() > 10) levelsetScores.resize(10);
+
+    SaveNewHighscores();
 
     return true;
 }
@@ -299,6 +302,8 @@ void HighscoreManager::SaveNewHighscores() {
         levelsetFile << a.level << "," << a.name << "," << a.time << "," << a.picId << "\n"; 
     }
     levelsetFile.close();
+
+    RequestPersistentStorageFlush();
 }
 
 void HighscoreManager::CreateLevelImages() {

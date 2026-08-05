@@ -176,3 +176,15 @@ bool WasmPromptText(const char* title, const char* current, char* out, int outLe
     return got == 1;
 }
 #endif
+
+void RequestPersistentStorageFlush() {
+#ifdef __WASM_PORT__
+    EM_ASM({
+        if (Module['requestPersistentStorageFlush']) {
+            // The JS controller reports the error; consume the rejection here
+            // so a C++ fire-and-forget request is never unhandled.
+            Module['requestPersistentStorageFlush']().catch(function() {});
+        }
+    });
+#endif
+}
