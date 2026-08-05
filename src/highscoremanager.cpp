@@ -264,12 +264,33 @@ HighscoreManager::HighscoreManager(SDL_Renderer *renderer)
 HighscoreManager::~HighscoreManager(){
     levelsetScores.clear();
     TTF_CloseFont(highscoreFont);
+
+    // Everything the constructor loaded, plus the per-level thumbnails built by
+    // CreateLevelImages. Without this the surfaces and textures outlived the
+    // manager -- roughly a megabyte, which shutdown then simply abandoned.
+    for (SDL_Texture *&texture : smallBG) {
+        if (texture) { SDL_DestroyTexture(texture); texture = nullptr; }
+    }
+    for (SDL_Texture *texture : {highscoresBG, highscoreFrame, headerLevelset,
+                                 headerMptrain, voidPanelBG}) {
+        if (texture) SDL_DestroyTexture(texture);
+    }
+    highscoresBG = highscoreFrame = headerLevelset = nullptr;
+    headerMptrain = voidPanelBG = nullptr;
+
+    if (backgroundSfc) { SDL_DestroySurface(backgroundSfc); backgroundSfc = nullptr; }
+    for (SDL_Surface *&surface : useBubbles) {
+        if (surface) { SDL_DestroySurface(surface); surface = nullptr; }
+    }
 }
 
 void HighscoreManager::Dispose(){
     SaveNewHighscores();
-    this->~HighscoreManager();
+    // Calling the destructor by hand ran the cleanup but never released the
+    // object itself, so the allocation leaked along with everything it still
+    // owned. delete does both, exactly once.
     ptrInstance = nullptr;
+    delete this;
 }
 
 std::string levelToData(std::array<std::vector<int>, 10> lvl) {
@@ -310,10 +331,17 @@ void HighscoreManager::SaveNewHighscores() {
     const std::string historypath = gameSettings->prefPath + std::string("highlevelshistory");
     const std::string levelsetpath = gameSettings->prefPath + std::string("highscores");
 
+    // Iterate the map rather than indexing it: highscoreLevels is keyed by level
+    // id, so operator[](i) over 0..size-1 default-inserted an empty grid for
+    // every id that was not present -- and each insertion grew size(), extending
+    // the loop that was feeding it. One completed level 17 turned a 1-entry map
+    // into 19 entries and wrote 18 empty grids into the history file. Harmless
+    // enough when this ran once at shutdown; it now runs on every save.
     std::string historyContents;
-    for (size_t i = 0; i < highscoreLevels.size(); i++)
+    for (const auto& [id, lvl] : highscoreLevels)
     {
-        historyContents += levelToData(highscoreLevels[i]);
+        (void)id;
+        historyContents += levelToData(lvl);
     }
 
     std::ostringstream levelsetStream;

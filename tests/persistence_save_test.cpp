@@ -81,6 +81,20 @@ static bool csvHasLevelAndTime(const std::filesystem::path& path,
     return false;
 }
 
+// An empty level grid serializes to a line of spaces with no digits in it,
+// which is how a phantom map entry shows up in the saved history.
+static bool hasBlankPaddedLine(const std::filesystem::path& path) {
+    std::ifstream input(path);
+    std::string line;
+    while (std::getline(input, line)) {
+        if (!line.empty() &&
+            line.find_first_not_of(" \t\r") == std::string::npos) {
+            return true;
+        }
+    }
+    return false;
+}
+
 static int countCsvRows(const std::filesystem::path& path) {
     std::ifstream input(path);
     std::string line;
@@ -166,6 +180,12 @@ int main() {
     }};
     manager->AppendToLevels(literalGrid, 17);
     CHECK(fileContains(historyPath, "1   2   3"));
+
+    // The history must hold the one level that was appended and nothing else.
+    // Indexing the level map by position used to default-insert an empty grid
+    // for every absent id, so appending level 17 alone wrote 18 blank grids
+    // alongside it -- each one a line of spaces.
+    CHECK(!hasBlankPaddedLine(historyPath));
 
     CHECK(manager->CheckAndAddScore(17, 12.5f));
     CHECK(csvHasLevelAndTime(scorePath, 17, 12.5f));

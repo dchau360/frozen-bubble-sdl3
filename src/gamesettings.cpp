@@ -39,8 +39,10 @@ GameSettings::~GameSettings() {
 
 void GameSettings::Dispose() {
     SaveSettings();
-    this->~GameSettings();
+    // Same fix as HighscoreManager::Dispose(): the explicit destructor call ran
+    // the cleanup but left the allocation behind.
     ptrInstance = nullptr;
+    delete this;
 }
 
 int WriteToIni(dictionary *ini, const char *key, const char *value){
