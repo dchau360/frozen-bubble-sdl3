@@ -122,7 +122,7 @@ Or right-click the app → **Open** → **Open** to bypass Gatekeeper once.
 
 - [Changelog](CHANGELOG.md) — release history
 - [Building from source](docs/BUILDING.md) — all platforms, including WebAssembly and Android
-- [Feature parity](docs/PARITY.md) — what's ported from the original Perl version, and what's new
+- [Compared with the original](docs/PARITY.md) — features added, fixes to the original's own server code, and what's reproduced unchanged
 - [Browser build notes](web/README.md) — saved data, Emscripten port status, serving locally
 
 ---
