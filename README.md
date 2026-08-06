@@ -3,325 +3,112 @@
   <img src="https://github.com/user-attachments/assets/c68db5c9-7e72-4d19-8e98-c598a3f5e54e">
 </p>
 
-A C++ / SDL3 port of the classic [Frozen Bubble 2](http://www.frozen-bubble.org/), reimplementing its gameplay, network multiplayer, and chain reaction system. The original was Linux-only; this port targets **Linux, macOS (Apple Silicon), Windows, Android TV, and WebAssembly (including iPhone/mobile browsers)**.
+A C++ / SDL3 port of the classic [Frozen Bubble 2](http://www.frozen-bubble.org/), reimplementing its gameplay, network multiplayer, and chain reaction system. The original was Linux-only; this port runs on **Linux, macOS, Windows, Android TV, and in the browser**.
 
-> **macOS builds are Apple Silicon (arm64) only.** The released `frozen-bubble-macos-arm64.dmg` will not launch on an Intel Mac. Intel users can still build from source (see [Building from Source](#building-from-source)) or play the browser build. Universal binaries would require building SDL3 and every dependency for both architectures, since Homebrew ships single-architecture bottles.
+The original was written in Perl; this is a full rewrite in C++. Core gameplay and the network protocol are faithfully reproduced, but edge-case mechanics may still differ — bug reports are welcome via [GitHub Issues](https://github.com/dchau360/frozen-bubble-sdl3/issues).
 
-> **Note:** The original game was written in Perl. This is a full rewrite in C++. While core gameplay and network protocol are faithfully reproduced, there may be inconsistencies and bugs compared to the original — particularly in edge-case game mechanics. Bug reports are welcome via [GitHub Issues](https://github.com/dchau360/frozen-bubble-sdl3/issues).
+---
 
-> **SDL3 port:** Fully migrated from SDL2 to SDL3 (3.4.4), SDL3_image, SDL3_mixer, SDL3_ttf across all platforms including WebAssembly.
+## Download
 
-### Emscripten SDL3 Port Status
+Latest builds are on the [releases page](https://github.com/dchau360/frozen-bubble-sdl3/releases/latest), and on [itch.io](https://dchau360.itch.io/frozenbubble2).
 
-The WASM build uses SDL3 via Emscripten ports. Emscripten's stable releases include SDL3 and SDL3_ttf, but **SDL3_image and SDL3_mixer are from pending PRs** that have not yet been merged:
-
-| Port | PR | Status |
+| Platform | Download | Notes |
 |---|---|---|
-| SDL3_mixer | [emscripten-core/emscripten#26571](https://github.com/emscripten-core/emscripten/pull/26571) | Approved, supports WAV/OGG/MP3 |
-| SDL3_image | [emscripten-core/emscripten#24634](https://github.com/emscripten-core/emscripten/pull/24634) | Draft, supports PNG/GIF/JPG |
+| **Linux** | `frozen-bubble-linux-x86_64.AppImage` | `chmod +x` and run |
+| **macOS** | `frozen-bubble-macos-arm64.dmg` | **Apple Silicon only** — see [macOS notes](#macos-notes) |
+| **Windows** | `frozen-bubble-windows-setup.exe` | Unsigned; SmartScreen will warn |
+| **Android TV** | `frozen-bubble-android-tv.apk` | Or sideload — see [Android TV](#android-tv) |
+| **Browser** | [Play on itch.io](https://dchau360.itch.io/frozenbubble2) | Works on desktop and mobile, including iPhone |
 
-The CI workflow patches the local Emscripten SDK with these port files before building. This works reliably but means local WASM builds require the same manual setup (see [Building WASM locally](#building-wasm-locally) below).
-
-**Once both PRs are merged** into a stable Emscripten release, the patching step will be removed and WASM builds will work out of the box with `emcmake cmake`.
+Building from source: [docs/BUILDING.md](docs/BUILDING.md).
 
 ---
 
 ## Game Modes
 
-### Single Player
-Classic Frozen Bubble gameplay — 100 levels, scoring, chain reactions.
+**Single player** — 100 levels, scoring, chain reactions.
 
-### 2-Player Local
-Two players on the same keyboard or controllers:
-- Player 1: Arrow keys + Up to fire
-- Player 2: C/X/V + D to fire
+**Local multiplayer (2–4 players)** — same keyboard or controllers. Player 1 uses the arrow keys with Up to fire; player 2 uses C/X/V with D to fire.
 
-Local multiplayer also supports **Clear Mode**, **Team Mode**, and a malus-attacks toggle — see the **Network Multiplayer** section below for what each one does; the local-multiplayer settings panel lets you switch between them the same way the network game room does.
+**Network multiplayer (2–20 players)** — LAN or internet, using the included server. Rooms hold 5, 10, or 20 players.
 
-### Network Multiplayer (2–20 players)
-Play over LAN or internet using the included server. Supports chain reactions, malus (attack bubbles), win tracking, and room sizes from 2 up to 20 players.
+All three game modes are available in both local and network play, chosen by the host:
 
-**Game modes** (chosen by the host, both in local multiplayer and network game rooms):
 - **Classic** — standard chain-reaction gameplay; last player or team standing wins.
-- **Clear Mode** — first player to clear their entire board wins the round (the last survivor also wins); malus and row compression are both disabled by default in this mode, though the host can override either.
-- **Team Mode** — players are split into teams; malus only ever lands on living opponents outside your own team. In rooms of 5 or fewer players, team assignment is a per-player grid in the game room settings. In rooms above 5 players, press **A** in the game room to open a roster screen where the host can assign any player's team (or a joiner can set their own).
+- **Clear Mode** — first player to clear their entire board wins the round (the last survivor also wins). Malus and row compression are off by default here, though the host can override both.
+- **Team Mode** — players split into teams; malus only lands on living opponents outside your team.
 
-When malus lands on your board, a fading on-screen indicator shows who attacked you and how many bubbles they sent. After each round a per-player stats table is shown (bubbles fired/popped, malus sent/received, and kills), and when the match ends the host posts a summary of the final standings to the lobby chat.
+The host configures malus, chain reactions, victories limit, per-player colours and aim guides, mouse/touch aim and more from the game room — all joined players see changes live. Rooms above 5 players get battle-royale UI: four opponent boards on screen at a time, ranked by who's most relevant to you, with **Tab** to page manually, keys **1–4** to target a visible opponent, and a spectate mode after you're knocked out.
 
-In-game chat works during play (Enter or T, gamepad X) and between rounds (T or gamepad X — Enter/fire advances to the next round only while chat is closed). Enter sends, Escape cancels. On touch devices the round-end screen shows a tappable CHAT button, and text is entered through a native browser prompt (mobile browsers can't open an on-screen keyboard for the game canvas).
-
-The lobby has a persistent chat dock, scrollable room cards (showing each room's player count and cap), and a sidebar listing everyone currently online, alongside a world map with colored dots showing where each connected player is located. Your own location is detected automatically at connect time and shown as an animated pulsing dot.
-
-The host can configure the following settings in the game room — all joined players see updates in real time:
-
-| Setting | Description |
-|---|---|
-| Game mode | Classic / Clear Mode / Team Mode (see above) |
-| Malus attacks | Enable or disable attack bubbles entirely |
-| Chain reaction | Toggle cascading chain reactions on/off |
-| Continue when players leave | Keep the game going if a player disconnects |
-| Single player targeting | All malus attacks target one player instead of spreading. Rooms with more than 5 players alive always use one-target attacks regardless of this setting. |
-| Victories limit | Number of round wins needed to win the match (or unlimited) |
-| Room size | 5, 10, or 20 players — set when creating the room |
-| Max colors per player | Maximum number of bubble colors per player's board (5–8, default 7). The optional 8th color is orange. |
-| Rows collapse per player | Whether rows drop down periodically for a specific player (on by default; set to off to disable) |
-| Aim guide per player | Show a trajectory preview for a specific player's shots |
-| Mouse/Touch mode | Enable mouse or touchscreen aiming for all players. **Note: mouse/touch aim is easier than keyboard-only controls** — the host should set this consistently so all players have the same experience. |
-
-Per-player settings (colors, row collapse, aim guide, and team in 5-or-fewer-player rooms) are shown as a compact grid the host navigates with arrow keys and Enter. Rooms of 5 or fewer players show a fat 5-slot player panel with team-color chips; rooms above 5 players use a compact 2-column roster instead.
-
-### Battle Royale (6–20 players)
-
-Rooms above 5 players get some extra UI to handle the larger player count:
-
-- Only 4 opponent boards are shown on screen at once. By default they're picked automatically — priority goes to whoever's targeting you, then attackers, then anyone in danger, then anyone else alive — and updates live as the match unfolds. Press **Tab** to page through opponents manually instead; paging past the last page returns to auto mode.
-- Keys **1-4** target whichever opponent currently occupies view slot 1-4 (**0** clears back to random targeting); this is active regardless of the single-player-targeting setting once more than 5 players are alive.
-- A board that's actually been attacked flashes a yellow border briefly.
-- The round-stats table includes a **KO** column — whoever last attacked a player is credited with the kill when that player is eliminated.
-- If you're eliminated before the round ends, the same **1-4**/**0** keys instead pin an opponent's board into view while you spectate (a **SPECTATING** label appears on screen), so you can keep watching a specific match instead of the auto view swapping around.
+After each round a per-player stats table shows bubbles fired and popped, malus sent and received, and kills. In-game chat works during play (**Enter** or **T**, gamepad **X**) and between rounds.
 
 ---
 
-## Play in Browser (iPhone / Mobile / Desktop)
+## Controls
 
-The game runs in any modern browser via WebAssembly. Mobile browsers (iPhone, Android) use touch controls; desktop browsers support keyboard and mouse.
+| Action | Keyboard | Mouse | Touch |
+|---|---|---|---|
+| Aim | Left / Right arrow | Move mouse | Tap left / right half, or drag |
+| Fire | Up arrow or Space | Left click | Tap centre, or tap target |
+| Back / pause | Escape | Right click | Swipe left |
 
-Settings, key bindings, level history, and high scores are saved in the browser and survive a reload. They are scoped to that browser profile and to the exact origin the game is served from — they do not follow you to another browser, another device, or a different host or port. In a private window, or where site storage is blocked or has no quota, the game falls back to session-only defaults and logs a diagnostic to the browser console. See [Saved Data](web/README.md#saved-data) for details.
+In menus on touch devices: tap to select, swipe up/down to scroll, swipe left to go back.
 
-### Touch Controls (iPhone / Android)
+Mouse and touch aiming are enabled per-room by the host, and change the in-game gestures above: with them off, tapping a screen half aims that way; with them on, you drag to aim and tap to fire at a point.
 
-**Menus:**
+> **Fairness:** free-angle mouse/touch aim is easier than keyboard left/right aiming. In network games the host should set this consistently so everyone plays with the same scheme.
 
-| Gesture | Action |
-|---|---|
-| Tap | Select / activate button |
-| Swipe up / down | Scroll through menu items |
-| Swipe left | Go back (same as Escape) |
-
-**In-game (Mouse/Touch mode OFF — default):**
-
-| Gesture | Action |
-|---|---|
-| Tap left half | Aim left |
-| Tap right half | Aim right |
-| Tap center / fire zone | Fire bubble |
-| Swipe left | Exit game (Escape) |
-
-**In-game (Mouse/Touch mode ON):**
-
-| Gesture | Action |
-|---|---|
-| Tap anywhere | Fire bubble toward tap position |
-| Drag / slide | Aim toward finger position |
-| Swipe left | Exit game (Escape) |
-
-Mouse/Touch mode is toggled by the host in the game room settings and syncs to all players.
-
-### Mouse Controls (Desktop Browser / Mouse Mode)
-
-| Action | Control |
-|---|---|
-| Aim | Move mouse |
-| Fire | Left click |
-| Go back / Escape | Right click |
-
-### Keyboard Controls (Desktop)
-
-| Key | Action |
-|---|---|
-| Left / Right arrow | Aim |
-| Up arrow or Space | Fire |
-| Escape | Back / pause |
-
-> **Fairness note:** Mouse/touch aim lets you point at any angle freely, which is easier than keyboard left/right aiming. In network games, the host should enable or disable Mouse/Touch mode consistently so all players use the same control scheme.
+**Controllers** (Android TV and desktop): D-pad left/right aims, **A** or D-pad up fires and selects, **B** goes back, **Start** pauses. Rebind anything under Settings → Keys, per player — navigate with up/down, press Enter, then press the button you want. **Reset ctrl defaults** restores that player's defaults.
 
 ---
 
-## Building from Source
+## Playing in the browser
 
-### 1. Clone the repo
-
-```bash
-git clone https://github.com/dchau360/frozen-bubble-sdl3.git
-cd frozen-bubble-sdl3
-```
-
-### 2. Install dependencies
-
-**macOS (Homebrew):**
-```bash
-brew install sdl3 sdl3_image sdl3_mixer sdl3_ttf cmake ninja
-```
-
-> If SDL3_mixer isn't in Homebrew yet, build from source:
-> ```bash
-> git clone https://github.com/libsdl-org/SDL_mixer.git --branch release-3.2.0
-> cd SDL_mixer && cmake -B build -G Ninja && cmake --build build && sudo cmake --install build
-> ```
-
-**Ubuntu / Debian:**
-
-SDL3 is not yet in apt on most distros — build from source:
-```bash
-# SDL3
-git clone https://github.com/libsdl-org/SDL.git --branch release-3.4.4
-cmake -S SDL -B SDL/build -G Ninja && cmake --build SDL/build && sudo cmake --install SDL/build
-
-# Repeat for SDL3_image, SDL3_mixer, SDL3_ttf
-```
-
-**Windows (MSYS2 MinGW64):**
-```bash
-pacman -S mingw-w64-x86_64-gcc mingw-w64-x86_64-cmake mingw-w64-x86_64-ninja \
-          mingw-w64-x86_64-SDL3 mingw-w64-x86_64-SDL3_image \
-          mingw-w64-x86_64-SDL3_mixer mingw-w64-x86_64-SDL3_ttf
-```
-
-> `iniparser` is bundled — no separate install needed.
-
-### 3. Build
-
-```bash
-cmake -B build -G Ninja
-cmake --build build --parallel
-```
-
-### 4. Run
-
-```bash
-./build/frozen-bubble-sdl3
-```
-
-The server binary (`fb-server`) is built automatically on Linux and macOS alongside the game.
-
-### Building WASM locally
-
-Until the SDL3_image/SDL3_mixer Emscripten ports are merged upstream, local WASM builds require manual setup:
-
-1. **Install Emscripten** (v4.0.8+ recommended):
-   ```bash
-   git clone https://github.com/emscripten-core/emsdk.git
-   cd emsdk && ./emsdk install latest && ./emsdk activate latest
-   source emsdk_env.sh
-   ```
-
-2. **Patch the SDK** with SDL3_image/SDL3_mixer port files:
-   ```bash
-   PORTS="$(dirname $(which emcc))/tools/ports"
-   SETTINGS_JS="$(dirname $(which emcc))/src/settings.js"
-   SETTINGS_PY="$(dirname $(which emcc))/tools/settings.py"
-
-   # Copy bundled port files (from pending PRs, included in this repo)
-   cp tools/ports/sdl3_mixer.py "$PORTS/sdl3_mixer.py"
-   cp tools/ports/sdl3_image.py "$PORTS/sdl3_image.py"
-
-   # Register new settings variables
-   sed -i '/SDL2_MIXER_FORMATS/a\var SDL3_IMAGE_FORMATS = [];\nvar SDL3_MIXER_FORMATS = [];' "$SETTINGS_JS"
-   sed -i "s/'SDL2_MIXER_FORMATS'/'SDL2_MIXER_FORMATS', 'SDL3_IMAGE_FORMATS', 'SDL3_MIXER_FORMATS'/" "$SETTINGS_PY"
-
-   # Suppress SDL3 experimental warning
-   sed -i "s/diagnostics.warning('experimental'/# diagnostics.warning('experimental'/" "$PORTS/sdl3.py"
-   ```
-
-3. **Build**:
-   ```bash
-   mkdir build-wasm && cd build-wasm
-   emcmake cmake .. -DCMAKE_BUILD_TYPE=Release
-   emmake make -j$(nproc)
-   ```
-
-4. **Serve** (requires COOP/COEP headers for audio):
-   ```bash
-   python3 -c "
-   import http.server
-   class H(http.server.SimpleHTTPRequestHandler):
-       def end_headers(self):
-           self.send_header('Cross-Origin-Opener-Policy','same-origin')
-           self.send_header('Cross-Origin-Embedder-Policy','require-corp')
-           super().end_headers()
-   http.server.HTTPServer(('',8080),H).serve_forever()
-   " &
-   open http://localhost:8080/frozen-bubble-sdl3.html
-   ```
+The browser build runs anywhere with WebAssembly support. Settings, key bindings, level history and high scores are saved in the browser and survive a reload, scoped to that browser profile and the exact origin — they don't follow you to another browser, device, host or port. In a private window, or where site storage is blocked, the game falls back to session-only defaults and logs a diagnostic to the console. Details in [web/README.md](web/README.md#saved-data).
 
 ---
 
-## Running a Server
+## Network play
+
+**Run a server:**
 
 ```bash
-./start-server.sh          # Start on default port 1511
-./start-server.sh -p 1234  # Custom port
-./start-server.sh -d       # Debug output
+./start-server.sh          # default port 1511
+./start-server.sh -p 1234  # custom port
+./start-server.sh -d       # debug output
 ```
 
-`start-server.sh` enables both TCP (direct connections) and UDP broadcast (LAN auto-discovery) by default.
+This enables both TCP (direct connections) and UDP broadcast (LAN auto-discovery).
 
----
+**Host a game:** start the server, then launch the game and pick **LAN Game** (auto-discovers) or **Net Game** (enter an IP). Create a room and wait for players.
 
-## Network Play Quick Start
+**Join:** **LAN Game** to auto-discover on your network, or **Net Game** and enter the host's IP. Any player pressing Enter after a round ends starts the next round for everyone.
 
-**Host:**
-1. Start the server: `./start-server.sh`
-2. Launch the game → **LAN Game** (auto-discovers) or **Net Game** (enter IP)
-3. Create a game room and wait for players
-
-**Join:**
-1. Launch the game → **LAN Game** to auto-discover on your network
-2. Or **Net Game** → enter the host's IP
-
-Any player pressing Enter after a round ends automatically starts the next round for everyone.
-
----
-
-## Public Server List
-
-Community servers are listed in the [frozen-bubble-servers](https://github.com/dchau360/frozen-bubble-servers) repo — same format as the original `frozen-bubble.org` server list:
+**Public servers** are listed in the [frozen-bubble-servers](https://github.com/dchau360/frozen-bubble-servers) repo, in the same format as the original `frozen-bubble.org` list:
 
 ```
 # host port
 myserver.example.com 1511
 ```
 
-Submit a PR to [frozen-bubble-servers](https://github.com/dchau360/frozen-bubble-servers) to add your server. The game fetches this list automatically on startup.
+The game fetches this list automatically on startup. Submit a PR there to add yours.
 
 ---
 
 ## Android TV
 
-### Installing via Downloader app
+Sideload with the **Downloader** app from the Amazon Appstore: enter code **1308098** (or the URL `http://aftv.news/1308098`) and follow the prompts.
 
-The easiest way to sideload on Fire TV:
-
-1. Install the **Downloader** app from the Amazon Appstore
-2. Open Downloader and enter code **1308098** (or URL: http://aftv.news/1308098)
-3. Follow the prompts to install
-
-See [`android/SETUP.md`](android/SETUP.md) for build-from-source instructions.
-
-Controller mapping:
-
-| Button | Action |
-|---|---|
-| D-pad Left/Right | Aim |
-| A / D-pad Up | Fire / Select |
-| B | Back / Exit game |
-| Start | Pause |
-
-**Key bindings** — go to Settings → Keys to bind any controller button or key to each action per player. Navigate with UP/DOWN, press ENTER to assign, then press the desired button. Select **Reset ctrl defaults** to restore D-pad + A button defaults for that player's controller slot.
-
-### Entering text (IP address, nickname, etc.)
-
-When a text input field is active, the on-screen keyboard appears. If the **Delete/Clear** key doesn't work immediately:
-
-1. Press any letter key first (e.g. **A**)
-2. The field is now active — press **Delete** to erase the letter, then continue deleting the existing text
-3. Type the new value and press **Enter** to confirm
+**Entering text** (IP address, nickname): when a field is active the on-screen keyboard appears. If **Delete/Clear** doesn't respond straight away, press any letter key first — the field is then active, and Delete will erase both it and the existing text.
 
 ---
 
-## macOS: "damaged and can't be opened"
+## macOS notes
 
-The app is ad-hoc signed but not notarized. If macOS blocks it, strip the quarantine flag in Terminal:
+Releases are **Apple Silicon (arm64) only** and will not launch on an Intel Mac. Intel users can [build from source](docs/BUILDING.md) or play in the browser. Universal binaries would mean building SDL3 and every dependency for both architectures, since Homebrew ships single-architecture bottles.
+
+The app is ad-hoc signed but not notarized, so macOS may report it as "damaged and can't be opened". Strip the quarantine flag:
 
 ```bash
 xattr -cr /Applications/FrozenBubble.app
@@ -331,53 +118,12 @@ Or right-click the app → **Open** → **Open** to bypass Gatekeeper once.
 
 ---
 
-## Changelog
+## More
 
-See [CHANGELOG.md](CHANGELOG.md) for release history.
-
----
-
-## TODO
-
-- [x] Chat between rounds in multiplayer
-- [ ] Sign macOS `.app` bundle for Gatekeeper compatibility
-- [ ] Sign Windows installer for SmartScreen compatibility
-- [x] WebAssembly SDL3 build (uses PR port files until Emscripten merges SDL3_image/SDL3_mixer)
-- [ ] Remove emsdk patching step once emscripten-core/emscripten#26571 and emscripten-core/emscripten#24634 are merged
-
----
-
-## Implemented from Original Perl Version
-
-Features ported from the original Frozen Bubble 2 Perl source:
-
-| Feature | Status |
-|---|---|
-| 100 single-player levels | ✅ |
-| Chain reaction system (cascading pops) | ✅ |
-| Malus (attack bubble) system | ✅ |
-| 2–5 player network multiplayer layouts | ✅ |
-| Network protocol (fb-server + client messages) | ✅ |
-| LAN auto-discovery (UDP broadcast) | ✅ |
-| Public server list (desktop) | ✅ |
-| In-game chat | ✅ |
-| Victories limit | ✅ |
-| Per-player color count (5–8 colors) | ✅ |
-| Row compression toggle per player | ✅ |
-| Single-player targeting (malus focus) | ✅ |
-| Continue when players leave | ✅ |
-| Multiplayer training mode | ✅ |
-| Geolocation dots on world map lobby | ✅ |
-| Aim guide (trajectory preview) | ✅ (added beyond original) |
-| Clear Mode (win by clearing your board) | ✅ (added beyond original) |
-| Team Mode (2–5 teams) | ✅ (added beyond original) |
-| Malus attacks toggle (disable entirely) | ✅ (added beyond original) |
-| Network multiplayer beyond 5 players (up to 20) | ✅ (added beyond original) |
-| Battle royale opponent auto-view, kill tracking, spectate mode | ✅ (added beyond original) |
-| Local multiplayer (2 players, controllers) | ✅ |
-| Local multiplayer (3–5 players, controllers) | ⏳ (WIP) |
-| Single-player malus targeting logic | ✅ |
-| macOS, Windows, Android TV | ✅ (original was Linux-only) |
+- [Changelog](CHANGELOG.md) — release history
+- [Building from source](docs/BUILDING.md) — all platforms, including WebAssembly and Android
+- [Feature parity](docs/PARITY.md) — what's ported from the original Perl version, and what's new
+- [Browser build notes](web/README.md) — saved data, Emscripten port status, serving locally
 
 ---
 

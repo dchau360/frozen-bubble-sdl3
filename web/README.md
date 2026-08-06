@@ -20,9 +20,25 @@ The default public server `fb.servequake.com:1511` appears pre-selected in the N
 
 > **Fairness note:** Mouse/Touch aim is easier than keyboard-only controls. The host can toggle Mouse/Touch mode in the game room settings, which syncs to all connected players.
 
+## Emscripten port status
+
+The WASM build uses SDL3 via Emscripten ports. Stable Emscripten releases
+include SDL3 and SDL3_ttf, but **SDL3_image and SDL3_mixer come from pending
+PRs** that have not been merged yet:
+
+| Port | PR | Status |
+|---|---|---|
+| SDL3_mixer | [emscripten-core/emscripten#26571](https://github.com/emscripten-core/emscripten/pull/26571) | Approved, supports WAV/OGG/MP3 |
+| SDL3_image | [emscripten-core/emscripten#24634](https://github.com/emscripten-core/emscripten/pull/24634) | Draft, supports PNG/GIF/JPG |
+
+CI patches its Emscripten SDK with the port files bundled in `tools/ports/`
+before building, and local builds need the same step — see
+[docs/BUILDING.md](../docs/BUILDING.md#webassembly). Once both PRs land in a
+stable release, the patching goes away and `emcmake cmake` works out of the box.
+
 ## Building WASM Locally
 
-See the [Building WASM locally](../README.md#building-wasm-locally) section in the main README.
+See [WebAssembly](../docs/BUILDING.md#webassembly) in the build guide.
 
 Output files land in `dist-wasm/`:
 - `frozen-bubble-sdl3.html` — HTML wrapper
