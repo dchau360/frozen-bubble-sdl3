@@ -267,7 +267,11 @@ uint8_t FrozenBubble::RunForEver()
     }
     if (startTime != 0) addictedTime += SDL_GetTicks() - startTime;
     if(addictedTime != 0) printf("Addicted for %s, %d bubbles were launched.", formatTime(addictedTime/1000), totalBubbles);
-    this->~FrozenBubble();
+    // Runs the same shutdown as before and also frees the singleton. Safe here
+    // because nothing touches the object afterwards: this returns straight to
+    // main(), which only uses the return value.
+    ptrInstance = nullptr;
+    delete this;
     return 0;
 #endif
 }

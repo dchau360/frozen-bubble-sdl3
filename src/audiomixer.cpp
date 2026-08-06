@@ -118,8 +118,10 @@ void AudioMixer::Dispose(){
     }
 
     MIX_Quit();
-    this->~AudioMixer();
+    // Destroying by hand ran the destructor but left the allocation behind.
+    // delete does both, matching NetworkClient::Dispose().
     ptrInstance = nullptr;
+    delete this;
 }
 
 void AudioMixer::PlayMusic(const char *track)

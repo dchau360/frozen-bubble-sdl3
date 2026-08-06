@@ -42,9 +42,14 @@ TransitionManager::~TransitionManager(){
     if (transitionTexture) SDL_DestroyTexture(transitionTexture);
 }
 
+// Currently unreachable -- nothing calls this, so the manager and its two
+// 640x480 surfaces simply outlive the process. Fixed anyway so a future caller
+// does not inherit the leak. Note for whoever wires it up: it must run *before*
+// SDL_DestroyRenderer, because destroying the renderer already destroys
+// transitionTexture, and the destructor would then destroy it a second time.
 void TransitionManager::Dispose(){
-    this->~TransitionManager();
     ptrInstance = nullptr;
+    delete this;
 }
 
 void TransitionManager::DoSnipIn(SDL_Renderer *rend)
