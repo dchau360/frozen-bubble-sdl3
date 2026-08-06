@@ -3,6 +3,9 @@ CMakeLists.txt.user
 # Out-of-tree build dirs: build-wasm (emcmake), build-asan (sanitizer tests,
 # see CLAUDE.md "Tests"), and any other build-<config> tree.
 /build-*
+# Packaged WASM output, produced by the workflow's packaging step and by
+# anyone reproducing the reload test locally.
+/dist-wasm
 /.vscode
 /.claude
 /.cache

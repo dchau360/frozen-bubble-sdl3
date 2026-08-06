@@ -5,7 +5,7 @@ import {constants as fsConstants} from 'node:fs';
 import {access, mkdtemp, rm} from 'node:fs/promises';
 import {get as httpGet} from 'node:http';
 import {tmpdir} from 'node:os';
-import {join, resolve} from 'node:path';
+import {delimiter as pathDelimiter, join, resolve} from 'node:path';
 import {spawn} from 'node:child_process';
 
 const SETTINGS_FIXTURE =
@@ -54,6 +54,15 @@ async function findChrome() {
     '/usr/bin/chromium',
     '/usr/bin/chromium-browser',
   ].filter(Boolean);
+
+  // Fall back to PATH so a CI image that installs Chrome somewhere other than
+  // the usual absolute paths still works, and the workflow never has to pin an
+  // executable location of its own.
+  const searchPath = (process.env.PATH || '').split(pathDelimiter).filter(Boolean);
+  for (const name of ['google-chrome', 'google-chrome-stable', 'chromium',
+                      'chromium-browser']) {
+    for (const directory of searchPath) candidates.push(join(directory, name));
+  }
 
   for (const candidate of candidates) {
     if (await isExecutable(candidate)) return candidate;

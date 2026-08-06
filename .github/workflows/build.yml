@@ -536,6 +536,15 @@ jobs:
           git submodule update --init --depth 1 --recursive android/app/jni/SDL3_image
           git submodule update --init --depth 1 --recursive android/app/jni/SDL3_ttf
 
+      # Guards the transactional asset deployment: these are plain JVM unit
+      # tests, so they run without the NDK and fail before the long release
+      # build rather than after it.
+      - name: Test Android asset deployment
+        working-directory: android
+        run: |
+          chmod +x gradlew
+          ./gradlew :app:testDebugUnitTest --no-daemon
+
       - name: Generate app icons from source PNG
         run: |
           sudo apt-get install -y imagemagick
@@ -618,6 +627,14 @@ jobs:
             exit 1
           fi
 
+      # The APK that ships must carry every asset the game loads at runtime, so
+      # compare what was packaged against share/ by hash rather than trusting
+      # the build to have copied it.
+      - name: Verify packaged Android assets
+        run: |
+          python3 tools/verify_android_assets.py \
+            --apk frozen-bubble-android-tv.apk --source share
+
       - name: Delete decoded keystore
         if: always()
         run: rm -f "$RUNNER_TEMP/release.keystore"
@@ -637,6 +654,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      # Pure state-machine tests for the IDBFS hydrate/flush controller. They
+      # need no browser and no build, so they run first and fail fast.
+      - name: Test WASM persistence state machine
+        run: node --test tests/wasm_persistence_test.cjs
 
       - name: Install Emscripten
         uses: mymindstorm/setup-emsdk@v14
@@ -682,6 +708,13 @@ jobs:
           cp build-wasm/frozen-bubble-sdl3.wasm dist-wasm/
           cp build-wasm/frozen-bubble-sdl3.data dist-wasm/
           cd dist-wasm && zip -r ../frozen-bubble-wasm.zip .
+
+      # Drives the packaged build in headless Chrome and reloads it, so the
+      # artifact that ships is the one proven to keep settings and highscores
+      # across a reload -- not just the build tree. The driver finds Chrome
+      # itself (CHROME_BIN, then known paths, then PATH).
+      - name: Test WASM persistence across reload
+        run: node tools/test-wasm-persistence.mjs dist-wasm
 
       - uses: actions/upload-artifact@v4
         with:
