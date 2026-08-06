@@ -5,24 +5,24 @@ Generated from the ledger cross-referenced against commit messages since
 `v2.4.27`, so a finding counts as fixed only if a commit cites its ID and the
 citing commit actually resolves it (not just references it as rationale).
 
-**As of the round and match state remediation through `a0f9b4b5`, plus the
-final-review follow-up on this branch.** Last release: `v2.4.33` (all five
-platforms green, itch.io deploys succeeded).
+**As of the platform persistence remediation through `8cf21f8a`.** Last
+release: `v2.4.33` (all five platforms green, itch.io deploys succeeded) — the
+persistence work is on `main` and unreleased.
 
 ## Position
 
 | | Total | Fixed | Open |
 |---|---|---|---|
 | High | 15 | 15 | 0 |
-| Medium | 45 | 32 | 13 |
+| Medium | 45 | 34 | 11 |
 | Low | 13 | 9 | 4 |
-| **Defects** | **73** | **56** | **17** |
-| Improvements | 24 | 15 done, 2 partial, 1 moot | 6 fully open |
+| **Defects** | **73** | **58** | **15** |
+| Improvements | 24 | 15 done, 3 partial, 1 moot | 5 fully open |
 
-The two partial improvements are IMP-015 and IMP-018. Together with the six
-fully open improvements (IMP-006, IMP-016, IMP-017, IMP-019, IMP-020, and
+The three partial improvements are IMP-015, IMP-018, and IMP-020. Together with
+the five fully open improvements (IMP-006, IMP-016, IMP-017, IMP-019, and
 IMP-021), eight improvements still have work remaining. The mutually
-exclusive arithmetic is 15 done + 2 partial + 1 moot + 6 fully open = 24.
+exclusive arithmetic is 15 done + 3 partial + 1 moot + 5 fully open = 24.
 
 All High-severity findings are fixed. Two caveats:
 
@@ -114,10 +114,42 @@ All High-severity findings are fixed. Two caveats:
   quarantine (redzone retention) even on the fixed code — a real gotcha,
   resolved by cross-checking against a plain (non-sanitized) build instead.
 
+- **BUG-046** — Android asset extraction left a partially populated tree behind.
+  Extraction is now transactional (`867b5f12`): assets are staged and swapped
+  into place, an interrupted or failed run is detected on the next launch and
+  redone, and the managed tree is rebuilt in full on upgrade. Deletion is
+  contained to the managed root (`9b6f1cd5`) and refuses to follow a symlink out
+  of it, including one whose target is a sibling of the root (`d756daaf`) —
+  found by review, not by the original finding. `c05dcbb5` added
+  `tools/verify_android_assets.py`, which hashes every packaged asset against
+  `share/`. Evidence: `AssetDeploymentTest.java` (JVM unit tests, covering
+  changed/deleted/new assets and truncation repair) and APK hash parity over
+  3352 files, both gated in CI since `8cf21f8a`. **Not verified on a device or
+  emulator** — no Android runtime was executed during this remediation. The
+  install-over-install procedure is recorded, unchecked, in
+  [../MANUAL_TEST_CHECKLIST.md](../MANUAL_TEST_CHECKLIST.md).
+- **BUG-048** — browser settings and highscores were written to MEMFS and lost
+  on reload. They now live on IDBFS, hydrated before `main()` runs and flushed
+  after each write, with flushes serialized and coalesced so concurrent
+  `syncfs` calls cannot stack (`5de4e1e7`, `03fdccdb`). `27927781` made every
+  settings and highscore mutation persist when it happens rather than only at a
+  clean shutdown. Three follow-ups came out of reviewing that change: saves are
+  written in full and swapped into place so an interrupted save cannot truncate
+  the table (`eabe89a1`); a save touches only the table that changed
+  (`885f46a4`); and `e1fd6cd8` fixed two pre-existing bugs the eager saving
+  exposed — indexing the level map by position default-inserted an empty grid
+  per absent id, each insertion extending the loop that fed it, so one completed
+  level wrote eighteen blank grids; and both `Dispose()` methods ran the
+  destructor by hand without freeing anything, which LeakSanitizer put at 958 KB
+  across 20 allocations. Evidence: `tests/wasm_persistence_test.cjs` (controller
+  state machine), `tools/test-wasm-persistence.mjs` (headless Chrome, reload
+  against the packaged `dist-wasm`), and `tests/persistence_save_test.cpp`
+  (real files, no mocks), all gated in CI since `8cf21f8a`. The leak fix is
+  confirmed by the Linux ASan job, since Apple ASan has no LeakSanitizer.
+
 ## Open defects
 
-**Medium (13)** — BUG-002, 004, 006, 011, 013, 014, 015, 017, 027, 037, 040,
-046, 048
+**Medium (11)** — BUG-002, 004, 006, 011, 013, 014, 015, 017, 027, 037, 040
 
 **Low (4)** — BUG-010, 038, 039, 047
 
@@ -128,9 +160,21 @@ All High-severity findings are fixed. Two caveats:
 - **IMP-015 (partial)** — see caveat above.
 - **IMP-018 (partial)** — the focused CTest harness is permanent, but the
   canonical matrix and lifecycle coverage listed above remain outstanding.
-- **IMP-016, IMP-017, IMP-019..021** — the remaining fully open
-  test-infrastructure items: protocol/parser unit tests, packaged-artifact
-  smoke tests, and the Linux leak-regression job.
+- **IMP-020 (partial)** — two of its packaged-artifact assertions now run in CI:
+  the WASM headless-browser reload preserves settings and highscores, and the
+  APK's packaged assets match `share/` by hash. Everything else it asks for is
+  still open — no packaged artifact is launched anywhere. Specifically
+  outstanding: the AppImage, `.app`, and Windows installer starting under dummy
+  video/audio drivers on a machine with no source tree at the baked `DATA_DIR`
+  (REL-003, REL-008, BUG-034); `g_dataDir` resolving inside the package
+  (REL-008); log-file location and initialization-failure reporting (BUG-047);
+  the Android emulator install-over-install that BUG-046 names; the dependency
+  walk for unresolved imports (REL-013); APK signing identity and `versionCode`
+  (REL-007, REL-004); DMG architectures (REL-012); and `docker/setup.sh`
+  leaving a pre-existing ECDSA key byte-identical (REL-010).
+- **IMP-016, IMP-017, IMP-019, IMP-021** — the remaining fully open
+  test-infrastructure items: protocol/parser unit tests and the Linux
+  leak-regression job.
 - **IMP-008** — effectively closed, not "done": Task 9 found zero actionable
   diagnostics in-scope and promoted nothing. No code change needed.
 
@@ -144,13 +188,13 @@ the server pushes `SERVER_READY` on connect (drain it before reading a reply),
 and it has a multi-second grace period before acting on a dropped socket, so use
 an explicit `PART` when testing departure paths.
 
-### 2. Platform — BUG-046, 048
+### 2. Settings and state — BUG-027
 
-Android asset extraction and WASM persistence (settings and highscores are
-written to MEMFS and lost on reload). Both need their platform to verify.
+The remaining non-protocol Medium. The platform pair that used to sit here
+(BUG-046, BUG-048) is fixed.
 
 ### 3. Lows, then the remaining improvements (IMP-006, IMP-015 leftovers,
-IMP-016, IMP-017, IMP-019..021)
+IMP-016, IMP-017, IMP-019, IMP-020 leftovers, IMP-021)
 
 ## Things to know before continuing
 
@@ -163,7 +207,13 @@ IMP-016, IMP-017, IMP-019..021)
   yet confirmed as acceptable. Shipped in v2.4.33's changelog as a known,
   one-time rebind requirement.
 - **CI now runs `ctest`** and, since `dde25951`, a full Linux ASan/UBSan build.
-  Compilation used to be the entire gate.
+  Compilation used to be the entire gate. Since `8cf21f8a` it also runs the
+  Android asset-deployment JVM tests and APK hash parity, and the WASM
+  controller tests plus a headless-Chrome reload of the packaged bundle.
+- **Apple ASan has no LeakSanitizer**, so a leak fix that passes locally on
+  macOS proves nothing about leaks — the Linux ASan job is the gate. `leaks
+  --atExit` is the local substitute; it caught the `Dispose()` leaks that a
+  clean macOS sanitizer run had missed.
 - **Don't trust the ledger's own prose blindly.** Several findings were written
   before later corrections; some describe files that have since been deleted
   (REL-006) and at least one described a state that no longer existed (this

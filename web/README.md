@@ -52,6 +52,28 @@ Any browser with WebAssembly and WebSocket support:
 - Chrome 57+, Firefox 52+, Safari 11+, Edge 16+
 - Mobile Safari (iPhone iOS 11+), Chrome for Android
 
+## Saved Data
+
+Settings, key bindings, level history, and high scores are stored in IndexedDB
+and survive a page reload.
+
+What that scope actually means:
+
+- **Per browser profile.** Saves made in one browser are not visible in another,
+  and a different profile on the same machine is a different store.
+- **Per exact origin.** Scheme, host, and port all count. A game served from
+  `https://example.com` and one from `https://www.example.com`, or from a
+  different port, keep separate saves. Moving the deployment to a new origin
+  leaves the old saves behind.
+- **Not synced between devices.** There is no account and no server-side save.
+- **Private windows and blocked storage fall back to defaults.** If the browser
+  denies persistent storage — a private/incognito window, a quota of zero, or
+  site data disabled — the game still runs, but saves last only until the tab is
+  closed, and a diagnostic is written to the browser console.
+
+Clearing site data for the origin deletes these saves, as it does for any other
+site.
+
 ## Limitations
 
 - **No local server hosting** — browsers cannot fork processes; use a remote server

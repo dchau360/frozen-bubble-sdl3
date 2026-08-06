@@ -86,6 +86,8 @@ Rooms above 5 players get some extra UI to handle the larger player count:
 
 The game runs in any modern browser via WebAssembly. Mobile browsers (iPhone, Android) use touch controls; desktop browsers support keyboard and mouse.
 
+Settings, key bindings, level history, and high scores are saved in the browser and survive a reload. They are scoped to that browser profile and to the exact origin the game is served from — they do not follow you to another browser, another device, or a different host or port. In a private window, or where site storage is blocked or has no quota, the game falls back to session-only defaults and logs a diagnostic to the browser console. See [Saved Data](web/README.md#saved-data) for details.
+
 ### Touch Controls (iPhone / Android)
 
 **Menus:**

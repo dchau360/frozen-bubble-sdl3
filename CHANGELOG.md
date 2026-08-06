@@ -1,5 +1,30 @@
 # Changelog
 
+## Unreleased
+
+- **Android upgrades no longer strand a half-extracted asset tree** — installing
+  a new version now rebuilds the managed asset directory completely, and an
+  extraction interrupted by a crash, a kill, or a full disk is detected and
+  redone on the next launch instead of leaving the game running against a
+  partial tree. Settings and high scores are never touched by this.
+- **Browser saves now survive a reload** — settings, key bindings, level
+  history, and high scores are stored in IndexedDB rather than in memory, so
+  they persist across a page reload in the same browser and origin. See the
+  scope note in [web/README.md](web/README.md#saved-data).
+- **Settings and high scores are written the moment they change**, rather than
+  only at a clean shutdown, so a crash or a closed tab no longer discards the
+  session's progress.
+- **Saves can no longer be lost to an interrupted write** — each file is written
+  out in full and swapped into place, so a crash mid-save leaves the previous
+  high-score table intact instead of a truncated one.
+- **The high-score screen no longer shows blank level thumbnails** — saving
+  invented an empty level for every unused id, and each one it invented made it
+  invent another, so finishing a single level wrote eighteen empty grids into
+  the level history.
+- **Fixed a ~1 MB leak at shutdown** — the high-score manager and settings
+  objects ran their cleanup but were never freed, along with the surfaces and
+  textures they owned.
+
 ## v2.4.33
 
 - **Classic, Clear, and Team matches now use the correct win conditions** — an

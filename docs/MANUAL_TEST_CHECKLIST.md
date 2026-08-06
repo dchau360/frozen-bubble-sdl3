@@ -148,6 +148,32 @@ port; only the UI path is unverified.)
 
 ## 4. Cannot be verified on macOS at all
 
+### BUG-046 — Android asset deployment across an upgrade
+
+The transactional deployment is covered by JVM unit tests and by APK hash parity
+against `share/`, both running in CI. **No emulator or device was run at any
+point during this remediation**, so the runtime path — the one that actually
+performs the swap on a real install-over-install — has never executed.
+
+**Needs:** two APKs signed by the same key, the second with a strictly higher
+`versionCode` (Android refuses the upgrade otherwise — see
+[ANDROID_SIGNING.md](ANDROID_SIGNING.md)). Between building them, change one
+asset's contents, delete another, and add a new one.
+
+**To check**, installing the second APK over the first:
+
+- [ ] the **changed** asset is refreshed to its new contents
+- [ ] the **deleted** asset is gone from the managed tree
+- [ ] the **new** asset is present
+- [ ] a **truncated but non-empty** asset is repaired — truncate one in the
+      managed tree before launching, and confirm it is restored in full rather
+      than left short (a zero-length file is the easy case; a partial one is the
+      case that matters)
+- [ ] `g_dataDir` in the startup log is the exact extracted path, not a
+      `/data/data/...` vs `/data/user/0/...` variant of it
+- [ ] settings and high scores from the first install are **preserved** — the
+      asset tree is rebuilt, preferences are not
+
 ### REL-003 — Windows non-blocking receive
 
 Fixed by construction in v2.4.29, still never run on Windows hardware.
@@ -166,3 +192,7 @@ waiting for the server.
   server and now agrees with the listed open players.
 - **BUG-008** — creator-led room closure was verified under a sanitizer with no
   diagnostics.
+- **BUG-048** — needs no manual check. The browser reload is automated:
+  `tools/test-wasm-persistence.mjs` drives the packaged bundle in headless
+  Chrome, reloads it, and asserts settings and high scores survived. It runs in
+  CI on every push.
