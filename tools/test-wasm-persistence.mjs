@@ -164,7 +164,7 @@ class DevToolsPage {
       const message = JSON.parse(String(event.data));
       if (!message.id) {
         const waiters = this.eventWaiters.get(message.method);
-        if (waiters?.length) waiters.shift()(message.params);
+        if (waiters?.length) waiters.shift().deliver(message.params);
         return;
       }
       const waiter = this.pending.get(message.id);
@@ -181,6 +181,15 @@ class DevToolsPage {
         waiter.reject(new Error('DevTools page WebSocket closed'));
       }
       this.pending.clear();
+      // Event waiters used to survive the close and sit until their own
+      // timeout, so a browser that died turned an immediate failure into a
+      // full TIMEOUT_MS stall -- per run, in CI.
+      for (const waiters of this.eventWaiters.values()) {
+        for (const waiter of waiters) {
+          waiter.fail(new Error('DevTools page WebSocket closed'));
+        }
+      }
+      this.eventWaiters.clear();
     });
   }
 
@@ -211,15 +220,21 @@ class DevToolsPage {
       const waiters = this.eventWaiters.get(method) || [];
       const timeout = setTimeout(() => {
         const currentWaiters = this.eventWaiters.get(method) || [];
-        const index = currentWaiters.indexOf(complete);
+        const index = currentWaiters.indexOf(waiter);
         if (index !== -1) currentWaiters.splice(index, 1);
         rejectEvent(new Error(`Timed out waiting for DevTools event ${method}`));
       }, timeoutMs);
-      const complete = (params) => {
-        clearTimeout(timeout);
-        resolveEvent(params);
+      const waiter = {
+        deliver: (params) => {
+          clearTimeout(timeout);
+          resolveEvent(params);
+        },
+        fail: (error) => {
+          clearTimeout(timeout);
+          rejectEvent(error);
+        },
       };
-      waiters.push(complete);
+      waiters.push(waiter);
       this.eventWaiters.set(method, waiters);
     });
   }
