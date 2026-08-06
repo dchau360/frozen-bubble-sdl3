@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v2.4.34
 
 - **Android upgrades no longer strand a half-extracted asset tree** — installing
   a new version now rebuilds the managed asset directory completely, and an
