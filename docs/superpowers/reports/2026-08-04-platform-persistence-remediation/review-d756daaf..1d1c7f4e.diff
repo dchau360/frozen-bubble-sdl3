@@ -1,0 +1,36 @@
+# Review package: d756daaf..HEAD
+
+## Commits
+1d1c7f4e fix(android): link local multiplayer settings
+
+## Files changed
+ android/app/CMakeLists.txt | 1 +
+ 1 file changed, 1 insertion(+)
+
+## Diff
+diff --git a/android/app/CMakeLists.txt b/android/app/CMakeLists.txt
+index e8f5b474..cf978902 100644
+--- a/android/app/CMakeLists.txt
++++ b/android/app/CMakeLists.txt
+@@ -72,20 +72,21 @@ target_include_directories(iniparser PUBLIC "${JNI_DIR}/iniparser")
+ # Game as shared library (Android requires this)
+ add_library(main SHARED
+     ../../src/frozenbubble.cpp
+     ../../src/main.cpp
+     ../../src/menubutton.cpp
+     ../../src/mainmenu.cpp
+     ../../src/mainmenu_input.cpp
+     ../../src/mainmenu_netpanel.cpp
+     ../../src/mainmenu_panels.cpp
+     ../../src/mainmenu_server.cpp
++    ../../src/localmultiplayer_settings.cpp
+     ../../src/gamesettings.cpp
+     ../../src/audiomixer.cpp
+     ../../src/shaderstuff.cpp
+     ../../src/bubblegame.cpp
+     ../../src/bubblegame_board.cpp
+     ../../src/bubblegame_input.cpp
+     ../../src/bubblegame_level.cpp
+     ../../src/bubblegame_net.cpp
+     ../../src/bubblegame_render.cpp
+     ../../src/bubblegame_shooter.cpp

@@ -1,0 +1,74 @@
+# Review package: 9b6f1cd5..HEAD
+
+## Commits
+d756daaf fix(android): detect sibling asset symlinks (BUG-046)
+
+## Files changed
+ .../src/main/java/org/frozenbubble/AssetDeployment.java  |  5 ++---
+ .../test/java/org/frozenbubble/AssetDeploymentTest.java  | 16 ++++++++++++++++
+ 2 files changed, 18 insertions(+), 3 deletions(-)
+
+## Diff
+diff --git a/android/app/src/main/java/org/frozenbubble/AssetDeployment.java b/android/app/src/main/java/org/frozenbubble/AssetDeployment.java
+index 9088d7b9..14d2c4cc 100644
+--- a/android/app/src/main/java/org/frozenbubble/AssetDeployment.java
++++ b/android/app/src/main/java/org/frozenbubble/AssetDeployment.java
+@@ -145,15 +145,14 @@ final class AssetDeployment {
+         if (!file.delete()) {
+             throw new IOException("Could not delete: " + file);
+         }
+     }
+ 
+     private static boolean isSymbolicLink(File file) throws IOException {
+         File parent = file.getParentFile();
+         if (parent == null) {
+             return false;
+         }
+-        File canonicalParent = parent.getCanonicalFile();
+-        File canonicalFile = file.getCanonicalFile();
+-        return !canonicalParent.equals(canonicalFile.getParentFile());
++        File expectedCanonicalPath = new File(parent.getCanonicalFile(), file.getName());
++        return !expectedCanonicalPath.equals(file.getCanonicalFile());
+     }
+ }
+diff --git a/android/app/src/test/java/org/frozenbubble/AssetDeploymentTest.java b/android/app/src/test/java/org/frozenbubble/AssetDeploymentTest.java
+index 5c4fa2b8..f592d231 100644
+--- a/android/app/src/test/java/org/frozenbubble/AssetDeploymentTest.java
++++ b/android/app/src/test/java/org/frozenbubble/AssetDeploymentTest.java
+@@ -172,20 +172,36 @@ public class AssetDeploymentTest {
+         Files.createSymbolicLink(share.toPath(), outsideDirectory.toPath());
+         writeFile(new File(filesDir, ".assets_version"), "schema-2:41");
+ 
+         File deployed = AssetDeployment.deploy(sourceOf("gfx/red.png", "new-asset"), filesDir, 42L);
+ 
+         assertFileBytes(new File(outsideDirectory, "must-survive.txt"), "outside-data");
+         assertFalse(Files.isSymbolicLink(deployed.toPath()));
+         assertFileBytes(new File(deployed, "gfx/red.png"), "new-asset");
+     }
+ 
++    @Test
++    public void rebuildUnlinksSiblingTargetSymlinkWithoutDeletingTarget() throws Exception {
++        File filesDir = temporaryDirectory();
++        File siblingDirectory = new File(filesDir, "other");
++        writeFile(new File(siblingDirectory, "must-survive.txt"), "sibling-data");
++        File share = new File(filesDir, "share");
++        Files.createSymbolicLink(share.toPath(), siblingDirectory.toPath());
++        writeFile(new File(filesDir, ".assets_version"), "schema-2:41");
++
++        File deployed = AssetDeployment.deploy(sourceOf("gfx/blue.png", "new-asset"), filesDir, 42L);
++
++        assertFileBytes(new File(siblingDirectory, "must-survive.txt"), "sibling-data");
++        assertFalse(Files.isSymbolicLink(deployed.toPath()));
++        assertFileBytes(new File(deployed, "gfx/blue.png"), "new-asset");
++    }
++
+     private File temporaryDirectory() throws IOException {
+         File directory = Files.createTempDirectory("asset-deployment-test").toFile();
+         temporaryDirectories.add(directory);
+         return directory;
+     }
+ 
+     private static FakeAssetSource sourceOf(String... pathAndContents) {
+         if (pathAndContents.length % 2 != 0) {
+             throw new IllegalArgumentException("paths must have literal contents");
+         }

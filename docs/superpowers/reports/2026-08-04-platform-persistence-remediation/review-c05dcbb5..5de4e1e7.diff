@@ -1,0 +1,772 @@
+# Review package: c05dcbb56b5f285864ec7cf5ba2a6ec25fac5b36..HEAD
+
+## Commits
+5de4e1e7 fix(wasm): hydrate and flush IDBFS persistence (BUG-048)
+
+## Files changed
+ CMakeLists.txt                  |   4 +-
+ tests/wasm_persistence_test.cjs | 191 +++++++++++++++++++++
+ tools/serve-wasm.py             |   3 +-
+ tools/test-wasm-persistence.mjs | 359 ++++++++++++++++++++++++++++++++++++++++
+ web/persistence.js              | 129 +++++++++++++++
+ 5 files changed, 684 insertions(+), 2 deletions(-)
+
+## Diff
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 763b8aef..cfbe1f57 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -122,25 +122,27 @@ if(EMSCRIPTEN)
+         -Wno-experimental
+         -sUSE_SDL=3
+         -sUSE_SDL_IMAGE=3
+         -sUSE_SDL_MIXER=3
+         -sUSE_SDL_TTF=3
+         -sALLOW_MEMORY_GROWTH=1
+         -sDISABLE_EXCEPTION_CATCHING=0
+         -sWASM=1
+         -sINITIAL_MEMORY=16777216
+         -lwebsocket.js
++        -lidbfs.js
+         "SHELL:-sENVIRONMENT=web"
+         "SHELL:-sSDL3_IMAGE_FORMATS=['png','gif']"
+         "SHELL:-sSDL3_MIXER_FORMATS=['ogg']"
++        "SHELL:--pre-js ${CMAKE_SOURCE_DIR}/web/persistence.js"
+         "SHELL:--preload-file ${CMAKE_SOURCE_DIR}/share@/share"
+-        "SHELL:-sEXPORTED_RUNTIME_METHODS=['cwrap','ccall','setValue','getValue','UTF8ToString','stringToUTF8']"
++        "SHELL:-sEXPORTED_RUNTIME_METHODS=['cwrap','ccall','setValue','getValue','UTF8ToString','stringToUTF8','FS']"
+         "SHELL:--shell-file ${CMAKE_SOURCE_DIR}/web/shell.html"
+     )
+ endif()
+ 
+ if(NOT DEFINED ASSET_PATH)
+     set(ASSET_PATH ${CMAKE_SOURCE_DIR}/share)
+ endif()
+ 
+ message("Asset path is: ${ASSET_PATH}")
+ 
+diff --git a/tests/wasm_persistence_test.cjs b/tests/wasm_persistence_test.cjs
+new file mode 100644
+index 00000000..23720627
+--- /dev/null
++++ b/tests/wasm_persistence_test.cjs
+@@ -0,0 +1,191 @@
++'use strict';
++
++const test = require('node:test');
++const assert = require('node:assert/strict');
++const createFrozenBubblePersistence = require('../web/persistence.js');
++
++function createHarness() {
++  const calls = [];
++  const pendingSyncs = [];
++  const dependencyEvents = [];
++  const errors = [];
++
++  const FS = {
++    mkdirTree(path) {
++      calls.push({operation: 'mkdirTree', path});
++    },
++    mount(type, options, path) {
++      calls.push({operation: 'mount', type, options, path});
++    },
++    syncfs(populate, callback) {
++      calls.push({operation: 'syncfs', populate});
++      pendingSyncs.push(callback);
++    },
++  };
++  const IDBFS = {name: 'fake-idbfs'};
++  const Module = {
++    printErr(message) {
++      errors.push(message);
++    },
++  };
++  const runtime = {
++    addRunDependency(name) {
++      dependencyEvents.push({operation: 'add', name});
++    },
++    removeRunDependency(name) {
++      dependencyEvents.push({operation: 'remove', name});
++    },
++  };
++
++  return {
++    calls,
++    pendingSyncs,
++    dependencyEvents,
++    errors,
++    Module,
++    IDBFS,
++    controller: createFrozenBubblePersistence(Module, FS, IDBFS, runtime),
++    completeNextSync(error) {
++      const callback = pendingSyncs.shift();
++      assert.ok(callback, 'expected one queued syncfs callback');
++      callback(error);
++    },
++    syncModes() {
++      return calls
++        .filter((call) => call.operation === 'syncfs')
++        .map((call) => call.populate);
++    },
++  };
++}
++
++async function hydrateSuccessfully(harness) {
++  const hydration = harness.controller.hydrate();
++  harness.completeNextSync();
++  assert.deepEqual(await hydration, {ok: true});
++}
++
++test('hydrate holds the run dependency until populate succeeds', async () => {
++  const harness = createHarness();
++
++  const hydration = harness.controller.hydrate();
++
++  assert.deepEqual(harness.calls.slice(0, 3), [
++    {operation: 'mkdirTree', path: '/libsdl/frozen-bubble'},
++    {
++      operation: 'mount',
++      type: harness.IDBFS,
++      options: {},
++      path: '/libsdl/frozen-bubble',
++    },
++    {operation: 'syncfs', populate: true},
++  ]);
++  assert.deepEqual(harness.dependencyEvents, [
++    {operation: 'add', name: 'frozen-bubble-idbfs'},
++  ]);
++
++  harness.completeNextSync();
++
++  assert.deepEqual(await hydration, {ok: true});
++  assert.equal(harness.Module.persistentStoragePopulateCompleted, true);
++  assert.deepEqual(harness.dependencyEvents, [
++    {operation: 'add', name: 'frozen-bubble-idbfs'},
++    {operation: 'remove', name: 'frozen-bubble-idbfs'},
++  ]);
++  assert.deepEqual(harness.syncModes(), [true]);
++});
++
++test('hydrate error releases startup and reports failure', async () => {
++  const harness = createHarness();
++  const failure = new Error('populate failed');
++
++  const hydration = harness.controller.hydrate();
++  harness.completeNextSync(failure);
++
++  assert.deepEqual(await hydration, {ok: false, error: failure});
++  assert.deepEqual(harness.dependencyEvents, [
++    {operation: 'add', name: 'frozen-bubble-idbfs'},
++    {operation: 'remove', name: 'frozen-bubble-idbfs'},
++  ]);
++  assert.deepEqual(harness.syncModes(), [true]);
++  assert.deepEqual(harness.errors, [
++    'Persistent storage hydrate failed: Error: populate failed',
++  ]);
++});
++
++test('flush requested before hydrate waits for populate', async () => {
++  const harness = createHarness();
++
++  const flush = harness.controller.requestFlush();
++  assert.deepEqual(harness.syncModes(), []);
++
++  const hydration = harness.controller.hydrate();
++  assert.deepEqual(harness.syncModes(), [true]);
++
++  harness.completeNextSync();
++  assert.deepEqual(await hydration, {ok: true});
++  assert.deepEqual(harness.syncModes(), [true, false]);
++
++  harness.completeNextSync();
++  await flush;
++  assert.deepEqual(harness.syncModes(), [true, false]);
++});
++
++test('rapid flush requests never overlap syncfs', async () => {
++  const harness = createHarness();
++  await hydrateSuccessfully(harness);
++
++  const first = harness.controller.requestFlush();
++  const second = harness.controller.requestFlush();
++  const third = harness.controller.requestFlush();
++
++  assert.equal(harness.pendingSyncs.length, 1);
++  assert.deepEqual(harness.syncModes(), [true, false]);
++
++  harness.completeNextSync();
++  assert.equal(harness.pendingSyncs.length, 1);
++  assert.deepEqual(harness.syncModes(), [true, false, false]);
++
++  harness.completeNextSync();
++  await Promise.all([first, second, third]);
++  assert.equal(harness.pendingSyncs.length, 0);
++  assert.deepEqual(harness.syncModes(), [true, false, false]);
++});
++
++test('dirty write during flush schedules exactly one follow-up', async () => {
++  const harness = createHarness();
++  await hydrateSuccessfully(harness);
++
++  const initialFlush = harness.controller.requestFlush();
++  const dirtyFlush = harness.controller.requestFlush();
++  const anotherDirtyFlush = harness.controller.requestFlush();
++
++  harness.completeNextSync();
++  assert.deepEqual(harness.syncModes(), [true, false, false]);
++
++  harness.completeNextSync();
++  await Promise.all([initialFlush, dirtyFlush, anotherDirtyFlush]);
++  assert.deepEqual(harness.syncModes(), [true, false, false]);
++});
++
++test('flush error settles waiters and later requests can retry', async () => {
++  const harness = createHarness();
++  await hydrateSuccessfully(harness);
++  const failure = new Error('flush failed');
++
++  const failedFlush = harness.controller.requestFlush();
++  const failedIdle = harness.controller.whenIdle();
++  harness.completeNextSync(failure);
++
++  await assert.rejects(failedFlush, failure);
++  await assert.rejects(failedIdle, failure);
++  assert.deepEqual(harness.errors, [
++    'Persistent storage flush failed: Error: flush failed',
++  ]);
++
++  const retry = harness.controller.requestFlush();
++  assert.deepEqual(harness.syncModes(), [true, false, false]);
++  harness.completeNextSync();
++  await retry;
++
++  assert.deepEqual(harness.syncModes(), [true, false, false]);
++});
+diff --git a/tools/serve-wasm.py b/tools/serve-wasm.py
+index 70ee5abd..8fd36522 100755
+--- a/tools/serve-wasm.py
++++ b/tools/serve-wasm.py
+@@ -72,21 +72,22 @@ def main():
+     # disables streaming compilation and the console error is not obvious.
+     Handler.extensions_map[".wasm"] = "application/wasm"
+ 
+     landing = next((p for p in LANDING_PAGES
+                     if os.path.isfile(os.path.join(root, p))), None)
+     if landing is None:
+         print(f"warning: no {' or '.join(LANDING_PAGES)} in {root}", file=sys.stderr)
+ 
+     socketserver.TCPServer.allow_reuse_address = True
+     with socketserver.TCPServer(("127.0.0.1", args.port), Handler) as httpd:
+-        url = f"http://localhost:{args.port}/{landing or ''}"
++        actual_port = httpd.server_address[1]
++        url = f"http://localhost:{actual_port}/{landing or ''}"
+         # flush: stdout block-buffers when redirected, and this line is the only
+         # confirmation the server came up when it is run in the background.
+         print(f"Serving {root}", flush=True)
+         print(f"  {url}   (COOP/COEP enabled)", flush=True)
+         try:
+             httpd.serve_forever()
+         except KeyboardInterrupt:
+             print()
+ 
+ 
+diff --git a/tools/test-wasm-persistence.mjs b/tools/test-wasm-persistence.mjs
+new file mode 100644
+index 00000000..bc2570fa
+--- /dev/null
++++ b/tools/test-wasm-persistence.mjs
+@@ -0,0 +1,359 @@
++#!/usr/bin/env node
++
++import assert from 'node:assert/strict';
++import {constants as fsConstants} from 'node:fs';
++import {access, mkdtemp, rm} from 'node:fs/promises';
++import {get as httpGet} from 'node:http';
++import {tmpdir} from 'node:os';
++import {join, resolve} from 'node:path';
++import {spawn} from 'node:child_process';
++
++const SETTINGS_FIXTURE =
++    '[GFX]\nQuality = 2\n[Keys]\nSpeedMultiplier = 4.25\n';
++const HIGHSCORES_FIXTURE = '17,Browser Test,12.5,3\n';
++const HISTORY_FIXTURE =
++`0   1   2   3   4   5   6   7
++0   1   2   3   4   5   6   7
++0   1   2   3   4   5   6   7
++0   1   2   3   4   5   6   7
++0   1   2   3   4   5   6   7
++0   1   2   3   4   5   6   7
++0   1   2   3   4   5   6   7
++0   1   2   3   4   5   6   7
++0   1   2   3   4   5   6   7
++0   1   2   3   4   5   6   7
++
++`;
++const FIXTURES = {
++  'settings.ini': SETTINGS_FIXTURE,
++  'highscores': HIGHSCORES_FIXTURE,
++  'highlevelshistory': HISTORY_FIXTURE,
++};
++const TIMEOUT_MS = 120_000;
++
++function delay(milliseconds) {
++  return new Promise((resolveDelay) => setTimeout(resolveDelay, milliseconds));
++}
++
++async function isExecutable(candidate) {
++  try {
++    await access(candidate, fsConstants.X_OK);
++    return true;
++  } catch {
++    return false;
++  }
++}
++
++async function findChrome() {
++  const candidates = [
++    process.env.CHROME_BIN,
++    '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
++    '/Applications/Chromium.app/Contents/MacOS/Chromium',
++    '/usr/bin/google-chrome',
++    '/usr/bin/google-chrome-stable',
++    '/usr/bin/chromium',
++    '/usr/bin/chromium-browser',
++  ].filter(Boolean);
++
++  for (const candidate of candidates) {
++    if (await isExecutable(candidate)) return candidate;
++  }
++  throw new Error(
++      'Chrome not found. Set CHROME_BIN or install Chrome/Chromium in a known path.');
++}
++
++function waitForMatch(stream, pattern, description, timeoutMs = TIMEOUT_MS) {
++  return new Promise((resolveMatch, rejectMatch) => {
++    let output = '';
++    const timeout = setTimeout(() => {
++      cleanup();
++      rejectMatch(new Error(`Timed out waiting for ${description}. Output:\n${output}`));
++    }, timeoutMs);
++
++    const onData = (chunk) => {
++      output += chunk.toString();
++      const match = output.match(pattern);
++      if (match) {
++        cleanup();
++        resolveMatch(match[1]);
++      }
++    };
++    const onEnd = () => {
++      cleanup();
++      rejectMatch(new Error(`Process output ended before ${description}. Output:\n${output}`));
++    };
++    const cleanup = () => {
++      clearTimeout(timeout);
++      stream.off('data', onData);
++      stream.off('end', onEnd);
++      stream.off('close', onEnd);
++    };
++
++    stream.on('data', onData);
++    stream.on('end', onEnd);
++    stream.on('close', onEnd);
++  });
++}
++
++function getJson(url) {
++  return new Promise((resolveJson, rejectJson) => {
++    const request = httpGet(url, (response) => {
++      let body = '';
++      response.setEncoding('utf8');
++      response.on('data', (chunk) => { body += chunk; });
++      response.on('end', () => {
++        if (response.statusCode !== 200) {
++          rejectJson(new Error(`GET ${url} returned ${response.statusCode}: ${body}`));
++          return;
++        }
++        try {
++          resolveJson(JSON.parse(body));
++        } catch (error) {
++          rejectJson(new Error(`Invalid JSON from ${url}: ${error.message}`));
++        }
++      });
++    });
++    request.on('error', rejectJson);
++  });
++}
++
++async function findPageWebSocket(browserWebSocketUrl) {
++  const endpoint = new URL(browserWebSocketUrl);
++  const listUrl = `http://${endpoint.host}/json/list`;
++  const deadline = Date.now() + TIMEOUT_MS;
++  let lastError;
++
++  while (Date.now() < deadline) {
++    try {
++      const targets = await getJson(listUrl);
++      const page = targets.find((target) =>
++        target.type === 'page' && target.webSocketDebuggerUrl);
++      if (page) return page.webSocketDebuggerUrl;
++    } catch (error) {
++      lastError = error;
++    }
++    await delay(100);
++  }
++  throw new Error(`Timed out finding Chrome page target${
++    lastError ? `: ${lastError.message}` : ''}`);
++}
++
++class DevToolsPage {
++  constructor(socket) {
++    this.socket = socket;
++    this.nextId = 1;
++    this.pending = new Map();
++    this.eventWaiters = new Map();
++    socket.addEventListener('message', (event) => {
++      const message = JSON.parse(String(event.data));
++      if (!message.id) {
++        const waiters = this.eventWaiters.get(message.method);
++        if (waiters?.length) waiters.shift()(message.params);
++        return;
++      }
++      const waiter = this.pending.get(message.id);
++      if (!waiter) return;
++      this.pending.delete(message.id);
++      if (message.error) {
++        waiter.reject(new Error(`${message.error.message} (${message.error.code})`));
++      } else {
++        waiter.resolve(message.result);
++      }
++    });
++    socket.addEventListener('close', () => {
++      for (const waiter of this.pending.values()) {
++        waiter.reject(new Error('DevTools page WebSocket closed'));
++      }
++      this.pending.clear();
++    });
++  }
++
++  static async connect(url) {
++    if (typeof WebSocket === 'undefined') {
++      throw new Error('Node 22 or newer is required for the global WebSocket API');
++    }
++    const socket = new WebSocket(url);
++    await new Promise((resolveOpen, rejectOpen) => {
++      socket.addEventListener('open', resolveOpen, {once: true});
++      socket.addEventListener('error', () => {
++        rejectOpen(new Error(`Unable to connect to DevTools WebSocket ${url}`));
++      }, {once: true});
++    });
++    return new DevToolsPage(socket);
++  }
++
++  send(method, params = {}) {
++    const id = this.nextId++;
++    return new Promise((resolveCommand, rejectCommand) => {
++      this.pending.set(id, {resolve: resolveCommand, reject: rejectCommand});
++      this.socket.send(JSON.stringify({id, method, params}));
++    });
++  }
++
++  waitForEvent(method, timeoutMs = TIMEOUT_MS) {
++    return new Promise((resolveEvent, rejectEvent) => {
++      const waiters = this.eventWaiters.get(method) || [];
++      const timeout = setTimeout(() => {
++        const currentWaiters = this.eventWaiters.get(method) || [];
++        const index = currentWaiters.indexOf(complete);
++        if (index !== -1) currentWaiters.splice(index, 1);
++        rejectEvent(new Error(`Timed out waiting for DevTools event ${method}`));
++      }, timeoutMs);
++      const complete = (params) => {
++        clearTimeout(timeout);
++        resolveEvent(params);
++      };
++      waiters.push(complete);
++      this.eventWaiters.set(method, waiters);
++    });
++  }
++
++  async evaluate(expression) {
++    const response = await this.send('Runtime.evaluate', {
++      expression,
++      awaitPromise: true,
++      returnByValue: true,
++    });
++    if (response.exceptionDetails) {
++      const details = response.exceptionDetails.exception?.description ||
++          response.exceptionDetails.text;
++      throw new Error(`Browser evaluation failed: ${details}`);
++    }
++    return response.result.value;
++  }
++
++  close() {
++    this.socket.close();
++  }
++}
++
++async function waitForPersistenceReady(page) {
++  const deadline = Date.now() + TIMEOUT_MS;
++  let lastError;
++  while (Date.now() < deadline) {
++    try {
++      const state = await page.evaluate(`(async function() {
++        if (typeof Module === 'undefined' ||
++            !Module.persistentStorageReady ||
++            !Module.frozenBubbleRuntimeInitialized) {
++          return {available: false};
++        }
++        const hydration = await Module.persistentStorageReady;
++        return {
++          available: true,
++          hydrationOk: hydration.ok,
++          hydrationError: hydration.error ? String(hydration.error) : '',
++          readyBeforeRuntime: Module.persistentStorageReadyBeforeRuntime
++        };
++      })()`);
++      if (state?.available) {
++        assert.equal(state.hydrationOk, true,
++            `IDBFS hydration failed: ${state.hydrationError}`);
++        return state;
++      }
++    } catch (error) {
++      lastError = error;
++    }
++    await delay(100);
++  }
++  throw new Error(`Timed out waiting for WASM persistence readiness${
++    lastError ? `: ${lastError.message}` : ''}`);
++}
++
++async function stopChild(child) {
++  if (!child || child.exitCode !== null || child.signalCode !== null) return;
++  await new Promise((resolveExit) => {
++    const forceTimer = setTimeout(() => {
++      if (child.exitCode === null && child.signalCode === null) child.kill('SIGKILL');
++    }, 5_000);
++    child.once('exit', () => {
++      clearTimeout(forceTimer);
++      resolveExit();
++    });
++    child.kill('SIGTERM');
++  });
++}
++
++async function main() {
++  const buildDirectory = resolve(process.argv[2] || 'build-wasm');
++  const chromeBinary = await findChrome();
++  const browserProfile = await mkdtemp(join(tmpdir(), 'frozen-bubble-wasm-'));
++  let server;
++  let chrome;
++  let page;
++
++  try {
++    server = spawn('python3', [
++      'tools/serve-wasm.py', buildDirectory, '--port', '0',
++    ], {stdio: ['ignore', 'pipe', 'pipe']});
++    server.stderr.resume();
++    const serverUrl = await waitForMatch(
++        server.stdout, /\s(http:\/\/localhost:\d+\/\S*)/, 'WASM server URL');
++    server.stdout.resume();
++
++    chrome = spawn(chromeBinary, [
++      '--headless=new',
++      '--no-sandbox',
++      '--remote-debugging-port=0',
++      `--user-data-dir=${browserProfile}`,
++      '--no-first-run',
++      '--no-default-browser-check',
++      'about:blank',
++    ], {stdio: ['ignore', 'ignore', 'pipe']});
++    const browserWebSocketUrl = await waitForMatch(
++        chrome.stderr, /(ws:\/\/[^\s]+\/devtools\/browser\/[^\s]+)/,
++        'Chrome DevTools endpoint');
++    chrome.stderr.resume();
++    const pageWebSocketUrl = await findPageWebSocket(browserWebSocketUrl);
++    page = await DevToolsPage.connect(pageWebSocketUrl);
++    await page.send('Page.enable');
++    await page.send('Runtime.enable');
++    await page.send('Page.navigate', {url: serverUrl});
++
++    const initialState = await waitForPersistenceReady(page);
++    assert.equal(initialState.readyBeforeRuntime, true,
++        'IDBFS populate did not complete before runtime initialization');
++
++    await page.evaluate(`(async function() {
++      const fixtures = ${JSON.stringify(FIXTURES)};
++      for (const [name, contents] of Object.entries(fixtures)) {
++        Module.FS.writeFile('/libsdl/frozen-bubble/' + name,
++            new TextEncoder().encode(contents));
++      }
++      await Module.requestPersistentStorageFlush();
++      await Module.whenPersistentStorageIdle();
++      return true;
++    })()`);
++
++    const reloadComplete = page.waitForEvent('Page.loadEventFired');
++    await page.send('Page.reload', {ignoreCache: true});
++    await reloadComplete;
++    const reloadedState = await waitForPersistenceReady(page);
++    assert.equal(reloadedState.readyBeforeRuntime, true,
++        'reload initialized runtime before IDBFS populate completed');
++
++    const persistedBytes = await page.evaluate(`(function() {
++      const names = ['settings.ini', 'highscores', 'highlevelshistory'];
++      return Object.fromEntries(names.map(function(name) {
++        return [name, Array.from(Module.FS.readFile(
++            '/libsdl/frozen-bubble/' + name))];
++      }));
++    })()`);
++    for (const [name, contents] of Object.entries(FIXTURES)) {
++      assert.deepEqual(persistedBytes[name], Array.from(Buffer.from(contents, 'utf8')),
++          `${name} bytes changed across reload`);
++    }
++
++    console.log(
++        'PASS: IDBFS hydrated before runtime and persisted all three fixtures across reload');
++  } finally {
++    page?.close();
++    await Promise.all([stopChild(chrome), stopChild(server)]);
++    await rm(browserProfile, {recursive: true, force: true});
++  }
++}
++
++main().catch((error) => {
++  console.error(error.stack || error);
++  process.exitCode = 1;
++});
+diff --git a/web/persistence.js b/web/persistence.js
+new file mode 100644
+index 00000000..fa5919c5
+--- /dev/null
++++ b/web/persistence.js
+@@ -0,0 +1,129 @@
++(function(root, factory) {
++  if (typeof module === 'object' && module.exports) {
++    module.exports = factory;
++    return;
++  }
++  root.createFrozenBubblePersistence = factory;
++  Module.persistentStoragePopulateCompleted = false;
++  Module.frozenBubbleRuntimeInitialized = false;
++  Module.persistentStorageReadyBeforeRuntime = false;
++
++  const previousRuntimeInitialized = Module.onRuntimeInitialized;
++  Module.onRuntimeInitialized = function() {
++    Module.persistentStorageReadyBeforeRuntime =
++        Module.persistentStoragePopulateCompleted;
++    Module.frozenBubbleRuntimeInitialized = true;
++    if (previousRuntimeInitialized) {
++      previousRuntimeInitialized.call(Module);
++    }
++  };
++
++  Module.preRun = Module.preRun || [];
++  Module.preRun.push(function() {
++    const controller = factory(Module, FS, IDBFS, {
++      addRunDependency: function(name) { addRunDependency(name); },
++      removeRunDependency: function(name) { removeRunDependency(name); }
++    });
++    Module.FS = FS;
++    Module.requestPersistentStorageFlush = controller.requestFlush;
++    Module.whenPersistentStorageIdle = controller.whenIdle;
++    Module.persistentStorageReady = controller.hydrate();
++  });
++})(typeof globalThis !== 'undefined' ? globalThis : this,
++function createFrozenBubblePersistence(Module, FS, IDBFS, runtime) {
++  const mountPath = '/libsdl/frozen-bubble';
++  const dependency = 'frozen-bubble-idbfs';
++  let hydrated = false;
++  let inFlight = false;
++  let dirty = false;
++  let idleWaiters = [];
++  let hydratePromise;
++
++  function settleWaiters(error) {
++    const waiters = idleWaiters;
++    idleWaiters = [];
++    for (const waiter of waiters) {
++      if (error) waiter.reject(error);
++      else waiter.resolve();
++    }
++  }
++
++  function startFlushIfNeeded() {
++    if (!hydrated || inFlight || !dirty) return;
++    dirty = false;
++    inFlight = true;
++
++    const complete = function(error) {
++      inFlight = false;
++      if (error) {
++        dirty = false;
++        if (Module.printErr) {
++          Module.printErr('Persistent storage flush failed: ' + error);
++        }
++        settleWaiters(error);
++      } else if (dirty) {
++        startFlushIfNeeded();
++      } else {
++        settleWaiters();
++      }
++    };
++
++    try {
++      FS.syncfs(false, complete);
++    } catch (error) {
++      complete(error);
++    }
++  }
++
++  function whenIdle() {
++    if (hydrated && !inFlight && !dirty) return Promise.resolve();
++    return new Promise(function(resolve, reject) {
++      idleWaiters.push({resolve, reject});
++    });
++  }
++
++  function requestFlush() {
++    dirty = true;
++    const completion = whenIdle();
++    startFlushIfNeeded();
++    return completion;
++  }
++
++  function hydrate() {
++    if (hydratePromise) return hydratePromise;
++    runtime.addRunDependency(dependency);
++    hydratePromise = new Promise(function(resolve) {
++      let completed = false;
++      const complete = function(error) {
++        if (completed) return;
++        completed = true;
++        hydrated = true;
++        Module.persistentStoragePopulateCompleted = true;
++        if (error && Module.printErr) {
++          Module.printErr('Persistent storage hydrate failed: ' + error);
++        }
++        resolve(error ? {ok: false, error} : {ok: true});
++        runtime.removeRunDependency(dependency);
++        if (error) {
++          dirty = false;
++          settleWaiters(error);
++        } else if (dirty) {
++          startFlushIfNeeded();
++        } else {
++          settleWaiters();
++        }
++      };
++
++      try {
++        FS.mkdirTree(mountPath);
++        FS.mount(IDBFS, {}, mountPath);
++        FS.syncfs(true, complete);
++      } catch (error) {
++        complete(error);
++      }
++    });
++    return hydratePromise;
++  }
++
++  return {hydrate, requestFlush, whenIdle};
++});

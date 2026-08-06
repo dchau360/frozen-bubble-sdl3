@@ -1,0 +1,689 @@
+# Review package: ae29f0bf14a66cd4ef466e423b48cecf8c5a95f1..HEAD
+
+## Commits
+867b5f12 fix(android): deploy packaged assets transactionally (BUG-046)
+
+## Files changed
+ android/app/build.gradle                           |   1 +
+ .../java/org/frozenbubble/AssetDeployment.java     | 142 +++++++++++
+ .../main/java/org/frozenbubble/AssetExtractor.java | 115 ++-------
+ .../org/frozenbubble/FrozenBubbleActivity.java     |  19 +-
+ .../java/org/frozenbubble/AssetDeploymentTest.java | 280 +++++++++++++++++++++
+ 5 files changed, 459 insertions(+), 98 deletions(-)
+
+## Diff
+diff --git a/android/app/build.gradle b/android/app/build.gradle
+index 41e28253..1e837b30 100644
+--- a/android/app/build.gradle
++++ b/android/app/build.gradle
+@@ -65,15 +65,16 @@ android {
+             excludes += ['**/libpng.so', '**/libvorbisenc.so']
+         }
+     }
+ 
+     lintOptions {
+         abortOnError false
+     }
+ }
+ 
+ dependencies {
++    testImplementation 'junit:junit:4.13.2'
+     // Google AdMob
+     implementation 'com.google.android.gms:play-services-ads:23.3.0'
+     // Google Play Billing (for "Remove Ads" IAP)
+     implementation 'com.android.billingclient:billing:7.1.1'
+ }
+diff --git a/android/app/src/main/java/org/frozenbubble/AssetDeployment.java b/android/app/src/main/java/org/frozenbubble/AssetDeployment.java
+new file mode 100644
+index 00000000..fda59c1c
+--- /dev/null
++++ b/android/app/src/main/java/org/frozenbubble/AssetDeployment.java
+@@ -0,0 +1,142 @@
++/*
++ * Frozen-Bubble SDL2 C++ Port
++ * Copyright (c) 2000-2012 The Frozen-Bubble Team
++ * Copyright (c) 2026 dchau360
++ *
++ * This program is free software; you can redistribute it and/or
++ * modify it under the terms of the GNU General Public License
++ * version 2, as published by the Free Software Foundation.
++ */
++package org.frozenbubble;
++
++import java.io.File;
++import java.io.FileInputStream;
++import java.io.FileOutputStream;
++import java.io.IOException;
++import java.io.InputStream;
++import java.nio.charset.StandardCharsets;
++
++final class AssetDeployment {
++    static final String MARKER_PREFIX = "schema-2:";
++
++    interface AssetSource {
++        String[] list(String path) throws IOException;
++        InputStream open(String path) throws IOException;
++    }
++
++    static File deploy(AssetSource source, File filesDir, long versionCode)
++            throws IOException {
++        File managedRoot = new File(filesDir, "share");
++        File marker = new File(filesDir, ".assets_version");
++        File markerTemp = new File(filesDir, ".assets_version.tmp");
++        String wanted = MARKER_PREFIX + versionCode;
++        String installed = marker.isFile() ? readUtf8(marker).trim() : "";
++
++        if (wanted.equals(installed) && managedRoot.isDirectory()) {
++            return managedRoot;
++        }
++
++        deleteIfPresent(marker);
++        deleteIfPresent(markerTemp);
++        deleteRecursively(managedRoot, managedRoot);
++        if (!managedRoot.mkdirs() && !managedRoot.isDirectory()) {
++            throw new IOException("Could not create managed asset root: " + managedRoot);
++        }
++        extractEntry(source, "", managedRoot);
++        writeAtomically(markerTemp, marker, wanted.getBytes(StandardCharsets.UTF_8));
++        return managedRoot;
++    }
++
++    private static void extractEntry(AssetSource source, String assetPath, File destination)
++            throws IOException {
++        String[] children = source.list(assetPath);
++        if (children == null || children.length == 0) {
++            if (!assetPath.isEmpty()) {
++                copyLeaf(source, assetPath, destination);
++            }
++            return;
++        }
++
++        if (!destination.mkdirs() && !destination.isDirectory()) {
++            throw new IOException("Could not create asset directory: " + destination);
++        }
++        for (String child : children) {
++            String childPath = assetPath.isEmpty() ? child : assetPath + "/" + child;
++            extractEntry(source, childPath, new File(destination, child));
++        }
++    }
++
++    private static void copyLeaf(AssetSource source, String assetPath, File destination)
++            throws IOException {
++        File temporary = new File(destination.getPath() + ".tmp");
++        deleteIfPresent(temporary);
++        try (InputStream input = source.open(assetPath);
++             FileOutputStream output = new FileOutputStream(temporary)) {
++            byte[] buffer = new byte[32768];
++            int count;
++            while ((count = input.read(buffer)) != -1) {
++                output.write(buffer, 0, count);
++            }
++        }
++        if (!temporary.renameTo(destination)) {
++            throw new IOException("Could not replace asset file: " + destination);
++        }
++    }
++
++    private static String readUtf8(File file) throws IOException {
++        try (InputStream input = new FileInputStream(file)) {
++            byte[] bytes = new byte[(int) file.length()];
++            int offset = 0;
++            while (offset < bytes.length) {
++                int count = input.read(bytes, offset, bytes.length - offset);
++                if (count < 0) {
++                    throw new IOException("Unexpected end of marker: " + file);
++                }
++                offset += count;
++            }
++            return new String(bytes, StandardCharsets.UTF_8);
++        }
++    }
++
++    private static void writeAtomically(File temporary, File destination, byte[] contents)
++            throws IOException {
++        deleteIfPresent(temporary);
++        try (FileOutputStream output = new FileOutputStream(temporary)) {
++            output.write(contents);
++        }
++        if (!temporary.renameTo(destination)) {
++            throw new IOException("Could not replace asset marker: " + destination);
++        }
++    }
++
++    private static void deleteIfPresent(File file) throws IOException {
++        if (file.exists() && !file.delete()) {
++            throw new IOException("Could not delete: " + file);
++        }
++    }
++
++    private static void deleteRecursively(File target, File managedRoot) throws IOException {
++        if (!target.equals(managedRoot)) {
++            throw new IOException("Refusing to delete unmanaged path: " + target);
++        }
++        deleteTree(target);
++    }
++
++    private static void deleteTree(File file) throws IOException {
++        if (!file.exists()) {
++            return;
++        }
++        if (file.isDirectory()) {
++            File[] children = file.listFiles();
++            if (children == null) {
++                throw new IOException("Could not list directory: " + file);
++            }
++            for (File child : children) {
++                deleteTree(child);
++            }
++        }
++        if (!file.delete()) {
++            throw new IOException("Could not delete: " + file);
++        }
++    }
++}
+diff --git a/android/app/src/main/java/org/frozenbubble/AssetExtractor.java b/android/app/src/main/java/org/frozenbubble/AssetExtractor.java
+index 162de715..ed3e090d 100644
+--- a/android/app/src/main/java/org/frozenbubble/AssetExtractor.java
++++ b/android/app/src/main/java/org/frozenbubble/AssetExtractor.java
+@@ -4,126 +4,57 @@
+  * Copyright (c) 2026 dchau360
+  *
+  * This program is free software; you can redistribute it and/or
+  * modify it under the terms of the GNU General Public License
+  * version 2, as published by the Free Software Foundation.
+  */
+ package org.frozenbubble;
+ 
+ import android.content.Context;
+ import android.content.res.AssetManager;
+-import android.util.Log;
++import android.content.pm.PackageInfo;
++import android.content.pm.PackageManager;
++import android.os.Build;
+ 
+-import java.io.File;
+-import java.io.FileInputStream;
+-import java.io.FileOutputStream;
+-import java.io.FileWriter;
++import java.io.IOException;
+ import java.io.InputStream;
+ 
+ /**
+  * Extracts APK assets to writable internal storage so C++ code can use
+  * fopen() on them. Android's APK asset manager is not accessible via
+  * standard POSIX file I/O — files must be copied out first.
+  *
+  * Assets are extracted once per app version to getFilesDir()/share/.
+  * A version marker file prevents redundant re-extraction on subsequent launches.
+  */
+ public class AssetExtractor {
+-    private static final String TAG = "FBubble.Assets";
+-
+     /**
+      * Extracts all APK assets to getFilesDir()/share/ if not already done.
+      * Must be called before SDL starts (before super.onCreate in SDLActivity).
+      *
+      * @return absolute path to the extracted share/ directory
+      */
+-    public static String extractAll(Context context) {
+-        File destDir = new File(context.getFilesDir(), "share");
+-        File markerFile = new File(context.getFilesDir(), ".assets_version");
+-
+-        long versionCode = 0;
+-        try {
+-            versionCode = context.getPackageManager()
+-                    .getPackageInfo(context.getPackageName(), 0)
+-                    .getLongVersionCode();
+-        } catch (Exception e) {
+-            Log.w(TAG, "Could not get version code: " + e.getMessage());
+-        }
+-
+-        // Skip if already extracted for this app version
+-        if (markerFile.exists()) {
+-            try {
+-                byte[] data = readBytes(markerFile);
+-                if (data != null && new String(data).trim().equals(String.valueOf(versionCode))) {
+-                    Log.d(TAG, "Assets already extracted (v" + versionCode + ") at " + destDir);
+-                    return destDir.getAbsolutePath();
+-                }
+-            } catch (Exception e) { /* fall through to re-extract */ }
+-        }
+-
+-        Log.i(TAG, "Extracting assets to " + destDir.getAbsolutePath() + " ...");
+-        destDir.mkdirs();
+-        extractDir(context.getAssets(), "", destDir.getAbsolutePath());
+-
+-        // Write version marker so we skip extraction next launch
++    public static String extractAll(Context context) throws IOException {
++        PackageInfo packageInfo;
+         try {
+-            FileWriter fw = new FileWriter(markerFile);
+-            fw.write(String.valueOf(versionCode));
+-            fw.close();
+-        } catch (Exception e) {
+-            Log.w(TAG, "Could not write version marker: " + e.getMessage());
++            packageInfo = context.getPackageManager()
++                    .getPackageInfo(context.getPackageName(), 0);
++        } catch (PackageManager.NameNotFoundException e) {
++            throw new IOException("Could not determine package version", e);
+         }
+-
+-        Log.i(TAG, "Asset extraction complete");
+-        return destDir.getAbsolutePath();
+-    }
+-
+-    /** Recursively extract an asset directory or file. */
+-    private static void extractDir(AssetManager assets, String assetPath, String destPath) {
+-        try {
+-            String[] children = assets.list(assetPath);
+-            if (children == null || children.length == 0) {
+-                // Leaf file
+-                if (!assetPath.isEmpty()) {
+-                    extractFile(assets, assetPath, destPath);
+-                }
+-            } else {
+-                // Directory — recurse
+-                new File(destPath).mkdirs();
+-                for (String child : children) {
+-                    String subAsset = assetPath.isEmpty() ? child : assetPath + "/" + child;
+-                    String subDest  = destPath + "/" + child;
+-                    extractDir(assets, subAsset, subDest);
+-                }
++        long versionCode = Build.VERSION.SDK_INT >= Build.VERSION_CODES.P
++                ? packageInfo.getLongVersionCode()
++                : packageInfo.versionCode;
++        AssetManager manager = context.getAssets();
++        AssetDeployment.AssetSource source = new AssetDeployment.AssetSource() {
++            public String[] list(String path) throws IOException {
++                return manager.list(path);
+             }
+-        } catch (Exception e) {
+-            Log.e(TAG, "Error processing '" + assetPath + "': " + e.getMessage());
+-        }
+-    }
+-
+-    /** Copy a single APK asset to a destination file path. */
+-    private static void extractFile(AssetManager assets, String assetPath, String destPath) {
+-        File dest = new File(destPath);
+-        if (dest.exists() && dest.length() > 0) return; // already extracted
+-        try {
+-            InputStream in = assets.open(assetPath);
+-            FileOutputStream out = new FileOutputStream(dest);
+-            byte[] buf = new byte[32768];
+-            int len;
+-            while ((len = in.read(buf)) > 0) out.write(buf, 0, len);
+-            in.close();
+-            out.close();
+-        } catch (Exception e) {
+-            Log.e(TAG, "Failed to extract '" + assetPath + "': " + e.getMessage());
+-        }
+-    }
+ 
+-    private static byte[] readBytes(File f) {
+-        try (FileInputStream fis = new FileInputStream(f)) {
+-            byte[] data = new byte[(int) f.length()];
+-            fis.read(data);
+-            return data;
+-        } catch (Exception e) {
+-            return null;
+-        }
++            public InputStream open(String path) throws IOException {
++                return manager.open(path);
++            }
++        };
++        return AssetDeployment.deploy(source, context.getFilesDir(), versionCode)
++                .getAbsolutePath();
+     }
+ }
+diff --git a/android/app/src/main/java/org/frozenbubble/FrozenBubbleActivity.java b/android/app/src/main/java/org/frozenbubble/FrozenBubbleActivity.java
+index fe4aed8a..109c9e99 100644
+--- a/android/app/src/main/java/org/frozenbubble/FrozenBubbleActivity.java
++++ b/android/app/src/main/java/org/frozenbubble/FrozenBubbleActivity.java
+@@ -4,21 +4,23 @@
+  * Copyright (c) 2026 dchau360
+  *
+  * This program is free software; you can redistribute it and/or
+  * modify it under the terms of the GNU General Public License
+  * version 2, as published by the Free Software Foundation.
+  */
+ package org.frozenbubble;
+ 
+ import org.libsdl.app.SDLActivity;
+ import android.os.Bundle;
++import android.util.Log;
+ import android.view.KeyEvent;
++import android.widget.Toast;
+ 
+ import java.io.BufferedReader;
+ import java.io.InputStreamReader;
+ import java.net.HttpURLConnection;
+ import java.net.URL;
+ 
+ /**
+  * Frozen Bubble Android TV Activity.
+  *
+  * SDL3 message protocol (sent from C++ via SDL_SendAndroidMessage):
+@@ -31,26 +33,31 @@ public class FrozenBubbleActivity extends SDLActivity {
+     private static final int MSG_SHOW_AD      = 0x8001;
+     private static final int MSG_REMOVE_ADS   = 0x8002;
+ 
+     /** Extracted asset directory path — read by C++ InitDataDir() via JNI. */
+     public static String sExtractedDataDir = "";
+ 
+     private BillingManager mBillingManager;
+ 
+     @Override
+     protected void onCreate(Bundle savedInstanceState) {
+-        // Extract APK assets to writable internal storage BEFORE SDL starts.
+-        // C++ code uses fopen() which cannot read APK assets directly — they
+-        // must be copied to the filesystem first. This is fast on subsequent
+-        // launches (version marker detected, extraction skipped).
+-        // Store the result so C++ can read the exact same path via JNI.
+-        sExtractedDataDir = AssetExtractor.extractAll(this);
++        try {
++            sExtractedDataDir = AssetExtractor.extractAll(this);
++        } catch (Exception e) {
++            sExtractedDataDir = "";
++            Log.e("FBubble.Assets", "Asset deployment failed; SDL will not start", e);
++            Toast.makeText(this,
++                    "Game assets could not be prepared. Restart or reinstall the app.",
++                    Toast.LENGTH_LONG).show();
++            finish();
++            return;
++        }
+ 
+         super.onCreate(savedInstanceState);
+ 
+         // NOTE: AdMob init is intentionally deferred — calling MobileAds.initialize()
+         // in onCreate() spawns HWUI worker threads that conflict with SDL's EGL surface,
+         // causing a "pthread_mutex_lock on destroyed mutex" crash (HWUI CommonPool).
+         // Ads are loaded lazily when C++ sends MSG_SHOW_AD (0x8001).
+ 
+         // Initialize billing client (restores prior purchases on connect)
+         mBillingManager = new BillingManager(this);
+diff --git a/android/app/src/test/java/org/frozenbubble/AssetDeploymentTest.java b/android/app/src/test/java/org/frozenbubble/AssetDeploymentTest.java
+new file mode 100644
+index 00000000..d5aa68be
+--- /dev/null
++++ b/android/app/src/test/java/org/frozenbubble/AssetDeploymentTest.java
+@@ -0,0 +1,280 @@
++package org.frozenbubble;
++
++import static org.junit.Assert.assertArrayEquals;
++import static org.junit.Assert.assertEquals;
++import static org.junit.Assert.assertFalse;
++import static org.junit.Assert.assertTrue;
++import static org.junit.Assert.fail;
++
++import org.junit.After;
++import org.junit.Test;
++
++import java.io.ByteArrayInputStream;
++import java.io.File;
++import java.io.FileInputStream;
++import java.io.IOException;
++import java.io.InputStream;
++import java.nio.charset.StandardCharsets;
++import java.nio.file.Files;
++import java.util.ArrayList;
++import java.util.LinkedHashMap;
++import java.util.List;
++import java.util.Map;
++
++public class AssetDeploymentTest {
++    private final List<File> temporaryDirectories = new ArrayList<>();
++
++    @After
++    public void removeTemporaryDirectories() throws IOException {
++        for (File directory : temporaryDirectories) {
++            deleteRecursively(directory);
++        }
++    }
++
++    @Test
++    public void freshDeployWritesAllAssetsAndSchemaMarker() throws Exception {
++        File filesDir = temporaryDirectory();
++        FakeAssetSource source = sourceOf(
++                "gfx/red.png", "red-bytes",
++                "snd/pop.wav", "pop-bytes");
++
++        File deployed = AssetDeployment.deploy(source, filesDir, 42L);
++
++        assertEquals(new File(filesDir, "share"), deployed);
++        assertFileBytes(new File(deployed, "gfx/red.png"), "red-bytes");
++        assertFileBytes(new File(deployed, "snd/pop.wav"), "pop-bytes");
++        assertFileBytes(new File(filesDir, ".assets_version"), "schema-2:42");
++    }
++
++    @Test
++    public void legacyMarkerForcesCompleteRebuild() throws Exception {
++        File filesDir = temporaryDirectory();
++        File share = new File(filesDir, "share");
++        writeFile(new File(share, "gfx/red.png"), "stale-red");
++        writeFile(new File(share, "obsolete.txt"), "obsolete");
++        writeFile(new File(filesDir, ".assets_version"), "42");
++
++        AssetDeployment.deploy(sourceOf("gfx/red.png", "fresh-red"), filesDir, 42L);
++
++        assertFileBytes(new File(share, "gfx/red.png"), "fresh-red");
++        assertFalse(new File(share, "obsolete.txt").exists());
++        assertFileBytes(new File(filesDir, ".assets_version"), "schema-2:42");
++    }
++
++    @Test
++    public void rebuildReplacesChangedAndTruncatedFiles() throws Exception {
++        File filesDir = temporaryDirectory();
++        AssetDeployment.deploy(sourceOf(
++                "gfx/changed.png", "long-original-bytes",
++                "gfx/truncated.png", "this file used to be longer"), filesDir, 42L);
++
++        AssetDeployment.deploy(sourceOf(
++                "gfx/changed.png", "replacement",
++                "gfx/truncated.png", "tiny"), filesDir, 43L);
++
++        File share = new File(filesDir, "share");
++        assertFileBytes(new File(share, "gfx/changed.png"), "replacement");
++        assertFileBytes(new File(share, "gfx/truncated.png"), "tiny");
++    }
++
++    @Test
++    public void rebuildRemovesDeletedAssets() throws Exception {
++        File filesDir = temporaryDirectory();
++        AssetDeployment.deploy(sourceOf(
++                "gfx/kept.png", "first-kept",
++                "gfx/deleted.png", "first-deleted"), filesDir, 42L);
++
++        AssetDeployment.deploy(sourceOf("gfx/kept.png", "second-kept"), filesDir, 43L);
++
++        File share = new File(filesDir, "share");
++        assertFileBytes(new File(share, "gfx/kept.png"), "second-kept");
++        assertFalse(new File(share, "gfx/deleted.png").exists());
++    }
++
++    @Test
++    public void rebuildHandlesFileDirectoryShapeChanges() throws Exception {
++        File filesDir = temporaryDirectory();
++        AssetDeployment.deploy(sourceOf("gfx/swap", "a-file"), filesDir, 42L);
++
++        AssetDeployment.deploy(sourceOf("gfx/swap/child.png", "a-child"), filesDir, 43L);
++
++        File share = new File(filesDir, "share");
++        assertTrue(new File(share, "gfx/swap").isDirectory());
++        assertFileBytes(new File(share, "gfx/swap/child.png"), "a-child");
++
++        AssetDeployment.deploy(sourceOf("snd/reverse/child.wav", "first-child"), filesDir, 44L);
++        AssetDeployment.deploy(sourceOf("snd/reverse", "a-file-again"), filesDir, 45L);
++
++        assertTrue(new File(share, "snd/reverse").isFile());
++        assertFileBytes(new File(share, "snd/reverse"), "a-file-again");
++    }
++
++    @Test
++    public void copyFailureDoesNotCommitCurrentMarker() throws Exception {
++        File filesDir = temporaryDirectory();
++        FakeAssetSource source = sourceOf(
++                "gfx/copied.png", "copied-before-error",
++                "gfx/broken.png", "never-copied");
++        source.failWhenOpening("gfx/broken.png");
++
++        try {
++            AssetDeployment.deploy(source, filesDir, 42L);
++            fail("copy failure must propagate as IOException");
++        } catch (IOException expected) {
++            assertFalse(new File(filesDir, ".assets_version").exists());
++        }
++    }
++
++    @Test
++    public void retryAfterFailureBuildsACompleteTree() throws Exception {
++        File filesDir = temporaryDirectory();
++        FakeAssetSource source = sourceOf(
++                "gfx/copied.png", "copied-on-retry",
++                "gfx/broken.png", "recovered-on-retry");
++        source.failWhenOpening("gfx/broken.png");
++
++        try {
++            AssetDeployment.deploy(source, filesDir, 42L);
++            fail("initial copy failure must propagate");
++        } catch (IOException expected) {
++            // The next launch retries from a tree without a current marker.
++        }
++        source.stopFailing();
++
++        File deployed = AssetDeployment.deploy(source, filesDir, 42L);
++
++        assertFileBytes(new File(deployed, "gfx/copied.png"), "copied-on-retry");
++        assertFileBytes(new File(deployed, "gfx/broken.png"), "recovered-on-retry");
++        assertFileBytes(new File(filesDir, ".assets_version"), "schema-2:42");
++    }
++
++    @Test
++    public void rebuildPreservesPreferenceSiblings() throws Exception {
++        File filesDir = temporaryDirectory();
++        writeFile(new File(filesDir, "settings.ini"), "saved-settings");
++        writeFile(new File(filesDir, "highscores"), "saved-scores");
++        writeFile(new File(filesDir, "highlevelshistory"), "saved-history");
++
++        AssetDeployment.deploy(sourceOf("gfx/red.png", "red"), filesDir, 42L);
++        AssetDeployment.deploy(sourceOf("gfx/blue.png", "blue"), filesDir, 43L);
++
++        assertFileBytes(new File(filesDir, "settings.ini"), "saved-settings");
++        assertFileBytes(new File(filesDir, "highscores"), "saved-scores");
++        assertFileBytes(new File(filesDir, "highlevelshistory"), "saved-history");
++    }
++
++    private File temporaryDirectory() throws IOException {
++        File directory = Files.createTempDirectory("asset-deployment-test").toFile();
++        temporaryDirectories.add(directory);
++        return directory;
++    }
++
++    private static FakeAssetSource sourceOf(String... pathAndContents) {
++        if (pathAndContents.length % 2 != 0) {
++            throw new IllegalArgumentException("paths must have literal contents");
++        }
++        FakeAssetSource source = new FakeAssetSource();
++        for (int i = 0; i < pathAndContents.length; i += 2) {
++            source.add(pathAndContents[i], pathAndContents[i + 1]);
++        }
++        return source;
++    }
++
++    private static void assertFileBytes(File file, String expected) throws IOException {
++        assertTrue("expected file: " + file, file.isFile());
++        assertArrayEquals(expected.getBytes(StandardCharsets.UTF_8), readFile(file));
++    }
++
++    private static byte[] readFile(File file) throws IOException {
++        try (InputStream input = new FileInputStream(file)) {
++            byte[] bytes = new byte[(int) file.length()];
++            int offset = 0;
++            while (offset < bytes.length) {
++                int count = input.read(bytes, offset, bytes.length - offset);
++                if (count < 0) {
++                    throw new IOException("Unexpected end of file: " + file);
++                }
++                offset += count;
++            }
++            return bytes;
++        }
++    }
++
++    private static void writeFile(File file, String contents) throws IOException {
++        File parent = file.getParentFile();
++        if (!parent.exists() && !parent.mkdirs()) {
++            throw new IOException("Could not create " + parent);
++        }
++        java.io.FileOutputStream output = new java.io.FileOutputStream(file);
++        try {
++            output.write(contents.getBytes(StandardCharsets.UTF_8));
++        } finally {
++            output.close();
++        }
++    }
++
++    private static void deleteRecursively(File file) throws IOException {
++        if (!file.exists()) {
++            return;
++        }
++        if (file.isDirectory()) {
++            File[] children = file.listFiles();
++            if (children == null) {
++                throw new IOException("Could not list " + file);
++            }
++            for (File child : children) {
++                deleteRecursively(child);
++            }
++        }
++        if (!file.delete()) {
++            throw new IOException("Could not delete " + file);
++        }
++    }
++
++    private static final class FakeAssetSource implements AssetDeployment.AssetSource {
++        private final Map<String, byte[]> assets = new LinkedHashMap<>();
++        private String failingPath;
++
++        void add(String path, String contents) {
++            assets.put(path, contents.getBytes(StandardCharsets.UTF_8));
++        }
++
++        void failWhenOpening(String path) {
++            failingPath = path;
++        }
++
++        void stopFailing() {
++            failingPath = null;
++        }
++
++        @Override
++        public String[] list(String path) {
++            String prefix = path.isEmpty() ? "" : path + "/";
++            List<String> children = new ArrayList<>();
++            for (String assetPath : assets.keySet()) {
++                if (!assetPath.startsWith(prefix)) {
++                    continue;
++                }
++                String remainder = assetPath.substring(prefix.length());
++                int separator = remainder.indexOf('/');
++                String child = separator < 0 ? remainder : remainder.substring(0, separator);
++                if (!children.contains(child)) {
++                    children.add(child);
++                }
++            }
++            return children.toArray(new String[children.size()]);
++        }
++
++        @Override
++        public InputStream open(String path) throws IOException {
++            if (path.equals(failingPath)) {
++                throw new IOException("forced copy failure: " + path);
++            }
++            byte[] contents = assets.get(path);
++            if (contents == null) {
++                throw new IOException("unknown asset: " + path);
++            }
++            return new ByteArrayInputStream(contents);
++        }
++    }
++}

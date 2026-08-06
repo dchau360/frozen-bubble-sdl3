@@ -1,0 +1,193 @@
+# Review package: 1d1c7f4e8d6b72da619e25362fc1c7f8c18534c2..HEAD
+
+## Commits
+c05dcbb5 test(android): verify packaged asset parity
+
+## Files changed
+ tests/android_asset_parity_test.py | 104 +++++++++++++++++++++++++++++++++++++
+ tools/verify_android_assets.py     |  66 +++++++++++++++++++++++
+ 2 files changed, 170 insertions(+)
+
+## Diff
+diff --git a/tests/android_asset_parity_test.py b/tests/android_asset_parity_test.py
+new file mode 100644
+index 00000000..61d38c43
+--- /dev/null
++++ b/tests/android_asset_parity_test.py
+@@ -0,0 +1,104 @@
++#!/usr/bin/env python3
++"""Behavioral tests for the Android APK asset-parity CLI."""
++
++from __future__ import annotations
++
++import pathlib
++import subprocess
++import sys
++import tempfile
++import unittest
++import zipfile
++
++
++REPOSITORY_ROOT = pathlib.Path(__file__).resolve().parents[1]
++SCRIPT = REPOSITORY_ROOT / "tools" / "verify_android_assets.py"
++
++
++class AndroidAssetParityTest(unittest.TestCase):
++    def make_source(self, root: pathlib.Path) -> pathlib.Path:
++        source = root / "share"
++        (source / "gfx").mkdir(parents=True)
++        (source / "gfx" / "bubble.png").write_bytes(b"blue bubble")
++        (source / "data").mkdir()
++        (source / "data" / "levels.txt").write_bytes(b"level one\n")
++        return source
++
++    def make_apk(self, root: pathlib.Path, assets: dict[str, bytes]) -> pathlib.Path:
++        apk = root / "app-debug.apk"
++        with zipfile.ZipFile(apk, "w") as archive:
++            for path, contents in assets.items():
++                archive.writestr(f"assets/{path}", contents)
++        return apk
++
++    def run_checker(self, apk: pathlib.Path, source: pathlib.Path) -> subprocess.CompletedProcess[str]:
++        return subprocess.run(
++            [sys.executable, str(SCRIPT), "--apk", str(apk), "--source", str(source)],
++            capture_output=True,
++            text=True,
++            check=False,
++        )
++
++    def test_matching_paths_and_hashes_pass(self) -> None:
++        """A correct package exits successfully."""
++        with tempfile.TemporaryDirectory() as temporary_directory:
++            root = pathlib.Path(temporary_directory)
++            source = self.make_source(root)
++            apk = self.make_apk(
++                root,
++                {"gfx/bubble.png": b"blue bubble", "data/levels.txt": b"level one\n"},
++            )
++
++            result = self.run_checker(apk, source)
++
++        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
++
++    def test_missing_packaged_asset_fails(self) -> None:
++        """Omitting a source asset reports its relative path."""
++        with tempfile.TemporaryDirectory() as temporary_directory:
++            root = pathlib.Path(temporary_directory)
++            source = self.make_source(root)
++            apk = self.make_apk(root, {"gfx/bubble.png": b"blue bubble"})
++
++            result = self.run_checker(apk, source)
++
++        self.assertNotEqual(result.returncode, 0)
++        self.assertIn("data/levels.txt", result.stdout)
++
++    def test_unexpected_packaged_asset_fails(self) -> None:
++        """An asset absent from share reports its relative path."""
++        with tempfile.TemporaryDirectory() as temporary_directory:
++            root = pathlib.Path(temporary_directory)
++            source = self.make_source(root)
++            apk = self.make_apk(
++                root,
++                {
++                    "gfx/bubble.png": b"blue bubble",
++                    "data/levels.txt": b"level one\n",
++                    "extra.txt": b"not in share",
++                },
++            )
++
++            result = self.run_checker(apk, source)
++
++        self.assertNotEqual(result.returncode, 0)
++        self.assertIn("extra.txt", result.stdout)
++
++    def test_changed_packaged_asset_fails(self) -> None:
++        """Different asset bytes report the affected relative path."""
++        with tempfile.TemporaryDirectory() as temporary_directory:
++            root = pathlib.Path(temporary_directory)
++            source = self.make_source(root)
++            apk = self.make_apk(
++                root,
++                {"gfx/bubble.png": b"red bubble", "data/levels.txt": b"level one\n"},
++            )
++
++            result = self.run_checker(apk, source)
++
++        self.assertNotEqual(result.returncode, 0)
++        self.assertIn("gfx/bubble.png", result.stdout)
++
++
++if __name__ == "__main__":
++    unittest.main()
+diff --git a/tools/verify_android_assets.py b/tools/verify_android_assets.py
+new file mode 100644
+index 00000000..cc3cbbf2
+--- /dev/null
++++ b/tools/verify_android_assets.py
+@@ -0,0 +1,66 @@
++#!/usr/bin/env python3
++"""Verify that packaged Android assets exactly match the source share tree."""
++
++from __future__ import annotations
++
++import argparse
++import pathlib
++import zipfile
++from hashlib import sha256
++
++
++def source_hashes(root: pathlib.Path) -> dict[str, str]:
++    return {
++        path.relative_to(root).as_posix(): sha256(path.read_bytes()).hexdigest()
++        for path in sorted(root.rglob("*"))
++        if path.is_file()
++    }
++
++
++def apk_hashes(apk: pathlib.Path) -> dict[str, str]:
++    with zipfile.ZipFile(apk) as archive:
++        return {
++            info.filename.removeprefix("assets/"):
++                sha256(archive.read(info)).hexdigest()
++            for info in archive.infolist()
++            if info.filename.startswith("assets/") and not info.is_dir()
++        }
++
++
++def main() -> int:
++    parser = argparse.ArgumentParser(
++        description="Verify APK assets against a source share directory."
++    )
++    parser.add_argument("--apk", required=True, type=pathlib.Path)
++    parser.add_argument("--source", required=True, type=pathlib.Path)
++    arguments = parser.parse_args()
++
++    source = source_hashes(arguments.source)
++    packaged = apk_hashes(arguments.apk)
++    missing = sorted(source.keys() - packaged.keys())
++    unexpected = sorted(packaged.keys() - source.keys())
++    mismatched = sorted(
++        path for path in source.keys() & packaged.keys() if source[path] != packaged[path]
++    )
++
++    if missing or unexpected or mismatched:
++        if missing:
++            print("Missing packaged assets:")
++            for path in missing:
++                print(f"  {path}")
++        if unexpected:
++            print("Unexpected packaged assets:")
++            for path in unexpected:
++                print(f"  {path}")
++        if mismatched:
++            print("Mismatched packaged assets:")
++            for path in mismatched:
++                print(f"  {path}")
++        return 1
++
++    print(f"APK assets match source: {len(source)} files with matching SHA-256 hashes.")
++    return 0
++
++
++if __name__ == "__main__":
++    raise SystemExit(main())

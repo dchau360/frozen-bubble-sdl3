@@ -1,0 +1,124 @@
+# Review package: 867b5f12..HEAD
+
+## Commits
+9b6f1cd5 fix(android): contain managed asset deletion (BUG-046)
+
+## Files changed
+ .../main/java/org/frozenbubble/AssetDeployment.java   | 19 ++++++++++++++++++-
+ .../java/org/frozenbubble/AssetDeploymentTest.java    | 16 ++++++++++++++++
+ 2 files changed, 34 insertions(+), 1 deletion(-)
+
+## Diff
+diff --git a/android/app/src/main/java/org/frozenbubble/AssetDeployment.java b/android/app/src/main/java/org/frozenbubble/AssetDeployment.java
+index fda59c1c..9088d7b9 100644
+--- a/android/app/src/main/java/org/frozenbubble/AssetDeployment.java
++++ b/android/app/src/main/java/org/frozenbubble/AssetDeployment.java
+@@ -25,21 +25,22 @@ final class AssetDeployment {
+     }
+ 
+     static File deploy(AssetSource source, File filesDir, long versionCode)
+             throws IOException {
+         File managedRoot = new File(filesDir, "share");
+         File marker = new File(filesDir, ".assets_version");
+         File markerTemp = new File(filesDir, ".assets_version.tmp");
+         String wanted = MARKER_PREFIX + versionCode;
+         String installed = marker.isFile() ? readUtf8(marker).trim() : "";
+ 
+-        if (wanted.equals(installed) && managedRoot.isDirectory()) {
++        if (wanted.equals(installed) && !isSymbolicLink(managedRoot)
++                && managedRoot.isDirectory()) {
+             return managedRoot;
+         }
+ 
+         deleteIfPresent(marker);
+         deleteIfPresent(markerTemp);
+         deleteRecursively(managedRoot, managedRoot);
+         if (!managedRoot.mkdirs() && !managedRoot.isDirectory()) {
+             throw new IOException("Could not create managed asset root: " + managedRoot);
+         }
+         extractEntry(source, "", managedRoot);
+@@ -116,27 +117,43 @@ final class AssetDeployment {
+     }
+ 
+     private static void deleteRecursively(File target, File managedRoot) throws IOException {
+         if (!target.equals(managedRoot)) {
+             throw new IOException("Refusing to delete unmanaged path: " + target);
+         }
+         deleteTree(target);
+     }
+ 
+     private static void deleteTree(File file) throws IOException {
++        if (isSymbolicLink(file)) {
++            if (!file.delete()) {
++                throw new IOException("Could not unlink symbolic link: " + file);
++            }
++            return;
++        }
+         if (!file.exists()) {
+             return;
+         }
+         if (file.isDirectory()) {
+             File[] children = file.listFiles();
+             if (children == null) {
+                 throw new IOException("Could not list directory: " + file);
+             }
+             for (File child : children) {
+                 deleteTree(child);
+             }
+         }
+         if (!file.delete()) {
+             throw new IOException("Could not delete: " + file);
+         }
+     }
++
++    private static boolean isSymbolicLink(File file) throws IOException {
++        File parent = file.getParentFile();
++        if (parent == null) {
++            return false;
++        }
++        File canonicalParent = parent.getCanonicalFile();
++        File canonicalFile = file.getCanonicalFile();
++        return !canonicalParent.equals(canonicalFile.getParentFile());
++    }
+ }
+diff --git a/android/app/src/test/java/org/frozenbubble/AssetDeploymentTest.java b/android/app/src/test/java/org/frozenbubble/AssetDeploymentTest.java
+index d5aa68be..5c4fa2b8 100644
+--- a/android/app/src/test/java/org/frozenbubble/AssetDeploymentTest.java
++++ b/android/app/src/test/java/org/frozenbubble/AssetDeploymentTest.java
+@@ -156,20 +156,36 @@ public class AssetDeploymentTest {
+         writeFile(new File(filesDir, "highlevelshistory"), "saved-history");
+ 
+         AssetDeployment.deploy(sourceOf("gfx/red.png", "red"), filesDir, 42L);
+         AssetDeployment.deploy(sourceOf("gfx/blue.png", "blue"), filesDir, 43L);
+ 
+         assertFileBytes(new File(filesDir, "settings.ini"), "saved-settings");
+         assertFileBytes(new File(filesDir, "highscores"), "saved-scores");
+         assertFileBytes(new File(filesDir, "highlevelshistory"), "saved-history");
+     }
+ 
++    @Test
++    public void rebuildUnlinksManagedRootSymlinkWithoutDeletingTarget() throws Exception {
++        File filesDir = temporaryDirectory();
++        File outsideDirectory = temporaryDirectory();
++        writeFile(new File(outsideDirectory, "must-survive.txt"), "outside-data");
++        File share = new File(filesDir, "share");
++        Files.createSymbolicLink(share.toPath(), outsideDirectory.toPath());
++        writeFile(new File(filesDir, ".assets_version"), "schema-2:41");
++
++        File deployed = AssetDeployment.deploy(sourceOf("gfx/red.png", "new-asset"), filesDir, 42L);
++
++        assertFileBytes(new File(outsideDirectory, "must-survive.txt"), "outside-data");
++        assertFalse(Files.isSymbolicLink(deployed.toPath()));
++        assertFileBytes(new File(deployed, "gfx/red.png"), "new-asset");
++    }
++
+     private File temporaryDirectory() throws IOException {
+         File directory = Files.createTempDirectory("asset-deployment-test").toFile();
+         temporaryDirectories.add(directory);
+         return directory;
+     }
+ 
+     private static FakeAssetSource sourceOf(String... pathAndContents) {
+         if (pathAndContents.length % 2 != 0) {
+             throw new IllegalArgumentException("paths must have literal contents");
+         }

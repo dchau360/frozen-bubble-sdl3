@@ -1,0 +1,173 @@
+# Review package: 5de4e1e7..HEAD
+
+## Commits
+03fdccdb fix(wasm): handle persistence test launch failures
+
+## Files changed
+ tests/wasm_persistence_driver_test.cjs | 52 ++++++++++++++++++++++++++++++++++
+ tools/test-wasm-persistence.mjs        | 24 ++++++++++++----
+ 2 files changed, 71 insertions(+), 5 deletions(-)
+
+## Diff
+diff --git a/tests/wasm_persistence_driver_test.cjs b/tests/wasm_persistence_driver_test.cjs
+new file mode 100644
+index 00000000..7ee81c5f
+--- /dev/null
++++ b/tests/wasm_persistence_driver_test.cjs
+@@ -0,0 +1,52 @@
++'use strict';
++
++const test = require('node:test');
++const assert = require('node:assert/strict');
++const {spawn} = require('node:child_process');
++const {mkdtemp, readdir, rm} = require('node:fs/promises');
++const {tmpdir} = require('node:os');
++const {join, resolve} = require('node:path');
++
++function run(command, args, options) {
++  return new Promise((resolveRun, rejectRun) => {
++    const child = spawn(command, args, options);
++    let stdout = '';
++    let stderr = '';
++    child.stdout.on('data', (chunk) => { stdout += chunk; });
++    child.stderr.on('data', (chunk) => { stderr += chunk; });
++    child.on('error', rejectRun);
++    child.on('close', (code, signal) => {
++      resolveRun({code, signal, stdout, stderr});
++    });
++  });
++}
++
++test('launch failure is handled and removes the temporary browser profile', async () => {
++  const isolatedTemp = await mkdtemp(join(tmpdir(), 'fb-wasm-driver-test-'));
++  const driver = resolve(__dirname, '../tools/test-wasm-persistence.mjs');
++
++  try {
++    const result = await run(process.execPath, [driver, 'unused-build'], {
++      env: {
++        ...process.env,
++        CHROME_BIN: process.execPath,
++        PATH: isolatedTemp,
++        TMPDIR: isolatedTemp,
++      },
++      stdio: ['ignore', 'pipe', 'pipe'],
++    });
++    const leftovers = await readdir(isolatedTemp);
++
++    assert.equal(result.code, 1);
++    assert.deepEqual({
++      emittedUnhandledError: /Unhandled 'error' event/.test(result.stderr),
++      leftovers,
++    }, {
++      emittedUnhandledError: false,
++      leftovers: [],
++    });
++    assert.match(result.stderr, /spawn python3 ENOENT/);
++  } finally {
++    await rm(isolatedTemp, {recursive: true, force: true});
++  }
++});
+diff --git a/tools/test-wasm-persistence.mjs b/tools/test-wasm-persistence.mjs
+index bc2570fa..7bbeaf8c 100644
+--- a/tools/test-wasm-persistence.mjs
++++ b/tools/test-wasm-persistence.mjs
+@@ -88,20 +88,27 @@ function waitForMatch(stream, pattern, description, timeoutMs = TIMEOUT_MS) {
+       stream.off('end', onEnd);
+       stream.off('close', onEnd);
+     };
+ 
+     stream.on('data', onData);
+     stream.on('end', onEnd);
+     stream.on('close', onEnd);
+   });
+ }
+ 
++function waitForSpawn(child) {
++  return new Promise((resolveSpawn, rejectSpawn) => {
++    child.once('spawn', resolveSpawn);
++    child.once('error', rejectSpawn);
++  });
++}
++
+ function getJson(url) {
+   return new Promise((resolveJson, rejectJson) => {
+     const request = httpGet(url, (response) => {
+       let body = '';
+       response.setEncoding('utf8');
+       response.on('data', (chunk) => { body += chunk; });
+       response.on('end', () => {
+         if (response.statusCode !== 200) {
+           rejectJson(new Error(`GET ${url} returned ${response.statusCode}: ${body}`));
+           return;
+@@ -254,59 +261,66 @@ async function waitForPersistenceReady(page) {
+     } catch (error) {
+       lastError = error;
+     }
+     await delay(100);
+   }
+   throw new Error(`Timed out waiting for WASM persistence readiness${
+     lastError ? `: ${lastError.message}` : ''}`);
+ }
+ 
+ async function stopChild(child) {
+-  if (!child || child.exitCode !== null || child.signalCode !== null) return;
++  if (!child || child.pid === undefined ||
++      child.exitCode !== null || child.signalCode !== null) return;
+   await new Promise((resolveExit) => {
++    const settle = () => {
++      clearTimeout(forceTimer);
++      child.off('error', settle);
++      child.off('close', settle);
++      resolveExit();
++    };
+     const forceTimer = setTimeout(() => {
+       if (child.exitCode === null && child.signalCode === null) child.kill('SIGKILL');
+     }, 5_000);
+-    child.once('exit', () => {
+-      clearTimeout(forceTimer);
+-      resolveExit();
+-    });
++    child.once('error', settle);
++    child.once('close', settle);
+     child.kill('SIGTERM');
+   });
+ }
+ 
+ async function main() {
+   const buildDirectory = resolve(process.argv[2] || 'build-wasm');
+   const chromeBinary = await findChrome();
+   const browserProfile = await mkdtemp(join(tmpdir(), 'frozen-bubble-wasm-'));
+   let server;
+   let chrome;
+   let page;
+ 
+   try {
+     server = spawn('python3', [
+       'tools/serve-wasm.py', buildDirectory, '--port', '0',
+     ], {stdio: ['ignore', 'pipe', 'pipe']});
++    await waitForSpawn(server);
+     server.stderr.resume();
+     const serverUrl = await waitForMatch(
+         server.stdout, /\s(http:\/\/localhost:\d+\/\S*)/, 'WASM server URL');
+     server.stdout.resume();
+ 
+     chrome = spawn(chromeBinary, [
+       '--headless=new',
+       '--no-sandbox',
+       '--remote-debugging-port=0',
+       `--user-data-dir=${browserProfile}`,
+       '--no-first-run',
+       '--no-default-browser-check',
+       'about:blank',
+     ], {stdio: ['ignore', 'ignore', 'pipe']});
++    await waitForSpawn(chrome);
+     const browserWebSocketUrl = await waitForMatch(
+         chrome.stderr, /(ws:\/\/[^\s]+\/devtools\/browser\/[^\s]+)/,
+         'Chrome DevTools endpoint');
+     chrome.stderr.resume();
+     const pageWebSocketUrl = await findPageWebSocket(browserWebSocketUrl);
+     page = await DevToolsPage.connect(pageWebSocketUrl);
+     await page.send('Page.enable');
+     await page.send('Runtime.enable');
+     await page.send('Page.navigate', {url: serverUrl});
+ 
