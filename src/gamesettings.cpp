@@ -128,11 +128,12 @@ void GameSettings::CreateDefaultSettings()
         char defaultSpeedBuf[16];
         snprintf(defaultSpeedBuf, sizeof(defaultSpeedBuf), "%.2f", DEFAULT_SPEED_MULTIPLIER);
         EvalIniResult(rval, dict, "Keys:SpeedMultiplier", defaultSpeedBuf);
-#ifdef __WASM_PORT__
-        EvalIniResult(rval, dict, "Keys:MouseEnabled", "true");
-#else
-        EvalIniResult(rval, dict, "Keys:MouseEnabled", "false");
-#endif
+        // This file is written first and then read straight back, so the value
+        // written here -- not the getter's fallback in ReadSettings() -- is what
+        // actually takes effect on a first run. Both go through
+        // DefaultMouseEnabled() so they cannot disagree.
+        EvalIniResult(rval, dict, "Keys:MouseEnabled",
+                      DefaultMouseEnabled() ? "true" : "false");
         EvalIniResult(rval, dict, "Keys:Nickname", "");
         EvalIniResult(rval, dict, "Keys:P1Left", "80");      // SDL_SCANCODE_LEFT
         EvalIniResult(rval, dict, "Keys:P1Right", "79");     // SDL_SCANCODE_RIGHT
@@ -167,6 +168,48 @@ void GameSettings::CreateDefaultSettings()
     iniparser_freedict(dict);
 
     SDL_Log("Created default settings file at %s", setPath);
+}
+
+bool GameSettings::DefaultMouseEnabled()
+{
+#if defined(__WASM_PORT__) || defined(__IOS_PORT__)
+    // iOS is touch-only. The browser build has defaulted this on since it
+    // shipped -- it runs on phones as often as on desktops.
+    return true;
+#elif defined(__ANDROID__)
+    // One APK covers Android TV and Android phones/tablets, and the correct
+    // default is opposite between them: a TV box has a remote and no
+    // touchscreen, a phone has a touchscreen and no keyboard. Ask the device
+    // instead of guessing. SDL registers Android touch devices during video
+    // init (Android_InitTouch -> the Java initTouch()), which runs before
+    // settings are read, so the answer is already available here.
+    int count = 0;
+    SDL_TouchID *devices = SDL_GetTouchDevices(&count);
+    SDL_free(devices);
+    return count > 0;
+#else
+    return false;
+#endif
+}
+
+void GameSettings::ResetToDefaults()
+{
+    // Free before rewriting: ReadSettings() below assigns a freshly loaded
+    // dictionary over optDict without looking at what was there, so the old one
+    // would simply be dropped.
+    if (optDict) {
+        iniparser_freedict(optDict);
+        optDict = nullptr;
+    }
+
+    // Rewrite the file, then read it back rather than assigning defaults to the
+    // members directly. Going through the file is what guarantees a reset the
+    // player can see: a purely in-memory reset would be undone by the next
+    // SaveKeys() writing the stale values back out.
+    CreateDefaultSettings();
+    ReadSettings();
+
+    SDL_Log("Settings reset to defaults");
 }
 
 void GameSettings::ReadSettings()
@@ -232,11 +275,8 @@ void GameSettings::ReadSettings()
     if (nick) snprintf(savedNickname, sizeof(savedNickname), "%s", nick);
 #endif
 
-#ifdef __WASM_PORT__
-    mouseEnabled = iniparser_getboolean(optDict, "Keys:MouseEnabled", true);
-#else
-    mouseEnabled = iniparser_getboolean(optDict, "Keys:MouseEnabled", false);
-#endif
+    mouseEnabled = iniparser_getboolean(optDict, "Keys:MouseEnabled",
+                                        DefaultMouseEnabled());
 
     LoadDefaultKeys();
 }

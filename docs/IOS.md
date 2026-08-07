@@ -17,7 +17,7 @@ git submodule update --init --recursive android/app/jni/SDL3 android/app/jni/SDL
 tools/build-ios.sh
 ```
 
-That writes `build-ios/frozen-bubble-sdl3-unsigned.ipa` (~24 MB). Other modes:
+That writes `build-ios/frozen-bubble-sdl3-unsigned.ipa` (~27 MB). Other modes:
 
 ```bash
 tools/build-ios.sh --simulator   # runs in the iOS Simulator; no .ipa
@@ -69,14 +69,24 @@ exceptions in the Info.plist rather than a blanket `NSAllowsArbitraryLoads`.
 letterbox it into a strip. The app declares landscape-only on both iPhone and
 iPad and hides the status bar.
 
+**Mouse/touch aim is on by default.** There is no keyboard to aim with, and with
+it off the only gesture is tapping a screen half, which cannot pick an angle.
+Keyboard and controller aiming still work — whichever you used last wins — and
+the setting is stored, so changing it sticks.
+
+**The app icon is compiled at build time.** iOS 11 and later read the icon from
+a compiled `Assets.car`, which only `actool` can produce, so
+[`tools/ios-appicon.sh`](../tools/ios-appicon.sh) runs after the link and merges
+actool's own `CFBundleIcons` keys into the Info.plist. The 1024 master in
+`ios/AppIcon.xcassets` is committed; regenerate it from the game's title art
+with `python3 tools/make-ios-icon.py` (needs Pillow — nothing else does).
+
 ## What does not work
 
 - **Hosting a LAN game.** "Start LAN game" as a *host* needs `fb-server` as a
   separate process, and iOS forbids `fork`/`exec` in the sandbox. Joining a game
   hosted elsewhere works — that is a plain TCP socket. Same restriction as the
   Android and Windows builds.
-- **No app icon.** An icon needs an asset catalog compiled by `actool`; the
-  bundle ships without one, so the home screen shows a blank tile.
 
 ## Installing
 
@@ -103,7 +113,11 @@ Verified in the iOS Simulator: the app launches, resolves its assets from the
 bundle, creates a Metal renderer, renders the title screen at the correct 4:3
 letterbox, and reads back its settings on a second launch.
 
+The app icon renders correctly on the simulator's home screen, and mouse/touch
+aim comes up enabled in a freshly written `settings.ini`.
+
 Not yet verified: touch input and gameplay on iOS specifically (the touch
-handling is platform-independent code shared with the Android build), audio
-output, netplay, and anything at all on physical hardware — the build is
-unsigned, so it has never been installed on a device.
+handling is platform-independent code shared with the Android build, and the
+settings-panel tap behaviour was verified through the WebAssembly build, which
+runs the same code), audio output, netplay, and anything at all on physical
+hardware — the build is unsigned, so it has never been installed on a device.

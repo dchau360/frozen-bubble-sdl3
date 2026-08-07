@@ -34,6 +34,30 @@ inline int ranrange(int a, int b) { return a + rand() % ((b - a ) + 1); }
 // avoiding an ODR violation across mainmenu_netpanel.cpp/mainmenu_input.cpp.
 static const int kRoomSizes[3] = {5, 10, 20};
 
+// Row indices for the key-config panel (keyConfigIndex). The rows are drawn in
+// mainmenu_panels.cpp and acted on in mainmenu_input.cpp; naming them keeps the
+// two files from drifting, and keeps the wrap-around arithmetic from being three
+// separately-maintained literals.
+enum KeyConfigRow {
+    kKeyRowLeft      = 0,
+    kKeyRowRight     = 1,
+    kKeyRowFire      = 2,
+    kKeyRowCenter    = 3,
+    kKeyRowResetCtrl = 4,
+    kKeyRowSpeed     = 5,
+    kKeyRowSound     = 6,
+    kKeyRowMouse     = 7,
+#ifndef __WASM_PORT__
+    // The browser build has no fullscreen row: an SDL fullscreen flag blacks out
+    // the canvas there, so the CSS shell does the scaling instead.
+    kKeyRowFullscreen = 8,
+    kKeyRowResetAll   = 9,
+#else
+    kKeyRowResetAll   = 8,
+#endif
+    kKeyRowLast = kKeyRowResetAll
+};
+
 // Texture dimensions helper (mainmenu.cpp).
 SDL_Point GetSize(SDL_Texture *texture);
 

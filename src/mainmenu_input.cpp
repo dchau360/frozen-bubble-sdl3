@@ -469,6 +469,44 @@ bool MainMenu::MenuEditingKey(SDL_Event *e) {
     return false;
 }
 
+bool MainMenu::HandlePanelTap(float lx, float ly) {
+    // Only the key-config panel records row bands today; every other panel
+    // keeps the existing tap-anywhere-to-confirm behaviour.
+    if (!showingKeysPanel) return false;
+    // While waiting for a key to bind, a tap is not a row press -- the panel is
+    // asking for a keystroke, and swallowing the tap here would leave no way to
+    // reach the Escape gesture.
+    if (awaitKp) return false;
+
+    for (int row = 0; row < kKeyConfigRowCount; row++) {
+        const SDL_Rect& r = keyRowRects[row];
+        if (r.w <= 0 || r.h <= 0) continue;  // row not drawn on this platform
+        if (lx < r.x || lx >= r.x + r.w) continue;
+        if (ly < r.y || ly >= r.y + r.h) continue;
+
+        if (keyConfigIndex != row) {
+            // First tap only moves the highlight. Most rows toggle a setting on
+            // activation, so a tap that both selected and activated would give
+            // no chance to read a row before changing it -- and on a phone the
+            // row under a thumb is easy to misjudge.
+            keyConfigIndex = row;
+            resetAllArmed = false;
+            AudioMixer::Instance()->PlaySFX("menu_change");
+            return true;
+        }
+
+        // Second tap on the already-highlighted row activates it. Pushed as a
+        // Return key event rather than duplicating the activation logic, so
+        // every row type keeps behaving exactly as it does from the keyboard.
+        SDL_Event ev = {};
+        ev.type = SDL_EVENT_KEY_DOWN;
+        ev.key.key = SDLK_RETURN;
+        SDL_PushEvent(&ev);
+        return true;
+    }
+    return false;
+}
+
 bool MainMenu::KeysPanelKey(SDL_Event *e) {
             if (showingKeysPanel) {
                 if (awaitKp && e->key.key != SDLK_ESCAPE) {
@@ -491,23 +529,17 @@ bool MainMenu::KeysPanelKey(SDL_Event *e) {
                 } else if (!awaitKp) {
                     // UP/DOWN: navigate keys within current player
                     if (e->key.key == SDLK_UP) {
-#ifdef __WASM_PORT__
-                        keyConfigIndex = (keyConfigIndex == 0) ? 7 : keyConfigIndex - 1;
-#else
-                        keyConfigIndex = (keyConfigIndex == 0) ? 8 : keyConfigIndex - 1;
-#endif
+                        keyConfigIndex = (keyConfigIndex == 0) ? kKeyRowLast : keyConfigIndex - 1;
+                        resetAllArmed = false;
                         AudioMixer::Instance()->PlaySFX("menu_change");
                         return true;
                     } else if (e->key.key == SDLK_DOWN) {
-#ifdef __WASM_PORT__
-                        keyConfigIndex = (keyConfigIndex == 7) ? 0 : keyConfigIndex + 1;
-#else
-                        keyConfigIndex = (keyConfigIndex == 8) ? 0 : keyConfigIndex + 1;
-#endif
+                        keyConfigIndex = (keyConfigIndex == kKeyRowLast) ? 0 : keyConfigIndex + 1;
+                        resetAllArmed = false;
                         AudioMixer::Instance()->PlaySFX("menu_change");
                         return true;
                     } else if (e->key.key == SDLK_LEFT) {
-                        if (keyConfigIndex == 5) {
+                        if (keyConfigIndex == kKeyRowSpeed) {
                             // Decrease game speed
                             GameSettings* gs = GameSettings::Instance();
                             gs->speedMultiplier -= 0.1f;
@@ -519,10 +551,11 @@ bool MainMenu::KeysPanelKey(SDL_Event *e) {
                         // Previous player
                         keyConfigPlayer = (keyConfigPlayer == 1) ? 4 : keyConfigPlayer - 1;
                         keyConfigIndex = 0;
+                        resetAllArmed = false;
                         AudioMixer::Instance()->PlaySFX("menu_change");
                         return true;
                     } else if (e->key.key == SDLK_RIGHT) {
-                        if (keyConfigIndex == 5) {
+                        if (keyConfigIndex == kKeyRowSpeed) {
                             // Increase game speed
                             GameSettings* gs = GameSettings::Instance();
                             gs->speedMultiplier += 0.1f;
@@ -534,10 +567,11 @@ bool MainMenu::KeysPanelKey(SDL_Event *e) {
                         // Next player
                         keyConfigPlayer = (keyConfigPlayer == 4) ? 1 : keyConfigPlayer + 1;
                         keyConfigIndex = 0;
+                        resetAllArmed = false;
                         AudioMixer::Instance()->PlaySFX("menu_change");
                         return true;
                     } else if (e->key.key == SDLK_RETURN) {
-                        if (keyConfigIndex == 4) {
+                        if (keyConfigIndex == kKeyRowResetCtrl) {
                             // Reset current player to default controller bindings
                             GameSettings* gs = GameSettings::Instance();
                             PlayerKeys* allKeys[5] = {
@@ -552,9 +586,9 @@ bool MainMenu::KeysPanelKey(SDL_Event *e) {
                             keys.center = (SDL_Scancode)(CTRL_SC_BASE + slot * 20 + SDL_GAMEPAD_BUTTON_DPAD_DOWN);
                             gs->SaveKeys();
                             AudioMixer::Instance()->PlaySFX("typewriter");
-                        } else if (keyConfigIndex == 5) {
+                        } else if (keyConfigIndex == kKeyRowSpeed) {
                             // Game Speed row — adjusted via LEFT/RIGHT, ENTER does nothing
-                        } else if (keyConfigIndex == 6) {
+                        } else if (keyConfigIndex == kKeyRowSound) {
                             // Toggle sound on/off
                             GameSettings* gs = GameSettings::Instance();
                             bool nowOn = !gs->soundEnabled();
@@ -566,20 +600,43 @@ bool MainMenu::KeysPanelKey(SDL_Event *e) {
                             } else {
                                 AudioMixer::Instance()->MuteAll(false);
                             }
-                        } else if (keyConfigIndex == 7) {
+                        } else if (keyConfigIndex == kKeyRowMouse) {
                             // Toggle mouse/touch aim
                             GameSettings* gs = GameSettings::Instance();
                             gs->mouseEnabled = !gs->mouseEnabled;
                             gs->SaveKeys();
                             AudioMixer::Instance()->PlaySFX("menu_change");
 #ifndef __WASM_PORT__
-                        } else if (keyConfigIndex == 8) {
+                        } else if (keyConfigIndex == kKeyRowFullscreen) {
                             // Toggle fullscreen
                             GameSettings* gs = GameSettings::Instance();
                             gs->SetValue("GFX:Fullscreen", "");
                             SDL_SetWindowFullscreen(SDL_GetRenderWindow(const_cast<SDL_Renderer*>(renderer)), gs->fullscreenMode());
                             AudioMixer::Instance()->PlaySFX("menu_change");
 #endif
+                        } else if (keyConfigIndex == kKeyRowResetAll) {
+                            // Two presses: the first arms, the second commits.
+                            // This discards every key binding the player has
+                            // set, and it sits directly below ordinary toggles,
+                            // so one stray Enter must not be able to wipe them.
+                            if (!resetAllArmed) {
+                                resetAllArmed = true;
+                                AudioMixer::Instance()->PlaySFX("menu_selected");
+                                return true;
+                            }
+                            resetAllArmed = false;
+
+                            GameSettings* gs = GameSettings::Instance();
+                            gs->ResetToDefaults();
+
+                            // Settings already pushed into a subsystem do not
+                            // re-read themselves, so re-apply the two that were.
+                            AudioMixer::Instance()->MuteAll(gs->soundEnabled());
+                            SDL_SetWindowFullscreen(
+                                SDL_GetRenderWindow(const_cast<SDL_Renderer*>(renderer)),
+                                gs->fullscreenMode());
+
+                            AudioMixer::Instance()->PlaySFX("typewriter");
                         } else {
                             // Wait for key press
                             AudioMixer::Instance()->PlaySFX("menu_selected");
@@ -1573,6 +1630,7 @@ void MainMenu::MenuEscapeKey() {
                     if (showingKeysPanel) {
                         AudioMixer::Instance()->PlaySFX("cancel");
                         showingKeysPanel = false;
+                        resetAllArmed = false;
                         GameSettings::Instance()->SaveKeys();
                         return;
                     }

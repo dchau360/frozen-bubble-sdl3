@@ -239,6 +239,24 @@ if(IOS)
                 "$<TARGET_BUNDLE_CONTENT_DIR:frozen-bubble-sdl3>/share"
         COMMENT "Copying game assets into the app bundle"
         VERBATIM)
+
+    # The home-screen icon has to be a compiled Assets.car; iOS 11 and later
+    # ignore loose PNGs in the bundle. Only actool can build one, so it runs here
+    # rather than being checked in.
+    if(CMAKE_OSX_SYSROOT MATCHES "Simulator")
+        set(FB_IOS_ACTOOL_PLATFORM "iphonesimulator")
+    else()
+        set(FB_IOS_ACTOOL_PLATFORM "iphoneos")
+    endif()
+    add_custom_command(TARGET frozen-bubble-sdl3 POST_BUILD
+        COMMAND "${CMAKE_SOURCE_DIR}/tools/ios-appicon.sh"
+                "${CMAKE_SOURCE_DIR}/ios/AppIcon.xcassets"
+                "$<TARGET_BUNDLE_CONTENT_DIR:frozen-bubble-sdl3>"
+                "${FB_IOS_ACTOOL_PLATFORM}"
+                "${CMAKE_OSX_DEPLOYMENT_TARGET}"
+                "${CMAKE_BINARY_DIR}/appicon"
+        COMMENT "Compiling the app icon asset catalog"
+        VERBATIM)
 endif()
 
 include(CTest)

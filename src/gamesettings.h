@@ -102,6 +102,20 @@ public:
     void LoadDefaultKeys();
     void SaveKeys();
 
+    // Restores every setting to its factory value. Rewrites settings.ini from
+    // the same code that seeds a first run and reloads it, so the file and the
+    // in-memory state cannot end up disagreeing. Callers are responsible for
+    // re-applying anything already pushed into a subsystem -- audio mute state
+    // and the window's fullscreen flag do not re-read this on their own.
+    void ResetToDefaults();
+
+    // Whether mouse/touch aim is on out of the box. Decided at runtime rather
+    // than by #ifdef because a single Android APK serves both TV boxes and
+    // phones, and the right answer differs between them. Only the *default* is
+    // affected: a stored preference always wins, and keyboard and controller
+    // aiming keep working whatever this returns.
+    static bool DefaultMouseEnabled();
+
     // Game speed multiplier (1.0–5.0). Persisted per device.
 #if defined(__ANDROID__) || defined(__ANDROID_PORT__)
     static constexpr float DEFAULT_SPEED_MULTIPLIER = 1.25f;

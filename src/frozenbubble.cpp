@@ -744,7 +744,9 @@ void FrozenBubble::HandleInput(SDL_Event *e) {
                 }
             } else if (fabsf(dy) > 15.f) {
                 injectKey(dy < 0 ? SDLK_UP : SDLK_DOWN);
-            } else {
+            } else if (!mainMenu->HandlePanelTap(lx, ly)) {
+                // Panels that hit-test their own rows consume the tap; the rest
+                // keep the original tap-anywhere-to-confirm behaviour.
                 injectKey(SDLK_RETURN);
             }
         } else if (e->type == SDL_EVENT_MOUSE_BUTTON_DOWN && e->button.button == SDL_BUTTON_LEFT) {
@@ -759,7 +761,7 @@ void FrozenBubble::HandleInput(SDL_Event *e) {
             if (!mainMenu->HasAnyPanelOpen()) {
                 int btn = getMenuButtonAt(lx, ly);
                 if (btn >= 0) mainMenu->SelectAndPressButton(btn);
-            } else {
+            } else if (!mainMenu->HandlePanelTap(lx, ly)) {
                 injectKey(SDLK_RETURN);
             }
         } else if (e->type == SDL_EVENT_MOUSE_BUTTON_DOWN && e->button.button == SDL_BUTTON_RIGHT) {

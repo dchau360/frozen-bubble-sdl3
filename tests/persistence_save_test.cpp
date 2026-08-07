@@ -233,6 +233,31 @@ int main() {
     CHECK(fileContains(historyPath, "1   2   3"));
     CHECK(fileContains(scorePath, "SENTINEL-SCORES-UNTOUCHED"));
 
+    // Reset-to-defaults must reach the file, not just the in-memory members. A
+    // reset that only reassigned the members would be undone by the next
+    // SaveKeys() writing the stale values straight back out, so assert against
+    // settings.ini as well as the object.
+    settings->speedMultiplier = 4.5f;
+    settings->mouseEnabled = !GameSettings::DefaultMouseEnabled();
+    settings->player1Keys.fire = (SDL_Scancode)99;
+    settings->SaveKeys();
+    CHECK(iniHasKeyValue(settingsPath, "p1fire", "99"));
+
+    settings->ResetToDefaults();
+    CHECK(settings->speedMultiplier == GameSettings::DEFAULT_SPEED_MULTIPLIER);
+    CHECK(settings->mouseEnabled == GameSettings::DefaultMouseEnabled());
+    CHECK(settings->player1Keys.fire == SDL_SCANCODE_UP);
+    CHECK(iniHasKeyValue(settingsPath, "p1fire", "82"));
+    // ShowFPS was turned on at the top of this test; a reset has to clear
+    // everything, not only the keys the reset row sits next to.
+    CHECK(iniHasKeyValue(settingsPath, "showfps", "false"));
+
+    // The value written to the file on a reset must agree with the fallback the
+    // getter would use. These are two separate code paths, and when they
+    // disagree the written value silently wins on every first run.
+    CHECK(iniHasKeyValue(settingsPath, "mouseenabled",
+                         GameSettings::DefaultMouseEnabled() ? "true" : "false"));
+
     // And with nothing changed since the last save, shutdown must write nothing
     // at all rather than rewriting both tables on the way out.
     { std::ofstream(historyPath) << "SENTINEL-DISPOSE-HISTORY\n"; }

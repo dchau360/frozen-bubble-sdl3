@@ -24,6 +24,14 @@
     <array>
         <string>iPhoneOS</string>
     </array>
+
+    <!-- Names the icon inside the compiled Assets.car that tools/ios-appicon.sh
+         adds after the link. The matching CFBundleIcons / CFBundleIcons~ipad
+         dictionaries are merged in by that script from actool's own output,
+         rather than written here, so they cannot drift from what the catalog
+         actually contains. -->
+    <key>CFBundleIconName</key>
+    <string>AppIcon</string>
     <key>DTPlatformName</key>
     <string>iphoneos</string>
     <key>MinimumOSVersion</key>

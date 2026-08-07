@@ -61,6 +61,10 @@ public:
     void RefreshCandy();
     void HandleInput(SDL_Event *e);
     void SelectAndPressButton(int idx);
+    // Handles a tap/click at logical canvas coords while a panel is open.
+    // Returns true when consumed. First tap on a row highlights it, a second tap
+    // on the same row activates it.
+    bool HandlePanelTap(float lx, float ly);
     bool IsAwaitingKeyBind() const { return showingKeysPanel && awaitKp; }
     bool IsTextEditActive() const { return networkFieldEditing; }
     bool HasAnyPanelOpen() const {
@@ -164,8 +168,18 @@ private:
 
     //Keys panel render
     bool showingKeysPanel = false;
+    // Tappable band for each selectable row, recorded by KeysPanelRender() as it
+    // lays them out. Touch input hit-tests against these rather than recomputing
+    // the layout, which would then have to be kept in step by hand.
+    static constexpr int kKeyConfigRowCount = 10;
+    SDL_Rect keyRowRects[kKeyConfigRowCount] = {};
     int keyConfigPlayer = 1; // 1 or 2
-    int keyConfigIndex = 0; // 0=left, 1=right, 2=fire, 3=center
+    int keyConfigIndex = 0; // row in the panel; see KeyConfigRow in mainmenu_internal.h
+    // "Reset all settings" needs a second confirming press. It throws away every
+    // key binding the player has set, and it sits one row below a plain toggle,
+    // so a single stray Enter must not be able to wipe the lot. Cleared whenever
+    // the selection moves or the panel closes.
+    bool resetAllArmed = false;
     void KeysPanelRender();
 
     // LAN server discovery

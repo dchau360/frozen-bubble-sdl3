@@ -419,6 +419,13 @@ void MainMenu::LevelPanelRender() {
 
 
 void MainMenu::KeysPanelRender() {
+    // keyRowRects is sized in mainmenu.h, which cannot see KeyConfigRow (the
+    // include runs the other way). Adding a row without widening that array
+    // would write past its end. Checked here because the constant is private,
+    // so the assert has to live inside a member.
+    static_assert(kKeyRowLast < kKeyConfigRowCount,
+                  "kKeyConfigRowCount must cover every KeyConfigRow");
+
     if (!showingKeysPanel) return;
 
     { SDL_FRect fr = ToFRect(voidPanelRct); SDL_RenderTexture(const_cast<SDL_Renderer*>(renderer), voidPanelBG, nullptr, &fr); };
@@ -440,6 +447,16 @@ void MainMenu::KeysPanelRender() {
         panelText.UpdatePosition({(640/2) - (panelText.Coords()->w / 2), y});
         { SDL_FRect fr = ToFRect(*panelText.Coords()); SDL_RenderTexture(const_cast<SDL_Renderer*>(renderer), panelText.Texture(), nullptr, &fr); };
         y += panelText.Coords()->h;
+    };
+
+    // Same as renderLine, but records the row's tappable band. The band spans
+    // the panel's full width rather than the glyphs': the text is centred and
+    // often short ("Sound: ON"), and a hit box that tight is hard to hit with a
+    // thumb.
+    auto renderRow = [&](int row, const char* txt, SDL_Color fg, int& y) {
+        int top = y;
+        renderLine(txt, fg, y);
+        keyRowRects[row] = { voidPanelRct.x, top, voidPanelRct.w, y - top };
     };
 
     char lineBuf[256];
@@ -465,49 +482,61 @@ void MainMenu::KeysPanelRender() {
             snprintf(lineBuf, sizeof(lineBuf), "[ %s%s ]", row.label, row.val.c_str());
         else
             snprintf(lineBuf, sizeof(lineBuf), "  %s%s  ", row.label, row.val.c_str());
-        renderLine(lineBuf, sel ? yellow : white, y);
+        renderRow(row.idx, lineBuf, sel ? yellow : white, y);
     }
 
     y += 6;
 
     // Row 4: Reset ctrl defaults
-    bool resetSel = (keyConfigIndex == 4);
-    renderLine(resetSel ? "[ Reset ctrl defaults ]" : "  Reset ctrl defaults  ", resetSel ? yellow : white, y);
+    bool resetSel = (keyConfigIndex == kKeyRowResetCtrl);
+    renderRow(kKeyRowResetCtrl, resetSel ? "[ Reset ctrl defaults ]" : "  Reset ctrl defaults  ", resetSel ? yellow : white, y);
 
     y += 6;
 
     // Row 5: Game Speed
     float spd = gs->speedMultiplier;
-    bool spdSel = (keyConfigIndex == 5);
+    bool spdSel = (keyConfigIndex == kKeyRowSpeed);
     snprintf(lineBuf, sizeof(lineBuf),
         spdSel ? "[ Game Speed: %.1f  (L/R adjust) ]" : "  Game Speed: %.1f  (L/R adjust)  ", spd);
-    renderLine(lineBuf, spdSel ? yellow : white, y);
+    renderRow(kKeyRowSpeed, lineBuf, spdSel ? yellow : white, y);
 
     y += 6;
 
     // Row 6: Sound toggle
-    bool sndSel = (keyConfigIndex == 6);
+    bool sndSel = (keyConfigIndex == kKeyRowSound);
     const char* sndState = gs->soundEnabled() ? "ON" : "OFF";
     snprintf(lineBuf, sizeof(lineBuf), sndSel ? "[ Sound: %s ]" : "  Sound: %s  ", sndState);
-    renderLine(lineBuf, sndSel ? yellow : white, y);
+    renderRow(kKeyRowSound, lineBuf, sndSel ? yellow : white, y);
 
     y += 6;
 
     // Row 7: Mouse/touch toggle
-    bool mouseSel = (keyConfigIndex == 7);
+    bool mouseSel = (keyConfigIndex == kKeyRowMouse);
     const char* mouseState = gs->mouseEnabled ? "ON" : "OFF";
     snprintf(lineBuf, sizeof(lineBuf), mouseSel ? "[ Mouse/Touch: %s ]" : "  Mouse/Touch: %s  ", mouseState);
-    renderLine(lineBuf, mouseSel ? yellow : white, y);
+    renderRow(kKeyRowMouse, lineBuf, mouseSel ? yellow : white, y);
 
 #ifndef __WASM_PORT__
     y += 6;
 
     // Row 8: Fullscreen toggle
-    bool fsSel = (keyConfigIndex == 8);
+    bool fsSel = (keyConfigIndex == kKeyRowFullscreen);
     const char* fsState = gs->fullscreenMode() ? "ON" : "OFF";
     snprintf(lineBuf, sizeof(lineBuf), fsSel ? "[ Fullscreen: %s ]" : "  Fullscreen: %s  ", fsState);
-    renderLine(lineBuf, fsSel ? yellow : white, y);
+    renderRow(kKeyRowFullscreen, lineBuf, fsSel ? yellow : white, y);
 #endif
+
+    y += 6;
+
+    // Last row: Reset all settings. Armed by one press and committed by a
+    // second, so the label has to say which state it is in -- otherwise the
+    // first press looks like it did nothing at all.
+    bool resetAllSel = (keyConfigIndex == kKeyRowResetAll);
+    if (resetAllSel && resetAllArmed)
+        renderRow(kKeyRowResetAll, "[ Press again to confirm ]", yellow, y);
+    else
+        renderRow(kKeyRowResetAll, resetAllSel ? "[ Reset all settings ]" : "  Reset all settings  ",
+                  resetAllSel ? yellow : white, y);
 
     y += 6;
 

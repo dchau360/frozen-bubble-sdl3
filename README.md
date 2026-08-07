@@ -58,13 +58,15 @@ After each round a per-player stats table shows bubbles fired and popped, malus 
 | Fire | Up arrow or Space | Left click | Tap centre, or tap target |
 | Back / pause | Escape | Right click | Swipe left |
 
-In menus on touch devices: tap to select, swipe up/down to scroll, swipe left to go back.
+In menus on touch devices: tap to select, swipe up/down to scroll, swipe left to go back. In the settings panel, the first tap on a row highlights it and a second tap changes it, so you can see what a row says before changing it.
 
 Mouse and touch aiming are enabled per-room by the host, and change the in-game gestures above: with them off, tapping a screen half aims that way; with them on, you drag to aim and tap to fire at a point.
 
 > **Fairness:** free-angle mouse/touch aim is easier than keyboard left/right aiming. In network games the host should set this consistently so everyone plays with the same scheme.
 
-**Controllers** (Android TV and desktop): D-pad left/right aims, **A** or D-pad up fires and selects, **B** goes back, **Start** pauses. Rebind anything under Settings → Keys, per player — navigate with up/down, press Enter, then press the button you want. **Reset ctrl defaults** restores that player's defaults.
+**Controllers** (Android TV and desktop): D-pad left/right aims, **A** or D-pad up fires and selects, **B** goes back, **Start** pauses. Rebind anything under Settings → Keys, per player — navigate with up/down, press Enter, then press the button you want. **Reset ctrl defaults** restores that player's defaults, and **Reset all settings** at the bottom of the same panel restores everything — key bindings, speed, sound, mouse aim. It asks for a second press before it does anything.
+
+Mouse/touch aim is on by default where there is no keyboard — in the browser, on iOS, and on Android phones and tablets — and off on desktop and Android TV. Either way it is a per-device setting you can change, and keyboard or controller aiming keeps working alongside it: whichever you used last takes over.
 
 ---
 
