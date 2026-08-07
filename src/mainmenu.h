@@ -116,13 +116,37 @@ private:
     void up();
     void down();
 
+    // ---- Panel row tap targets -------------------------------------------
+    // Whichever panel renders publishes the on-screen band of each selectable
+    // row here, together with the selection variable those rows drive. Touch
+    // input then hit-tests the bands instead of re-deriving each panel's
+    // layout, which would have to be kept in step by hand for five different
+    // panels -- and which is not even expressible for the lobby's room list or
+    // the game room's player grid, whose row counts vary at runtime.
+    struct PanelTapRow {
+        SDL_Rect rect;
+        int index;      // value to assign to the primary selection
+        int subIndex;   // value for the secondary selection, or -1 for none
+    };
+    std::vector<PanelTapRow> panelTapRows;
+    int* panelTapSelection = nullptr;
+    // Second axis, for the game room's grid: a cell picks both a settings row
+    // and a player column. Null for the panels that are a plain list.
+    int* panelTapSubSelection = nullptr;
+
+    // Called by a panel's render before it registers rows. Clearing here means
+    // the last panel to render owns the rows, which is what the caller wants:
+    // only one panel is interactive at a time.
+    void BeginPanelTapRows(int* selection, int* subSelection = nullptr);
+    void AddPanelTapRow(int index, const SDL_Rect& rect, int subIndex = -1);
+
     // HandleInput decomposition (mainmenu_input.cpp)
     void MenuTextInputEvent(SDL_Event *e);
     bool MenuEditingKey(SDL_Event *e);
     bool KeysPanelKey(SDL_Event *e);
     bool LobbyChatTypingKey(SDL_Event *e);
     bool LocalMPPanelKey(SDL_Event *e);
-    void PlayLocalMPMenuSFX(const char *name);
+    void PlayMenuSFX(const char *name);
     void MenuUpKey();
     void MenuDownKey();
     void MenuLeftRightKey(SDL_Event *e);
@@ -168,11 +192,6 @@ private:
 
     //Keys panel render
     bool showingKeysPanel = false;
-    // Tappable band for each selectable row, recorded by KeysPanelRender() as it
-    // lays them out. Touch input hit-tests against these rather than recomputing
-    // the layout, which would then have to be kept in step by hand.
-    static constexpr int kKeyConfigRowCount = 10;
-    SDL_Rect keyRowRects[kKeyConfigRowCount] = {};
     int keyConfigPlayer = 1; // 1 or 2
     int keyConfigIndex = 0; // row in the panel; see KeyConfigRow in mainmenu_internal.h
     // "Reset all settings" needs a second confirming press. It throws away every

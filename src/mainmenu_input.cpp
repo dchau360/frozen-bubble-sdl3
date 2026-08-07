@@ -469,35 +469,52 @@ bool MainMenu::MenuEditingKey(SDL_Event *e) {
     return false;
 }
 
+void MainMenu::BeginPanelTapRows(int* selection, int* subSelection) {
+    panelTapRows.clear();
+    panelTapSelection = selection;
+    panelTapSubSelection = subSelection;
+}
+
+void MainMenu::AddPanelTapRow(int index, const SDL_Rect& rect, int subIndex) {
+    if (rect.w <= 0 || rect.h <= 0) return;  // row not drawn this frame
+    panelTapRows.push_back({rect, index, subIndex});
+}
+
 bool MainMenu::HandlePanelTap(float lx, float ly) {
-    // Only the key-config panel records row bands today; every other panel
-    // keeps the existing tap-anywhere-to-confirm behaviour.
-    if (!showingKeysPanel) return false;
-    // While waiting for a key to bind, a tap is not a row press -- the panel is
-    // asking for a keystroke, and swallowing the tap here would leave no way to
-    // reach the Escape gesture.
-    if (awaitKp) return false;
+    // While the key panel is waiting for a key to bind, or a text field is being
+    // edited, a tap is not a row press. Consuming it here would swallow the
+    // gesture that gets the player back out of that state.
+    if (showingKeysPanel && awaitKp) return false;
+    if (networkFieldEditing) return false;
+    if (panelTapSelection == nullptr) return false;
 
-    for (int row = 0; row < kKeyConfigRowCount; row++) {
-        const SDL_Rect& r = keyRowRects[row];
-        if (r.w <= 0 || r.h <= 0) continue;  // row not drawn on this platform
-        if (lx < r.x || lx >= r.x + r.w) continue;
-        if (ly < r.y || ly >= r.y + r.h) continue;
+    for (const PanelTapRow& row : panelTapRows) {
+        if (lx < row.rect.x || lx >= row.rect.x + row.rect.w) continue;
+        if (ly < row.rect.y || ly >= row.rect.y + row.rect.h) continue;
 
-        if (keyConfigIndex != row) {
-            // First tap only moves the highlight. Most rows toggle a setting on
+        bool sameRow = (*panelTapSelection == row.index);
+        // A grid cell is only "the same" when the column matches too, so moving
+        // across a row of player columns stays a selection rather than
+        // immediately changing the cell that happens to be under the finger.
+        if (sameRow && row.subIndex >= 0 && panelTapSubSelection != nullptr)
+            sameRow = (*panelTapSubSelection == row.subIndex);
+
+        if (!sameRow) {
+            // First tap only moves the highlight. Most rows change a setting on
             // activation, so a tap that both selected and activated would give
             // no chance to read a row before changing it -- and on a phone the
             // row under a thumb is easy to misjudge.
-            keyConfigIndex = row;
+            *panelTapSelection = row.index;
+            if (row.subIndex >= 0 && panelTapSubSelection != nullptr)
+                *panelTapSubSelection = row.subIndex;
             resetAllArmed = false;
-            AudioMixer::Instance()->PlaySFX("menu_change");
+            PlayMenuSFX("menu_change");
             return true;
         }
 
         // Second tap on the already-highlighted row activates it. Pushed as a
-        // Return key event rather than duplicating the activation logic, so
-        // every row type keeps behaving exactly as it does from the keyboard.
+        // Return key event rather than duplicating each panel's activation
+        // logic, so every row keeps behaving exactly as it does from a keyboard.
         SDL_Event ev = {};
         ev.type = SDL_EVENT_KEY_DOWN;
         ev.key.key = SDLK_RETURN;
@@ -702,7 +719,7 @@ bool MainMenu::LocalMPPanelKey(SDL_Event *e) {
                     if (ApplyLocalMultiplayerVictoriesInput(
                             localMPMenuIndex, command,
                             localMPVictoriesIndex)) {
-                        PlayLocalMPMenuSFX("menu_change");
+                        PlayMenuSFX("menu_change");
                         return true;
                     }
                     if (localMPMenuIndex == 0) {
@@ -760,7 +777,7 @@ bool MainMenu::LocalMPPanelKey(SDL_Event *e) {
                             localMPMenuIndex,
                             LocalMultiplayerMenuCommand::Enter,
                             localMPVictoriesIndex)) {
-                        PlayLocalMPMenuSFX("menu_change");
+                        PlayMenuSFX("menu_change");
                         return true;
                     }
                     if (localMPMenuIndex == 0) {
@@ -817,7 +834,10 @@ bool MainMenu::LocalMPPanelKey(SDL_Event *e) {
     return false;
 }
 
-void MainMenu::PlayLocalMPMenuSFX(const char *name) {
+// Menu sound effect that is safe to call from a headless test, where no audio
+// device exists. Was PlayLocalMPMenuSFX; renamed once the panel-tap handler
+// needed the same guard to be testable.
+void MainMenu::PlayMenuSFX(const char *name) {
 #ifdef FROZEN_BUBBLE_TEST_ACCESS
     if (headlessTestMode) return;
 #endif

@@ -43,6 +43,23 @@ struct MainMenuTestAccess {
         return menu.localMPVictoriesIndex;
     }
 
+    // ---- panel tap rows ----------------------------------------------
+    // Drives HandlePanelTap against a layout published by hand, so the
+    // select-then-activate rule can be checked without a live panel -- notably
+    // the game room's two-axis grid, which needs a connected server to reach.
+    static void BeginRows(MainMenu& menu, int* sel, int* sub = nullptr) {
+        menu.BeginPanelTapRows(sel, sub);
+    }
+    static void AddRow(MainMenu& menu, int index, SDL_Rect rect, int sub = -1) {
+        menu.AddPanelTapRow(index, rect, sub);
+    }
+    static bool Tap(MainMenu& menu, float x, float y) {
+        return menu.HandlePanelTap(x, y);
+    }
+    static size_t RowCount(const MainMenu& menu) {
+        return menu.panelTapRows.size();
+    }
+
     static bool PressKey(MainMenu& menu, SDL_Keycode key) {
         SDL_Event event{};
         event.type = SDL_EVENT_KEY_DOWN;
@@ -178,6 +195,66 @@ int main() {
     MainMenuTestAccess::SetVictories(*menu, 17);
     CHECK(MainMenuTestAccess::PressKey(*menu, SDLK_RETURN));
     CHECK(MainMenuTestAccess::VictoriesIndex(*menu) == 0);
+
+    // ---- panel row tapping ------------------------------------------------
+    {
+        int selection = 0;
+        MainMenuTestAccess::BeginRows(*menu, &selection);
+        MainMenuTestAccess::AddRow(*menu, 0, {100, 100, 200, 20});
+        MainMenuTestAccess::AddRow(*menu, 1, {100, 120, 200, 20});
+        // A row the panel chose not to draw registers nothing, so a tap where it
+        // would have been falls through instead of selecting an invisible row.
+        MainMenuTestAccess::AddRow(*menu, 2, {100, 140, 0, 0});
+        CHECK(MainMenuTestAccess::RowCount(*menu) == 2);
+
+        // A tap outside every row is not consumed, so the caller can fall back
+        // to the old tap-anywhere-to-confirm gesture.
+        CHECK(!MainMenuTestAccess::Tap(*menu, 50.f, 50.f));
+        CHECK(!MainMenuTestAccess::Tap(*menu, 150.f, 145.f));
+        CHECK(selection == 0);
+
+        // First tap on an unselected row only moves the selection.
+        CHECK(MainMenuTestAccess::Tap(*menu, 150.f, 125.f));
+        CHECK(selection == 1);
+        // Second tap on the same row activates: it is consumed, and the Return
+        // it pushes is what every panel's own handler acts on.
+        SDL_FlushEvent(SDL_EVENT_KEY_DOWN);
+        CHECK(MainMenuTestAccess::Tap(*menu, 150.f, 125.f));
+        CHECK(selection == 1);
+        SDL_Event pushed{};
+        CHECK(SDL_PeepEvents(&pushed, 1, SDL_GETEVENT,
+                             SDL_EVENT_KEY_DOWN, SDL_EVENT_KEY_DOWN) == 1);
+        CHECK(pushed.key.key == SDLK_RETURN);
+
+        // Two-axis rows (the game room's per-player grid): moving along a row
+        // to a different column is still a selection, not an activation, so a
+        // cell is never changed by the tap that first reaches it.
+        int gridRow = 8, gridCol = 0;
+        MainMenuTestAccess::BeginRows(*menu, &gridRow, &gridCol);
+        MainMenuTestAccess::AddRow(*menu, 8, {100, 200, 40, 16}, 0);
+        MainMenuTestAccess::AddRow(*menu, 8, {140, 200, 40, 16}, 1);
+        MainMenuTestAccess::AddRow(*menu, 9, {100, 216, 40, 16}, 0);
+
+        SDL_FlushEvent(SDL_EVENT_KEY_DOWN);
+        CHECK(MainMenuTestAccess::Tap(*menu, 150.f, 205.f));  // same row, col 1
+        CHECK(gridRow == 8);
+        CHECK(gridCol == 1);
+        CHECK(SDL_PeepEvents(&pushed, 1, SDL_GETEVENT,
+                             SDL_EVENT_KEY_DOWN, SDL_EVENT_KEY_DOWN) == 0);
+
+        // Now that the cell is selected, tapping it again activates it.
+        CHECK(MainMenuTestAccess::Tap(*menu, 150.f, 205.f));
+        CHECK(SDL_PeepEvents(&pushed, 1, SDL_GETEVENT,
+                             SDL_EVENT_KEY_DOWN, SDL_EVENT_KEY_DOWN) == 1);
+        CHECK(pushed.key.key == SDLK_RETURN);
+
+        // Beginning a new panel's rows drops the previous panel's, so a tap
+        // cannot land on a row that is no longer on screen.
+        MainMenuTestAccess::BeginRows(*menu, nullptr);
+        CHECK(MainMenuTestAccess::RowCount(*menu) == 0);
+        CHECK(!MainMenuTestAccess::Tap(*menu, 150.f, 205.f));
+        SDL_FlushEvent(SDL_EVENT_KEY_DOWN);
+    }
 
     for (int enabledField = 0; enabledField < 5; ++enabledField) {
         const bool chainReaction = enabledField == 0;

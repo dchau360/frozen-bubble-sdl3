@@ -271,6 +271,10 @@ void MainMenu::NetPanelLobbyActionsRender() {
     NetworkClient* netClient = NetworkClient::Instance();
     SDL_Renderer* roomRenderer = const_cast<SDL_Renderer*>(renderer);
 
+    // The lobby and the game room are one screen with two selection axes: the
+    // action/room list, and the player column for the per-player grid rows.
+    BeginPanelTapRows(&selectedActionIndex, &currentPlayerCol);
+
     // Card/panel drawing primitives shared by every box in this revamped
     // layout (header bar, match-rules panel, room cards, player sidebar,
     // online sidebar). Byte-identical copies live in NetPanelChatDockRender()
@@ -415,6 +419,7 @@ void MainMenu::NetPanelLobbyActionsRender() {
                 int sx = 622 - tw;
                 if (startSel) drawSelection({sx - 6, 10, tw + 12, 24});
                 drawLabel("Start game!", sx, 14, startColor);
+                AddPanelTapRow(12, {sx - 6, 10, tw + 12, 24});
             }
             drawPanel({10, 42, 430, 286}, panelFill, panelEdge);
             drawLabel("MATCH RULES", 20, 48, textGold);
@@ -485,9 +490,11 @@ void MainMenu::NetPanelLobbyActionsRender() {
                 { SDL_FRect fr = ToFRect(card); SDL_RenderRect(roomRenderer, &fr); }
             }
 
+            SDL_Rect rowRect = {renderX - 4, renderY - 3, highlightW, currentGame ? 18 : 30};
             if (i == (size_t)selectedActionIndex) {
-                drawSelection({renderX - 4, renderY - 3, highlightW, currentGame ? 18 : 30});
+                drawSelection(rowRect);
             }
+            AddPanelTapRow((int)i, rowRect);
 
             char actionText[128];
             snprintf(actionText, sizeof(actionText), "%s", actions[i].c_str());
@@ -608,6 +615,8 @@ void MainMenu::NetPanelLobbyActionsRender() {
                 {
                     int cellX = actionStartX + labelW;
                     bool isFocusedAll = (selectedActionIndex == rowIdx && currentPlayerCol == 0);
+                    // Column 0 is the "apply to everyone" cell.
+                    AddPanelTapRow(rowIdx, {cellX - 2, rowY - 1, colW - 2, lineHeight}, 0);
                     if (isFocusedAll && isHost && highlightServer) {
                         SDL_Rect cellHl = {cellX - 2, rowY - 1, colW - 2, lineHeight};
                         { SDL_FRect fr = ToFRect(cellHl); SDL_RenderTexture(const_cast<SDL_Renderer*>(renderer), highlightServer, nullptr, &fr); };
@@ -645,6 +654,7 @@ void MainMenu::NetPanelLobbyActionsRender() {
                 for (int pi = 0; pi < numPlayers; pi++) {
                     int cellX = actionStartX + labelW + (pi + 1) * colW; // +1 to skip ALL column
                     bool isFocusedCell = (selectedActionIndex == rowIdx && currentPlayerCol == pi + 1);
+                    AddPanelTapRow(rowIdx, {cellX - 2, rowY - 1, colW - 2, lineHeight}, pi + 1);
 
                     // Cell highlight: host all rows; joiner only their own column on Teams row
                     bool canHighlight = isHost || (row == 3 && pi == myJoinerSlot);
@@ -856,6 +866,10 @@ void MainMenu::NetPanelChatDockRender() {
     // area, with the input row's focus box only shown while Chat is selected.
     drawPanel({10, 334, 620, 138}, {29, 13, 43, 238}, panelEdge);
     drawLabel("CHAT", 20, 340, textGold);
+    // Action index 0 is Chat, whose row lives here rather than in the action
+    // list (that loop skips i == 0). Registered after the list's rows, which is
+    // safe: NetPanelLobbyActionsRender ran first and only it calls Begin.
+    AddPanelTapRow(0, {18, 438, 604, 26});
     if (selectedActionIndex == 0) drawSelection({18, 438, 604, 26});
     char chatText[128];
     size_t inputLength = strlen(networkChatInput);
@@ -956,6 +970,7 @@ void MainMenu::NetPanelConnectionScreensRender() {
 
     if (!networkInLobby && networkInputMode == 7) {
         // LAN server list screen
+        BeginPanelTapRows(&lanMenuIndex);
         SDL_Color white  = {255, 255, 255, 255};
         SDL_Color black  = {0, 0, 0, 255};
         SDL_Color yellow = {255, 220, 50, 255};
@@ -968,6 +983,14 @@ void MainMenu::NetPanelConnectionScreensRender() {
             { SDL_FRect fr = ToFRect(*panelText.Coords()); SDL_RenderTexture(const_cast<SDL_Renderer*>(renderer), panelText.Texture(), nullptr, &fr); };
             y += panelText.Coords()->h;
         };
+        // Registers the row's tappable band as it is drawn. Full panel width
+        // rather than the glyphs' own: the entries are centred and of varying
+        // length, and a hit box that tight is hard to hit with a thumb.
+        auto renderMenuRow = [&](int index, const char* txt, SDL_Color fg, int& y) {
+            int top = y;
+            renderLine(txt, fg, y);
+            AddPanelTapRow(index, { voidPanelRct.x, top, voidPanelRct.w, y - top });
+        };
 
         int y = (480/2) - 120;
         char lineBuf[280];
@@ -979,7 +1002,7 @@ void MainMenu::NetPanelConnectionScreensRender() {
         snprintf(lineBuf, sizeof(lineBuf),
             hostSel ? "[ %s ]" : "  %s  ",
             serverHosting ? "Server running (rescan)" : "Host a server");
-        renderLine(lineBuf, hostSel ? yellow : white, y);
+        renderMenuRow(0, lineBuf, hostSel ? yellow : white, y);
 
         // Menu items 1+: discovered servers (includes 127.0.0.1 if local server running)
         if (discoveredServers.empty()) {
@@ -998,7 +1021,7 @@ void MainMenu::NetPanelConnectionScreensRender() {
                 snprintf(lineBuf, sizeof(lineBuf),
                     sel ? "[ %-28s %7s ]" : "  %-28s %7s  ",
                     dname.c_str(), latBuf);
-                renderLine(lineBuf, sel ? yellow : white, y);
+                renderMenuRow(i + 1, lineBuf, sel ? yellow : white, y);
             }
         }
 
@@ -1012,7 +1035,7 @@ void MainMenu::NetPanelConnectionScreensRender() {
             const char* curNick = networkPreNick[0] != '\0' ? networkPreNick : (getenv("USER") ? getenv("USER") : "unnamed");
 #endif
             snprintf(lineBuf, sizeof(lineBuf), sel ? "[ Set Name: %-20s ]" : "  Set Name: %-20s  ", curNick);
-            renderLine(lineBuf, sel ? yellow : white, y);
+            renderMenuRow(lanMenuMax - 1, lineBuf, sel ? yellow : white, y);
         }
 
         snprintf(lineBuf, sizeof(lineBuf), "\nUP/DOWN  ENTER to select  R to rescan\nESC to cancel");
@@ -1037,6 +1060,7 @@ void MainMenu::NetPanelConnectionScreensRender() {
 #endif
 
         // Net game public server list screen
+        BeginPanelTapRows(&netMenuIndex);
         SDL_Color white  = {255, 255, 255, 255};
         SDL_Color black  = {0, 0, 0, 255};
         SDL_Color yellow = {255, 220, 50, 255};
@@ -1051,6 +1075,14 @@ void MainMenu::NetPanelConnectionScreensRender() {
             y += panelText.Coords()->h;
         };
 
+        // See the LAN screen above: registers each row's tappable band, panel
+        // width rather than glyph width.
+        auto renderMenuRow = [&](int index, const char* txt, SDL_Color fg, int& y) {
+            int top = y;
+            renderLine(txt, fg, y);
+            AddPanelTapRow(index, { voidPanelRct.x, top, voidPanelRct.w, y - top });
+        };
+
         int y = (480/2) - 120;
         char lineBuf[320];
 
@@ -1058,7 +1090,7 @@ void MainMenu::NetPanelConnectionScreensRender() {
 
         // Menu item 0: Manual entry
         bool manualSel = (netMenuIndex == 0);
-        renderLine(manualSel ? "[ Manual entry ]" : "  Manual entry  ", manualSel ? yellow : white, y);
+        renderMenuRow(0, manualSel ? "[ Manual entry ]" : "  Manual entry  ", manualSel ? yellow : white, y);
 
         // Menu items 1+: public internet servers only
         // (Local LAN server is accessible via the LAN Game panel instead)
@@ -1080,7 +1112,9 @@ void MainMenu::NetPanelConnectionScreensRender() {
                     sel ? "[ %-28s %7s ]" : "  %-28s %7s  ",
                     displayName.c_str(), latencyBuf);
                 SDL_Color col = offline ? grey : (sel ? yellow : white);
-                renderLine(lineBuf, col, y);
+                // Offline servers stay tappable: selecting one is how the player
+                // reads its address, and the keyboard can land on them too.
+                renderMenuRow(i + 1, lineBuf, col, y);
             }
         }
 
@@ -1094,7 +1128,7 @@ void MainMenu::NetPanelConnectionScreensRender() {
             const char* curNick = networkPreNick[0] != '\0' ? networkPreNick : (getenv("USER") ? getenv("USER") : "unnamed");
 #endif
             snprintf(lineBuf, sizeof(lineBuf), sel ? "[ Set Name: %-20s ]" : "  Set Name: %-20s  ", curNick);
-            renderLine(lineBuf, sel ? yellow : white, y);
+            renderMenuRow(netMenuMax - 1, lineBuf, sel ? yellow : white, y);
         }
 
         snprintf(lineBuf, sizeof(lineBuf), "\nUP/DOWN  ENTER to select  R to refresh\nESC to cancel");
@@ -1136,6 +1170,8 @@ void MainMenu::NetPanelConnectionScreensRender() {
 
     if (!networkInLobby) {
         // Connection screen — render in segments so active field can be colored
+        // Host / Port / Connect are one selection axis, same as the lists above.
+        BeginPanelTapRows(&networkManualFieldIndex);
         const char* titleStr = serverHosting ? "Hosting Server" : "Join Server";
         bool hostActive = networkManualFieldIndex == 0;
         bool portActive = networkManualFieldIndex == 1;
@@ -1159,14 +1195,20 @@ void MainMenu::NetPanelConnectionScreensRender() {
 
         bool connectActive = (!networkFieldEditing && networkManualFieldIndex == 2);
 
+        auto renderMenuRow = [&](int index, const char* txt, SDL_Color fg, int& y) {
+            int top = y;
+            renderLine(txt, fg, y);
+            AddPanelTapRow(index, { voidPanelRct.x, top, voidPanelRct.w, y - top });
+        };
+
         snprintf(lineBuf, sizeof(lineBuf), hostActive && networkFieldEditing ? "Host: [ %s_ ]" : "Host:   %s  ", networkHost);
-        renderLine(lineBuf, hostActive ? yellow : white, y);
+        renderMenuRow(0, lineBuf, hostActive ? yellow : white, y);
 
         snprintf(lineBuf, sizeof(lineBuf), portActive && networkFieldEditing ? "Port: [ %d_ ]" : "Port:   %d  ", networkPort);
-        renderLine(lineBuf, portActive ? yellow : white, y);
+        renderMenuRow(1, lineBuf, portActive ? yellow : white, y);
 
         snprintf(lineBuf, sizeof(lineBuf), connectActive ? "[ Connect ]" : "  Connect  ");
-        renderLine(lineBuf, connectActive ? yellow : white, y);
+        renderMenuRow(2, lineBuf, connectActive ? yellow : white, y);
 
         if (networkFieldEditing) {
             snprintf(lineBuf, sizeof(lineBuf), "\n%sENTER to confirm  ESC to cancel",

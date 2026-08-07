@@ -66,6 +66,13 @@ static std::string ControllerScancodeName(SDL_Scancode sc) {
 void MainMenu::Render(void) {
     SDL_RenderTexture(const_cast<SDL_Renderer*>(renderer), background, nullptr, nullptr);
 
+    // Drop last frame's tap targets before any panel republishes its own. A
+    // panel that closed this frame would otherwise leave its rows behind, and a
+    // tap on empty space would still land on one.
+    panelTapRows.clear();
+    panelTapSelection = nullptr;
+    panelTapSubSelection = nullptr;
+
     for (MenuButton &button : buttons) {
         button.Render(renderer);
     }
@@ -419,14 +426,9 @@ void MainMenu::LevelPanelRender() {
 
 
 void MainMenu::KeysPanelRender() {
-    // keyRowRects is sized in mainmenu.h, which cannot see KeyConfigRow (the
-    // include runs the other way). Adding a row without widening that array
-    // would write past its end. Checked here because the constant is private,
-    // so the assert has to live inside a member.
-    static_assert(kKeyRowLast < kKeyConfigRowCount,
-                  "kKeyConfigRowCount must cover every KeyConfigRow");
-
     if (!showingKeysPanel) return;
+
+    BeginPanelTapRows(&keyConfigIndex);
 
     { SDL_FRect fr = ToFRect(voidPanelRct); SDL_RenderTexture(const_cast<SDL_Renderer*>(renderer), voidPanelBG, nullptr, &fr); };
 
@@ -456,7 +458,7 @@ void MainMenu::KeysPanelRender() {
     auto renderRow = [&](int row, const char* txt, SDL_Color fg, int& y) {
         int top = y;
         renderLine(txt, fg, y);
-        keyRowRects[row] = { voidPanelRct.x, top, voidPanelRct.w, y - top };
+        AddPanelTapRow(row, { voidPanelRct.x, top, voidPanelRct.w, y - top });
     };
 
     char lineBuf[256];
