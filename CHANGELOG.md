@@ -1,5 +1,50 @@
 # Changelog
 
+## v2.4.36
+
+- **Touch taps and swipes now land in the right place off a 4:3 screen.** They
+  were mapped onto the 640×480 playfield by scaling the raw touch position,
+  which is only correct on a window shaped exactly like the canvas — true of
+  every desktop window and no phone or Android TV panel. On a landscape phone
+  this compressed the horizontal axis to 61% of true, and made swipe-left-to-
+  go-back need a swipe 1.6x longer than intended; portrait was worse still.
+  Fixed by mapping through the same letterbox-aware conversion the mouse
+  already used. Affects iOS, Android TV, and any non-4:3 desktop window.
+- **iOS now rotates freely** instead of being locked to landscape, matching the
+  browser build (which cannot lock orientation at all). Portrait renders the
+  playfield as a band across the screen rather than filling it.
+- **Android now opens in the right orientation for the device**: portrait on
+  phones and tablets, landscape on TV boxes, decided automatically from
+  whether the device has a touchscreen — the same one APK serves both.
+- **New: swipe left to leave a round in progress**, for touch devices that have
+  no Escape key, gamepad B, or Android back button — iOS in particular had no
+  way to leave a game at all. Confined to the bottom of the screen, level with
+  the launcher or below, so it can't be triggered by mistake while aiming.
+- **The game speed setting can now be changed by tapping**, not just from a
+  keyboard. It's stepped with Left/Right rather than activated, so the old
+  tap-to-activate gesture silently did nothing for it; a second tap on either
+  half of the row now steps the value down or up.
+- **Lobby and game-room chat can now be typed into by tapping.** Activating the
+  chat row used to go straight to "send", which did nothing with an empty
+  field and looked broken. It now raises the on-screen keyboard properly.
+- **Composing a chat message no longer hides the conversation.** The whole room
+  used to be replaced by a bare input box; it now grows the chat log to show
+  as many recent messages as fit, with the room's map still behind it.
+- **The on-screen keyboard no longer covers the field you're typing into**, on
+  iOS and Android. The rect telling the OS where to shift the view for was
+  being passed in canvas coordinates instead of window coordinates, so the
+  shift was wrong on anything but a 4:3 screen.
+- **The letterbox bars around the playfield are reliably black**, rather than
+  taking on the last UI colour that happened to be drawn — most visible in
+  portrait, where the bars are a third of the screen.
+- **Removed the "Continue when players leave" room setting** — it's now always
+  on, matching the only value most hosts used it at. Everything else in the
+  game room shifted up one row's worth of internal bookkeeping only; no other
+  behavior changes.
+- Fixed an Android build issue where compiling the game corrupted a shared
+  header in the SDL_image submodule tree, breaking the next iOS build until it
+  was manually restored.
+
 ## v2.4.35
 
 - **New: an experimental iOS build**, produced by `tools/build-ios.sh`. It is

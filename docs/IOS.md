@@ -82,9 +82,13 @@ is unset. The window is 640×480, so SDL decides landscape-only by itself and th
 plist never gets a say. `frozenbubble.cpp` sets that hint before creating the
 window.
 
-Note that the Android build is still locked to landscape in its manifest
-(`android:screenOrientation="landscape"`), so the two mobile platforms differ
-here.
+Android differs in a second way: it does not rotate freely either way. A phone
+is portrait-*locked* and a TV box is landscape-locked, decided once at startup
+from whether the device has a touchscreen — a single APK serves both, and the
+manifest cannot express a per-device answer, so the choice is made in code
+instead (`DeviceHasTouchscreen()` in `frozenbubble.cpp`, the same check the
+mouse/touch-aim default already used). iOS is the only platform that actually
+rotates.
 
 **Mouse/touch aim is on by default.** There is no keyboard to aim with, and with
 it off the only gesture is tapping a screen half, which cannot pick an angle.
@@ -104,6 +108,22 @@ a game at all. Swiping left across the bottom of the playfield — level with th
 launcher or below, the band `HandleMouseAim` already ignores — now does it. The
 band matters: a false positive here quits a game in progress, so the gesture is
 kept out of the area where a long drag could just as well be someone aiming.
+
+**The soft keyboard no longer covers the field you're typing into.** iOS (and
+Android) already shift the view up so an active text field clears the
+keyboard — SDL implements it, driven by the rect passed to
+`SDL_SetTextInputArea`. That rect was being passed in 640×480 logical canvas
+coordinates, which only coincide with the window coordinates SDL expects on a
+4:3 window; on a letterboxed phone screen they are nowhere near each other, so
+the view shifted by the wrong amount or not at all. `SetTextInputAreaLogical()`
+in `platform.cpp` now converts through the renderer before handing the rect to
+SDL.
+
+**Composing a chat message keeps the conversation on screen.** Opening the chat
+input used to replace the whole room with a bare "Send Chat Message" box, which
+lost the log at the exact moment it mattered for reading what you're replying
+to. It now grows the chat dock over the room's settings instead, keeping the
+world map behind and showing as many recent messages as fit.
 
 ## What does not work
 
@@ -152,3 +172,8 @@ hardware — the build is unsigned, so it has never been installed on a device.
 Taps could not be injected into the simulator to confirm the letterbox mapping
 end-to-end, so `tests/touch_letterbox_test.cpp` pins the arithmetic instead,
 across every aspect ratio the game actually runs at.
+
+Also unverified on a device: the keyboard-avoidance shift while composing chat,
+the expanded chat dock, and the game room's settings list after a renumbering
+that removed one row (see [CHANGELOG.md](../CHANGELOG.md)) — all built and unit
+tested, none of them seen running on hardware.

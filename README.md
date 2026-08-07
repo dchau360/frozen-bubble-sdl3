@@ -18,7 +18,7 @@ Latest builds are on the [releases page](https://github.com/dchau360/frozen-bubb
 | **Linux** | `frozen-bubble-linux-x86_64.AppImage` | `chmod +x` and run |
 | **macOS** | `frozen-bubble-macos-arm64.dmg` | **Apple Silicon only** — see [macOS notes](#macos-notes) |
 | **Windows** | `frozen-bubble-windows-setup.exe` | Unsigned; SmartScreen will warn |
-| **Android TV** | `frozen-bubble-android-tv.apk` | Or sideload — see [Android TV](#android-tv) |
+| **Android** | `frozen-bubble-android-tv.apk` | Same APK for TV boxes and phones/tablets — see [Android](#android-tv) |
 | **Browser** | [Play on itch.io](https://dchau360.itch.io/frozenbubble2) | Works on desktop and mobile, including iPhone |
 
 **iOS** has no download: the build exists but is experimental and unsigned, so it
@@ -58,7 +58,9 @@ After each round a per-player stats table shows bubbles fired and popped, malus 
 | Fire | Up arrow or Space | Left click | Tap centre, or tap target |
 | Back / quit | Escape | Right click | Swipe left |
 
-In menus on touch devices: tap to select, swipe up/down to scroll, swipe left to go back. To leave a round in progress, swipe left **across the bottom of the screen**, level with the launcher or below it — anywhere higher is where you aim, so the swipe is confined to the band that aiming ignores and can't quit your game by accident. In list-style panels — settings, the LAN and Net server lists, the connect form, and the online lobby and game room — the first tap on a row highlights it and a second tap on the same row activates it, so you can see what a row says before changing it. In the game room's per-player grid, a tap picks the cell first, so you never change the wrong player's setting by mis-tapping.
+In menus on touch devices: tap to select, swipe up/down to scroll, swipe left to go back. To leave a round in progress, swipe left **across the bottom of the screen**, level with the launcher or below it — anywhere higher is where you aim, so the swipe is confined to the band that aiming ignores and can't quit your game by accident. In list-style panels — settings, the LAN and Net server lists, the connect form, and the online lobby and game room — the first tap on a row highlights it and a second tap on the same row activates it, so you can see what a row says before changing it. Rows adjusted sideways (like game speed) step with a second tap on either half, rather than needing L/R keys. In the game room's per-player grid, a tap picks the cell first, so you never change the wrong player's setting by mis-tapping.
+
+Tapping **Chat** raises the keyboard and shows the full chat log over the map while you type, rather than the usual last few lines, so you can see what you're replying to.
 
 Mouse and touch aiming are enabled per-room by the host, and change the in-game gestures above: with them off, tapping a screen half aims that way; with them on, you drag to aim and tap to fire at a point.
 
@@ -92,6 +94,8 @@ This enables both TCP (direct connections) and UDP broadcast (LAN auto-discovery
 
 **Join:** **LAN Game** to auto-discover on your network, or **Net Game** and enter the host's IP. Any player pressing Enter after a round ends starts the next round for everyone.
 
+> LAN auto-discovery needs a UDP broadcast, which browsers cannot send — the browser build's **LAN Game** list is always empty. Use **Net Game** with the host's address there, or play native.
+
 **Public servers** are listed in the [frozen-bubble-servers](https://github.com/dchau360/frozen-bubble-servers) repo, in the same format as the original `frozen-bubble.org` list:
 
 ```
@@ -108,6 +112,8 @@ The game fetches this list automatically on startup. Submit a PR there to add yo
 Sideload with the **Downloader** app from the Amazon Appstore: enter code **1308098** (or the URL `http://aftv.news/1308098`) and follow the prompts.
 
 **Entering text** (IP address, nickname): when a field is active the on-screen keyboard appears. If **Delete/Clear** doesn't respond straight away, press any letter key first — the field is then active, and Delete will erase both it and the existing text.
+
+**On a phone or tablet**, the same APK installs and runs in portrait, decided automatically from whether the device has a touchscreen — a TV box stays landscape. Mouse/touch aim is also on by default there; see [Controls](#controls).
 
 ---
 
