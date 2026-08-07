@@ -854,14 +854,29 @@ void FrozenBubble::HandleInput(SDL_Event *e) {
         // using both would double-inject SDLK_RETURN and fire a bubble on the new round.
         // WASM uses MOUSE_BUTTON_DOWN exclusively (see handler above).
 #ifndef __WASM_PORT__
-        else if (e->type == SDL_EVENT_FINGER_MOTION) {
+        // Press position is kept so a release can be told apart from a tap.
+        // Touch has no other way out of a round: Escape, gamepad B and Android's
+        // back button all reach QuitToTitle, and iOS has none of them.
+        static float gameTouchStartX = 0.f, gameTouchStartY = 0.f;
+        static bool gameTouchStarted = false;
+        if (e->type == SDL_EVENT_FINGER_DOWN) {
+            TouchToLogical(e, &gameTouchStartX, &gameTouchStartY);
+            gameTouchStarted = true;
+        } else if (e->type == SDL_EVENT_FINGER_MOTION) {
             float lx, ly;
             TouchToLogical(e, &lx, &ly);
             mainGame->HandleMouseAim(lx, ly);
         } else if (e->type == SDL_EVENT_FINGER_UP) {
             float lx, ly;
             TouchToLogical(e, &lx, &ly);
-            if (mainGame->IsGameFinished()) {
+            bool back = gameTouchStarted &&
+                        mainGame->IsTouchBackSwipe(gameTouchStartX, gameTouchStartY, lx, ly);
+            gameTouchStarted = false;
+            if (back) {
+                // Deliberately ahead of the finished-game branch: a round that
+                // has ended still needs a way out that is not "start another".
+                injectKey(SDLK_ESCAPE);
+            } else if (mainGame->IsGameFinished()) {
                 if (!mainGame->HandleFinishedTap(lx, ly))
                     injectKey(SDLK_RETURN); // tap to continue after round
             } else {

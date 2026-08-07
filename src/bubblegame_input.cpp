@@ -64,6 +64,26 @@ void BubbleGame::HandleMouseAim(float mx, float my) {
     bArr.mouseTargetAngle = ang;
 }
 
+bool BubbleGame::IsTouchBackSwipe(float startX, float startY,
+                                  float endX, float endY) const {
+    if (chattingMode) return false;
+    if (currentSettings.playerCount < 1) return false;
+
+    const SDL_Rect& r = bubbleArrays[0].shooterSprite.rect;
+    // Same cutoff HandleMouseAim uses to reject backward shots, so the two
+    // agree by construction: anything this function accepts is something aiming
+    // has already declined to act on.
+    const float aimCutoff = (r.y + r.h * 0.5f) - 5.f;
+    if (startY <= aimCutoff) return false;
+
+    const float dx = endX - startX;
+    const float dy = endY - startY;
+    // Long, and clearly horizontal. The menus use 40px, but a stray 40px here
+    // would end the round rather than move a highlight.
+    if (dx > -100.f) return false;
+    return fabsf(dy) < fabsf(dx) * 0.6f;
+}
+
 void BubbleGame::HandleMouseFire() {
     if (chattingMode) return;
     if (!currentSettings.mouseEnabled) return;

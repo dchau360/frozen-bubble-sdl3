@@ -453,6 +453,18 @@ public:
     void HandleInput(SDL_Event *e);
     void HandleMouseAim(float mx, float my);  // logical canvas coords (0-640, 0-480)
     void HandleMouseFire();
+
+    // True when a finger press/release pair is an unambiguous "go back" swipe
+    // rather than an aim-and-fire. Touch is the only input with no way out of a
+    // round otherwise: the keyboard has Escape, gamepads have B, and Android
+    // has its own back button, but iOS has none of the three.
+    //
+    // The gesture has to start at or below the shooter barrel. HandleMouseAim
+    // already ignores everything from there down, so that band is the one part
+    // of the playfield where a long drag cannot also be someone aiming -- and
+    // an accidental match here would quit a game in progress, not merely
+    // misfire a bubble. All coordinates are logical canvas coords.
+    bool IsTouchBackSwipe(float startX, float startY, float endX, float endY) const;
     void UpdatePenguin(BubbleArray &bArray);
 
     void LoadLevelset(const char *path);

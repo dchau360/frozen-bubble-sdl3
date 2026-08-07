@@ -41,6 +41,7 @@ struct BubbleGameTestAccess {
             false);
     }
     static void depart(BubbleGame& game, int idx) { game.HandlePlayerDeparture(idx); }
+    static bool& chatting(BubbleGame& game) { return game.chattingMode; }
     static void assignChains(BubbleGame& game, int idx) {
         game.AssignChainReactions(game.bubbleArrays[idx]);
     }
@@ -545,6 +546,45 @@ int main() {
         CHECK(miniLanding.first != 0);
         CHECK(mini.bubbleMap[2][3].bubbleId == 0);
         CHECK(mini.stickAnimPos.y > mini.topLimit);
+    }
+
+    // --- IsTouchBackSwipe -------------------------------------------------
+    // Touch is the only input with no other way out of a round, and the cost of
+    // a false positive is a quit mid-game, so the gesture is deliberately hard
+    // to trigger by accident.
+    {
+        BubbleGame game(renderer);
+        BubbleGameTestAccess::reset(game, 1, false, false);
+
+        SDL_Rect& shooter = BubbleGameTestAccess::player(game, 0).shooterSprite.rect;
+        shooter = {300, 400, 40, 48};
+        const float barrel = 400.f + 48.f * 0.5f;   // shooter centre
+        const float below = barrel + 20.f;          // inside the dead band
+        const float above = barrel - 60.f;          // where aiming still acts
+
+        // A long leftward swipe low on the screen: the intended gesture.
+        CHECK(game.IsTouchBackSwipe(500.f, below, 300.f, below));
+
+        // The same swipe higher up is someone aiming, and must not quit.
+        CHECK(!game.IsTouchBackSwipe(500.f, above, 300.f, above));
+
+        // Direction matters: rightward is not a back gesture.
+        CHECK(!game.IsTouchBackSwipe(300.f, below, 500.f, below));
+
+        // Too short to be deliberate.
+        CHECK(!game.IsTouchBackSwipe(400.f, below, 330.f, below));
+
+        // Long enough, but diagonal rather than a horizontal swipe.
+        CHECK(!game.IsTouchBackSwipe(500.f, below, 380.f, below - 100.f));
+
+        // A plain tap is not a swipe.
+        CHECK(!game.IsTouchBackSwipe(400.f, below, 400.f, below));
+
+        // Chatting swallows input; the gesture must not fire behind the prompt.
+        BubbleGameTestAccess::chatting(game) = true;
+        CHECK(!game.IsTouchBackSwipe(500.f, below, 300.f, below));
+        BubbleGameTestAccess::chatting(game) = false;
+        CHECK(game.IsTouchBackSwipe(500.f, below, 300.f, below));
     }
 
     SDL_DestroyRenderer(renderer);

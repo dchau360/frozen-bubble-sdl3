@@ -65,10 +65,15 @@ fetch via `NSURLSession` — the counterpart of the Android JNI `fetchUrl()`.
 Two of those endpoints are plaintext HTTP and get named App Transport Security
 exceptions in the Info.plist rather than a blanket `NSAllowsArbitraryLoads`.
 
-**Rotates freely.** The app allows portrait and both landscapes, matching the
-browser build, which cannot lock orientation at all. The playfield is a fixed
-640×480 canvas, so portrait renders it as a band across the middle of the screen
-rather than filling it — smaller, but playable.
+**Rotates freely, portrait first.** The app allows portrait and both landscapes,
+matching the browser build, which cannot lock orientation at all. Portrait is
+listed first, which is as close to "prefer portrait" as iOS gets: the starting
+orientation comes from how the device is being held, not from an app preference.
+The playfield is a fixed 640×480 canvas, so portrait renders it as a band across
+the middle of the screen rather than filling it — smaller, but playable.
+
+Android differs: there a phone is portrait-*locked*, because SDL resolves a
+fixed-size window to a single orientation and cannot offer the choice.
 
 Allowing it takes two changes, not one. The Info.plist orientations are
 necessary but not sufficient: SDL intersects them with a mask of its own, and
@@ -92,6 +97,13 @@ a compiled `Assets.car`, which only `actool` can produce, so
 actool's own `CFBundleIcons` keys into the Info.plist. The 1024 master in
 `ios/AppIcon.xcassets` is committed; regenerate it from the game's title art
 with `python3 tools/make-ios-icon.py` (needs Pillow — nothing else does).
+
+**Leaving a round needs a gesture.** Escape, gamepad B and Android's back button
+all reach `QuitToTitle()`; iOS has none of the three, so touch had no way out of
+a game at all. Swiping left across the bottom of the playfield — level with the
+launcher or below, the band `HandleMouseAim` already ignores — now does it. The
+band matters: a false positive here quits a game in progress, so the gesture is
+kept out of the area where a long drag could just as well be someone aiming.
 
 ## What does not work
 
