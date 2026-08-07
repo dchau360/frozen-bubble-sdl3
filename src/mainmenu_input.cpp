@@ -475,9 +475,10 @@ void MainMenu::BeginPanelTapRows(int* selection, int* subSelection) {
     panelTapSubSelection = subSelection;
 }
 
-void MainMenu::AddPanelTapRow(int index, const SDL_Rect& rect, int subIndex) {
+void MainMenu::AddPanelTapRow(int index, const SDL_Rect& rect, int subIndex,
+                              bool splitAdjust) {
     if (rect.w <= 0 || rect.h <= 0) return;  // row not drawn this frame
-    panelTapRows.push_back({rect, index, subIndex});
+    panelTapRows.push_back({rect, index, subIndex, splitAdjust});
 }
 
 bool MainMenu::HandlePanelTap(float lx, float ly) {
@@ -513,11 +514,18 @@ bool MainMenu::HandlePanelTap(float lx, float ly) {
         }
 
         // Second tap on the already-highlighted row activates it. Pushed as a
-        // Return key event rather than duplicating each panel's activation
-        // logic, so every row keeps behaving exactly as it does from a keyboard.
+        // key event rather than duplicating each panel's activation logic, so
+        // every row keeps behaving exactly as it does from a keyboard.
         SDL_Event ev = {};
         ev.type = SDL_EVENT_KEY_DOWN;
-        ev.key.key = SDLK_RETURN;
+        if (row.splitAdjust) {
+            // Stepped rows have no Return behaviour to borrow, so the half of
+            // the row that was touched picks the direction instead.
+            const float mid = row.rect.x + row.rect.w * 0.5f;
+            ev.key.key = (lx < mid) ? SDLK_LEFT : SDLK_RIGHT;
+        } else {
+            ev.key.key = SDLK_RETURN;
+        }
         SDL_PushEvent(&ev);
         return true;
     }
@@ -879,7 +887,7 @@ void MainMenu::MenuUpKey() {
                             AudioMixer::Instance()->PlaySFX("menu_change");
 
                             // Joiner on Teams row: auto-focus their own column
-                            if (currentGame && !isHostRoom && selectedActionIndex == 11) {
+                            if (currentGame && !isHostRoom && selectedActionIndex == kRoomTeam) {
                                 std::string myNick = netClient->GetPlayerNick();
                                 for (int i = 0; i < (int)currentGame->players.size(); i++) {
                                     if (currentGame->players[i].nick == myNick) { currentPlayerCol = i + 1; break; }
@@ -929,7 +937,7 @@ void MainMenu::MenuDownKey() {
                             AudioMixer::Instance()->PlaySFX("menu_change");
 
                             // Joiner on Teams row: auto-focus their own column
-                            if (currentGame && !isHostRoom && selectedActionIndex == 11) {
+                            if (currentGame && !isHostRoom && selectedActionIndex == kRoomTeam) {
                                 std::string myNick = netClient->GetPlayerNick();
                                 for (int i = 0; i < (int)currentGame->players.size(); i++) {
                                     if (currentGame->players[i].nick == myNick) { currentPlayerCol = i + 1; break; }
@@ -947,7 +955,7 @@ void MainMenu::MenuLeftRightKey(SDL_Event *e) {
                     if (showingNetPanel && networkInLobby && networkInputMode == 0 && selectedActionIndex != 0) {
                         NetworkClient* netClient = NetworkClient::Instance();
                         GameRoom* currentGame = netClient->GetCurrentGame();
-                        if (currentGame && currentGame->creator != netClient->GetPlayerNick() && selectedActionIndex == 11) {
+                        if (currentGame && currentGame->creator != netClient->GetPlayerNick() && selectedActionIndex == kRoomTeam) {
                             // Joiner LEFT/RIGHT on Teams row: change own team and notify host
                             std::string myNick = netClient->GetPlayerNick();
                             int mySlot = -1;
@@ -970,7 +978,7 @@ void MainMenu::MenuLeftRightKey(SDL_Event *e) {
                         } else if (currentGame && currentGame->creator == netClient->GetPlayerNick()) {
                             // Only host can change settings
                             bool settingChanged = false;
-                            if (selectedActionIndex == 1) {
+                            if (selectedActionIndex == kRoomMode) {
                                 int mode = netTeamMode ? 2 : (netClearMode ? 1 : 0);
                                 bool wasClear = netClearMode;
                                 mode += (e->key.key == SDLK_LEFT) ? -1 : 1;
@@ -990,23 +998,19 @@ void MainMenu::MenuLeftRightKey(SDL_Event *e) {
                                 }
                                 AudioMixer::Instance()->PlaySFX("menu_change");
                                 settingChanged = true;
-                            } else if (selectedActionIndex == 2) {
+                            } else if (selectedActionIndex == kRoomMalus) {
                                 netDisableMalus = !netDisableMalus;
                                 AudioMixer::Instance()->PlaySFX("menu_change");
                                 settingChanged = true;
-                            } else if (selectedActionIndex == 3) {
+                            } else if (selectedActionIndex == kRoomChain) {
                                 chainReactionEnabled = !chainReactionEnabled;
                                 AudioMixer::Instance()->PlaySFX("menu_change");
                                 settingChanged = true;
-                            } else if (selectedActionIndex == 4) {
-                                continueWhenPlayersLeave = !continueWhenPlayersLeave;
-                                AudioMixer::Instance()->PlaySFX("menu_change");
-                                settingChanged = true;
-                            } else if (selectedActionIndex == 5) {
+                            } else if (selectedActionIndex == kRoomTarget) {
                                 singlePlayerTargetting = !singlePlayerTargetting;
                                 AudioMixer::Instance()->PlaySFX("menu_change");
                                 settingChanged = true;
-                            } else if (selectedActionIndex == 6) {
+                            } else if (selectedActionIndex == kRoomVictories) {
                                 // LEFT/RIGHT cycle victories limit
                                 if (e->key.key == SDLK_LEFT) {
                                     victoriesLimitIndex--;
@@ -1017,8 +1021,9 @@ void MainMenu::MenuLeftRightKey(SDL_Event *e) {
                                 }
                                 AudioMixer::Instance()->PlaySFX("menu_change");
                                 settingChanged = true;
-                            } else if (selectedActionIndex >= 8 && selectedActionIndex <= 10) {
-                                // Grid rows 8/9/10: Left/Right navigates player columns
+                            } else if (selectedActionIndex >= kRoomGridFirst &&
+                                       selectedActionIndex <= kRoomGridLast) {
+                                // Grid rows: Left/Right navigates player columns
                                 // col 0 = ALL, col 1..N = P1..PN
                                 int numPlayers = (int)currentGame->players.size();
                                 if (numPlayers < 1) numPlayers = 1;
@@ -1032,7 +1037,7 @@ void MainMenu::MenuLeftRightKey(SDL_Event *e) {
                                     if (currentPlayerCol >= totalCols) currentPlayerCol = 0;
                                 }
                                 AudioMixer::Instance()->PlaySFX("menu_change");
-                            } else if (selectedActionIndex == 11) {
+                            } else if (selectedActionIndex == kRoomTeam) {
                                 // Team row: Left/Right changes team number for focused column
                                 int numPlayers = (int)currentGame->players.size();
                                 if (numPlayers < 1) numPlayers = 1;
@@ -1053,7 +1058,7 @@ void MainMenu::MenuLeftRightKey(SDL_Event *e) {
                             }
                             if (settingChanged) {
                                 static const int vLimits[] = {0,1,2,3,4,5,6,7,8,9,10,11,12,15,20,30,50,100};
-                                netClient->SendOptions(chainReactionEnabled, continueWhenPlayersLeave,
+                                netClient->SendOptions(chainReactionEnabled, /*continueWhenLeave=*/true,
                                     singlePlayerTargetting, vLimits[victoriesLimitIndex], playerColorCounts, playerNoCompress, playerAimGuide, netRoomMouseEnabled, netClearMode, netDisableMalus, netTeamMode, netPlayerTeams, netTeamCount);
                             }
                         } else if (!currentGame && selectedActionIndex == 1) {
@@ -1078,6 +1083,25 @@ void MainMenu::SubmitLobbyChatInput(NetworkClient *netClient) {
     // keyboard) — compose in a native browser prompt.
     if (WasmHasTouch() && networkChatInput[0] == '\0') {
         WasmPromptText("Chat message:", "", networkChatInput, sizeof(networkChatInput));
+    }
+#endif
+#if defined(__IOS_PORT__) || defined(__ANDROID__)
+    // Touch has no keyboard until something asks for one, and activating the
+    // chat row never did: it went straight to "send", which with an empty field
+    // does nothing at all -- so on a phone the row simply appeared dead.
+    //
+    // Hand over to the dedicated chat input mode instead. It already raises the
+    // system keyboard and routes SDL_EVENT_TEXT_INPUT into this same buffer,
+    // which typing into the row does not: that path reads key events, and a
+    // soft keyboard reports characters as text input, not keystrokes. Enter
+    // there sends and comes back here.
+    if (networkChatInput[0] == '\0' && DeviceHasTouchscreen()) {
+        networkInputMode = 4;
+        SDL_StopTextInput(SDL_GetKeyboardFocus());
+        SDL_StartTextInput(SDL_GetKeyboardFocus());
+        { SDL_Rect r = {160, 152, 320, 20}; SDL_SetTextInputArea(SDL_GetKeyboardFocus(), &r, 0); }
+        AudioMixer::Instance()->PlaySFX("menu_selected");
+        return;
     }
 #endif
     // Chat - handle commands or send message
@@ -1121,7 +1145,7 @@ void MainMenu::GameRoomHostReturn(NetworkClient *netClient, GameRoom *currentGam
     if (numPlayers < 1) numPlayers = 1;
     if (numPlayers > 5) numPlayers = 5;
     bool settingChanged = false;
-    if (selectedActionIndex == 1) {
+    if (selectedActionIndex == kRoomMode) {
         // Cycle game mode: Classic -> Clear -> Teams -> Classic
         int mode = netTeamMode ? 2 : (netClearMode ? 1 : 0);
         int nextMode = (mode + 1) % 3;
@@ -1143,36 +1167,31 @@ void MainMenu::GameRoomHostReturn(NetworkClient *netClient, GameRoom *currentGam
             }
             settingChanged = true;
         }
-    } else if (selectedActionIndex == 2) {
+    } else if (selectedActionIndex == kRoomMalus) {
         netDisableMalus = !netDisableMalus;
         AudioMixer::Instance()->PlaySFX("menu_change");
         settingChanged = true;
-    } else if (selectedActionIndex == 3) {
+    } else if (selectedActionIndex == kRoomChain) {
         // Toggle chain reaction
         chainReactionEnabled = !chainReactionEnabled;
         AudioMixer::Instance()->PlaySFX("menu_change");
         settingChanged = true;
-    } else if (selectedActionIndex == 4) {
-        // Toggle continue when players leave
-        continueWhenPlayersLeave = !continueWhenPlayersLeave;
-        AudioMixer::Instance()->PlaySFX("menu_change");
-        settingChanged = true;
-    } else if (selectedActionIndex == 5) {
+    } else if (selectedActionIndex == kRoomTarget) {
         // Toggle single player targetting
         singlePlayerTargetting = !singlePlayerTargetting;
         AudioMixer::Instance()->PlaySFX("menu_change");
         settingChanged = true;
-    } else if (selectedActionIndex == 6) {
+    } else if (selectedActionIndex == kRoomVictories) {
         // Cycle victories limit
         victoriesLimitIndex++;
         if (victoriesLimitIndex > 17) victoriesLimitIndex = 0; // 18 values total
         AudioMixer::Instance()->PlaySFX("menu_change");
         settingChanged = true;
-    } else if (selectedActionIndex == 7) {
+    } else if (selectedActionIndex == kRoomMouse) {
         // Toggle mouse/touch aim (per-session, off by default)
         netRoomMouseEnabled = !netRoomMouseEnabled;
         AudioMixer::Instance()->PlaySFX("menu_change");
-    } else if (selectedActionIndex == 8) {
+    } else if (selectedActionIndex == kRoomMaxColors) {
         // Cycle per-player color count; col 0 = ALL
         int np = (int)currentGame->players.size();
         if (np < 1) np = 1; if (np > 5) np = 5;
@@ -1184,7 +1203,7 @@ void MainMenu::GameRoomHostReturn(NetworkClient *netClient, GameRoom *currentGam
         }
         AudioMixer::Instance()->PlaySFX("menu_change");
         settingChanged = true;
-    } else if (selectedActionIndex == 9) {
+    } else if (selectedActionIndex == kRoomRows) {
         // Toggle per-player compression; col 0 = ALL (set all to majority opposite)
         int np = (int)currentGame->players.size();
         if (np < 1) np = 1; if (np > 5) np = 5;
@@ -1195,7 +1214,7 @@ void MainMenu::GameRoomHostReturn(NetworkClient *netClient, GameRoom *currentGam
         for (int i = lo; i < hi; i++) playerNoCompress[i] = allOn;
         AudioMixer::Instance()->PlaySFX("menu_change");
         settingChanged = true;
-    } else if (selectedActionIndex == 10) {
+    } else if (selectedActionIndex == kRoomAim) {
         // Toggle per-player aim guide; col 0 = ALL (set all to majority opposite)
         int np = (int)currentGame->players.size();
         if (np < 1) np = 1; if (np > 5) np = 5;
@@ -1206,7 +1225,7 @@ void MainMenu::GameRoomHostReturn(NetworkClient *netClient, GameRoom *currentGam
         for (int i = lo; i < hi; i++) playerAimGuide[i] = !allOn;
         AudioMixer::Instance()->PlaySFX("menu_change");
         settingChanged = true;
-    } else if (selectedActionIndex == 11) {
+    } else if (selectedActionIndex == kRoomTeam) {
         // ENTER: advance team number for focused column (same as RIGHT)
         int np = (int)currentGame->players.size();
         if (np < 1) np = 1; if (np > 5) np = 5;
@@ -1218,7 +1237,7 @@ void MainMenu::GameRoomHostReturn(NetworkClient *netClient, GameRoom *currentGam
         }
         AudioMixer::Instance()->PlaySFX("menu_change");
         settingChanged = true;
-    } else if (selectedActionIndex == 12 && currentGame && currentGame->players.size() > 1) {
+    } else if (selectedActionIndex == kRoomStart && currentGame && currentGame->players.size() > 1) {
         // Start game
         netClient->StartGame();
         netClient->AddStatusMessage("Starting game...");
@@ -1226,7 +1245,7 @@ void MainMenu::GameRoomHostReturn(NetworkClient *netClient, GameRoom *currentGam
     }
     if (settingChanged) {
         static const int vLimits[] = {0,1,2,3,4,5,6,7,8,9,10,11,12,15,20,30,50,100};
-        netClient->SendOptions(chainReactionEnabled, continueWhenPlayersLeave,
+        netClient->SendOptions(chainReactionEnabled, /*continueWhenLeave=*/true,
             singlePlayerTargetting, vLimits[victoriesLimitIndex], playerColorCounts, playerNoCompress, playerAimGuide, netRoomMouseEnabled, netClearMode, netDisableMalus, netTeamMode, netPlayerTeams, netTeamCount);
     }
 }
@@ -1261,7 +1280,7 @@ void MainMenu::MenuReturnKey() {
                                     SubmitLobbyChatInput(netClient);
                                 } else if (isHost) {
                                     GameRoomHostReturn(netClient, currentGame);
-                                } else if (!isHost && selectedActionIndex == 11) {
+                                } else if (!isHost && selectedActionIndex == kRoomTeam) {
                                     // Joiner ENTER on Teams row: advance own team assignment
                                     std::string myNick = netClient->GetPlayerNick();
                                     int mySlot = -1;

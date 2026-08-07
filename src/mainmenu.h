@@ -127,6 +127,12 @@ private:
         SDL_Rect rect;
         int index;      // value to assign to the primary selection
         int subIndex;   // value for the secondary selection, or -1 for none
+        // Rows whose value is stepped with LEFT/RIGHT rather than activated
+        // with Return. A second tap on one of these sends LEFT or RIGHT
+        // depending on which half was touched; sending Return would do
+        // literally nothing, which is how the game-speed row ended up with no
+        // way to change it on a phone at all.
+        bool splitAdjust;
     };
     std::vector<PanelTapRow> panelTapRows;
     int* panelTapSelection = nullptr;
@@ -138,7 +144,8 @@ private:
     // the last panel to render owns the rows, which is what the caller wants:
     // only one panel is interactive at a time.
     void BeginPanelTapRows(int* selection, int* subSelection = nullptr);
-    void AddPanelTapRow(int index, const SDL_Rect& rect, int subIndex = -1);
+    void AddPanelTapRow(int index, const SDL_Rect& rect, int subIndex = -1,
+                        bool splitAdjust = false);
 
     // HandleInput decomposition (mainmenu_input.cpp)
     void MenuTextInputEvent(SDL_Event *e);
@@ -242,7 +249,6 @@ private:
 
     // Game settings (when hosting)
     bool chainReactionEnabled = true;
-    bool continueWhenPlayersLeave = true;
     bool singlePlayerTargetting = true;
     int victoriesLimitIndex = 5; // 0=none, 1=1, 2=2, 3=3, 4=4, 5=5, etc.
     int playerColorCounts[5] = {8, 8, 8, 8, 8};  // Per-player color count (5-8)

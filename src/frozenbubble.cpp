@@ -448,6 +448,12 @@ void FrozenBubble::RunOneFrame()
 
     // render
     if(!IsGamePause) {
+        // Clear to opaque black explicitly. SDL_RenderClear paints with
+        // whatever draw colour was last set, and nothing here resets it
+        // between frames, so the letterbox bars took the colour of the last
+        // thing drawn -- on a phone, where the bars are a third of the screen,
+        // that showed up as a yellow border round the playfield.
+        SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
         SDL_RenderClear(renderer);
         if (currentState == TitleScreen) mainMenu->Render();
         else if (currentState == MainGame) mainGame->Render();

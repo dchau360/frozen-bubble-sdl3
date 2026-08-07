@@ -455,10 +455,12 @@ void MainMenu::KeysPanelRender() {
     // the panel's full width rather than the glyphs': the text is centred and
     // often short ("Sound: ON"), and a hit box that tight is hard to hit with a
     // thumb.
-    auto renderRow = [&](int row, const char* txt, SDL_Color fg, int& y) {
+    auto renderRow = [&](int row, const char* txt, SDL_Color fg, int& y,
+                         bool splitAdjust = false) {
         int top = y;
         renderLine(txt, fg, y);
-        AddPanelTapRow(row, { voidPanelRct.x, top, voidPanelRct.w, y - top });
+        AddPanelTapRow(row, { voidPanelRct.x, top, voidPanelRct.w, y - top },
+                       -1, splitAdjust);
     };
 
     char lineBuf[256];
@@ -498,9 +500,12 @@ void MainMenu::KeysPanelRender() {
     // Row 5: Game Speed
     float spd = gs->speedMultiplier;
     bool spdSel = (keyConfigIndex == kKeyRowSpeed);
+    // The arrows read as "adjustable sideways" to a keyboard player and as
+    // "tap this end" to a touch one, which the old "(L/R adjust)" did not: on a
+    // phone there are no L and R keys to press.
     snprintf(lineBuf, sizeof(lineBuf),
-        spdSel ? "[ Game Speed: %.1f  (L/R adjust) ]" : "  Game Speed: %.1f  (L/R adjust)  ", spd);
-    renderRow(kKeyRowSpeed, lineBuf, spdSel ? yellow : white, y);
+        spdSel ? "[ <  Game Speed: %.1f  > ]" : "  Game Speed: %.1f  ", spd);
+    renderRow(kKeyRowSpeed, lineBuf, spdSel ? yellow : white, y, true);
 
     y += 6;
 

@@ -1190,6 +1190,8 @@ void BubbleGame::RenderPaused() {
         SDL_DestroySurface(sfc);
     }
 
+    // Black, so the letterbox bars stay black behind the pause overlay too.
+    SDL_SetRenderDrawColor(rend, 0, 0, 0, 255);
     SDL_RenderClear(rend);
     SDL_RenderTexture(rend, prePauseBackground, nullptr, nullptr);
     SDL_RenderTexture(rend, pauseBackground, nullptr, nullptr);

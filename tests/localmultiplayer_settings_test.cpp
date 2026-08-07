@@ -50,8 +50,9 @@ struct MainMenuTestAccess {
     static void BeginRows(MainMenu& menu, int* sel, int* sub = nullptr) {
         menu.BeginPanelTapRows(sel, sub);
     }
-    static void AddRow(MainMenu& menu, int index, SDL_Rect rect, int sub = -1) {
-        menu.AddPanelTapRow(index, rect, sub);
+    static void AddRow(MainMenu& menu, int index, SDL_Rect rect, int sub = -1,
+                       bool splitAdjust = false) {
+        menu.AddPanelTapRow(index, rect, sub, splitAdjust);
     }
     static bool Tap(MainMenu& menu, float x, float y) {
         return menu.HandlePanelTap(x, y);
@@ -244,6 +245,45 @@ int main() {
 
         // Now that the cell is selected, tapping it again activates it.
         CHECK(MainMenuTestAccess::Tap(*menu, 150.f, 205.f));
+        CHECK(SDL_PeepEvents(&pushed, 1, SDL_GETEVENT,
+                             SDL_EVENT_KEY_DOWN, SDL_EVENT_KEY_DOWN) == 1);
+        CHECK(pushed.key.key == SDLK_RETURN);
+
+        // Stepped rows (game speed) have no Return behaviour to borrow -- the
+        // panel's Return handler does nothing for them -- so the half of the
+        // row that was tapped picks a direction instead. Without this the row
+        // cannot be changed at all on a device with no keyboard.
+        int stepRow = 0;
+        MainMenuTestAccess::BeginRows(*menu, &stepRow);
+        MainMenuTestAccess::AddRow(*menu, 0, {100, 300, 200, 20}, -1, true);
+        MainMenuTestAccess::AddRow(*menu, 1, {100, 320, 200, 20});
+
+        // Selecting it first still takes a tap, as for any other row.
+        SDL_FlushEvent(SDL_EVENT_KEY_DOWN);
+        CHECK(MainMenuTestAccess::Tap(*menu, 150.f, 325.f));
+        CHECK(stepRow == 1);
+        CHECK(MainMenuTestAccess::Tap(*menu, 150.f, 305.f));
+        CHECK(stepRow == 0);
+        CHECK(SDL_PeepEvents(&pushed, 1, SDL_GETEVENT,
+                             SDL_EVENT_KEY_DOWN, SDL_EVENT_KEY_DOWN) == 0);
+
+        // Left half steps down.
+        CHECK(MainMenuTestAccess::Tap(*menu, 120.f, 305.f));
+        CHECK(SDL_PeepEvents(&pushed, 1, SDL_GETEVENT,
+                             SDL_EVENT_KEY_DOWN, SDL_EVENT_KEY_DOWN) == 1);
+        CHECK(pushed.key.key == SDLK_LEFT);
+
+        // Right half steps up.
+        CHECK(MainMenuTestAccess::Tap(*menu, 280.f, 305.f));
+        CHECK(SDL_PeepEvents(&pushed, 1, SDL_GETEVENT,
+                             SDL_EVENT_KEY_DOWN, SDL_EVENT_KEY_DOWN) == 1);
+        CHECK(pushed.key.key == SDLK_RIGHT);
+
+        // The neighbouring ordinary row is unaffected: it still activates with
+        // Return wherever it is touched.
+        CHECK(MainMenuTestAccess::Tap(*menu, 120.f, 325.f));
+        CHECK(stepRow == 1);
+        CHECK(MainMenuTestAccess::Tap(*menu, 120.f, 325.f));
         CHECK(SDL_PeepEvents(&pushed, 1, SDL_GETEVENT,
                              SDL_EVENT_KEY_DOWN, SDL_EVENT_KEY_DOWN) == 1);
         CHECK(pushed.key.key == SDLK_RETURN);

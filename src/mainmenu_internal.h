@@ -58,6 +58,33 @@ enum KeyConfigRow {
     kKeyRowLast = kKeyRowResetAll
 };
 
+// Row indices for the game room's action list (selectedActionIndex). The list
+// is built positionally in mainmenu_netpanel.cpp and acted on by index in
+// mainmenu_input.cpp, so every row that is added or removed renumbers the ones
+// below it -- previously in about forty separate literals across the two files,
+// where a missed one silently toggles the neighbouring setting instead.
+//
+// Only meaningful while a game room is open. The plain lobby uses the same
+// variable for a different list (0 = chat, 1 = create, 2+ = one per room).
+enum GameRoomRow {
+    kRoomChat       = 0,
+    kRoomMode       = 1,
+    kRoomMalus      = 2,
+    kRoomChain      = 3,
+    kRoomTarget     = 4,
+    kRoomVictories  = 5,
+    kRoomMouse      = 6,
+    // Per-player grid: label on the left, one cell per player across.
+    kRoomMaxColors  = 7,
+    kRoomRows       = 8,
+    kRoomAim        = 9,
+    kRoomTeam       = 10,
+    kRoomStart      = 11,   // host only, and only with more than one player
+
+    kRoomGridFirst  = kRoomMaxColors,
+    kRoomGridLast   = kRoomAim,   // Team is edited through the roster, not here
+};
+
 // Texture dimensions helper (mainmenu.cpp).
 SDL_Point GetSize(SDL_Texture *texture);
 

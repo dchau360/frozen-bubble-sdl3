@@ -111,7 +111,7 @@ void MainMenu::NetPanelRender() {
             bool cr, cl, st; int vl; int pc[5]; bool nc[5]; bool ag[5]; bool me; bool cm; bool dm; bool tm; int pt[5]; int rcvTc;
             if (netClient->GetAndClearPendingOptions(cr, cl, st, vl, pc, nc, ag, me, cm, dm, tm, pt, rcvTc)) {
                 chainReactionEnabled = cr;
-                continueWhenPlayersLeave = cl;
+                (void)cl;  // "continue when players leave" is always on now
                 singlePlayerTargetting = st;
                 // Map vl to victoriesLimitIndex
                 static const int vLimits[] = {0,1,2,3,4,5,6,7,8,9,10,11,12,15,20,30,50,100};
@@ -333,34 +333,34 @@ void MainMenu::NetPanelLobbyActionsRender() {
             actions.push_back(modeText);  // index 1
             actions.push_back(malusText); // index 2
 
-            // Global settings (indices 3-6) - same for host and joiner
-            char crText[64], continueText[64], targetText[64], victoriesText[64];
+            // Global settings - same for host and joiner. "Continue when
+            // players leave" used to sit between chain-reaction and targetting;
+            // it is now always on and has no row.
+            char crText[64], targetText[64], victoriesText[64];
             snprintf(crText, sizeof(crText), "Chain-reaction: %s", chainReactionEnabled ? "enabled" : "disabled");
-            snprintf(continueText, sizeof(continueText), "Continue when players leave: %s", continueWhenPlayersLeave ? "enabled" : "disabled");
             snprintf(targetText, sizeof(targetText), "Single player targetting: %s", singlePlayerTargetting ? "enabled" : "disabled");
             const char* victoriesLimits[] = {"none (unlimited)", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "15", "20", "30", "50", "100"};
             snprintf(victoriesText, sizeof(victoriesText), "Victories limit: %s", victoriesLimits[victoriesLimitIndex]);
-            actions.push_back(crText);       // index 3
-            actions.push_back(continueText); // index 4
-            actions.push_back(targetText);   // index 5
-            actions.push_back(victoriesText);// index 6
+            actions.push_back(crText);        // kRoomChain
+            actions.push_back(targetText);    // kRoomTarget
+            actions.push_back(victoriesText); // kRoomVictories
 
-            // Mouse/touch aim (index 7) — per-session local setting, defaults OFF
+            // Mouse/touch aim (kRoomMouse) — per-session local setting, defaults OFF
             {
                 char mouseText[64];
                 snprintf(mouseText, sizeof(mouseText), "Mouse/Touch aim: %s", netRoomMouseEnabled ? "ON" : "OFF");
-                actions.push_back(mouseText); // index 7
+                actions.push_back(mouseText); // kRoomMouse
             }
 
-            // Per-player grid rows (indices 8-11) — label only; values rendered as grid cells below
-            actions.push_back("Max colors:"); // index 8
-            actions.push_back("Rows:");       // index 9
-            actions.push_back("Aim:");        // index 10
-            actions.push_back("Team:");       // index 11
+            // Per-player grid rows — label only; values rendered as grid cells below
+            actions.push_back("Max colors:"); // kRoomMaxColors
+            actions.push_back("Rows:");       // kRoomRows
+            actions.push_back("Aim:");        // kRoomAim
+            actions.push_back("Team:");       // kRoomTeam
 
-            // Start game (index 12) — host only when >1 player
+            // Start game (kRoomStart) — host only when >1 player
             if (currentGame->creator == netClient->GetPlayerNick() && currentGame->players.size() > 1) {
-                actions.push_back("Start game!"); // index 12
+                actions.push_back("Start game!"); // kRoomStart
             }
             // No "Part game" menu item - use ESC key to leave like original
 
@@ -392,7 +392,7 @@ void MainMenu::NetPanelLobbyActionsRender() {
             }
         }
 
-        const int gridStart = 8;       // First grid row index
+        const int gridStart = kRoomGridFirst;  // First grid row index
 
         // Header bar establishes location and role at a glance.
         drawPanel({10, 8, 620, 28}, {38, 20, 57, 235}, panelEdge);
@@ -411,7 +411,7 @@ void MainMenu::NetPanelLobbyActionsRender() {
                 // Right-aligned in the header so it can never collide with
                 // the title text (whose length varies with the creator's
                 // nickname) or the player sidebar panel drawn later.
-                bool startSel = (selectedActionIndex == 12);
+                bool startSel = (selectedActionIndex == kRoomStart);
                 SDL_Color startColor = startSel ? textGold : textMain;
                 panelText.UpdateColor(startColor, {20, 12, 32, 255});
                 panelText.UpdateText(roomRenderer, "Start game!", 0);
@@ -925,7 +925,7 @@ void MainMenu::NetPanelChatDockRender() {
                         if (currentGame->players[i].nick == senderNick) {
                             netPlayerTeams[i] = newTeam;
                             static const int vLimits[] = {0,1,2,3,4,5,6,7,8,9,10,11,12,15,20,30,50,100};
-                            netClient->SendOptions(chainReactionEnabled, continueWhenPlayersLeave,
+                            netClient->SendOptions(chainReactionEnabled, /*continueWhenLeave=*/true,
                                 singlePlayerTargetting, vLimits[victoriesLimitIndex], playerColorCounts,
                                 playerNoCompress, playerAimGuide, netRoomMouseEnabled, netClearMode,
                                 netDisableMalus, netTeamMode, netPlayerTeams, netTeamCount);
