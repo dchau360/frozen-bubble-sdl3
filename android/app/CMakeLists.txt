@@ -36,6 +36,15 @@ set(SDLMIXER_GME OFF CACHE BOOL "" FORCE)
 # SDL3_image: PNG + GIF only (bubble textures are GIFs)
 set(SDLIMAGE_VENDORED ON CACHE BOOL "" FORCE)
 set(SDLIMAGE_PNG ON CACHE BOOL "" FORCE)
+# PNG stays on, but not via libpng -- same as the iOS build, see
+# cmake/iOSDeps.cmake. Building the vendored libpng drags in the vendored
+# zlib, whose own CMakeLists renames zconf.h *inside the source tree* on any
+# out-of-source build, and jni/SDL3_image is a shared submodule the iOS build
+# compiles from too, so an Android build left it broken for the next iOS one.
+# Without libpng SDL_image decodes PNG through SDL3's own decoder; all 3269
+# PNGs under share/ come back byte-identical, same dimensions and same surface
+# format. libpng only adds APNG, which nothing here loads.
+set(SDLIMAGE_PNG_LIBPNG OFF CACHE BOOL "" FORCE)
 set(SDLIMAGE_GIF ON CACHE BOOL "" FORCE)
 set(SDLIMAGE_ANI OFF CACHE BOOL "" FORCE)
 set(SDLIMAGE_AVIF OFF CACHE BOOL "" FORCE)

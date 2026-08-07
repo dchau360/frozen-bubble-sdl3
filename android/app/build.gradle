@@ -56,13 +56,13 @@ android {
         targetCompatibility JavaVersion.VERSION_1_8
     }
 
-    // Exclude duplicate and unused native libraries from the APK (~2.6 MB
-    // uncompressed): libpng.so shares its SONAME with libpng16.so so
-    // SDL3_image can never dlopen it, and libvorbisenc.so has no DT_NEEDED
-    // or dlopen reference anywhere (IMP-014).
+    // libvorbisenc.so has no DT_NEEDED or dlopen reference anywhere, so it is
+    // dead weight in the APK (IMP-014). The libpng.so exclusion that used to
+    // sit here is gone: SDLIMAGE_PNG_LIBPNG is off in CMakeLists.txt, so no
+    // libpng is built at all.
     packagingOptions {
         jniLibs {
-            excludes += ['**/libpng.so', '**/libvorbisenc.so']
+            excludes += ['**/libvorbisenc.so']
         }
     }
 
