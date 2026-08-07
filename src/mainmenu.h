@@ -291,7 +291,12 @@ private:
     // NetPanelRender decomposition (mainmenu_netpanel.cpp)
     void NetPanelWorldMapRender();       // World map background + geolocation player spots
     void NetPanelLobbyActionsRender();   // Action list + per-player settings grid
-    void NetPanelChatDockRender();        // Persistent chat dock: input + last 5 messages
+    // Persistent chat dock: input row plus the most recent messages. `expanded`
+    // grows it over the whole panel while a message is being composed, so the
+    // conversation being replied to stays readable instead of being replaced by
+    // a bare input box -- which matters most on a phone, where composing raises
+    // a keyboard over the bottom half of the screen.
+    void NetPanelChatDockRender(bool expanded = false);
     void NetPanelConnectionScreensRender(); // Pre-login screens: LAN list, manual entry, public list
     void NetSetupPanelRender(); // Chain reaction prompt for network games
     void SavePreNick();         // Persist networkPreNick (localStorage on WASM, INI elsewhere)

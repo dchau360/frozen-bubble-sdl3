@@ -185,6 +185,16 @@ void MainMenu::NetPanelRender() {
         return;
     }
 
+    // Composing a message: same world map behind, but the chat dock grown over
+    // the room's settings so the whole readable log is on screen. The action
+    // list is left out rather than drawn behind -- none of it is reachable
+    // while typing, and on a phone the keyboard covers the lower half anyway.
+    if (networkInLobby && netGameBackground && networkInputMode == 4) {
+        NetPanelWorldMapRender();
+        NetPanelChatDockRender(true);
+        return;
+    }
+
     NetPanelConnectionScreensRender();
 }
 
@@ -826,7 +836,7 @@ void MainMenu::NetPanelLobbyActionsRender() {
         }
 }
 
-void MainMenu::NetPanelChatDockRender() {
+void MainMenu::NetPanelChatDockRender(bool expanded) {
     NetworkClient* netClient = NetworkClient::Instance();
     SDL_Renderer* roomRenderer = const_cast<SDL_Renderer*>(renderer);
     GameRoom* currentGame = netClient->GetCurrentGame();
@@ -864,27 +874,36 @@ void MainMenu::NetPanelChatDockRender() {
 
     // Persistent chat dock: its own background panel, always-visible message
     // area, with the input row's focus box only shown while Chat is selected.
-    drawPanel({10, 334, 620, 138}, {29, 13, 43, 238}, panelEdge);
-    drawLabel("CHAT", 20, 340, textGold);
+    // Grown upward while composing; the input row stays put at the bottom so
+    // the caret does not move under the finger that just opened the keyboard.
+    const int dockTop = expanded ? 60 : 334;
+    const int dockHeight = expanded ? 412 : 138;
+    drawPanel({10, dockTop, 620, dockHeight}, {29, 13, 43, 238}, panelEdge);
+    drawLabel(expanded ? "CHAT  --  ENTER sends, ESC cancels" : "CHAT",
+              20, dockTop + 6, textGold);
     // Action index 0 is Chat, whose row lives here rather than in the action
     // list (that loop skips i == 0). Registered after the list's rows, which is
     // safe: NetPanelLobbyActionsRender ran first and only it calls Begin.
-    AddPanelTapRow(0, {18, 438, 604, 26});
-    if (selectedActionIndex == 0) drawSelection({18, 438, 604, 26});
+    if (!expanded) AddPanelTapRow(0, {18, 438, 604, 26});
+    const bool inputFocused = expanded || selectedActionIndex == 0;
+    if (inputFocused) drawSelection({18, 438, 604, 26});
     char chatText[128];
     size_t inputLength = strlen(networkChatInput);
     const char* visibleInput = networkChatInput;
     bool clippedInput = inputLength > 70;
     if (clippedInput) visibleInput += inputLength - 70;
     snprintf(chatText, sizeof(chatText), "> %s%s%s", clippedInput ? "..." : "",
-             visibleInput, selectedActionIndex == 0 ? "_" : "");
+             visibleInput, inputFocused ? "_" : "");
     drawLabel(chatText, 26, 444, textMain);
 
     // Display chat messages in the dock's message area.
     const int chatStatusX = 22;
     const int chatStatusY = 426;
     const int chatLineHeight = 16;
-    const int maxChatLines = 5;
+    // Bottom line stays at chatStatusY either way, so the log grows upward into
+    // the space the expanded dock just claimed. The cap keeps the topmost line
+    // clear of the dock's own header.
+    const int maxChatLines = expanded ? ((chatStatusY - (dockTop + 24)) / chatLineHeight) + 1 : 5;
     std::vector<ChatMessage> chatMsgs = netClient->GetChatMessages();
 
     // >5-cap rooms: every client (not just the host) applies !team:<nick>:<n>
@@ -938,7 +957,7 @@ void MainMenu::NetPanelChatDockRender() {
         lastProcessedChatCount = chatMsgs.size();
     }
 
-    // Display last 5 messages from bottom up (skip hidden !team: commands).
+    // Display the most recent messages from bottom up (skip hidden !team: commands).
     int chatLine = 0;
     int startIdx = (int)chatMsgs.size() - maxChatLines;
     if (startIdx < 0) startIdx = 0;
