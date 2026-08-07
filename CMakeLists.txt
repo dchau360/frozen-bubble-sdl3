@@ -353,6 +353,17 @@ if(BUILD_TESTING AND NOT EMSCRIPTEN AND NOT ANDROID AND NOT IOS)
     add_test(NAME localmultiplayer-header-compile-test
         COMMAND localmultiplayer-header-compile-test)
 
+    add_executable(touch-letterbox-test
+        tests/touch_letterbox_test.cpp
+    )
+    set_property(TARGET touch-letterbox-test PROPERTY CXX_STANDARD 17)
+    set_property(TARGET touch-letterbox-test PROPERTY CXX_EXTENSIONS OFF)
+    target_link_libraries(touch-letterbox-test PRIVATE SDL3::SDL3)
+    add_test(NAME touch-letterbox-test COMMAND touch-letterbox-test)
+    # Reports itself skipped where no video backend can be created at all,
+    # rather than passing without having checked anything.
+    set_tests_properties(touch-letterbox-test PROPERTIES SKIP_RETURN_CODE 77)
+
     add_executable(netview-test
         tests/netview_test.cpp
         src/netview.cpp

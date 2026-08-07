@@ -56,9 +56,9 @@ After each round a per-player stats table shows bubbles fired and popped, malus 
 |---|---|---|---|
 | Aim | Left / Right arrow | Move mouse | Tap left / right half, or drag |
 | Fire | Up arrow or Space | Left click | Tap centre, or tap target |
-| Back / pause | Escape | Right click | Swipe left |
+| Back / pause | Escape | Right click | Swipe left (menus only) |
 
-In menus on touch devices: tap to select, swipe up/down to scroll, swipe left to go back. In list-style panels — settings, the LAN and Net server lists, the connect form, and the online lobby and game room — the first tap on a row highlights it and a second tap on the same row activates it, so you can see what a row says before changing it. In the game room's per-player grid, a tap picks the cell first, so you never change the wrong player's setting by mis-tapping.
+In menus on touch devices: tap to select, swipe up/down to scroll, swipe left to go back. Swipe-left-to-go-back works in menus, not during a round — pausing or leaving a game in progress currently needs a keyboard, a controller, or a mouse. In list-style panels — settings, the LAN and Net server lists, the connect form, and the online lobby and game room — the first tap on a row highlights it and a second tap on the same row activates it, so you can see what a row says before changing it. In the game room's per-player grid, a tap picks the cell first, so you never change the wrong player's setting by mis-tapping.
 
 Mouse and touch aiming are enabled per-room by the host, and change the in-game gestures above: with them off, tapping a screen half aims that way; with them on, you drag to aim and tap to fire at a point.
 

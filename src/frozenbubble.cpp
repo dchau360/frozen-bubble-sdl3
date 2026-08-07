@@ -146,6 +146,15 @@ FrozenBubble::FrozenBubble() {
     SDL_WindowFlags fullscreen = gameOptions->fullscreenMode() ? SDL_WINDOW_FULLSCREEN : 0;
 #endif
 
+#ifdef __IOS_PORT__
+    // Allowing portrait in the Info.plist is necessary but not sufficient: SDL
+    // intersects the plist's orientations with its own mask, and derives that
+    // mask from the requested window size whenever this hint is unset. The
+    // window is 640x480, so SDL would decide landscape-only on its own and the
+    // device would never rotate. Must be set before the window is created.
+    SDL_SetHint(SDL_HINT_ORIENTATIONS, "LandscapeLeft LandscapeRight Portrait");
+#endif
+
     window = SDL_CreateWindow("Frozen-Bubble: SDL3", resolution.x, resolution.y, fullscreen);
     // SDL3: texture scale mode is set per-texture, not globally via hint.
     // Linear scaling will be applied when textures are created.
@@ -631,6 +640,23 @@ void FrozenBubble::HandleControllerEvent(SDL_Event *e) {
     }
 }
 
+void FrozenBubble::TouchToLogical(const SDL_Event *e, float *lx, float *ly) const {
+    // tfinger is normalized against the window, so scale it back up by the
+    // window size and then let the renderer undo the letterbox -- the same
+    // conversion the mouse path already gets for free from window coordinates.
+    int ww = 0, wh = 0;
+    if (window) SDL_GetWindowSize(window, &ww, &wh);
+    if (ww <= 0 || wh <= 0 || !renderer) {
+        // No window to measure against (headless, or a failed create): fall back
+        // to the plain canvas mapping rather than emitting a zeroed coordinate.
+        *lx = e->tfinger.x * 640.f;
+        *ly = e->tfinger.y * 480.f;
+        return;
+    }
+    SDL_RenderCoordinatesFromWindow(renderer, e->tfinger.x * (float)ww,
+                                    e->tfinger.y * (float)wh, lx, ly);
+}
+
 void FrozenBubble::HandleInput(SDL_Event *e) {
     switch(e->type) {
         case SDL_EVENT_WINDOW_CLOSE_REQUESTED:
@@ -707,7 +733,12 @@ void FrozenBubble::HandleInput(SDL_Event *e) {
 
         // Touch/click navigation for menu
         // Buttons: x=89, y=14+i*56, w=202, h=46 in logical (640x480) coords
-        static float touchStartX = -1.f, touchStartY = -1.f;
+        // Tracked with an explicit flag rather than a negative sentinel: once
+        // touches are mapped through the letterbox, a press that starts in a
+        // bar has a legitimately negative logical coordinate, and a sentinel
+        // would read that as "no press recorded" and zero out the swipe.
+        static float touchStartX = 0.f, touchStartY = 0.f;
+        static bool touchStarted = false;
         static Uint32 lastMenuTapMs = 0;
         Uint32 nowMs = SDL_GetTicks();
         auto getMenuButtonAt = [](float lx, float ly) -> int {
@@ -720,20 +751,20 @@ void FrozenBubble::HandleInput(SDL_Event *e) {
         };
 
         if (e->type == SDL_EVENT_FINGER_DOWN) {
-            touchStartX = e->tfinger.x * 640.f;
-            touchStartY = e->tfinger.y * 480.f;
+            TouchToLogical(e, &touchStartX, &touchStartY);
+            touchStarted = true;
         } else if (e->type == SDL_EVENT_FINGER_UP) {
             // Debounce: ignore rapid re-fires (multi-finger or OS double events)
             if (nowMs - lastMenuTapMs < 200) {
-                touchStartX = touchStartY = -1.f;
+                touchStarted = false;
                 return;
             }
             lastMenuTapMs = nowMs;
-            float lx = e->tfinger.x * 640.f;
-            float ly = e->tfinger.y * 480.f;
-            float dx = (touchStartX >= 0) ? (lx - touchStartX) : 0.f;
-            float dy = (touchStartY >= 0) ? (ly - touchStartY) : 0.f;
-            touchStartX = touchStartY = -1.f;
+            float lx, ly;
+            TouchToLogical(e, &lx, &ly);
+            float dx = touchStarted ? (lx - touchStartX) : 0.f;
+            float dy = touchStarted ? (ly - touchStartY) : 0.f;
+            touchStarted = false;
             if (!mainMenu->HasAnyPanelOpen()) {
                 int btn = getMenuButtonAt(lx, ly);
                 if (btn >= 0) mainMenu->SelectAndPressButton(btn);
@@ -802,13 +833,17 @@ void FrozenBubble::HandleInput(SDL_Event *e) {
         // WASM uses MOUSE_BUTTON_DOWN exclusively (see handler above).
 #ifndef __WASM_PORT__
         else if (e->type == SDL_EVENT_FINGER_MOTION) {
-            mainGame->HandleMouseAim(e->tfinger.x * 640.f, e->tfinger.y * 480.f);
+            float lx, ly;
+            TouchToLogical(e, &lx, &ly);
+            mainGame->HandleMouseAim(lx, ly);
         } else if (e->type == SDL_EVENT_FINGER_UP) {
+            float lx, ly;
+            TouchToLogical(e, &lx, &ly);
             if (mainGame->IsGameFinished()) {
-                if (!mainGame->HandleFinishedTap(e->tfinger.x * 640.f, e->tfinger.y * 480.f))
+                if (!mainGame->HandleFinishedTap(lx, ly))
                     injectKey(SDLK_RETURN); // tap to continue after round
             } else {
-                mainGame->HandleMouseAim(e->tfinger.x * 640.f, e->tfinger.y * 480.f);
+                mainGame->HandleMouseAim(lx, ly);
                 mainGame->HandleMouseFire();
             }
         }

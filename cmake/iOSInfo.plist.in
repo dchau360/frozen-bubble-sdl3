@@ -55,16 +55,23 @@
     <key>UILaunchScreen</key>
     <dict/>
 
-    <!-- The playfield is a fixed 640x480 landscape canvas. Allowing portrait
-         would letterbox it into a thin strip with the aim controls off in the
-         margins, so the app is landscape-only on both device families. -->
+    <!-- Every orientation is allowed, matching the browser build, which cannot
+         lock orientation at all and simply letterboxes whatever it is handed.
+         The playfield is a fixed 640x480 canvas, so portrait renders it as a
+         band across the middle of the screen rather than filling it -- smaller,
+         but playable, and rotating is the player's call rather than ours.
+         Taps are mapped through the renderer's letterbox (TouchToLogical), so
+         they stay aligned at any aspect ratio. -->
     <key>UISupportedInterfaceOrientations</key>
     <array>
+        <string>UIInterfaceOrientationPortrait</string>
         <string>UIInterfaceOrientationLandscapeLeft</string>
         <string>UIInterfaceOrientationLandscapeRight</string>
     </array>
     <key>UISupportedInterfaceOrientations~ipad</key>
     <array>
+        <string>UIInterfaceOrientationPortrait</string>
+        <string>UIInterfaceOrientationPortraitUpsideDown</string>
         <string>UIInterfaceOrientationLandscapeLeft</string>
         <string>UIInterfaceOrientationLandscapeRight</string>
     </array>

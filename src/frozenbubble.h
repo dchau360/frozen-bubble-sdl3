@@ -106,6 +106,14 @@ private:
 
     void HandleInput(SDL_Event *e);
 
+    // Maps a finger event onto the 640x480 logical canvas. SDL normalizes
+    // tfinger.x/y against the *window*, not the canvas, so scaling them by
+    // 640/480 is only correct when the window happens to be exactly 4:3 --
+    // any other aspect leaves letterbox bars that the naive form counts as
+    // playfield, displacing every tap by the width of a bar. Phones are never
+    // 4:3, and in portrait the error is larger than the canvas is tall.
+    void TouchToLogical(const SDL_Event *e, float *lx, float *ly) const;
+
     // ---- F3 performance overlay ----------------------------------------
     // Toggled by F3, persisted as GFX:ShowFPS. Draws bottom-right over every
     // screen. Reports frame pacing *and* effective game speed, because the two

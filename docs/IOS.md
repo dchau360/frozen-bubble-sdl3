@@ -65,9 +65,21 @@ fetch via `NSURLSession` — the counterpart of the Android JNI `fetchUrl()`.
 Two of those endpoints are plaintext HTTP and get named App Transport Security
 exceptions in the Info.plist rather than a blanket `NSAllowsArbitraryLoads`.
 
-**Landscape only.** The playfield is a fixed 640×480 canvas; portrait would
-letterbox it into a strip. The app declares landscape-only on both iPhone and
-iPad and hides the status bar.
+**Rotates freely.** The app allows portrait and both landscapes, matching the
+browser build, which cannot lock orientation at all. The playfield is a fixed
+640×480 canvas, so portrait renders it as a band across the middle of the screen
+rather than filling it — smaller, but playable.
+
+Allowing it takes two changes, not one. The Info.plist orientations are
+necessary but not sufficient: SDL intersects them with a mask of its own, and
+derives that mask from the requested window size whenever `SDL_HINT_ORIENTATIONS`
+is unset. The window is 640×480, so SDL decides landscape-only by itself and the
+plist never gets a say. `frozenbubble.cpp` sets that hint before creating the
+window.
+
+Note that the Android build is still locked to landscape in its manifest
+(`android:screenOrientation="landscape"`), so the two mobile platforms differ
+here.
 
 **Mouse/touch aim is on by default.** There is no keyboard to aim with, and with
 it off the only gesture is tapping a screen half, which cannot pick an angle.
@@ -116,8 +128,15 @@ letterbox, and reads back its settings on a second launch.
 The app icon renders correctly on the simulator's home screen, and mouse/touch
 aim comes up enabled in a freshly written `settings.ini`.
 
+Portrait was verified by screenshot in the simulator: the canvas renders upright
+and centred, matching the source artwork, rather than rotated.
+
 Not yet verified: touch input and gameplay on iOS specifically (the touch
 handling is platform-independent code shared with the Android build, and the
 settings-panel tap behaviour was verified through the WebAssembly build, which
 runs the same code), audio output, netplay, and anything at all on physical
 hardware — the build is unsigned, so it has never been installed on a device.
+
+Taps could not be injected into the simulator to confirm the letterbox mapping
+end-to-end, so `tests/touch_letterbox_test.cpp` pins the arithmetic instead,
+across every aspect ratio the game actually runs at.
