@@ -74,6 +74,12 @@ private:
     // Per-controller state: joystick instance ID + axis hold flags
     struct ControllerState {
         SDL_JoystickID id = 0;
+        // The open handle, so it can actually be closed on removal. It was
+        // previously opened and dropped, leaking one gamepad per hotplug.
+        // A slot with pad == nullptr is free and gets reused by the next
+        // controller, which keeps the vector index (the player slot) stable for
+        // everyone else instead of growing past the 5 slots bindings exist for.
+        SDL_Gamepad *pad = nullptr;
         bool axisLeftHeld = false, axisRightHeld = false;
         bool axisUpHeld   = false, axisDownHeld  = false;
     };

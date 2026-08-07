@@ -1100,21 +1100,30 @@ void BubbleGame::ReloadGame(int level) {
             bubbleArrays[0].dangerZone = 12;
             break;
         case 3:
-            // Reset fields that change during a round (bubbleOffset shifts with compressor)
+            // Reset fields that change during a round (bubbleOffset shifts with compressor).
+            // curLaunchRct has to be restored here too: losing enlarges it to
+            // {x-1, y-1, 34, 48} for the death visual, and 3 players is the one
+            // count nothing else puts back -- SetupGameMetrics below restores it
+            // for 1 and 2 players but deliberately skips 3-5, and cases 4, 5 and
+            // the royale default restore it themselves. Without this the enlarged
+            // (and one-pixel-drifted) launcher carried into every later round.
             bubbleArrays[0].shooterSprite.angle = PI/2.0f;
             bubbleArrays[0].bubbleOffset = {190, 44};
             bubbleArrays[0].turnsToCompress = 12;
             bubbleArrays[0].numSeparators = 0;
+            bubbleArrays[0].curLaunchRct = {302, 390, 32, 32};
 
             bubbleArrays[1].shooterSprite.angle = PI/2.0f;
             bubbleArrays[1].bubbleOffset = {20, 19};
             bubbleArrays[1].turnsToCompress = 12;
             bubbleArrays[1].numSeparators = 0;
+            bubbleArrays[1].curLaunchRct = {68, 192, 32, 32};
 
             bubbleArrays[2].shooterSprite.angle = PI/2.0f;
             bubbleArrays[2].bubbleOffset = {492, 19};
             bubbleArrays[2].turnsToCompress = 12;
             bubbleArrays[2].numSeparators = 0;
+            bubbleArrays[2].curLaunchRct = {540, 192, 32, 32};
             break;
         case 4:
             bubbleArrays[0].shooterSprite.angle = PI/2.0f;

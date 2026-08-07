@@ -258,11 +258,10 @@ void MainMenu::HandleInput(SDL_Event *e){
                 case SDLK_ESCAPE:
                     MenuEscapeKey();
                     break;
-                case SDLK_F11: // mute / unpause audio
-                    if(AudioMixer::Instance()->IsHalted() == true) {
+                case SDLK_F11: // mute / unmute audio
+                    // Resumes the paused track rather than restarting "intro".
+                    if(AudioMixer::Instance()->IsHalted() == true)
                         AudioMixer::Instance()->MuteAll(true);
-                        AudioMixer::Instance()->PlayMusic("intro");
-                    }
                     else AudioMixer::Instance()->MuteAll();
                     break;
             }

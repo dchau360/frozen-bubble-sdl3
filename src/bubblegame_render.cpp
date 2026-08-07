@@ -647,9 +647,16 @@ void BubbleGame::Render() {
     }
 
     if(playedPause) {
-        audMixer->PauseMusic(true);
+        // Not while muted: now that muting pauses the track rather than stopping
+        // it, an unguarded resume here would start the music playing again on
+        // unpause even though the player had muted it.
+        if (!audMixer->IsHalted()) audMixer->ResumeMusic();
         playedPause = false;
-        FrozenBubble::Instance()->startTime += SDL_GetTicks() - timePaused;
+        Uint32 pausedFor = SDL_GetTicks() - timePaused;
+        FrozenBubble::Instance()->startTime += pausedFor;
+        // The training clock needs the same correction as the highscore timer
+        // above, or a paused game burns its two minutes while nothing moves.
+        if (mpTrainStartTime > 0) mpTrainStartTime += pausedFor;
     }
 
     // Roll up per-round stats once when a multiplayer round ends (also broadcasts 'S').

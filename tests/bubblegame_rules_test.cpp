@@ -331,6 +331,22 @@ int main() {
         CHECK(BubbleGameTestAccess::cleared(game));
         CHECK(BubbleGameTestAccess::player(game, 0).winCount == 1);
 
+        // Clearing a single-player level scores it once and only once. Bubbles
+        // already in flight keep driving CheckGameState after the win -- a late
+        // chain landing on the empty board is dropped as unattached, leaving the
+        // board clear again -- and that used to award the 1000 bonus a second
+        // time and write a duplicate highscore row.
+        //
+        // networkGame is set purely so SubmitScore returns before it reaches the
+        // highscore manager: this is about the scoring guard, not the save path.
+        BubbleGameTestAccess::reset(game, 1, true, false);
+        BubbleGameTestAccess::player(game, 0).score = 0;
+        BubbleGameTestAccess::check(game, 0);
+        CHECK(BubbleGameTestAccess::finished(game));
+        CHECK(BubbleGameTestAccess::player(game, 0).score == 1000);
+        BubbleGameTestAccess::check(game, 0);
+        CHECK(BubbleGameTestAccess::player(game, 0).score == 1000);
+
         BubbleGameTestAccess::reset(game, 2, false, false);
         PutDangerBubble(BubbleGameTestAccess::player(game, 0));
         PutDangerBubble(BubbleGameTestAccess::player(game, 1));

@@ -392,7 +392,10 @@ void FrozenBubble::RunOneFrame()
         }
         if (e.type == SDL_EVENT_GAMEPAD_BUTTON_DOWN || e.type == SDL_EVENT_GAMEPAD_BUTTON_UP ||
             e.type == SDL_EVENT_GAMEPAD_AXIS_MOTION  || e.type == SDL_EVENT_GAMEPAD_ADDED ||
-            e.type == SDL_EVENT_JOYSTICK_ADDED) {
+            e.type == SDL_EVENT_JOYSTICK_ADDED ||
+            // Removal was never routed here, which is why it was never handled:
+            // the handle stayed open and the slot stayed occupied for good.
+            e.type == SDL_EVENT_GAMEPAD_REMOVED || e.type == SDL_EVENT_JOYSTICK_REMOVED) {
             HandleControllerEvent(&e);
             continue;
         }
@@ -474,18 +477,42 @@ void FrozenBubble::HandleControllerEvent(SDL_Event *e) {
     if (e->type == SDL_EVENT_GAMEPAD_ADDED || e->type == SDL_EVENT_JOYSTICK_ADDED) {
         SDL_JoystickID idx = (e->type == SDL_EVENT_GAMEPAD_ADDED) ? e->gdevice.which : e->jdevice.which;
         if (!SDL_IsGamepad(idx)) return;
+        // Already tracked: nothing to do, and do not open a second handle.
+        for (auto& cs : controllers) if (cs.id == idx) return;
+
         SDL_Gamepad *gp = SDL_OpenGamepad(idx);
-        if (gp) {
-            SDL_JoystickID id = idx;
-            // Only add if not already tracked
-            bool found = false;
-            for (auto& cs : controllers) if (cs.id == id) { found = true; break; }
-            if (!found) {
-                ControllerState cs;
-                cs.id = id;
-                controllers.push_back(cs);
-                SDL_Log("Controller connected: %s → player %d", SDL_GetGamepadName(gp), (int)controllers.size());
-            }
+        if (!gp) return;
+
+        // Reuse a slot freed by an earlier removal before growing the vector.
+        // Slot index is the player number, and bindings only exist for the
+        // first CTRL_SC_PLAYERS of them, so unplugging and replugging a pad used
+        // to walk it into a slot whose buttons resolve to SDL_SCANCODE_UNKNOWN
+        // (guarded since BUG-035) and silently stop responding.
+        int slot = -1;
+        for (int i = 0; i < (int)controllers.size(); i++) {
+            if (controllers[i].pad == nullptr) { slot = i; break; }
+        }
+        if (slot < 0) {
+            controllers.push_back(ControllerState{});
+            slot = (int)controllers.size() - 1;
+        }
+        controllers[slot] = ControllerState{};
+        controllers[slot].id = idx;
+        controllers[slot].pad = gp;
+        SDL_Log("Controller connected: %s → player %d", SDL_GetGamepadName(gp), slot + 1);
+        return;
+    }
+
+    if (e->type == SDL_EVENT_GAMEPAD_REMOVED || e->type == SDL_EVENT_JOYSTICK_REMOVED) {
+        SDL_JoystickID idx = (e->type == SDL_EVENT_GAMEPAD_REMOVED) ? e->gdevice.which : e->jdevice.which;
+        for (int i = 0; i < (int)controllers.size(); i++) {
+            if (controllers[i].id != idx) continue;
+            if (controllers[i].pad) SDL_CloseGamepad(controllers[i].pad);
+            // Freed in place rather than erased: erasing would shift every later
+            // controller into a different player slot mid-game.
+            controllers[i] = ControllerState{};
+            SDL_Log("Controller disconnected from player %d", i + 1);
+            break;
         }
         return;
     }

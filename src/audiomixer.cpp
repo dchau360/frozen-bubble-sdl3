@@ -198,17 +198,27 @@ void AudioMixer::PlaySFX(const char *sfx)
     MIX_PlayTrack(track, 0);
 }
 
-void AudioMixer::PauseMusic(bool enable){
+void AudioMixer::PauseMusic(){
     if (!musicTrack) return;
-    if (enable == true) MIX_ResumeTrack(musicTrack);
-    else MIX_PauseTrack(musicTrack);
+    MIX_PauseTrack(musicTrack);
+}
+
+void AudioMixer::ResumeMusic(){
+    if (!musicTrack) return;
+    MIX_ResumeTrack(musicTrack);
 }
 
 void AudioMixer::MuteAll(bool enable){
     if(enable == true) {
         haltedMixer = false;
+        // Muting used to stop the music outright, so unmuting had no track to
+        // go back to and every caller had to name one -- which restarted it
+        // from the beginning, and in-game named "main1p" whatever was actually
+        // playing. Pausing means unmuting resumes where it left off.
+        ResumeMusic();
     } else {
-        if (mixer) MIX_StopAllTracks(mixer, 0);
+        PauseMusic();
+        for (MIX_Track* t : sfxTracks) MIX_StopTrack(t, 0);
         haltedMixer = true;
     }
 }

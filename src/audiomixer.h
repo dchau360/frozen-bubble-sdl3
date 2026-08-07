@@ -33,7 +33,10 @@ class AudioMixer final
 public:
     void PlayMusic(const char *track);
     void PlaySFX(const char *sfx);
-    void PauseMusic(bool enable = false);
+    // Split from the old PauseMusic(bool), where passing true *resumed* — the
+    // one thing the name promised it would not do.
+    void PauseMusic();
+    void ResumeMusic();
     void MuteAll(bool enable = false);
     bool IsHalted() { return haltedMixer; };
 

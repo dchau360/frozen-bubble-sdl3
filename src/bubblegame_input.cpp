@@ -196,11 +196,11 @@ void BubbleGame::HandleInput(SDL_Event *e) {
                 case SDLK_ESCAPE:
                     QuitToTitle();
                     break;
-                case SDLK_F11: // mute / unpause audio
-                    if(audMixer->IsHalted() == true) {
-                        audMixer->MuteAll(true);
-                        audMixer->PlayMusic("main1p");
-                    }
+                case SDLK_F11: // mute / unmute audio
+                    // Unmuting resumes whatever was playing. It used to restart
+                    // "main1p" from the top, which was both a restart and the
+                    // wrong track in any game not using it.
+                    if(audMixer->IsHalted() == true) audMixer->MuteAll(true);
                     else audMixer->MuteAll();
                     break;
                 case SDLK_C: // toggle colorblind mode

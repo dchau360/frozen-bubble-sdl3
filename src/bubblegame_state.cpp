@@ -675,6 +675,7 @@ void BubbleGame::FinishRoundAsDraw() {
 }
 
 void BubbleGame::CheckGameState(BubbleArray &bArray, bool countForRoot) {
+
     // Only actual fired shots advance the compressor/new-root counter; chain-reaction
     // landings must not (original: count_for_root=0 for chain landings vs =1 for real
     // shots, bin/frozen-bubble ~line 2566 vs the fire block).
@@ -701,8 +702,20 @@ void BubbleGame::CheckGameState(BubbleArray &bArray, bool countForRoot) {
     }
     if (bArray.allClear() &&
         (currentSettings.playerCount < 2 || currentSettings.clearMode)) {
-        // Award bonus for clearing the level!
-        if (currentSettings.playerCount < 2) {
+        // Award bonus for clearing the level -- once. This runs again after the
+        // level is already won: UpdateSingleBubblesAtScale keeps driving bubbles
+        // that were still in flight (unlike UpdatePenguin, it has no gameFinish
+        // guard, and the render path calls it while the win panel is up). A
+        // chain bubble landing on the now-empty board has nothing to attach to,
+        // is dropped as unattached, and leaves the board clear again -- so
+        // without this the level scored twice, adding another 1000 and writing a
+        // duplicate row to both highscores and highlevelshistory.
+        //
+        // Deliberately narrower than an early return at the top of this
+        // function: a network round can be announced finished by a remote win
+        // and still need the local clear detected afterwards, which the
+        // ResolveRoundOutcome path below handles.
+        if (currentSettings.playerCount < 2 && !gameFinish) {
             int clearBonus = 1000;
             bArray.score += clearBonus;
 
