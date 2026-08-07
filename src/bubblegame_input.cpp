@@ -110,6 +110,10 @@ void BubbleGame::StartInGameChat() {
     chattingMode = true;
     chatInputBuf[0] = '\0';
     SDL_StartTextInput(SDL_GetKeyboardFocus());
+    // Where the composing line is drawn, so the platform can lift the view
+    // clear of the on-screen keyboard rather than covering it. Without this the
+    // field sits behind the keyboard on a phone and you type blind.
+    SetTextInputAreaLogical(const_cast<SDL_Renderer*>(renderer), {8, 300, 624, 20});
     SDL_Log("In-game chat opened (betweenRounds=%d)", gameFinish);
 }
 

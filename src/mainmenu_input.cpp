@@ -211,7 +211,7 @@ void MainMenu::HandleInput(SDL_Event *e){
                         networkChatInput[0] = '\0';
                         SDL_StopTextInput(SDL_GetKeyboardFocus());
                         SDL_StartTextInput(SDL_GetKeyboardFocus());
-                        { SDL_Rect r = {160, 152, 320, 20}; SDL_SetTextInputArea(SDL_GetKeyboardFocus(), &r, 0); }
+                        SetTextInputAreaLogical(const_cast<SDL_Renderer*>(renderer), {160, 152, 320, 20});
                         AudioMixer::Instance()->PlaySFX("menu_selected");
                     }
                     break;
@@ -222,7 +222,7 @@ void MainMenu::HandleInput(SDL_Event *e){
                         networkUsername[0] = '\0';
                         SDL_StopTextInput(SDL_GetKeyboardFocus());
                         SDL_StartTextInput(SDL_GetKeyboardFocus());
-                        { SDL_Rect r = {160, 152, 320, 20}; SDL_SetTextInputArea(SDL_GetKeyboardFocus(), &r, 0); }
+                        SetTextInputAreaLogical(const_cast<SDL_Renderer*>(renderer), {160, 152, 320, 20});
                         AudioMixer::Instance()->PlaySFX("menu_selected");
                     }
                     break;
@@ -1099,7 +1099,7 @@ void MainMenu::SubmitLobbyChatInput(NetworkClient *netClient) {
         networkInputMode = 4;
         SDL_StopTextInput(SDL_GetKeyboardFocus());
         SDL_StartTextInput(SDL_GetKeyboardFocus());
-        { SDL_Rect r = {160, 152, 320, 20}; SDL_SetTextInputArea(SDL_GetKeyboardFocus(), &r, 0); }
+        SetTextInputAreaLogical(const_cast<SDL_Renderer*>(renderer), {160, 152, 320, 20});
         AudioMixer::Instance()->PlaySFX("menu_selected");
         return;
     }
@@ -1427,7 +1427,7 @@ void MainMenu::MenuReturnKey() {
                             networkFieldEditing = true;
                             SDL_StopTextInput(SDL_GetKeyboardFocus());
                             SDL_StartTextInput(SDL_GetKeyboardFocus());
-                            { SDL_Rect r = {160, 152, 320, 20}; SDL_SetTextInputArea(SDL_GetKeyboardFocus(), &r, 0); }
+                            SetTextInputAreaLogical(const_cast<SDL_Renderer*>(renderer), {160, 152, 320, 20});
                             AudioMixer::Instance()->PlaySFX("menu_selected");
                             return;
                         }
@@ -1471,7 +1471,7 @@ void MainMenu::MenuReturnKey() {
                                 networkInputMode = 11;
                                 SDL_StopTextInput(SDL_GetKeyboardFocus());
                                 SDL_StartTextInput(SDL_GetKeyboardFocus());
-                                { SDL_Rect r = {160, 152, 320, 20}; SDL_SetTextInputArea(SDL_GetKeyboardFocus(), &r, 0); }
+                                SetTextInputAreaLogical(const_cast<SDL_Renderer*>(renderer), {160, 152, 320, 20});
                                 AudioMixer::Instance()->PlaySFX("menu_selected");
                                 return;
                             }
@@ -1508,7 +1508,7 @@ void MainMenu::MenuReturnKey() {
                                 networkInputMode = 11;
                                 SDL_StopTextInput(SDL_GetKeyboardFocus());
                                 SDL_StartTextInput(SDL_GetKeyboardFocus());
-                                { SDL_Rect r = {160, 152, 320, 20}; SDL_SetTextInputArea(SDL_GetKeyboardFocus(), &r, 0); }
+                                SetTextInputAreaLogical(const_cast<SDL_Renderer*>(renderer), {160, 152, 320, 20});
                                 AudioMixer::Instance()->PlaySFX("menu_selected");
                                 return;
                             }

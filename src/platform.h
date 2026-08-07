@@ -28,6 +28,7 @@
 #define APP_VERSION "v0.0.0-nocmake"
 #endif
 
+#include <SDL3/SDL.h>
 #include <string>
 
 // Runtime data directory - set at startup via InitDataDir()
@@ -76,6 +77,14 @@ bool ReplaceFileAtomically(const std::string& tempPath,
 // answer is available any time after SDL_Init(SDL_INIT_VIDEO) -- and is empty
 // before it, so callers must not run earlier than that.
 bool DeviceHasTouchscreen();
+
+// Tells the platform where the text field being edited is, so iOS and Android
+// can lift the view clear of the on-screen keyboard instead of letting it cover
+// the field. The rect is in 640x480 logical canvas coordinates and is converted
+// here: SDL wants window coordinates, and on a letterboxed phone screen the two
+// are nowhere near each other -- a logical rect passed straight through lands
+// far from the field and the platform shifts by the wrong amount, or not at all.
+void SetTextInputAreaLogical(SDL_Renderer *renderer, const SDL_Rect &logical);
 
 #ifdef __WASM_PORT__
 // True when the browser reports touch capability (phones/tablets).

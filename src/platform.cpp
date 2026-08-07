@@ -226,3 +226,20 @@ bool DeviceHasTouchscreen() {
     SDL_free(devices);
     return count > 0;
 }
+
+void SetTextInputAreaLogical(SDL_Renderer *renderer, const SDL_Rect &logical) {
+    SDL_Window *window = renderer ? SDL_GetRenderWindow(renderer) : SDL_GetKeyboardFocus();
+    if (window == nullptr) return;
+    if (renderer == nullptr) {
+        // No renderer to convert with: pass the rect through rather than
+        // dropping the hint entirely. Correct wherever the window is 4:3.
+        SDL_SetTextInputArea(window, &logical, 0);
+        return;
+    }
+    float x0 = 0.f, y0 = 0.f, x1 = 0.f, y1 = 0.f;
+    SDL_RenderCoordinatesToWindow(renderer, (float)logical.x, (float)logical.y, &x0, &y0);
+    SDL_RenderCoordinatesToWindow(renderer, (float)(logical.x + logical.w),
+                                  (float)(logical.y + logical.h), &x1, &y1);
+    SDL_Rect windowRect = { (int)x0, (int)y0, (int)(x1 - x0), (int)(y1 - y0) };
+    SDL_SetTextInputArea(window, &windowRect, 0);
+}
