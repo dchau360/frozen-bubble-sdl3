@@ -183,10 +183,7 @@ bool GameSettings::DefaultMouseEnabled()
     // instead of guessing. SDL registers Android touch devices during video
     // init (Android_InitTouch -> the Java initTouch()), which runs before
     // settings are read, so the answer is already available here.
-    int count = 0;
-    SDL_TouchID *devices = SDL_GetTouchDevices(&count);
-    SDL_free(devices);
-    return count > 0;
+    return DeviceHasTouchscreen();
 #else
     return false;
 #endif

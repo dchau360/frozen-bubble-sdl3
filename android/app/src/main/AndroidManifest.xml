@@ -40,12 +40,21 @@
             android:enabled="false"
             android:exported="false" />
 
-        <!-- Main TV activity -->
+        <!-- Main activity, for TV boxes and phones alike.
+
+             screenOrientation is deliberately not pinned to landscape. One APK
+             serves both, and the manifest cannot tell them apart; the game
+             picks per device at window creation (SDL_HINT_ORIENTATIONS in
+             frozenbubble.cpp: landscape with no touchscreen, portrait with
+             one), and SDL's setRequestedOrientation overrides whatever this
+             says. Left unspecified so the frames before that use the device's
+             own orientation, rather than showing a phone a sideways launch that
+             then snaps upright. -->
         <activity
             android:name=".FrozenBubbleActivity"
             android:label="@string/app_name"
             android:configChanges="keyboard|keyboardHidden|navigation|orientation|screenSize|screenLayout"
-            android:screenOrientation="landscape"
+            android:screenOrientation="unspecified"
             android:exported="true"
             android:launchMode="singleTop">
 

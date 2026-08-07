@@ -146,13 +146,35 @@ FrozenBubble::FrozenBubble() {
     SDL_WindowFlags fullscreen = gameOptions->fullscreenMode() ? SDL_WINDOW_FULLSCREEN : 0;
 #endif
 
-#ifdef __IOS_PORT__
-    // Allowing portrait in the Info.plist is necessary but not sufficient: SDL
-    // intersects the plist's orientations with its own mask, and derives that
-    // mask from the requested window size whenever this hint is unset. The
-    // window is 640x480, so SDL would decide landscape-only on its own and the
-    // device would never rotate. Must be set before the window is created.
+#if defined(__IOS_PORT__) || defined(__ANDROID__)
+    // Screen orientation, decided here rather than in the manifest or the
+    // Info.plist, because neither can express it. Must be set before the window
+    // is created: both backends read this hint while creating it.
+    //
+    // On iOS the plist alone is not enough -- SDL intersects the plist's
+    // orientations with a mask of its own, derived from the requested window
+    // size whenever this hint is unset. The window is 640x480, so SDL decides
+    // landscape-only by itself and the plist never gets a say.
+    //
+    // On Android a single APK serves TV boxes and phones, so the manifest
+    // cannot pick per device; SDL's setRequestedOrientation at window creation
+    // overrides whatever the manifest asked for. A TV is landscape hardware and
+    // stays landscape. A phone gets portrait, which is how it is already being
+    // held.
+    //
+    // Naming both orientations would not give a phone free rotation anyway:
+    // for a non-resizable window SDL breaks the tie by aspect (see
+    // SDLActivity.setOrientationBis), and 640x480 is wider than tall, so
+    // "Portrait LandscapeLeft LandscapeRight" resolves right back to landscape.
+#if defined(__ANDROID__)
+    if (DeviceHasTouchscreen()) {
+        SDL_SetHint(SDL_HINT_ORIENTATIONS, "Portrait");
+    } else {
+        SDL_SetHint(SDL_HINT_ORIENTATIONS, "LandscapeLeft LandscapeRight");
+    }
+#else
     SDL_SetHint(SDL_HINT_ORIENTATIONS, "LandscapeLeft LandscapeRight Portrait");
+#endif
 #endif
 
     window = SDL_CreateWindow("Frozen-Bubble: SDL3", resolution.x, resolution.y, fullscreen);

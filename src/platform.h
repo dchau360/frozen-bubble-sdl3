@@ -69,6 +69,14 @@ void RequestPersistentStorageFlush();
 bool ReplaceFileAtomically(const std::string& tempPath,
                            const std::string& finalPath);
 
+// True when SDL has registered at least one touch device. This is how the game
+// tells an Android phone or tablet from an Android TV box: one APK serves both,
+// and several defaults are opposite between them (aim mode, screen
+// orientation). SDL registers Android touch devices during video init, so the
+// answer is available any time after SDL_Init(SDL_INIT_VIDEO) -- and is empty
+// before it, so callers must not run earlier than that.
+bool DeviceHasTouchscreen();
+
 #ifdef __WASM_PORT__
 // True when the browser reports touch capability (phones/tablets).
 // SDL3's Emscripten backend has no screen-keyboard support, so touch devices

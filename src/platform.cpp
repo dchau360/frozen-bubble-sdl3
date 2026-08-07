@@ -219,3 +219,10 @@ void RequestPersistentStorageFlush() {
     });
 #endif
 }
+
+bool DeviceHasTouchscreen() {
+    int count = 0;
+    SDL_TouchID *devices = SDL_GetTouchDevices(&count);
+    SDL_free(devices);
+    return count > 0;
+}
