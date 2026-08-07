@@ -18,6 +18,7 @@
  */
 
 #include "networkclient.h"
+#include "platform.h"
 #include <algorithm>
 #include <cstring>
 #include <errno.h>
@@ -1751,8 +1752,12 @@ static std::string androidFetchUrl(const char* url) {
 #endif
 
 static void curlFetch(const char* url, std::vector<ServerInfo>& out, bool originalFormat) {
+#if defined(__ANDROID__) || defined(__IOS_PORT__)
 #ifdef __ANDROID__
     std::string body = androidFetchUrl(url);
+#else
+    std::string body = IosFetchUrl(url, 8);
+#endif
     if (body.empty()) return;
 
     // Parse line by line — same logic as the popen path below
@@ -1854,8 +1859,10 @@ std::string NetworkClient::DetectGeoLocation() {
 
     for (const char* url : urls) {
         body.clear();
-#ifdef __ANDROID__
+#if defined(__ANDROID__)
         body = androidFetchUrl(url);
+#elif defined(__IOS_PORT__)
+        body = IosFetchUrl(url, 8);
 #else
         char cmd[256];
         snprintf(cmd, sizeof(cmd), "curl -s --connect-timeout 5 --max-time 8 '%s' 2>/dev/null", url);

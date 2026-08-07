@@ -78,6 +78,18 @@ void InitDataDir() {
     g_dataDir = "/share";  // Virtual filesystem path
 }
 
+#elif defined(__IOS_PORT__)
+
+// iOS bundles are flat: resources sit at the top level of the .app, not under
+// Contents/Resources as on macOS, and SDL_GetBasePath() returns that directory
+// (with a trailing separator). The bundle is the only possible location — iOS
+// has no install prefix to probe and no writable directory outside the app
+// container — so unlike desktop there is no DATA_DIR fallback worth keeping.
+void InitDataDir() {
+    const char* base = SDL_GetBasePath();
+    g_dataDir = base ? std::string(base) + "share" : "share";
+}
+
 #else // Desktop platforms
 
 void InitDataDir() {

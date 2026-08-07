@@ -17,7 +17,12 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
-#ifndef __ANDROID__
+// Android and iOS both need SDL's own entry point: SDL_main.h renames main() and
+// supplies the platform launcher (a JNI-called native activity on Android, a
+// UIApplicationMain shim on iOS). Defining SDL_MAIN_HANDLED there suppresses that
+// shim, and the app links but never gets a UIApplication, so nothing is drawn.
+// Desktop keeps SDL_MAIN_HANDLED so main() stays a plain main().
+#if !defined(__ANDROID__) && !defined(__IOS_PORT__)
 #define SDL_MAIN_HANDLED
 #endif
 #include <SDL3/SDL_main.h>

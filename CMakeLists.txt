@@ -10,7 +10,17 @@ cmake_minimum_required(VERSION 3.13)
 # Android requires to advance per release) and the off-tag fallback in
 # .github/workflows/build.yml. Both are listed in the release checklist in
 # CLAUDE.md and must be bumped together with this line.
-project(frozen-bubble-sdl3 VERSION 2.4.34 LANGUAGES CXX C)
+#
+# iOS additionally needs Objective-C++ for src/platform_ios.mm. It is declared
+# here rather than via a later enable_language(OBJCXX): enabling a language after
+# project() leaves CMake without the compile and archive rules for it, which
+# fails the generate step. CMAKE_SYSTEM_NAME is already readable at this point
+# because the iOS build passes it on the command line.
+set(FB_LANGUAGES CXX C)
+if(CMAKE_SYSTEM_NAME STREQUAL "iOS")
+    list(APPEND FB_LANGUAGES OBJCXX)
+endif()
+project(frozen-bubble-sdl3 VERSION 2.4.34 LANGUAGES ${FB_LANGUAGES})
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/cmake")
 
@@ -24,7 +34,11 @@ if (("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU") OR ("${CMAKE_CXX_COMPILER_ID}" MA
     add_compile_options(-Wall -Wextra -pedantic -Wno-pointer-arith)
 endif()
 
-if(NOT EMSCRIPTEN)
+if(IOS)
+    # No system SDL exists for iOS, and a find_package() here would happily match
+    # the host's macOS Homebrew build. Compile it from the pinned submodules.
+    include(iOSDeps)
+elseif(NOT EMSCRIPTEN)
     find_package(SDL3 REQUIRED)
     find_package(SDL3_image REQUIRED)
     find_package(SDL3_mixer REQUIRED)
@@ -44,11 +58,16 @@ target_include_directories(iniparser-static PUBLIC
 
 # REQUIRED on find_package handles missing libraries
 
-if(NOT WIN32 AND NOT MINGW AND NOT EMSCRIPTEN)
+# fb-server is a desktop host process. iOS forbids fork/exec inside the app
+# sandbox, so nothing could launch it even if it were built and bundled.
+if(NOT WIN32 AND NOT MINGW AND NOT EMSCRIPTEN AND NOT IOS)
     add_subdirectory(server)
 endif()
 
-if(APPLE)
+# Homebrew prefixes hold *macOS* headers. On an iOS build they would shadow the
+# iPhoneOS SDK and produce a binary that links against the wrong platform, so
+# this stays macOS-only rather than applying to every APPLE target.
+if(APPLE AND NOT IOS)
     include_directories("/opt/homebrew/include")
     include_directories("/usr/local/include")
 endif()
@@ -65,6 +84,14 @@ if(EMSCRIPTEN)
     set(NETWORK_CLIENT_SRC src/networkclient.cpp src/networkclient_wasm.cpp)
 else()
     set(NETWORK_CLIENT_SRC src/networkclient.cpp)
+endif()
+
+# iOS needs one Objective-C++ file (NSURLSession stands in for the desktop
+# popen("curl ...")); the OBJCXX language is enabled in project() above.
+if(IOS)
+    set(PLATFORM_EXTRA_SRC src/platform_ios.mm)
+else()
+    set(PLATFORM_EXTRA_SRC "")
 endif()
 
 set(FROZEN_BUBBLE_CORE_SOURCES
@@ -96,6 +123,7 @@ set(FROZEN_BUBBLE_CORE_SOURCES
     ${NETWORK_CLIENT_SRC}
     src/logger.cpp
     src/platform.cpp
+    ${PLATFORM_EXTRA_SRC}
 )
 
 add_executable(frozen-bubble-sdl3
@@ -150,6 +178,11 @@ if(ANDROID)
     # Android TV build configuration
     target_compile_definitions(frozen-bubble-sdl3 PRIVATE __ANDROID_PORT__)
     # DATA_DIR not needed on Android - assets loaded via asset manager
+elseif(IOS)
+    # No DATA_DIR: assets resolve from SDL_GetBasePath() inside the .app bundle,
+    # and a compile-time path baked in from this machine could only ever be wrong
+    # on a device (the same trap REL-008 recorded for installed macOS builds).
+    target_compile_definitions(frozen-bubble-sdl3 PRIVATE __IOS_PORT__)
 elseif(EMSCRIPTEN)
     target_compile_definitions(frozen-bubble-sdl3 PRIVATE __WASM_PORT__ DATA_DIR=\"/share\")
 else()
@@ -177,8 +210,40 @@ if(WIN32 OR MINGW)
     target_link_libraries(frozen-bubble-sdl3 PRIVATE ws2_32)
 endif()
 
+if(IOS)
+    set(FB_IOS_EXECUTABLE "FrozenBubble")
+    set(FB_IOS_BUNDLE_ID "org.frozenbubble.sdl3" CACHE STRING
+        "iOS bundle identifier")
+    configure_file("${CMAKE_SOURCE_DIR}/cmake/iOSInfo.plist.in"
+                   "${CMAKE_BINARY_DIR}/Info.plist" @ONLY)
+
+    set_target_properties(frozen-bubble-sdl3 PROPERTIES
+        OUTPUT_NAME "${FB_IOS_EXECUTABLE}"
+        MACOSX_BUNDLE TRUE
+        MACOSX_BUNDLE_INFO_PLIST "${CMAKE_BINARY_DIR}/Info.plist"
+        # Unsigned by request. Left explicit so an Xcode-generator build does not
+        # quietly pick up a development identity and produce an artifact that
+        # only installs on the machine that built it.
+        XCODE_ATTRIBUTE_CODE_SIGNING_ALLOWED "NO"
+        XCODE_ATTRIBUTE_CODE_SIGNING_REQUIRED "NO"
+        XCODE_ATTRIBUTE_CODE_SIGN_IDENTITY ""
+    )
+
+    # An iOS bundle is flat -- resources live at the top level of the .app, not
+    # under Contents/Resources -- which is exactly what TARGET_BUNDLE_CONTENT_DIR
+    # expands to here. copy_directory_if_different keeps incremental builds from
+    # recopying 3000+ sprites on every link.
+    add_custom_command(TARGET frozen-bubble-sdl3 POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_directory_if_different
+                "${CMAKE_SOURCE_DIR}/share"
+                "$<TARGET_BUNDLE_CONTENT_DIR:frozen-bubble-sdl3>/share"
+        COMMENT "Copying game assets into the app bundle"
+        VERBATIM)
+endif()
+
 include(CTest)
-if(BUILD_TESTING AND NOT EMSCRIPTEN AND NOT ANDROID)
+# The test executables are host tools: ctest would have to run them on a device.
+if(BUILD_TESTING AND NOT EMSCRIPTEN AND NOT ANDROID AND NOT IOS)
     find_package(Python3 COMPONENTS Interpreter REQUIRED)
 
     add_executable(bubblegame-rules-test
@@ -336,19 +401,24 @@ if(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
     endif()
 endif()
 
-# Install executable
-install(TARGETS frozen-bubble-sdl3
-    RUNTIME DESTINATION bin
-    COMPONENT runtime
-)
+# Nothing to install on iOS: the deliverable is the .app bundle itself, which
+# already carries its assets, and CMake rejects a MACOSX_BUNDLE target given a
+# RUNTIME destination anyway.
+if(NOT IOS)
+    # Install executable
+    install(TARGETS frozen-bubble-sdl3
+        RUNTIME DESTINATION bin
+        COMPONENT runtime
+    )
 
-# Install game assets
-install(DIRECTORY ${CMAKE_SOURCE_DIR}/share/
-    DESTINATION share/frozen-bubble
-    COMPONENT assets
-    PATTERN ".DS_Store" EXCLUDE
-    PATTERN "*.md" EXCLUDE
-)
+    # Install game assets
+    install(DIRECTORY ${CMAKE_SOURCE_DIR}/share/
+        DESTINATION share/frozen-bubble
+        COMPONENT assets
+        PATTERN ".DS_Store" EXCLUDE
+        PATTERN "*.md" EXCLUDE
+    )
+endif()
 
 # Set asset path for installed version
 if(CMAKE_INSTALL_PREFIX)

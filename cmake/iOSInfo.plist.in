@@ -1,0 +1,105 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleDevelopmentRegion</key>
+    <string>en</string>
+    <key>CFBundleExecutable</key>
+    <string>@FB_IOS_EXECUTABLE@</string>
+    <key>CFBundleIdentifier</key>
+    <string>@FB_IOS_BUNDLE_ID@</string>
+    <key>CFBundleInfoDictionaryVersion</key>
+    <string>6.0</string>
+    <key>CFBundleName</key>
+    <string>Frozen Bubble</string>
+    <key>CFBundleDisplayName</key>
+    <string>Frozen Bubble</string>
+    <key>CFBundlePackageType</key>
+    <string>APPL</string>
+    <key>CFBundleShortVersionString</key>
+    <string>@PROJECT_VERSION@</string>
+    <key>CFBundleVersion</key>
+    <string>@PROJECT_VERSION@</string>
+    <key>CFBundleSupportedPlatforms</key>
+    <array>
+        <string>iPhoneOS</string>
+    </array>
+    <key>DTPlatformName</key>
+    <string>iphoneos</string>
+    <key>MinimumOSVersion</key>
+    <string>@CMAKE_OSX_DEPLOYMENT_TARGET@</string>
+
+    <!-- 1 = iPhone/iPod touch, 2 = iPad. -->
+    <key>UIDeviceFamily</key>
+    <array>
+        <integer>1</integer>
+        <integer>2</integer>
+    </array>
+    <key>UIRequiredDeviceCapabilities</key>
+    <array>
+        <string>arm64</string>
+    </array>
+
+    <!-- An empty UILaunchScreen dict is what tells iOS the app is built against
+         a modern SDK. Without any launch-screen key the system runs it in
+         compatibility mode at a legacy resolution and letterboxes the result,
+         so the 640x480 canvas would be scaled twice and end up soft. -->
+    <key>UILaunchScreen</key>
+    <dict/>
+
+    <!-- The playfield is a fixed 640x480 landscape canvas. Allowing portrait
+         would letterbox it into a thin strip with the aim controls off in the
+         margins, so the app is landscape-only on both device families. -->
+    <key>UISupportedInterfaceOrientations</key>
+    <array>
+        <string>UIInterfaceOrientationLandscapeLeft</string>
+        <string>UIInterfaceOrientationLandscapeRight</string>
+    </array>
+    <key>UISupportedInterfaceOrientations~ipad</key>
+    <array>
+        <string>UIInterfaceOrientationLandscapeLeft</string>
+        <string>UIInterfaceOrientationLandscapeRight</string>
+    </array>
+
+    <!-- Without this, UIKit refuses to deliver pointer events and SDL logs
+         "You need UIApplicationSupportsIndirectInputEvents in your Info.plist
+         for mouse support" at launch. It is what makes a trackpad or Bluetooth
+         mouse work on iPad; touch is unaffected either way. -->
+    <key>UIApplicationSupportsIndirectInputEvents</key>
+    <true/>
+
+    <key>UIStatusBarHidden</key>
+    <true/>
+    <key>UIViewControllerBasedStatusBarAppearance</key>
+    <false/>
+    <key>UIRequiresFullScreen</key>
+    <true/>
+
+    <!-- App Transport Security blocks plaintext HTTP by default. Two of the
+         server-discovery endpoints are http:// only and are not under this
+         project's control, so they get named exceptions rather than the blanket
+         NSAllowsArbitraryLoads, which would also drop TLS enforcement for the
+         GitHub server list. Netplay itself is a raw TCP socket, which ATS does
+         not govern at all. -->
+    <key>NSAppTransportSecurity</key>
+    <dict>
+        <key>NSExceptionDomains</key>
+        <dict>
+            <key>frozen-bubble.org</key>
+            <dict>
+                <key>NSExceptionAllowsInsecureHTTPLoads</key>
+                <true/>
+                <key>NSIncludesSubdomains</key>
+                <true/>
+            </dict>
+            <key>ip-api.com</key>
+            <dict>
+                <key>NSExceptionAllowsInsecureHTTPLoads</key>
+                <true/>
+                <key>NSIncludesSubdomains</key>
+                <true/>
+            </dict>
+        </dict>
+    </dict>
+</dict>
+</plist>

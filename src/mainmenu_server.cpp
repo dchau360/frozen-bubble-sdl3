@@ -77,7 +77,7 @@ bool portInUse(int port) {
 
 
 void MainMenu::StartLocalServer() {
-#if defined(__ANDROID__) || defined(__WASM_PORT__) || defined(_WIN32)
+#if defined(__ANDROID__) || defined(__WASM_PORT__) || defined(_WIN32) || defined(__IOS_PORT__)
     SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Cannot host server on this platform");
     connectErrorMsg = "Server hosting not available on this platform";
     return;
@@ -178,7 +178,7 @@ void MainMenu::StartLocalServer() {
 
 
 void MainMenu::StopLocalServer() {
-#if defined(__ANDROID__) || defined(__WASM_PORT__) || defined(_WIN32)
+#if defined(__ANDROID__) || defined(__WASM_PORT__) || defined(_WIN32) || defined(__IOS_PORT__)
     return;
 #else
     if (!serverHosting || serverPid <= 0) {

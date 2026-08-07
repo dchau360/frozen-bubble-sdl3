@@ -96,6 +96,19 @@ FrozenBubble::FrozenBubble() {
         logFilename = "frozen-bubble-joiner4.log";
     }
 
+#ifdef __IOS_PORT__
+    // The names above let several desktop clients started from one directory keep
+    // separate logs. iOS runs a single instance, and its working directory is the
+    // app bundle: writable in the simulator, read-only and signed on a device, so
+    // a relative path logs fine under test and then silently stops on hardware.
+    // Use the same writable container the settings file already goes to.
+    std::string iosLogPath;
+    if (const char* pref = SDL_GetPrefPath("", "frozen-bubble")) {
+        iosLogPath = std::string(pref) + "frozen-bubble.log";
+        logFilename = iosLogPath.c_str();
+    }
+#endif
+
     Logger::Initialize(logFilename);
 
     // Verify asset directory exists before proceeding

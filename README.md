@@ -21,6 +21,11 @@ Latest builds are on the [releases page](https://github.com/dchau360/frozen-bubb
 | **Android TV** | `frozen-bubble-android-tv.apk` | Or sideload — see [Android TV](#android-tv) |
 | **Browser** | [Play on itch.io](https://dchau360.itch.io/frozenbubble2) | Works on desktop and mobile, including iPhone |
 
+**iOS** has no download: the build exists but is experimental and unsigned, so it
+must be re-signed before a device will install it. Build it yourself with
+`tools/build-ios.sh` — see [docs/IOS.md](docs/IOS.md). To just play on an iPhone,
+use the browser build above.
+
 Building from source: [docs/BUILDING.md](docs/BUILDING.md).
 
 ---
@@ -121,7 +126,8 @@ Or right-click the app → **Open** → **Open** to bypass Gatekeeper once.
 ## More
 
 - [Changelog](CHANGELOG.md) — release history
-- [Building from source](docs/BUILDING.md) — all platforms, including WebAssembly and Android
+- [Building from source](docs/BUILDING.md) — all platforms, including WebAssembly, Android and iOS
+- [iOS notes](docs/IOS.md) — experimental unsigned build, and how to sign it
 - [Compared with the original](docs/PARITY.md) — features added, fixes to the original's own server code, and what's reproduced unchanged
 - [Browser build notes](web/README.md) — saved data, Emscripten port status, serving locally
 

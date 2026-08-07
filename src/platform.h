@@ -81,4 +81,12 @@ bool WasmHasTouch();
 bool WasmPromptText(const char* title, const char* current, char* out, int outLen);
 #endif
 
+#ifdef __IOS_PORT__
+// Blocking HTTP GET, returning the response body ("" on any failure).
+// Defined in platform_ios.mm. iOS blocks fork/exec inside the app sandbox and
+// ships no curl binary, so the desktop popen("curl ...") path returns nothing
+// there; this is the iOS counterpart of Android's JNI fetchUrl().
+std::string IosFetchUrl(const char* url, int timeoutSeconds);
+#endif
+
 #endif // PLATFORM_H

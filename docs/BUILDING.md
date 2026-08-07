@@ -140,3 +140,17 @@ cd android && ./gradlew assembleRelease
 Release signing uses a persistent key from repository secrets — a tagged build
 fails rather than shipping an APK that cannot be upgraded over the previous
 one. See [ANDROID_SIGNING.md](ANDROID_SIGNING.md).
+
+## iOS
+
+Experimental, and the artifact is unsigned — it will not install on a stock
+device without being re-signed first. Needs full Xcode and the same SDL3
+submodules as the Android build.
+
+```bash
+tools/build-ios.sh              # build-ios/frozen-bubble-sdl3-unsigned.ipa
+tools/build-ios.sh --simulator  # runs in the iOS Simulator
+```
+
+See [IOS.md](IOS.md) for what differs from the other platforms, what does not
+work yet, and how to sign the result.
