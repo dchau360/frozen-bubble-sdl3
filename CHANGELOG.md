@@ -1,5 +1,46 @@
 # Changelog
 
+## v2.4.35
+
+- **New: an experimental iOS build**, produced by `tools/build-ios.sh`. It is
+  **unsigned**, so it has to be re-signed before a device will install it, and
+  nothing is published on the releases page — to play on an iPhone today, use
+  the browser build. SDL3 and its satellites are compiled from source for the
+  platform, assets resolve from inside the app bundle, saves and logs go to the
+  app container, and HTTP goes through NSURLSession since iOS ships no `curl`.
+  Hosting a LAN game is unavailable there, as on Android and Windows. See
+  [docs/IOS.md](docs/IOS.md), including what is still unverified.
+- **Mouse and touch aiming now default to on where there is no keyboard** — in
+  the browser, on iOS, and on Android phones and tablets — and stay off on
+  desktop and Android TV. A single Android APK serves both TV boxes and phones,
+  so the default is decided at runtime from whether the device has a
+  touchscreen. A stored preference still wins, and keyboard and controller
+  aiming keep working alongside it.
+- **New: "Reset all settings"**, at the bottom of Settings → Keys. It restores
+  key bindings, speed, sound and mouse aim, and asks for a second press before
+  doing anything.
+- **List-style panels are now tap-to-select on touch devices** — settings, the
+  LAN and Net server lists, the connect form, and the online lobby and game
+  room. The first tap on a row highlights it and a second tap activates it, so
+  a row can be read before it changes. In the game room's per-player grid a tap
+  picks the cell first, so a mis-tap no longer changes the wrong player's
+  setting.
+- **3-player rounds no longer keep the death-enlarged launcher** — every other
+  player count put it back, and the offset also drifted a pixel per death
+  instead of applying once.
+- **Clearing a single-player level no longer scores twice** — a chain bubble
+  still in flight when the win panel appeared could re-enter the scoring branch,
+  awarding a second 1000 and writing a duplicate row into the high scores and
+  the level history.
+- **The training-mode clock no longer counts paused time**, matching the
+  high-score timer beside it.
+- **Replugging a controller now works** — each hotplug leaked a gamepad and
+  consumed a slot permanently, eventually walking a pad into a slot past the
+  bindings where its buttons silently stopped responding.
+- **Muting no longer restarts the music** — muting stopped playback outright, so
+  unmuting had to name a track and always resumed the in-game theme regardless
+  of what had been playing. It now pauses and resumes.
+
 ## v2.4.34
 
 - **Android upgrades no longer strand a half-extracted asset tree** — installing
