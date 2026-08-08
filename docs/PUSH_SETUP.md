@@ -8,6 +8,12 @@ registry, the relay — is already built and works without them, logging what it
 
 This is the operator/developer side. Players need none of it.
 
+> **Status:** Android has been verified end to end on a real device — a real
+> FCM token, a real join event, a real banner. iOS is built the same way but
+> has not yet been confirmed against a real APNs delivery (needs a paid
+> Apple Developer account); everything short of the live Apple round-trip
+> works today.
+
 > **Cost:** Firebase Cloud Messaging is free. APNs requires a **paid Apple
 > Developer Program membership, $99/year** — free Apple IDs cannot create push
 > keys at all.
@@ -173,7 +179,8 @@ Android can go live while iOS waits for your membership.
    ```bash
    docker compose exec fb-server cat /var/lib/fb-server/notify.dat
    ```
-   You should see one line: `ios <token> <registered> <last-notified>`.
+   You should see one line: `<platform> <token> <registered> <last-notified>`
+   (`ios` or `android`).
 5. Background or close the app.
 6. From another device, join a room on that server.
 7. The banner should arrive within a few seconds. `docker compose logs

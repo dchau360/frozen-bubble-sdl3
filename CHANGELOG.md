@@ -48,6 +48,23 @@
   `FrozenBubble.entitlements` to sign with. See
   [docs/PUSH_SETUP.md](docs/PUSH_SETUP.md) for both consoles end to end.
 
+  **Android verified end to end on real hardware**, including two bugs only a
+  real device and real credentials could surface: `androidPushToken()` looked
+  up `PushManager` with `FindClass()` by name, which silently returns null
+  when called from a thread the JVM didn't create — the SDL game thread is
+  exactly that — so no real device ever obtained a token. Fixed by routing
+  through a one-line static wrapper on `FrozenBubbleActivity` instead, reached
+  via the already-valid Activity object rather than a name lookup, mirroring
+  `androidFetchUrl()`. Separately, `notify-relay`'s pinned `apns2` dependency
+  turned out to hard-require `PyJWT<2.0` while `firebase-admin` requires
+  `PyJWT>=2.5.0` — no version of either satisfies both, so the relay image
+  could never have built with real credentials at all, blocking Android
+  delivery too. Replaced with `aioapns`, moving the relay's receive loop onto
+  `asyncio` in the process (a persistent APNs connection instead of
+  reconnecting per push, and FCM's blocking call now runs via
+  `asyncio.to_thread`). iOS delivery remains unverified against a real device
+  pending Apple Developer Program enrollment.
+
 ## v2.4.36
 
 - **Touch taps and swipes now land in the right place off a 4:3 screen.** They
