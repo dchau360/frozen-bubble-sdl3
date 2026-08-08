@@ -44,3 +44,6 @@ keystore.properties
 # and must never be committed. See docs/PUSH_SETUP.md.
 android/app/google-services.json
 *.p8
+
+# docker-compose environment overrides — holds credential file paths.
+docker/.env

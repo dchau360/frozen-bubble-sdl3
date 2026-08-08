@@ -99,6 +99,25 @@ public class FrozenBubbleActivity extends SDLActivity {
      * Must be called from a background thread (not the main/UI thread).
      * Returns the response body as a string, or "" on error.
      */
+    /**
+     * Called from C++ via JNI to get this device's FCM push token.
+     * Must be called from a background thread (not the main/UI thread) --
+     * PushManager.getToken() blocks. Returns "" if there isn't one.
+     *
+     * A thin wrapper rather than calling PushManager directly by class name:
+     * JNI's FindClass("org/frozenbubble/PushManager") fails when called from
+     * a native thread the JVM did not create (SDL's game thread is exactly
+     * that) because it resolves against the wrong classloader off the main
+     * thread -- a well-known JNI trap. Routing through a static method
+     * already on FrozenBubbleActivity sidesteps it: the native side reaches
+     * this class via GetObjectClass() on the already-valid Activity object
+     * (see androidFetchUrl() in networkclient.cpp for the identical pattern),
+     * which needs no name-based class lookup at all.
+     */
+    public static String getPushToken() {
+        return PushManager.getToken();
+    }
+
     public static String fetchUrl(String urlStr) {
         try {
             URL url = new URL(urlStr);

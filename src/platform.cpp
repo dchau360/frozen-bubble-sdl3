@@ -255,25 +255,30 @@ const char* PushPlatformName() {
 }
 
 #if defined(__ANDROID__) || defined(__ANDROID_PORT__)
-// Calls PushManager.getToken() -> String, the same JNI shape androidFetchUrl()
-// in networkclient.cpp uses. Blocking, so it must not run on the UI thread;
-// the SDL thread this is called from is not the UI thread.
+// Calls FrozenBubbleActivity.getPushToken() -> String, which just delegates to
+// PushManager.getToken(). Blocking, so it must not run on the UI thread; the
+// SDL thread this is called from is not the UI thread.
+//
+// Goes through the Activity object (SDL_GetAndroidActivity() +
+// GetObjectClass()) rather than FindClass("org/frozenbubble/PushManager") by
+// name -- the exact same shape androidFetchUrl() in networkclient.cpp already
+// uses. FindClass-by-name resolves against the wrong classloader when called
+// from a thread the JVM did not create, which the SDL game thread is; it
+// silently returns null there instead of throwing anything logged. Looking up
+// a method on an already-valid jobject has no such problem, which is why
+// PushManager itself is reached only through this one-line wrapper.
 static std::string androidPushToken() {
     JNIEnv *env = (JNIEnv *)SDL_GetAndroidJNIEnv();
-    if (env == nullptr) return "";
+    jobject activity = (jobject)SDL_GetAndroidActivity();
+    if (!env || !activity) return "";
 
-    jclass cls = env->FindClass("org/frozenbubble/PushManager");
-    if (cls == nullptr) {
-        // A build without the class at all -- clear the pending exception or
-        // the next JNI call in this thread inherits it.
-        env->ExceptionClear();
-        return "";
-    }
-
-    jmethodID mid = env->GetStaticMethodID(cls, "getToken", "()Ljava/lang/String;");
-    if (mid == nullptr) {
+    jclass cls = env->GetObjectClass(activity);
+    jmethodID mid = env->GetStaticMethodID(cls, "getPushToken", "()Ljava/lang/String;");
+    if (!mid) {
+        SDL_Log("androidPushToken: getPushToken method not found");
         env->ExceptionClear();
         env->DeleteLocalRef(cls);
+        env->DeleteLocalRef(activity);
         return "";
     }
 
@@ -281,9 +286,11 @@ static std::string androidPushToken() {
     if (env->ExceptionCheck()) {
         env->ExceptionClear();
         env->DeleteLocalRef(cls);
+        env->DeleteLocalRef(activity);
         return "";
     }
     env->DeleteLocalRef(cls);
+    env->DeleteLocalRef(activity);
 
     if (jresult == nullptr) return "";
     const char *chars = env->GetStringUTFChars(jresult, nullptr);

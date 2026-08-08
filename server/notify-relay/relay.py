@@ -29,9 +29,9 @@ Environment:
     FCM_SERVICE_ACCOUNT_JSON  path to a service-account JSON, for live Android
 """
 
+import asyncio
 import logging
 import os
-import socket
 import sys
 
 LOG_FORMAT = "%(asctime)s %(levelname)s %(message)s"
@@ -51,64 +51,73 @@ def _redact(token):
 
 
 class ApnsSender:
-    """Live APNs delivery. Constructed only when all four APNS_* vars are set."""
+    """Live APNs delivery. Constructed only when all four APNS_* vars are set.
+
+    Uses aioapns rather than the more commonly seen `apns2` package: apns2 has
+    not been released in years and hard-pins PyJWT<2.0, which is flatly
+    incompatible with firebase-admin's PyJWT>=2.5.0 -- the two cannot appear in
+    the same requirements.txt at all, let alone the same virtualenv. aioapns is
+    async (a natural fit once FCM's blocking call forced this module onto an
+    event loop anyway) and keeps one persistent HTTP/2 connection rather than
+    reconnecting per notification.
+    """
 
     def __init__(self, key_path, key_id, team_id, topic, use_sandbox):
-        self.key_path = key_path
-        self.key_id = key_id
-        self.team_id = team_id
         self.topic = topic
         self.use_sandbox = use_sandbox
-        self._client = None
+        # Imported lazily so stub mode has no third-party dependency at all.
+        from aioapns import APNs  # type: ignore
 
-    def _client_lazy(self):
-        if self._client is None:
-            # Imported lazily so stub mode has no third-party dependency at all.
-            from apns2.client import APNsClient  # type: ignore
-            from apns2.credentials import TokenCredentials  # type: ignore
+        self._client = APNs(
+            key=key_path,
+            key_id=key_id,
+            team_id=team_id,
+            topic=topic,
+            use_sandbox=use_sandbox,
+        )
 
-            creds = TokenCredentials(
-                auth_key_path=self.key_path,
-                auth_key_id=self.key_id,
-                team_id=self.team_id,
-            )
-            self._client = APNsClient(credentials=creds, use_sandbox=self.use_sandbox)
-        return self._client
+    async def send(self, token, message):
+        from aioapns import NotificationRequest  # type: ignore
 
-    def send(self, token, message):
-        from apns2.payload import Payload  # type: ignore
-
-        payload = Payload(alert=message, sound="default", badge=1)
-        self._client_lazy().send_notification(token, payload, self.topic)
+        request = NotificationRequest(
+            device_token=token,
+            message={"aps": {"alert": message, "sound": "default", "badge": 1}},
+            apns_topic=self.topic,
+        )
+        result = await self._client.send_notification(request)
+        if not result.is_successful:
+            raise RuntimeError(f"APNs rejected the push: {result.status} {result.description}")
 
 
 class FcmSender:
     """Live FCM delivery. Constructed only when FCM_SERVICE_ACCOUNT_JSON is set."""
 
     def __init__(self, service_account_path):
-        self.service_account_path = service_account_path
-        self._messaging = None
+        # Imported lazily so stub mode has no third-party dependency at all.
+        import firebase_admin  # type: ignore
+        from firebase_admin import credentials  # type: ignore
 
-    def _messaging_lazy(self):
-        if self._messaging is None:
-            import firebase_admin  # type: ignore
-            from firebase_admin import credentials, messaging  # type: ignore
+        cred = credentials.Certificate(service_account_path)
+        try:
+            firebase_admin.get_app()
+        except ValueError:
+            firebase_admin.initialize_app(cred)
 
-            cred = credentials.Certificate(self.service_account_path)
-            try:
-                firebase_admin.get_app()
-            except ValueError:
-                firebase_admin.initialize_app(cred)
-            self._messaging = messaging
-        return self._messaging
+    async def send(self, token, message):
+        # firebase-admin's messaging.send() is a blocking HTTP call with no
+        # async variant; run it off the event loop thread so one slow FCM
+        # request cannot delay every other pending notification (APNs
+        # included, since both senders now share this loop).
+        from firebase_admin import messaging  # type: ignore
 
-    def send(self, token, message):
-        messaging = self._messaging_lazy()
-        msg = messaging.Message(
-            notification=messaging.Notification(title="Frozen Bubble", body=message),
-            token=token,
-        )
-        messaging.send(msg)
+        def _send_sync():
+            msg = messaging.Message(
+                notification=messaging.Notification(title="Frozen Bubble", body=message),
+                token=token,
+            )
+            messaging.send(msg)
+
+        await asyncio.to_thread(_send_sync)
 
 
 def build_senders():
@@ -139,7 +148,7 @@ def build_senders():
     return senders
 
 
-def handle_datagram(data, senders):
+async def handle_datagram(data, senders):
     try:
         text = data.decode("utf-8", errors="replace").strip()
     except Exception:
@@ -167,7 +176,7 @@ def handle_datagram(data, senders):
         return
 
     try:
-        sender.send(token, message)
+        await sender.send(token, message)
         log.info("pushed to %s token=%s", platform, _redact(token))
     except Exception as exc:
         # A delivery failure must never take the relay down -- the game server
@@ -176,7 +185,20 @@ def handle_datagram(data, senders):
                   platform, _redact(token), exc)
 
 
-def main():
+class _RelayProtocol(asyncio.DatagramProtocol):
+    """Fans each datagram out to its own task rather than awaiting it inline,
+    so one slow push (APNs/FCM both do real network I/O) can never delay the
+    next datagram from being picked up off the socket."""
+
+    def __init__(self, senders):
+        self.senders = senders
+
+    def datagram_received(self, data, addr):
+        log.debug("datagram from %s", addr)
+        asyncio.ensure_future(handle_datagram(data, self.senders))
+
+
+async def async_main():
     bind = os.environ.get("NOTIFY_RELAY_BIND", "0.0.0.0:9099")
     if ":" not in bind:
         log.error("NOTIFY_RELAY_BIND must be host:port, got %r", bind)
@@ -190,22 +212,28 @@ def main():
 
     senders = build_senders()
 
-    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    sock.bind((host, port))
+    loop = asyncio.get_running_loop()
+    transport, _ = await loop.create_datagram_endpoint(
+        lambda: _RelayProtocol(senders),
+        local_addr=(host, port),
+    )
     log.info("notify-relay listening on %s:%d", host, port)
 
-    while True:
-        try:
-            data, addr = sock.recvfrom(MAX_DATAGRAM)
-        except KeyboardInterrupt:
-            log.info("shutting down")
-            return 0
-        except OSError as exc:
-            log.error("recvfrom failed: %s", exc)
-            continue
-        log.debug("datagram from %s", addr)
-        handle_datagram(data, senders)
+    try:
+        await asyncio.Event().wait()   # run until killed
+    except asyncio.CancelledError:
+        pass
+    finally:
+        transport.close()
+    return 0
+
+
+def main():
+    try:
+        return asyncio.run(async_main())
+    except KeyboardInterrupt:
+        log.info("shutting down")
+        return 0
 
 
 if __name__ == "__main__":

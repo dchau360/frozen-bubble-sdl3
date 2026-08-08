@@ -1,4 +1,9 @@
 # Only needed for LIVE delivery. In stub mode (no APNS_*/FCM_* env vars set)
 # relay.py imports neither of these -- it runs on a bare Python 3 install.
-apns2==0.7.2
+#
+# aioapns, not the more commonly seen apns2: apns2 hard-pins PyJWT<2.0, which
+# is flatly incompatible with firebase-admin's PyJWT>=2.5.0 -- the two cannot
+# coexist in one requirements.txt, let alone one virtualenv, so this image
+# could never build with apns2 listed alongside firebase-admin.
+aioapns==4.0
 firebase-admin==6.5.0
