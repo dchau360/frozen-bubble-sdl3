@@ -61,6 +61,10 @@ public class FrozenBubbleActivity extends SDLActivity {
 
         // Initialize billing client (restores prior purchases on connect)
         mBillingManager = new BillingManager(this);
+
+        // Ask for notification permission (Android 13+). Cheap and does not
+        // touch the SDL surface, unlike the AdMob init deferred above.
+        PushManager.init(this);
     }
 
     @Override

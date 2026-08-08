@@ -10,6 +10,43 @@ services:
     restart: unless-stopped
     ports:
       - "1511:1511"        # native TCP clients connect here directly
+    environment:
+      # Where to fire "someone joined" datagrams for players who followed this
+      # server. Resolved over the compose-internal network by service name.
+      # Comment this out to accept follow registrations but never send.
+      - FB_SERVER_NOTIFY_RELAY=notify-relay:9099
+      - FB_SERVER_NOTIFY_FILE=/var/lib/fb-server/notify.dat
+    volumes:
+      # Follow registrations must survive a redeploy, or every follower is
+      # silently dropped whenever the stack is rebuilt.
+      - fb-notify-data:/var/lib/fb-server
+    depends_on:
+      - notify-relay
+
+  # ── Push-notification relay ─────────────────────────────────────────────────
+  # Owns the actual APNs/FCM delivery, which fb-server cannot do itself (no TLS
+  # stack, and a single blocking event loop that must not stall mid-game).
+  # Runs in stub mode — logging what it would send — until credentials are
+  # supplied. See server/notify-relay/README.md.
+  notify-relay:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.notify-relay
+    restart: unless-stopped
+    environment:
+      - NOTIFY_RELAY_BIND=0.0.0.0:9099
+      # Live iOS delivery — all four required, otherwise iOS stays in stub mode.
+      - APNS_KEY_PATH=${APNS_KEY_PATH:-}
+      - APNS_KEY_ID=${APNS_KEY_ID:-}
+      - APNS_TEAM_ID=${APNS_TEAM_ID:-}
+      - APNS_TOPIC=${APNS_TOPIC:-}
+      - APNS_USE_SANDBOX=${APNS_USE_SANDBOX:-}
+      # Live Android delivery, otherwise Android stays in stub mode.
+      - FCM_SERVICE_ACCOUNT_JSON=${FCM_SERVICE_ACCOUNT_JSON:-}
+    volumes:
+      # Credential files live outside the image; the directory is optional and
+      # only needs to exist if you configured the paths above to point into it.
+      - ./push-credentials:/credentials:ro
 
   # ── nginx TLS termination ───────────────────────────────────────────────────
   # Terminates SSL and proxies WebSocket connections to fb-server.
@@ -26,3 +63,6 @@ services:
       - ./ssl/privkey.pem:/etc/ssl/fb/privkey.pem:ro
     depends_on:
       - fb-server
+
+volumes:
+  fb-notify-data:

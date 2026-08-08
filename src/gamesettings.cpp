@@ -275,7 +275,72 @@ void GameSettings::ReadSettings()
     mouseEnabled = iniparser_getboolean(optDict, "Keys:MouseEnabled",
                                         DefaultMouseEnabled());
 
+    LoadFollowedServers();
+
     LoadDefaultKeys();
+}
+
+// Followed servers are stored as numbered slots ("Servers:Followed0Host", ...)
+// with an explicit count, the same fixed-slot shape the P1-P5 key bindings use
+// below. The count is authoritative: slots beyond it are ignored even if the
+// file still holds them.
+void GameSettings::LoadFollowedServers()
+{
+    followedServers.clear();
+
+    int count = iniparser_getint(optDict, "Servers:FollowedCount", 0);
+    if (count < 0) count = 0;
+    if (count > kMaxFollowedServers) count = kMaxFollowedServers;
+
+    for (int i = 0; i < count; i++) {
+        char key[64];
+        snprintf(key, sizeof(key), "Servers:Followed%dHost", i);
+        const char* host = iniparser_getstring(optDict, key, "");
+        snprintf(key, sizeof(key), "Servers:Followed%dPort", i);
+        const int port = iniparser_getint(optDict, key, 0);
+        snprintf(key, sizeof(key), "Servers:Followed%dName", i);
+        const char* label = iniparser_getstring(optDict, key, "");
+
+        // A slot with no host or a nonsense port is unusable -- drop it rather
+        // than carrying an entry that can never match a real server.
+        if (!host || !*host) continue;
+        if (port <= 0 || port > 65535) continue;
+
+        FollowedServer fs;
+        fs.host = host;
+        fs.port = port;
+        fs.label = label ? label : "";
+        followedServers.push_back(fs);
+    }
+}
+
+bool GameSettings::IsServerFollowed(const std::string& host, int port) const
+{
+    for (const FollowedServer& fs : followedServers) {
+        if (fs.port == port && fs.host == host) return true;
+    }
+    return false;
+}
+
+bool GameSettings::ToggleServerFollowed(const std::string& host, int port,
+                                        const std::string& label)
+{
+    for (size_t i = 0; i < followedServers.size(); i++) {
+        if (followedServers[i].port == port && followedServers[i].host == host) {
+            followedServers.erase(followedServers.begin() + (long)i);
+            return false;
+        }
+    }
+
+    if (host.empty() || port <= 0 || port > 65535) return false;
+    if ((int)followedServers.size() >= kMaxFollowedServers) return false;
+
+    FollowedServer fs;
+    fs.host = host;
+    fs.port = port;
+    fs.label = label;
+    followedServers.push_back(fs);
+    return true;
 }
 
 // Key bindings were cast straight from the ini integer to SDL_Scancode with no
@@ -369,7 +434,34 @@ void GameSettings::SaveKeys()
     iniparser_set(optDict, "Keys:P5Fire", std::to_string(player5Keys.fire).c_str());
     iniparser_set(optDict, "Keys:P5Center", std::to_string(player5Keys.center).c_str());
 
+    SaveFollowedServers();
+
     SaveSettings();
+}
+
+void GameSettings::SaveFollowedServers()
+{
+    // Section header has to exist or iniparser_dump_ini drops every key under it.
+    iniparser_set(optDict, "Servers", NULL);
+
+    const int count = (int)followedServers.size();
+    iniparser_set(optDict, "Servers:FollowedCount", std::to_string(count).c_str());
+
+    for (int i = 0; i < kMaxFollowedServers; i++) {
+        char key[64];
+        const bool used = i < count;
+
+        // Unused slots are blanked rather than left behind: a stale host from
+        // a previously longer list is confusing to anyone reading the file,
+        // even though the count above already stops it being loaded.
+        snprintf(key, sizeof(key), "Servers:Followed%dHost", i);
+        iniparser_set(optDict, key, used ? followedServers[i].host.c_str() : "");
+        snprintf(key, sizeof(key), "Servers:Followed%dPort", i);
+        iniparser_set(optDict, key,
+                      used ? std::to_string(followedServers[i].port).c_str() : "0");
+        snprintf(key, sizeof(key), "Servers:Followed%dName", i);
+        iniparser_set(optDict, key, used ? followedServers[i].label.c_str() : "");
+    }
 }
 
 void GameSettings::SaveSettings()

@@ -104,6 +104,9 @@ bool NetworkClient::Connect(const char* host, int port) {
         return false;
     }
 
+    connectedHost = host ? host : "";
+    connectedPort = port;
+
     socket_init();
 
     // Create socket
@@ -568,6 +571,26 @@ bool NetworkClient::PartGame() {
 bool NetworkClient::SendTalk(const char* message) {
     char cmd[256];
     snprintf(cmd, sizeof(cmd), "TALK %s", message);
+    return SendCommand(cmd);
+}
+
+bool NetworkClient::SendNotifyReg(const char* platform, const char* token) {
+    if (!platform || !*platform || !token || !*token) return false;
+    // A token containing a space would split into a third argument the server
+    // discards, silently registering a truncated token that can never receive
+    // anything. Neither APNs (hex) nor FCM (base64url-ish) tokens contain
+    // spaces, so this only ever rejects something already broken.
+    if (strchr(token, ' ') != nullptr) return false;
+    char cmd[512];
+    snprintf(cmd, sizeof(cmd), "NOTIFYREG %s %s", platform, token);
+    return SendCommand(cmd);
+}
+
+bool NetworkClient::SendNotifyUnreg(const char* token) {
+    if (!token || !*token) return false;
+    if (strchr(token, ' ') != nullptr) return false;
+    char cmd[512];
+    snprintf(cmd, sizeof(cmd), "NOTIFYUNREG %s", token);
     return SendCommand(cmd);
 }
 

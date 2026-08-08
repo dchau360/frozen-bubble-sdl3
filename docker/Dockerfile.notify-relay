@@ -1,0 +1,22 @@
+# notify-relay — delivers "a player joined a server you follow" push notifications
+# Build context: repo root (so COPY can reach server/notify-relay/)
+#
+# Runs in stub mode by default: with no APNS_*/FCM_* credentials set it logs
+# what it would have sent and needs nothing beyond the Python standard library.
+# The delivery libraries are installed here anyway so that supplying
+# credentials is purely a configuration change, not a rebuild.
+
+FROM python:3.12-slim
+
+WORKDIR /app
+
+COPY server/notify-relay/requirements.txt ./
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY server/notify-relay/relay.py ./
+
+# UDP, and only ever reachable from fb-server on the compose-internal network —
+# deliberately not published to the host.
+EXPOSE 9099/udp
+
+CMD ["python3", "-u", "relay.py"]

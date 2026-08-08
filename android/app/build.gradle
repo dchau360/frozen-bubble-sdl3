@@ -2,6 +2,25 @@ plugins {
     id 'com.android.application'
 }
 
+// Firebase Cloud Messaging is optional and switched on purely by the presence
+// of google-services.json, which is git-ignored because it identifies a
+// specific Firebase project.
+//
+// Applying the google-services plugin without that file fails the build
+// outright, so anyone cloning this repo -- and CI, which has no credentials --
+// would be unable to build Android at all if this were unconditional. With the
+// file absent the app compiles exactly as it did before push existed, and
+// PushManager.getToken() returns "" (it reaches the SDK reflectively for the
+// same reason). See docs/PUSH_SETUP.md.
+def googleServicesFile = file('google-services.json')
+def firebaseEnabled = googleServicesFile.exists()
+if (firebaseEnabled) {
+    apply plugin: 'com.google.gms.google-services'
+    logger.lifecycle("google-services.json found -- Firebase Cloud Messaging enabled")
+} else {
+    logger.lifecycle("google-services.json absent -- push notifications disabled (see docs/PUSH_SETUP.md)")
+}
+
 android {
     namespace 'org.frozenbubble'
     compileSdk 34
@@ -77,4 +96,11 @@ dependencies {
     implementation 'com.google.android.gms:play-services-ads:23.3.0'
     // Google Play Billing (for "Remove Ads" IAP)
     implementation 'com.android.billingclient:billing:7.1.1'
+    // Firebase Cloud Messaging, only when google-services.json is present.
+    // PushManager reaches it by reflection, so its absence is a runtime
+    // no-op rather than a compile error.
+    if (firebaseEnabled) {
+        implementation platform('com.google.firebase:firebase-bom:33.1.2')
+        implementation 'com.google.firebase:firebase-messaging'
+    }
 }

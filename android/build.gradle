@@ -5,6 +5,10 @@ buildscript {
     }
     dependencies {
         classpath 'com.android.tools.build:gradle:8.2.0'
+        // Only ever applied when app/google-services.json exists -- see
+        // app/build.gradle. Declared unconditionally because a classpath entry
+        // is inert until a module applies the plugin.
+        classpath 'com.google.gms:google-services:4.4.2'
     }
 }
 

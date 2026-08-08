@@ -86,10 +86,12 @@ else()
     set(NETWORK_CLIENT_SRC src/networkclient.cpp)
 endif()
 
-# iOS needs one Objective-C++ file (NSURLSession stands in for the desktop
-# popen("curl ...")); the OBJCXX language is enabled in project() above.
+# iOS needs Objective-C++ for two things the portable code cannot express:
+# NSURLSession standing in for the desktop popen("curl ..."), and APNs
+# registration for follow-a-server notifications. OBJCXX is enabled in
+# project() above.
 if(IOS)
-    set(PLATFORM_EXTRA_SRC src/platform_ios.mm)
+    set(PLATFORM_EXTRA_SRC src/platform_ios.mm src/push_ios.mm)
 else()
     set(PLATFORM_EXTRA_SRC "")
 endif()
@@ -211,11 +213,23 @@ if(WIN32 OR MINGW)
 endif()
 
 if(IOS)
+    # UserNotifications is not among the frameworks SDL3 pulls in, so push_ios.mm
+    # needs it named explicitly or the link fails on UNUserNotificationCenter.
+    target_link_libraries(frozen-bubble-sdl3 PRIVATE "-framework UserNotifications")
+
     set(FB_IOS_EXECUTABLE "FrozenBubble")
     set(FB_IOS_BUNDLE_ID "org.frozenbubble.sdl3" CACHE STRING
         "iOS bundle identifier")
     configure_file("${CMAKE_SOURCE_DIR}/cmake/iOSInfo.plist.in"
                    "${CMAKE_BINARY_DIR}/Info.plist" @ONLY)
+
+    # Emitted next to the .app so signing can point at it. Generated rather than
+    # checked in only because the APNs environment has to be switchable: a token
+    # minted against the sandbox is rejected by production and vice versa.
+    set(FB_IOS_APS_ENVIRONMENT "development" CACHE STRING
+        "aps-environment entitlement value: development or production")
+    configure_file("${CMAKE_SOURCE_DIR}/cmake/FrozenBubble.entitlements.in"
+                   "${CMAKE_BINARY_DIR}/FrozenBubble.entitlements" @ONLY)
 
     set_target_properties(frozen-bubble-sdl3 PROPERTIES
         OUTPUT_NAME "${FB_IOS_EXECUTABLE}"
@@ -408,6 +422,11 @@ if(BUILD_TESTING AND NOT EMSCRIPTEN AND NOT ANDROID AND NOT IOS)
             COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tests/server_list_cap_test.py $<TARGET_FILE:fb-server>)
         add_test(NAME server-massleave-test
             COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tests/server_massleave_test.py $<TARGET_FILE:fb-server>)
+        # Follow-a-server notifications: registration, the join hook, cooldown,
+        # unregistration and on-disk persistence, with a UDP socket standing in
+        # for the relay sidecar.
+        add_test(NAME server-notify-test
+            COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tests/server_notify_test.py $<TARGET_FILE:fb-server>)
         # Binds the hardcoded UDP discovery port, so it cannot run concurrently
         # with another fb-server; it skips when that port is already in use.
         add_test(NAME server-udp-probe-test

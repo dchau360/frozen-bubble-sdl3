@@ -243,3 +243,69 @@ void SetTextInputAreaLogical(SDL_Renderer *renderer, const SDL_Rect &logical) {
     SDL_Rect windowRect = { (int)x0, (int)y0, (int)(x1 - x0), (int)(y1 - y0) };
     SDL_SetTextInputArea(window, &windowRect, 0);
 }
+
+const char* PushPlatformName() {
+#if defined(__IOS_PORT__)
+    return "ios";
+#elif defined(__ANDROID__) || defined(__ANDROID_PORT__)
+    return "android";
+#else
+    return nullptr;
+#endif
+}
+
+#if defined(__ANDROID__) || defined(__ANDROID_PORT__)
+// Calls PushManager.getToken() -> String, the same JNI shape androidFetchUrl()
+// in networkclient.cpp uses. Blocking, so it must not run on the UI thread;
+// the SDL thread this is called from is not the UI thread.
+static std::string androidPushToken() {
+    JNIEnv *env = (JNIEnv *)SDL_GetAndroidJNIEnv();
+    if (env == nullptr) return "";
+
+    jclass cls = env->FindClass("org/frozenbubble/PushManager");
+    if (cls == nullptr) {
+        // A build without the class at all -- clear the pending exception or
+        // the next JNI call in this thread inherits it.
+        env->ExceptionClear();
+        return "";
+    }
+
+    jmethodID mid = env->GetStaticMethodID(cls, "getToken", "()Ljava/lang/String;");
+    if (mid == nullptr) {
+        env->ExceptionClear();
+        env->DeleteLocalRef(cls);
+        return "";
+    }
+
+    jstring jresult = (jstring)env->CallStaticObjectMethod(cls, mid);
+    if (env->ExceptionCheck()) {
+        env->ExceptionClear();
+        env->DeleteLocalRef(cls);
+        return "";
+    }
+    env->DeleteLocalRef(cls);
+
+    if (jresult == nullptr) return "";
+    const char *chars = env->GetStringUTFChars(jresult, nullptr);
+    std::string result(chars ? chars : "");
+    env->ReleaseStringUTFChars(jresult, chars);
+    env->DeleteLocalRef(jresult);
+    return result;
+}
+#endif
+
+std::string PushDeviceToken() {
+#if defined(__IOS_PORT__)
+    // Defined in push_ios.mm. Returns "" until APNs hands back a token, which
+    // is asynchronous and needs the aps-environment entitlement -- an unsigned
+    // build never gets one.
+    return IosPushDeviceToken();
+#elif defined(__ANDROID__) || defined(__ANDROID_PORT__)
+    return androidPushToken();
+#else
+    // Desktop and browser builds have no push service to register with.
+    // Following a server is still allowed and still persists; it simply
+    // registers nothing from here.
+    return std::string();
+#endif
+}

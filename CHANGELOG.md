@@ -1,5 +1,53 @@
 # Changelog
 
+## Unreleased
+
+- **New: follow a server and be told when someone joins it.** Press **F** on a
+  server in the LAN or Net list, or tap the star at the left of its row, and
+  that server will notify your phone when a player joins — so a quiet server
+  can tell you a game is starting instead of you checking it. Followed servers
+  are saved per device, up to eight.
+
+  The notification is delivered by the OS, so it arrives with the app
+  backgrounded or fully closed; it is deliberately suppressed while the app is
+  in the foreground, where the lobby already shows who is online. Rate-limited
+  to one per device per 10 minutes so a busy server can't turn into a stream of
+  banners.
+
+  Server-side this is a new `NOTIFYREG`/`NOTIFYUNREG` protocol pair and a
+  registration table (`server/notify.c`) that is deliberately *not* tied to a
+  connection: everything else in the server is keyed by file descriptor and
+  freed the moment a socket closes, which is exactly the wrong lifetime for
+  something whose whole purpose is to reach a device that has disconnected.
+
+  Actual APNs/FCM delivery is handled by a new optional sidecar,
+  `server/notify-relay/`, rather than by `fb-server` itself — the game server
+  has no TLS stack and runs one blocking event loop for every connected player,
+  so an HTTP/2 handshake with Apple mid-round would stall the game. It fires a
+  best-effort UDP datagram instead and moves on; if the relay is down, missing,
+  or misconfigured, the datagram is dropped and gameplay is untouched. Operators
+  who don't want the feature can simply not run it. See
+  [SetupServer.md](SetupServer.md).
+
+  Device-token acquisition is implemented on both platforms: `src/push_ios.mm`
+  requests permission and registers with APNs (grafting its callbacks onto
+  SDL's application delegate rather than replacing it, which would stop the app
+  launching), and `PushManager.java` obtains an FCM token. Foreground
+  suppression is handled per platform — a `UNUserNotificationCenterDelegate` on
+  iOS, and on Android by FCM's own behaviour, which routes a notification
+  payload to the app instead of the tray while it is in front.
+
+  **Firebase is optional and off by default.** The Gradle plugin is applied only
+  when `android/app/google-services.json` is present, and `PushManager` reaches
+  the SDK by reflection, so a clone without credentials — including CI — builds
+  and runs exactly as before. Both paths are verified.
+
+  **Still needs credentials to deliver anything.** iOS additionally needs a
+  signed build: APNs will not issue a token without the `aps-environment`
+  entitlement, which free sideloading profiles do not grant. The build now emits
+  `FrozenBubble.entitlements` to sign with. See
+  [docs/PUSH_SETUP.md](docs/PUSH_SETUP.md) for both consoles end to end.
+
 ## v2.4.36
 
 - **Touch taps and swipes now land in the right place off a 4:3 screen.** They

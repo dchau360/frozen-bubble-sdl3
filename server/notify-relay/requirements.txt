@@ -1,0 +1,4 @@
+# Only needed for LIVE delivery. In stub mode (no APNS_*/FCM_* env vars set)
+# relay.py imports neither of these -- it runs on a bare Python 3 install.
+apns2==0.7.2
+firebase-admin==6.5.0

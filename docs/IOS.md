@@ -125,12 +125,40 @@ lost the log at the exact moment it mattered for reading what you're replying
 to. It now grows the chat dock over the room's settings instead, keeping the
 world map behind and showing as many recent messages as fit.
 
+**Following a server registers this device for join notifications.** Marking a
+server with **F**, or tapping the star at the left of its row, stores it in
+`settings.ini` and hands the server this device's push token. The server keeps
+that token in a file rather than in per-connection state, precisely because the
+notification has to reach a device that is no longer connected. Delivery is the
+OS's job, so a banner arrives whether the app is backgrounded or closed; while
+the app is in the foreground it is suppressed, since the lobby already shows
+who is online.
+
+`push_ios.mm` asks for notification permission at startup and registers with
+APNs. It deliberately does not replace SDL's `UIApplicationDelegate` — SDL owns
+that and the app would stop launching — and instead grafts the two APNs
+callbacks onto SDL's existing delegate class at runtime. The banner is
+suppressed while the app is active by a `UNUserNotificationCenterDelegate` that
+returns no presentation options.
+
+A token still requires all three of: a signature carrying the
+`aps-environment` entitlement (the default unsigned build has none, and free
+sideloading profiles do not grant it), the player allowing the prompt, and APNs
+answering. Any of those failing is an ordinary outcome reported as `""`, and
+callers skip the registration rather than treating it as an error. The build
+writes `build-ios/FrozenBubble.entitlements` for you to sign with; see
+[PUSH_SETUP.md](PUSH_SETUP.md).
+
 ## What does not work
 
 - **Hosting a LAN game.** "Start LAN game" as a *host* needs `fb-server` as a
   separate process, and iOS forbids `fork`/`exec` in the sandbox. Joining a game
   hosted elsewhere works — that is a plain TCP socket. Same restriction as the
   Android and Windows builds.
+- **Receiving a follow notification on an unsigned build.** APNs registration
+  needs the `aps-environment` entitlement, which requires signing with a paid
+  Apple Developer profile — free sideloading does not grant it. Following a
+  server still works and persists; the device just never gets a token.
 
 ## Installing
 
@@ -177,3 +205,17 @@ Also unverified on a device: the keyboard-avoidance shift while composing chat,
 the expanded chat dock, and the game room's settings list after a renumbering
 that removed one row (see [CHANGELOG.md](../CHANGELOG.md)) — all built and unit
 tested, none of them seen running on hardware.
+
+Follow notifications are verified as far as they can be without credentials:
+`tests/server_notify_test.py` drives the real server over the real protocol and
+checks registration, the join hook, the datagram format, the cooldown,
+unregistration and on-disk persistence, and the relay was confirmed by hand to
+receive and log those datagrams.
+
+On the iOS side specifically, the simulator confirms that the app links against
+UserNotifications, launches without crashing, and shows the permission prompt
+over the title screen with the expected Alert|Sound options. Neither APNs
+callback fires there — a simulator running an unsigned build cannot complete
+registration — so **the device token path itself has never executed**, and
+nothing downstream of it (a real `NOTIFYREG` from a phone, an actual banner) has
+been seen working. That needs a signed build on hardware.

@@ -184,6 +184,22 @@ void MainMenu::HandleInput(SDL_Event *e){
                         AudioMixer::Instance()->PlaySFX("menu_change");
                     }
                     break;
+                case SDLK_F:
+                    // Follow/unfollow the highlighted server, so it can notify
+                    // this device when someone joins it. Index 0 is "Host a
+                    // server"/"Manual entry" and the last row is "Set Name" --
+                    // only the entries in between are real servers.
+                    if (showingNetPanel && !networkInLobby && networkInputMode == 7) {
+                        const int serverIdx = lanMenuIndex - 1;
+                        if (serverIdx >= 0 && serverIdx < (int)discoveredServers.size())
+                            ToggleFollowServer(discoveredServers[serverIdx]);
+                    }
+                    if (showingNetPanel && !networkInLobby && networkInputMode == 10) {
+                        const int serverIdx = netMenuIndex - 1;
+                        if (serverIdx >= 0 && serverIdx < (int)publicServers.size())
+                            ToggleFollowServer(publicServers[serverIdx]);
+                    }
+                    break;
                 case SDLK_J:
                     if (showingNetPanel && networkInLobby) {
                         NetworkClient* netClient = NetworkClient::Instance();
@@ -476,9 +492,9 @@ void MainMenu::BeginPanelTapRows(int* selection, int* subSelection) {
 }
 
 void MainMenu::AddPanelTapRow(int index, const SDL_Rect& rect, int subIndex,
-                              bool splitAdjust) {
+                              bool splitAdjust, SDL_Keycode activateKey) {
     if (rect.w <= 0 || rect.h <= 0) return;  // row not drawn this frame
-    panelTapRows.push_back({rect, index, subIndex, splitAdjust});
+    panelTapRows.push_back({rect, index, subIndex, splitAdjust, activateKey});
 }
 
 bool MainMenu::HandlePanelTap(float lx, float ly) {
@@ -518,7 +534,9 @@ bool MainMenu::HandlePanelTap(float lx, float ly) {
         // every row keeps behaving exactly as it does from a keyboard.
         SDL_Event ev = {};
         ev.type = SDL_EVENT_KEY_DOWN;
-        if (row.splitAdjust) {
+        if (row.activateKey != 0) {
+            ev.key.key = row.activateKey;
+        } else if (row.splitAdjust) {
             // Stepped rows have no Return behaviour to borrow, so the half of
             // the row that was touched picks the direction instead.
             const float mid = row.rect.x + row.rect.w * 0.5f;
@@ -1553,6 +1571,7 @@ void MainMenu::MenuReturnKey() {
                                     networkInputMode = 0;  // Switch to lobby mode so C/J/T/U keys work
                                     networkGameStarting = false;
                                     wasmSyncWaitStart = 0;
+                                    RefreshFollowRegistration();
                                     netClient->RequestList();  // Immediate list on lobby entry
                                     lastListRequest = SDL_GetTicks();
 #ifdef __ANDROID__
