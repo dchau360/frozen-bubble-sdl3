@@ -8,6 +8,12 @@
     <!-- Required for Google Play Billing -->
     <uses-permission android:name="com.android.vending.BILLING" />
 
+    <!-- Android 13+ requires this at runtime before any notification is shown;
+         PushManager.init() asks for it at startup. Declining only means follow
+         notifications never appear; everything else is unaffected. Harmless
+         on older versions, where it is granted implicitly. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
     <!-- Android TV requirements -->
     <uses-feature android:name="android.software.leanback" android:required="false" />
     <uses-feature android:name="android.hardware.touchscreen" android:required="false" />

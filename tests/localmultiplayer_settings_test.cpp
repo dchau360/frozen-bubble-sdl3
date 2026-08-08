@@ -51,8 +51,8 @@ struct MainMenuTestAccess {
         menu.BeginPanelTapRows(sel, sub);
     }
     static void AddRow(MainMenu& menu, int index, SDL_Rect rect, int sub = -1,
-                       bool splitAdjust = false) {
-        menu.AddPanelTapRow(index, rect, sub, splitAdjust);
+                       bool splitAdjust = false, SDL_Keycode activateKey = 0) {
+        menu.AddPanelTapRow(index, rect, sub, splitAdjust, activateKey);
     }
     static bool Tap(MainMenu& menu, float x, float y) {
         return menu.HandlePanelTap(x, y);
@@ -284,6 +284,44 @@ int main() {
         CHECK(MainMenuTestAccess::Tap(*menu, 120.f, 325.f));
         CHECK(stepRow == 1);
         CHECK(MainMenuTestAccess::Tap(*menu, 120.f, 325.f));
+        CHECK(SDL_PeepEvents(&pushed, 1, SDL_GETEVENT,
+                             SDL_EVENT_KEY_DOWN, SDL_EVENT_KEY_DOWN) == 1);
+        CHECK(pushed.key.key == SDLK_RETURN);
+
+        // A server row carries two targets: the narrow follow star at its left
+        // edge, and the rest of the row which connects. The star is registered
+        // first so the narrower band wins the hit test -- registered the other
+        // way round, the full-width row would swallow every tap and the star
+        // would be unreachable by touch.
+        int serverRow = 0;
+        MainMenuTestAccess::BeginRows(*menu, &serverRow);
+        MainMenuTestAccess::AddRow(*menu, 1, {100, 400, 40, 20}, -1, false, SDLK_F);
+        MainMenuTestAccess::AddRow(*menu, 1, {100, 400, 400, 20});
+        MainMenuTestAccess::AddRow(*menu, 2, {100, 420, 400, 20});
+
+        // First tap still only selects, star or not.
+        SDL_FlushEvent(SDL_EVENT_KEY_DOWN);
+        CHECK(MainMenuTestAccess::Tap(*menu, 110.f, 405.f));
+        CHECK(serverRow == 1);
+        CHECK(SDL_PeepEvents(&pushed, 1, SDL_GETEVENT,
+                             SDL_EVENT_KEY_DOWN, SDL_EVENT_KEY_DOWN) == 0);
+
+        // Second tap on the star toggles following rather than connecting.
+        CHECK(MainMenuTestAccess::Tap(*menu, 110.f, 405.f));
+        CHECK(SDL_PeepEvents(&pushed, 1, SDL_GETEVENT,
+                             SDL_EVENT_KEY_DOWN, SDL_EVENT_KEY_DOWN) == 1);
+        CHECK(pushed.key.key == SDLK_F);
+
+        // The same row tapped past the star still connects.
+        CHECK(MainMenuTestAccess::Tap(*menu, 300.f, 405.f));
+        CHECK(SDL_PeepEvents(&pushed, 1, SDL_GETEVENT,
+                             SDL_EVENT_KEY_DOWN, SDL_EVENT_KEY_DOWN) == 1);
+        CHECK(pushed.key.key == SDLK_RETURN);
+
+        // A row with no star is unaffected.
+        CHECK(MainMenuTestAccess::Tap(*menu, 110.f, 425.f));
+        CHECK(serverRow == 2);
+        CHECK(MainMenuTestAccess::Tap(*menu, 110.f, 425.f));
         CHECK(SDL_PeepEvents(&pushed, 1, SDL_GETEVENT,
                              SDL_EVENT_KEY_DOWN, SDL_EVENT_KEY_DOWN) == 1);
         CHECK(pushed.key.key == SDLK_RETURN);

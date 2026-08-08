@@ -66,6 +66,16 @@ twenty, which needed new UI to be playable at all:
 | **Frame-rate-independent movement**, so the game runs at the same speed regardless of display refresh | v2.4.9 |
 | **Sound toggle**, **fullscreen toggle**, **saved nickname** | v2.4.15, v2.4.24, v2.4.16 |
 
+### Notifications
+
+| Feature | Added |
+|---|---|
+| **Follow a server** — mark a server with **F** (or tap the star on its row) and it notifies your phone when a player joins, so you can be told a game is starting without leaving the app open. Requires the server operator to run the `notify-relay` sidecar; see [SetupServer.md](../SetupServer.md) | unreleased |
+
+The notification is delivered by the OS, so it arrives whether the app is
+backgrounded or fully closed. It is deliberately suppressed while the app is in
+the foreground, where the lobby already shows who is online.
+
 ### Platforms
 
 The original was Linux-only.

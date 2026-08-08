@@ -25,6 +25,7 @@
 #include <iostream>
 #include <mutex>
 #include <string>
+#include <vector>
 
 // Virtual scancode base for controller button bindings.
 // Virtual scancode = CTRL_SC_BASE + playerSlot * CTRL_SC_PER_PLAYER + button.
@@ -74,6 +75,15 @@ inline bool IsKeyPressed(SDL_Scancode sc) {
 
 struct PlayerKeys {
     SDL_Scancode left, right, fire, center;
+};
+
+// A server the player asked to be notified about. Marking one as followed
+// registers this device's push token with that server, so it can notify us
+// when somebody joins -- including, and mainly, while the app is closed.
+struct FollowedServer {
+    std::string host;
+    int port = 0;
+    std::string label;   // display name; falls back to host:port when empty
 };
 
 class GameSettings final
@@ -126,6 +136,23 @@ public:
 
     char savedNickname[32] = "";
     bool mouseEnabled = false;  // Mouse/touchscreen aim+fire (player 1)
+
+    // Servers the player follows for join notifications. Bounded rather than
+    // unbounded because the ini format here stores fixed numbered slots (the
+    // same shape as the P1-P5 key bindings above) and because a device that
+    // registers with dozens of servers is far more likely to be a mistake than
+    // an intent.
+    static constexpr int kMaxFollowedServers = 8;
+    std::vector<FollowedServer> followedServers;
+
+    void LoadFollowedServers();
+    void SaveFollowedServers();
+    bool IsServerFollowed(const std::string& host, int port) const;
+    // Adds if absent, removes if present. Returns true if the server is
+    // followed afterwards. Refuses to add beyond kMaxFollowedServers (returns
+    // false without changing anything).
+    bool ToggleServerFollowed(const std::string& host, int port,
+                              const std::string& label);
 
     GameSettings(const GameSettings& obj) = delete;
     void Dispose();

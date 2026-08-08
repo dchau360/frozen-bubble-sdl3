@@ -57,6 +57,11 @@ int conns_nb(void);
 void add_prio(int fd);
 void remove_prio(int fd);  /* Move fd from prio (in-game) back to normal lobby mode */
 
+/* This server's display name (the -n flag, or the sanitized hostname if unset).
+ * Exposed so notify.c can put a recognizable name in a push notification body
+ * without needing to know how net.c resolved it. Never NULL or empty. */
+const char* net_servername(void);
+
 #ifdef DEBUG
 void net_debug(void);
 #endif

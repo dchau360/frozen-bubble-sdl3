@@ -233,6 +233,67 @@ int main() {
     CHECK(fileContains(historyPath, "1   2   3"));
     CHECK(fileContains(scorePath, "SENTINEL-SCORES-UNTOUCHED"));
 
+    // Followed servers -- the list of servers allowed to send this device a
+    // "someone joined" notification. This has to survive a restart or the
+    // player's follows silently vanish, so assert the round trip through the
+    // file rather than just the in-memory vector.
+    CHECK(settings->followedServers.empty());
+    CHECK(!settings->IsServerFollowed("fb.example.org", 1511));
+
+    CHECK(settings->ToggleServerFollowed("fb.example.org", 1511, "Example"));
+    CHECK(settings->IsServerFollowed("fb.example.org", 1511));
+    // Same host on a different port is a different server.
+    CHECK(!settings->IsServerFollowed("fb.example.org", 1512));
+
+    CHECK(settings->ToggleServerFollowed("192.168.1.50", 1511, ""));
+    settings->SaveKeys();
+    CHECK(iniHasKeyValue(settingsPath, "followedcount", "2"));
+    CHECK(iniHasKeyValue(settingsPath, "followed0host", "fb.example.org"));
+    CHECK(iniHasKeyValue(settingsPath, "followed0port", "1511"));
+    CHECK(iniHasKeyValue(settingsPath, "followed1host", "192.168.1.50"));
+
+    settings->followedServers.clear();
+    settings->LoadFollowedServers();
+    CHECK(settings->followedServers.size() == 2);
+    CHECK(settings->IsServerFollowed("fb.example.org", 1511));
+    CHECK(settings->IsServerFollowed("192.168.1.50", 1511));
+    CHECK(settings->followedServers[0].label == "Example");
+
+    // Toggling an existing entry removes it, and the removal must reach the
+    // file too -- an unfollow that only cleared memory would come back on the
+    // next launch and keep notifying.
+    CHECK(!settings->ToggleServerFollowed("fb.example.org", 1511, "Example"));
+    CHECK(!settings->IsServerFollowed("fb.example.org", 1511));
+    settings->SaveKeys();
+    settings->followedServers.clear();
+    settings->LoadFollowedServers();
+    CHECK(settings->followedServers.size() == 1);
+    CHECK(!settings->IsServerFollowed("fb.example.org", 1511));
+    CHECK(settings->IsServerFollowed("192.168.1.50", 1511));
+
+    // The list is bounded. Past the cap a follow is refused outright rather
+    // than evicting somebody else's entry or growing without limit.
+    for (int i = 0; i < GameSettings::kMaxFollowedServers + 3; i++) {
+        settings->ToggleServerFollowed("host" + std::to_string(i) + ".test",
+                                       1511, "");
+    }
+    CHECK((int)settings->followedServers.size() == GameSettings::kMaxFollowedServers);
+
+    // Garbage in the file is dropped rather than loaded as an entry that can
+    // never match a real server.
+    settings->followedServers.clear();
+    settings->SaveKeys();
+    settings->SetValue("Servers:FollowedCount", "2");
+    settings->SetValue("Servers:Followed0Host", "");
+    settings->SetValue("Servers:Followed0Port", "1511");
+    settings->SetValue("Servers:Followed1Host", "ok.example.org");
+    settings->SetValue("Servers:Followed1Port", "0");
+    settings->LoadFollowedServers();
+    CHECK(settings->followedServers.empty());
+
+    settings->followedServers.clear();
+    settings->SaveKeys();
+
     // Reset-to-defaults must reach the file, not just the in-memory members. A
     // reset that only reassigned the members would be undone by the next
     // SaveKeys() writing the stale values straight back out, so assert against

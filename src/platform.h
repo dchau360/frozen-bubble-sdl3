@@ -98,7 +98,38 @@ bool WasmHasTouch();
 bool WasmPromptText(const char* title, const char* current, char* out, int outLen);
 #endif
 
+// ── Push notifications for followed servers ──────────────────────────────────
+//
+// Which push service this build talks to: "ios", "android", or nullptr where
+// there is none. The strings match what the server's NOTIFYREG accepts.
+// nullptr is the answer for desktop and for the browser build, neither of
+// which can receive a notification while closed -- following a server is
+// still allowed there, it just registers nothing until the player opens the
+// same account on a phone.
+const char* PushPlatformName();
+
+// This device's push token, or "" when there isn't one.
+//
+// Empty is the normal, expected answer today: acquiring a real token needs an
+// APNs entitlement (iOS) or a Firebase project (Android), neither of which is
+// wired up yet. Every caller must treat "" as "cannot register" and skip the
+// send rather than transmitting an empty token the server would reject. Once
+// the platform pieces land, this is the single place they report back to.
+std::string PushDeviceToken();
+
 #ifdef __IOS_PORT__
+// APNs device token as a lowercase hex string, or "" if there isn't one yet.
+//
+// Registration is asynchronous and can legitimately never complete: an
+// unsigned build has no aps-environment entitlement and APNs simply fails,
+// and the player can decline the permission prompt. Both are ordinary
+// outcomes, reported as "". Defined in push_ios.mm.
+std::string IosPushDeviceToken();
+
+// Kick off the permission prompt and APNs registration. Safe to call more than
+// once. Defined in push_ios.mm.
+void IosRegisterForPush();
+
 // Blocking HTTP GET, returning the response body ("" on any failure).
 // Defined in platform_ios.mm. iOS blocks fork/exec inside the app sandbox and
 // ships no curl binary, so the desktop popen("curl ...") path returns nothing

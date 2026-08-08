@@ -104,6 +104,12 @@ public:
     bool IsConnected() { return state != DISCONNECTED; }
     ConnectionState GetState() { return state; }
 
+    // Where we are connected (or were last asked to connect). Used to tell
+    // whether a server picked out of a list is the one this connection is
+    // talking to, which decides whether a follow can be registered right now.
+    const std::string& GetHost() const { return connectedHost; }
+    int GetPort() const { return connectedPort; }
+
     // Protocol commands
     bool SendNick(const char* nickname);
     bool SendGeoLoc(const char* location);
@@ -114,6 +120,16 @@ public:
     bool SendTalk(const char* message);
     bool SendGameData(const char* data);
     bool RequestList();
+
+    // "Follow this server": hand the server this device's push token so it can
+    // notify us when someone joins, including after we disconnect. platform
+    // must be "ios" or "android" -- the server rejects anything else, and no
+    // other platform has a push story to register for. Safe to re-send on
+    // every connect; the server upserts by token without resetting its
+    // notification cooldown.
+    bool SendNotifyReg(const char* platform, const char* token);
+    bool SendNotifyUnreg(const char* token);
+
     bool SendCommand(const char* command);
 
     // Message processing
@@ -223,6 +239,8 @@ private:
     void* websocketSocket;  // WebSocket handle (WebAssembly builds) - using void* to avoid emscripten header dependency
 #endif
     ConnectionState state;
+    std::string connectedHost;
+    int connectedPort = 0;
     std::string playerNick;
     std::string playerGeoloc;
 

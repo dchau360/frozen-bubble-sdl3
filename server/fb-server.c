@@ -27,10 +27,12 @@
 #include "game.h"
 #include "tools.h"
 #include "stats.h"
+#include "notify.h"
 
 static void cleanup_atexit(void)
 {
         stats_cleanup();
+        notify_cleanup();
 }
 
 static void setup_signal_handlers(void)
@@ -54,6 +56,17 @@ int main(int argc, char **argv)
 
         create_server(argc, argv);
         daemonize();
+        // Initialize the follow-a-server push notification registry.
+        //
+        // Deliberately after create_server() and daemonize(), unlike
+        // stats_init() above. create_server() is what parses -d/-o and calls
+        // logging_init(), so anything logged before it -- including whether a
+        // relay is configured at all -- is silently discarded, and this
+        // module's startup diagnostics are the operator's only feedback that
+        // the feature is wired up. Being after daemonize() also keeps the
+        // short-lived parent process out of the registry file: it exits
+        // through the same atexit() handler that saves the table.
+        notify_init();
         connections_manager();
 
         return 0;

@@ -67,6 +67,11 @@ static char greets_msg_base[] = "SERVER_READY %s %s";
 static char* servername = NULL;
 static char* serverlanguage = NULL;
 
+const char* net_servername(void)
+{
+        return (servername && *servername) ? servername : "this server";
+}
+
 static char ok_generic[] = "OK";
 
 static char fl_client_nolf[] = "NO_LF_WITHIN_TOO_MUCH_DATA (I bet you're not a regular FB client, hu?)";

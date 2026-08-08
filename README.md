@@ -96,6 +96,8 @@ This enables both TCP (direct connections) and UDP broadcast (LAN auto-discovery
 
 > LAN auto-discovery needs a UDP broadcast, which browsers cannot send — the browser build's **LAN Game** list is always empty. Use **Net Game** with the host's address there, or play native.
 
+**Follow a server:** press **F** on a server in either list (or tap the star at the left of its row) and it will notify your phone when a player joins, so a quiet server can tell you a game is starting rather than you checking it. The notification arrives with the app backgrounded or closed, and is suppressed while you're in the foreground. Needs the server operator to run the optional relay — see [SetupServer.md](SetupServer.md). Delivery is not live yet: it needs an Apple Push key / Firebase project, so following currently registers but nothing is sent.
+
 **Public servers** are listed in the [frozen-bubble-servers](https://github.com/dchau360/frozen-bubble-servers) repo, in the same format as the original `frozen-bubble.org` list:
 
 ```

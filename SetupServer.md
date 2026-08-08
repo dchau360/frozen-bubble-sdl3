@@ -133,12 +133,71 @@ cd docker
 ./setup.sh -d          # -d runs in background
 ```
 
-This builds fb-server from source and starts both the game server and the nginx
-TLS proxy. To stop:
+This builds fb-server from source and starts the game server, the nginx TLS
+proxy, and the push-notification relay. To stop:
 
 ```bash
 docker compose down
 ```
+
+---
+
+## Optional — Push Notifications for Followed Servers
+
+Players can mark your server as **followed** (press **F** on its row in the
+server list, or tap the star). Their device then gets a notification when
+somebody joins, even with the game closed — useful for a server that is quiet
+most of the day.
+
+This works out of the box in a **stub mode** that logs what it would have sent
+but delivers nothing. Making notifications actually arrive needs push
+credentials, which only you as the operator can obtain.
+
+**Nothing breaks if you skip this.** Follows are still accepted and stored; they
+just never fire. The relay is also entirely optional — remove
+`FB_SERVER_NOTIFY_RELAY` from the `fb-server` service to turn the feature off.
+
+### Checking the stub
+
+```bash
+docker compose logs notify-relay
+```
+
+A join on a followed server logs a line like:
+
+```
+[stub] would push to ios token=abc123...ef01: A player just joined myserver!
+```
+
+### Going live
+
+**iOS** needs an Apple Developer account: create a Push Notifications auth key
+(a `.p8` file) and note its Key ID, your Team ID, and the app's bundle id.
+
+**Android** needs a Firebase project with Cloud Messaging enabled, and a
+service-account JSON.
+
+Put the credential files in `docker/push-credentials/` (git-ignored) and set the
+matching variables in a `.env` file next to `docker-compose.yml`:
+
+```bash
+APNS_KEY_PATH=/credentials/AuthKey_XXXXXXXXXX.p8
+APNS_KEY_ID=XXXXXXXXXX
+APNS_TEAM_ID=YYYYYYYYYY
+APNS_TOPIC=org.frozenbubble.sdl3
+FCM_SERVICE_ACCOUNT_JSON=/credentials/firebase-service-account.json
+```
+
+Then `docker compose up -d --build notify-relay`. The startup log says which of
+the two is configured; anything still unconfigured stays in stub mode. Device
+tokens are redacted in all log output.
+
+Notifications are rate-limited to one per device per 10 minutes
+(`FB_SERVER_NOTIFY_COOLDOWN_SECONDS` on the `fb-server` service), so a busy
+server does not turn into a stream of banners.
+
+See [server/notify-relay/README.md](server/notify-relay/README.md) for the
+protocol and internals.
 
 ---
 

@@ -39,3 +39,8 @@ __pycache__/
 *.jks
 *.p12
 keystore.properties
+
+# Push notification credentials -- identify a specific Firebase/Apple account
+# and must never be committed. See docs/PUSH_SETUP.md.
+android/app/google-services.json
+*.p8

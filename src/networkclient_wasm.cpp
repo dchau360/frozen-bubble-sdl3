@@ -151,6 +151,9 @@ bool NetworkClient::Connect(const char* host, int port) {
         return false;
     }
 
+    connectedHost = host ? host : "";
+    connectedPort = port;
+
     // Use wss:// when the page is served over HTTPS (browsers block mixed content).
     // Use ws:// on plain HTTP (local / itch.io iframe without forcing HTTPS).
     const char* scheme = (EM_ASM_INT({ return location.protocol === 'https:' ? 1 : 0; }))

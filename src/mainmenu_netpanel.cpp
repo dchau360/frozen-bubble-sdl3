@@ -93,6 +93,7 @@ void MainMenu::NetPanelRender() {
                 networkInputMode = 0;
                 networkGameStarting = false;
                 wasmSyncWaitStart = 0;
+                RefreshFollowRegistration();
                 netClient->RequestList();
                 lastListRequest = SDL_GetTicks();
 #ifdef __ANDROID__
@@ -979,6 +980,57 @@ void MainMenu::NetPanelChatDockRender(bool expanded) {
     }
 }
 
+void MainMenu::ToggleFollowServer(const ServerInfo& server) {
+    GameSettings* gs = GameSettings::Instance();
+    NetworkClient* netClient = NetworkClient::Instance();
+
+    const bool wasFollowed = gs->IsServerFollowed(server.host, server.port);
+    const bool nowFollowed =
+        gs->ToggleServerFollowed(server.host, server.port, server.name);
+
+    if (!wasFollowed && !nowFollowed) {
+        // Refused: the list is full. Say so rather than letting the star
+        // silently fail to light up.
+        connectErrorMsg = "Already following " +
+                          std::to_string(GameSettings::kMaxFollowedServers) +
+                          " servers -- unfollow one first";
+        PlayMenuSFX("menu_change");
+        return;
+    }
+
+    gs->SaveKeys();
+
+    // Tell the server, but only if this is the server we are actually talking
+    // to -- there is no way to reach any other one from here, and the
+    // registration is re-sent on connect anyway.
+    const char* platform = PushPlatformName();
+    const std::string token = PushDeviceToken();
+    if (platform != nullptr && !token.empty() && netClient->IsConnected() &&
+        netClient->GetHost() == server.host && netClient->GetPort() == server.port) {
+        if (nowFollowed) netClient->SendNotifyReg(platform, token.c_str());
+        else             netClient->SendNotifyUnreg(token.c_str());
+    }
+
+    PlayMenuSFX("menu_selected");
+}
+
+void MainMenu::RefreshFollowRegistration() {
+    const char* platform = PushPlatformName();
+    if (platform == nullptr) return;                 // no push story on this build
+
+    const std::string token = PushDeviceToken();
+    if (token.empty()) return;                       // nothing to register yet
+
+    NetworkClient* netClient = NetworkClient::Instance();
+    if (!netClient->IsConnected()) return;
+
+    if (!GameSettings::Instance()->IsServerFollowed(netClient->GetHost(),
+                                                    netClient->GetPort()))
+        return;
+
+    netClient->SendNotifyReg(platform, token.c_str());
+}
+
 void MainMenu::NetPanelConnectionScreensRender() {
     NetworkClient* netClient = NetworkClient::Instance();
 
@@ -1010,6 +1062,24 @@ void MainMenu::NetPanelConnectionScreensRender() {
             renderLine(txt, fg, y);
             AddPanelTapRow(index, { voidPanelRct.x, top, voidPanelRct.w, y - top });
         };
+        // A server row carries a second, smaller target: the follow star at its
+        // left edge. Registered before the full-width row so that the narrower
+        // band wins the hit test, since the first matching band is the one
+        // used.
+        auto renderServerRow = [&](int index, const char* txt, SDL_Color fg, int& y) {
+            int top = y;
+            renderLine(txt, fg, y);
+            const SDL_Rect& drawn = *panelText.Coords();
+            const int len = (int)strlen(txt);
+            if (len > 0 && drawn.w > 0) {
+                // "[ * " -- four glyphs in, derived from the drawn width rather
+                // than a pixel guess so it holds if the font changes.
+                const int starW = (drawn.w / len) * 4;
+                AddPanelTapRow(index, { drawn.x, top, starW, y - top }, -1, false,
+                               SDLK_F);
+            }
+            AddPanelTapRow(index, { voidPanelRct.x, top, voidPanelRct.w, y - top });
+        };
 
         int y = (480/2) - 120;
         char lineBuf[280];
@@ -1037,10 +1107,12 @@ void MainMenu::NetPanelConnectionScreensRender() {
                 int lat = discoveredServers[i].latencyMs;
                 if (lat < 0) snprintf(latBuf, sizeof(latBuf), "offline");
                 else         snprintf(latBuf, sizeof(latBuf), "%dms", lat);
+                const bool followed = GameSettings::Instance()->IsServerFollowed(
+                    discoveredServers[i].host, discoveredServers[i].port);
                 snprintf(lineBuf, sizeof(lineBuf),
-                    sel ? "[ %-28s %7s ]" : "  %-28s %7s  ",
-                    dname.c_str(), latBuf);
-                renderMenuRow(i + 1, lineBuf, sel ? yellow : white, y);
+                    sel ? "[ %s %-26s %7s ]" : "  %s %-26s %7s  ",
+                    followed ? "*" : " ", dname.c_str(), latBuf);
+                renderServerRow(i + 1, lineBuf, sel ? yellow : white, y);
             }
         }
 
@@ -1057,7 +1129,7 @@ void MainMenu::NetPanelConnectionScreensRender() {
             renderMenuRow(lanMenuMax - 1, lineBuf, sel ? yellow : white, y);
         }
 
-        snprintf(lineBuf, sizeof(lineBuf), "\nUP/DOWN  ENTER to select  R to rescan\nESC to cancel");
+        snprintf(lineBuf, sizeof(lineBuf), "\nUP/DOWN  ENTER to select  R to rescan\nF to follow (notify on join)  ESC to cancel");
         renderLine(lineBuf, white, y);
 
         if (!connectErrorMsg.empty()) {
@@ -1101,6 +1173,20 @@ void MainMenu::NetPanelConnectionScreensRender() {
             renderLine(txt, fg, y);
             AddPanelTapRow(index, { voidPanelRct.x, top, voidPanelRct.w, y - top });
         };
+        // See the LAN screen: the follow star is a narrower band registered
+        // ahead of the row it sits inside.
+        auto renderServerRow = [&](int index, const char* txt, SDL_Color fg, int& y) {
+            int top = y;
+            renderLine(txt, fg, y);
+            const SDL_Rect& drawn = *panelText.Coords();
+            const int len = (int)strlen(txt);
+            if (len > 0 && drawn.w > 0) {
+                const int starW = (drawn.w / len) * 4;
+                AddPanelTapRow(index, { drawn.x, top, starW, y - top }, -1, false,
+                               SDLK_F);
+            }
+            AddPanelTapRow(index, { voidPanelRct.x, top, voidPanelRct.w, y - top });
+        };
 
         int y = (480/2) - 120;
         char lineBuf[320];
@@ -1127,13 +1213,15 @@ void MainMenu::NetPanelConnectionScreensRender() {
                 char latencyBuf[16];
                 if (offline) snprintf(latencyBuf, sizeof(latencyBuf), "offline");
                 else         snprintf(latencyBuf, sizeof(latencyBuf), "%dms", publicServers[i].latencyMs);
+                const bool followed = GameSettings::Instance()->IsServerFollowed(
+                    publicServers[i].host, publicServers[i].port);
                 snprintf(lineBuf, sizeof(lineBuf),
-                    sel ? "[ %-28s %7s ]" : "  %-28s %7s  ",
-                    displayName.c_str(), latencyBuf);
+                    sel ? "[ %s %-26s %7s ]" : "  %s %-26s %7s  ",
+                    followed ? "*" : " ", displayName.c_str(), latencyBuf);
                 SDL_Color col = offline ? grey : (sel ? yellow : white);
                 // Offline servers stay tappable: selecting one is how the player
                 // reads its address, and the keyboard can land on them too.
-                renderMenuRow(i + 1, lineBuf, col, y);
+                renderServerRow(i + 1, lineBuf, col, y);
             }
         }
 
@@ -1150,7 +1238,7 @@ void MainMenu::NetPanelConnectionScreensRender() {
             renderMenuRow(netMenuMax - 1, lineBuf, sel ? yellow : white, y);
         }
 
-        snprintf(lineBuf, sizeof(lineBuf), "\nUP/DOWN  ENTER to select  R to refresh\nESC to cancel");
+        snprintf(lineBuf, sizeof(lineBuf), "\nUP/DOWN  ENTER to select  R to refresh\nF to follow (notify on join)  ESC to cancel");
         renderLine(lineBuf, white, y);
 
         if (pendingLobbyConnect) {

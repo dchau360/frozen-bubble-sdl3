@@ -40,6 +40,7 @@
 #include "log.h"
 #include "game.h"
 #include "stats.h"
+#include "notify.h"
 
 enum game_status { GAME_STATUS_OPEN, GAME_STATUS_CLOSED, GAME_STATUS_PLAYING };
 
@@ -89,6 +90,7 @@ static char wn_no_such_player[] = "NO_SUCH_PLAYER";
 static char wn_denied[] = "DENIED";
 static char wn_flooding[] = "FLOODING";
 static char wn_others_not_ready[] = "OTHERS_NOT_READY";
+static char wn_invalid_platform[] = "INVALID_PLATFORM";
 
 static char fl_line_unrecognized[] = "MISSING_FB_PROTOCOL_TAG";
 static char fl_proto_mismatch[] = "INCOMPATIBLE_PROTOCOL";
@@ -286,6 +288,7 @@ static int add_player(struct game * g, int fd, char* nick)
                 g->players_number++;
                 open_players = g_list_remove(open_players, GINT_TO_POINTER(fd));
                 calculate_list_games();
+                notify_fire_join_event();  /* server-wide "someone joined" hook for followers */
                 return 1;
         } else {
                 free(nick);
@@ -886,6 +889,37 @@ int process_msg(int fd, char* msg)
                 } else {
                         player_part_game(fd);
                         remove_prio(fd);  /* return fd to lobby mode; prevents 5-sec prio gracetime and duplicate add_prio on rejoin */
+                        send_ok(fd, msg_orig);
+                }
+        } else if (streq(current_command, "NOTIFYREG")) {
+                /* "Follow" registration: remember this device's push token so
+                 * notify_fire_join_event() can reach it after this connection
+                 * closes. Deliberately not gated on already_in_game() -- you
+                 * follow a server from its lobby, not from inside a room. */
+                if (!args || !(ptr = strchr(args, ' '))) {
+                        send_line_log(fd, wn_missing_arguments, msg_orig);
+                } else {
+                        char* platform = args;
+                        *ptr = '\0';
+                        char* token = ptr + 1;
+                        if ((ptr2 = strchr(token, ' ')))
+                                *ptr2 = '\0';
+                        if (!streq(platform, "ios") && !streq(platform, "android")) {
+                                send_line_log(fd, wn_invalid_platform, msg_orig);
+                        } else if (!*token) {
+                                send_line_log(fd, wn_missing_arguments, msg_orig);
+                        } else {
+                                notify_register(platform, token);
+                                send_ok(fd, msg_orig);
+                        }
+                }
+        } else if (streq(current_command, "NOTIFYUNREG")) {
+                if (!args) {
+                        send_line_log(fd, wn_missing_arguments, msg_orig);
+                } else {
+                        if ((ptr = strchr(args, ' ')))
+                                *ptr = '\0';
+                        notify_unregister(args);
                         send_ok(fd, msg_orig);
                 }
         } else if (streq(current_command, "LIST")) {

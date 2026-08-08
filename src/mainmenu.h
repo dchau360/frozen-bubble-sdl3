@@ -133,6 +133,14 @@ private:
         // literally nothing, which is how the game-speed row ended up with no
         // way to change it on a phone at all.
         bool splitAdjust;
+        // Overrides what a second tap sends, for a sub-target that sits inside
+        // a row and does something different from the row itself -- the follow
+        // star on a server entry, which must toggle following rather than
+        // connect. 0 means "use the default", i.e. splitAdjust or Return.
+        // A row registered with one of these must be added *before* the wider
+        // row it sits inside, since the first band that contains the touch
+        // wins.
+        SDL_Keycode activateKey;
     };
     std::vector<PanelTapRow> panelTapRows;
     int* panelTapSelection = nullptr;
@@ -145,7 +153,20 @@ private:
     // only one panel is interactive at a time.
     void BeginPanelTapRows(int* selection, int* subSelection = nullptr);
     void AddPanelTapRow(int index, const SDL_Rect& rect, int subIndex = -1,
-                        bool splitAdjust = false);
+                        bool splitAdjust = false, SDL_Keycode activateKey = 0);
+
+    // Follow/unfollow a server for join notifications: updates the persisted
+    // list and, when we happen to be connected to that same server, tells it
+    // to start or stop notifying this device. Shared by the LAN and Net server
+    // lists.
+    void ToggleFollowServer(const ServerInfo& server);
+
+    // Re-send this device's push token if the server we just entered is one the
+    // player follows. Called on every lobby entry: push tokens rotate, and a
+    // stale one on the server silently stops delivering, so refreshing costs
+    // one line on the wire and removes a whole class of "notifications just
+    // stopped working" failures. A no-op where there is no token.
+    void RefreshFollowRegistration();
 
     // HandleInput decomposition (mainmenu_input.cpp)
     void MenuTextInputEvent(SDL_Event *e);
