@@ -43,8 +43,12 @@ class ServerListCapTest(unittest.TestCase):
             self.skipTest(f"fb-server binary not found at {self.server_path}")
 
         self.port = 15512
+        # -d keeps the server in the foreground. Without it fb-server forks and
+        # the parent exits, so Popen.kill() reaps only the parent and the real
+        # daemon keeps the port -- the next test in this file would fail to bind
+        # but still probe successfully, silently talking to the stale server.
         self.server = subprocess.Popen(
-            [str(self.server_path), "-p", str(self.port), "-q", "-z"],
+            [str(self.server_path), "-p", str(self.port), "-q", "-z", "-d"],
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
         )
