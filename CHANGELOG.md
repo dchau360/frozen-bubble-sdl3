@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v2.4.37
 
 - **New: follow a server and be told when someone joins it.** Press **F** on a
   server in the LAN or Net list, or tap the star at the left of its row, and
