@@ -16,9 +16,12 @@
   3840px per side with an aspect ratio no more extreme than 2:1. All three
   qualify.
 - **`icon-512.png`** (512×512, 24-bit RGB) — Play's high-res store icon.
-  Cropped and upscaled from the in-game pause-screen penguin portrait
-  (`share/gfx/pause_0035.png`, 190×143 native), not a generic stock image,
-  on the same icy gradient as the feature graphic. This is also now the
+  Foreground is the in-game pause-screen penguin portrait
+  (`share/gfx/pause_0035.png`, 190×143 native); background is a blurred
+  crop of the pause screen's own warm-glow backdrop
+  (`share/gfx/back_paused.png`) — both pieces are from the same actual game
+  screen, not a generic stock image or made-up gradient. This is also now
+  the
   **actual app launcher icon source** —
   `share/icons/frozen-bubble-icon-512x512.png` is the same image, and
   [`.github/workflows/build.yml`](../../.github/workflows/build.yml)'s
