@@ -592,7 +592,10 @@ jobs:
           See docs/ANDROID_SIGNING.md."
           exit 1
 
-      - name: Build release APK
+      # Builds both the APK (sideloading / itch.io / Amazon Appstore) and the
+      # AAB (Google Play requires App Bundle format for new submissions) in
+      # one invocation so the native build is only compiled once.
+      - name: Build release APK + AAB
         working-directory: android
         env:
           SIGNED: ${{ steps.keystore.outputs.present }}
@@ -603,13 +606,13 @@ jobs:
         run: |
           chmod +x gradlew
           if [ "$SIGNED" = "true" ]; then
-            ./gradlew assembleRelease --no-daemon \
+            ./gradlew assembleRelease bundleRelease --no-daemon \
               -Pandroid.injected.signing.store.file="$KEYSTORE_PATH" \
               -Pandroid.injected.signing.store.password="$KEYSTORE_PASSWORD" \
               -Pandroid.injected.signing.key.alias="$KEY_ALIAS" \
               -Pandroid.injected.signing.key.password="$KEY_PASSWORD"
           else
-            ./gradlew assembleRelease --no-daemon
+            ./gradlew assembleRelease bundleRelease --no-daemon
           fi
 
       - name: Rename APK
@@ -623,6 +626,19 @@ jobs:
             mv "$out/app-release-unsigned.apk" frozen-bubble-android-tv.apk
           else
             echo "::error::No release APK found in $out"
+            ls -la "$out" || true
+            exit 1
+          fi
+
+      - name: Rename AAB
+        run: |
+          out=android/app/build/outputs/bundle/release
+          # Unlike the APK, Gradle uses the same filename for the bundle
+          # whether or not a signing config was injected.
+          if [ -f "$out/app-release.aab" ]; then
+            mv "$out/app-release.aab" frozen-bubble-android-tv.aab
+          else
+            echo "::error::No release AAB found in $out"
             ls -la "$out" || true
             exit 1
           fi
@@ -643,6 +659,14 @@ jobs:
         with:
           name: Android
           path: frozen-bubble-android-tv.apk
+
+      # AAB isn't installable by sideloading, so it's a separate artifact
+      # rather than bundled with the APK -- only needed for the Play Console
+      # upload, not for itch.io/Amazon Appstore/direct download.
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Android-AAB
+          path: frozen-bubble-android-tv.aab
 
   # ────────────────────────────────────────────────────────────────
   # WebAssembly (WASM) — SDL3 via Emscripten ports
@@ -744,6 +768,7 @@ jobs:
             macOS/frozen-bubble-macos-arm64.dmg
             Windows/frozen-bubble-windows-setup.exe
             Android/frozen-bubble-android-tv.apk
+            Android-AAB/frozen-bubble-android-tv.aab
             WASM/frozen-bubble-wasm.zip
 
   # ────────────────────────────────────────────────────────────────

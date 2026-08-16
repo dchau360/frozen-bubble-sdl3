@@ -5,7 +5,7 @@
 | | Version | Notes |
 |---|---|---|
 | JDK | 17 | Temurin is what CI uses |
-| Android SDK | compileSdk / targetSdk **34** | via Android Studio SDK Manager |
+| Android SDK | compileSdk / targetSdk **36** | via Android Studio SDK Manager |
 | NDK | **25.2.9519653** | pinned in `app/build.gradle` (`ndkVersion`) |
 | CMake | **3.22.1** | pinned in `app/build.gradle`; install via the SDK Manager |
 
@@ -33,19 +33,21 @@ always a missing or partial submodule checkout rather than a real build error.
 ```bash
 cd android
 ./gradlew assembleDebug     # debug APK
-./gradlew assembleRelease   # release APK
+./gradlew assembleRelease   # release APK  (sideloading, itch.io, Amazon Appstore)
+./gradlew bundleRelease     # release AAB  (Google Play submission)
 ```
 
-Output lands in `app/build/outputs/apk/`. You can also open `android/` in
-Android Studio and click Run.
+APK output lands in `app/build/outputs/apk/`; the AAB in
+`app/build/outputs/bundle/release/`. You can also open `android/` in Android
+Studio and click Run.
 
-A local `assembleRelease` produces `app-release-unsigned.apk` unless you supply
-signing configuration, because the release build type declares no
+A local `assembleRelease`/`bundleRelease` produces an unsigned artifact unless
+you supply signing configuration, because the release build type declares no
 `signingConfig`. That is deliberate — release keys live in CI secrets, not in
 the repository. See [../docs/ANDROID_SIGNING.md](../docs/ANDROID_SIGNING.md) for
 how tagged releases are signed with a persistent key, and why a tagged build
 fails outright rather than shipping an APK that Android would refuse to install
-over the previous version.
+over the previous version. The same signing mechanism applies to the AAB.
 
 ## Versioning
 
