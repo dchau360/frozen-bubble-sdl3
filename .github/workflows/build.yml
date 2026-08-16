@@ -545,10 +545,14 @@ jobs:
           chmod +x gradlew
           ./gradlew :app:testDebugUnitTest --no-daemon
 
+      # Source is a 512x512 PNG cropped from the in-game pause-screen penguin
+      # portrait (share/gfx/pause_0035.png) -- the only other icon source in
+      # the repo tops out at 64x64, which upscaled to blur once resized up to
+      # the 192x192 xxxhdpi mipmap this loop generates.
       - name: Generate app icons from source PNG
         run: |
           sudo apt-get install -y imagemagick
-          SRC="share/icons/frozen-bubble-icon-64x64.png"
+          SRC="share/icons/frozen-bubble-icon-512x512.png"
           RES="android/app/src/main/res"
           for size_dir in "48:mipmap-mdpi" "72:mipmap-hdpi" "96:mipmap-xhdpi" "144:mipmap-xxhdpi" "192:mipmap-xxxhdpi"; do
             size="${size_dir%%:*}"

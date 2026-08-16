@@ -15,14 +15,20 @@
   doesn't require portrait screenshots, just 2–8 images between 320px and
   3840px per side with an aspect ratio no more extreme than 2:1. All three
   qualify.
+- **`icon-512.png`** (512×512, 24-bit RGB) — Play's high-res store icon.
+  Cropped and upscaled from the in-game pause-screen penguin portrait
+  (`share/gfx/pause_0035.png`, 190×143 native), not a generic stock image,
+  on the same icy gradient as the feature graphic. This is also now the
+  **actual app launcher icon source** —
+  `share/icons/frozen-bubble-icon-512x512.png` is the same image, and
+  [`.github/workflows/build.yml`](../../.github/workflows/build.yml)'s
+  "Generate app icons from source PNG" step now reads from it instead of
+  the old 64×64 source, so every mipmap density it generates (48–192px) is
+  a downscale from 512 rather than an upscale from 64. The checked-in
+  `android/app/src/main/res/mipmap-hdpi/ic_launcher.png` fallback (used by
+  local/Android-Studio builds that skip that CI step) was regenerated to
+  match.
 
-## Not ready — needs real source art
-
-- **`icon-512-draft-upscaled-low-quality.png`** — Play's high-res store
-  icon needs a 512×512 32-bit PNG. The only source in this repo is
-  `share/icons/frozen-bubble-icon-64x64.png` (and a `.ico` that tops out at
-  the same 64×64). This file is an 8x Lanczos upscale of that — visibly
-  soft/blurry at real size, kept here only so the gap is visible rather
-  than silently shipping a bad icon. Don't submit it as-is. It needs either
-  the original higher-resolution artwork (if it exists somewhere outside
-  this repo) or a redraw.
+There's still headroom for a proper redraw or vector source at some point —
+this is a crop of one in-game animation frame, not custom-made icon art —
+but it's a real, presentable, on-brand icon rather than a blurry stopgap.
