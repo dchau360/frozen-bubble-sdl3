@@ -46,7 +46,15 @@ All three game modes are available in both local and network play, chosen by the
 
 The host configures malus, chain reactions, victories limit, per-player colours and aim guides, mouse/touch aim and more from the game room — all joined players see changes live. Rooms above 5 players get battle-royale UI: four opponent boards on screen at a time, ranked by who's most relevant to you, with **Tab** to page manually, keys **1–4** to target a visible opponent, and a spectate mode after you're knocked out.
 
+<p align="center">
+  <img src="docs/screenshots/game-room.png" alt="Game room screen: match rules, per-player setup grid, and a 20-slot player roster" width="480">
+</p>
+
 After each round a per-player stats table shows bubbles fired and popped, malus sent and received, and kills. In-game chat works during play (**Enter** or **T**, gamepad **X**) and between rounds.
+
+<p align="center">
+  <img src="docs/screenshots/round-stats.png" alt="Post-round stats table showing each player's wins, bubbles fired and popped, attack and defense malus, and kills" width="480">
+</p>
 
 ---
 
