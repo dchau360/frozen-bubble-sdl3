@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Privacy Policy — Frozen Bubble: SDL3</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #ffffff;
+    --fg: #1a1a1a;
+    --muted: #555;
+    --link: #0b57d0;
+    --border: #ddd;
+    --code-bg: #f2f2f2;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #14161a;
+      --fg: #e8e8e8;
+      --muted: #a8a8a8;
+      --link: #7fb2ff;
+      --border: #333;
+      --code-bg: #1f2226;
+    }
+  }
+  body {
+    background: var(--bg);
+    color: var(--fg);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    line-height: 1.6;
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 2.5rem 1.25rem 4rem;
+  }
+  h1 { font-size: 1.7rem; margin-bottom: 0.25rem; }
+  h2 { font-size: 1.2rem; margin-top: 2.2rem; border-bottom: 1px solid var(--border); padding-bottom: 0.3rem; }
+  p, li { color: var(--fg); }
+  .effective-date { color: var(--muted); margin-top: 0; }
+  a { color: var(--link); }
+  code { background: var(--code-bg); padding: 0.15em 0.4em; border-radius: 4px; font-size: 0.9em; }
+  footer { margin-top: 3rem; color: var(--muted); font-size: 0.9rem; }
+</style>
+</head>
+<body>
+
+<h1>Privacy Policy — Frozen Bubble: SDL3</h1>
+<p class="effective-date"><strong>Effective date:</strong> August 16, 2026</p>
+
+<p>Frozen Bubble: SDL3 ("the app") is a free, open-source game
+(<a href="https://github.com/dchau360/frozen-bubble-sdl3/blob/main/LICENSE">GPLv2 licensed</a>),
+source at
+<a href="https://github.com/dchau360/frozen-bubble-sdl3">github.com/dchau360/frozen-bubble-sdl3</a>.
+This policy covers the Android build distributed on Google Play; the same
+practices apply to the other platform builds except where noted (ads and
+in-app purchases are Android-only).</p>
+
+<p>The app has no user accounts, no analytics SDK, and does not collect your
+name, email, or any other real-world identity. What it does handle is
+described below.</p>
+
+<h2>Information collected</h2>
+
+<p><strong>Nickname.</strong> You choose a display nickname in Settings. It's
+stored only on your device and sent to whichever multiplayer server you
+connect to, so other players in your game can see it. It is not tied to any
+account and isn't sent anywhere else.</p>
+
+<p><strong>Network connection data.</strong> Playing network multiplayer means
+connecting to a game server over TCP — your IP address is visible to that
+server the same way it is for any internet connection, and the reference
+server implementation
+(<a href="https://github.com/dchau360/frozen-bubble-sdl3/tree/main/server"><code>server/</code></a>)
+writes IP address, nickname, and connect/disconnect times to a local server
+log for operational purposes (abuse investigation, debugging). Per-nickname
+match statistics (wins, bubbles fired/popped) are also persisted
+server-side so they can be shown across sessions. <strong>Anyone can run a
+Frozen Bubble server</strong> — the app ships with no server of its own and
+fetches a community-maintained list of public servers on startup (see the
+<a href="https://github.com/dchau360/frozen-bubble-servers">frozen-bubble-servers</a>
+repo). The developer only controls the logging behavior of the reference
+server code; a third-party server operator's own practices are outside this
+policy's scope.</p>
+
+<p><strong>"Follow a server" push token (opt-in, Android/iOS only).</strong>
+If you tap the star on a server to follow it, the app registers a Firebase
+Cloud Messaging (Android) or APNs (iOS) device token with <strong>that
+specific server</strong>, so its operator's optional push relay can notify
+you when someone joins. The token is sent only to servers you explicitly
+follow, is stored alongside your platform (<code>ios</code>/<code>android</code>)
+and a last-notified timestamp for cooldown purposes, and is removed when you
+unfollow. See
+<a href="https://github.com/dchau360/frozen-bubble-sdl3/blob/main/docs/PUSH_SETUP.md">docs/PUSH_SETUP.md</a>
+for the full mechanism.</p>
+
+<p><strong>Advertising identifiers (Android only).</strong> The Android build
+shows an interstitial ad via Google AdMob when entering the multiplayer
+lobby. AdMob's SDK collects device and advertising identifiers under
+Google's own policies — see
+<a href="https://policies.google.com/privacy">Google's Privacy Policy</a> and
+<a href="https://policies.google.com/technologies/partner-sites">How Google uses information from sites or apps that use our services</a>.
+The developer does not separately collect or receive this data.</p>
+
+<p><strong>Purchase data (Android only).</strong> A one-time "Remove Ads"
+purchase is processed entirely by Google Play Billing. The app never sees
+your payment method, card number, or billing address — it only receives a
+purchase token from Google confirming entitlement, which is stored locally
+on your device to keep ads off.</p>
+
+<p><strong>Crash or diagnostic data.</strong> The app does not integrate any
+crash-reporting or analytics SDK, so none is collected by the developer.</p>
+
+<h2>How information is used</h2>
+<ul>
+  <li>Nickname and network data: to run the multiplayer match you're playing.</li>
+  <li>Push token: solely to deliver the join notification for servers you
+      followed; never used for advertising or analytics.</li>
+  <li>Advertising identifiers: handled entirely within Google's AdMob SDK to
+      select and measure ads; not accessed by the developer directly.</li>
+  <li>Purchase token: to keep the "ads removed" state accurate on your
+      device.</li>
+</ul>
+
+<h2>Third-party services</h2>
+<ul>
+  <li><a href="https://policies.google.com/privacy">Google AdMob</a> — ads (Android)</li>
+  <li><a href="https://policies.google.com/privacy">Google Play Billing</a> — in-app purchases (Android)</li>
+  <li><a href="https://firebase.google.com/support/privacy">Firebase Cloud Messaging</a> — push delivery for followed servers (Android)</li>
+  <li>Apple Push Notification service — push delivery for followed servers (iOS)</li>
+</ul>
+
+<h2>Data retention</h2>
+<ul>
+  <li>Nickname and settings live only in local app storage until you clear app data or uninstall.</li>
+  <li>Followed-server push tokens are removed from a server's registry when you unfollow, or can be requested removed by contacting that server's operator.</li>
+  <li>Server-side connection logs and match statistics are retained at the discretion of whoever operates that particular server.</li>
+</ul>
+
+<h2>Children's privacy</h2>
+<p>The app is not directed at children under 13 and does not knowingly
+collect personal information from them. Nicknames are free-text and players
+should avoid entering real names or other identifying information.</p>
+
+<h2>Your choices</h2>
+<ul>
+  <li>Turn off ads permanently with the one-time "Remove Ads" purchase.</li>
+  <li>Unfollow any server to stop push registration for it.</li>
+  <li>Play local single-player or local multiplayer to avoid any network data transmission entirely.</li>
+  <li>Uninstalling the app removes all locally stored settings and nicknames.</li>
+</ul>
+
+<h2>Changes to this policy</h2>
+<p>This policy may be updated as the app changes (for example, if a new
+platform or feature is added). Material changes will be noted in
+<a href="https://github.com/dchau360/frozen-bubble-sdl3/blob/main/CHANGELOG.md">CHANGELOG.md</a>.</p>
+
+<h2>Contact</h2>
+<p>This is an independent open-source project with no company behind it.
+Questions or data-removal requests: open an issue at
+<a href="https://github.com/dchau360/frozen-bubble-sdl3/issues">github.com/dchau360/frozen-bubble-sdl3/issues</a>.</p>
+
+<footer>Frozen Bubble: SDL3 — <a href="https://github.com/dchau360/frozen-bubble-sdl3">source on GitHub</a></footer>
+
+</body>
+</html>
