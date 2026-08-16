@@ -148,7 +148,7 @@ Or right-click the app → **Open** → **Open** to bypass Gatekeeper once.
 ## More
 
 - [Changelog](CHANGELOG.md) — release history
-- [Privacy policy](docs/PRIVACY_POLICY.md) — what data the app and its servers handle
+- [Privacy policy](https://dchau360.github.io/frozen-bubble-sdl3/) — what data the app and its servers handle
 - [Building from source](docs/BUILDING.md) — all platforms, including WebAssembly, Android and iOS
 - [iOS notes](docs/IOS.md) — experimental unsigned build, and how to sign it
 - [Compared with the original](docs/PARITY.md) — features added, fixes to the original's own server code, and what's reproduced unchanged
