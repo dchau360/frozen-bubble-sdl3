@@ -1,0 +1,42 @@
+name: Deploy GitHub Pages
+
+# Publishes the static site on the gh-pages branch (currently just the
+# privacy policy needed for Google Play submission -- see
+# docs/PRIVACY_POLICY.md for the source of truth and PRIVACY_POLICY.md
+# vs this branch's index.html). Deliberately scoped to a dedicated branch
+# rather than serving docs/ from main, since docs/ also contains internal
+# audit and planning notes that shouldn't be published as a website.
+
+on:
+  push:
+    branches: [gh-pages]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: gh-pages
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: .
+
+      - id: deployment
+        uses: actions/deploy-pages@v4
