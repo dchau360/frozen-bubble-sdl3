@@ -430,7 +430,7 @@ void MainMenu::NetPanelLobbyActionsRender() {
                 int sx = 622 - tw;
                 if (startSel) drawSelection({sx - 6, 10, tw + 12, 24});
                 drawLabel("Start game!", sx, 14, startColor);
-                AddPanelTapRow(12, {sx - 6, 10, tw + 12, 24});
+                AddPanelTapRow(kRoomStart, {sx - 6, 10, tw + 12, 24});
             }
             drawPanel({10, 42, 430, 286}, panelFill, panelEdge);
             drawLabel("MATCH RULES", 20, 48, textGold);
