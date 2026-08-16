@@ -519,10 +519,10 @@ jobs:
           key: gradle-${{ hashFiles('android/**/*.gradle*', 'android/**/gradle-wrapper.properties') }}
           restore-keys: gradle-
 
-      - name: Install NDK 25
+      - name: Install NDK 25 + platform 36
         run: |
           $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager \
-            "ndk;25.2.9519653"
+            "ndk;25.2.9519653" "platforms;android-36" "build-tools;36.0.0"
 
       - name: Init SDL3 submodules
         run: |

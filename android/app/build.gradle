@@ -23,12 +23,12 @@ if (firebaseEnabled) {
 
 android {
     namespace 'org.frozenbubble'
-    compileSdk 34
+    compileSdk 36
 
     defaultConfig {
         applicationId "org.frozenbubble"
         minSdk 21
-        targetSdk 34
+        targetSdk 36
         ndkVersion "25.2.9519653"
         versionCode 20
         versionName "2.4.37"
