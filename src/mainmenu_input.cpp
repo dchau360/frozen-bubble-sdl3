@@ -1104,16 +1104,24 @@ void MainMenu::SubmitLobbyChatInput(NetworkClient *netClient) {
     }
 #endif
 #if defined(__IOS_PORT__) || defined(__ANDROID__)
-    // Touch has no keyboard until something asks for one, and activating the
-    // chat row never did: it went straight to "send", which with an empty field
-    // does nothing at all -- so on a phone the row simply appeared dead.
+    // Neither touch nor a TV remote has a keyboard until something asks for
+    // one, and activating the chat row never did: it went straight to "send",
+    // which with an empty field does nothing at all -- so the row simply
+    // appeared dead.
     //
     // Hand over to the dedicated chat input mode instead. It already raises the
     // system keyboard and routes SDL_EVENT_TEXT_INPUT into this same buffer,
-    // which typing into the row does not: that path reads key events, and a
-    // soft keyboard reports characters as text input, not keystrokes. Enter
-    // there sends and comes back here.
-    if (networkChatInput[0] == '\0' && DeviceHasTouchscreen()) {
+    // which typing into the row does not: that path reads key events, and both
+    // a soft keyboard and a TV's on-screen keyboard report characters as text
+    // input, not keystrokes. Enter there sends and comes back here.
+    //
+    // Deliberately not gated on DeviceHasTouchscreen(): a TV box needs this
+    // handover just as much as a phone, having no keyboard either, and the
+    // lobby's T-to-chat shortcut is a key a remote does not have. The gate used
+    // to be here and was harmless only because that predicate answered true on
+    // every Android device; once it learned to say false on a TV, it took TV
+    // chat with it.
+    if (networkChatInput[0] == '\0') {
         networkInputMode = 4;
         SDL_StopTextInput(SDL_GetKeyboardFocus());
         SDL_StartTextInput(SDL_GetKeyboardFocus());
