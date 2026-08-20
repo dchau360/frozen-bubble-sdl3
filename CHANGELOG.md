@@ -1,5 +1,21 @@
 # Changelog
 
+## v2.4.38
+
+- **Fix: Android TV launched in a squeezed portrait window instead of filling
+  the screen.** A per-device orientation change shipped in v2.4.37 picked
+  portrait or landscape based on whether the device had a touchscreen — but
+  Android TV boxes register a touch device too (both because Android TV
+  itself can claim the touchscreen feature, and because SDL registers a touch
+  device for any virtual input device, which every Android device has), so
+  every TV got portrait. The game now asks the device's UI mode instead.
+- **Fix: lobby and game-room chat did nothing on Android TV**, a side effect
+  of the same touchscreen check above gating the keyboard handover chat
+  needs. TV boxes have no keyboard either, so they need that handover just
+  as much as a phone; the check is gone. Verified on real Fire TV hardware.
+- **Docs:** noted that a sluggish Fire TV is usually fixed by a reboot —
+  under [Android TV](README.md#android-tv) in the README.
+
 ## v2.4.37
 
 - **New: follow a server and be told when someone joins it.** Press **F** on a
