@@ -127,7 +127,7 @@ Sideload with the **Downloader** app from the Amazon Appstore: enter code **1308
 
 **Entering text** (IP address, nickname): when a field is active the on-screen keyboard appears. If **Delete/Clear** doesn't respond straight away, press any letter key first — the field is then active, and Delete will erase both it and the existing text.
 
-**On a phone or tablet**, the same APK installs and runs in portrait, decided automatically from whether the device has a touchscreen — a TV box stays landscape. Mouse/touch aim is also on by default there; see [Controls](#controls).
+**On a phone or tablet**, the same APK installs and runs in portrait, decided automatically from the device's UI mode — a TV box stays landscape. Mouse/touch aim is also on by default there; see [Controls](#controls).
 
 ---
 

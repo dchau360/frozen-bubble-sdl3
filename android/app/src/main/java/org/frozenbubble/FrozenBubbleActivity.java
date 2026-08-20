@@ -9,7 +9,12 @@
  */
 package org.frozenbubble;
 
+import org.libsdl.app.SDL;
 import org.libsdl.app.SDLActivity;
+import android.app.UiModeManager;
+import android.content.Context;
+import android.content.pm.PackageManager;
+import android.content.res.Configuration;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.KeyEvent;
@@ -116,6 +121,45 @@ public class FrozenBubbleActivity extends SDLActivity {
      */
     public static String getPushToken() {
         return PushManager.getToken();
+    }
+
+    /**
+     * Called from C++ via JNI. True on a TV box, false on a phone or tablet.
+     *
+     * The game needs this to pick a screen orientation, an aim default and a
+     * chat-keyboard behaviour, and it cannot ask whether a touchscreen exists
+     * to find out: <em>Android TV devices report that they have one.</em>
+     * Google's own Android TV emulator lists
+     * {@code android.hardware.touchscreen} in {@code pm list features}, and
+     * SDL is looser still -- {@code SDLActivity.initTouch()} registers a touch
+     * device for any {@code InputDevice.isVirtual()}, which every Android
+     * device has, so {@code SDL_GetTouchDevices()} is non-empty even on a TV.
+     * Asking about touch hardware therefore answers "yes" everywhere and
+     * discriminates nothing.
+     *
+     * UI mode is the question that actually has different answers:
+     * {@code UI_MODE_TYPE_TELEVISION} is what the platform sets for a
+     * leanback device. {@code FEATURE_LEANBACK} is checked as a fallback for
+     * boxes that under-report their UI mode.
+     *
+     * Wrapped as a static on this class for the same JNI-classloader reason
+     * as {@link #getPushToken()} above.
+     */
+    public static boolean isTelevision() {
+        Context ctx = SDL.getContext();
+        if (ctx == null) {
+            return false;
+        }
+        UiModeManager uiMode =
+                (UiModeManager) ctx.getSystemService(Context.UI_MODE_SERVICE);
+        if (uiMode != null
+                && uiMode.getCurrentModeType() == Configuration.UI_MODE_TYPE_TELEVISION) {
+            return true;
+        }
+        PackageManager pm = ctx.getPackageManager();
+        return pm != null
+                && (pm.hasSystemFeature(PackageManager.FEATURE_LEANBACK)
+                    || pm.hasSystemFeature("android.hardware.type.television"));
     }
 
     public static String fetchUrl(String urlStr) {

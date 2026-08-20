@@ -220,7 +220,55 @@ void RequestPersistentStorageFlush() {
 #endif
 }
 
+#ifdef __ANDROID__
+// Calls FrozenBubbleActivity.isTelevision(). Same Activity-object route as
+// androidPushToken() below, and for the same JNI-classloader reason.
+//
+// Cached: the answer cannot change while the process lives, and one caller
+// (the chat row in mainmenu_input.cpp) asks once per frame.
+static bool androidIsTelevision() {
+    static int cached = -1;
+    if (cached >= 0) return cached != 0;
+
+    JNIEnv *env = (JNIEnv *)SDL_GetAndroidJNIEnv();
+    jobject activity = (jobject)SDL_GetAndroidActivity();
+    if (!env || !activity) return false;   // not cached: try again once it exists
+
+    jclass cls = env->GetObjectClass(activity);
+    jmethodID mid = env->GetStaticMethodID(cls, "isTelevision", "()Z");
+    if (!mid) {
+        SDL_Log("androidIsTelevision: isTelevision method not found");
+        env->ExceptionClear();
+        env->DeleteLocalRef(cls);
+        env->DeleteLocalRef(activity);
+        return false;
+    }
+
+    jboolean result = env->CallStaticBooleanMethod(cls, mid);
+    if (env->ExceptionCheck()) {
+        env->ExceptionClear();
+        env->DeleteLocalRef(cls);
+        env->DeleteLocalRef(activity);
+        return false;
+    }
+    env->DeleteLocalRef(cls);
+    env->DeleteLocalRef(activity);
+
+    cached = result ? 1 : 0;
+    return cached != 0;
+}
+#endif
+
 bool DeviceHasTouchscreen() {
+#ifdef __ANDROID__
+    // A TV box has no touchscreen, but neither Android nor SDL will say so:
+    // Android TV reports android.hardware.touchscreen (Google's own TV
+    // emulator does), and SDL_GetTouchDevices() counts virtual input devices,
+    // which every Android device has -- so the check below answers "yes" on a
+    // TV and the game would pick portrait, touch aim and a soft keyboard for
+    // a device driven by a remote. Ask what kind of device this is instead.
+    if (androidIsTelevision()) return false;
+#endif
     int count = 0;
     SDL_TouchID *devices = SDL_GetTouchDevices(&count);
     SDL_free(devices);
