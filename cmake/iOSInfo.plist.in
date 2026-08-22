@@ -48,6 +48,17 @@
         <string>arm64</string>
     </array>
 
+    <!-- Joining a server on the same network is a local-network connection, and
+         since iOS 14 those are gated behind a privacy prompt. Without this key
+         the system has nothing to show the player and denies the connection, so
+         LAN play fails with what looks like an unreachable host. Only the
+         prompt is covered here: LAN *auto-discovery* additionally needs the
+         multicast entitlement, which Apple grants by separate request, so the
+         LAN list can stay empty even once this is set -- enter the host's
+         address directly. -->
+    <key>NSLocalNetworkUsageDescription</key>
+    <string>Frozen Bubble connects to Frozen Bubble game servers on your local network so you can play with people nearby.</string>
+
     <!-- An empty UILaunchScreen dict is what tells iOS the app is built against
          a modern SDK. Without any launch-screen key the system runs it in
          compatibility mode at a legacy resolution and letterboxes the result,

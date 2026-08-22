@@ -8,11 +8,11 @@ registry, the relay — is already built and works without them, logging what it
 
 This is the operator/developer side. Players need none of it.
 
-> **Status:** Android has been verified end to end on a real device — a real
-> FCM token, a real join event, a real banner. iOS is built the same way but
-> has not yet been confirmed against a real APNs delivery (needs a paid
-> Apple Developer account); everything short of the live Apple round-trip
-> works today.
+> **Status:** Both platforms verified end to end on real devices — a real
+> device token, a real join event, a real delivery. iOS was confirmed against
+> live APNs on 2026-08-22 with a development-signed build on an iPhone: the
+> token registered, a join fired the hook, and the relay logged
+> `pushed to ios`.
 
 > **Cost:** Firebase Cloud Messaging is free. APNs requires a **paid Apple
 > Developer Program membership, $99/year** — free Apple IDs cannot create push
