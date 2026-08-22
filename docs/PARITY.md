@@ -70,7 +70,7 @@ twenty, which needed new UI to be playable at all:
 
 | Feature | Added |
 |---|---|
-| **Follow a server** — mark a server with **F** (or tap the star on its row) and it notifies your phone when a player joins, so you can be told a game is starting without leaving the app open. Requires the server operator to run the `notify-relay` sidecar; see [SetupServer.md](../SetupServer.md) | unreleased |
+| **Follow a server** — mark a server with **F** (or tap the star on its row, or the same toggle in the online lobby's header once connected) and it notifies your phone when a player joins, so you can be told a game is starting without leaving the app open. A server that doesn't understand the follow protocol (an older `fb-server`, or anything else on that port) says so instead of the toggle silently doing nothing. Requires the server operator to run the `notify-relay` sidecar; see [SetupServer.md](../SetupServer.md) | unreleased |
 
 The notification is delivered by the OS, so it arrives whether the app is
 backgrounded or fully closed. It is deliberately suppressed while the app is in

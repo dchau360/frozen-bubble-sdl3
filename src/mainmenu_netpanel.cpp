@@ -389,6 +389,7 @@ void MainMenu::NetPanelLobbyActionsRender() {
             // In lobby - show create/join options
             actions.push_back("Chat");
             actions.push_back("Create new game");
+            actions.push_back("Follow this server");  // index kLobbyFollow; rendered in the header below, not here
 
             std::vector<GameRoom> games = netClient->GetGameList();
             for (const auto& game : games) {
@@ -440,6 +441,50 @@ void MainMenu::NetPanelLobbyActionsRender() {
             char title[160];
             snprintf(title, sizeof(title), "ONLINE LOBBY   |   %s", netClient->GetPlayerNick().c_str());
             drawLabel(title, 20, 14, textGold);
+
+            // Follow-this-server toggle, right-aligned in the header bar --
+            // same treatment as "Start game!" in the room header above, and
+            // reachable however this server was connected to (list star, LAN
+            // discovery, manual entry), since all of them land here once
+            // connected. netClient->GetNotifySupport() answers a one-time
+            // capability probe (ProbeNotifySupportIfNeeded()) so a server
+            // that has never heard of the follow protocol says so instead of
+            // silently doing nothing when toggled.
+            {
+                netClient->ProbeNotifySupportIfNeeded();
+                NotifySupport support = netClient->GetNotifySupport();
+                bool followed = GameSettings::Instance()->IsServerFollowed(
+                    netClient->GetHost(), netClient->GetPort());
+
+                const char* followText;
+                bool interactive;
+                if (support == NotifySupport::Unsupported) {
+                    followText = "Follow: not supported by server";
+                    interactive = false;
+                } else if (support == NotifySupport::Unknown) {
+                    followText = "Follow: checking...";
+                    interactive = false;
+                } else if (followed) {
+                    followText = "★ Following this server";
+                    interactive = true;
+                } else {
+                    followText = "☆ Follow this server (F)";
+                    interactive = true;
+                }
+
+                bool followSel = interactive && (selectedActionIndex == kLobbyFollow);
+                SDL_Color followColor = followSel ? textGold : (interactive ? textMain : textMuted);
+                panelText.UpdateColor(followColor, {20, 12, 32, 255});
+                panelText.UpdateText(roomRenderer, followText, 0);
+                int tw = panelText.Coords()->w;
+                int sx = 622 - tw;
+                if (followSel) drawSelection({sx - 6, 10, tw + 12, 24});
+                drawLabel(followText, sx, 14, followColor);
+                if (interactive) {
+                    AddPanelTapRow(kLobbyFollow, {sx - 6, 10, tw + 12, 24}, -1, false, SDLK_F);
+                }
+            }
+
             drawPanel({10, 42, 428, 276}, panelFill, panelEdge);
             drawPanel({446, 42, 184, 276}, {18, 55, 65, 225}, panelEdge);
             drawLabel("GAME ROOMS", 20, 48, textGold);
@@ -449,9 +494,9 @@ void MainMenu::NetPanelLobbyActionsRender() {
         // scroll-offset state, this is recomputed from selectedActionIndex
         // every frame. Shows exactly 5 rooms at a time.
         int firstVisibleRoom = 0;
-        if (!currentGame && selectedActionIndex >= 2) {
-            firstVisibleRoom = selectedActionIndex - 2;
-            int maxFirst = std::max(0, (int)actions.size() - 2 - 5);
+        if (!currentGame && selectedActionIndex >= kLobbyFollow + 1) {
+            firstVisibleRoom = selectedActionIndex - (kLobbyFollow + 1);
+            int maxFirst = std::max(0, (int)actions.size() - (kLobbyFollow + 1) - 5);
             if (firstVisibleRoom > maxFirst) firstVisibleRoom = maxFirst;
         }
 
@@ -465,9 +510,12 @@ void MainMenu::NetPanelLobbyActionsRender() {
             }
             // Start Match/Start game is rendered in the header bar above.
             if (currentGame && i == 12 && hasStartRow) continue;
+            // Follow this server is rendered in the header bar above.
+            if (!currentGame && (int)i == kLobbyFollow) continue;
             // Outside the lobby room-list scroll window.
-            if (!currentGame && i >= 2 &&
-                ((int)i - 2 < firstVisibleRoom || (int)i - 2 >= firstVisibleRoom + 5)) continue;
+            if (!currentGame && i >= (size_t)(kLobbyFollow + 1) &&
+                ((int)i - (kLobbyFollow + 1) < firstVisibleRoom ||
+                 (int)i - (kLobbyFollow + 1) >= firstVisibleRoom + 5)) continue;
 
             int renderY = 0;
             int renderX = actionStartX;
@@ -487,13 +535,13 @@ void MainMenu::NetPanelLobbyActionsRender() {
                 renderY = 68;
                 highlightW = 340;
             } else {
-                renderY = 98 + ((int)i - 2 - firstVisibleRoom) * 40;
+                renderY = 98 + ((int)i - (kLobbyFollow + 1) - firstVisibleRoom) * 40;
                 renderX = 20;
                 highlightW = 408;
             }
 
             // Card border behind lobby room entries.
-            if (!currentGame && i >= 2) {
+            if (!currentGame && i >= (size_t)(kLobbyFollow + 1)) {
                 SDL_Rect card = {14, renderY - 6, 420, 34};
                 SDL_SetRenderDrawColor(roomRenderer, 20, 72, 79, 215);
                 { SDL_FRect fr = ToFRect(card); SDL_RenderFillRect(roomRenderer, &fr); }
@@ -1012,6 +1060,30 @@ void MainMenu::ToggleFollowServer(const ServerInfo& server) {
     }
 
     PlayMenuSFX("menu_selected");
+}
+
+void MainMenu::ToggleFollowCurrentServer() {
+    NetworkClient* netClient = NetworkClient::Instance();
+    if (!netClient->IsConnected()) return;
+
+    switch (netClient->GetNotifySupport()) {
+        case NotifySupport::Unsupported:
+            connectErrorMsg = "This server doesn't support follow notifications";
+            PlayMenuSFX("menu_change");
+            return;
+        case NotifySupport::Unknown:
+            // Still probing -- act on nothing rather than guess.
+            PlayMenuSFX("menu_change");
+            return;
+        case NotifySupport::Supported:
+            break;
+    }
+
+    ServerInfo server;
+    server.host = netClient->GetHost();
+    server.port = netClient->GetPort();
+    server.name = netClient->GetHost();  // no separate display name once connected
+    ToggleFollowServer(server);
 }
 
 void MainMenu::RefreshFollowRegistration() {

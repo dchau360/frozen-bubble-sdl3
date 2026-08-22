@@ -93,6 +93,12 @@ struct ServerInfo {
     int latencyMs = -1;   // Round-trip TCP connect time in ms; -1 = unreachable/unknown
 };
 
+// Whether the currently-connected server understands NOTIFYREG/NOTIFYUNREG at
+// all -- an older fb-server, or anything else answering on that port, has
+// never heard of them and the protocol gives no other way to tell short of
+// asking. Reset to Unknown on every new connection.
+enum class NotifySupport { Unknown, Supported, Unsupported };
+
 class NetworkClient {
 public:
     NetworkClient();
@@ -129,6 +135,15 @@ public:
     // notification cooldown.
     bool SendNotifyReg(const char* platform, const char* token);
     bool SendNotifyUnreg(const char* token);
+
+    // Capability probe for the follow feature: sends a side-effect-free
+    // NOTIFYUNREG for a token nothing will ever hold, once per connection,
+    // and reads the next "OK" (supported) vs "UNKNOWN_COMMAND" (not) off the
+    // wire in HandleServerResponse(). No-op once notifySupport is already
+    // known, or while a probe is already in flight, so it is safe to call
+    // every frame from render code.
+    void ProbeNotifySupportIfNeeded();
+    NotifySupport GetNotifySupport() const { return notifySupport; }
 
     bool SendCommand(const char* command);
 
@@ -265,6 +280,11 @@ private:
     void HandleServerResponse(const std::string& response);
     void ParseListResponse(const char* listData);
     void HandlePushMessage(const std::string& pushMsg);
+
+    // Follow-feature capability probe (native and WASM both use this, unlike
+    // the WASM-only pending* blocks below).
+    NotifySupport notifySupport = NotifySupport::Unknown;
+    bool pendingNotifyProbe = false;
 
     // WASM async CREATE state
     bool pendingCreate = false;

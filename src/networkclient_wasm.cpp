@@ -153,6 +153,8 @@ bool NetworkClient::Connect(const char* host, int port) {
 
     connectedHost = host ? host : "";
     connectedPort = port;
+    notifySupport = NotifySupport::Unknown;
+    pendingNotifyProbe = false;
 
     // Use wss:// when the page is served over HTTPS (browsers block mixed content).
     // Use ws:// on plain HTTP (local / itch.io iframe without forcing HTTPS).

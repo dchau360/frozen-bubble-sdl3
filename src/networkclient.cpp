@@ -106,6 +106,8 @@ bool NetworkClient::Connect(const char* host, int port) {
 
     connectedHost = host ? host : "";
     connectedPort = port;
+    notifySupport = NotifySupport::Unknown;
+    pendingNotifyProbe = false;
 
     socket_init();
 
@@ -594,6 +596,22 @@ bool NetworkClient::SendNotifyUnreg(const char* token) {
     return SendCommand(cmd);
 }
 
+void NetworkClient::ProbeNotifySupportIfNeeded() {
+    if (notifySupport != NotifySupport::Unknown || pendingNotifyProbe) return;
+    if (!IsConnected()) return;
+    // NOTIFYUNREG on a token nothing will ever hold is a genuine no-op on a
+    // server that understands it (notify_unregister() on an unregistered
+    // token does nothing) and answers "OK" -- an older fb-server, or
+    // anything else listening on that port, has never heard of NOTIFYREG /
+    // NOTIFYUNREG at all and answers "UNKNOWN_COMMAND" instead. That is the
+    // only signal the wire protocol offers for "does this server support
+    // follow", and it costs nothing to ask either way. HandleServerResponse()
+    // reads the answer off the very next line, same idiom as pendingCreate /
+    // pendingJoin above.
+    pendingNotifyProbe = true;
+    SendCommand("NOTIFYUNREG fb-follow-capability-probe");
+}
+
 bool NetworkClient::SendOptions(bool chainReaction, bool continueWhenLeave, bool singleTarget, int victoriesLimit, const int playerColors[5], const bool noCompress[5], const bool aimGuide[5], bool mouseEnabled, bool clearMode, bool disableMalus, bool teamMode, const int playerTeams[5], int teamCount) {
     // Send game options using SETOPTIONS command (original line 4468-4474)
     // Format: SETOPTIONS CHAINREACTION:0/1,...,NUMCOLORS_P1:N,...,NUMCOLORS_P5:N
@@ -1051,6 +1069,10 @@ void NetworkClient::HandleServerResponse(const std::string& response) {
     if (response.find("OK") != std::string::npos) {
         SDL_Log("Command successful: %s", response.c_str());
         lastErrorResponse.clear();
+        if (pendingNotifyProbe) {
+            notifySupport = NotifySupport::Supported;
+            pendingNotifyProbe = false;
+        }
 #ifdef __WASM_PORT__
         // Confirm a pending WASM CREATE on any OK response that isn't PART: OK.
         // We only need pendingCreate here — CREATE is the only command that sets it.
@@ -1104,6 +1126,11 @@ void NetworkClient::HandleServerResponse(const std::string& response) {
             pendingJoin = false;
         }
 #endif
+    } else if (response.find("UNKNOWN_COMMAND") != std::string::npos) {
+        if (pendingNotifyProbe) {
+            notifySupport = NotifySupport::Unsupported;
+            pendingNotifyProbe = false;
+        }
     } else if (response.find("PONG") != std::string::npos) {
         SDL_Log("Ping response");
     } else if (response.find("NICK_IN_USE") != std::string::npos) {

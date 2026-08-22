@@ -85,6 +85,15 @@ enum GameRoomRow {
     kRoomGridLast   = kRoomAim,   // Team is edited through the roster, not here
 };
 
+// The plain lobby's "Follow this server" toggle (0 = chat, 1 = create,
+// 2 = follow, 3+ = one per room). Rendered in the header bar rather than as
+// a list row -- the same treatment kRoomStart gets for "Start game!" -- but
+// it still occupies a real slot in the action list so keyboard/gamepad
+// Up/Down can reach it, not just touch. Reachable regardless of how this
+// server was connected to (list star, LAN discovery, or manual entry), since
+// all of those funnel through this one lobby screen once connected.
+static const int kLobbyFollow = 2;
+
 // Texture dimensions helper (mainmenu.cpp).
 SDL_Point GetSize(SDL_Texture *texture);
 

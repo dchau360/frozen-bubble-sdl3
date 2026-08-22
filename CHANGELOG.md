@@ -1,5 +1,28 @@
 # Changelog
 
+## Unreleased
+
+- **New: follow a server from its lobby, not just the server list**, with an
+  indicator when the server doesn't support it. The header of the online
+  lobby now carries the same follow toggle the LAN/Net list rows have (press
+  **F**, or tap it), so it's reachable no matter how you got connected —
+  picked off a list, found via LAN discovery, or typed in by hand. The client
+  probes the server once per connection with a side-effect-free `NOTIFYUNREG`
+  and reads back whether it was understood, so an older `fb-server` (or
+  anything else answering on that port) shows "not supported" instead of the
+  toggle silently doing nothing.
+- **Fix: iOS builds were missing `NSLocalNetworkUsageDescription`.** Without
+  it, iOS 14+ silently refuses any local-network connection attempt — LAN
+  play included — with no error the app can catch. Added to
+  `cmake/iOSInfo.plist.in`.
+- **Fix: `notify-relay`'s APNs sender could never have delivered a real
+  push.** It passed the `.p8` key's file *path* to `aioapns`, which expects
+  the key's PEM *contents* — every send failed parsing the pathname as PEM
+  before reaching Apple. Invisible until real credentials were supplied,
+  since stub mode never constructs the sender at all. iOS push confirmed
+  against live APNs on a real device once fixed — see
+  [docs/PUSH_SETUP.md](docs/PUSH_SETUP.md).
+
 ## v2.4.38
 
 - **Fix: Android TV launched in a squeezed portrait window instead of filling

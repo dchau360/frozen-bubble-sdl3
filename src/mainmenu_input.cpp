@@ -199,6 +199,15 @@ void MainMenu::HandleInput(SDL_Event *e){
                         if (serverIdx >= 0 && serverIdx < (int)publicServers.size())
                             ToggleFollowServer(publicServers[serverIdx]);
                     }
+                    // Same key, once already connected: follow the server
+                    // for this whole lobby rather than a list entry. Not
+                    // offered inside a game room -- you follow a server from
+                    // its lobby, matching the server side (see server/game.c
+                    // NOTIFYREG's own comment on the same rule).
+                    if (showingNetPanel && networkInLobby && networkInputMode == 0 &&
+                        !NetworkClient::Instance()->GetCurrentGame()) {
+                        ToggleFollowCurrentServer();
+                    }
                     break;
                 case SDLK_J:
                     if (showingNetPanel && networkInLobby) {
@@ -898,7 +907,7 @@ void MainMenu::MenuUpKey() {
                             } else {
                                 // In lobby
                                 std::vector<GameRoom> games = netClient->GetGameList();
-                                maxActions = 2 + games.size(); // Chat + Create + Join games
+                                maxActions = (kLobbyFollow + 1) + games.size(); // Chat + Create + Follow + Join games
                             }
                             selectedActionIndex--;
                             if (selectedActionIndex < 0) selectedActionIndex = maxActions - 1;
@@ -948,7 +957,7 @@ void MainMenu::MenuDownKey() {
                             } else {
                                 // In lobby
                                 std::vector<GameRoom> games = netClient->GetGameList();
-                                maxActions = 2 + games.size(); // Chat + Create + Join games
+                                maxActions = (kLobbyFollow + 1) + games.size(); // Chat + Create + Follow + Join games
                             }
                             selectedActionIndex++;
                             if (selectedActionIndex >= maxActions) selectedActionIndex = 0;
@@ -1330,11 +1339,16 @@ void MainMenu::MenuReturnKey() {
                                     netClient->CreateGame(kRoomSizes[netRoomSizeChoice]);
                                     netClient->AddStatusMessage("Game created - now you need to wait for players to join");
                                     AudioMixer::Instance()->PlaySFX("menu_selected");
+                                } else if (selectedActionIndex == kLobbyFollow) {
+                                    // Enter on the header's Follow row -- same action as the F
+                                    // shortcut, so a keyboard/gamepad user who found this row by
+                                    // navigating to it isn't left needing to know the letter.
+                                    ToggleFollowCurrentServer();
                                 } else {
-                                    // Join game (selectedActionIndex >= 2)
+                                    // Join game (selectedActionIndex >= kLobbyFollow + 1)
                                     SDL_Log("Join game action: selectedActionIndex=%d", selectedActionIndex);
                                     std::vector<GameRoom> games = netClient->GetGameList();
-                                    int gameIndex = selectedActionIndex - 2;
+                                    int gameIndex = selectedActionIndex - (kLobbyFollow + 1);
                                     SDL_Log("Join game: gameIndex=%d, games.size()=%d", gameIndex, (int)games.size());
                                     if (gameIndex >= 0 && gameIndex < (int)games.size()) {
                                         SDL_Log("Attempting to join game created by: %s", games[gameIndex].creator.c_str());
