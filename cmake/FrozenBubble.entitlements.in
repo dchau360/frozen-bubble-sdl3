@@ -7,16 +7,16 @@
          token, so "follow a server" registers nothing.
 
          The build itself is unsigned by default (see CMakeLists.txt), which
-         means this file does nothing until you sign with it:
-
-           codesign -f -s "Apple Development: you@example.com" \
-             --entitlements build-ios/FrozenBubble.entitlements \
-             build-ios/FrozenBubble.app
+         means this file does nothing until you sign with it: run codesign
+         with -f, -s "your signing identity", and the entitlements flag
+         pointed at this file (see docs/IOS.md for the exact command; not
+         reproduced here because AMFI's plist parser rejects a literal
+         double-hyphen flag name inside an XML comment).
 
          "development" matches a development provisioning profile and the APNs
          sandbox host; set FB_IOS_APS_ENVIRONMENT=production for a distribution
          profile. A token minted under one is rejected by the other, which is
-         the most common reason a correct-looking setup delivers nothing --
+         the most common reason a correct-looking setup delivers nothing;
          see docs/PUSH_SETUP.md. -->
     <key>aps-environment</key>
     <string>@FB_IOS_APS_ENVIRONMENT@</string>

@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v2.4.39
 
 - **New: follow a server from its lobby, not just the server list**, with an
   indicator when the server doesn't support it. The header of the online
@@ -22,6 +22,15 @@
   since stub mode never constructs the sender at all. iOS push confirmed
   against live APNs on a real device once fixed — see
   [docs/PUSH_SETUP.md](docs/PUSH_SETUP.md).
+- **Fix: the generated iOS entitlements file (`FrozenBubble.entitlements`)
+  could never be signed with.** Its own doc comment contained a literal `--`
+  sequence, which Apple's plist parser (AMFI) rejects inside an XML comment,
+  so `codesign --entitlements` failed outright on every attempt. Also
+  documented the real gotcha it was trying to explain: signing with only that
+  file's `aps-environment` key (rather than the full entitlement set a
+  provisioning profile carries) fails install with "missing
+  application-identifier entitlement" — [docs/IOS.md](docs/IOS.md) now shows
+  pulling the full set out of the profile itself.
 
 ## v2.4.38
 

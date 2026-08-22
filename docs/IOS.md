@@ -172,6 +172,21 @@ code signature at install time and there is nothing here to verify. Options:
   ```bash
   codesign -f -s "Apple Development: you@example.com" --entitlements your.entitlements build-ios/FrozenBubble.app
   ```
+  `your.entitlements` needs to be the **profile's own entitlements**, not just
+  `build-ios/FrozenBubble.entitlements` on its own — that file only carries
+  `aps-environment`, and signing with only that omits `application-identifier`
+  and the team ID, which the installer requires and normally gets auto-derived
+  by Xcode. Pull the real set out of the profile instead (PlistBuddy needs a
+  seekable file, not a pipe, hence the intermediate file):
+  ```bash
+  security cms -D -i embedded.mobileprovision > /tmp/profile.plist
+  /usr/libexec/PlistBuddy -x -c "Print :Entitlements" /tmp/profile.plist > your.entitlements
+  ```
+  Also copy the profile itself into the bundle before signing (a stock device
+  refuses to install without it):
+  ```bash
+  cp embedded.mobileprovision build-ios/FrozenBubble.app/embedded.mobileprovision
+  ```
 - **Xcode**: point a project at the built `.app`, or build with the Xcode
   generator and let Xcode manage signing.
 - **TrollStore / a jailbroken device** installs unsigned bundles directly.
