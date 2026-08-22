@@ -68,8 +68,25 @@ class ApnsSender:
         # Imported lazily so stub mode has no third-party dependency at all.
         from aioapns import APNs  # type: ignore
 
+        # aioapns wants the PEM *contents* here, not a path: `key` is handed
+        # straight to jwt.encode(key=...), and the only open() anywhere in the
+        # package is for cert_file. Passing the path instead fails at the first
+        # send with "Unable to load PEM file ... MalformedFraming" -- PyJWT
+        # parsing the pathname itself as PEM -- which reads like a corrupt .p8
+        # and sends you looking at the wrong thing entirely.
+        #
+        # APNS_KEY_PATH stays a path because that is what a container mount
+        # gives you; the read happens here instead.
+        try:
+            with open(key_path, "r") as f:
+                key_data = f.read()
+        except OSError as exc:
+            raise RuntimeError(
+                f"APNS_KEY_PATH could not be read ({key_path}): {exc}"
+            ) from exc
+
         self._client = APNs(
-            key=key_path,
+            key=key_data,
             key_id=key_id,
             team_id=team_id,
             topic=topic,
