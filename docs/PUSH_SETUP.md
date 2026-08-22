@@ -40,17 +40,50 @@ If the App ID already exists, open it and tick **Push Notifications**, then Save
 
 ### 2. Create the APNs auth key (.p8)
 
-A `.p8` *auth key* is preferred over the older `.p12` *certificate*: one key
-works for every app on your team, for both sandbox and production, and it never
-expires.
+A `.p8` *auth key* is preferred over the older `.p12` *certificate*: an
+unrestricted key works for every app on your team, for both sandbox and
+production, and it never expires.
 
 1. Go to <https://developer.apple.com/account/resources/authkeys/list>.
 2. **+** → name it e.g. `Frozen Bubble Push`.
 3. Tick **Apple Push Notifications service (APNs)** → Continue → Register.
+
+   Apple may offer a **Sandbox**-restricted variant alongside the plain one —
+   take the **plain, unrestricted** option, not the sandbox-only one. See
+   [Sandbox or production?](#sandbox-or-production) directly below before
+   clicking, because this choice is awkward to undo.
 4. **Download** the `.p8`. Apple lets you download it **exactly once** — if you
    lose it you must revoke and create a new one.
 5. Note the **Key ID** shown on that page (10 characters).
 6. Note your **Team ID** from <https://developer.apple.com/account> → Membership.
+
+<a id="sandbox-or-production"></a>
+#### Sandbox or production?
+
+Apple asks this while creating the key, and the wording invites the wrong
+answer: it sounds like you are choosing where you intend to *test*, so a
+sandbox-only key looks like the right pick for development. It is not.
+
+**Take the unrestricted key** — labelled just **Apple Push Notifications
+service (APNs)** on the Keys page, or **Sandbox & Production** if you have
+ended up in the older certificates flow instead. A sandbox-restricted key
+covers only the sandbox host, so shipping later means revoking it and starting
+over, and Apple hands out the `.p8` exactly once. The unrestricted key costs
+nothing extra and still works perfectly well for sandbox testing.
+
+Sandbox versus production is **not** decided by the key. It is decided per
+send, by `APNS_USE_SANDBOX` in the relay's `.env`, and it has to agree with how
+the app was signed:
+
+| Build signed with | `APNS_USE_SANDBOX` |
+|---|---|
+| Development profile — what you use to test on your own iPhone | `1` |
+| Distribution profile — what you ship | unset |
+
+Mismatching those is the single most common reason a correctly configured push
+never arrives: a token minted by a development build is simply not valid
+against the production host, and Apple reports nothing useful when it is
+rejected.
 
 ### 3. Put the values where the relay can read them
 
@@ -64,10 +97,8 @@ APNS_TEAM_ID=YYYYYYYYYY                            # step 2.6
 APNS_TOPIC=org.frozenbubble.sdl3                   # the bundle id, exactly
 ```
 
-Add `APNS_USE_SANDBOX=1` while testing with a development build — a token from a
-development build is **not** valid against the production APNs host, and vice
-versa. This mismatch is the single most common reason a correctly configured
-push silently never arrives.
+Add `APNS_USE_SANDBOX=1` while testing with a development build, per
+[Sandbox or production?](#sandbox-or-production) above.
 
 ### 4. Signing — the part that catches people out
 
@@ -199,7 +230,7 @@ second one.
 |---|---|
 | `notify.dat` has no line for your device | The app never got a token. iOS: not signed with the push entitlement, or the permission prompt was declined. Android: `google-services.json` missing at build time, or package name mismatch. |
 | Relay logs `[stub] would push…` | That platform's credentials are unset or incomplete — APNs needs **all four** variables. |
-| Relay logs a `BadDeviceToken` / `403` from Apple | Sandbox/production mismatch. Flip `APNS_USE_SANDBOX`. |
+| Relay logs a `BadDeviceToken` / `403` from Apple | Sandbox/production mismatch. Flip `APNS_USE_SANDBOX`. If flipping it fails in *both* positions, the key itself may be sandbox-restricted — check it on the Keys page and see [Sandbox or production?](#sandbox-or-production). |
 | Relay logs `SenderId mismatch` from FCM | The `google-services.json` in the app and the service account belong to different Firebase projects. |
 | Banner appears only when the app is open | Nothing is wrong with delivery — foreground suppression may not be wired for that build. Backgrounding the app is the real test. |
 | Nothing at all on Android after force-stopping | Expected. FCM does not deliver to an app the user force-stopped from Settings until it is opened again. Swiping away from recents is fine. |
