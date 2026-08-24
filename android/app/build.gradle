@@ -21,9 +21,31 @@ if (firebaseEnabled) {
     logger.lifecycle("google-services.json absent -- push notifications disabled (see docs/PUSH_SETUP.md)")
 }
 
+// Optional AdMob test-device ID, read from local.properties (git-ignored,
+// same file `sdk.dir` already lives in) rather than hardcoded into source.
+// This hashes to one specific physical device -- committing it here would
+// tie a public GPL repo to a maintainer's real device for no benefit, since
+// nothing else needs it. Google's Mobile Ads SDK logs the exact hash to
+// Logcat once an ad is requested from a device not yet on this list; add it
+// as `admob.testDeviceId=<hash>` in android/local.properties to always get
+// safe test ads on that device even with the real ad unit ID below. Absent
+// -> compiles to an empty string, which AdsManager treats as "no test
+// device configured" and serves real ads -- the correct default for CI and
+// for a real release build.
+def localProps = new Properties()
+def localPropsFile = rootProject.file('local.properties')
+if (localPropsFile.exists()) {
+    localPropsFile.withInputStream { localProps.load(it) }
+}
+def admobTestDeviceId = localProps.getProperty('admob.testDeviceId', '')
+
 android {
     namespace 'org.frozenbubble'
     compileSdk 36
+
+    buildFeatures {
+        buildConfig true
+    }
 
     defaultConfig {
         applicationId "org.frozenbubble"
@@ -32,6 +54,8 @@ android {
         ndkVersion "25.2.9519653"
         versionCode 22
         versionName "2.4.39"
+
+        buildConfigField "String", "ADMOB_TEST_DEVICE_ID", "\"${admobTestDeviceId}\""
 
         externalNativeBuild {
             cmake {

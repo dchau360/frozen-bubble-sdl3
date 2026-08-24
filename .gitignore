@@ -25,6 +25,7 @@ weird-mini-bubble.png
 PHASE1_WALKTHROUGH.md
 
 # Android build output and cache
+android/build/
 android/app/build/
 android/app/.cxx/
 android/.gradle/

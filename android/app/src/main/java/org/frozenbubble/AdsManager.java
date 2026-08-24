@@ -18,10 +18,13 @@ import com.google.android.gms.ads.AdRequest;
 import com.google.android.gms.ads.FullScreenContentCallback;
 import com.google.android.gms.ads.LoadAdError;
 import com.google.android.gms.ads.MobileAds;
+import com.google.android.gms.ads.RequestConfiguration;
 import com.google.android.gms.ads.interstitial.InterstitialAd;
 import com.google.android.gms.ads.interstitial.InterstitialAdLoadCallback;
 
 import androidx.annotation.NonNull;
+
+import java.util.Collections;
 
 /**
  * Manages AdMob interstitial ads and the "ads removed" preference.
@@ -51,6 +54,22 @@ public class AdsManager {
         if (isAdsRemoved(activity)) {
             Log.d(TAG, "Ads have been removed by user purchase — skipping init");
             return;
+        }
+
+        // With the real ad unit ID in place, any real device that requests an
+        // ad is a real (if $0) impression -- including the developer's own,
+        // which AdMob's policy treats as invalid traffic and can flag a new
+        // account over. Registering this device as a test device makes the
+        // SDK always serve safe test creatives here regardless of the ad
+        // unit ID, exactly as it did before the real ID replaced the test
+        // one. Empty when unset (see build.gradle) -- no-op in that case, so
+        // CI and release builds always request real ads.
+        if (!BuildConfig.ADMOB_TEST_DEVICE_ID.isEmpty()) {
+            RequestConfiguration config = new RequestConfiguration.Builder()
+                    .setTestDeviceIds(Collections.singletonList(BuildConfig.ADMOB_TEST_DEVICE_ID))
+                    .build();
+            MobileAds.setRequestConfiguration(config);
+            Log.d(TAG, "AdMob test device configured");
         }
 
         MobileAds.initialize(activity, initStatus -> {
