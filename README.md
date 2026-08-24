@@ -52,6 +52,8 @@ The host configures malus, chain reactions, victories limit, per-player colours 
 
 After each round a per-player stats table shows bubbles fired and popped, malus sent and received, and kills. In-game chat works during play (**Enter** or **T**, gamepad **X**) and between rounds.
 
+**Dealing with abusive players.** Type `/block <nick>` in chat to hide someone's messages — in the lobby and mid-match both, and it takes effect immediately without needing the server's cooperation. `/unblock <nick>` undoes it, `/blocked` lists who you have blocked, and the list is saved per device. `/report <nick> <what happened>` sends a report to that server's operator; each server is run by a different person, so what happens next is up to them — blocking is the part that is in your hands. Type `/help` in chat for the full list.
+
 <p align="center">
   <img src="docs/screenshots/round-stats.png" alt="Post-round stats table showing each player's wins, bubbles fired and popped, attack and defense malus, and kills" width="480">
 </p>

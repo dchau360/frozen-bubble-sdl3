@@ -294,6 +294,54 @@ int main() {
     settings->followedServers.clear();
     settings->SaveKeys();
 
+    // Blocked players -- who this device hides chat from. Same round-trip
+    // requirement as followed servers, and for a sharper reason: a block that
+    // silently forgot itself on restart would put an abusive player's messages
+    // back in front of someone who had deliberately shut them out.
+    CHECK(settings->blockedPlayers.empty());
+    CHECK(!settings->IsPlayerBlocked("griefer"));
+
+    CHECK(settings->ToggleBlockedPlayer("griefer"));
+    CHECK(settings->IsPlayerBlocked("griefer"));
+    CHECK(!settings->IsPlayerBlocked("Griefer"));   // exact match, not case-folded
+    CHECK(settings->ToggleBlockedPlayer("spammer"));
+    settings->SaveKeys();
+    CHECK(iniHasKeyValue(settingsPath, "nickcount", "2"));
+    CHECK(iniHasKeyValue(settingsPath, "nick0", "griefer"));
+    CHECK(iniHasKeyValue(settingsPath, "nick1", "spammer"));
+
+    settings->blockedPlayers.clear();
+    settings->LoadBlockedPlayers();
+    CHECK(settings->blockedPlayers.size() == 2);
+    CHECK(settings->IsPlayerBlocked("griefer"));
+    CHECK(settings->IsPlayerBlocked("spammer"));
+
+    // Unblocking has to reach the file too, or the unblock comes back next
+    // launch and the player stays muted with no way to tell why.
+    CHECK(!settings->ToggleBlockedPlayer("griefer"));
+    CHECK(!settings->IsPlayerBlocked("griefer"));
+    settings->SaveKeys();
+    settings->blockedPlayers.clear();
+    settings->LoadBlockedPlayers();
+    CHECK(settings->blockedPlayers.size() == 1);
+    CHECK(!settings->IsPlayerBlocked("griefer"));
+    CHECK(settings->IsPlayerBlocked("spammer"));
+
+    // Bounded like the follow list: past the cap a block is refused rather
+    // than silently evicting an earlier one.
+    for (int i = 0; i < GameSettings::kMaxBlockedPlayers + 3; i++) {
+        settings->ToggleBlockedPlayer("nick" + std::to_string(i));
+    }
+    CHECK((int)settings->blockedPlayers.size() == GameSettings::kMaxBlockedPlayers);
+    // An empty nick is never a valid block -- it would match nothing and just
+    // consume a slot.
+    settings->blockedPlayers.clear();
+    CHECK(!settings->ToggleBlockedPlayer(""));
+    CHECK(settings->blockedPlayers.empty());
+
+    settings->blockedPlayers.clear();
+    settings->SaveKeys();
+
     // Reset-to-defaults must reach the file, not just the in-memory members. A
     // reset that only reassigned the members would be undone by the next
     // SaveKeys() writing the stale values straight back out, so assert against

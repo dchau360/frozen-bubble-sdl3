@@ -1,5 +1,34 @@
 # Changelog
 
+## Unreleased
+
+- **New: block and report abusive players.** `/block <nick>` in chat hides
+  someone's messages — in the lobby and mid-match both — and takes effect
+  immediately without needing anything from the server, so it works even on
+  a server with no moderation at all. `/unblock <nick>` undoes it, `/blocked`
+  lists them, and the list is saved per device (up to 32). A blocked player's
+  in-game messages are dropped on arrival rather than hidden at draw time, so
+  they don't play the chat sound either — an audible ping for a message you
+  can't see would be worse than not blocking.
+
+  `/report <nick> <reason>` sends a report to that server's operator, who
+  reads it from `reports.log`. Deliberately never acted on automatically:
+  nicks are chosen fresh every connect and aren't tied to any account, so
+  auto-kicking on report would hand every player a way to remove anyone they
+  liked. The client says the report was "sent to the server operator" rather
+  than implying anything happens on its own.
+
+  This also closes an App Store blocker — Apple's Guideline 1.2 requires
+  apps with user-to-user messaging to offer blocking and reporting.
+- **Fix: the server wrote `reports.log` (and would have written any relative
+  path) into the filesystem root.** fb-server daemonizes with `cwd=/`, so a
+  bare `fopen("reports.log", "a")` fails on any real install — reports would
+  have been silently dropped while the reporter was told they'd been filed.
+  Resolved to an absolute path with the same precedence as `notify.dat`
+  (`FB_SERVER_REPORT_FILE`, then `$HOME/.fb-server/`, then
+  `/var/lib/fb-server/`), and a write failure now returns `REPORT_FAILED` to
+  the client instead of a false `OK`.
+
 ## v2.4.39
 
 - **New: follow a server from its lobby, not just the server list**, with an

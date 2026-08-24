@@ -212,6 +212,33 @@ In the game: **Net Game** → enter the host and port above → **Connect**.
 
 ---
 
+## Abuse Reports
+
+Players can report each other with `/report <nick> <reason>` in chat. Reports
+are appended to a file for you to read; **nothing is acted on automatically**,
+by design — nicks are chosen fresh on every connect and are not tied to any
+account, so auto-kicking on report would hand every player a way to remove
+anyone they liked.
+
+```bash
+docker compose exec fb-server cat /var/lib/fb-server/reports.log
+```
+
+Each line records the time, the reporter's nick and IP, who they reported, and
+the reason. Cross-reference the IP against `joiners.log` in the same directory
+if you need to identify someone across nick changes.
+
+Override the location with `FB_SERVER_REPORT_FILE` if you want it elsewhere.
+Acting on a report is entirely up to you as the operator — the game has no
+built-in ban mechanism, so blocking at the firewall (or simply not running an
+open server) is what enforcement looks like today.
+
+Players also have `/block <nick>`, which hides someone's chat immediately and
+entirely client-side — it needs nothing from you and works even if you never
+read the report log.
+
+---
+
 ## Updating the Server
 
 When a new version of fb-server is released, rebuild the Docker image to pick up the changes:

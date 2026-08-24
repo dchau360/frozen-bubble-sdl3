@@ -469,6 +469,11 @@ void BubbleGame::ProcessNetworkMessages() {
                         InGameChatMsg chatMsg;
                         chatMsg.nick = netClient->GetPlayerNickname(senderId);
                         if (chatMsg.nick.empty()) chatMsg.nick = "Player";
+                        // Dropped here rather than filtered at render time, so a
+                        // blocked player's message never shows *and* never plays
+                        // the chat sound -- an audible ping for a message you
+                        // cannot see would be worse than not blocking at all.
+                        if (GameSettings::Instance()->IsPlayerBlocked(chatMsg.nick)) break;
                         chatMsg.text = gameData + 1;
                         chatMsg.framesLeft = 300;  // 5 seconds at 60 fps
                         inGameChatMessages.push_back(chatMsg);

@@ -596,6 +596,19 @@ bool NetworkClient::SendNotifyUnreg(const char* token) {
     return SendCommand(cmd);
 }
 
+bool NetworkClient::SendReport(const char* nick, const char* reason) {
+    if (!nick || !*nick || !reason || !*reason) return false;
+    // The server splits on the first space to separate nick from reason, so a
+    // nick containing one would silently report a truncated name with the
+    // remainder folded into the reason text. Nicks can't contain spaces
+    // anyway (the server's own NICK handling truncates at one), so this only
+    // rejects input that was already malformed.
+    if (strchr(nick, ' ') != nullptr) return false;
+    char cmd[512];
+    snprintf(cmd, sizeof(cmd), "REPORT %s %s", nick, reason);
+    return SendCommand(cmd);
+}
+
 void NetworkClient::ProbeNotifySupportIfNeeded() {
     if (notifySupport != NotifySupport::Unknown || pendingNotifyProbe) return;
     if (!IsConnected()) return;

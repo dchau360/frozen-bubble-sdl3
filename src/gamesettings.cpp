@@ -276,6 +276,7 @@ void GameSettings::ReadSettings()
                                         DefaultMouseEnabled());
 
     LoadFollowedServers();
+    LoadBlockedPlayers();
 
     LoadDefaultKeys();
 }
@@ -340,6 +341,63 @@ bool GameSettings::ToggleServerFollowed(const std::string& host, int port,
     fs.port = port;
     fs.label = label;
     followedServers.push_back(fs);
+    return true;
+}
+
+// Same fixed-numbered-slot shape as the followed-server block above.
+void GameSettings::LoadBlockedPlayers()
+{
+    blockedPlayers.clear();
+
+    int count = iniparser_getint(optDict, "Blocked:NickCount", 0);
+    if (count < 0) count = 0;
+    if (count > kMaxBlockedPlayers) count = kMaxBlockedPlayers;
+
+    for (int i = 0; i < count; i++) {
+        char key[64];
+        snprintf(key, sizeof(key), "Blocked:Nick%d", i);
+        const char* nick = iniparser_getstring(optDict, key, "");
+        if (!nick || !*nick) continue;
+        blockedPlayers.push_back(nick);
+    }
+}
+
+void GameSettings::SaveBlockedPlayers()
+{
+    // Section header has to exist or iniparser_dump_ini drops every key under it.
+    iniparser_set(optDict, "Blocked", NULL);
+
+    const int count = (int)blockedPlayers.size();
+    iniparser_set(optDict, "Blocked:NickCount", std::to_string(count).c_str());
+
+    for (int i = 0; i < kMaxBlockedPlayers; i++) {
+        char key[64];
+        snprintf(key, sizeof(key), "Blocked:Nick%d", i);
+        iniparser_set(optDict, key, i < count ? blockedPlayers[i].c_str() : "");
+    }
+}
+
+bool GameSettings::IsPlayerBlocked(const std::string& nick) const
+{
+    for (const std::string& blocked : blockedPlayers) {
+        if (blocked == nick) return true;
+    }
+    return false;
+}
+
+bool GameSettings::ToggleBlockedPlayer(const std::string& nick)
+{
+    for (size_t i = 0; i < blockedPlayers.size(); i++) {
+        if (blockedPlayers[i] == nick) {
+            blockedPlayers.erase(blockedPlayers.begin() + (long)i);
+            return false;
+        }
+    }
+
+    if (nick.empty()) return false;
+    if ((int)blockedPlayers.size() >= kMaxBlockedPlayers) return false;
+
+    blockedPlayers.push_back(nick);
     return true;
 }
 
@@ -435,6 +493,7 @@ void GameSettings::SaveKeys()
     iniparser_set(optDict, "Keys:P5Center", std::to_string(player5Keys.center).c_str());
 
     SaveFollowedServers();
+    SaveBlockedPlayers();
 
     SaveSettings();
 }

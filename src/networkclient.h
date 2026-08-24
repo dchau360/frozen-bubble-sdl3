@@ -136,6 +136,13 @@ public:
     bool SendNotifyReg(const char* platform, const char* token);
     bool SendNotifyUnreg(const char* token);
 
+    // Report a player for abuse. The server appends it to a file for its
+    // operator to review; nothing is enforced automatically (a nick is not an
+    // identity here, so auto-acting on reports would be trivially abusable).
+    // Blocking, which is local and immediate, is the other half of this --
+    // see GameSettings::ToggleBlockedPlayer.
+    bool SendReport(const char* nick, const char* reason);
+
     // Capability probe for the follow feature: sends a side-effect-free
     // NOTIFYUNREG for a token nothing will ever hold, once per connection,
     // and reads the next "OK" (supported) vs "UNKNOWN_COMMAND" (not) off the

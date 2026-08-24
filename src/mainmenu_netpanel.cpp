@@ -1006,24 +1006,40 @@ void MainMenu::NetPanelChatDockRender(bool expanded) {
         lastProcessedChatCount = chatMsgs.size();
     }
 
-    // Display the most recent messages from bottom up (skip hidden !team: commands).
-    int chatLine = 0;
-    int startIdx = (int)chatMsgs.size() - maxChatLines;
-    if (startIdx < 0) startIdx = 0;
-    for (size_t i = startIdx; i < chatMsgs.size() && chatLine < maxChatLines; i++) {
+    // Collect what is actually displayable *before* taking the last N, rather
+    // than slicing first and skipping while drawing. Hidden messages (!team:
+    // control traffic, and anyone this device has blocked) would otherwise eat
+    // their line slots and leave the dock half empty -- so blocking someone
+    // noisy would shrink everyone else's visible history too.
+    const GameSettings* gs = GameSettings::Instance();
+    std::vector<size_t> visible;
+    visible.reserve(chatMsgs.size());
+    for (size_t i = 0; i < chatMsgs.size(); i++) {
         if (chatMsgs[i].message.size() > 6 && chatMsgs[i].message.substr(0, 6) == "!team:") continue;
+        // Server notices are never suppressed -- a blocked nick cannot hide
+        // "*** so-and-so joined" or anything else the server itself says.
+        if (chatMsgs[i].nick != "Server" && gs->IsPlayerBlocked(chatMsgs[i].nick)) continue;
+        visible.push_back(i);
+    }
+
+    // Display the most recent messages from bottom up.
+    int chatLine = 0;
+    size_t startIdx = visible.size() > (size_t)maxChatLines
+                      ? visible.size() - (size_t)maxChatLines : 0;
+    for (size_t vi = startIdx; vi < visible.size() && chatLine < maxChatLines; vi++) {
+        const ChatMessage& cm = chatMsgs[visible[vi]];
         char chatLineText[256];
         // Server messages start with ***, regular messages show <nick>
-        if (chatMsgs[i].nick == "Server" || chatMsgs[i].message.find("***") == 0) {
-            snprintf(chatLineText, sizeof(chatLineText), "*** %.72s", chatMsgs[i].message.c_str());
+        if (cm.nick == "Server" || cm.message.find("***") == 0) {
+            snprintf(chatLineText, sizeof(chatLineText), "*** %.72s", cm.message.c_str());
         } else {
             snprintf(chatLineText, sizeof(chatLineText), "<%.16s> %.56s",
-                chatMsgs[i].nick.c_str(), chatMsgs[i].message.c_str());
+                cm.nick.c_str(), cm.message.c_str());
         }
 
         int yPos = chatStatusY - (maxChatLines - 1 - chatLine) * chatLineHeight;
         drawLabel(chatLineText, chatStatusX, yPos,
-                  chatMsgs[i].nick == "Server" ? textMuted : textMain);
+                  cm.nick == "Server" ? textMuted : textMain);
         chatLine++;
     }
 }
@@ -1538,12 +1554,22 @@ void MainMenu::NetPanelConnectionScreensRender() {
         std::vector<ChatMessage> chatMsgs = netClient->GetChatMessages();
         offset += snprintf(lobbyText + offset, sizeof(lobbyText) - offset, "\nChat:\n");
 
-        int chatStart = chatMsgs.size() > 3 ? chatMsgs.size() - 3 : 0;
-        for (size_t i = chatStart; i < chatMsgs.size(); i++) {
-            offset += snprintf(lobbyText + offset, sizeof(lobbyText) - offset,
-                "<%s> %s\n",
-                chatMsgs[i].nick.c_str(),
-                chatMsgs[i].message.c_str());
+        // Same block filtering as the chat dock above, for the same reason:
+        // a blocked player's messages must not reappear on this fallback view.
+        {
+            const GameSettings* gs = GameSettings::Instance();
+            std::vector<size_t> visible;
+            for (size_t i = 0; i < chatMsgs.size(); i++) {
+                if (chatMsgs[i].nick != "Server" && gs->IsPlayerBlocked(chatMsgs[i].nick)) continue;
+                visible.push_back(i);
+            }
+            size_t chatStart = visible.size() > 3 ? visible.size() - 3 : 0;
+            for (size_t vi = chatStart; vi < visible.size(); vi++) {
+                offset += snprintf(lobbyText + offset, sizeof(lobbyText) - offset,
+                    "<%s> %s\n",
+                    chatMsgs[visible[vi]].nick.c_str(),
+                    chatMsgs[visible[vi]].message.c_str());
+            }
         }
 
         offset += snprintf(lobbyText + offset, sizeof(lobbyText) - offset,

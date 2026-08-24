@@ -154,6 +154,24 @@ public:
     bool ToggleServerFollowed(const std::string& host, int port,
                               const std::string& label);
 
+    // Players whose chat this device hides. Purely local and purely cosmetic:
+    // there is no account system, so a nick is not a durable identity and
+    // blocking one cannot be enforced server-side or stop that person playing.
+    // What it does do is let someone shut up an abusive player immediately,
+    // without waiting on an operator -- which is the part a player actually
+    // controls. Bounded for the same reason as followedServers: fixed numbered
+    // ini slots, and a list in the hundreds is a bug rather than an intent.
+    static constexpr int kMaxBlockedPlayers = 32;
+    std::vector<std::string> blockedPlayers;
+
+    void LoadBlockedPlayers();
+    void SaveBlockedPlayers();
+    bool IsPlayerBlocked(const std::string& nick) const;
+    // Adds if absent, removes if present. Returns true if the player is
+    // blocked afterwards. Refuses to add beyond kMaxBlockedPlayers (returns
+    // false without changing anything).
+    bool ToggleBlockedPlayer(const std::string& nick);
+
     GameSettings(const GameSettings& obj) = delete;
     void Dispose();
     static GameSettings* Instance(){

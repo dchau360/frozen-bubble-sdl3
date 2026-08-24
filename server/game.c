@@ -31,6 +31,9 @@
 #include <sys/socket.h>
 #include <regex.h>
 #include <time.h>
+#include <errno.h>
+#include <sys/stat.h>
+#include <sys/types.h>
 
 #include <glib.h>
 
@@ -91,6 +94,44 @@ static char wn_denied[] = "DENIED";
 static char wn_flooding[] = "FLOODING";
 static char wn_others_not_ready[] = "OTHERS_NOT_READY";
 static char wn_invalid_platform[] = "INVALID_PLATFORM";
+static char wn_report_failed[] = "REPORT_FAILED";
+
+/* Absolute path for the abuse-report log. The server daemonizes with cwd="/"
+ * (see net.c), so a bare relative fopen() lands in the filesystem root and
+ * fails on any sane install -- which would silently drop every report while
+ * still telling the reporter it was filed. Same precedence as notify.c and
+ * stats.c: explicit env var, then $HOME, then a system-wide path. Resolved
+ * once and cached; the directory is created by whichever of those modules
+ * gets there first, and fopen() failing is handled by the caller either way. */
+static const char* report_file_path(void)
+{
+        static char* path = NULL;
+        if (path) return path;
+
+        const char* explicit_path = getenv("FB_SERVER_REPORT_FILE");
+        const char* home = getenv("HOME");
+        if (explicit_path && *explicit_path) {
+                path = g_strdup(explicit_path);
+        } else if (home) {
+                path = g_strdup_printf("%s/.fb-server/reports.log", home);
+        } else {
+                path = g_strdup("/var/lib/fb-server/reports.log");
+        }
+
+        /* mkdir the containing directory rather than assuming notify_init()
+         * already did: reports must work on a server with the follow feature
+         * entirely unconfigured. */
+        char* dir = g_strdup(path);
+        char* last_slash = strrchr(dir, '/');
+        if (last_slash && last_slash != dir) {
+                *last_slash = '\0';
+                mkdir(dir, 0755);
+        }
+        g_free(dir);
+
+        l1(OUTPUT_TYPE_INFO, "Abuse report file: %s", path);
+        return path;
+}
 
 static char fl_line_unrecognized[] = "MISSING_FB_PROTOCOL_TAG";
 static char fl_proto_mismatch[] = "INCOMPATIBLE_PROTOCOL";
@@ -921,6 +962,59 @@ int process_msg(int fd, char* msg)
                                 *ptr = '\0';
                         notify_unregister(args);
                         send_ok(fd, msg_orig);
+                }
+        } else if (streq(current_command, "REPORT")) {
+                /* Player-abuse report: "REPORT <nick> <reason>". Appended to a
+                 * flat file for the operator to read, exactly like the
+                 * joiners.log written on NICK above -- this server has no
+                 * moderation tooling and inventing one here would be a much
+                 * larger feature than the report path itself.
+                 *
+                 * Deliberately never acted on automatically. A nick is not an
+                 * identity here (no accounts, chosen fresh every connect), so
+                 * auto-kicking on report would hand every player a way to
+                 * remove anyone they liked. The client-side block list is what
+                 * gives the reporter immediate relief; this is the channel for
+                 * an operator to see a pattern and act out of band. */
+                if (!args || !(ptr = strchr(args, ' '))) {
+                        send_line_log(fd, wn_missing_arguments, msg_orig);
+                } else {
+                        char* reported = args;
+                        *ptr = '\0';
+                        char* reason = ptr + 1;
+                        if (!*reported || !*reason) {
+                                send_line_log(fd, wn_missing_arguments, msg_orig);
+                        } else {
+                                FILE* rf = fopen(report_file_path(), "a");
+                                if (rf) {
+                                        time_t now = time(NULL);
+                                        struct tm* tm_info = gmtime(&now);
+                                        char tbuf[32];
+                                        strftime(tbuf, sizeof(tbuf), "%Y-%m-%d %H:%M:%S UTC", tm_info);
+                                        fprintf(rf, "%s  reporter=%-12s reporter_ip=%-15s reported=%-12s reason=%.200s\n",
+                                                tbuf,
+                                                nick[fd] ? nick[fd] : "?",
+                                                IP[fd] ? IP[fd] : "unknown",
+                                                reported, reason);
+                                        fclose(rf);
+                                        l2(OUTPUT_TYPE_INFO, "player report: '%s' reported '%s'",
+                                           nick[fd] ? nick[fd] : "?", reported);
+                                        /* OK means "we recorded it", not "we
+                                         * acted on it" -- the client's wording
+                                         * says so too. */
+                                        send_ok(fd, msg_orig);
+                                } else {
+                                        /* Telling the player their report was
+                                         * filed when it went nowhere is worse
+                                         * than having no report feature at
+                                         * all, so this failure is loud on both
+                                         * ends rather than swallowed. */
+                                        l2(OUTPUT_TYPE_ERROR,
+                                           "could not write report file %s: %s",
+                                           report_file_path(), strerror(errno));
+                                        send_line_log(fd, wn_report_failed, msg_orig);
+                                }
+                        }
                 }
         } else if (streq(current_command, "LIST")) {
                 send_line_log(fd, list_games_str, msg_orig);

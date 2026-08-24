@@ -1154,9 +1154,84 @@ void MainMenu::SubmitLobbyChatInput(NetworkClient *netClient) {
                 } else {
                     netClient->AddStatusMessage("Erroneous nickname");
                 }
+            } else if (strncmp(networkChatInput, "/block ", 7) == 0) {
+                // Hide a player's chat on this device. Local and immediate --
+                // it needs no server support, so it works even against a
+                // server with no moderation of any kind.
+                const char* target = networkChatInput + 7;
+                while (*target == ' ') target++;
+                GameSettings* gs = GameSettings::Instance();
+                char msg[160];
+                if (*target == '\0') {
+                    netClient->AddStatusMessage("Usage: /block <nick>");
+                } else if (target == netClient->GetPlayerNick()) {
+                    netClient->AddStatusMessage("You cannot block yourself");
+                } else if (gs->IsPlayerBlocked(target)) {
+                    netClient->AddStatusMessage("Already blocked. Use /unblock to undo.");
+                } else if (gs->ToggleBlockedPlayer(target)) {
+                    gs->SaveSettings();
+                    snprintf(msg, sizeof(msg), "Blocked %s -- their chat is now hidden", target);
+                    netClient->AddStatusMessage(msg);
+                } else {
+                    // Only remaining failure is the bounded-list cap.
+                    snprintf(msg, sizeof(msg), "Block list is full (%d) -- /unblock someone first",
+                             GameSettings::kMaxBlockedPlayers);
+                    netClient->AddStatusMessage(msg);
+                }
+            } else if (strncmp(networkChatInput, "/unblock ", 9) == 0) {
+                const char* target = networkChatInput + 9;
+                while (*target == ' ') target++;
+                GameSettings* gs = GameSettings::Instance();
+                char msg[160];
+                if (*target == '\0') {
+                    netClient->AddStatusMessage("Usage: /unblock <nick>");
+                } else if (!gs->IsPlayerBlocked(target)) {
+                    netClient->AddStatusMessage("That player is not blocked");
+                } else {
+                    gs->ToggleBlockedPlayer(target);   // known present: removes
+                    gs->SaveSettings();
+                    snprintf(msg, sizeof(msg), "Unblocked %s", target);
+                    netClient->AddStatusMessage(msg);
+                }
+            } else if (strcmp(networkChatInput, "/blocked") == 0) {
+                const GameSettings* gs = GameSettings::Instance();
+                if (gs->blockedPlayers.empty()) {
+                    netClient->AddStatusMessage("You have not blocked anyone");
+                } else {
+                    std::string list = "Blocked:";
+                    for (const std::string& n : gs->blockedPlayers) list += " " + n;
+                    netClient->AddStatusMessage(list);
+                }
+            } else if (strncmp(networkChatInput, "/report ", 8) == 0) {
+                // Sends the report to the server operator. Deliberately says
+                // "sent to the server operator" rather than implying anything
+                // happens automatically -- nothing does, and promising
+                // otherwise would be worse than saying nothing.
+                const char* rest = networkChatInput + 8;
+                while (*rest == ' ') rest++;
+                char nickBuf[64];
+                const char* space = strchr(rest, ' ');
+                char msg[192];
+                if (*rest == '\0' || space == nullptr || *(space + 1) == '\0') {
+                    netClient->AddStatusMessage("Usage: /report <nick> <what happened>");
+                } else {
+                    size_t nickLen = (size_t)(space - rest);
+                    if (nickLen >= sizeof(nickBuf)) nickLen = sizeof(nickBuf) - 1;
+                    memcpy(nickBuf, rest, nickLen);
+                    nickBuf[nickLen] = '\0';
+                    const char* reason = space + 1;
+                    if (netClient->SendReport(nickBuf, reason)) {
+                        snprintf(msg, sizeof(msg),
+                                 "Reported %s to the server operator. Use /block %s to hide their chat.",
+                                 nickBuf, nickBuf);
+                        netClient->AddStatusMessage(msg);
+                    } else {
+                        netClient->AddStatusMessage("Could not send the report");
+                    }
+                }
             } else if (strcmp(networkChatInput, "/help") == 0) {
                 // Show help
-                netClient->AddStatusMessage("Available commands: /nick <new_nick>, /help");
+                netClient->AddStatusMessage("Commands: /nick <new_nick>, /block <nick>, /unblock <nick>, /blocked, /report <nick> <reason>, /help");
             } else {
                 // Unknown command
                 netClient->AddStatusMessage("Unknown command. Type /help for help.");
