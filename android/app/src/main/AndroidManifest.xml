@@ -31,11 +31,10 @@
         android:isGame="true"
         android:theme="@android:style/Theme.NoTitleBar.Fullscreen">
 
-        <!-- Replace ca-app-pub-XXXXXXXXXXXXXXXX~XXXXXXXXXX with your real AdMob App ID -->
+        <!-- Real AdMob App ID (Frozen Bubble app, created in AdMob 2026-08-24) -->
         <meta-data
             android:name="com.google.android.gms.ads.APPLICATION_ID"
-            android:value="ca-app-pub-3940256099942544~3347511713"/>
-        <!-- ^^^ Above is Google's test App ID — swap for production -->
+            android:value="ca-app-pub-7736855769799322~9200045587"/>
 
         <!-- Disable AdMob auto-init ContentProvider: MobileAds.initialize() called on SDL
              surfaces conflicts with HWUI thread pool (CommonPool), causing a destroyed-mutex

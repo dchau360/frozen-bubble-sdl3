@@ -36,10 +36,9 @@ public class AdsManager {
     private static final String PREFS_NAME  = "FrozenBubblePrefs";
     private static final String KEY_NO_ADS  = "ads_removed";
 
-    // Test ad unit ID — replace with your real unit ID before publishing
-    // Test IDs: https://developers.google.com/admob/android/test-ads
+    // Real interstitial ad unit ID (Frozen Bubble app, created in AdMob 2026-08-24)
     private static final String AD_UNIT_ID =
-            "ca-app-pub-3940256099942544/1033173712"; // test interstitial
+            "ca-app-pub-7736855769799322/5410693019";
 
     private static InterstitialAd sInterstitial = null;
     private static boolean sInitialized = false;
