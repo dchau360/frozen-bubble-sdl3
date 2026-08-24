@@ -45,8 +45,15 @@ public class AdsManager {
 
     private static InterstitialAd sInterstitial = null;
     private static boolean sInitialized = false;
+    private static boolean sTestDeviceConfigured = false;
 
-    /** Call once from Activity.onCreate() */
+    /**
+     * Not called from anywhere in this app today -- AdMob init is deferred to
+     * the first loadAd() instead (see the comment there), reached only via
+     * showLobbyAd() when C++ sends MSG_SHOW_AD. Left here since it's a
+     * reasonable thing for a caller embedding this class elsewhere to use,
+     * but don't rely on it running as this app's own init path.
+     */
     public static void init(final Activity activity) {
         if (sInitialized) return;
         sInitialized = true;
@@ -56,21 +63,7 @@ public class AdsManager {
             return;
         }
 
-        // With the real ad unit ID in place, any real device that requests an
-        // ad is a real (if $0) impression -- including the developer's own,
-        // which AdMob's policy treats as invalid traffic and can flag a new
-        // account over. Registering this device as a test device makes the
-        // SDK always serve safe test creatives here regardless of the ad
-        // unit ID, exactly as it did before the real ID replaced the test
-        // one. Empty when unset (see build.gradle) -- no-op in that case, so
-        // CI and release builds always request real ads.
-        if (!BuildConfig.ADMOB_TEST_DEVICE_ID.isEmpty()) {
-            RequestConfiguration config = new RequestConfiguration.Builder()
-                    .setTestDeviceIds(Collections.singletonList(BuildConfig.ADMOB_TEST_DEVICE_ID))
-                    .build();
-            MobileAds.setRequestConfiguration(config);
-            Log.d(TAG, "AdMob test device configured");
-        }
+        configureTestDeviceIfNeeded();
 
         MobileAds.initialize(activity, initStatus -> {
             Log.d(TAG, "AdMob initialized");
@@ -123,7 +116,29 @@ public class AdsManager {
 
     // --- private helpers ---
 
+    /**
+     * Registers this device as an AdMob test device, if android/local.properties
+     * (git-ignored) set one -- see build.gradle. Must run before the *first*
+     * ad request of the process, since RequestConfiguration only affects
+     * requests made after it's set. This is the actual call path that runs in
+     * this app (init() above does not -- see its comment), reached lazily via
+     * loadAd() rather than eagerly in onCreate() for the same HWUI-thread
+     * reason MobileAds.initialize() itself is deferred there.
+     */
+    private static void configureTestDeviceIfNeeded() {
+        if (sTestDeviceConfigured) return;
+        sTestDeviceConfigured = true;
+        if (!BuildConfig.ADMOB_TEST_DEVICE_ID.isEmpty()) {
+            RequestConfiguration config = new RequestConfiguration.Builder()
+                    .setTestDeviceIds(Collections.singletonList(BuildConfig.ADMOB_TEST_DEVICE_ID))
+                    .build();
+            MobileAds.setRequestConfiguration(config);
+            Log.d(TAG, "AdMob test device configured");
+        }
+    }
+
     private static void loadAd(final Activity activity) {
+        configureTestDeviceIfNeeded();
         activity.runOnUiThread(() -> {
             AdRequest req = new AdRequest.Builder().build();
             InterstitialAd.load(activity, AD_UNIT_ID, req,
