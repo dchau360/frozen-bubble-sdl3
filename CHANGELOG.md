@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+- **New: two ways to remove ads** (Android) — a $5/year auto-renewing
+  subscription (`remove_ads_year`) or a $15 permanent unlock
+  (`remove_ads_forever`). Both live as rows in the Settings panel, showing
+  Play's own localized price; the yearly row states that it renews and where
+  to cancel, before you buy.
+- **Fix: ad removal could never actually be purchased.** The only way to
+  trigger it was pressing `R` on the chain-reaction prompt — and nothing maps
+  a touch or a controller button to `R`, so no phone, tablet, or TV box could
+  reach it. (A code comment claimed it was "mapped from a controller button";
+  no such mapping existed.) It is now a normal Settings row, reachable by tap,
+  keyboard, and controller alike.
+- **Fix: the Settings panel drew outside its own background.** The content had
+  outgrown the fixed 280px box, so "Reset all settings" and the two help lines
+  rendered over the title screen behind it. The panel now measures its rows
+  and sizes itself, so it stays correct as rows come and go by platform and
+  entitlement.
 - **New: block and report abusive players.** `/block <nick>` in chat hides
   someone's messages — in the lobby and mid-match both — and takes effect
   immediately without needing anything from the server, so it works even on

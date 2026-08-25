@@ -368,13 +368,6 @@ void MainMenu::LocalMPPanelRender() {
 void MainMenu::OptPanelRender() {
     if (!showingOptPanel) return;
 
-#ifdef __ANDROID__
-    // On Android, show "Remove Ads" option at the bottom of the options panel.
-    // Pressing 'R' (mapped from a controller button via fake key event) triggers IAP.
-    // This is rendered as informational text; actual purchase is via SDL_SendAndroidMessage.
-    (void)0; // placeholder — text injected into snprintf below
-#endif
-
     if(awaitKp == false && lastOptInput != SDLK_UNKNOWN && !runDelay) { // we got our response
         chainReaction = (lastOptInput == SDLK_Y);
 
@@ -430,7 +423,72 @@ void MainMenu::KeysPanelRender() {
 
     BeginPanelTapRows(&keyConfigIndex);
 
-    { SDL_FRect fr = ToFRect(voidPanelRct); SDL_RenderTexture(const_cast<SDL_Renderer*>(renderer), voidPanelBG, nullptr, &fr); };
+#ifdef __ANDROID__
+    const bool adsRemoved = AdsRemoved();
+#endif
+
+    // Size the panel to the rows this configuration actually shows, rather
+    // than the fixed 280px box this used to draw. The content had already
+    // outgrown that box before the ad-removal rows existed -- "Reset all
+    // settings" and the two help lines rendered outside the wood texture,
+    // straight onto the title screen behind it -- and two more rows made it
+    // obvious. Measuring keeps it correct as rows come and go across
+    // platforms and entitlement states.
+    SDL_Renderer* rend = const_cast<SDL_Renderer*>(renderer);
+    panelText.UpdateText(rend, "Xy", 0);
+    const int lineH = panelText.Coords()->h;
+    const int gapH  = 6;
+
+    // Must track the render order below exactly; a row added there without a
+    // matching count here just re-creates the overflow this replaced.
+    int lines = 8;   // title, LEFT/RIGHT hint, 4 key rows, reset ctrl, speed
+    int gaps  = 3;
+    lines += 2; gaps += 2;               // sound, mouse
+#ifndef __WASM_PORT__
+    lines += 1; gaps += 1;               // fullscreen
+#endif
+#ifdef __ANDROID__
+    gaps += 1;
+    lines += adsRemoved ? 1 : 2;         // thank-you line, or the two buy rows
+    if (!adsRemoved && keyConfigIndex == kKeyRowRemoveAdsYear)
+        lines += 1;                      // auto-renewal notice
+    if (adsRemoved) gaps += 1;
+#endif
+    lines += 1; gaps += 1;               // reset all
+    lines += 1; gaps += 1;               // "Press button or key..." or its spacer
+    lines += 2;                          // UP/DOWN select, ESC when done
+
+    const int padX = 24, padTop = 16, padBottom = 16;
+    const int contentH = lines * lineH + gaps * gapH;
+    SDL_Rect panelRect = {
+        voidPanelRct.x - padX / 2,
+        std::max(4, (480 - (contentH + padTop + padBottom)) / 2),
+        voidPanelRct.w + padX,
+        std::min(contentH + padTop + padBottom, 480 - 8),
+    };
+
+    // Same three-slice draw as LocalMPPanelRender: stretching the whole
+    // texture to a taller box smears its carved border, so the caps are kept
+    // at native height and only the middle is stretched. The 2px overlaps stop
+    // linear filtering showing a hairline of background at each seam.
+    {
+        float srcW, srcH;
+        SDL_GetTextureSize(voidPanelBG, &srcW, &srcH);
+        const float topCap = srcH * 0.11f, bottomCap = srcH * 0.14f, overlap = 2.0f;
+        SDL_FRect topSrc = {0, 0, srcW, topCap + overlap};
+        SDL_FRect topDst = {(float)panelRect.x, (float)panelRect.y,
+                            (float)panelRect.w, topCap + overlap};
+        SDL_FRect bottomSrc = {0, srcH - bottomCap - overlap, srcW, bottomCap + overlap};
+        SDL_FRect bottomDst = {(float)panelRect.x,
+                               panelRect.y + panelRect.h - bottomCap - overlap,
+                               (float)panelRect.w, bottomCap + overlap};
+        SDL_FRect midSrc = {0, topCap, srcW, srcH - topCap - bottomCap};
+        SDL_FRect midDst = {(float)panelRect.x, panelRect.y + topCap,
+                            (float)panelRect.w, panelRect.h - topCap - bottomCap};
+        SDL_RenderTexture(rend, voidPanelBG, &topSrc, &topDst);
+        SDL_RenderTexture(rend, voidPanelBG, &midSrc, &midDst);
+        SDL_RenderTexture(rend, voidPanelBG, &bottomSrc, &bottomDst);
+    }
 
     GameSettings* gs = GameSettings::Instance();
     PlayerKeys* allKeys[5] = {
@@ -459,12 +517,12 @@ void MainMenu::KeysPanelRender() {
                          bool splitAdjust = false) {
         int top = y;
         renderLine(txt, fg, y);
-        AddPanelTapRow(row, { voidPanelRct.x, top, voidPanelRct.w, y - top },
+        AddPanelTapRow(row, { panelRect.x, top, panelRect.w, y - top },
                        -1, splitAdjust);
     };
 
     char lineBuf[256];
-    int y = (480/2) - 120;
+    int y = panelRect.y + padTop;
 
     snprintf(lineBuf, sizeof(lineBuf), "Key config  Player %d/4  (" APP_VERSION ")", keyConfigPlayer);
     renderLine(lineBuf, white, y);
@@ -531,6 +589,48 @@ void MainMenu::KeysPanelRender() {
     const char* fsState = gs->fullscreenMode() ? "ON" : "OFF";
     snprintf(lineBuf, sizeof(lineBuf), fsSel ? "[ Fullscreen: %s ]" : "  Fullscreen: %s  ", fsState);
     renderRow(kKeyRowFullscreen, lineBuf, fsSel ? yellow : white, y);
+#endif
+
+#ifdef __ANDROID__
+    // Ad-removal purchases. These live here rather than behind the old
+    // [R]-to-buy hint on the chain-reaction prompt, which no phone, tablet, or
+    // TV box could actually trigger -- nothing maps a touch or a controller to
+    // R. This panel already handles both, so the rows are reachable everywhere
+    // the game runs.
+    y += 6;
+    {
+        const bool removed = adsRemoved;
+        if (removed) {
+            // One line instead of two buy rows. The rows still exist as
+            // navigable indices so the enum stays fixed, but there is nothing
+            // to sell somebody who has already paid.
+            renderLine("  Ads removed -- thank you!  ", white, y);
+            y += 6;
+        } else {
+            const std::string yearPrice = AdsPrice(0);
+            const std::string everPrice = AdsPrice(1);
+
+            bool yearSel = (keyConfigIndex == kKeyRowRemoveAdsYear);
+            // Play's own price string when it has arrived, and an honest
+            // placeholder when it has not -- never a hardcoded number, which
+            // would be wrong in every currency but one.
+            snprintf(lineBuf, sizeof(lineBuf),
+                     yearSel ? "[ Remove ads 1 year: %s/yr ]" : "  Remove ads 1 year: %s/yr  ",
+                     yearPrice.empty() ? "..." : yearPrice.c_str());
+            renderRow(kKeyRowRemoveAdsYear, lineBuf, yearSel ? yellow : white, y);
+
+            bool everSel = (keyConfigIndex == kKeyRowRemoveAdsForever);
+            snprintf(lineBuf, sizeof(lineBuf),
+                     everSel ? "[ Remove ads forever: %s ]" : "  Remove ads forever: %s  ",
+                     everPrice.empty() ? "..." : everPrice.c_str());
+            renderRow(kKeyRowRemoveAdsForever, lineBuf, everSel ? yellow : white, y);
+
+            // Play policy requires auto-renewal be disclosed before purchase,
+            // and it is the thing a player most needs to know about the yearly
+            // option -- so it is shown on the panel, not buried in the store.
+            if (yearSel) renderLine("  renews yearly, cancel in Play  ", white, y);
+        }
+    }
 #endif
 
     y += 6;

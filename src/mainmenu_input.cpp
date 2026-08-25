@@ -476,15 +476,6 @@ bool MainMenu::MenuEditingKey(SDL_Event *e) {
                 }
             }
 
-#ifdef __ANDROID__
-            // On Android: pressing 'R' in any options panel triggers "Remove Ads" IAP
-            if (awaitKp && (showingOptPanel || showingNetSetupPanel) &&
-                e->key.key == SDLK_R) {
-                SDL_SendAndroidMessage(0x8002, 0); // launch Remove Ads purchase flow
-                return true;
-            }
-#endif
-
             if (awaitKp && (showingOptPanel || showingNetSetupPanel) && e->key.key != SDLK_ESCAPE) {
                 AudioMixer::Instance()->PlaySFX("typewriter");
                 lastOptInput = e->key.key;
@@ -579,14 +570,32 @@ bool MainMenu::KeysPanelKey(SDL_Event *e) {
                     AudioMixer::Instance()->PlaySFX("typewriter");
                     return true;
                 } else if (!awaitKp) {
+                    // Once ads are paid off, the two purchase rows collapse to
+                    // a single thank-you line with nothing to activate. They
+                    // keep their indices so the enum stays fixed, so navigation
+                    // has to step over them or the highlight vanishes for two
+                    // presses on a row that isn't drawn.
+                    auto skippableRow = [](int row) {
+#ifdef __ANDROID__
+                        return (row == kKeyRowRemoveAdsYear ||
+                                row == kKeyRowRemoveAdsForever) && AdsRemoved();
+#else
+                        (void)row;
+                        return false;
+#endif
+                    };
                     // UP/DOWN: navigate keys within current player
                     if (e->key.key == SDLK_UP) {
-                        keyConfigIndex = (keyConfigIndex == 0) ? kKeyRowLast : keyConfigIndex - 1;
+                        do {
+                            keyConfigIndex = (keyConfigIndex == 0) ? kKeyRowLast : keyConfigIndex - 1;
+                        } while (skippableRow(keyConfigIndex));
                         resetAllArmed = false;
                         AudioMixer::Instance()->PlaySFX("menu_change");
                         return true;
                     } else if (e->key.key == SDLK_DOWN) {
-                        keyConfigIndex = (keyConfigIndex == kKeyRowLast) ? 0 : keyConfigIndex + 1;
+                        do {
+                            keyConfigIndex = (keyConfigIndex == kKeyRowLast) ? 0 : keyConfigIndex + 1;
+                        } while (skippableRow(keyConfigIndex));
                         resetAllArmed = false;
                         AudioMixer::Instance()->PlaySFX("menu_change");
                         return true;
@@ -665,6 +674,19 @@ bool MainMenu::KeysPanelKey(SDL_Event *e) {
                             gs->SetValue("GFX:Fullscreen", "");
                             SDL_SetWindowFullscreen(SDL_GetRenderWindow(const_cast<SDL_Renderer*>(renderer)), gs->fullscreenMode());
                             AudioMixer::Instance()->PlaySFX("menu_change");
+#endif
+#ifdef __ANDROID__
+                        } else if (keyConfigIndex == kKeyRowRemoveAdsYear ||
+                                   keyConfigIndex == kKeyRowRemoveAdsForever) {
+                            // Already paid: the rows render as a thank-you line
+                            // with nothing to activate, so ignore the press
+                            // rather than reopening Play on a purchase they
+                            // already own.
+                            if (!AdsRemoved()) {
+                                SDL_SendAndroidMessage(
+                                    keyConfigIndex == kKeyRowRemoveAdsYear ? 0x8002 : 0x8003, 0);
+                                AudioMixer::Instance()->PlaySFX("menu_selected");
+                            }
 #endif
                         } else if (keyConfigIndex == kKeyRowResetAll) {
                             // Two presses: the first arms, the second commits.

@@ -333,11 +333,7 @@ void MainMenu::press() {
             showingSPPanel = false;
             showingOptPanel = awaitKp = true;
             panelText.UpdateText(const_cast<SDL_Renderer*>(renderer),
-                "Multiplayer training\n\n\nEnable chain reaction?\n\n\nY or N?:          \n"
-#ifdef __ANDROID__
-                "\n\n[R] Remove Ads"
-#endif
-                , 0);
+                "Multiplayer training\n\n\nEnable chain reaction?\n\n\nY or N?:          \n", 0);
             panelText.UpdatePosition({(640/2) - (panelText.Coords()->w / 2), (480/2) - 120});
             selectedMode = 6;  // mode 6 = mp_training
         }
@@ -415,11 +411,7 @@ void MainMenu::ShowPanel(int which) {
             showingSPPanel = false;
             showingOptPanel = awaitKp = true;
             panelText.UpdateText(const_cast<SDL_Renderer *>(renderer),
-                "Random level\n\n\nEnable chain reaction?\n\n\nY or N?:          \n"
-#ifdef __ANDROID__
-                "\n\n[R] Remove Ads"
-#endif
-                , 0);
+                "Random level\n\n\nEnable chain reaction?\n\n\nY or N?:          \n", 0);
             panelText.UpdatePosition({(640/2) - (panelText.Coords()->w / 2), (480/2) - 120});
             selectedMode = 3;
             break;

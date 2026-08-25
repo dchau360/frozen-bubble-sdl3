@@ -137,4 +137,24 @@ void IosRegisterForPush();
 std::string IosFetchUrl(const char* url, int timeoutSeconds);
 #endif
 
+// ── In-app purchases (Android only) ───────────────────────────────────────────
+//
+// Ads and the purchases that remove them exist only on Android, so these are
+// the one place the rest of the UI has to ask about them. Elsewhere
+// AdsRemoved() is constant false and the purchase rows are not built at all.
+#if defined(__ANDROID__) || defined(__ANDROID_PORT__)
+// Is ad removal currently in force? True for a permanent purchase and for an
+// in-force yearly subscription; goes false again when a subscription lapses,
+// since Play stops reporting it and BillingManager re-derives the flag on
+// every launch.
+bool AdsRemoved();
+
+// Localized price for a purchase row, or "" when Play has not answered yet
+// (the row says so rather than showing a made-up number). Index 0 is the
+// yearly subscription, 1 is the permanent purchase. Never hardcode a price:
+// Play sets them per country, and showing one figure while charging another
+// is its own problem in several jurisdictions.
+std::string AdsPrice(int productIndex);
+#endif
+
 #endif // PLATFORM_H

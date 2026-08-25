@@ -52,7 +52,8 @@ github.com/dchau360/frozen-bubble-sdl3.
 This is an independent, fan-made continuation of the original Frozen Bubble
 project and is not affiliated with or endorsed by the original authors.
 
-Contains ads. A one-time in-app purchase removes them permanently.
+Contains ads. Remove them for a year, or permanently, with an in-app
+purchase.
 ```
 
 **Category:** Games > Puzzle
@@ -77,7 +78,7 @@ honest answers are, based on what the app actually does:
 | **User interaction / communication** | **Yes — unmoderated** | Network multiplayer has free-text chat between players, with **no profanity filter or moderation** in this codebase. Answer honestly here — this is the one question worth not glossing over, since IARC/Play specifically ask about *unmoderated* chat and it nudges the rating up a notch (typically still in the Teen range at most, not Mature) |
 | Shares location | No | — |
 | Shares personal info with other users | Only your chosen nickname (not tied to real identity) | — |
-| Users can spend real money | Yes | One-time "Remove Ads" purchase via Google Play Billing |
+| Users can spend real money | Yes | Two ad-removal purchases via Google Play Billing: a yearly subscription and a one-time permanent unlock |
 
 Expect this to land around **Teen** (or your platform's equivalent) purely
 because of the unmoderated chat question — not because of any actual violent
@@ -120,115 +121,58 @@ data) travels over it, but it isn't TLS.
 
 ---
 
-## AdMob — real account setup (manual, your account)
+## AdMob — done
 
-1. Go to <https://apps.admob.com> and sign up (uses your Google account —
-   no separate signup, but you're accepting AdMob's own terms).
-2. **Apps → Add app** → Android → is it published on Play yet? No (you can
-   link it later) → name it "Frozen Bubble".
-3. AdMob issues an **App ID** (`ca-app-pub-XXXXXXXXXXXXXXXX~XXXXXXXXXX`).
-4. **Ad units → Add ad unit → Interstitial** (matches what `AdsManager.java`
-   already implements) → note the **Ad unit ID**
-   (`ca-app-pub-XXXXXXXXXXXXXXXX/YYYYYYYYYY`).
-5. Send me both IDs and I'll wire them into
-   [`AndroidManifest.xml`](../../android/app/src/main/AndroidManifest.xml)
-   (replacing the Google test ID currently there) and
-   [`AdsManager.java`](../../android/app/src/main/java/org/frozenbubble/AdsManager.java).
+Account created 2026-08-24, real IDs wired in (commit `710cd088`):
 
-Keep testing with the **test ad unit ID** (already in place) until you're
-ready to actually publish — serving real ads before the app is live on Play
-violates AdMob policy.
+| | |
+|---|---|
+| App ID | `ca-app-pub-7736855769799322~9200045587` (in `AndroidManifest.xml`) |
+| Interstitial ad unit | `ca-app-pub-7736855769799322/5410693019` (in `AdsManager.java`) |
 
----
+**The account is still pending Google's approval** — a new-account review,
+separate from Play Console verification. Until it clears, ad requests fail
+with `Account not approved yet`, which is expected and not a bug.
 
-## Play Console — remove_ads in-app product (manual, once account exists)
-
-1. Play Console → your app → **Monetize → Products → In-app products**.
-2. **Create product**. Product ID must be exactly `remove_ads` (matches what
-   `BillingManager.java` already queries for) — Play product IDs can't be
-   changed after creation, so get this exact.
-3. Set a price, title ("Remove Ads"), description ("Removes all ads
-   permanently").
-4. Activate it. No app code change needed — `BillingManager.java` already
-   queries for this exact product ID.
+The owner's test tablet is registered as an AdMob test device via
+`admob.testDeviceId` in `android/local.properties` (git-ignored), so local
+builds always get safe test creatives rather than real impressions — tapping
+your own live ads is invalid traffic and can get a new account flagged. To
+register another device, run a debug build, watch logcat for the SDK's
+"Use RequestConfiguration..." line, and add that hash to that file.
 
 ---
 
-## Closed testing (the 12-tester/14-day gate for a Personal account)
+## Play Console — the two ad-removal products
 
-### What the track actually needs
+Create both under **Monetize** once the account is verified. The product IDs
+must match `BillingManager.java` exactly and **cannot be changed after
+creation**:
 
-A common misconception is that "closed testing" is a stripped-down, informal
-mode — it isn't. Play Console requires most of the same setup as a
-production release before it will let a closed track go out at all:
+| What | Product ID | Where in Play Console | Price |
+|---|---|---|---|
+| 1 year, auto-renewing | `remove_ads_year` | Monetize → **Subscriptions** | $5/year |
+| Permanent | `remove_ads_forever` | Monetize → Products → **In-app products** | $15 one-time |
 
-- **Content rating questionnaire** — done (above).
-- **Data Safety form** — done (above).
-- **Ads declaration** — "Yes, my app contains ads" (Play Console asks this
-  as its own checkbox separately from the Data Safety form).
-- **Target audience & content** — age groups your app targets; pick 13+
-  given the unmoderated chat (matches the content rating reasoning above).
-- **Store listing** (title, descriptions, icon, screenshots, feature
-  graphic) — all of it, not a subset. Testers see the real listing. Already
-  drafted above.
-- **Countries/regions** — pick where the track is available; "all
-  countries" is fine for testing.
-- **US export laws / content guidelines declarations** — standard
-  checkboxes, no encryption export complications here (see the encryption
-  note in the Data Safety section above).
+**The yearly one is a subscription, not a one-time product** — it belongs
+under Subscriptions, and needs a **base plan** with a yearly billing period
+(the app reads the first offer on it). A one-time "1 year pass" was considered
+and rejected: without a backend, its expiry can only come from the purchase
+timestamp, and allowing a second year means consuming the first, which throws
+that timestamp away and loses the entitlement on the next reinstall. Play
+tracks subscription state itself, so `queryPurchasesAsync(SUBS)` answers
+correctly across reinstalls and new devices with no server of ours.
 
-None of this is testing-track-specific busywork — it's the same review
-Google runs before *any* release. Filling it in once now means production
-is just "promote this release" later, not a second round of the same forms.
+Prices above are what you set in Play Console for your home currency; Play
+converts for other countries. The app never hardcodes a price — it shows
+Play's own localized string, and `...` until Play answers.
 
-### Setting up the track
+No app code change is needed for either — both IDs are already wired in.
 
-1. Play Console → your app → **Testing → Closed testing**.
-2. **Create track** (or use the default one Play Console offers).
-3. Upload the release `.aab` — the CI-built one from
-   [Android-AAB in the latest release](https://github.com/dchau360/frozen-bubble-sdl3/releases/latest)
-   works directly, no separate testing build needed.
-4. **Testers** tab → choose **Email list** (simplest option — no Google
-   Group needed for 12 people):
-   - Paste tester emails, one per line or comma-separated. Each must be a
-     real Google account (Gmail or Workspace) — Play Console doesn't
-     validate this until the person tries to opt in.
-5. Save. Play Console generates an **opt-in URL** for this track — that's
-   what you send testers, not a direct Play Store link. They:
-   - Open the URL while signed into the Google account you listed.
-   - Click **Become a tester**.
-   - Follow the link to the Play Store listing and install from there.
-6. **The 14-day clock starts when a tester opts in**, not when you invite
-   them — so stagger reminders if people are slow to click through, since a
-   tester who opts in on day 5 doesn't help you reach day 14 until their
-   own day 14.
-7. Once you have 12 testers opted in continuously for 14 days, Play Console
-   unlocks the option to apply for production access on that app.
+### Testing purchases before launch
 
-Being opted in is the literal requirement, but it's worth asking testers to
-actually **install and open the app at least once** — real usage is what
-surfaces bugs, and an opted-in-but-never-installed tester list looks odd if
-Google ever reviews it manually.
-
-### Where to find 12 testers
-
-You don't need 12 strangers — friends and family with any Google account
-qualify. If you want more (or don't want to ask people you know to install
-a beta), some places that work well for a small open-source game:
-
-- **Your own itch.io page's comment section** (`dchau360.itch.io/frozenbubble2`)
-  — people already playing the browser build are the most likely to bother
-  installing an Android beta too.
-- **The GitHub repo itself** — a pinned issue or a note in the README asking
-  for closed-testing volunteers; open-source-curious people are usually
-  happy to help for a small, transparent project.
-- **r/AndroidApps** and **r/AppHookup** on Reddit — both regularly have
-  beta-tester-wanted threads; check each sub's rules on self-promotion
-  first.
-- **r/AndroidGaming** — same idea, gaming-specific audience.
-- A **Discord server** for retro/arcade games or indie/open-source dev, if
-  you're in one — a quick "testing a Frozen Bubble Android port, need 12
-  people for 14 days" post usually gets more than enough volunteers.
-
-12 is a small number — realistically one or two of the above sources is
-enough; no need to hit all of them.
+Purchases can't be tested until the app is uploaded to a track (internal
+testing is enough) and your account is added under **Setup → License
+testing**, which makes purchases free and instant for those accounts. Until
+then the app logs `Product not available` for both, which is the expected
+state and not a bug.

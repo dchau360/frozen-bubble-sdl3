@@ -30,13 +30,15 @@ import java.net.URL;
  *
  * SDL3 message protocol (sent from C++ via SDL_SendAndroidMessage):
  *   0x8001 — show interstitial ad (called when entering network lobby)
- *   0x8002 — launch "Remove Ads" IAP purchase flow
+ *   0x8002 — buy the yearly ad-removal subscription
+ *   0x8003 — buy permanent ad removal
  */
 public class FrozenBubbleActivity extends SDLActivity {
 
-    // Custom SDL_SendAndroidMessage command codes (must match mainmenu.cpp)
-    private static final int MSG_SHOW_AD      = 0x8001;
-    private static final int MSG_REMOVE_ADS   = 0x8002;
+    // Custom SDL_SendAndroidMessage command codes (must match mainmenu_input.cpp)
+    private static final int MSG_SHOW_AD           = 0x8001;
+    private static final int MSG_BUY_ADS_YEAR      = 0x8002;
+    private static final int MSG_BUY_ADS_FOREVER   = 0x8003;
 
     /** Extracted asset directory path — read by C++ InitDataDir() via JNI. */
     public static String sExtractedDataDir = "";
@@ -91,12 +93,44 @@ public class FrozenBubbleActivity extends SDLActivity {
             case MSG_SHOW_AD:
                 AdsManager.showLobbyAd(this);
                 return true;
-            case MSG_REMOVE_ADS:
-                runOnUiThread(() -> mBillingManager.launchPurchaseFlow());
+            case MSG_BUY_ADS_YEAR:
+                runOnUiThread(() ->
+                        mBillingManager.launchPurchaseFlow(BillingManager.PRODUCT_YEAR));
+                return true;
+            case MSG_BUY_ADS_FOREVER:
+                runOnUiThread(() ->
+                        mBillingManager.launchPurchaseFlow(BillingManager.PRODUCT_FOREVER));
                 return true;
             default:
                 return false;
         }
+    }
+
+    /**
+     * Called from C++ via JNI: is ad removal currently active? Reads the flag
+     * BillingManager last derived from Play, so it covers both a permanent
+     * purchase and an in-force yearly subscription -- and goes false again once
+     * a subscription lapses.
+     */
+    public static boolean adsRemoved() {
+        Context ctx = SDL.getContext();
+        if (ctx == null) return false;
+        return ctx.getSharedPreferences("FrozenBubblePrefs", Context.MODE_PRIVATE)
+                  .getBoolean("ads_removed", false);
+    }
+
+    /**
+     * Called from C++ via JNI: the localized price to show on a purchase row,
+     * or "" if Play has not answered yet (the row then says so rather than
+     * inventing a number). productIndex 0 = yearly, 1 = permanent -- an int
+     * rather than a string keeps the JNI signature trivial.
+     */
+    public static String adsPrice(int productIndex) {
+        Context ctx = SDL.getContext();
+        if (ctx == null) return "";
+        return BillingManager.getPrice(null,
+                productIndex == 0 ? BillingManager.PRODUCT_YEAR
+                                  : BillingManager.PRODUCT_FOREVER);
     }
 
     /**

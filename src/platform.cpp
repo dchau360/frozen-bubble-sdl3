@@ -364,3 +364,67 @@ std::string PushDeviceToken() {
     return std::string();
 #endif
 }
+
+#if defined(__ANDROID__) || defined(__ANDROID_PORT__)
+// Both of these reach static methods on FrozenBubbleActivity through the
+// Activity object rather than FindClass()-by-name, for the reason spelled out
+// above androidPushToken(): FindClass resolves against the wrong classloader
+// on the SDL game thread and silently returns null.
+//
+// Deliberately uncached, unlike androidIsTelevision(): a price arrives
+// asynchronously from Play some time after startup, and the entitlement
+// changes the moment somebody buys. Caching either would show a stale row.
+bool AdsRemoved() {
+    JNIEnv *env = (JNIEnv *)SDL_GetAndroidJNIEnv();
+    jobject activity = (jobject)SDL_GetAndroidActivity();
+    if (!env || !activity) return false;
+
+    jclass cls = env->GetObjectClass(activity);
+    jmethodID mid = env->GetStaticMethodID(cls, "adsRemoved", "()Z");
+    if (!mid) {
+        env->ExceptionClear();
+        env->DeleteLocalRef(cls);
+        env->DeleteLocalRef(activity);
+        return false;
+    }
+    jboolean result = env->CallStaticBooleanMethod(cls, mid);
+    if (env->ExceptionCheck()) {
+        env->ExceptionClear();
+        result = JNI_FALSE;
+    }
+    env->DeleteLocalRef(cls);
+    env->DeleteLocalRef(activity);
+    return result != JNI_FALSE;
+}
+
+std::string AdsPrice(int productIndex) {
+    JNIEnv *env = (JNIEnv *)SDL_GetAndroidJNIEnv();
+    jobject activity = (jobject)SDL_GetAndroidActivity();
+    if (!env || !activity) return std::string();
+
+    jclass cls = env->GetObjectClass(activity);
+    jmethodID mid = env->GetStaticMethodID(cls, "adsPrice", "(I)Ljava/lang/String;");
+    if (!mid) {
+        env->ExceptionClear();
+        env->DeleteLocalRef(cls);
+        env->DeleteLocalRef(activity);
+        return std::string();
+    }
+    jstring jresult = (jstring)env->CallStaticObjectMethod(cls, mid, (jint)productIndex);
+    if (env->ExceptionCheck()) {
+        env->ExceptionClear();
+        env->DeleteLocalRef(cls);
+        env->DeleteLocalRef(activity);
+        return std::string();
+    }
+    env->DeleteLocalRef(cls);
+    env->DeleteLocalRef(activity);
+
+    if (jresult == nullptr) return std::string();
+    const char *chars = env->GetStringUTFChars(jresult, nullptr);
+    std::string result(chars ? chars : "");
+    env->ReleaseStringUTFChars(jresult, chars);
+    env->DeleteLocalRef(jresult);
+    return result;
+}
+#endif

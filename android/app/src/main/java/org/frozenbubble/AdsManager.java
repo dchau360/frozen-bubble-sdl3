@@ -97,14 +97,26 @@ public class AdsManager {
         });
     }
 
-    /** Mark ads as permanently removed (call after successful IAP). */
-    public static void setAdsRemoved(Activity activity) {
+    /**
+     * Set the ads-removed entitlement (call from BillingManager once Play has
+     * been consulted).
+     *
+     * Takes a value rather than only ever granting, because the yearly plan can
+     * lapse -- a subscription that expired has to put ads back, and a
+     * grant-only version of this would leave them off forever after one paid
+     * year.
+     */
+    public static void setAdsRemoved(Activity activity, boolean removed) {
         SharedPreferences.Editor ed = activity
                 .getSharedPreferences(PREFS_NAME, Activity.MODE_PRIVATE).edit();
-        ed.putBoolean(KEY_NO_ADS, true);
+        ed.putBoolean(KEY_NO_ADS, removed);
         ed.apply();
-        sInterstitial = null; // discard any loaded ad
-        Log.d(TAG, "Ads removed");
+        if (removed) {
+            sInterstitial = null; // discard any loaded ad
+            Log.d(TAG, "Ads removed");
+        } else {
+            Log.d(TAG, "Ads enabled (no active entitlement)");
+        }
     }
 
     /** Returns true if the user has purchased ad removal. */

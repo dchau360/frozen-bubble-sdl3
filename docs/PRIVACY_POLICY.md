@@ -52,8 +52,9 @@ policies — see
 [How Google uses information from sites or apps that use our services](https://policies.google.com/technologies/partner-sites).
 The developer does not separately collect or receive this data.
 
-**Purchase data (Android only).** A one-time "Remove Ads" purchase is
-processed entirely by Google Play Billing. The app never sees your payment
+**Purchase data (Android only).** The two ad-removal purchases — a yearly
+subscription and a one-time permanent unlock — are processed entirely by
+Google Play Billing. The app never sees your payment
 method, card number, or billing address — it only receives a purchase
 token from Google confirming entitlement, which is stored locally on your
 device to keep ads off.
@@ -98,7 +99,9 @@ avoid entering real names or other identifying information.
 
 ## Your choices
 
-- Turn off ads permanently with the one-time "Remove Ads" purchase.
+- Turn off ads for a year, or permanently, with an in-app purchase. The
+  yearly one is an auto-renewing subscription you can cancel any time in the
+  Play Store.
 - Unfollow any server to stop push registration for it.
 - Play local single-player or local multiplayer to avoid any network data
   transmission entirely.

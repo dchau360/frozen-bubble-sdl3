@@ -51,7 +51,17 @@ enum KeyConfigRow {
     // The browser build has no fullscreen row: an SDL fullscreen flag blacks out
     // the canvas there, so the CSS shell does the scaling instead.
     kKeyRowFullscreen = 8,
+# ifdef __ANDROID__
+    // Ads and in-app purchases are Android-only, so these two rows exist
+    // nowhere else. They replaced an [R]-to-buy hint that was unreachable in
+    // practice: nothing maps a controller or a touch to R, so no phone,
+    // tablet, or TV box could ever trigger it.
+    kKeyRowRemoveAdsYear   = 9,
+    kKeyRowRemoveAdsForever = 10,
+    kKeyRowResetAll   = 11,
+# else
     kKeyRowResetAll   = 9,
+# endif
 #else
     kKeyRowResetAll   = 8,
 #endif
