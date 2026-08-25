@@ -1,15 +1,31 @@
 name: Deploy GitHub Pages
 
-# Publishes the static site on the gh-pages branch (currently just the
-# privacy policy needed for Google Play submission -- see
-# docs/PRIVACY_POLICY.md for the source of truth and PRIVACY_POLICY.md
-# vs this branch's index.html). Deliberately scoped to a dedicated branch
-# rather than serving docs/ from main, since docs/ also contains internal
-# audit and planning notes that shouldn't be published as a website.
+# Publishes the public site (currently the privacy policy Google Play requires,
+# plus the Google site-verification token) to GitHub Pages.
+#
+# The site is GENERATED from docs/PRIVACY_POLICY.md by tools/build-site.py
+# rather than hand-maintained. It used to live as its own index.html on a
+# gh-pages branch, which meant the published policy was a third copy that
+# nobody remembered to update -- it was still describing the app from before
+# the two ad-removal products existed. One source now, rendered at deploy time.
+#
+# Note on the previous trigger: this workflow fired on `push` to `gh-pages`,
+# which could never work. Actions resolves workflow files from the branch being
+# pushed, and gh-pages held only index.html/index.md -- no .github/ at all. So
+# every deploy in practice needed a manual dispatch. It runs off main now,
+# where this file actually lives.
+#
+# docs/ as a whole is still deliberately NOT published: it carries internal
+# audit and planning notes. Only what build-site.py names gets uploaded.
 
 on:
   push:
-    branches: [gh-pages]
+    branches: [main]
+    paths:
+      - 'docs/PRIVACY_POLICY.md'
+      - 'site/**'
+      - 'tools/build-site.py'
+      - '.github/workflows/pages.yml'
   workflow_dispatch:
 
 permissions:
@@ -29,14 +45,26 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
         with:
-          ref: gh-pages
+          python-version: '3.x'
+
+      - run: pip install markdown
+
+      - name: Render the site
+        run: python tools/build-site.py _site
+
+      - name: Check the verification token survived byte-for-byte
+        # A mangled or missing token silently un-verifies the domain with
+        # Google, which is not visible from the rendered page.
+        run: cmp site/google034c4b2cf8d147df.html _site/google034c4b2cf8d147df.html
 
       - uses: actions/configure-pages@v5
 
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: .
+          path: _site
 
       - id: deployment
         uses: actions/deploy-pages@v4

@@ -48,3 +48,6 @@ android/app/google-services.json
 
 # docker-compose environment overrides — holds credential file paths.
 docker/.env
+
+# Output of tools/build-site.py (the GitHub Pages site, rendered at deploy time)
+_site/
