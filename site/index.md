@@ -22,9 +22,9 @@ Android, and in the browser**.
 | Android | `frozen-bubble-android-tv.apk` — same APK for TV boxes, phones and tablets |
 | Browser | [Play on itch.io](https://dchau360.itch.io/frozenbubble2) — desktop and mobile, including iPhone |
 
-Everything is on the
-[releases page](https://github.com/dchau360/frozen-bubble-sdl3/releases/latest)
-and on [itch.io](https://dchau360.itch.io/frozenbubble2).
+Downloads are on the
+[releases page](https://github.com/dchau360/frozen-bubble-sdl3/releases/latest);
+[itch.io](https://dchau360.itch.io/frozenbubble2) hosts the browser version.
 
 There is no iOS download. The build exists but is unsigned and experimental, so
 a device will not install it without re-signing — see

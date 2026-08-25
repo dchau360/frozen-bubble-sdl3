@@ -11,7 +11,7 @@ The original was written in Perl; this is a full rewrite in C++. Core gameplay a
 
 ## Download
 
-Latest builds are on the [releases page](https://github.com/dchau360/frozen-bubble-sdl3/releases/latest), and on [itch.io](https://dchau360.itch.io/frozenbubble2).
+Latest builds are on the [releases page](https://github.com/dchau360/frozen-bubble-sdl3/releases/latest). [itch.io](https://dchau360.itch.io/frozenbubble2) hosts the browser version.
 
 | Platform | Download | Notes |
 |---|---|---|
