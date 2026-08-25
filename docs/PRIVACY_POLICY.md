@@ -3,7 +3,7 @@
 **Effective date:** August 16, 2026
 
 Frozen Bubble: SDL3 ("the app") is a free, open-source game
-([GPLv2 licensed](../LICENSE), source at
+([GPLv2 licensed](https://github.com/dchau360/frozen-bubble-sdl3/blob/main/COPYING), source at
 [github.com/dchau360/frozen-bubble-sdl3](https://github.com/dchau360/frozen-bubble-sdl3)).
 This policy covers the Android build distributed on Google Play; the same
 practices apply to the other platform builds except where noted (ads and
@@ -23,7 +23,7 @@ isn't sent anywhere else.
 **Network connection data.** Playing network multiplayer means connecting
 to a game server over TCP — your IP address is visible to that server the
 same way it is for any internet connection, and the reference server
-implementation ([`server/`](../server)) writes IP address, nickname, and
+implementation ([`server/`](https://github.com/dchau360/frozen-bubble-sdl3/tree/main/server)) writes IP address, nickname, and
 connect/disconnect times to a local server log for operational purposes
 (abuse investigation, debugging). Per-nickname match statistics (wins,
 bubbles fired/popped) are also persisted server-side so they can be shown
@@ -111,7 +111,7 @@ avoid entering real names or other identifying information.
 
 This policy may be updated as the app changes (for example, if a new
 platform or feature is added). Material changes will be noted in
-[CHANGELOG.md](../CHANGELOG.md).
+[CHANGELOG.md](https://github.com/dchau360/frozen-bubble-sdl3/blob/main/CHANGELOG.md).
 
 ## Contact
 
