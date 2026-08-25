@@ -1,6 +1,6 @@
 # Frozen Bubble: SDL3
 
-A C++ / SDL3 port of the classic [Frozen Bubble 2](http://www.frozen-bubble.org/),
+A C++ / SDL3 port of the classic [Frozen Bubble 2](https://en.wikipedia.org/wiki/Frozen_Bubble),
 reimplementing its gameplay, network multiplayer and chain-reaction system.
 The original was Linux-only; this port runs on **Linux, macOS, Windows,
 Android, and in the browser**.

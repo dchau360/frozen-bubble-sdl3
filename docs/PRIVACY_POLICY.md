@@ -42,7 +42,7 @@ operator's optional push relay can notify you when someone joins. The token
 is sent only to servers you explicitly follow, is stored alongside your
 platform (`ios`/`android`) and a last-notified timestamp for cooldown
 purposes, and is removed when you unfollow. See
-[docs/PUSH_SETUP.md](PUSH_SETUP.md) for the full mechanism.
+[docs/PUSH_SETUP.md](https://github.com/dchau360/frozen-bubble-sdl3/blob/main/docs/PUSH_SETUP.md) for the full mechanism.
 
 **Advertising identifiers (Android only).** The Android build shows an
 interstitial ad via Google AdMob when entering the multiplayer lobby.
