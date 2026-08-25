@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v2.4.40
 
 - **New: two ways to remove ads** (Android) — a $5/year auto-renewing
   subscription (`remove_ads_year`) or a $15 permanent unlock
