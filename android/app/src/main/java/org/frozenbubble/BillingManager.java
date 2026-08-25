@@ -182,10 +182,22 @@ public class BillingManager implements PurchasesUpdatedListener {
      * would stay off forever after a single expired year. Both queries are
      * asynchronous and independent, so the results are combined once the second
      * one lands rather than each writing the flag on its own.
+     *
+     * A query that comes back non-OK (a disconnect, a transient Play error)
+     * still has to mark itself finished, or the other query's result is never
+     * applied at all -- a paying subscriber would keep seeing ads for the whole
+     * session because an unrelated INAPP lookup happened to fail. But a failed
+     * query is not evidence of *not* owning anything either, so revoking is
+     * held back unless both queries actually answered. Grant on any evidence,
+     * revoke only on complete evidence.
+     *
+     * The unsynchronized arrays are safe because Play delivers both callbacks
+     * on the main thread; they are not a general-purpose concurrent combine.
      */
     private void restorePurchases() {
         final boolean[] owned = new boolean[2];
         final boolean[] done  = new boolean[2];
+        final boolean[] ok    = new boolean[2];
 
         mBillingClient.queryPurchasesAsync(
                 QueryPurchasesParams.newBuilder()
@@ -197,9 +209,13 @@ public class BillingManager implements PurchasesUpdatedListener {
                             handlePurchase(p);
                             if (isActive(p, PRODUCT_FOREVER)) owned[0] = true;
                         }
-                        done[0] = true;
-                        if (done[1]) applyEntitlement(owned[0] || owned[1]);
+                        ok[0] = true;
+                    } else {
+                        Log.w(TAG, "INAPP purchase query failed: "
+                                + billingResult.getDebugMessage());
                     }
+                    done[0] = true;
+                    if (done[1]) combineRestore(owned, ok);
                 });
 
         mBillingClient.queryPurchasesAsync(
@@ -212,10 +228,31 @@ public class BillingManager implements PurchasesUpdatedListener {
                             handlePurchase(p);
                             if (isActive(p, PRODUCT_YEAR)) owned[1] = true;
                         }
-                        done[1] = true;
-                        if (done[0]) applyEntitlement(owned[0] || owned[1]);
+                        ok[1] = true;
+                    } else {
+                        Log.w(TAG, "SUBS purchase query failed: "
+                                + billingResult.getDebugMessage());
                     }
+                    done[1] = true;
+                    if (done[0]) combineRestore(owned, ok);
                 });
+    }
+
+    /** Applies the combined result of the two purchase queries. */
+    private void combineRestore(boolean[] owned, boolean[] ok) {
+        if (owned[0] || owned[1]) {
+            applyEntitlement(true);
+        } else if (ok[0] && ok[1]) {
+            // Both queries answered and neither found an active purchase, so
+            // this is a real lapse rather than a lookup that fell over.
+            applyEntitlement(false);
+        } else {
+            // Nothing owned, but at least one query never answered -- leave the
+            // existing flag alone rather than revoking on missing data. The
+            // next restorePurchases() (next launch, or an ITEM_ALREADY_OWNED)
+            // settles it.
+            Log.w(TAG, "Purchase query incomplete; leaving entitlement unchanged");
+        }
     }
 
     private static boolean isActive(Purchase p, String productId) {
@@ -263,7 +300,7 @@ public class BillingManager implements PurchasesUpdatedListener {
      * would be wrong, and in several jurisdictions displaying a price other
      * than the one charged is its own problem.
      */
-    public static String getPrice(Activity activity, String productId) {
+    public static String getPrice(String productId) {
         return sInstance == null ? "" : sInstance.priceFor(productId);
     }
 
@@ -280,7 +317,15 @@ public class BillingManager implements PurchasesUpdatedListener {
         if (offers == null || offers.isEmpty()) return "";
         List<ProductDetails.PricingPhase> phases =
                 offers.get(0).getPricingPhases().getPricingPhaseList();
-        return phases.isEmpty() ? "" : phases.get(0).getFormattedPrice();
+        if (phases.isEmpty()) return "";
+        // The last phase is the recurring one. Phases are ordered as the buyer
+        // meets them, so phase 0 is the free trial or discounted introductory
+        // period whenever one is configured in Play Console -- and taking it
+        // would print "$0.00" next to a subscription that actually renews at
+        // full price, which is exactly what this method's contract forbids.
+        // Play Console needs no app change to add such an offer, so this must
+        // hold without anyone remembering to come back here.
+        return phases.get(phases.size() - 1).getFormattedPrice();
     }
 
     private void handlePurchase(Purchase purchase) {

@@ -115,8 +115,7 @@ public class FrozenBubbleActivity extends SDLActivity {
     public static boolean adsRemoved() {
         Context ctx = SDL.getContext();
         if (ctx == null) return false;
-        return ctx.getSharedPreferences("FrozenBubblePrefs", Context.MODE_PRIVATE)
-                  .getBoolean("ads_removed", false);
+        return AdsManager.isAdsRemoved(ctx);
     }
 
     /**
@@ -126,9 +125,9 @@ public class FrozenBubbleActivity extends SDLActivity {
      * rather than a string keeps the JNI signature trivial.
      */
     public static String adsPrice(int productIndex) {
-        Context ctx = SDL.getContext();
-        if (ctx == null) return "";
-        return BillingManager.getPrice(null,
+        // No context needed: getPrice() reads the cached ProductDetails and
+        // returns "" when Play has not answered yet.
+        return BillingManager.getPrice(
                 productIndex == 0 ? BillingManager.PRODUCT_YEAR
                                   : BillingManager.PRODUCT_FOREVER);
     }

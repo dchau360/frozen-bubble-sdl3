@@ -17,6 +17,25 @@
   rejects control characters, and the server folds them out of `reports.log`
   independently — a hand-rolled client can no longer forge log entries that
   frame another player.
+- **Fix: a paid subscription could be ignored for a whole session** (Android).
+  Ad removal is derived from two independent Play queries, and either one
+  coming back with a transient error stopped the *other* one's result from
+  being applied at all — so a Play hiccup on the one-time-purchase lookup left
+  an active, paid yearly subscriber looking at ads until the next launch. The
+  entitlement is now granted on any evidence of ownership, and revoked only
+  when both queries actually answered.
+- **Fix: the Mobile Ads SDK was never initialized** (Android). The manifest
+  disables AdMob's own auto-init (it collides with SDL's EGL surface at
+  startup), and the code that was meant to take over never ran, so ad requests
+  went out against an uninitialized SDK and worked only by its internal
+  fallback — leaving the first request, the one the test-device allow-list
+  exists to protect, outside any guarantee. Init now happens lazily on the
+  first ad load, verified on-device.
+- **Fix: an introductory offer would have displayed the wrong price**
+  (Android). The Settings row showed the subscription's first pricing phase,
+  which is the free trial or discounted period whenever one is configured in
+  Play Console — printing "$0.00" beside a plan that renews at full price. It
+  now shows the recurring price.
 
 ## v2.4.40
 

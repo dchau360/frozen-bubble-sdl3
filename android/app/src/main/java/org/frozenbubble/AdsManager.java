@@ -10,6 +10,7 @@
 package org.frozenbubble;
 
 import android.app.Activity;
+import android.content.Context;
 import android.content.SharedPreferences;
 import android.util.Log;
 
@@ -48,27 +49,18 @@ public class AdsManager {
     private static boolean sTestDeviceConfigured = false;
 
     /**
-     * Not called from anywhere in this app today -- AdMob init is deferred to
-     * the first loadAd() instead (see the comment there), reached only via
-     * showLobbyAd() when C++ sends MSG_SHOW_AD. Left here since it's a
-     * reasonable thing for a caller embedding this class elsewhere to use,
-     * but don't rely on it running as this app's own init path.
+     * Not called from anywhere in this app today -- this app reaches ads only
+     * via showLobbyAd() when C++ sends MSG_SHOW_AD, and loadAd() initializes
+     * the SDK on demand. Left here because it is a reasonable entry point for
+     * a caller embedding this class elsewhere; it delegates rather than
+     * duplicating the init sequence, so there is only ever one of those.
      */
     public static void init(final Activity activity) {
-        if (sInitialized) return;
-        sInitialized = true;
-
         if (isAdsRemoved(activity)) {
             Log.d(TAG, "Ads have been removed by user purchase — skipping init");
             return;
         }
-
-        configureTestDeviceIfNeeded();
-
-        MobileAds.initialize(activity, initStatus -> {
-            Log.d(TAG, "AdMob initialized");
-            loadAd(activity);
-        });
+        loadAd(activity);
     }
 
     /** Show an interstitial ad if one is ready and ads haven't been removed. */
@@ -119,10 +111,17 @@ public class AdsManager {
         }
     }
 
-    /** Returns true if the user has purchased ad removal. */
-    public static boolean isAdsRemoved(Activity activity) {
-        return activity
-                .getSharedPreferences(PREFS_NAME, Activity.MODE_PRIVATE)
+    /**
+     * Returns true if the user has purchased ad removal.
+     *
+     * Takes a Context rather than an Activity only so the JNI entry point in
+     * FrozenBubbleActivity can share it: preference name and key live here,
+     * and a second copy of those string literals elsewhere would survive a
+     * rename here with no compile error and silently read the wrong flag.
+     */
+    public static boolean isAdsRemoved(Context context) {
+        return context
+                .getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
                 .getBoolean(KEY_NO_ADS, false);
     }
 
@@ -149,23 +148,50 @@ public class AdsManager {
         }
     }
 
+    /**
+     * Loads an interstitial, initializing the Mobile Ads SDK first if this is
+     * the first request of the process.
+     *
+     * MobileAds.initialize() genuinely has to run: the manifest disables
+     * AdMob's own MobileAdsInitProvider (its ContentProvider init collides with
+     * SDL's EGL surface on the HWUI thread and crashes at startup), so nothing
+     * else will do it. This is the deferred init the manifest comment refers
+     * to -- lazy, off the startup path, but real. Requesting an ad against an
+     * uninitialized SDK happens to work through its own internal lazy init,
+     * which is not something to depend on, and leaves the first request -- the
+     * one the test-device allow-list exists to make safe -- outside any
+     * guarantee that the configuration applied.
+     */
     private static void loadAd(final Activity activity) {
-        configureTestDeviceIfNeeded();
         activity.runOnUiThread(() -> {
-            AdRequest req = new AdRequest.Builder().build();
-            InterstitialAd.load(activity, AD_UNIT_ID, req,
-                    new InterstitialAdLoadCallback() {
-                @Override
-                public void onAdLoaded(@NonNull InterstitialAd ad) {
-                    sInterstitial = ad;
-                    Log.d(TAG, "Ad loaded");
-                }
-                @Override
-                public void onAdFailedToLoad(@NonNull LoadAdError e) {
-                    sInterstitial = null;
-                    Log.w(TAG, "Ad failed to load: " + e.getMessage());
-                }
-            });
+            configureTestDeviceIfNeeded();
+            if (!sInitialized) {
+                sInitialized = true;
+                MobileAds.initialize(activity, initStatus -> {
+                    Log.d(TAG, "AdMob initialized");
+                    requestInterstitial(activity);
+                });
+                return;
+            }
+            requestInterstitial(activity);
+        });
+    }
+
+    /** Issues the actual ad request. Caller must be on the UI thread. */
+    private static void requestInterstitial(final Activity activity) {
+        AdRequest req = new AdRequest.Builder().build();
+        InterstitialAd.load(activity, AD_UNIT_ID, req,
+                new InterstitialAdLoadCallback() {
+            @Override
+            public void onAdLoaded(@NonNull InterstitialAd ad) {
+                sInterstitial = ad;
+                Log.d(TAG, "Ad loaded");
+            }
+            @Override
+            public void onAdFailedToLoad(@NonNull LoadAdError e) {
+                sInterstitial = null;
+                Log.w(TAG, "Ad failed to load: " + e.getMessage());
+            }
         });
     }
 }
