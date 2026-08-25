@@ -1,5 +1,23 @@
 # Changelog
 
+## Unreleased
+
+- **Fix: blocking a player did not survive a restart.** `/block` and
+  `/unblock` saved through the path that never rewrites the block list to
+  disk, so the block worked for the rest of the session and was then silently
+  forgotten — putting an abusive player's chat back in front of someone who
+  had deliberately shut it out. Blocks now persist. The existing test called
+  the save routine directly and so passed throughout.
+- **Fix: `/block Alice ` (trailing space) silently blocked nobody.** The nick
+  was trimmed at the front but not the back, so it never matched the nick the
+  server reports on incoming chat, while the UI still confirmed the block.
+- **Fix: report text is no longer able to inject protocol lines or log
+  entries.** A newline pasted into `/report`'s reason split the message into
+  two commands, the second of which the server would execute. The client now
+  rejects control characters, and the server folds them out of `reports.log`
+  independently — a hand-rolled client can no longer forge log entries that
+  frame another player.
+
 ## v2.4.40
 
 - **New: two ways to remove ads** (Android) — a $5/year auto-renewing

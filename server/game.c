@@ -133,6 +133,22 @@ static const char* report_file_path(void)
         return path;
 }
 
+/* reports.log is one record per line and is read by a human deciding whether
+ * to act on a player. Both the reported nick and the reason are attacker-
+ * chosen -- this is a raw line protocol, so nothing stops a hand-rolled client
+ * from putting a newline in either and forging extra entries that frame an
+ * innocent player or invent a reporter. Fold anything non-printable to '.' so
+ * one report can only ever be one line. */
+static void sanitize_report_field(const char* in, char* out, size_t outsz)
+{
+        size_t i = 0;
+        for (; in[i] && i + 1 < outsz; i++) {
+                unsigned char c = (unsigned char)in[i];
+                out[i] = (c < 0x20 || c == 0x7f) ? '.' : in[i];
+        }
+        out[i] = '\0';
+}
+
 static char fl_line_unrecognized[] = "MISSING_FB_PROTOCOL_TAG";
 static char fl_proto_mismatch[] = "INCOMPATIBLE_PROTOCOL";
 
@@ -991,14 +1007,23 @@ int process_msg(int fd, char* msg)
                                         struct tm* tm_info = gmtime(&now);
                                         char tbuf[32];
                                         strftime(tbuf, sizeof(tbuf), "%Y-%m-%d %H:%M:%S UTC", tm_info);
+                                        char safe_reporter[64];
+                                        char safe_reported[64];
+                                        char safe_reason[256];
+                                        /* The reporter's own nick is chosen via NICK, so it is
+                                         * no more trustworthy than the reported one. */
+                                        sanitize_report_field(nick[fd] ? nick[fd] : "?",
+                                                              safe_reporter, sizeof(safe_reporter));
+                                        sanitize_report_field(reported, safe_reported, sizeof(safe_reported));
+                                        sanitize_report_field(reason, safe_reason, sizeof(safe_reason));
                                         fprintf(rf, "%s  reporter=%-12s reporter_ip=%-15s reported=%-12s reason=%.200s\n",
                                                 tbuf,
-                                                nick[fd] ? nick[fd] : "?",
+                                                safe_reporter,
                                                 IP[fd] ? IP[fd] : "unknown",
-                                                reported, reason);
+                                                safe_reported, safe_reason);
                                         fclose(rf);
                                         l2(OUTPUT_TYPE_INFO, "player report: '%s' reported '%s'",
-                                           nick[fd] ? nick[fd] : "?", reported);
+                                           nick[fd] ? nick[fd] : "?", safe_reported);
                                         /* OK means "we recorded it", not "we
                                          * acted on it" -- the client's wording
                                          * says so too. */

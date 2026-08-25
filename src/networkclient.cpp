@@ -604,6 +604,15 @@ bool NetworkClient::SendReport(const char* nick, const char* reason) {
     // anyway (the server's own NICK handling truncates at one), so this only
     // rejects input that was already malformed.
     if (strchr(nick, ' ') != nullptr) return false;
+    // The protocol is line-oriented and SendCommand appends the terminator
+    // itself, so any control character the caller smuggles in splits one
+    // REPORT into several lines -- the server would execute the tail as its
+    // own command. The reason text comes straight from the chat box, which
+    // accepts clipboard paste, so this is reachable without a modified client.
+    for (const char* p = nick; *p; ++p)
+        if ((unsigned char)*p < 0x20 || *p == 0x7f) return false;
+    for (const char* p = reason; *p; ++p)
+        if ((unsigned char)*p < 0x20 || *p == 0x7f) return false;
     char cmd[512];
     snprintf(cmd, sizeof(cmd), "REPORT %s %s", nick, reason);
     return SendCommand(cmd);
