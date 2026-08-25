@@ -36,6 +36,10 @@
   which is the free trial or discounted period whenever one is configured in
   Play Console — printing "$0.00" beside a plan that renews at full price. It
   now shows the recurring price.
+- **Fix: team-assignment control traffic could show up as chat.** The lobby's
+  fallback text view didn't hide `!team:` protocol messages the way the chat
+  dock did, so the same message list rendered differently depending on which
+  screen was up. Both views now share one filter.
 
 ## v2.4.40
 

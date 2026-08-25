@@ -427,44 +427,197 @@ void MainMenu::KeysPanelRender() {
     const bool adsRemoved = AdsRemoved();
 #endif
 
-    // Size the panel to the rows this configuration actually shows, rather
-    // than the fixed 280px box this used to draw. The content had already
-    // outgrown that box before the ad-removal rows existed -- "Reset all
-    // settings" and the two help lines rendered outside the wood texture,
-    // straight onto the title screen behind it -- and two more rows made it
-    // obvious. Measuring keeps it correct as rows come and go across
-    // platforms and entitlement states.
+    GameSettings* gs = GameSettings::Instance();
+    PlayerKeys* allKeys[5] = {
+        &gs->player1Keys, &gs->player2Keys, &gs->player3Keys,
+        &gs->player4Keys, &gs->player5Keys
+    };
+    PlayerKeys& pk = *allKeys[keyConfigPlayer - 1];
+
+    SDL_Color white  = {255, 255, 255, 255};
+    SDL_Color yellow = {255, 220, 50, 255};
+    SDL_Color black  = {0, 0, 0, 255};
+
     SDL_Renderer* rend = const_cast<SDL_Renderer*>(renderer);
     panelText.UpdateText(rend, "Xy", 0);
     const int lineH = panelText.Coords()->h;
-    const int gapH  = 6;
 
-    // Must track the render order below exactly; a row added there without a
-    // matching count here just re-creates the overflow this replaced.
-    int lines = 8;   // title, LEFT/RIGHT hint, 4 key rows, reset ctrl, speed
-    int gaps  = 3;
-    lines += 2; gaps += 2;               // sound, mouse
+    // The panel is built as a list of rows first and drawn from that same
+    // list, so its height cannot disagree with what it draws. The previous
+    // version counted rows into a pair of hand-maintained `lines`/`gaps`
+    // integers that had to mirror the render body statement for statement --
+    // adding a row there and forgetting to bump the count here put the text
+    // back outside the wood texture and onto the title screen, which is the
+    // bug that motivated sizing the panel at all. Rows come and go by platform
+    // and by entitlement, so the two passes have to be the same pass.
+    struct PanelLine {
+        std::string text;        // empty = blank spacer, occupies a row
+        SDL_Color   color;
+        int         row;         // -1 = not selectable
+        bool        splitAdjust;
+        int         gapBefore;
+    };
+    std::vector<PanelLine> lines;
+    int pendingGap = 0;
+    auto addGap  = [&](int g) { pendingGap += g; };
+    auto addLine = [&](const std::string& txt, SDL_Color c) {
+        lines.push_back({txt, c, -1, false, pendingGap});
+        pendingGap = 0;
+    };
+    auto addRow  = [&](int row, const std::string& txt, SDL_Color c,
+                       bool splitAdjust = false) {
+        lines.push_back({txt, c, row, splitAdjust, pendingGap});
+        pendingGap = 0;
+    };
+
+    char lineBuf[256];
+
+    snprintf(lineBuf, sizeof(lineBuf), "Key config  Player %d/4  (" APP_VERSION ")", keyConfigPlayer);
+    addLine(lineBuf, white);
+    addLine("LEFT/RIGHT to switch player", white);
+
+    addGap(6);
+
+    // Rows 0-3: key bindings
+    struct { int idx; const char* label; std::string val; } keyRows[4] = {
+        {0, "turn left?  ", ControllerScancodeName(pk.left)},
+        {1, "turn right? ", ControllerScancodeName(pk.right)},
+        {2, "fire?       ", ControllerScancodeName(pk.fire)},
+        {3, "center?     ", ControllerScancodeName(pk.center)},
+    };
+    for (auto& row : keyRows) {
+        bool sel = (keyConfigIndex == row.idx);
+        if (sel && awaitKp)
+            snprintf(lineBuf, sizeof(lineBuf), "[ %s<-- ]", row.label);
+        else if (sel)
+            snprintf(lineBuf, sizeof(lineBuf), "[ %s%s ]", row.label, row.val.c_str());
+        else
+            snprintf(lineBuf, sizeof(lineBuf), "  %s%s  ", row.label, row.val.c_str());
+        addRow(row.idx, lineBuf, sel ? yellow : white);
+    }
+
+    addGap(6);
+
+    // Reset ctrl defaults
+    bool resetSel = (keyConfigIndex == kKeyRowResetCtrl);
+    addRow(kKeyRowResetCtrl,
+           resetSel ? "[ Reset ctrl defaults ]" : "  Reset ctrl defaults  ",
+           resetSel ? yellow : white);
+
+    addGap(6);
+
+    // Game Speed. The arrows read as "adjustable sideways" to a keyboard
+    // player and as "tap this end" to a touch one, which the old "(L/R adjust)"
+    // did not: on a phone there are no L and R keys to press.
+    bool spdSel = (keyConfigIndex == kKeyRowSpeed);
+    snprintf(lineBuf, sizeof(lineBuf),
+        spdSel ? "[ <  Game Speed: %.1f  > ]" : "  Game Speed: %.1f  ",
+        gs->speedMultiplier);
+    addRow(kKeyRowSpeed, lineBuf, spdSel ? yellow : white, true);
+
+    addGap(6);
+
+    // Sound toggle
+    bool sndSel = (keyConfigIndex == kKeyRowSound);
+    snprintf(lineBuf, sizeof(lineBuf), sndSel ? "[ Sound: %s ]" : "  Sound: %s  ",
+             gs->soundEnabled() ? "ON" : "OFF");
+    addRow(kKeyRowSound, lineBuf, sndSel ? yellow : white);
+
+    addGap(6);
+
+    // Mouse/touch toggle
+    bool mouseSel = (keyConfigIndex == kKeyRowMouse);
+    snprintf(lineBuf, sizeof(lineBuf), mouseSel ? "[ Mouse/Touch: %s ]" : "  Mouse/Touch: %s  ",
+             gs->mouseEnabled ? "ON" : "OFF");
+    addRow(kKeyRowMouse, lineBuf, mouseSel ? yellow : white);
+
 #ifndef __WASM_PORT__
-    lines += 1; gaps += 1;               // fullscreen
+    addGap(6);
+
+    // Fullscreen toggle
+    bool fsSel = (keyConfigIndex == kKeyRowFullscreen);
+    snprintf(lineBuf, sizeof(lineBuf), fsSel ? "[ Fullscreen: %s ]" : "  Fullscreen: %s  ",
+             gs->fullscreenMode() ? "ON" : "OFF");
+    addRow(kKeyRowFullscreen, lineBuf, fsSel ? yellow : white);
 #endif
+
 #ifdef __ANDROID__
-    gaps += 1;
-    lines += adsRemoved ? 1 : 2;         // thank-you line, or the two buy rows
-    if (!adsRemoved && keyConfigIndex == kKeyRowRemoveAdsYear)
-        lines += 1;                      // auto-renewal notice
-    if (adsRemoved) gaps += 1;
+    // Ad-removal purchases. These live here rather than behind the old
+    // [R]-to-buy hint on the chain-reaction prompt, which no phone, tablet, or
+    // TV box could actually trigger -- nothing maps a touch or a controller to
+    // R. This panel already handles both, so the rows are reachable everywhere
+    // the game runs.
+    addGap(6);
+    if (adsRemoved) {
+        // One line instead of two buy rows. The rows still exist as navigable
+        // indices so the enum stays fixed, but there is nothing to sell
+        // somebody who has already paid.
+        addLine("  Ads removed -- thank you!  ", white);
+        addGap(6);
+    } else {
+        const std::string yearPrice = AdsPrice(0);
+        const std::string everPrice = AdsPrice(1);
+
+        // Play's own price string when it has arrived, and an honest
+        // placeholder when it has not -- never a hardcoded number, which would
+        // be wrong in every currency but one.
+        bool yearSel = (keyConfigIndex == kKeyRowRemoveAdsYear);
+        snprintf(lineBuf, sizeof(lineBuf),
+                 yearSel ? "[ Remove ads 1 year: %s/yr ]" : "  Remove ads 1 year: %s/yr  ",
+                 yearPrice.empty() ? "..." : yearPrice.c_str());
+        addRow(kKeyRowRemoveAdsYear, lineBuf, yearSel ? yellow : white);
+
+        bool everSel = (keyConfigIndex == kKeyRowRemoveAdsForever);
+        snprintf(lineBuf, sizeof(lineBuf),
+                 everSel ? "[ Remove ads forever: %s ]" : "  Remove ads forever: %s  ",
+                 everPrice.empty() ? "..." : everPrice.c_str());
+        addRow(kKeyRowRemoveAdsForever, lineBuf, everSel ? yellow : white);
+
+        // Play policy requires auto-renewal be disclosed before purchase, and
+        // it is the thing a player most needs to know about the yearly option
+        // -- so it is shown on the panel, not buried in the store.
+        if (yearSel) addLine("  renews yearly, cancel in Play  ", white);
+    }
 #endif
-    lines += 1; gaps += 1;               // reset all
-    lines += 1; gaps += 1;               // "Press button or key..." or its spacer
-    lines += 2;                          // UP/DOWN select, ESC when done
+
+    addGap(6);
+
+    // Reset all settings. Armed by one press and committed by a second, so the
+    // label has to say which state it is in -- otherwise the first press looks
+    // like it did nothing at all.
+    bool resetAllSel = (keyConfigIndex == kKeyRowResetAll);
+    if (resetAllSel && resetAllArmed)
+        addRow(kKeyRowResetAll, "[ Press again to confirm ]", yellow);
+    else
+        addRow(kKeyRowResetAll,
+               resetAllSel ? "[ Reset all settings ]" : "  Reset all settings  ",
+               resetAllSel ? yellow : white);
+
+    addGap(6);
+
+    // Blank when not waiting, so the two help lines below do not jump up a row
+    // the moment a binding is armed.
+    if (awaitKp) addLine("Press button or key...", yellow);
+    else         addLine("", white);
+
+    addLine("UP/DOWN select, ENTER change", white);
+    addLine("ESC when done", white);
+
+    // --- size from the list, then draw from the same list ---
 
     const int padX = 24, padTop = 16, padBottom = 16;
-    const int contentH = lines * lineH + gaps * gapH;
+    int contentH = 0;
+    for (const PanelLine& l : lines) contentH += l.gapBefore + lineH;
+
+    // No height clamp: one used to cap the background at the screen while the
+    // text kept drawing past it, so an overflow showed up as text on bare
+    // title screen rather than as a panel that was visibly too tall. Letting
+    // both run off together keeps them honest about each other.
     SDL_Rect panelRect = {
         voidPanelRct.x - padX / 2,
         std::max(4, (480 - (contentH + padTop + padBottom)) / 2),
         voidPanelRct.w + padX,
-        std::min(contentH + padTop + padBottom, 480 - 8),
+        contentH + padTop + padBottom,
     };
 
     // Same three-slice draw as LocalMPPanelRender: stretching the whole
@@ -490,170 +643,26 @@ void MainMenu::KeysPanelRender() {
         SDL_RenderTexture(rend, voidPanelBG, &bottomSrc, &bottomDst);
     }
 
-    GameSettings* gs = GameSettings::Instance();
-    PlayerKeys* allKeys[5] = {
-        &gs->player1Keys, &gs->player2Keys, &gs->player3Keys,
-        &gs->player4Keys, &gs->player5Keys
-    };
-    PlayerKeys& pk = *allKeys[keyConfigPlayer - 1];
-
-    SDL_Color white  = {255, 255, 255, 255};
-    SDL_Color yellow = {255, 220, 50, 255};
-    SDL_Color black  = {0, 0, 0, 255};
-
-    auto renderLine = [&](const char* txt, SDL_Color fg, int& y) {
-        panelText.UpdateColor(fg, black);
-        panelText.UpdateText(const_cast<SDL_Renderer*>(renderer), txt, 0);
-        panelText.UpdatePosition({(640/2) - (panelText.Coords()->w / 2), y});
-        { SDL_FRect fr = ToFRect(*panelText.Coords()); SDL_RenderTexture(const_cast<SDL_Renderer*>(renderer), panelText.Texture(), nullptr, &fr); };
-        y += panelText.Coords()->h;
-    };
-
-    // Same as renderLine, but records the row's tappable band. The band spans
-    // the panel's full width rather than the glyphs': the text is centred and
-    // often short ("Sound: ON"), and a hit box that tight is hard to hit with a
-    // thumb.
-    auto renderRow = [&](int row, const char* txt, SDL_Color fg, int& y,
-                         bool splitAdjust = false) {
-        int top = y;
-        renderLine(txt, fg, y);
-        AddPanelTapRow(row, { panelRect.x, top, panelRect.w, y - top },
-                       -1, splitAdjust);
-    };
-
-    char lineBuf[256];
     int y = panelRect.y + padTop;
-
-    snprintf(lineBuf, sizeof(lineBuf), "Key config  Player %d/4  (" APP_VERSION ")", keyConfigPlayer);
-    renderLine(lineBuf, white, y);
-    renderLine("LEFT/RIGHT to switch player", white, y);
-    y += 6;  // small gap before key rows
-
-    // Rows 0-3: key bindings
-    struct { int idx; const char* label; std::string val; } rows[4] = {
-        {0, "turn left?  ", ControllerScancodeName(pk.left)},
-        {1, "turn right? ", ControllerScancodeName(pk.right)},
-        {2, "fire?       ", ControllerScancodeName(pk.fire)},
-        {3, "center?     ", ControllerScancodeName(pk.center)},
-    };
-    for (auto& row : rows) {
-        bool sel = (keyConfigIndex == row.idx);
-        if (sel && awaitKp)
-            snprintf(lineBuf, sizeof(lineBuf), "[ %s<-- ]", row.label);
-        else if (sel)
-            snprintf(lineBuf, sizeof(lineBuf), "[ %s%s ]", row.label, row.val.c_str());
-        else
-            snprintf(lineBuf, sizeof(lineBuf), "  %s%s  ", row.label, row.val.c_str());
-        renderRow(row.idx, lineBuf, sel ? yellow : white, y);
-    }
-
-    y += 6;
-
-    // Row 4: Reset ctrl defaults
-    bool resetSel = (keyConfigIndex == kKeyRowResetCtrl);
-    renderRow(kKeyRowResetCtrl, resetSel ? "[ Reset ctrl defaults ]" : "  Reset ctrl defaults  ", resetSel ? yellow : white, y);
-
-    y += 6;
-
-    // Row 5: Game Speed
-    float spd = gs->speedMultiplier;
-    bool spdSel = (keyConfigIndex == kKeyRowSpeed);
-    // The arrows read as "adjustable sideways" to a keyboard player and as
-    // "tap this end" to a touch one, which the old "(L/R adjust)" did not: on a
-    // phone there are no L and R keys to press.
-    snprintf(lineBuf, sizeof(lineBuf),
-        spdSel ? "[ <  Game Speed: %.1f  > ]" : "  Game Speed: %.1f  ", spd);
-    renderRow(kKeyRowSpeed, lineBuf, spdSel ? yellow : white, y, true);
-
-    y += 6;
-
-    // Row 6: Sound toggle
-    bool sndSel = (keyConfigIndex == kKeyRowSound);
-    const char* sndState = gs->soundEnabled() ? "ON" : "OFF";
-    snprintf(lineBuf, sizeof(lineBuf), sndSel ? "[ Sound: %s ]" : "  Sound: %s  ", sndState);
-    renderRow(kKeyRowSound, lineBuf, sndSel ? yellow : white, y);
-
-    y += 6;
-
-    // Row 7: Mouse/touch toggle
-    bool mouseSel = (keyConfigIndex == kKeyRowMouse);
-    const char* mouseState = gs->mouseEnabled ? "ON" : "OFF";
-    snprintf(lineBuf, sizeof(lineBuf), mouseSel ? "[ Mouse/Touch: %s ]" : "  Mouse/Touch: %s  ", mouseState);
-    renderRow(kKeyRowMouse, lineBuf, mouseSel ? yellow : white, y);
-
-#ifndef __WASM_PORT__
-    y += 6;
-
-    // Row 8: Fullscreen toggle
-    bool fsSel = (keyConfigIndex == kKeyRowFullscreen);
-    const char* fsState = gs->fullscreenMode() ? "ON" : "OFF";
-    snprintf(lineBuf, sizeof(lineBuf), fsSel ? "[ Fullscreen: %s ]" : "  Fullscreen: %s  ", fsState);
-    renderRow(kKeyRowFullscreen, lineBuf, fsSel ? yellow : white, y);
-#endif
-
-#ifdef __ANDROID__
-    // Ad-removal purchases. These live here rather than behind the old
-    // [R]-to-buy hint on the chain-reaction prompt, which no phone, tablet, or
-    // TV box could actually trigger -- nothing maps a touch or a controller to
-    // R. This panel already handles both, so the rows are reachable everywhere
-    // the game runs.
-    y += 6;
-    {
-        const bool removed = adsRemoved;
-        if (removed) {
-            // One line instead of two buy rows. The rows still exist as
-            // navigable indices so the enum stays fixed, but there is nothing
-            // to sell somebody who has already paid.
-            renderLine("  Ads removed -- thank you!  ", white, y);
-            y += 6;
-        } else {
-            const std::string yearPrice = AdsPrice(0);
-            const std::string everPrice = AdsPrice(1);
-
-            bool yearSel = (keyConfigIndex == kKeyRowRemoveAdsYear);
-            // Play's own price string when it has arrived, and an honest
-            // placeholder when it has not -- never a hardcoded number, which
-            // would be wrong in every currency but one.
-            snprintf(lineBuf, sizeof(lineBuf),
-                     yearSel ? "[ Remove ads 1 year: %s/yr ]" : "  Remove ads 1 year: %s/yr  ",
-                     yearPrice.empty() ? "..." : yearPrice.c_str());
-            renderRow(kKeyRowRemoveAdsYear, lineBuf, yearSel ? yellow : white, y);
-
-            bool everSel = (keyConfigIndex == kKeyRowRemoveAdsForever);
-            snprintf(lineBuf, sizeof(lineBuf),
-                     everSel ? "[ Remove ads forever: %s ]" : "  Remove ads forever: %s  ",
-                     everPrice.empty() ? "..." : everPrice.c_str());
-            renderRow(kKeyRowRemoveAdsForever, lineBuf, everSel ? yellow : white, y);
-
-            // Play policy requires auto-renewal be disclosed before purchase,
-            // and it is the thing a player most needs to know about the yearly
-            // option -- so it is shown on the panel, not buried in the store.
-            if (yearSel) renderLine("  renews yearly, cancel in Play  ", white, y);
+    for (const PanelLine& l : lines) {
+        y += l.gapBefore;
+        if (!l.text.empty()) {
+            panelText.UpdateColor(l.color, black);
+            panelText.UpdateText(rend, l.text.c_str(), 0);
+            panelText.UpdatePosition({(640/2) - (panelText.Coords()->w / 2), y});
+            SDL_FRect fr = ToFRect(*panelText.Coords());
+            SDL_RenderTexture(rend, panelText.Texture(), nullptr, &fr);
         }
+        // Advance by the measured line height rather than this string's own
+        // glyph box, so the draw walks exactly the height the sizing pass
+        // reserved for it. The tap band spans the panel's full width rather
+        // than the glyphs': the text is centred and often short ("Sound: ON"),
+        // and a hit box that tight is hard to hit with a thumb.
+        if (l.row >= 0)
+            AddPanelTapRow(l.row, { panelRect.x, y, panelRect.w, lineH },
+                           -1, l.splitAdjust);
+        y += lineH;
     }
-#endif
-
-    y += 6;
-
-    // Last row: Reset all settings. Armed by one press and committed by a
-    // second, so the label has to say which state it is in -- otherwise the
-    // first press looks like it did nothing at all.
-    bool resetAllSel = (keyConfigIndex == kKeyRowResetAll);
-    if (resetAllSel && resetAllArmed)
-        renderRow(kKeyRowResetAll, "[ Press again to confirm ]", yellow, y);
-    else
-        renderRow(kKeyRowResetAll, resetAllSel ? "[ Reset all settings ]" : "  Reset all settings  ",
-                  resetAllSel ? yellow : white, y);
-
-    y += 6;
-
-    if (awaitKp)
-        renderLine("Press button or key...", yellow, y);
-    else
-        y += panelText.Coords()->h;  // keep spacing consistent
-
-    renderLine("UP/DOWN select, ENTER change", white, y);
-    renderLine("ESC when done", white, y);
 }
 
 

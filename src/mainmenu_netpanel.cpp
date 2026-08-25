@@ -52,6 +52,34 @@
 #include <algorithm>
 #include "mainmenu_internal.h"
 
+// Indices of the chat messages that should actually be shown, newest last.
+//
+// Two things are hidden: "!team:" control traffic, which is protocol chatter
+// the players were never meant to read, and anyone this device has blocked.
+// Server notices are never suppressed -- a blocked nick must not be able to
+// hide "*** so-and-so joined" or anything else the server itself says.
+//
+// This is collected *before* callers take the last N, rather than skipping
+// while drawing: a hidden message would otherwise eat its line slot and leave
+// the view half empty, so blocking one noisy player would shrink everyone
+// else's visible history too.
+//
+// Shared because both chat views need the same answer. They previously each
+// had their own copy and had already drifted -- only one of them filtered
+// "!team:", so the same message list rendered differently depending on which
+// screen happened to be up.
+static std::vector<size_t> VisibleChatIndices(const std::vector<ChatMessage>& msgs) {
+    const GameSettings* gs = GameSettings::Instance();
+    std::vector<size_t> visible;
+    visible.reserve(msgs.size());
+    for (size_t i = 0; i < msgs.size(); i++) {
+        if (msgs[i].message.size() > 6 && msgs[i].message.compare(0, 6, "!team:") == 0) continue;
+        if (msgs[i].nick != "Server" && gs->IsPlayerBlocked(msgs[i].nick)) continue;
+        visible.push_back(i);
+    }
+    return visible;
+}
+
 void MainMenu::NetPanelRender() {
     if (!showingNetPanel) return;
 
@@ -1006,21 +1034,7 @@ void MainMenu::NetPanelChatDockRender(bool expanded) {
         lastProcessedChatCount = chatMsgs.size();
     }
 
-    // Collect what is actually displayable *before* taking the last N, rather
-    // than slicing first and skipping while drawing. Hidden messages (!team:
-    // control traffic, and anyone this device has blocked) would otherwise eat
-    // their line slots and leave the dock half empty -- so blocking someone
-    // noisy would shrink everyone else's visible history too.
-    const GameSettings* gs = GameSettings::Instance();
-    std::vector<size_t> visible;
-    visible.reserve(chatMsgs.size());
-    for (size_t i = 0; i < chatMsgs.size(); i++) {
-        if (chatMsgs[i].message.size() > 6 && chatMsgs[i].message.substr(0, 6) == "!team:") continue;
-        // Server notices are never suppressed -- a blocked nick cannot hide
-        // "*** so-and-so joined" or anything else the server itself says.
-        if (chatMsgs[i].nick != "Server" && gs->IsPlayerBlocked(chatMsgs[i].nick)) continue;
-        visible.push_back(i);
-    }
+    std::vector<size_t> visible = VisibleChatIndices(chatMsgs);
 
     // Display the most recent messages from bottom up.
     int chatLine = 0;
@@ -1554,15 +1568,8 @@ void MainMenu::NetPanelConnectionScreensRender() {
         std::vector<ChatMessage> chatMsgs = netClient->GetChatMessages();
         offset += snprintf(lobbyText + offset, sizeof(lobbyText) - offset, "\nChat:\n");
 
-        // Same block filtering as the chat dock above, for the same reason:
-        // a blocked player's messages must not reappear on this fallback view.
         {
-            const GameSettings* gs = GameSettings::Instance();
-            std::vector<size_t> visible;
-            for (size_t i = 0; i < chatMsgs.size(); i++) {
-                if (chatMsgs[i].nick != "Server" && gs->IsPlayerBlocked(chatMsgs[i].nick)) continue;
-                visible.push_back(i);
-            }
+            std::vector<size_t> visible = VisibleChatIndices(chatMsgs);
             size_t chatStart = visible.size() > 3 ? visible.size() - 3 : 0;
             for (size_t vi = chatStart; vi < visible.size(); vi++) {
                 offset += snprintf(lobbyText + offset, sizeof(lobbyText) - offset,
