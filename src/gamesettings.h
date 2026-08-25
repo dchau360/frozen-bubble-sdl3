@@ -162,11 +162,34 @@ public:
     // controls. Bounded for the same reason as followedServers: fixed numbered
     // ini slots, and a list in the hundreds is a bug rather than an intent.
     static constexpr int kMaxBlockedPlayers = 32;
+
+    // The server truncates nicks to 10 characters (see the NICK handler in
+    // server/game.c), so that is the longest nick this device will ever be
+    // asked to match against. Storing a longer one than the server will ever
+    // report back means the block can never fire -- the UI would confirm it
+    // and nothing would happen.
+    static constexpr size_t kMaxNickLength = 10;
+
     std::vector<std::string> blockedPlayers;
 
     void LoadBlockedPlayers();
     void SaveBlockedPlayers();
     bool IsPlayerBlocked(const std::string& nick) const;
+
+    // Nick comparison for blocking, case-insensitive over ASCII.
+    //
+    // The server's own uniqueness check is case-sensitive, so "Alice" and
+    // "alice" can be connected at the same time as two different people --
+    // which made a case-sensitive block a one-keystroke bypass: reconnect with
+    // the case flipped and you are visible again, while the blocker's UI still
+    // says you are blocked. The cost is that a genuinely different "alice"
+    // cannot be left visible while "Alice" is blocked, which is much the
+    // better trade: nicks are not identities here anyway.
+    static bool NicksEqual(const std::string& a, const std::string& b);
+
+    // Trims surrounding whitespace and clamps to kMaxNickLength, so what gets
+    // stored is something the server could actually send back.
+    static std::string NormalizeNick(const std::string& nick);
     // Adds if absent, removes if present. Returns true if the player is
     // blocked afterwards. Refuses to add beyond kMaxBlockedPlayers (returns
     // false without changing anything).

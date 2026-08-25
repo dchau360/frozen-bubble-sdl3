@@ -1125,18 +1125,6 @@ void MainMenu::MenuLeftRightKey(SDL_Event *e) {
                     return;
 }
 
-// Nicks typed as slash-command arguments are compared byte-for-byte against
-// the nick the server hands back on incoming chat, so a stray space at either
-// end silently turns a block into a no-op: the UI confirms it, and the
-// messages keep arriving. Trim both ends once, here, rather than trusting
-// every caller to get it right.
-static std::string TrimChatArg(const char* s) {
-    while (*s == ' ' || *s == '\t') s++;
-    std::string out(s);
-    while (!out.empty() && (out.back() == ' ' || out.back() == '\t')) out.pop_back();
-    return out;
-}
-
 void MainMenu::SubmitLobbyChatInput(NetworkClient *netClient) {
 #ifdef __WASM_PORT__
     // Touch devices can't type into the inline chat field
@@ -1192,12 +1180,14 @@ void MainMenu::SubmitLobbyChatInput(NetworkClient *netClient) {
                 // Hide a player's chat on this device. Local and immediate --
                 // it needs no server support, so it works even against a
                 // server with no moderation of any kind.
-                std::string target = TrimChatArg(networkChatInput + 7);
+                // Trimmed and clamped to the length the server will actually
+                // report back; matching below is case-insensitive.
+                std::string target = GameSettings::NormalizeNick(networkChatInput + 7);
                 GameSettings* gs = GameSettings::Instance();
                 char msg[160];
                 if (target.empty()) {
                     netClient->AddStatusMessage("Usage: /block <nick>");
-                } else if (target == netClient->GetPlayerNick()) {
+                } else if (GameSettings::NicksEqual(target, netClient->GetPlayerNick())) {
                     netClient->AddStatusMessage("You cannot block yourself");
                 } else if (gs->IsPlayerBlocked(target)) {
                     netClient->AddStatusMessage("Already blocked. Use /unblock to undo.");
@@ -1216,7 +1206,7 @@ void MainMenu::SubmitLobbyChatInput(NetworkClient *netClient) {
                     netClient->AddStatusMessage(msg);
                 }
             } else if (strncmp(networkChatInput, "/unblock ", 9) == 0) {
-                std::string target = TrimChatArg(networkChatInput + 9);
+                std::string target = GameSettings::NormalizeNick(networkChatInput + 9);
                 GameSettings* gs = GameSettings::Instance();
                 char msg[160];
                 if (target.empty()) {

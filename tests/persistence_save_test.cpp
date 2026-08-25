@@ -303,7 +303,12 @@ int main() {
 
     CHECK(settings->ToggleBlockedPlayer("griefer"));
     CHECK(settings->IsPlayerBlocked("griefer"));
-    CHECK(!settings->IsPlayerBlocked("Griefer"));   // exact match, not case-folded
+    // Case-insensitive on purpose. The server's own nick-uniqueness check is
+    // case-sensitive, so "griefer" and "Griefer" can be online simultaneously
+    // as two different people -- a case-sensitive block was therefore a
+    // one-keystroke bypass, with the blocker's UI still claiming it held.
+    CHECK(settings->IsPlayerBlocked("Griefer"));
+    CHECK(settings->IsPlayerBlocked("GRIEFER"));
     CHECK(settings->ToggleBlockedPlayer("spammer"));
     settings->SaveKeys();
     CHECK(iniHasKeyValue(settingsPath, "nickcount", "2"));
@@ -326,6 +331,27 @@ int main() {
     CHECK(settings->blockedPlayers.size() == 1);
     CHECK(!settings->IsPlayerBlocked("griefer"));
     CHECK(settings->IsPlayerBlocked("spammer"));
+
+    // Unblocking must be case-insensitive too, or a player can block someone
+    // and then be unable to undo it by typing the name the way they saw it.
+    CHECK(settings->ToggleBlockedPlayer("SPAMMER") == false);
+    CHECK(!settings->IsPlayerBlocked("spammer"));
+
+    // Surrounding whitespace is trimmed rather than stored: "alice " would
+    // never match the "alice" the server reports, so the block would confirm
+    // in the UI and then quietly do nothing.
+    CHECK(settings->ToggleBlockedPlayer("  alice  "));
+    CHECK(settings->IsPlayerBlocked("alice"));
+    CHECK(!settings->ToggleBlockedPlayer("alice"));
+
+    // The server truncates nicks to 10 characters, so anything longer is
+    // clamped to what the server could actually send back -- storing the full
+    // string would guarantee the block never fires.
+    CHECK(settings->ToggleBlockedPlayer("abcdefghijKLMNOP"));
+    CHECK(settings->blockedPlayers.back().size() == GameSettings::kMaxNickLength);
+    CHECK(settings->IsPlayerBlocked("abcdefghij"));
+    CHECK(!settings->ToggleBlockedPlayer("ABCDEFGHIJ"));   // case-insensitive removal
+    CHECK(settings->blockedPlayers.empty());
 
     // Bounded like the follow list: past the cap a block is refused rather
     // than silently evicting an earlier one.

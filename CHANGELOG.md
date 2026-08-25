@@ -36,6 +36,14 @@
   which is the free trial or discounted period whenever one is configured in
   Play Console — printing "$0.00" beside a plan that renews at full price. It
   now shows the recurring price.
+- **Fix: blocking a player was bypassable by changing one letter's case.**
+  The block matched nicks exactly, but the server's own nick-uniqueness check
+  is case-sensitive too — so `Alice` and `alice` can be connected at the same
+  time as two different people, and anyone you blocked could reappear just by
+  reconnecting with the case flipped, while your UI still said they were
+  blocked. Matching is now case-insensitive. Nicks are also clamped to the
+  10-character limit the server enforces, since a longer stored nick could
+  never match what the server actually reports.
 - **Fix: Android builds reported their version as `v0.0.0-nocmake`.** Android
   compiles through `android/app/CMakeLists.txt`, not the root one, so the
   `APP_VERSION` the root file defines for every other platform never reached

@@ -377,27 +377,61 @@ void GameSettings::SaveBlockedPlayers()
     }
 }
 
+bool GameSettings::NicksEqual(const std::string& a, const std::string& b)
+{
+    if (a.size() != b.size()) return false;
+    for (size_t i = 0; i < a.size(); i++) {
+        unsigned char ca = (unsigned char)a[i], cb = (unsigned char)b[i];
+        if (ca >= 'A' && ca <= 'Z') ca = (unsigned char)(ca - 'A' + 'a');
+        if (cb >= 'A' && cb <= 'Z') cb = (unsigned char)(cb - 'A' + 'a');
+        if (ca != cb) return false;
+    }
+    return true;
+}
+
+// Deliberately ASCII-only rather than tolower() from <cctype>: that one is
+// locale-dependent, so the same nick could compare equal on one player's
+// machine and not another's. Nicks here are whatever bytes the server passed
+// through, and a block that works differently by locale is worse than one that
+// only folds A-Z.
+std::string GameSettings::NormalizeNick(const std::string& nick)
+{
+    size_t b = 0, e = nick.size();
+    while (b < e && (nick[b] == ' ' || nick[b] == '\t')) b++;
+    while (e > b && (nick[e - 1] == ' ' || nick[e - 1] == '\t')) e--;
+    std::string out = nick.substr(b, e - b);
+    if (out.size() > kMaxNickLength) out.resize(kMaxNickLength);
+    return out;
+}
+
 bool GameSettings::IsPlayerBlocked(const std::string& nick) const
 {
     for (const std::string& blocked : blockedPlayers) {
-        if (blocked == nick) return true;
+        if (NicksEqual(blocked, nick)) return true;
     }
     return false;
 }
 
 bool GameSettings::ToggleBlockedPlayer(const std::string& nick)
 {
+    // Normalize once, here, so every caller gets the same answer and the
+    // stored form is one the server could actually report back.
+    const std::string key = NormalizeNick(nick);
+
     for (size_t i = 0; i < blockedPlayers.size(); i++) {
-        if (blockedPlayers[i] == nick) {
+        if (NicksEqual(blockedPlayers[i], key)) {
             blockedPlayers.erase(blockedPlayers.begin() + (long)i);
             return false;
         }
     }
 
-    if (nick.empty()) return false;
+    if (key.empty()) return false;
     if ((int)blockedPlayers.size() >= kMaxBlockedPlayers) return false;
 
-    blockedPlayers.push_back(nick);
+    // Stored as typed (after trimming) rather than folded to lower case, so
+    // /blocked shows the player back the name they actually saw in chat.
+    // Matching is case-insensitive regardless.
+    blockedPlayers.push_back(key);
     return true;
 }
 
