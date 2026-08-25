@@ -40,9 +40,16 @@
   a { color: var(--link); }
   code { background: var(--code-bg); padding: 0.15em 0.4em; border-radius: 4px; font-size: 0.9em; }
   footer { margin-top: 3rem; color: var(--muted); font-size: 0.9rem; }
+  nav { margin-bottom: 1.5rem; font-size: .9rem; }
+  nav a { color: var(--muted); text-decoration: none; }
+  nav a:hover { color: var(--link); text-decoration: underline; }
+  img { max-width: 100%; height: auto; border-radius: 6px; }
+  table { border-collapse: collapse; width: 100%; }
+  th, td { border: 1px solid var(--border); padding: .4rem .6rem; text-align: left; }
 </style>
 </head>
 <body>
+<nav><a href="{{ROOT}}">Frozen Bubble: SDL3</a></nav>
 {{CONTENT}}
 </body>
 </html>
