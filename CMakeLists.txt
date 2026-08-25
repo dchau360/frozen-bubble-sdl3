@@ -191,8 +191,10 @@ else()
     target_compile_definitions(frozen-bubble-sdl3 PRIVATE DATA_DIR=\"${ASSET_PATH}\")
 endif()
 
-# Applies to every platform, including Android and WASM, so the version shown
-# in the menu always matches the tag this was built from (REL-004).
+# Covers every platform built through this file, so the version shown in the
+# menu matches the tag this was built from (REL-004). Android is the exception:
+# it builds through android/app/CMakeLists.txt, which sets APP_VERSION itself
+# from build.gradle's versionName.
 target_compile_definitions(frozen-bubble-sdl3
     PRIVATE APP_VERSION=\"v${PROJECT_VERSION}\")
 

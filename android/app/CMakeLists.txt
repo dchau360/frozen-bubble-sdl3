@@ -116,6 +116,17 @@ target_compile_definitions(main PRIVATE
     DATA_DIR=""
 )
 
+# Android builds through this file rather than the root CMakeLists.txt, so the
+# APP_VERSION that file sets for every other platform never reached here -- the
+# Settings panel showed platform.h's "v0.0.0-nocmake" placeholder in every APK,
+# release ones included. Value comes from build.gradle's versionName so there is
+# still exactly one number to bump (REL-004).
+if(DEFINED APP_VERSION_NAME)
+    target_compile_definitions(main PRIVATE APP_VERSION="v${APP_VERSION_NAME}")
+else()
+    message(WARNING "APP_VERSION_NAME not passed from Gradle; menu will show a placeholder version")
+endif()
+
 target_include_directories(main PRIVATE
     ../../src
 )

@@ -36,6 +36,12 @@
   which is the free trial or discounted period whenever one is configured in
   Play Console — printing "$0.00" beside a plan that renews at full price. It
   now shows the recurring price.
+- **Fix: Android builds reported their version as `v0.0.0-nocmake`.** Android
+  compiles through `android/app/CMakeLists.txt`, not the root one, so the
+  `APP_VERSION` the root file defines for every other platform never reached
+  it — every APK ever shipped showed the placeholder in the Settings panel.
+  It now comes from `build.gradle`'s `versionName`, which the release
+  checklist already bumps.
 - **Fix: team-assignment control traffic could show up as chat.** The lobby's
   fallback text view didn't hide `!team:` protocol messages the way the chat
   dock did, so the same message list rendered differently depending on which

@@ -39,6 +39,13 @@ if (localPropsFile.exists()) {
 }
 def admobTestDeviceId = localProps.getProperty('admob.testDeviceId', '')
 
+// Version string, shared by the APK's versionName and by the native build's
+// APP_VERSION (see android/app/CMakeLists.txt). Android does not build through
+// the root CMakeLists.txt, so without passing it down the Settings panel falls
+// back to platform.h's "v0.0.0-nocmake" placeholder. This is already one of the
+// files the release checklist bumps, so it is not a new place to remember.
+def appVersionName = "2.4.40"
+
 android {
     namespace 'org.frozenbubble'
     compileSdk 36
@@ -53,14 +60,15 @@ android {
         targetSdk 36
         ndkVersion "25.2.9519653"
         versionCode 23
-        versionName "2.4.40"
+        versionName appVersionName
 
         buildConfigField "String", "ADMOB_TEST_DEVICE_ID", "\"${admobTestDeviceId}\""
 
         externalNativeBuild {
             cmake {
                 cppFlags "-std=c++17"
-                arguments "-DANDROID_STL=c++_shared"
+                arguments "-DANDROID_STL=c++_shared",
+                          "-DAPP_VERSION_NAME=${appVersionName}"
             }
         }
 
