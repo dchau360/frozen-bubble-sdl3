@@ -132,7 +132,7 @@ All of these are in original `fb-server` code and are still present upstream.
 
 | | |
 |---|---|
-| **Local multiplayer with 3 or more players** | Experimental. The smaller side boards render bubbles that appear to hang detached in mid-air, unattached to the bubble mass above them. Two-player local play, and network play at any player count, are unaffected |
+| **Local multiplayer with 3 or more players** | Experimental — less play-tested than two-player and network play. Two causes of bubbles appearing detached on the smaller side boards are fixed (a malus parking in an emptied column, and a chain-reaction arc using the centre board's threshold — see the Unreleased section of [CHANGELOG.md](../CHANGELOG.md)), but the mode has not had a full pass since |
 
 ---
 

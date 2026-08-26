@@ -664,13 +664,7 @@ void BubbleGame::UpdateSingleBubblesAtScale(float deltaScale) {
             // it. Recompute the landing row fresh from the board's current state,
             // mirroring the same top-of-column scan ProcessMalusQueue does, before
             // placing the bubble.
-            int topOfCol = 0;
-            for (size_t row = 0; row < malusArray->bubbleMap.size(); row++) {
-                if (malus.cx < (int)malusArray->bubbleMap[row].size() &&
-                    malusArray->bubbleMap[row][malus.cx].bubbleId != -1) {
-                    if ((int)row > topOfCol) topOfCol = (int)row;
-                }
-            }
+            const int topOfCol = TopOccupiedRowInColumn(*malusArray, malus.cx);
             malus.stickY = std::min(topOfCol + 1, 12);
 
             SDL_Log("Malus bubble sticking at cx=%d stickY=%d", malus.cx, malus.stickY);

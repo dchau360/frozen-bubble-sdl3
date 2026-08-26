@@ -292,17 +292,10 @@ void BubbleGame::ProcessMalusQueue(BubbleArray &bArray, int currentFrame) {
         return;
     }
 
-    // Calculate top_of_cx: highest bubble in each column (original line 2221-2226)
-    int top_of_cx[8] = {0, 0, 0, 0, 0, 0, 0, 0};
-    for (size_t row = 0; row < bArray.bubbleMap.size(); row++) {
-        for (size_t col = 0; col < bArray.bubbleMap[row].size(); col++) {
-            if (bArray.bubbleMap[row][col].bubbleId != -1) {
-                if ((int)row > top_of_cx[col]) {
-                    top_of_cx[col] = row;
-                }
-            }
-        }
-    }
+    // Calculate top_of_cx: lowest bubble in each column (original line 2221-2226),
+    // or -1 for a column that holds nothing -- see TopOccupiedRowInColumn.
+    int top_of_cx[8];
+    for (int col = 0; col < 8; col++) top_of_cx[col] = TopOccupiedRowInColumn(bArray, col);
 
     // Generate ALL malus bubbles at once (original while loop at line 2227)
     std::vector<MalusBubble> newMalusBubbles;
@@ -334,7 +327,8 @@ void BubbleGame::ProcessMalusQueue(BubbleArray &bArray, int currentFrame) {
 
         // Calculate where bubble will stick (original line 2241-2243)
         int cy = 12;  // Always starts at row 12
-        int stickY = top_of_cx[cx] + 1;  // Stick one row below highest in column
+        // One row below the column's lowest bubble; row 0 when it is empty.
+        int stickY = top_of_cx[cx] + 1;
 
         // Update top_of_cx for next bubble in this column
         top_of_cx[cx] = stickY;

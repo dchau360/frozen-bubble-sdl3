@@ -35,8 +35,8 @@ To play on an iPhone, use the browser build.
 
 - **Single player** through the original level set, plus a level editor.
 - **Local multiplayer** for 2–4 players, with gamepad support. Three- and
-  four-player games are experimental — the smaller side boards have known
-  rendering glitches. For five or more players, use a network room.
+  four-player games are experimental and less play-tested than the rest. For
+  five or more players, use a network room.
 - **Network multiplayer** against the original `fb-server` protocol, so this
   port and the original game can share a server.
 - **Chain reactions**, malus attacks and the original scoring — ported against

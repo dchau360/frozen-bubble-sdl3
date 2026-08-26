@@ -56,6 +56,10 @@ struct SingleBubble {
     int leftLimit, rightLimit, topLimit; // limit before bouncing
     bool lowGfx = false; // running on lowgfx
     int bubbleSize = 32; // bubble size (change when creating for small variants)
+    // Screen Y this bubble must fall past before a chain reaction swings it
+    // back up to its target. Screen-space, so it belongs to the board's slot
+    // rather than being one global number -- see ChainArcThreshold.
+    int chainArcThreshold = 380;
     float speedX = 0, speedY = 0, genSpeed = 0; // used for falling bubbles
     bool chainExists = false; // enable chain reaction animation
     SDL_Point chainDest = {}; //where to land when chain reacting
@@ -139,7 +143,7 @@ struct SingleBubble {
                     // Chain reaction movement - physics-based parabolic arc like original FB
                     // BUT only start the swooping animation after bubble falls below threshold (maxy)
                     // This creates visible delay after explosion and makes arc animation visible
-                    const float maxy = 380.0f; // Threshold Y position (from original FB)
+                    const float maxy = static_cast<float>(chainArcThreshold);
                     const float acceleration = FREEFALL_CONSTANT * 3.0f;
 
                     // Only start chain reaction physics if bubble has fallen below maxy OR already started
@@ -244,6 +248,32 @@ struct MalusBubble {
 // bubbles, shared across the bubblegame_*.cpp translation units.
 extern std::vector<SingleBubble> singleBubbles;
 extern std::vector<MalusBubble> malusBubbles;
+
+// Lowest occupied row in a column, or -1 when the column holds nothing.
+//
+// Malus bubbles rise from below and park one row under whatever they meet, so
+// this is the scan both halves of that journey need: ProcessMalusQueue picks a
+// column and a provisional landing row from it, and the stick handler repeats
+// the scan many frames later because the board can change while the bubble is
+// still rising. The two used to keep their own copies of the loop, seeded with
+// 0 rather than -1, which silently conflated "the column's lowest bubble is the
+// ceiling row" with "the column is empty" and parked a malus at row 1 with
+// nothing above it. Detached grid bubbles are only ever cleaned up by
+// CheckAirBubbles, which CheckPossibleDestroy runs only after a pop, so one
+// landing in a dead column simply hung in mid-air until the player happened to
+// pop something else. Returning -1 for an empty column makes the shared
+// `row + 1` land it on the ceiling row instead, which is attached by
+// definition.
+inline int TopOccupiedRowInColumn(const BubbleArray &bArray, int cx) {
+    int topRow = -1;
+    for (int row = 0; row < static_cast<int>(bArray.bubbleMap.size()); ++row) {
+        if (cx < static_cast<int>(bArray.bubbleMap[row].size()) &&
+            bArray.bubbleMap[row][cx].bubbleId != -1 && row > topRow) {
+            topRow = row;
+        }
+    }
+    return topRow;
+}
 
 // oddswap mirrors Perl's $pdata{$player}{oddswap}:
 //   0 = standard (row 0 has 8 cells, no hex offset)

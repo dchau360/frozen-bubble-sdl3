@@ -29,7 +29,7 @@ SINGLE PLAYER
 LOCAL MULTIPLAYER
 2-4 players, same device — keyboard, controller, or a mix. Perfect for
 couch play. Note that 3- and 4-player local games are still experimental
-and can show visual glitches on the smaller side boards.
+and less tested than the rest.
 
 ONLINE MULTIPLAYER
 Play with friends or strangers over the internet, 2-20 players per room.

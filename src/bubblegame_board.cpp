@@ -164,6 +164,24 @@ static void ValidateAssignedChains(BubbleArray &bArray, int oddswap) {
     }
 }
 
+// The screen Y a chain-reaction bubble must fall past before it swings back up
+// toward its target. The original picks this per player rather than globally
+// (bin/frozen-bubble line 2525): 380 for the centre board and for both boards
+// of a two-player game, 185 for the two top mini boards, 415 for the two
+// bottom ones. Hard-coding 380 everywhere sent a top mini board's chain bubble
+// roughly two hundred pixels below its own board -- down across the centre
+// board and into the bottom slots -- before it turned around, and it hung
+// visibly at the apex of the swing back up.
+static int ChainArcThreshold(const BubbleArray &bArray, int playerCount) {
+    if (playerCount < 3 || bArray.playerAssigned == 0) return 380;
+    // Arrays 1..4 fill the mini slots in order for games up to five players;
+    // above that the board is parked in one of the same four slots instead
+    // (see the royale branch of the name-plate switch in bubblegame_render).
+    const int slot = bArray.parkedSlot >= 0 ? bArray.parkedSlot
+                                            : bArray.playerAssigned - 1;
+    return slot <= 1 ? 185 : 415;
+}
+
 void BubbleGame::AssignChainReactions(BubbleArray &bArray) {
     // Assign chain reaction targets to falling bubbles ONCE when they're created
     // Original: frozen-bubble line 814-865 in stick_bubble function
@@ -354,6 +372,8 @@ void BubbleGame::AssignChainReactions(BubbleArray &bArray) {
                 bArray.bubbleOffset.x + freeCol * chainBubbleSize + chainRowOffset,
                 bArray.bubbleOffset.y + freeRow * chainRowSize
             };
+            sBubble.chainArcThreshold =
+                ChainArcThreshold(bArray, currentSettings.playerCount);
             occupiedPositions.insert({freeRow, freeCol}); // Reserve this position
 
             // Mark all bubbles in this group as "chained" to prevent other chains from targeting them

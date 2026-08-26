@@ -45,6 +45,13 @@ struct BubbleGameTestAccess {
     static void assignChains(BubbleGame& game, int idx) {
         game.AssignChainReactions(game.bubbleArrays[idx]);
     }
+    static int checkAir(BubbleGame& game, int idx) {
+        return game.CheckAirBubbles(game.bubbleArrays[idx]);
+    }
+    static void runMalus(BubbleGame& game, int idx, int frame) {
+        game.frameCount = frame;
+        game.ProcessMalusQueue(game.bubbleArrays[idx], frame);
+    }
     static void updateAtScale(BubbleGame& game, float scale) {
         game.UpdateSingleBubblesAtScale(scale);
     }
@@ -585,6 +592,199 @@ int main() {
         CHECK(!game.IsTouchBackSwipe(500.f, below, 300.f, below));
         BubbleGameTestAccess::chatting(game) = false;
         CHECK(game.IsTouchBackSwipe(500.f, below, 300.f, below));
+    }
+
+    // --- Malus landing rows -----------------------------------------------
+    // A malus bubble rises from below and parks one row under whatever it
+    // meets. When its column holds nothing at all there is no "whatever" to
+    // park under, and parking at row 1 regardless leaves it hanging with an
+    // empty ceiling cell above it. Nothing sweeps that up: detached grid
+    // bubbles are only removed by CheckAirBubbles, which CheckPossibleDestroy
+    // runs only after a pop, and a malus landing alone pops nothing. Boards
+    // empty out columns routinely late in a round, and mini boards in 3+
+    // player games take malus from every opponent at once, which is where this
+    // was visible as bubbles stuck in mid-air.
+    {
+        BubbleGame game(renderer);
+        BubbleGameTestAccess::reset(game, 4, false, false);
+        BubbleArray& mini = BubbleGameTestAccess::player(game, 1);
+        ShapeBoard(mini, false);
+        mini.bubbleOffset = {20, 19};
+        mini.leftLimit = 20; mini.rightLimit = 148; mini.topLimit = 19;
+        mini.numColors = 4;
+        // Real per-cell positions, the way RandomLevel lays a mini board out.
+        for (int row = 0; row < 13; ++row) {
+            const int size = (int)mini.bubbleMap[row].size();
+            const int sep = (size % 2 == 0) ? 0 : 8;
+            for (int col = 0; col < size; ++col)
+                mini.bubbleMap[row][col].pos = {sep + 16 * col + 20, 14 * row + 19};
+        }
+        // Cleared down to a single ceiling bubble in column 7, which is what a
+        // round looks like just before a win. Malus columns are drawn from
+        // 0..6, so whichever one comes up is guaranteed to be empty.
+        mini.bubbleMap[0][7].bubbleId = 1;
+
+        mini.malusQueue.push_back(0);
+        BubbleGameTestAccess::runMalus(game, 1, 1000);
+        CHECK(malusBubbles.size() == 1);
+        if (malusBubbles.size() == 1) {
+            // An empty column has to aim at the ceiling row itself, not one
+            // row under it.
+            CHECK(malusBubbles[0].cx >= 0 && malusBubbles[0].cx <= 6);
+            CHECK(malusBubbles[0].stickY == 0);
+
+            // The stick handler rescans the column when the bubble arrives,
+            // because the board can change while it is still rising. That
+            // rescan has to reach the same conclusion.
+            malusBubbles[0].cx = 5;
+            for (int frame = 0; frame < 4000 && !malusBubbles.empty(); ++frame)
+                BubbleGameTestAccess::updateAtScale(game, 1.0f);
+            CHECK(malusBubbles.empty());
+            CHECK(mini.bubbleMap[0][5].bubbleId != -1);
+            CHECK(mini.bubbleMap[1][5].bubbleId == -1);
+
+            // The real proof: the connectivity sweep must not want to drop it.
+            singleBubbles.clear();
+            CHECK(BubbleGameTestAccess::checkAir(game, 1) == 0);
+        }
+    }
+
+    // A column that does hold bubbles still takes the malus underneath them,
+    // so the empty-column case above cannot have been fixed by always aiming
+    // at the ceiling.
+    {
+        BubbleGame game(renderer);
+        BubbleGameTestAccess::reset(game, 4, false, false);
+        BubbleArray& mini = BubbleGameTestAccess::player(game, 1);
+        ShapeBoard(mini, false);
+        mini.bubbleOffset = {20, 19};
+        mini.leftLimit = 20; mini.rightLimit = 148; mini.topLimit = 19;
+        mini.numColors = 4;
+        for (int row = 0; row < 13; ++row) {
+            const int size = (int)mini.bubbleMap[row].size();
+            const int sep = (size % 2 == 0) ? 0 : 8;
+            for (int col = 0; col < size; ++col)
+                mini.bubbleMap[row][col].pos = {sep + 16 * col + 20, 14 * row + 19};
+        }
+        for (int row = 0; row <= 3; ++row)
+            for (int col = 0; col < (int)mini.bubbleMap[row].size(); ++col)
+                mini.bubbleMap[row][col].bubbleId = 1;
+
+        mini.malusQueue.push_back(0);
+        BubbleGameTestAccess::runMalus(game, 1, 1000);
+        CHECK(malusBubbles.size() == 1);
+        if (malusBubbles.size() == 1) {
+            CHECK(malusBubbles[0].stickY == 4);
+            malusBubbles[0].cx = 5;
+            for (int frame = 0; frame < 4000 && !malusBubbles.empty(); ++frame)
+                BubbleGameTestAccess::updateAtScale(game, 1.0f);
+            CHECK(malusBubbles.empty());
+            CHECK(mini.bubbleMap[4][5].bubbleId != -1);
+        }
+    }
+
+    // --- Chain-reaction arc thresholds -------------------------------------
+    // A chain bubble falls until it passes a screen-space threshold, then
+    // swings back up to its target. The threshold belongs to the board's slot
+    // (original bin/frozen-bubble line 2525), so a top mini board must turn
+    // around while it is still near its own board rather than after crossing
+    // the centre board on its way toward the bottom of the screen.
+    {
+        BubbleGame game(renderer);
+
+        struct Case { int players; int array; int expected; const char* what; };
+        const Case cases[] = {
+            {2, 0, 380, "two-player left board"},
+            {2, 1, 380, "two-player right board"},
+            {4, 0, 380, "centre board"},
+            {4, 1, 185, "top-left mini"},
+            {4, 2, 185, "top-right mini"},
+            {5, 3, 415, "bottom-left mini"},
+            {5, 4, 415, "bottom-right mini"},
+        };
+
+        for (const Case& c : cases) {
+            BubbleGameTestAccess::reset(game, c.players, false, false);
+            BubbleArray& board = BubbleGameTestAccess::player(game, c.array);
+            ShapeBoard(board, false);
+            board.bubbleMap[0][0].bubbleId = 2;
+            board.bubbleMap[1][0].bubbleId = 2;
+            singleBubbles = {FallingBubble(c.array, 2, 100)};
+            BubbleGameTestAccess::assignChains(game, c.array);
+            CHECK(singleBubbles.size() == 1);
+            if (singleBubbles.size() == 1) {
+                CHECK(singleBubbles[0].chainExists);
+                CHECK(singleBubbles[0].chainArcThreshold == c.expected);
+                if (singleBubbles[0].chainArcThreshold != c.expected)
+                    std::fprintf(stderr, "  (%s: got %d, wanted %d)\n",
+                                 c.what, singleBubbles[0].chainArcThreshold,
+                                 c.expected);
+            }
+        }
+
+        // Above five players a board is parked into one of the same four
+        // slots, so the threshold follows the slot rather than the array index.
+        BubbleGameTestAccess::reset(game, 8, false, false);
+        BubbleArray& parked = BubbleGameTestAccess::player(game, 6);
+        ShapeBoard(parked, false);
+        parked.parkedSlot = 3;  // bottom-right
+        parked.bubbleMap[0][0].bubbleId = 2;
+        parked.bubbleMap[1][0].bubbleId = 2;
+        singleBubbles = {FallingBubble(6, 2, 100)};
+        BubbleGameTestAccess::assignChains(game, 6);
+        CHECK(singleBubbles.size() == 1);
+        if (singleBubbles.size() == 1)
+            CHECK(singleBubbles[0].chainArcThreshold == 415);
+    }
+
+    // And the threshold has to actually keep the swing inside the board: a
+    // top-left mini board runs from y=19 to about y=201, so its chain bubble
+    // must turn around near there. Under the old global 380 it sank to y=424
+    // first -- through the centre board and into the bottom-left slot -- which
+    // is what a player saw as a bubble adrift in someone else's board.
+    {
+        BubbleGame game(renderer);
+        BubbleGameTestAccess::reset(game, 4, false, false);
+        BubbleArray& mini = BubbleGameTestAccess::player(game, 1);
+        ShapeBoard(mini, false);
+        mini.bubbleOffset = {20, 19};
+        mini.leftLimit = 20; mini.rightLimit = 148; mini.topLimit = 19;
+        for (int row = 0; row < 13; ++row) {
+            const int size = (int)mini.bubbleMap[row].size();
+            const int sep = (size % 2 == 0) ? 0 : 8;
+            for (int col = 0; col < size; ++col)
+                mini.bubbleMap[row][col].pos = {sep + 16 * col + 20, 14 * row + 19};
+        }
+        mini.bubbleMap[0][0].bubbleId = 2;
+        mini.bubbleMap[1][0].bubbleId = 2;
+
+        SingleBubble faller{};
+        faller.assignedArray = 1;
+        faller.bubbleId = 2;
+        faller.posX = 60; faller.posY = 100;
+        faller.pos = {60, 100};
+        faller.falling = true;
+        faller.bubbleSize = 16;
+        faller.leftLimit = 20; faller.rightLimit = 148; faller.topLimit = 19;
+        singleBubbles = {faller};
+        BubbleGameTestAccess::assignChains(game, 1);
+
+        float deepest = 0.0f;
+        for (int frame = 0; frame < 600; ++frame) {
+            bool inFlight = false;
+            for (const SingleBubble& sb : singleBubbles) {
+                if (sb.chainExists && !sb.shouldClear && !sb.chainReachedDest) {
+                    if (sb.posY > deepest) deepest = sb.posY;
+                    inFlight = true;
+                }
+            }
+            if (!inFlight) break;
+            BubbleGameTestAccess::updateAtScale(game, 1.0f);
+        }
+        CHECK(deepest > 0.0f);
+        CHECK(deepest < 230.0f);
+        if (deepest >= 230.0f)
+            std::fprintf(stderr, "  (mini chain bubble sank to y=%.1f)\n", deepest);
     }
 
     SDL_DestroyRenderer(renderer);

@@ -2,6 +2,24 @@
 
 ## Unreleased
 
+- **Fix: attack bubbles could hang in mid-air.** A malus bubble rises from the
+  bottom of the board and parks one row under whatever it meets. Both halves of
+  that journey scanned its column starting from row 0, which cannot tell "the
+  column's lowest bubble is the ceiling row" from "the column is empty" — so a
+  malus sent to a column the round had already cleared parked at row 1 with
+  nothing above it. Unattached bubbles are only swept up after a pop, and a
+  malus landing alone pops nothing, so it simply hung there until the player
+  happened to clear something else. An empty column now sends it to the ceiling
+  row, which is attached by definition. Most visible on the small side boards
+  of a 3+ player game, which take attacks from every opponent at once.
+- **Fix: chain-reaction bubbles on the small side boards swung far outside
+  them.** A chain bubble falls until it passes a screen Y threshold, then arcs
+  back up to its target. The original picks that threshold per board
+  (`bin/frozen-bubble` line 2525) — 185 for the two top side boards, 415 for
+  the two bottom ones, 380 for the centre — but the port used 380 for every
+  board. A top side board's chain bubble therefore sank to y=424, roughly two
+  hundred pixels below its own board and straight through the centre board,
+  before turning around, hanging visibly at the top of the swing back.
 - **Fix: blocking a player did not survive a restart.** `/block` and
   `/unblock` saved through the path that never rewrites the block list to
   disk, so the block worked for the rest of the session and was then silently
