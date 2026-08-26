@@ -63,6 +63,15 @@ bool IsConnectionLevelOpcode(char opcode) {
     return opcode == 'n' || opcode == 'l';
 }
 
+bool IsKickedMePush(const std::string& line) {
+    static const char kKicked[] = "PUSH: KICKED";
+    const size_t at = line.find(kKicked);
+    if (at == std::string::npos) return false;
+    // Anything but trailing whitespace after it means this is the
+    // "KICKED: <nick>" notice about somebody else.
+    return line.find_first_not_of(" \r\t", at + sizeof(kKicked) - 1) == std::string::npos;
+}
+
 bool IsGameMessageLine(const std::string& line) {
     return !line.empty() && static_cast<unsigned char>(line[0]) < 0x20;
 }
@@ -234,6 +243,16 @@ void NetBotConnection::HandleLine(const std::string& line) {
         // never be relayed, and the leader's own start would stall waiting
         // for an acknowledgement that never came.
         SendLine("OK_GAME_START");
+        return;
+    }
+
+    // The server's kick only puts a player back in the lobby -- the socket
+    // stays open. For a person that is the right thing; a bot nobody is
+    // hosting any more has nothing to sit in the lobby for, and would show up
+    // in the server's player list forever.
+    if (IsKickedMePush(line)) {
+        SDL_Log("netbot %s: kicked from the room, disconnecting", nick.c_str());
+        Leave();
         return;
     }
 

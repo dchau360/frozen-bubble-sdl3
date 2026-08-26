@@ -21,6 +21,11 @@
   itself in each part of the protocol that counts connections, including the
   end-of-round handshake, where one silent seat would have stalled the next
   round for the whole room.
+- **New: `/kick p2` in the game room.** The host can remove a player by roster
+  position or by nickname. The server has always supported this and enforces
+  that only the room's creator may do it; no client had ever sent the command,
+  and a player who was kicked was left looking at a room the server had
+  already removed them from.
 - **Fix: attack bubbles could hang in mid-air.** A malus bubble rises from the
   bottom of the board and parks one row under whatever it meets. Both halves of
   that journey scanned its column starting from row 0, which cannot tell "the

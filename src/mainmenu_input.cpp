@@ -1312,9 +1312,59 @@ void MainMenu::SubmitLobbyChatInput(NetworkClient *netClient) {
                         netClient->AddStatusMessage("Could not send the report");
                     }
                 }
+            } else if (strncmp(networkChatInput, "/kick ", 6) == 0) {
+                // Host-only removal. The server enforces that (game.c only
+                // honours KICK from the room's creator); the checks here are
+                // so the host gets a useful message instead of a bare
+                // protocol error, not as the security boundary.
+                const char* rest = networkChatInput + 6;
+                while (*rest == ' ') rest++;
+                GameRoom* room = netClient->GetCurrentGame();
+                if (!room) {
+                    netClient->AddStatusMessage("You are not in a game room");
+                } else if (room->creator != netClient->GetPlayerNick()) {
+                    netClient->AddStatusMessage("Only the host can remove players");
+                } else if (*rest == '\0') {
+                    netClient->AddStatusMessage("Usage: /kick p2  (or /kick <nick>)");
+                } else {
+                    // "p2" means the second row of the roster, which is what
+                    // the player is actually looking at -- nicknames are
+                    // truncated to ten characters and easy to mistype.
+                    std::string target = rest;
+                    // A trailing space is invisible in the chat box and would
+                    // otherwise turn "p2 " into a nickname lookup that can
+                    // never match -- the same trap /block once fell into.
+                    while (!target.empty() && (target.back() == ' ' || target.back() == '\t'))
+                        target.pop_back();
+                    if (!target.empty() &&
+                        (target[0] == 'p' || target[0] == 'P') && target.size() > 1 &&
+                        target.find_first_not_of("0123456789", 1) == std::string::npos) {
+                        const int slot = std::atoi(target.c_str() + 1);
+                        if (slot < 1 || slot > (int)room->players.size()) {
+                            char msg[96];
+                            snprintf(msg, sizeof(msg), "There is no player %s in this room",
+                                     target.c_str());
+                            netClient->AddStatusMessage(msg);
+                            target.clear();
+                        } else {
+                            target = room->players[slot - 1].nick;
+                        }
+                    }
+                    if (!target.empty()) {
+                        char msg[128];
+                        if (target == netClient->GetPlayerNick()) {
+                            netClient->AddStatusMessage("You cannot remove yourself -- press ESC to leave");
+                        } else if (netClient->KickPlayer(target.c_str())) {
+                            snprintf(msg, sizeof(msg), "Removing %s...", target.c_str());
+                            netClient->AddStatusMessage(msg);
+                        } else {
+                            netClient->AddStatusMessage("Could not send the kick");
+                        }
+                    }
+                }
             } else if (strcmp(networkChatInput, "/help") == 0) {
                 // Show help
-                netClient->AddStatusMessage("Commands: /nick <new_nick>, /block <nick>, /unblock <nick>, /blocked, /report <nick> <reason>, /help");
+                netClient->AddStatusMessage("Commands: /nick <new_nick>, /kick p2|<nick> (host), /block <nick>, /unblock <nick>, /blocked, /report <nick> <reason>, /help");
             } else {
                 // Unknown command
                 netClient->AddStatusMessage("Unknown command. Type /help for help.");

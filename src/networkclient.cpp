@@ -621,6 +621,22 @@ bool NetworkClient::SendReport(const char* nick, const char* reason) {
     return SendCommand(cmd);
 }
 
+bool NetworkClient::KickPlayer(const char* nick) {
+    if (!nick || !*nick) return false;
+    // Same line-protocol hygiene as SendReport: the nickname reaches here
+    // from a chat box that accepts paste, and SendCommand appends the
+    // terminator itself, so an embedded control character would split one
+    // KICK into two lines and have the server run the tail as a command.
+    // A space would truncate the name server-side (KICK splits on the first
+    // one), and nicknames cannot contain one anyway.
+    if (strchr(nick, ' ') != nullptr) return false;
+    for (const char* p = nick; *p; ++p)
+        if ((unsigned char)*p < 0x20 || *p == 0x7f) return false;
+    char cmd[128];
+    snprintf(cmd, sizeof(cmd), "KICK %s", nick);
+    return SendCommand(cmd);
+}
+
 void NetworkClient::ProbeNotifySupportIfNeeded() {
     if (notifySupport != NotifySupport::Unknown || pendingNotifyProbe) return;
     if (!IsConnected()) return;
@@ -1300,9 +1316,37 @@ void NetworkClient::HandlePushMessage(const std::string& pushMsg) {
         }
 
         SDL_Log("Chat: [%s] %s", chat.nick.c_str(), chat.message.c_str());
+    } else if (pushMsg.compare(0, 6, "KICKED") == 0 &&
+               pushMsg.find_first_not_of(" \r\t", 6) == std::string::npos) {
+        // We are the one who was kicked. The server has already removed this
+        // connection from the room (game.c kick_player -> player_part_game_),
+        // so staying on the room screen would leave us looking at a room we
+        // are no longer in, unable to act on anything in it.
+        SDL_Log("We were kicked from the room");
+        ChatMessage chat;
+        chat.nick = "Server";
+        chat.message = "The host removed you from the room";
+        chat.timestamp = SDL_GetTicks();
+        chatMessages.push_back(chat);
+        if (chatMessages.size() > 50) chatMessages.erase(chatMessages.begin());
+        state = IN_LOBBY;
+        currentGame = nullptr;
     } else if (pushMsg.find("KICKED:") == 0) {
+        // Someone else was kicked. This arrives instead of PARTED, so the
+        // roster has to be maintained here too or they linger in the list.
         std::string nick = pushMsg.substr(8);
         SDL_Log("Kicked: %s", nick.c_str());
+        if (currentGame) {
+            auto it = std::remove_if(currentGame->players.begin(), currentGame->players.end(),
+                [&nick](const NetworkPlayer& p) { return p.nick == nick; });
+            currentGame->players.erase(it, currentGame->players.end());
+        }
+        ChatMessage chat;
+        chat.nick = "Server";
+        chat.message = nick + " was removed by the host";
+        chat.timestamp = SDL_GetTicks();
+        chatMessages.push_back(chat);
+        if (chatMessages.size() > 50) chatMessages.erase(chatMessages.begin());
     } else if (pushMsg.find("OPTIONS: ") == 0) {
         // Host broadcast updated game settings (server relays as "OPTIONS: ...")
         std::string opts = pushMsg.substr(9); // Skip "OPTIONS: "

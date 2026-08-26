@@ -53,6 +53,7 @@ covers hosting your own.
 
 Chat is not moderated by the developer. `/block <nick>` hides a player's
 messages on your device immediately, without needing anything from the server;
+if you host the room, `/kick p2` removes that player from it outright.
 `/report <nick> <reason>` sends a report to that server's operator. Reports are
 never acted on automatically — nicknames are chosen fresh on every connection
 and are not tied to any account, so automatic kicks on report would just hand

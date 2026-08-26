@@ -62,6 +62,14 @@ std::map<int, int> AssignRemoteSeats(const std::vector<int>& roomPlayerIds,
 inline constexpr int kMaxRoomBots = 4;
 int MaxRoomBots(int roomPlayers, int maxPlayers, int currentBots);
 
+// True for the push that tells *this* connection it was kicked.
+//
+// The server sends a bare "PUSH: KICKED" to the player it removed and
+// "PUSH: KICKED: <nick>" to everyone else about that player, so the two
+// forms differ only by what follows -- and reading the second as the first
+// would have every bot in the room quit whenever any one of them was kicked.
+bool IsKickedMePush(const std::string& line);
+
 // Whether an in-game opcode is about the connection that sent it rather than
 // about the contents of a board.
 //

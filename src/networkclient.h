@@ -162,6 +162,10 @@ public:
     // Blocking, which is local and immediate, is the other half of this --
     // see GameSettings::ToggleBlockedPlayer.
     bool SendReport(const char* nick, const char* reason);
+    // Remove a player from the room. Server-side this is creator-only
+    // (game.c) -- a non-host's KICK comes back as an error, so the check
+    // does not rest on the client asking nicely.
+    bool KickPlayer(const char* nick);
 
     // Capability probe for the follow feature: sends a side-effect-free
     // NOTIFYUNREG for a token nothing will ever hold, once per connection,

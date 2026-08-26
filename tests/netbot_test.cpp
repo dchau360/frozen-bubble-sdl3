@@ -151,6 +151,17 @@ int main() {
         CHECK(IsConnectionLevelOpcode('l'));    // seat left
     }
 
+    // Being kicked, versus being told someone else was.
+    {
+        CHECK(IsKickedMePush("FB/1.3 PUSH: KICKED"));
+        CHECK(IsKickedMePush("FB/1.3 PUSH: KICKED\r"));
+        // The notice about another player must not make this bot quit --
+        // otherwise kicking one bot would empty the room of all of them.
+        CHECK(!IsKickedMePush("FB/1.3 PUSH: KICKED: bot1-998"));
+        CHECK(!IsKickedMePush("FB/1.3 PUSH: JOINED: someone"));
+        CHECK(!IsKickedMePush(""));
+    }
+
     // How many bots a host may ask for. Bots take real seats, so the ceiling
     // is what the room has left plus the ones already connected.
     {
