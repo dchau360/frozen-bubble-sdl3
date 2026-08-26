@@ -897,21 +897,56 @@ void BubbleGame::NewGame(SetupSettings setup) {
             SDL_Log("Set local player (array 0) lobbyPlayerId = %d, nickname = '%s'",
                     bubbleArrays[0].lobbyPlayerId, bubbleArrays[0].playerNickname.c_str());
 
+            const auto& idToNick = netClient->GetPlayerIdToNick();
+
+            // A bot's seat is whichever one the server gave its own
+            // connection, so take the id from the connection rather than
+            // from the room's list -- a bot handed someone else's id would
+            // send that player's malus and swallow their shots. Doing this
+            // first also keeps those ids out of the fill below.
+            std::map<int, int> botSeats;
+            for (int i = 1; i < currentSettings.playerCount; i++) {
+                if (!bubbleArrays[i].isBot) continue;
+                auto it = botConnections.find(i);
+                if (it == botConnections.end() || !it->second) continue;
+                botSeats[i] = it->second->PlayerId();
+            }
+
             // Pre-populate remote players' lobbyPlayerIds and nicks from GAME_CAN_START mapping
             // This ensures correct nick targeting for malus messages even before the first shot
-            const auto& idToNick = netClient->GetPlayerIdToNick();
-            int remoteSlot = 1;
-            for (const auto& kv : idToNick) {
-                if (remoteSlot >= currentSettings.playerCount) break;
-                if (kv.first == (int)netClient->GetMyPlayerId()) continue;  // Skip local player
-                bubbleArrays[remoteSlot].lobbyPlayerId = kv.first;
-                bubbleArrays[remoteSlot].playerNickname = kv.second;
-                SDL_Log("Pre-assigned remote player (array %d) lobbyPlayerId = %d, nickname = '%s'",
-                        remoteSlot, kv.first, kv.second.c_str());
-                remoteSlot++;
+            std::vector<int> roomPlayerIds;
+            for (const auto& kv : idToNick) roomPlayerIds.push_back(kv.first);
+            const std::map<int, int> remoteSeats =
+                AssignRemoteSeats(roomPlayerIds, (int)netClient->GetMyPlayerId(),
+                                  botSeats, currentSettings.playerCount);
+
+            // A bot's seat is whichever one the server gave its own
+            // connection, so the id comes from the connection rather than
+            // from the room's list -- a bot handed someone else's id would
+            // send that player's malus and swallow their shots. The
+            // nickname still comes from the room where it has it: the
+            // server truncates long ones, and the per-slot settings remap
+            // below matches arrays to room slots by nickname.
+            for (const auto& seat : botSeats) {
+                auto nickIt = idToNick.find(seat.second);
+                bubbleArrays[seat.first].lobbyPlayerId = seat.second;
+                bubbleArrays[seat.first].playerNickname =
+                    (nickIt != idToNick.end()) ? nickIt->second
+                                               : botConnections[seat.first]->Nick();
+                SDL_Log("Assigned bot (array %d) lobbyPlayerId = %d, nickname = '%s'",
+                        seat.first, seat.second,
+                        bubbleArrays[seat.first].playerNickname.c_str());
             }
-            // Any remaining remote slots are unknown
-            for (int i = remoteSlot; i < currentSettings.playerCount; i++) {
+            for (const auto& seat : remoteSeats) {
+                bubbleArrays[seat.first].lobbyPlayerId = seat.second;
+                bubbleArrays[seat.first].playerNickname = idToNick.at(seat.second);
+                SDL_Log("Pre-assigned remote player (array %d) lobbyPlayerId = %d, nickname = '%s'",
+                        seat.first, seat.second,
+                        bubbleArrays[seat.first].playerNickname.c_str());
+            }
+            // Any board nobody was seated on is unknown
+            for (int i = 1; i < currentSettings.playerCount; i++) {
+                if (botSeats.count(i) || remoteSeats.count(i)) continue;
                 bubbleArrays[i].lobbyPlayerId = -1;
                 bubbleArrays[i].playerNickname = "";
             }

@@ -23,6 +23,7 @@
 #include <deque>
 #include <map>
 #include <string>
+#include <vector>
 
 // The id-to-nickname map the server sends when a game starts, as
 // <idByte><nick>,<idByte><nick>,... Split out from the connection so the
@@ -35,6 +36,22 @@ struct GameCanStartRoster {
 };
 GameCanStartRoster ParseGameCanStart(const std::string& payload,
                                      const std::string& myNick);
+
+// Which board each of the room's other players is rendered on.
+//
+// `roomPlayerIds` is every id the room announced, in its own order.
+// `botSeats` maps board index -> player id for the bots this client hosts;
+// those boards are already spoken for and cannot be handed to anyone else,
+// and neither can our own id. Boards are filled from index 1 up (index 0 is
+// always the local player), stopping at `playerCount`.
+//
+// Split out from the caller because getting it wrong is quiet: a remote
+// player seated on a bot's board takes over a board the host is simulating,
+// and the two fight over it for the rest of the round.
+std::map<int, int> AssignRemoteSeats(const std::vector<int>& roomPlayerIds,
+                                     int myPlayerId,
+                                     const std::map<int, int>& botSeats,
+                                     int playerCount);
 
 // True for a line that carries an in-game payload rather than a lobby reply.
 // Lobby lines are text beginning "FB/"; in-game ones are prefixed with the

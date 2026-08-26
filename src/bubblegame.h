@@ -505,6 +505,14 @@ public:
     bool SendGameDataFor(const BubbleArray &bArray, const char *payload);
     // Answer the end-of-round handshake for every seat this client holds.
     bool SendReadyForNextRound();
+    // True when an incoming message's sender is a seat we speak for -- our
+    // own connection, or one of our bots'. The server relays every in-game
+    // message to the room except back to the sender, so a bot's moves arrive
+    // here on the host's own connection, describing a board the host has
+    // already simulated.
+    bool OwnsSenderId(int senderId) const;
+    // Read (and discard) whatever the bots' sockets have received.
+    void PumpBotConnections();
 
     void LoadLevelset(const char *path);
     void LoadLevel(int id);

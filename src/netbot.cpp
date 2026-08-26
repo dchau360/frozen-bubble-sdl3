@@ -19,6 +19,8 @@
 
 #include "netbot.h"
 
+#include <set>
+
 // Parsing is wire-format handling, not socket handling, so it is built on
 // every platform including WASM -- and tested there too.
 GameCanStartRoster ParseGameCanStart(const std::string& payload,
@@ -35,6 +37,25 @@ GameCanStartRoster ParseGameCanStart(const std::string& payload,
         if (entry == myNick) out.myPlayerId = playerId;
     }
     return out;
+}
+
+std::map<int, int> AssignRemoteSeats(const std::vector<int>& roomPlayerIds,
+                                     int myPlayerId,
+                                     const std::map<int, int>& botSeats,
+                                     int playerCount) {
+    std::set<int> spokenFor;
+    spokenFor.insert(myPlayerId);
+    for (const auto& seat : botSeats) spokenFor.insert(seat.second);
+
+    std::map<int, int> seats;
+    int slot = 1;
+    for (int id : roomPlayerIds) {
+        if (spokenFor.count(id)) continue;
+        while (slot < playerCount && botSeats.count(slot)) ++slot;
+        if (slot >= playerCount) break;
+        seats[slot++] = id;
+    }
+    return seats;
 }
 
 bool IsGameMessageLine(const std::string& line) {

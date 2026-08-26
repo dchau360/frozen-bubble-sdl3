@@ -6,7 +6,9 @@
 #include "netbot.h"
 
 #include <cstdio>
+#include <map>
 #include <string>
+#include <vector>
 
 static int failures = 0;
 #define CHECK(expression) do { \
@@ -88,6 +90,58 @@ int main() {
         // 0x20 is a space -- the first byte of no line this protocol sends,
         // and the boundary the check is written against.
         CHECK(!IsGameMessageLine(" leading space"));
+    }
+
+    // Seat assignment: a four-board game where boards 2 and 3 are our bots.
+    {
+        // The room lists us (66), two humans (70, 72) and our two bots
+        // (67, 68) -- all five ids, in the room's own order.
+        const std::vector<int> room = {66, 67, 68, 70, 72};
+        const std::map<int, int> botSeats = {{2, 67}, {3, 68}};
+        const std::map<int, int> seats = AssignRemoteSeats(room, 66, botSeats, 4);
+        // Only board 1 is free; the humans take it in room order.
+        CHECK(seats.size() == 1);
+        CHECK(seats.at(1) == 70);
+        // Neither our own id nor a bot's was handed out.
+        for (const auto& seat : seats) {
+            CHECK(seat.second != 66);
+            CHECK(seat.second != 67 && seat.second != 68);
+        }
+    }
+
+    // Bots on the low boards must not push a remote player onto a bot board.
+    {
+        const std::vector<int> room = {10, 11, 12, 13};
+        const std::map<int, int> botSeats = {{1, 11}, {2, 12}};
+        const std::map<int, int> seats = AssignRemoteSeats(room, 10, botSeats, 4);
+        CHECK(seats.size() == 1);
+        CHECK(seats.count(1) == 0 && seats.count(2) == 0);
+        CHECK(seats.at(3) == 13);
+    }
+
+    // No bots: unchanged from the plain case -- boards fill from 1 in room order.
+    {
+        const std::vector<int> room = {4, 5, 6};
+        const std::map<int, int> seats = AssignRemoteSeats(room, 4, {}, 3);
+        CHECK(seats.size() == 2);
+        CHECK(seats.at(1) == 5);
+        CHECK(seats.at(2) == 6);
+    }
+
+    // More players in the room than boards in the game: the surplus is dropped
+    // rather than written past the last board.
+    {
+        const std::vector<int> room = {1, 2, 3, 4, 5};
+        const std::map<int, int> seats = AssignRemoteSeats(room, 1, {}, 3);
+        CHECK(seats.size() == 2);
+        CHECK(seats.count(3) == 0);
+    }
+
+    // Every board is a bot: nothing left to seat, and no infinite scan.
+    {
+        const std::map<int, int> botSeats = {{1, 8}, {2, 9}};
+        const std::map<int, int> seats = AssignRemoteSeats({7, 8, 9}, 7, botSeats, 3);
+        CHECK(seats.empty());
     }
 
     if (failures == 0) std::printf("netbot tests passed\n");

@@ -102,6 +102,36 @@ void BubbleGame::SendNetworkBubbleShot(BubbleArray &bArray) {
     }
 }
 
+bool BubbleGame::OwnsSenderId(int senderId) const {
+    NetworkClient *netClient = NetworkClient::Instance();
+    if (netClient && senderId == static_cast<int>(netClient->GetMyPlayerId())) return true;
+    // Bots are matched against their own connections rather than against
+    // bubbleArrays[].lobbyPlayerId, so suppression holds even in the window
+    // before the seats are mapped -- otherwise the first echo would be taken
+    // for an unknown player and handed a free remote slot.
+    for (const auto &entry : botConnections) {
+        if (entry.second && entry.second->PlayerId() == senderId) return true;
+    }
+    return false;
+}
+
+void BubbleGame::PumpBotConnections() {
+    // The server relays an in-game message to every seat but the sender, so
+    // a bot's socket receives the whole room's traffic -- all of which this
+    // client already has on its own connection. The messages are dropped,
+    // but the socket still has to be read: an unread socket backs up, and
+    // the server drops any connection whose send falls short (game.c
+    // "destination is not reading data"), taking the bot out of the game.
+    for (auto &entry : botConnections) {
+        if (!entry.second) continue;
+        entry.second->Update();
+        int senderId = 0;
+        std::string payload;
+        while (entry.second->TakeGameMessage(&senderId, &payload)) {
+        }
+    }
+}
+
 void BubbleGame::ProcessNetworkMessages() {
     NetworkClient* netClient = NetworkClient::Instance();
     if (!netClient->IsConnected()) {
@@ -114,6 +144,7 @@ void BubbleGame::ProcessNetworkMessages() {
 
     // Update network client
     netClient->Update();
+    PumpBotConnections();
 
     // Process all pending messages
     while (netClient->HasMessage()) {
@@ -126,9 +157,11 @@ void BubbleGame::ProcessNetworkMessages() {
             if (sscanf(msg.c_str(), "GAMEMSG:%d:%511[^\n]", &senderId, gameData) == 2) {
                 SDL_Log("Processing game message from player %d: %s", senderId, gameData);
 
-                // Ignore our own messages echoed back
-                if (senderId == netClient->GetMyPlayerId()) {
-                    SDL_Log("Ignoring our own message (ID=%d)", senderId);
+                // A seat we speak for has already had this move simulated
+                // locally -- the message is the announcement of it, not news.
+                // Replaying it would run the shot twice.
+                if (OwnsSenderId(senderId)) {
+                    SDL_Log("Ignoring a message from a seat we own (ID=%d)", senderId);
                     continue;
                 }
 
@@ -156,6 +189,7 @@ void BubbleGame::ProcessNetworkMessages() {
                             if (opponentIdx == -1) {
                                 NetworkClient* netClient = NetworkClient::Instance();
                                 for (int i = 1; i < currentSettings.playerCount; i++) {
+                                    if (bubbleArrays[i].isBot) continue;  // a bot's board is never a free seat
                                     if (bubbleArrays[i].lobbyPlayerId == -1) {
                                         bubbleArrays[i].lobbyPlayerId = senderId;
                                         bubbleArrays[i].playerNickname = netClient->GetPlayerNickname(senderId);
@@ -246,6 +280,7 @@ void BubbleGame::ProcessNetworkMessages() {
                             if (opponentIdx == -1) {
                                 NetworkClient* netClient = NetworkClient::Instance();
                                 for (int i = 1; i < currentSettings.playerCount; i++) {
+                                    if (bubbleArrays[i].isBot) continue;  // a bot's board is never a free seat
                                     if (bubbleArrays[i].lobbyPlayerId == -1) {
                                         bubbleArrays[i].lobbyPlayerId = senderId;
                                         bubbleArrays[i].playerNickname = netClient->GetPlayerNickname(senderId);
