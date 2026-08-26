@@ -59,7 +59,8 @@ purchase.
 **Category:** Games > Puzzle
 **Contact email:** (your email — this is shown publicly on the listing)
 **External marketing / website:** `https://github.com/dchau360/frozen-bubble-sdl3`
-**Privacy policy URL:** `https://dchau360.github.io/frozen-bubble-sdl3/`
+**Privacy policy URL:** `https://dchau360.github.io/frozen-bubble-sdl3/privacy/`
+**Website URL:** `https://dchau360.github.io/frozen-bubble-sdl3/`
 
 ---
 
@@ -76,9 +77,19 @@ honest answers are, based on what the app actually does:
 | Controlled substances | None | — |
 | Gambling | No | No real-money wagering or loot-box mechanics |
 | **User interaction / communication** | **Yes — unmoderated** | Network multiplayer has free-text chat between players, with **no profanity filter or moderation** in this codebase. Answer honestly here — this is the one question worth not glossing over, since IARC/Play specifically ask about *unmoderated* chat and it nudges the rating up a notch (typically still in the Teen range at most, not Mature) |
-| Shares location | No | — |
+| Shares location | **Yes — approximate, not precise** | See below |
 | Shares personal info with other users | Only your chosen nickname (not tied to real identity) | — |
 | Users can spend real money | Yes | Two ad-removal purchases via Google Play Billing: a yearly subscription and a one-time permanent unlock |
+
+On location specifically: the game calls an IP-geolocation service
+(`ipinfo.io`/`ip-api.com`) at startup to get a rough lat/lon from your IP
+address — this is **not** GPS or any device location permission, and is
+cached to one decimal place (roughly city/region accuracy, not street-level
+or precise). It's shown as a pin on a world map in the network lobby, so
+other players can see approximately where players and servers are. Answer
+"approximate location" (not "precise location") on the Data Safety form's
+location question, and "yes" to sharing it with other users — the world map
+is exactly that.
 
 Expect this to land around **Teen** (or your platform's equivalent) purely
 because of the unmoderated chat question — not because of any actual violent
@@ -96,7 +107,7 @@ answer key.
 
 | Play category | Collected? | Shared? | Purpose | Notes |
 |---|---|---|---|---|
-| **Location** | No | — | — | |
+| **Location** | **Yes — approximate location** | **Yes, with other users** | App functionality (shown on a world map in the lobby) | Derived from IP address via ipinfo.io/ip-api.com, not GPS or a device location permission. Cached to one decimal place (~city/region accuracy). See the content-rating section above for detail |
 | **Personal info** (name, email, address, phone, User IDs) | No | — | — | Nickname is free-text, unverified, not linked to real identity — Google's own guidance treats this as not requiring declaration here |
 | **Financial info** | No (by the app) | — | — | Google Play Billing handles the purchase; the app never receives payment details, only a purchase token |
 | **Health & fitness** | No | — | — | |

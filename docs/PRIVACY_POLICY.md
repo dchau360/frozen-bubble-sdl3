@@ -44,6 +44,14 @@ platform (`ios`/`android`) and a last-notified timestamp for cooldown
 purposes, and is removed when you unfollow. See
 [docs/PUSH_SETUP.md](https://github.com/dchau360/frozen-bubble-sdl3/blob/main/docs/PUSH_SETUP.md) for the full mechanism.
 
+**Approximate location.** On startup the app asks a third-party IP-geolocation
+service (ipinfo.io, falling back to ip-api.com) for a rough position derived
+from your IP address — not GPS, and not anything requiring a location
+permission. The result is cached to one decimal place, roughly city or
+region accuracy rather than a precise address, and is shown as a pin on a
+world map in the network lobby so other online players can see approximately
+where players and servers are. It is not stored beyond the current session.
+
 **Advertising identifiers (Android only).** The Android build shows an
 interstitial ad via Google AdMob when entering the multiplayer lobby.
 AdMob's SDK collects device and advertising identifiers under Google's own
@@ -80,6 +88,9 @@ or analytics SDK, so none is collected by the developer.
   push delivery for followed servers (Android)
 - Apple Push Notification service — push delivery for followed servers
   (iOS)
+- [ipinfo.io](https://ipinfo.io/privacy-policy) / [ip-api.com](https://ip-api.com/docs/legal) —
+  approximate location from your IP address, for the network lobby's world
+  map
 
 ## Data retention
 
@@ -104,7 +115,8 @@ avoid entering real names or other identifying information.
   Play Store.
 - Unfollow any server to stop push registration for it.
 - Play local single-player or local multiplayer to avoid any network data
-  transmission entirely.
+  transmission entirely — this also means no location lookup happens, since
+  it only runs before network play.
 - Uninstalling the app removes all locally stored settings and nicknames.
 
 ## Changes to this policy
