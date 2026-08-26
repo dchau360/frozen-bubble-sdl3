@@ -36,6 +36,18 @@
   which is the free trial or discounted period whenever one is configured in
   Play Console — printing "$0.00" beside a plan that renews at full price. It
   now shows the recurring price.
+- **Fix: a network game counted you twice, and then would not start round 2.**
+  The server truncates nicknames to 10 characters; the client kept the full
+  one. When the server sent back its authoritative room roster after the
+  start, the client compared it against its own list *by nickname* — and
+  `"android_user"` didn't match the `"android_us"` the server echoed, so it
+  added the local player a second time as a phantom. That inflated the player
+  count (a 5-player game reported 6), drew a duplicate board, wrongly switched
+  on the >5-player battle-royale HUD, and deadlocked the end-of-round
+  handshake, which waited for a ready signal the phantom could never send —
+  so winning a round left you unable to start the next one. Only triggered
+  with a nickname longer than 10 characters, which is why short-nicked players
+  never saw it. The client now clamps to the same limit the server enforces.
 - **Fix: blocking a player was bypassable by changing one letter's case.**
   The block matched nicks exactly, but the server's own nick-uniqueness check
   is case-sensitive too — so `Alice` and `alice` can be connected at the same

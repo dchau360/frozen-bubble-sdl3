@@ -35,6 +35,18 @@
 #define PROTO_MINOR 3
 #define BUFFER_SIZE 4096
 
+// The server silently truncates every nickname to 10 characters (the NICK and
+// CREATE handlers in server/game.c both do `args[10] = '\0'`). The client has
+// to clamp to the same length before it stores or sends one, because it later
+// matches the server's authoritative roster against its own record of who is
+// in the room *by nickname*. Keeping the untruncated name locally makes that
+// comparison fail against the truncated name the server echoes back, so the
+// local player gets added to the room a second time as a phantom -- inflating
+// the player count, drawing a duplicate board, and deadlocking the
+// end-of-round handshake, which waits for a ready signal the phantom can
+// never send.
+#define MAX_NICK_LENGTH 10
+
 // The accumulation buffer has to be able to hold one whole server line. The
 // server formats each line into a 16384-byte buffer and can emit up to
 // sizeof(buf)-1 of it (server/net.c send_line), and the LIST reply is built in a

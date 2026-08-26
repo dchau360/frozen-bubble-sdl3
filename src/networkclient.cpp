@@ -304,8 +304,11 @@ bool NetworkClient::SendNick(const char* nickname) {
     // by another currently-active connection (rather than silently killing
     // it), so two clients defaulting to the same nickname (e.g. both taking
     // it from the OS username) no longer fight over the same nick.
-    std::string originalNick = nickname;
-    std::string tryNick = nickname;
+    // Clamp to what the server will actually keep, before storing or sending:
+    // the roster it echoes back is truncated, and an untruncated local copy
+    // fails to match it (see MAX_NICK_LENGTH in networkclient.h).
+    std::string originalNick = std::string(nickname).substr(0, MAX_NICK_LENGTH);
+    std::string tryNick = originalNick;
     int suffix = 2; // Start with suffix 2 for first retry
 
 #ifdef __WASM_PORT__
@@ -342,7 +345,7 @@ bool NetworkClient::SendNick(const char* nickname) {
             SDL_Log("Nickname '%s' is in use by an active connection, trying with suffix %d", tryNick.c_str(), suffix);
             char suffixStr[16];
             snprintf(suffixStr, sizeof(suffixStr), "%d", suffix);
-            tryNick = originalNick.substr(0, std::min((size_t)9, originalNick.length())) + suffixStr;
+            tryNick = originalNick.substr(0, std::min((size_t)(MAX_NICK_LENGTH - 1), originalNick.length())) + suffixStr;
             suffix++;
             continue;
         }
@@ -367,8 +370,8 @@ bool NetworkClient::CreateGame(int maxPlayers) {
     // CREATE requires a game name argument (uses player's nickname)
     // Implement retry with suffix if NICK_IN_USE (original lines 4768-4785)
 
-    std::string originalNick = playerNick;
-    std::string tryNick = playerNick;
+    std::string originalNick = playerNick.substr(0, MAX_NICK_LENGTH);
+    std::string tryNick = originalNick;
     int suffix = 2; // Start with suffix 2 for first retry
 
 #ifdef __WASM_PORT__
@@ -412,7 +415,7 @@ bool NetworkClient::CreateGame(int maxPlayers) {
             SDL_Log("Nickname '%s' is in use, trying with suffix %d", tryNick.c_str(), suffix);
             char suffixStr[16];
             snprintf(suffixStr, sizeof(suffixStr), "%d", suffix);
-            tryNick = originalNick.substr(0, std::min((size_t)9, originalNick.length())) + suffixStr;
+            tryNick = originalNick.substr(0, std::min((size_t)(MAX_NICK_LENGTH - 1), originalNick.length())) + suffixStr;
             suffix++;
             continue;
         }
@@ -498,7 +501,7 @@ bool NetworkClient::JoinGame(const char* creator) {
             SDL_Log("Nickname '%s' is in use, trying with suffix %d", tryNick.c_str(), suffix);
             char suffixStr[16];
             snprintf(suffixStr, sizeof(suffixStr), "%d", suffix);
-            tryNick = originalNick.substr(0, std::min((size_t)9, originalNick.length())) + suffixStr;
+            tryNick = originalNick.substr(0, std::min((size_t)(MAX_NICK_LENGTH - 1), originalNick.length())) + suffixStr;
             suffix++;
             continue;
         }
