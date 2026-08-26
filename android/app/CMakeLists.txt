@@ -78,37 +78,15 @@ add_library(iniparser STATIC
 )
 target_include_directories(iniparser PUBLIC "${JNI_DIR}/iniparser")
 
-# Game as shared library (Android requires this)
+# Game as shared library (Android requires this).
+#
+# The source list is shared with the root CMakeLists.txt rather than repeated
+# here -- see cmake/CoreSources.cmake for why.
+include(${CMAKE_CURRENT_SOURCE_DIR}/../../cmake/CoreSources.cmake)
+
 add_library(main SHARED
-    ../../src/frozenbubble.cpp
     ../../src/main.cpp
-    ../../src/menubutton.cpp
-    ../../src/mainmenu.cpp
-    ../../src/mainmenu_input.cpp
-    ../../src/mainmenu_netpanel.cpp
-    ../../src/mainmenu_panels.cpp
-    ../../src/mainmenu_server.cpp
-    ../../src/localmultiplayer_settings.cpp
-    ../../src/gamesettings.cpp
-    ../../src/audiomixer.cpp
-    ../../src/shaderstuff.cpp
-    ../../src/bubblegame.cpp
-    ../../src/bubblegame_board.cpp
-    ../../src/bubblegame_input.cpp
-    ../../src/bubblegame_level.cpp
-    ../../src/bubblegame_net.cpp
-    ../../src/bubblegame_render.cpp
-    ../../src/bubblegame_shooter.cpp
-    ../../src/bubblegame_state.cpp
-    ../../src/netview.cpp
-    ../../src/netteams.cpp
-    ../../src/roundstats_color.cpp
-    ../../src/transitionmanager.cpp
-    ../../src/ttftext.cpp
-    ../../src/highscoremanager.cpp
-    ../../src/networkclient.cpp
-    ../../src/logger.cpp
-    ../../src/platform.cpp
+    ${FROZEN_BUBBLE_CORE_SOURCES}
 )
 
 target_compile_definitions(main PRIVATE

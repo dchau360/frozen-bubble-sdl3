@@ -48,7 +48,9 @@ bool IsGameMessageLine(const std::string& line) {
 #include <SDL3/SDL.h>
 
 #include <cstring>
-#include <netdb.h>
+#if !defined(_WIN32)
+#include <netdb.h>   // getaddrinfo; Windows has it in ws2tcpip.h, via socket_compat.h
+#endif
 #include <string>
 
 namespace {

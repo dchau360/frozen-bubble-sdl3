@@ -96,39 +96,7 @@ else()
     set(PLATFORM_EXTRA_SRC "")
 endif()
 
-set(FROZEN_BUBBLE_CORE_SOURCES
-    src/frozenbubble.cpp
-    src/menubutton.cpp
-    src/mainmenu.cpp
-    src/mainmenu_input.cpp
-    src/mainmenu_netpanel.cpp
-    src/mainmenu_panels.cpp
-    src/mainmenu_server.cpp
-    src/localmultiplayer_settings.cpp
-    src/gamesettings.cpp
-    src/audiomixer.cpp
-    src/shaderstuff.cpp
-    src/bubbleai.cpp
-    src/bubblegame.cpp
-    src/bubblegame_board.cpp
-    src/bubblegame_input.cpp
-    src/bubblegame_level.cpp
-    src/bubblegame_net.cpp
-    src/bubblegame_render.cpp
-    src/bubblegame_shooter.cpp
-    src/bubblegame_state.cpp
-    src/netbot.cpp
-    src/netview.cpp
-    src/netteams.cpp
-    src/roundstats_color.cpp
-    src/transitionmanager.cpp
-    src/ttftext.cpp
-    src/highscoremanager.cpp
-    ${NETWORK_CLIENT_SRC}
-    src/logger.cpp
-    src/platform.cpp
-    ${PLATFORM_EXTRA_SRC}
-)
+include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/CoreSources.cmake)
 
 add_executable(frozen-bubble-sdl3
     src/main.cpp
