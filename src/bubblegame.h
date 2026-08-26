@@ -288,6 +288,12 @@ struct SetupSettings {
     int playerTeams[MAX_NET_PLAYERS] = {1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1};
     int teamCount = 2;  // number of teams (2..5); meaningful when teamMode
     bool continueWhenPlayersLeave = true;
+    // Per-player: this slot is played by the AI rather than a person. Sized
+    // like the other per-player arrays so network rooms can use it too.
+    bool playerIsBot[MAX_NET_PLAYERS] = {};
+    // How hard the bots try: 0 easy, 1 normal, 2 hard. One setting for all of
+    // them -- a per-bot dial is more knobs than the room screen can justify.
+    int botSkill = 1;
 };
 
 // Shared between the lobby/game-room team UI and in-gameplay team indicators
@@ -340,6 +346,16 @@ struct BubbleArray {
     bool aimGuideEnabled = false;      // If true, draw aim trajectory guide for this player
 
     bool suppressFireUntilRelease = false;  // Block fire key for one frame after round transition
+
+    // Bot control. A bot drives the same shooterLeft/Right/Action flags a
+    // person's keyboard does rather than placing bubbles directly, so it is
+    // subject to every rule a player is -- aim speed, the fire-release
+    // interlock, the hurry timer -- and its penguin animates normally.
+    bool isBot = false;
+    int botSkill = 1;                 // index into BubbleAI::Skill
+    unsigned botRng = 0;              // own stream, independent of the game's rand()
+    float botTargetAngle = -1.0f;     // < 0 when it has not chosen a shot yet
+    int botThinkFrames = 0;           // deliberate pause before it commits
 
     // Network game action flags (original: $actions{$player}{mp_fire} and {mp_stick})
     bool mpFirePending = false;  // Set to true when we receive 'f' message, cleared after firing
@@ -466,6 +482,7 @@ public:
     // misfire a bubble. All coordinates are logical canvas coords.
     bool IsTouchBackSwipe(float startX, float startY, float endX, float endY) const;
     void UpdatePenguin(BubbleArray &bArray);
+    void DriveBot(BubbleArray &bArray);
 
     void LoadLevelset(const char *path);
     void LoadLevel(int id);

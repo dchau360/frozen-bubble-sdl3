@@ -343,6 +343,8 @@ private:
     bool showingLocalMPPanel = false;
     int localMPMenuIndex = 0;       // 0=players, 1=CR, 2=row collapse, 3=mode, 4=malus, 5=team mode, 6=victories, 7..7+N-1=aim guide per player, 7+N..7+2N-1=colors per player, 7+2N=start
     int localMPPlayerCount = 2;     // 2-4 players
+    int localMPBotCount = 0;        // bots fill the last slots; player 1 stays human
+    int localMPBotSkill = 1;        // 0 easy, 1 normal, 2 hard
     bool localMPCR = true;          // Chain reaction enabled
     bool localMPNoCompress = false;  // Disable row compression for all players
     bool localMPClearMode = false;   // Clear Mode (win by clearing board; defaults compression+malus off)

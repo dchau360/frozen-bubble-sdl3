@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- **New: bots in local multiplayer.** The setup screen takes a bot count and a
+  skill, and the bots fill the highest player slots so player 1 is always a
+  person. They need no controller, so the "not enough controllers" warning
+  only counts the human seats now. A bot aims by flying a probe bubble through
+  the real launch physics -- the same movement, collision and cell-resolution
+  code a fired bubble uses -- once per candidate angle, and keeps the angle
+  whose landing clears the most, so it cannot drift out of step with the game
+  the way a separate model of the board would. It then drives the same
+  shooter controls a keyboard does rather than placing bubbles directly,
+  which is what makes its launcher visibly swing onto the shot. Network-room
+  bots are next and reuse the same aiming.
 - **Fix: attack bubbles could hang in mid-air.** A malus bubble rises from the
   bottom of the board and parks one row under whatever it meets. Both halves of
   that journey scanned its column starting from row 0, which cannot tell "the

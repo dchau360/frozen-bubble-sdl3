@@ -108,6 +108,7 @@ set(FROZEN_BUBBLE_CORE_SOURCES
     src/gamesettings.cpp
     src/audiomixer.cpp
     src/shaderstuff.cpp
+    src/bubbleai.cpp
     src/bubblegame.cpp
     src/bubblegame_board.cpp
     src/bubblegame_input.cpp
@@ -303,6 +304,54 @@ if(BUILD_TESTING AND NOT EMSCRIPTEN AND NOT ANDROID AND NOT IOS)
         target_link_libraries(bubblegame-rules-test PRIVATE ws2_32)
     endif()
     add_test(NAME bubblegame-rules-test COMMAND bubblegame-rules-test)
+
+    add_executable(bubbleai-test
+        tests/bubbleai_test.cpp
+        ${FROZEN_BUBBLE_CORE_SOURCES}
+    )
+    set_property(TARGET bubbleai-test PROPERTY CXX_STANDARD 17)
+    set_property(TARGET bubbleai-test PROPERTY CXX_EXTENSIONS OFF)
+    target_include_directories(bubbleai-test PRIVATE src)
+    target_compile_definitions(bubbleai-test PRIVATE
+        FROZEN_BUBBLE_TEST_ACCESS
+        DATA_DIR="${ASSET_PATH}"
+        APP_VERSION="v${PROJECT_VERSION}"
+    )
+    target_link_libraries(bubbleai-test PRIVATE
+        SDL3::SDL3
+        SDL3_image::SDL3_image
+        SDL3_mixer::SDL3_mixer
+        SDL3_ttf::SDL3_ttf
+        iniparser-static
+    )
+    if(WIN32 OR MINGW)
+        target_link_libraries(bubbleai-test PRIVATE ws2_32)
+    endif()
+    add_test(NAME bubbleai-test COMMAND bubbleai-test)
+
+    add_executable(bot-play-test
+        tests/bot_play_test.cpp
+        ${FROZEN_BUBBLE_CORE_SOURCES}
+    )
+    set_property(TARGET bot-play-test PROPERTY CXX_STANDARD 17)
+    set_property(TARGET bot-play-test PROPERTY CXX_EXTENSIONS OFF)
+    target_include_directories(bot-play-test PRIVATE src)
+    target_compile_definitions(bot-play-test PRIVATE
+        FROZEN_BUBBLE_TEST_ACCESS
+        DATA_DIR="${ASSET_PATH}"
+        APP_VERSION="v${PROJECT_VERSION}"
+    )
+    target_link_libraries(bot-play-test PRIVATE
+        SDL3::SDL3
+        SDL3_image::SDL3_image
+        SDL3_mixer::SDL3_mixer
+        SDL3_ttf::SDL3_ttf
+        iniparser-static
+    )
+    if(WIN32 OR MINGW)
+        target_link_libraries(bot-play-test PRIVATE ws2_32)
+    endif()
+    add_test(NAME bot-play-test COMMAND bot-play-test)
 
     add_executable(persistence-save-test
         tests/persistence_save_test.cpp

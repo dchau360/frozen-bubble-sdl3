@@ -6,7 +6,7 @@ bool ApplyLocalMultiplayerVictoriesInput(
     int menuIndex,
     LocalMultiplayerMenuCommand command,
     int& victoriesIndex) {
-    if (menuIndex != 6) return false;
+    if (menuIndex != kLocalMPRowVictories) return false;
 
     if (command == LocalMultiplayerMenuCommand::Left) {
         --victoriesIndex;
@@ -22,6 +22,11 @@ bool ApplyLocalMultiplayerVictoriesInput(
     return true;
 }
 
+int ClampLocalBotCount(int botCount, int playerCount) {
+    const int players = std::clamp(playerCount, 2, 4);
+    return std::clamp(botCount, 0, players - 1);
+}
+
 LocalMultiplayerOptions BuildLocalMultiplayerOptions(
     int playerCount,
     bool chainReaction,
@@ -31,7 +36,9 @@ LocalMultiplayerOptions BuildLocalMultiplayerOptions(
     bool teamMode,
     int victoriesIndex,
     const int colors[5],
-    const bool aimGuide[5]) {
+    const bool aimGuide[5],
+    int botCount,
+    int botSkill) {
     LocalMultiplayerOptions options;
     options.playerCount = playerCount;
     options.chainReaction = chainReaction;
@@ -44,6 +51,8 @@ LocalMultiplayerOptions BuildLocalMultiplayerOptions(
         options.colors[i] = colors[i];
         options.aimGuide[i] = aimGuide[i];
     }
+    options.botCount = ClampLocalBotCount(botCount, playerCount);
+    options.botSkill = std::clamp(botSkill, 0, 2);
     return options;
 }
 
@@ -70,5 +79,12 @@ SetupSettings BuildLocalMultiplayerSettings(
         settings.disableCompression[i] = options.noCompression;
         settings.aimGuide[i] = options.aimGuide[i];
     }
+
+    // Bots take the last slots so player 1 stays human whatever the count.
+    const int bots = ClampLocalBotCount(options.botCount, settings.playerCount);
+    settings.botSkill = std::clamp(options.botSkill, 0, 2);
+    for (int i = 0; i < MAX_NET_PLAYERS; ++i) settings.playerIsBot[i] = false;
+    for (int i = settings.playerCount - bots; i < settings.playerCount; ++i)
+        settings.playerIsBot[i] = true;
     return settings;
 }

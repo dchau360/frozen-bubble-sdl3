@@ -632,7 +632,9 @@ void MainMenu::SetupNewGame(int mode) {
                 localMPTeamMode,
                 localMPVictoriesIndex,
                 playerColorCounts,
-                localMPAimGuide);
+                localMPAimGuide,
+                localMPBotCount,
+                localMPBotSkill);
             StartLocalGame(BuildLocalMultiplayerSettings(options));
             break;
         }

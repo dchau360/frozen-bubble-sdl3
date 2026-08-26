@@ -417,6 +417,14 @@ void BubbleGame::NewGame(SetupSettings setup) {
         bubbleArrays[i].numColors = nc;
         bubbleArrays[i].compressionDisabled = setup.disableCompression[i];
         bubbleArrays[i].aimGuideEnabled = setup.aimGuide[i];
+        bubbleArrays[i].isBot = setup.playerIsBot[i];
+        bubbleArrays[i].botSkill = setup.botSkill;
+        // Seed per slot so bots in the same game diverge immediately instead
+        // of all opening with the same shot.
+        bubbleArrays[i].botRng =
+            static_cast<unsigned>(SDL_GetTicks()) * 2654435761u + static_cast<unsigned>(i) * 40503u + 1u;
+        bubbleArrays[i].botTargetAngle = -1.0f;
+        bubbleArrays[i].botThinkFrames = 0;
     }
 
     // Initialize controllers for local multiplayer

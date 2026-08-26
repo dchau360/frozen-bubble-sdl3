@@ -754,10 +754,10 @@ bool MainMenu::LobbyChatTypingKey(SDL_Event *e) {
 
 bool MainMenu::LocalMPPanelKey(SDL_Event *e) {
             if (showingLocalMPPanel && !runDelay) {
-                // 0=Players, 1=CR, 2=Row collapse, 3=Mode, 4=Malus, 5=Team mode,
-                // 6=Victories, 7..7+N-1=Aim guide per player,
-                // 7+N..7+2N-1=Colors per player, 7+2N=Start
-                int localMaxIdx = 7 + 2 * localMPPlayerCount;
+                // Row order and the per-player offsets live in
+                // localmultiplayer_settings.h, shared with the panel that
+                // draws them.
+                int localMaxIdx = LocalMPStartRow(localMPPlayerCount);
                 if (e->key.key == SDLK_UP) {
                     localMPMenuIndex--;
                     if (localMPMenuIndex < 0) localMPMenuIndex = localMaxIdx;
@@ -779,7 +779,7 @@ bool MainMenu::LocalMPPanelKey(SDL_Event *e) {
                         PlayMenuSFX("menu_change");
                         return true;
                     }
-                    if (localMPMenuIndex == 0) {
+                    if (localMPMenuIndex == kLocalMPRowPlayers) {
                         if (e->key.key == SDLK_LEFT) {
                             localMPPlayerCount--;
                             if (localMPPlayerCount < 2) localMPPlayerCount = 4;
@@ -787,6 +787,12 @@ bool MainMenu::LocalMPPanelKey(SDL_Event *e) {
                             localMPPlayerCount++;
                             if (localMPPlayerCount > 4) localMPPlayerCount = 2;
                         }
+                        // Fewer players can mean fewer seats for bots; leaving
+                        // a stale count would start a game with no human in it.
+                        localMPBotCount =
+                            ClampLocalBotCount(localMPBotCount, localMPPlayerCount);
+                        if (localMPMenuIndex > LocalMPStartRow(localMPPlayerCount))
+                            localMPMenuIndex = LocalMPStartRow(localMPPlayerCount);
                         AudioMixer::Instance()->PlaySFX("menu_change");
                     } else if (localMPMenuIndex == 1) {
                         localMPCR = !localMPCR;
@@ -813,12 +819,31 @@ bool MainMenu::LocalMPPanelKey(SDL_Event *e) {
                     } else if (localMPMenuIndex == 5) {
                         localMPTeamMode = !localMPTeamMode;
                         AudioMixer::Instance()->PlaySFX("menu_change");
-                    } else if (localMPMenuIndex >= 7 && localMPMenuIndex < 7 + localMPPlayerCount) {
-                        int pi = localMPMenuIndex - 7;
+                    } else if (localMPMenuIndex == kLocalMPRowBots) {
+                        const int maxBots = ClampLocalBotCount(99, localMPPlayerCount);
+                        if (e->key.key == SDLK_LEFT) {
+                            localMPBotCount = localMPBotCount <= 0 ? maxBots
+                                                                  : localMPBotCount - 1;
+                        } else {
+                            localMPBotCount =
+                                localMPBotCount >= maxBots ? 0 : localMPBotCount + 1;
+                        }
+                        AudioMixer::Instance()->PlaySFX("menu_change");
+                    } else if (localMPMenuIndex == kLocalMPRowBotSkill) {
+                        if (e->key.key == SDLK_LEFT) {
+                            localMPBotSkill = localMPBotSkill <= 0 ? 2 : localMPBotSkill - 1;
+                        } else {
+                            localMPBotSkill = localMPBotSkill >= 2 ? 0 : localMPBotSkill + 1;
+                        }
+                        AudioMixer::Instance()->PlaySFX("menu_change");
+                    } else if (localMPMenuIndex >= kLocalMPFirstPlayerRow &&
+                               localMPMenuIndex < LocalMPAimGuideRow(localMPPlayerCount)) {
+                        int pi = localMPMenuIndex - kLocalMPFirstPlayerRow;
                         localMPAimGuide[pi] = !localMPAimGuide[pi];
                         AudioMixer::Instance()->PlaySFX("menu_change");
-                    } else if (localMPMenuIndex >= 7 + localMPPlayerCount && localMPMenuIndex < 7 + 2 * localMPPlayerCount) {
-                        int pi = localMPMenuIndex - 7 - localMPPlayerCount;
+                    } else if (localMPMenuIndex >= LocalMPColorsRow(0, localMPPlayerCount) &&
+                               localMPMenuIndex < LocalMPStartRow(localMPPlayerCount)) {
+                        int pi = localMPMenuIndex - LocalMPColorsRow(0, localMPPlayerCount);
                         if (e->key.key == SDLK_LEFT) {
                             playerColorCounts[pi]--;
                             if (playerColorCounts[pi] < 5) playerColorCounts[pi] = 8;
@@ -837,9 +862,13 @@ bool MainMenu::LocalMPPanelKey(SDL_Event *e) {
                         PlayMenuSFX("menu_change");
                         return true;
                     }
-                    if (localMPMenuIndex == 0) {
+                    if (localMPMenuIndex == kLocalMPRowPlayers) {
                         localMPPlayerCount++;
                         if (localMPPlayerCount > 4) localMPPlayerCount = 2;
+                        localMPBotCount =
+                            ClampLocalBotCount(localMPBotCount, localMPPlayerCount);
+                        if (localMPMenuIndex > LocalMPStartRow(localMPPlayerCount))
+                            localMPMenuIndex = LocalMPStartRow(localMPPlayerCount);
                         AudioMixer::Instance()->PlaySFX("menu_change");
                     } else if (localMPMenuIndex == 1) {
                         localMPCR = !localMPCR;
@@ -866,12 +895,22 @@ bool MainMenu::LocalMPPanelKey(SDL_Event *e) {
                     } else if (localMPMenuIndex == 5) {
                         localMPTeamMode = !localMPTeamMode;
                         AudioMixer::Instance()->PlaySFX("menu_change");
-                    } else if (localMPMenuIndex >= 7 && localMPMenuIndex < 7 + localMPPlayerCount) {
-                        int pi = localMPMenuIndex - 7;
+                    } else if (localMPMenuIndex == kLocalMPRowBots) {
+                        const int maxBots = ClampLocalBotCount(99, localMPPlayerCount);
+                        localMPBotCount =
+                            localMPBotCount >= maxBots ? 0 : localMPBotCount + 1;
+                        AudioMixer::Instance()->PlaySFX("menu_change");
+                    } else if (localMPMenuIndex == kLocalMPRowBotSkill) {
+                        localMPBotSkill = localMPBotSkill >= 2 ? 0 : localMPBotSkill + 1;
+                        AudioMixer::Instance()->PlaySFX("menu_change");
+                    } else if (localMPMenuIndex >= kLocalMPFirstPlayerRow &&
+                               localMPMenuIndex < LocalMPAimGuideRow(localMPPlayerCount)) {
+                        int pi = localMPMenuIndex - kLocalMPFirstPlayerRow;
                         localMPAimGuide[pi] = !localMPAimGuide[pi];
                         AudioMixer::Instance()->PlaySFX("menu_change");
-                    } else if (localMPMenuIndex >= 7 + localMPPlayerCount && localMPMenuIndex < 7 + 2 * localMPPlayerCount) {
-                        int pi = localMPMenuIndex - 7 - localMPPlayerCount;
+                    } else if (localMPMenuIndex >= LocalMPColorsRow(0, localMPPlayerCount) &&
+                               localMPMenuIndex < LocalMPStartRow(localMPPlayerCount)) {
+                        int pi = localMPMenuIndex - LocalMPColorsRow(0, localMPPlayerCount);
                         playerColorCounts[pi]++;
                         if (playerColorCounts[pi] > 8) playerColorCounts[pi] = 5;
                         AudioMixer::Instance()->PlaySFX("menu_change");

@@ -60,6 +60,9 @@ struct SingleBubble {
     // back up to its target. Screen-space, so it belongs to the board's slot
     // rather than being one global number -- see ChainArcThreshold.
     int chainArcThreshold = 380;
+    // Set on probe bubbles the bot AI flies through a board to see where a
+    // shot would land. They must not be heard, only measured.
+    bool simulated = false;
     float speedX = 0, speedY = 0, genSpeed = 0; // used for falling bubbles
     bool chainExists = false; // enable chain reaction animation
     SDL_Point chainDest = {}; //where to land when chain reacting
@@ -114,13 +117,13 @@ struct SingleBubble {
             pos.x = (int)posX;
             pos.y = (int)posY;
             if (pos.x < leftLimit) {
-                AudioMixer::Instance()->PlaySFX("rebound");
+                if (!simulated) AudioMixer::Instance()->PlaySFX("rebound");
                 posX = 2.0f * leftLimit - posX;
                 pos.x = (int)posX;
                 direction -= 2.0f * (direction-PI/2.0f);
             }
             if (pos.x > rightLimit - bubbleSize) {
-                AudioMixer::Instance()->PlaySFX("rebound");
+                if (!simulated) AudioMixer::Instance()->PlaySFX("rebound");
                 posX = 2.0f * (rightLimit - bubbleSize) - posX;
                 pos.x = (int)posX;
                 direction += 2.0f * (PI/2.0f-direction);
@@ -274,6 +277,11 @@ inline int TopOccupiedRowInColumn(const BubbleArray &bArray, int cx) {
     }
     return topRow;
 }
+
+// Defined in bubblegame_shooter.cpp. Resolves the grid cell a launched bubble
+// comes to rest in; the bot AI needs the same answer the real shot would get.
+void GetClosestFreeCell(SingleBubble &sBubble, BubbleArray &bArray, int *row, int *col,
+                        int anchorRow, int anchorCol, bool isMini);
 
 // oddswap mirrors Perl's $pdata{$player}{oddswap}:
 //   0 = standard (row 0 has 8 cells, no hex offset)

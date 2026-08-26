@@ -5,6 +5,7 @@
 #include "platform.h"
 
 #include <cstdio>
+#include <set>
 #include <memory>
 #include <string>
 
@@ -367,6 +368,71 @@ int main() {
         CHECK(started.aimGuide[2]);
         CHECK(!started.aimGuide[3]);
         CHECK(started.aimGuide[4]);
+    }
+
+    // --- Bots -------------------------------------------------------------
+    // Bots take the highest slots so player 1 is always a person, and a game
+    // of nothing but bots is not a game.
+    {
+        CHECK(ClampLocalBotCount(0, 4) == 0);
+        CHECK(ClampLocalBotCount(3, 4) == 3);
+        CHECK(ClampLocalBotCount(4, 4) == 3);   // one seat always stays human
+        CHECK(ClampLocalBotCount(9, 2) == 1);
+        CHECK(ClampLocalBotCount(-2, 3) == 0);
+
+        LocalMultiplayerOptions options;
+        options.playerCount = 4;
+        options.botCount = 2;
+        options.botSkill = 2;
+        const SetupSettings settings = BuildLocalMultiplayerSettings(options);
+        CHECK(!settings.playerIsBot[0]);
+        CHECK(!settings.playerIsBot[1]);
+        CHECK(settings.playerIsBot[2]);
+        CHECK(settings.playerIsBot[3]);
+        CHECK(!settings.playerIsBot[4]);
+        CHECK(settings.botSkill == 2);
+
+        // An over-large count is trimmed rather than taken literally, so the
+        // human slot survives.
+        options.botCount = 4;
+        const SetupSettings crowded = BuildLocalMultiplayerSettings(options);
+        CHECK(!crowded.playerIsBot[0]);
+        CHECK(crowded.playerIsBot[1]);
+        CHECK(crowded.playerIsBot[2]);
+        CHECK(crowded.playerIsBot[3]);
+
+        // No bots means no bot flags anywhere.
+        options.botCount = 0;
+        const SetupSettings solo = BuildLocalMultiplayerSettings(options);
+        for (int i = 0; i < MAX_NET_PLAYERS; ++i) CHECK(!solo.playerIsBot[i]);
+
+        // Skill is clamped to the three the AI actually implements.
+        options.botSkill = 47;
+        CHECK(BuildLocalMultiplayerSettings(options).botSkill == 2);
+        options.botSkill = -3;
+        CHECK(BuildLocalMultiplayerSettings(options).botSkill == 0);
+    }
+
+    // The panel and the key handler both index rows through these helpers, so
+    // the two can only disagree if the helpers themselves are wrong.
+    {
+        CHECK(LocalMPAimGuideRow(0) == kLocalMPFirstPlayerRow);
+        CHECK(LocalMPColorsRow(0, 4) == kLocalMPFirstPlayerRow + 4);
+        CHECK(LocalMPStartRow(4) == kLocalMPFirstPlayerRow + 8);
+        // Every row index in a 4-player panel is distinct and contiguous.
+        std::set<int> rows;
+        for (int i = 0; i <= LocalMPStartRow(4); ++i) rows.insert(i);
+        CHECK((int)rows.size() == LocalMPStartRow(4) + 1);
+        CHECK(kLocalMPRowBots < kLocalMPRowBotSkill);
+        CHECK(kLocalMPRowBotSkill < kLocalMPFirstPlayerRow);
+        // Victories input still answers only for its own row.
+        int victories = 3;
+        CHECK(!ApplyLocalMultiplayerVictoriesInput(
+            kLocalMPRowBots, LocalMultiplayerMenuCommand::Right, victories));
+        CHECK(victories == 3);
+        CHECK(ApplyLocalMultiplayerVictoriesInput(
+            kLocalMPRowVictories, LocalMultiplayerMenuCommand::Right, victories));
+        CHECK(victories == 4);
     }
 
     menu.reset();

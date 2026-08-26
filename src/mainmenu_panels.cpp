@@ -255,10 +255,15 @@ void MainMenu::LocalMPPanelRender() {
     int connected = 0;
     { SDL_JoystickID *joys = SDL_GetJoysticks(&connected); SDL_free(joys); }
     char warningText[128] = "";
-    if (connected < localMPPlayerCount) {
+    // Bots need no controller, so only the human slots count toward the
+    // warning -- otherwise adding bots to fix "not enough controllers" would
+    // leave the warning up, which reads as though it had not worked.
+    const int humansNeeded =
+        localMPPlayerCount - ClampLocalBotCount(localMPBotCount, localMPPlayerCount);
+    if (connected < humansNeeded) {
         snprintf(warningText, sizeof(warningText),
             "WARNING: %d controller(s) connected, need %d\n",
-            connected, localMPPlayerCount);
+            connected, humansNeeded);
     }
 
     char victoriesText[32];
@@ -267,6 +272,21 @@ void MainMenu::LocalMPPanelRender() {
     } else {
         snprintf(victoriesText, sizeof(victoriesText), "%d",
             kVictoriesLimits[localMPVictoriesIndex]);
+    }
+
+    // Bots occupy the last slots, so name them: "P3+P4" reads better than a
+    // bare count when the player is deciding who they are actually playing.
+    const int botCount = ClampLocalBotCount(localMPBotCount, localMPPlayerCount);
+    char botsText[48];
+    if (botCount == 0) {
+        snprintf(botsText, sizeof(botsText), "none");
+    } else {
+        int pos = snprintf(botsText, sizeof(botsText), "%d (", botCount);
+        for (int i = localMPPlayerCount - botCount; i < localMPPlayerCount; ++i) {
+            pos += snprintf(botsText + pos, sizeof(botsText) - pos, "%sP%d",
+                            i == localMPPlayerCount - botCount ? "" : "+", i + 1);
+        }
+        snprintf(botsText + pos, sizeof(botsText) - pos, ")");
     }
 
     // Exactly one blank line separates the header (title + optional warning)
@@ -282,7 +302,9 @@ void MainMenu::LocalMPPanelRender() {
         "%s Mode: %s\n"
         "%s Malus: %s\n"
         "%s Team Mode: %s\n"
-        "%s Victories limit: %s\n",
+        "%s Victories limit: %s\n"
+        "%s Bots: %s\n"
+        "%s Bot skill: %s\n",
         warningText,
         localMPMenuIndex == 0 ? ">" : " ",
         localMPPlayerCount,
@@ -296,8 +318,12 @@ void MainMenu::LocalMPPanelRender() {
         localMPDisableMalus ? "disabled" : "enabled",
         localMPMenuIndex == 5 ? ">" : " ",
         localMPTeamMode ? "ON (P1+P3 vs P2+P4)" : "OFF",
-        localMPMenuIndex == 6 ? ">" : " ",
-        victoriesText);
+        localMPMenuIndex == kLocalMPRowVictories ? ">" : " ",
+        victoriesText,
+        localMPMenuIndex == kLocalMPRowBots ? ">" : " ",
+        botsText,
+        localMPMenuIndex == kLocalMPRowBotSkill ? ">" : " ",
+        LocalMPBotSkillName(localMPBotSkill));
 
     // Per-player rows are collapsed onto one line each (instead of one line
     // per player) so the panel's height stays constant regardless of player
@@ -305,14 +331,14 @@ void MainMenu::LocalMPPanelRender() {
     // leading "> " marker, since a whole line can no longer stand for one item.
     pos += snprintf(pnltxt + pos, sizeof(pnltxt) - pos, "  Aim guide:");
     for (int pi = 0; pi < localMPPlayerCount && pi < 5; pi++) {
-        bool sel = localMPMenuIndex == 7 + pi;
+        bool sel = localMPMenuIndex == LocalMPAimGuideRow(pi);
         pos += snprintf(pnltxt + pos, sizeof(pnltxt) - pos,
             sel ? " [P%d:%s]" : " P%d:%s",
             pi + 1, localMPAimGuide[pi] ? "on" : "off");
     }
     pos += snprintf(pnltxt + pos, sizeof(pnltxt) - pos, "\n  Max colors:");
     for (int pi = 0; pi < localMPPlayerCount && pi < 5; pi++) {
-        bool sel = localMPMenuIndex == 7 + localMPPlayerCount + pi;
+        bool sel = localMPMenuIndex == LocalMPColorsRow(pi, localMPPlayerCount);
         pos += snprintf(pnltxt + pos, sizeof(pnltxt) - pos,
             sel ? " [P%d:%d]" : " P%d:%d",
             pi + 1, playerColorCounts[pi]);
@@ -323,7 +349,7 @@ void MainMenu::LocalMPPanelRender() {
         "Use UP/DOWN to select\n"
         "LEFT/RIGHT or ENTER to change\n"
         "Press ESC to cancel",
-        localMPMenuIndex == 7 + 2 * localMPPlayerCount ? ">" : " ");
+        localMPMenuIndex == LocalMPStartRow(localMPPlayerCount) ? ">" : " ");
 
     panelText.UpdateText(const_cast<SDL_Renderer *>(renderer), pnltxt, 0);
 

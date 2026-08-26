@@ -34,6 +34,7 @@
 #include <cmath>
 #include <algorithm>
 #include "bubblegame_internal.h"
+#include "bubbleai.h"
 
 void BubbleGame::LaunchBubble(BubbleArray &bArray) {
     PlaySFX("launch");
@@ -58,6 +59,65 @@ void BubbleGame::LaunchBubble(BubbleArray &bArray) {
     // Don't send if this is a remote player's shot (we're just replicating their fire from mpFirePending)
     if (currentSettings.networkGame && bArray.playerAssigned == 0) {
         SendNetworkBubbleShot(bArray);
+    }
+}
+
+// Drive a bot's shooter for one frame.
+//
+// The bot steers with the same three flags a keyboard sets and fires with the
+// same one, so it inherits the launcher's turn rate, the fire-release
+// interlock and the hurry timer instead of teleporting bubbles onto the
+// board. It picks a shot once per turn, when the board is settled and its
+// next bubble is known, then spends a few frames swinging onto that angle --
+// which is also what makes it look like someone is playing.
+void BubbleGame::DriveBot(BubbleArray &bArray) {
+    bArray.shooterLeft = bArray.shooterRight = bArray.shooterCenter = false;
+    bArray.shooterAction = false;
+
+    if (bArray.playerState != BubbleArray::PlayerState::ALIVE || gameFinish) {
+        bArray.botTargetAngle = -1.0f;
+        return;
+    }
+    // Only aim between shots: mid-flight the board is about to change.
+    if (!bArray.newShoot) {
+        bArray.botTargetAngle = -1.0f;
+        return;
+    }
+    if (bArray.suppressFireUntilRelease) {
+        // Stand off the trigger for a frame, exactly as a player's hand does.
+        bArray.suppressFireUntilRelease = false;
+        return;
+    }
+
+    if (bArray.botTargetAngle < 0.0f) {
+        const bool isMini = (currentSettings.playerCount >= 3 && bArray.playerAssigned >= 1);
+        const BubbleAI::Skill skill =
+            bArray.botSkill <= 0 ? BubbleAI::Skill::Easy :
+            bArray.botSkill == 1 ? BubbleAI::Skill::Normal : BubbleAI::Skill::Hard;
+        const BubbleAI::Shot shot =
+            BubbleAI::ChooseShot(bArray, bArray.curLaunch, isMini, skill, &bArray.botRng);
+        // No angle lands anywhere -- fire straight up rather than freezing.
+        bArray.botTargetAngle = shot.valid ? shot.angle : (float)PI / 2.0f;
+        // A short, varying pause so several bots do not move in lockstep.
+        bArray.botThinkFrames = 8 + (int)(bArray.botRng % 18);
+    }
+
+    if (bArray.botThinkFrames > 0) {
+        bArray.botThinkFrames--;
+        return;
+    }
+
+    const float step = (float)LAUNCHER_SPEED * FrozenBubble::Instance()->deltaScale;
+    const float delta = bArray.botTargetAngle - bArray.shooterSprite.angle;
+    if (delta > step) {
+        bArray.shooterLeft = true;        // larger angle is further left
+    } else if (delta < -step) {
+        bArray.shooterRight = true;
+    } else {
+        // Close enough that another step would overshoot: take the shot.
+        bArray.shooterSprite.angle = bArray.botTargetAngle;
+        bArray.shooterAction = true;
+        bArray.botTargetAngle = -1.0f;
     }
 }
 
@@ -91,7 +151,9 @@ void BubbleGame::UpdatePenguin(BubbleArray &bArray) {
         int pIdx = (bArray.playerAssigned >= 0 && bArray.playerAssigned < 5) ? bArray.playerAssigned : 0;
         PlayerKeys& keys = *allPlayerKeys[pIdx];
 
-        if (acceptInput) {
+        if (acceptInput && bArray.isBot) {
+            DriveBot(bArray);
+        } else if (acceptInput) {
             if (currentSettings.localMultiplayer && bArray.playerAssigned >= 0 && bArray.playerAssigned < 5) {
                 // Local multiplayer: keyboard first (always works, matches 1P path),
                 // then OR with controller DPAD for real gamepads.
@@ -315,7 +377,7 @@ static bool IsGridAdjacent(int r1, int c1, int r2, int c2, int oddswap = 0) {
 // anchorRow/anchorCol: grid position of the hit bubble (-1 if none, e.g. ceiling hit).
 // When provided, the result is guaranteed to be a free cell adjacent to the anchor.
 void GetClosestFreeCell(SingleBubble &sBubble, BubbleArray &bArray, int *row, int *col,
-                        int anchorRow = -1, int anchorCol = -1, bool isMini = false) {
+                        int anchorRow, int anchorCol, bool isMini) {
     // Original: get_array_closest_pos() at frozen-bubble lines 636-641
     // Uses MIDPOINT between old and new position (line 2208-2209)
 
