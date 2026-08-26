@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import math
 import random
 import signal
 import socket
@@ -91,36 +92,82 @@ class FailureState:
             return True
 
 
-def build_fire_message(rng: random.Random, num_colors: int) -> str:
-    angle = rng.uniform(0.3, 2.8)
-    color = rng.randrange(num_colors)
-    return f"f{angle:.3f}:{color}"
+# A mini board's own geometry, taken from the 5-player layout in
+# bubblegame.cpp: every side board places its shooter at the same offset from
+# its bubbleOffset, so one relative calculation serves all four slots.
+MINI_SHOOTER = (64, 181)
+MINI_BUBBLE = 16
+MINI_ROW = 14
+# The shooter cannot point at or below the horizontal.
+MIN_ANGLE = 0.20
+MAX_ANGLE = 2.94
 
 
-def build_stick_message(state: BotRuntimeState, rng: random.Random, num_colors: int) -> str:
-    """Where this bot's shot comes to rest.
+def next_free_cell(state: BotRuntimeState) -> Tuple[int, int]:
+    """The column and row this bot's next bubble will come to rest in.
 
-    Every client renders its opponents' boards purely from these messages, so
-    the positions have to be ones a real client could actually produce. A real
-    bubble stops where it collides, which is always against the bubble above it
-    -- so walk each column down from the level's first free row rather than
-    stamping a diagonal across the grid, which left a staircase of bubbles
-    visibly floating in mid-air on every mini board.
+    A real bubble stops where it collides, which is always against whatever is
+    already above it -- so walk each column down from the first row the level
+    leaves empty. Stamping a diagonal across the grid instead, as this used to,
+    left a staircase of bubbles visibly floating in mid-air on every mini
+    board, because each shot landed alone in a fresh column.
     """
     col = state.shot_count % BOARD_COLUMNS
-    # Prefer a column that still has room; fall back to the chosen one when the
-    # whole board is full, which the danger-zone check ends shortly anyway.
+    # Prefer a column that still has room; keep the chosen one when the whole
+    # board is full, which the danger-zone check ends shortly anyway.
     for offset in range(BOARD_COLUMNS):
         candidate = (col + offset) % BOARD_COLUMNS
         if state.column_rows[candidate] <= LAST_ROW:
             col = candidate
             break
-    row = min(state.column_rows[col], LAST_ROW)
-    color = rng.randrange(num_colors)
+    return col, min(state.column_rows[col], LAST_ROW)
+
+
+def fire_angle_for_cell(col: int, row: int) -> float:
+    """The launch angle that actually points at the cell the bubble lands in.
+
+    A receiving client animates a remote launch along this angle alone -- it
+    does not simulate the collision, it just teleports the bubble into place
+    when the stick message arrives. An angle unrelated to the landing cell
+    therefore reads on screen as the bubble flying straight through the
+    opponent's bubble mass before appearing somewhere else entirely.
+    """
+    inset = MINI_BUBBLE // 2 if row % 2 else 0
+    target_x = MINI_BUBBLE * col + inset + MINI_BUBBLE // 2
+    target_y = MINI_ROW * row + MINI_BUBBLE // 2
+    # Screen y grows downward while the launch angle measures upward, hence
+    # the flip on the vertical component.
+    angle = math.atan2(MINI_SHOOTER[1] - target_y, target_x - MINI_SHOOTER[0])
+    return min(max(angle, MIN_ANGLE), MAX_ANGLE)
+
+
+def build_fire_message(angle: float, color: int) -> str:
+    return f"f{angle:.3f}:{color}"
+
+
+def build_stick_message(state: BotRuntimeState, rng: random.Random,
+                        num_colors: int, cell: Optional[Tuple[int, int]] = None,
+                        color: Optional[int] = None) -> str:
+    col, row = cell if cell is not None else next_free_cell(state)
+    if color is None:
+        color = rng.randrange(num_colors)
     next_colors = build_next_colors_str(rng, num_colors)
     state.shot_count += 1
     state.column_rows[col] = row + 1
     return f"s{col}:{row}:{color}:{next_colors}"
+
+
+def plan_shot(state: BotRuntimeState, rng: random.Random,
+              num_colors: int) -> Tuple[str, str]:
+    """The fire and stick pair for one shot, agreeing on both colour and
+    destination -- a real client's do, and every other client draws this
+    board from nothing else."""
+    col, row = next_free_cell(state)
+    color = rng.randrange(num_colors)
+    fire = build_fire_message(fire_angle_for_cell(col, row), color)
+    stick = build_stick_message(state, rng, num_colors, cell=(col, row),
+                                color=color)
+    return fire, stick
 
 
 @dataclass
@@ -328,8 +375,8 @@ class BotClient:
         if self.state.last_fire_at and now - self.state.last_fire_at < effective_interval:
             return
 
-        fire_payload = build_fire_message(self.rng, self.num_colors)
-        stick_payload = build_stick_message(self.state, self.rng, self.num_colors)
+        fire_payload, stick_payload = plan_shot(
+            self.state, self.rng, self.num_colors)
         self.ready_acked = False  # firing means the new round is underway
         self.send_game_payload(fire_payload)
         self.pending_stick_payload = stick_payload

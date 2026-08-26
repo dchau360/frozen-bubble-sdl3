@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Regression tests for the headless netplay bot harness."""
 
+import math
 import random
 import sys
 import unittest
@@ -52,11 +53,9 @@ class ProtocolHelpersTest(unittest.TestCase):
         self.assertEqual(state.column_rows[0], net_bots.FIRST_FREE_ROW + 1)
         self.assertEqual(state.shot_count, 1)
 
-        # The next shot rolls to the next column, still at the first free row.
         second = net_bots.build_stick_message(state, rng, num_colors=8)
         self.assertTrue(second.startswith(f"s1:{net_bots.FIRST_FREE_ROW}:"))
 
-        # Coming back round to column 0 stacks on top of the first bubble.
         for _ in range(net_bots.BOARD_COLUMNS - 2):
             net_bots.build_stick_message(state, rng, num_colors=8)
         again = net_bots.build_stick_message(state, rng, num_colors=8)
@@ -82,6 +81,42 @@ class ProtocolHelpersTest(unittest.TestCase):
         self.assertEqual(
             state.column_rows,
             [net_bots.FIRST_FREE_ROW] * net_bots.BOARD_COLUMNS,
+        )
+
+    def test_fire_angle_points_toward_the_landing_column(self):
+        # A receiving client animates a remote launch along the angle alone,
+        # so it has to point at the cell the stick message will name --
+        # otherwise the bubble flies through the opponent's mass on screen.
+        left = net_bots.fire_angle_for_cell(0, net_bots.FIRST_FREE_ROW)
+        middle = net_bots.fire_angle_for_cell(3, net_bots.FIRST_FREE_ROW)
+        right = net_bots.fire_angle_for_cell(6, net_bots.FIRST_FREE_ROW)
+        # Angles measure counter-clockwise from due right, so aiming further
+        # left means a larger angle.
+        self.assertGreater(left, middle)
+        self.assertGreater(middle, right)
+        self.assertAlmostEqual(middle, math.pi / 2, places=1)
+
+    def test_fire_angle_stays_within_the_shooter_arc(self):
+        for col in range(net_bots.BOARD_COLUMNS):
+            for row in range(net_bots.LAST_ROW + 1):
+                angle = net_bots.fire_angle_for_cell(col, row)
+                self.assertGreaterEqual(angle, net_bots.MIN_ANGLE)
+                self.assertLessEqual(angle, net_bots.MAX_ANGLE)
+
+    def test_plan_shot_agrees_on_colour_and_destination(self):
+        state = net_bots.BotRuntimeState()
+        rng = random.Random(7)
+        fire, stick = net_bots.plan_shot(state, rng, num_colors=8)
+
+        fire_angle, fire_color = fire[1:].split(":")
+        stick_col, stick_row, stick_color = stick[1:].split(":")[:3]
+        # The bubble that leaves the shooter is the one that lands.
+        self.assertEqual(fire_color, stick_color)
+        # And it was launched toward where it lands.
+        self.assertAlmostEqual(
+            float(fire_angle),
+            net_bots.fire_angle_for_cell(int(stick_col), int(stick_row)),
+            places=3,
         )
 
 
