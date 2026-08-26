@@ -125,10 +125,29 @@ local data. For a followed server's push registration, unfollowing removes
 it, or contact that server's operator (this is disclosed in the privacy
 policy already).
 
-**Encryption in transit:** Network multiplayer traffic (game protocol,
-chat) is **plain TCP, not encrypted** — worth answering honestly on
-whichever question asks this. Nothing sensitive (no passwords, no payment
-data) travels over it, but it isn't TLS.
+**Encryption in transit:** Not uniformly — answer **No** on "is all user
+data encrypted in transit," or use the per-category breakdown if the form
+offers one:
+
+- **Native TCP clients (desktop, Android) — not encrypted.** The game
+  protocol is a raw socket connect (`networkclient.cpp`); nickname, chat,
+  the IP-derived location, and gameplay state all travel in the clear.
+  This isn't an operator misconfiguration — the reference `docker-compose.yml`
+  deliberately exposes port 1511 for native clients as plain TCP, and only
+  port 443 (the browser/WebSocket path) gets TLS via nginx. Anyone can run
+  a server, and most third-party ones will have no more encryption than
+  the reference setup does.
+- **Browser/WASM clients — encrypted**, when connecting through a server
+  that terminates TLS on its WebSocket endpoint (the official server does;
+  a self-hosted one might not).
+- **First-party SDK traffic (AdMob, Play Billing, Firebase, APNs) —
+  encrypted.** All HTTPS/TLS by platform requirement, not something the
+  app controls either way.
+- **Geolocation lookup — mostly encrypted, one gap.** `ipinfo.io/loc` is
+  HTTPS; the fallback, `ip-api.com`, is plain HTTP.
+
+Nothing sensitive (no passwords, no payment data) is in the unencrypted
+paths, but "no" is still the accurate answer to a blanket yes/no question.
 
 ---
 
