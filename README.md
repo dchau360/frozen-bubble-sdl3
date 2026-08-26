@@ -36,6 +36,10 @@ Building from source: [docs/BUILDING.md](docs/BUILDING.md).
 
 **Local multiplayer (2–4 players)** — same keyboard or controllers. Player 1 uses the arrow keys with Up to fire; player 2 uses C/X/V with D to fire.
 
+> Three- and four-player local games are **experimental**. The smaller side
+> boards have known rendering glitches — bubbles can appear to hang detached in
+> mid-air. Two-player local play and network play at any size are unaffected.
+
 **Network multiplayer (2–20 players)** — LAN or internet, using the included server. Rooms hold 5, 10, or 20 players.
 
 All three game modes are available in both local and network play, chosen by the host:

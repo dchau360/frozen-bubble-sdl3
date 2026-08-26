@@ -128,6 +128,14 @@ All of these are in original `fb-server` code and are still present upstream.
 
 ---
 
+## Known issues
+
+| | |
+|---|---|
+| **Local multiplayer with 3 or more players** | Experimental. The smaller side boards render bubbles that appear to hang detached in mid-air, unattached to the bubble mass above them. Two-player local play, and network play at any player count, are unaffected |
+
+---
+
 ## Not supported
 
 | | |
