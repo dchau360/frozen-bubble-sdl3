@@ -89,7 +89,12 @@ enum GameRoomRow {
     kRoomRows       = 8,
     kRoomAim        = 9,
     kRoomTeam       = 10,
-    kRoomStart      = 11,   // host only, and only with more than one player
+    // Bots are the host's to add, and "Start game!" is host-only too, so a
+    // joiner's list simply ends at kRoomTeam and never reaches either.
+    kRoomBots       = 11,   // host only
+    kRoomBotSkill   = 12,   // host only (shown even at zero bots, so the
+                            // rows below it never renumber)
+    kRoomStart      = 13,   // host only, and only with more than one player
 
     kRoomGridFirst  = kRoomMaxColors,
     kRoomGridLast   = kRoomAim,   // Team is edited through the roster, not here

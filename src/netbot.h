@@ -39,19 +39,41 @@ GameCanStartRoster ParseGameCanStart(const std::string& payload,
 
 // Which board each of the room's other players is rendered on.
 //
-// `roomPlayerIds` is every id the room announced, in its own order.
-// `botSeats` maps board index -> player id for the bots this client hosts;
-// those boards are already spoken for and cannot be handed to anyone else,
-// and neither can our own id. Boards are filled from index 1 up (index 0 is
-// always the local player), stopping at `playerCount`.
+// `roomPlayerIds` is every id the room announced, in its own order. Boards
+// fill from index 1 up (index 0 is always the local player), stopping at
+// `playerCount`. A host's bots are in that list like anyone else and are
+// seated by the same rule -- every client runs this over the same room, so
+// they agree on which board is whose, and only the host knows which of them
+// it is playing itself.
 //
-// Split out from the caller because getting it wrong is quiet: a remote
-// player seated on a bot's board takes over a board the host is simulating,
-// and the two fight over it for the rest of the round.
+// Split out from the caller because getting it wrong is quiet: a board
+// assigned to the wrong id replays another player's shots for a whole round.
 std::map<int, int> AssignRemoteSeats(const std::vector<int>& roomPlayerIds,
                                      int myPlayerId,
-                                     const std::map<int, int>& botSeats,
                                      int playerCount);
+
+// The most bots a host may have in a room right now.
+//
+// `roomPlayers` is everyone currently in the room, the host's `currentBots`
+// among them, and `maxPlayers` is the room's cap. Bots take real seats, so
+// the ceiling has to leave room for the people already there -- and asking
+// for fewer than are connected is always allowed, since that is how they are
+// removed.
+inline constexpr int kMaxRoomBots = 4;
+int MaxRoomBots(int roomPlayers, int maxPlayers, int currentBots);
+
+// Whether an in-game opcode is about the connection that sent it rather than
+// about the contents of a board.
+//
+// This is the line that decides what a client may ignore when the sender is a
+// seat it simulates itself. Board-state messages ('f' fire, 's' stick, 'g'
+// attack, 'M' malus stick, 'F' win, 'S' round stats) describe a simulation
+// that has already run locally, so replaying them would run it twice.
+// Connection-level ones do not: 'n' says one connection is ready for the next
+// round and 'l' that one is gone, and both are counted per connection -- a
+// hosted bot holds its own, so its 'n' must be counted like any other
+// player's, or the round waits forever for a seat that already answered.
+bool IsConnectionLevelOpcode(char opcode);
 
 // True for a line that carries an in-game payload rather than a lobby reply.
 // Lobby lines are text beginning "FB/"; in-game ones are prefixed with the
@@ -85,7 +107,10 @@ public:
                   const std::string& roomCreator, const std::string& nick);
 
     // Pump the socket. Lobby lines are consumed here; in-game payloads are
-    // queued for TakeGameMessage.
+    // queued for TakeGameMessage, and a keepalive goes out when the bot has
+    // had nothing to say for a second -- the server terminates an in-game
+    // connection that is silent for five (server/net.c, "in game gracetime"),
+    // which a bot hits as soon as its board is out of the round.
     void Update();
 
     bool IsConnected() const { return sockfd >= 0; }
@@ -114,6 +139,8 @@ private:
 
     int sockfd = -1;
     int myPlayerId = 0;
+    // Last time anything was written, for the keepalive below.
+    unsigned lastSendTicks = 0;
     std::string nick;
     std::string incoming;                       // partial line carry-over
     std::map<int, std::string> roster;          // player id -> nick

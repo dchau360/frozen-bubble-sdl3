@@ -19,8 +19,6 @@
 
 #include "netbot.h"
 
-#include <set>
-
 // Parsing is wire-format handling, not socket handling, so it is built on
 // every platform including WASM -- and tested there too.
 GameCanStartRoster ParseGameCanStart(const std::string& payload,
@@ -41,21 +39,28 @@ GameCanStartRoster ParseGameCanStart(const std::string& payload,
 
 std::map<int, int> AssignRemoteSeats(const std::vector<int>& roomPlayerIds,
                                      int myPlayerId,
-                                     const std::map<int, int>& botSeats,
                                      int playerCount) {
-    std::set<int> spokenFor;
-    spokenFor.insert(myPlayerId);
-    for (const auto& seat : botSeats) spokenFor.insert(seat.second);
-
     std::map<int, int> seats;
     int slot = 1;
     for (int id : roomPlayerIds) {
-        if (spokenFor.count(id)) continue;
-        while (slot < playerCount && botSeats.count(slot)) ++slot;
+        if (id == myPlayerId) continue;
         if (slot >= playerCount) break;
         seats[slot++] = id;
     }
     return seats;
+}
+
+int MaxRoomBots(int roomPlayers, int maxPlayers, int currentBots) {
+    if (currentBots < 0) currentBots = 0;
+    const int free = maxPlayers - roomPlayers;
+    int ceiling = currentBots + (free > 0 ? free : 0);
+    if (ceiling > kMaxRoomBots) ceiling = kMaxRoomBots;
+    if (ceiling < 0) ceiling = 0;
+    return ceiling;
+}
+
+bool IsConnectionLevelOpcode(char opcode) {
+    return opcode == 'n' || opcode == 'l';
 }
 
 bool IsGameMessageLine(const std::string& line) {
@@ -68,6 +73,7 @@ bool IsGameMessageLine(const std::string& line) {
 
 #include <SDL3/SDL.h>
 
+#include <cerrno>
 #include <cstring>
 #if !defined(_WIN32)
 #include <netdb.h>   // getaddrinfo; Windows has it in ws2tcpip.h, via socket_compat.h
@@ -83,6 +89,17 @@ constexpr char kStartPush[] = "PUSH: GAME_CAN_START: ";
 // read buffer is sized for a burst rather than a line.
 constexpr size_t kReadChunk = 16384;
 
+// A signal can interrupt a socket call at any time; that is not a failure,
+// but the plain would-block test does not cover it, so without this an
+// unlucky signal would close the bot's connection mid-match.
+bool SockInterrupted(int err) {
+#ifdef _WIN32
+    return err == WSAEINTR;
+#else
+    return err == EINTR;
+#endif
+}
+
 bool SendAllBytes(int fd, const char* data, size_t len) {
     size_t offset = 0;
     int stalls = 0;
@@ -93,6 +110,7 @@ bool SendAllBytes(int fd, const char* data, size_t len) {
             stalls = 0;
             continue;
         }
+        if (n < 0 && SockInterrupted(SOCK_ERRNO)) continue;
         if (n < 0 && SOCK_WOULD_BLOCK(SOCK_ERRNO)) {
             // The protocol is newline-framed, so a half-written line does not
             // merely go missing: it leaves the server parsing the next one at
@@ -115,6 +133,7 @@ bool NetBotConnection::SendLine(const std::string& command) {
     const std::string line =
         "FB/" + std::to_string(kProtoMajor) + "." + std::to_string(kProtoMinor) +
         " " + command + "\n";
+    lastSendTicks = SDL_GetTicks();
     return SendAllBytes(sockfd, line.c_str(), line.size());
 }
 
@@ -182,10 +201,16 @@ void NetBotConnection::Drain() {
             continue;
         }
         if (n == 0) {          // server closed
+            SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
+                        "netbot %s: server closed the connection", nick.c_str());
             Leave();
             return;
         }
-        if (SOCK_WOULD_BLOCK(SOCK_ERRNO)) return;
+        const int err = SOCK_ERRNO;
+        if (SockInterrupted(err)) continue;
+        if (SOCK_WOULD_BLOCK(err)) return;
+        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
+                    "netbot %s: recv failed (%d), dropping", nick.c_str(), err);
         Leave();
         return;
     }
@@ -203,6 +228,12 @@ void NetBotConnection::HandleLine(const std::string& line) {
         myPlayerId = parsed.myPlayerId;
         SDL_Log("netbot %s: game starting, id=%d, %zu players",
                 nick.c_str(), myPlayerId, roster.size());
+        // Acknowledging is what puts this connection into the server's prio
+        // mode (game.c ok_start_game -> add_prio). Without it the server
+        // keeps reading this socket as lobby text: the bot's shots would
+        // never be relayed, and the leader's own start would stall waiting
+        // for an acknowledgement that never came.
+        SendLine("OK_GAME_START");
         return;
     }
 
@@ -220,6 +251,16 @@ void NetBotConnection::Update() {
         incoming.erase(0, nl + 1);
         if (!line.empty()) HandleLine(line);
     }
+
+    // Keepalive. A bot goes quiet the moment its board is out of the round --
+    // it has no shots left to send -- and five seconds later the server drops
+    // it for inactivity, which reads to everyone else as the bot rage-quitting
+    // mid-match. The human client sends the same 'p' once a second for the
+    // same reason; the server consumes it and does not relay it.
+    if (sockfd >= 0 && myPlayerId != 0) {
+        const unsigned now = SDL_GetTicks();
+        if (now - lastSendTicks >= 1000) SendGamePayload("p");
+    }
 }
 
 bool NetBotConnection::SendGamePayload(const std::string& payload) {
@@ -229,6 +270,7 @@ bool NetBotConnection::SendGamePayload(const std::string& payload) {
     framed.push_back(static_cast<char>(myPlayerId));
     framed.append(payload);
     framed.push_back('\n');
+    lastSendTicks = SDL_GetTicks();
     return SendAllBytes(sockfd, framed.c_str(), framed.size());
 }
 

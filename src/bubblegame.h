@@ -513,6 +513,10 @@ public:
     bool OwnsSenderId(int senderId) const;
     // Read (and discard) whatever the bots' sockets have received.
     void PumpBotConnections();
+    // Take over the bots the lobby connected while the room was filling.
+    void AdoptBots(std::vector<std::unique_ptr<NetBotConnection>> bots, int skill);
+    // PART and close every bot, whether seated or still pending.
+    void ReleaseBots();
 
     void LoadLevelset(const char *path);
     void LoadLevel(int id);
@@ -680,6 +684,11 @@ private:
     // play. Empty in a local game and for anyone who is not the host: a bot
     // belongs to whoever added it, and only that client simulates it.
     std::map<int, std::unique_ptr<NetBotConnection>> botConnections;
+    // Bots handed over by the lobby but not yet matched to a board.
+    std::vector<std::unique_ptr<NetBotConnection>> pendingBots;
+    int adoptedBotSkill = 1;
+    // Claim a board for each bot, by the id the server gave its connection.
+    void SeatBots();
     void SetSendMalusToOne(int opponentIdx);    // Set/clear single-player targeting (original: set_sendmalustoone)
     void ProcessMalusQueue(BubbleArray &bArray, int currentFrame);  // Generate malus bubbles from queue
     void CheckGameState(BubbleArray &bArray, bool countForRoot = true);

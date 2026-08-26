@@ -22,6 +22,7 @@
 #include "audiomixer.h"
 #include "frozenbubble.h"
 #include "localmultiplayer_settings.h"
+#include "netbot.h"
 #include "transitionmanager.h"
 #include "networkclient.h"
 #include "platform.h"
@@ -270,6 +271,7 @@ void MainMenu::HandleInput(SDL_Event *e){
                         NetworkClient* netClient = NetworkClient::Instance();
                         if (netClient->GetState() == IN_LOBBY) {
                             netRosterEditMode = false;
+                            DropLobbyBots();  // our bots leave with us
                             netClient->PartGame();
                             netClient->RequestList();  // Immediate list after parting
                             lastListRequest = SDL_GetTicks();
@@ -1109,6 +1111,22 @@ void MainMenu::MenuLeftRightKey(SDL_Event *e) {
                                 }
                                 AudioMixer::Instance()->PlaySFX("menu_change");
                                 settingChanged = true;
+                            } else if (selectedActionIndex == kRoomBots) {
+                                // Each bot is a real seat in the room, so the
+                                // ceiling is what the room has left.
+                                const int maxBots = MaxRoomBots(
+                                    (int)currentGame->players.size(),
+                                    currentGame->maxPlayers, netRoomBotCount);
+                                netRoomBotCount += (e->key.key == SDLK_LEFT) ? -1 : 1;
+                                if (netRoomBotCount < 0) netRoomBotCount = maxBots;
+                                if (netRoomBotCount > maxBots) netRoomBotCount = 0;
+                                SyncLobbyBots();
+                                AudioMixer::Instance()->PlaySFX("menu_change");
+                            } else if (selectedActionIndex == kRoomBotSkill) {
+                                netRoomBotSkill += (e->key.key == SDLK_LEFT) ? -1 : 1;
+                                if (netRoomBotSkill < 0) netRoomBotSkill = 2;
+                                if (netRoomBotSkill > 2) netRoomBotSkill = 0;
+                                AudioMixer::Instance()->PlaySFX("menu_change");
                             } else if (selectedActionIndex >= kRoomGridFirst &&
                                        selectedActionIndex <= kRoomGridLast) {
                                 // Grid rows: Left/Right navigates player columns
@@ -1314,8 +1332,9 @@ void MainMenu::GameRoomHostReturn(NetworkClient *netClient, GameRoom *currentGam
     // Entering per-player team-assignment mode (>5-cap, Team Mode) now happens
     // via the [A] hotkey in HandleInput, not a dedicated action row -- see the
     // comment above the A-key check there for why.
-    // Host actions: 0=Chat, 1=Mode, 2=Malus, 3=CR, 4=Continue, 5=Target, 6=Victories,
-    // 7=Mouse, 8..10=grid rows, 11=Team, 12=Start
+    // Row indices are the GameRoomRow enum in mainmenu_internal.h -- the list
+    // is built positionally in mainmenu_netpanel.cpp and acted on by index
+    // here, so the two have to agree.
     int numPlayers = currentGame ? (int)currentGame->players.size() : 1;
     if (numPlayers < 1) numPlayers = 1;
     if (numPlayers > 5) numPlayers = 5;
@@ -1412,6 +1431,16 @@ void MainMenu::GameRoomHostReturn(NetworkClient *netClient, GameRoom *currentGam
         }
         AudioMixer::Instance()->PlaySFX("menu_change");
         settingChanged = true;
+    } else if (selectedActionIndex == kRoomBots && currentGame) {
+        // ENTER: add one more bot, wrapping at the room's ceiling (same as RIGHT)
+        const int maxBots = MaxRoomBots((int)currentGame->players.size(),
+                                        currentGame->maxPlayers, netRoomBotCount);
+        netRoomBotCount = (netRoomBotCount >= maxBots) ? 0 : netRoomBotCount + 1;
+        SyncLobbyBots();
+        AudioMixer::Instance()->PlaySFX("menu_change");
+    } else if (selectedActionIndex == kRoomBotSkill) {
+        netRoomBotSkill = (netRoomBotSkill >= 2) ? 0 : netRoomBotSkill + 1;
+        AudioMixer::Instance()->PlaySFX("menu_change");
     } else if (selectedActionIndex == kRoomStart && currentGame && currentGame->players.size() > 1) {
         // Start game
         netClient->StartGame();
@@ -1815,6 +1844,7 @@ void MainMenu::MenuEscapeKey() {
                             if (currentGame) {
                                 // Leave the game (like original)
                                 netRosterEditMode = false;
+                                DropLobbyBots();  // our bots leave with us
                                 netClient->PartGame();
                                 netClient->RequestList();  // Immediate list after parting
                                 lastListRequest = SDL_GetTicks();

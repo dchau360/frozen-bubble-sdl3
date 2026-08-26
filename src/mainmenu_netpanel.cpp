@@ -51,6 +51,8 @@
 
 #include <algorithm>
 #include "mainmenu_internal.h"
+#include "localmultiplayer_settings.h"
+#include "netbot.h"
 
 // Indices of the chat messages that should actually be shown, newest last.
 //
@@ -78,6 +80,73 @@ static std::vector<size_t> VisibleChatIndices(const std::vector<ChatMessage>& ms
         visible.push_back(i);
     }
     return visible;
+}
+
+// Bots are ordinary members of the room -- each one has its own connection
+// and the server cannot tell it from a person. Only this client knows which
+// ones they are, and only this client simulates them.
+void MainMenu::SyncLobbyBots() {
+    NetworkClient* netClient = NetworkClient::Instance();
+    GameRoom* room = netClient ? netClient->GetCurrentGame() : nullptr;
+    if (!netClient || !room) {
+        DropLobbyBots();
+        return;
+    }
+
+    while ((int)lobbyBots.size() > netRoomBotCount) {
+        if (lobbyBots.back()) lobbyBots.back()->Leave();
+        lobbyBots.pop_back();
+    }
+
+    while ((int)lobbyBots.size() < netRoomBotCount) {
+        // The server truncates nicknames to ten characters and the roster is
+        // matched by nickname, so the name has to stay distinct within that.
+        char botNick[16];
+        snprintf(botNick, sizeof(botNick), "bot%d-%03d",
+                 (int)lobbyBots.size() + 1, (int)(SDL_GetTicks() % 1000));
+        auto bot = std::make_unique<NetBotConnection>();
+        if (!bot->JoinRoom(netClient->GetHost(), netClient->GetPort(),
+                           room->creator, botNick)) {
+            netClient->AddStatusMessage("Could not add a bot");
+            netRoomBotCount = (int)lobbyBots.size();
+            return;
+        }
+        lobbyBots.push_back(std::move(bot));
+    }
+
+    // The leader blocks waiting for every other player to acknowledge the
+    // game start, and a bot acknowledges on its own socket. Without this it
+    // would be waiting behind the very loop that has to service it.
+    if (!lobbyBots.empty()) {
+        netClient->SetLeaderWaitTick([this]() { PumpLobbyBots(); });
+    }
+}
+
+void MainMenu::PumpLobbyBots() {
+    for (auto& bot : lobbyBots) {
+        if (bot) bot->Update();
+    }
+    // A bot's connection can go without us asking -- the host can kick it
+    // like any other room member, and the server drops it if the room does.
+    // Forget it here so the count on screen still means what it says, and so
+    // asking for the same number again actually reconnects one.
+    const size_t before = lobbyBots.size();
+    lobbyBots.erase(std::remove_if(lobbyBots.begin(), lobbyBots.end(),
+                                   [](const std::unique_ptr<NetBotConnection>& b) {
+                                       return !b || !b->IsConnected();
+                                   }),
+                    lobbyBots.end());
+    if (lobbyBots.size() != before) netRoomBotCount = (int)lobbyBots.size();
+}
+
+void MainMenu::DropLobbyBots() {
+    for (auto& bot : lobbyBots) {
+        if (bot) bot->Leave();
+    }
+    lobbyBots.clear();
+    netRoomBotCount = 0;
+    NetworkClient* netClient = NetworkClient::Instance();
+    if (netClient) netClient->SetLeaderWaitTick(nullptr);
 }
 
 void MainMenu::NetPanelRender() {
@@ -133,6 +202,10 @@ void MainMenu::NetPanelRender() {
 
     // Update network client
     if (netClient->IsConnected()) {
+        // Before netClient->Update(), so a bot that has already been told the
+        // game is starting has answered by the time this client acts on the
+        // same news.
+        PumpLobbyBots();
         netClient->Update();
 
         // Apply any options broadcast by the host (joiners receive SETOPTIONS push)
@@ -397,8 +470,20 @@ void MainMenu::NetPanelLobbyActionsRender() {
             actions.push_back("Aim:");        // kRoomAim
             actions.push_back("Team:");       // kRoomTeam
 
+            // Bots (kRoomBots, kRoomBotSkill) — host only. A bot joins the
+            // room as a real player: everyone sees it in the roster and it
+            // counts against the room's cap. Only the host simulates it.
+            const bool isRoomHost = currentGame->creator == netClient->GetPlayerNick();
+            if (isRoomHost) {
+                // Both rows are drawn under the roster rather than here, but
+                // they still need slots in this list: it is what Up/Down
+                // navigates, and the indices below depend on their being here.
+                actions.push_back("Bots");      // kRoomBots
+                actions.push_back("Bot skill"); // kRoomBotSkill
+            }
+
             // Start game (kRoomStart) — host only when >1 player
-            if (currentGame->creator == netClient->GetPlayerNick() && currentGame->players.size() > 1) {
+            if (isRoomHost && currentGame->players.size() > 1) {
                 actions.push_back("Start game!"); // kRoomStart
             }
             // No "Part game" menu item - use ESC key to leave like original
@@ -534,6 +619,17 @@ void MainMenu::NetPanelLobbyActionsRender() {
             if (i == 0) continue;
             // For grid rows (Colors/Rows/Aim/Team in a game room), skip the label text here — rendered as table below
             if (currentGame && (int)i >= gridStart && (int)i <= gridStart + 3) {
+                continue;
+            }
+            // Bots belong with the roster they join, and the settings column
+            // has no vertical room left anyway — drawn in the players panel.
+            if (currentGame && ((int)i == kRoomBots || (int)i == kRoomBotSkill)) {
+                continue;
+            }
+            // "Start game!" is drawn right-aligned in the header bar. It has
+            // no entry in the settingY table below, so letting it through
+            // here drew a second copy at y=0, on top of the header.
+            if (currentGame && (int)i == kRoomStart) {
                 continue;
             }
             // Start Match/Start game is rendered in the header bar above.
@@ -890,6 +986,40 @@ void MainMenu::NetPanelLobbyActionsRender() {
                 }
             }
             drawLabel("ESC  Leave room", panelX + 12, panelY + 238, textMuted);
+
+            // Bots, below the roster they will appear in. Host only: a bot is
+            // an ordinary room member to everyone else. The band under the
+            // ESC line is the only clear space left on this screen -- the
+            // roster ends at panelY+257 and the panel at panelY+286.
+            if (currentGame->creator == netClient->GetPlayerNick()) {
+                const int botsY = panelY + 252;
+                const int skillY = panelY + 270;
+                const int rowW = panelW - 18;
+                const int maxBots = MaxRoomBots((int)currentGame->players.size(),
+                                                currentGame->maxPlayers, netRoomBotCount);
+                char botsText[64];
+                if (maxBots <= 0 && netRoomBotCount == 0) {
+                    snprintf(botsText, sizeof(botsText), "Bots: 0  (room full)");
+                } else {
+                    snprintf(botsText, sizeof(botsText), "Bots: < %d >  of %d",
+                             netRoomBotCount, maxBots);
+                }
+                char skillText[64];
+                snprintf(skillText, sizeof(skillText), "Skill: < %s >",
+                         LocalMPBotSkillName(netRoomBotSkill));
+
+                SDL_Rect botsRect = {panelX + 8, botsY - 3, rowW, 18};
+                if (selectedActionIndex == kRoomBots) drawSelection(botsRect);
+                AddPanelTapRow(kRoomBots, botsRect);
+                drawLabel(botsText, panelX + 12, botsY,
+                          selectedActionIndex == kRoomBots ? textGold : textMain);
+
+                SDL_Rect skillRect = {panelX + 8, skillY - 3, rowW, 18};
+                if (selectedActionIndex == kRoomBotSkill) drawSelection(skillRect);
+                AddPanelTapRow(kRoomBotSkill, skillRect);
+                drawLabel(skillText, panelX + 12, skillY,
+                          selectedActionIndex == kRoomBotSkill ? textGold : textMuted);
+            }
         } else {
             // Lobby online-player sidebar: green status dot + nickname per
             // free player, excluding self, capped at 11 shown (no scroll).

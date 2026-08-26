@@ -11,8 +11,16 @@
   whose landing clears the most, so it cannot drift out of step with the game
   the way a separate model of the board would. It then drives the same
   shooter controls a keyboard does rather than placing bubbles directly,
-  which is what makes its launcher visibly swing onto the shot. Network-room
-  bots are next and reuse the same aiming.
+  which is what makes its launcher visibly swing onto the shot.
+- **New: bots in network game rooms.** The host picks 0-4 bots and a skill
+  under the room's player list, and each one joins as an ordinary member with
+  its own connection to the server: everyone sees it in the roster, it counts
+  against the room's cap, and it plays and takes attacks like anyone else.
+  Only the host simulates them, using the same aiming as local play. Every
+  board this client speaks for -- its own and its bots' -- now answers for
+  itself in each part of the protocol that counts connections, including the
+  end-of-round handshake, where one silent seat would have stalled the next
+  round for the whole room.
 - **Fix: attack bubbles could hang in mid-air.** A malus bubble rises from the
   bottom of the board and parks one row under whatever it meets. Both halves of
   that journey scanned its column starting from row 0, which cannot tell "the

@@ -102,6 +102,66 @@ void BubbleGame::SendNetworkBubbleShot(BubbleArray &bArray) {
     }
 }
 
+void BubbleGame::AdoptBots(std::vector<std::unique_ptr<NetBotConnection>> bots,
+                           int skill) {
+    // The lobby holds the bots while the room fills; which board each one
+    // ends up on is not known until the room's players are seated, so they
+    // wait here and SeatBots claims their boards.
+    for (auto &bot : bots) {
+        if (bot) pendingBots.push_back(std::move(bot));
+    }
+    adoptedBotSkill = skill;
+}
+
+void BubbleGame::SeatBots() {
+    // Every bot goes back through the pending list first, including ones
+    // already playing: a second round re-seats the whole room, and a board
+    // index from the previous round is not necessarily still the right key.
+    for (auto &entry : botConnections) {
+        if (entry.second) pendingBots.push_back(std::move(entry.second));
+    }
+    botConnections.clear();
+
+    for (auto &bot : pendingBots) {
+        if (!bot || !bot->IsConnected()) continue;
+        const int botId = bot->PlayerId();
+        bool seated = false;
+        for (int i = 1; i < currentSettings.playerCount; i++) {
+            if (bubbleArrays[i].lobbyPlayerId != botId) continue;
+            bubbleArrays[i].isBot = true;
+            bubbleArrays[i].botSkill = adoptedBotSkill;
+            bubbleArrays[i].botTargetAngle = -1.0f;
+            bubbleArrays[i].botThinkFrames = 0;
+            SDL_Log("Seated bot '%s' (id %d) on board %d",
+                    bot->Nick().c_str(), botId, i);
+            botConnections[i] = std::move(bot);
+            seated = true;
+            break;
+        }
+        if (!seated) {
+            // The room has more players than the game has boards, or the
+            // bot never got an id. Nothing simulates it, so it must not stay
+            // in the room taking up a seat that is never played.
+            SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
+                        "No board for bot '%s' (id %d) -- dropping it",
+                        bot->Nick().c_str(), botId);
+            bot->Leave();
+        }
+    }
+    pendingBots.clear();
+}
+
+void BubbleGame::ReleaseBots() {
+    for (auto &entry : botConnections) {
+        if (entry.second) entry.second->Leave();
+    }
+    botConnections.clear();
+    for (auto &bot : pendingBots) {
+        if (bot) bot->Leave();
+    }
+    pendingBots.clear();
+}
+
 bool BubbleGame::OwnsSenderId(int senderId) const {
     NetworkClient *netClient = NetworkClient::Instance();
     if (netClient && senderId == static_cast<int>(netClient->GetMyPlayerId())) return true;
@@ -157,16 +217,20 @@ void BubbleGame::ProcessNetworkMessages() {
             if (sscanf(msg.c_str(), "GAMEMSG:%d:%511[^\n]", &senderId, gameData) == 2) {
                 SDL_Log("Processing game message from player %d: %s", senderId, gameData);
 
+                // Parse game data - original protocol (first character is message type)
+                char msgType = gameData[0];
+
                 // A seat we speak for has already had this move simulated
                 // locally -- the message is the announcement of it, not news.
                 // Replaying it would run the shot twice.
-                if (OwnsSenderId(senderId)) {
+                //
+                // That reasoning only covers messages that describe the
+                // contents of a board -- see IsConnectionLevelOpcode for the
+                // ones it does not, and why they must go through.
+                if (!IsConnectionLevelOpcode(msgType) && OwnsSenderId(senderId)) {
                     SDL_Log("Ignoring a message from a seat we own (ID=%d)", senderId);
                     continue;
                 }
-
-                // Parse game data - original protocol (first character is message type)
-                char msgType = gameData[0];
                 switch (msgType) {
                     case 'f': {
                         // Fire: f{angle}:{nextcolor}

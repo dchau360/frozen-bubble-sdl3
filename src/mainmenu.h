@@ -27,6 +27,7 @@
 #include <map>
 #include <mutex>
 #include <string>
+#include <memory>
 #ifdef FROZEN_BUBBLE_TEST_ACCESS
 #include <functional>
 #endif
@@ -35,6 +36,7 @@
 #include "networkclient.h"
 #include "shaderstuff.h"
 #include "bubblegame.h"
+#include "netbot.h"
 #include "ttftext.h"
 
 #pragma region "banner_defines"
@@ -289,6 +291,18 @@ private:
     bool netClearMode = false;         // Clear Mode for network game
     bool netDisableMalus = false;      // Disable malus for network game
     bool netTeamMode = false;          // Team Mode for network game
+    // Bots the host has added to the current game room. They are real room
+    // members with their own connections; only this client simulates them.
+    int netRoomBotCount = 0;
+    int netRoomBotSkill = 1;           // index into BubbleAI::Skill
+    std::vector<std::unique_ptr<NetBotConnection>> lobbyBots;
+    // Bring the number of connected bots in line with netRoomBotCount.
+    void SyncLobbyBots();
+    // Read the bots' sockets so they answer the server while in the lobby.
+    void PumpLobbyBots();
+    // PART every bot and forget them (leaving a room, or losing the server).
+    void DropLobbyBots();
+
     int netRoomSizeChoice = 2;         // Index into kRoomSizes for "Create Game Room" (0=5,1=10,2=20); default 20 (royale headline mode)
     int netPlayerTeams[MAX_NET_PLAYERS] = {1,2,3,4,5,1,2,3,4,5,1,2,3,4,5,1,2,3,4,5}; // Per-player team (<=5-cap grid path)
     size_t lastProcessedChatCount = 0; // Host: how many chat msgs we've scanned for !team: commands (<=5 path)

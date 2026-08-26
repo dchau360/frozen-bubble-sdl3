@@ -1429,6 +1429,10 @@ void NetworkClient::HandlePushMessage(const std::string& pushMsg) {
             SDL_Log("Leader: polling LEADER_CHECK_GAME_START until all joiners are ready...");
             int attempts = 0;
             while (attempts < 50) { // up to 5 seconds
+                // Service anything else this client speaks for; a hosted bot
+                // acknowledges on its own socket, and this loop is what it
+                // would otherwise be waiting behind.
+                if (leaderWaitTick) leaderWaitTick();
                 char buf[BUFFER_SIZE];
                 snprintf(buf, sizeof(buf), "FB/%d.%d LEADER_CHECK_GAME_START\n", PROTO_MAJOR, PROTO_MINOR);
                 SendAll(sockfd, buf, strlen(buf));

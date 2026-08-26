@@ -609,6 +609,12 @@ void MainMenu::SetupNewGame(int mode) {
                 // Apply per-session mouse setting (off by default in multiplayer)
                 GameSettings::Instance()->mouseEnabled = netRoomMouseEnabled;
                 netRosterEditMode = false;
+                // The game takes the bots over from here: it simulates their
+                // boards and sends for them. Which board each one lands on is
+                // decided inside NewGame, once the room's players are seated.
+                FrozenBubble::Instance()->bubbleGame()->AdoptBots(std::move(lobbyBots),
+                                                                 netRoomBotSkill);
+                lobbyBots.clear();
                 FrozenBubble::Instance()->bubbleGame()->NewGame(ns);
             }
             break;
@@ -673,6 +679,11 @@ void MainMenu::ReturnToNetLobby() {
     SDL_Log("ReturnToNetLobby() called - returning to network lobby");
 
     // Clear the current game room data so it doesn't show stale info
+    // The room is torn down below, so the bots in it go too -- whether they
+    // are still ours or the game has taken them over.
+    FrozenBubble::Instance()->bubbleGame()->ReleaseBots();
+    DropLobbyBots();
+
     NetworkClient* netClient = NetworkClient::Instance();
     if (netClient) {
         netRosterEditMode = false;

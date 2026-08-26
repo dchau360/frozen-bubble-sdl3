@@ -899,44 +899,17 @@ void BubbleGame::NewGame(SetupSettings setup) {
 
             const auto& idToNick = netClient->GetPlayerIdToNick();
 
-            // A bot's seat is whichever one the server gave its own
-            // connection, so take the id from the connection rather than
-            // from the room's list -- a bot handed someone else's id would
-            // send that player's malus and swallow their shots. Doing this
-            // first also keeps those ids out of the fill below.
-            std::map<int, int> botSeats;
-            for (int i = 1; i < currentSettings.playerCount; i++) {
-                if (!bubbleArrays[i].isBot) continue;
-                auto it = botConnections.find(i);
-                if (it == botConnections.end() || !it->second) continue;
-                botSeats[i] = it->second->PlayerId();
-            }
-
             // Pre-populate remote players' lobbyPlayerIds and nicks from GAME_CAN_START mapping
-            // This ensures correct nick targeting for malus messages even before the first shot
+            // This ensures correct nick targeting for malus messages even before the first shot.
+            // Our own bots are in this list like anyone else and are seated by
+            // the same rule -- every client runs it over the same room, so all
+            // of them agree on which board is whose. SeatBots below then claims
+            // the ones that turn out to be ours.
             std::vector<int> roomPlayerIds;
             for (const auto& kv : idToNick) roomPlayerIds.push_back(kv.first);
             const std::map<int, int> remoteSeats =
                 AssignRemoteSeats(roomPlayerIds, (int)netClient->GetMyPlayerId(),
-                                  botSeats, currentSettings.playerCount);
-
-            // A bot's seat is whichever one the server gave its own
-            // connection, so the id comes from the connection rather than
-            // from the room's list -- a bot handed someone else's id would
-            // send that player's malus and swallow their shots. The
-            // nickname still comes from the room where it has it: the
-            // server truncates long ones, and the per-slot settings remap
-            // below matches arrays to room slots by nickname.
-            for (const auto& seat : botSeats) {
-                auto nickIt = idToNick.find(seat.second);
-                bubbleArrays[seat.first].lobbyPlayerId = seat.second;
-                bubbleArrays[seat.first].playerNickname =
-                    (nickIt != idToNick.end()) ? nickIt->second
-                                               : botConnections[seat.first]->Nick();
-                SDL_Log("Assigned bot (array %d) lobbyPlayerId = %d, nickname = '%s'",
-                        seat.first, seat.second,
-                        bubbleArrays[seat.first].playerNickname.c_str());
-            }
+                                  currentSettings.playerCount);
             for (const auto& seat : remoteSeats) {
                 bubbleArrays[seat.first].lobbyPlayerId = seat.second;
                 bubbleArrays[seat.first].playerNickname = idToNick.at(seat.second);
@@ -946,10 +919,12 @@ void BubbleGame::NewGame(SetupSettings setup) {
             }
             // Any board nobody was seated on is unknown
             for (int i = 1; i < currentSettings.playerCount; i++) {
-                if (botSeats.count(i) || remoteSeats.count(i)) continue;
+                if (remoteSeats.count(i)) continue;
                 bubbleArrays[i].lobbyPlayerId = -1;
                 bubbleArrays[i].playerNickname = "";
             }
+
+            SeatBots();
 
             // Remap per-player settings (aimGuide, compression, colors) from lobby slot order
             // to bubbleArray order. setup.aimGuide[i] is indexed by the game room's player list

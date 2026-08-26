@@ -21,6 +21,7 @@
 #define NETWORKCLIENT_H
 
 #include <SDL3/SDL.h>
+#include <functional>
 #include <string>
 #include <vector>
 #include <queue>
@@ -125,6 +126,13 @@ public:
     // Where we are connected (or were last asked to connect). Used to tell
     // whether a server picked out of a list is the one this connection is
     // talking to, which decides whether a follow can be registered right now.
+    // Called repeatedly while the leader blocks waiting for every other
+    // player to acknowledge the game start. That wait is synchronous, so
+    // anything else this client is speaking for -- a hosted bot on its own
+    // socket -- stops being serviced for the duration and would miss the
+    // acknowledgement the leader is waiting for. Optional; unset by default.
+    void SetLeaderWaitTick(std::function<void()> tick) { leaderWaitTick = std::move(tick); }
+
     const std::string& GetHost() const { return connectedHost; }
     int GetPort() const { return connectedPort; }
 
@@ -273,6 +281,7 @@ private:
     void* websocketSocket;  // WebSocket handle (WebAssembly builds) - using void* to avoid emscripten header dependency
 #endif
     ConnectionState state;
+    std::function<void()> leaderWaitTick;
     std::string connectedHost;
     int connectedPort = 0;
     std::string playerNick;

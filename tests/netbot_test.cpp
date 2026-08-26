@@ -92,39 +92,30 @@ int main() {
         CHECK(!IsGameMessageLine(" leading space"));
     }
 
-    // Seat assignment: a four-board game where boards 2 and 3 are our bots.
+    // Seat assignment. A host's bots are room players like any other, so
+    // they are seated by the same rule on every client -- what makes a board
+    // a bot's is the host recognising the id afterwards, not the seating.
     {
-        // The room lists us (66), two humans (70, 72) and our two bots
-        // (67, 68) -- all five ids, in the room's own order.
+        // Us (66), our two bots (67, 68) and two humans (70, 72).
         const std::vector<int> room = {66, 67, 68, 70, 72};
-        const std::map<int, int> botSeats = {{2, 67}, {3, 68}};
-        const std::map<int, int> seats = AssignRemoteSeats(room, 66, botSeats, 4);
-        // Only board 1 is free; the humans take it in room order.
-        CHECK(seats.size() == 1);
-        CHECK(seats.at(1) == 70);
-        // Neither our own id nor a bot's was handed out.
-        for (const auto& seat : seats) {
-            CHECK(seat.second != 66);
-            CHECK(seat.second != 67 && seat.second != 68);
-        }
+        const std::map<int, int> seats = AssignRemoteSeats(room, 66, 5);
+        CHECK(seats.size() == 4);
+        CHECK(seats.at(1) == 67);
+        CHECK(seats.at(2) == 68);
+        CHECK(seats.at(3) == 70);
+        CHECK(seats.at(4) == 72);
+        // Board 0 is ours and is never handed out.
+        CHECK(seats.count(0) == 0);
+        for (const auto& seat : seats) CHECK(seat.second != 66);
     }
 
-    // Bots on the low boards must not push a remote player onto a bot board.
-    {
-        const std::vector<int> room = {10, 11, 12, 13};
-        const std::map<int, int> botSeats = {{1, 11}, {2, 12}};
-        const std::map<int, int> seats = AssignRemoteSeats(room, 10, botSeats, 4);
-        CHECK(seats.size() == 1);
-        CHECK(seats.count(1) == 0 && seats.count(2) == 0);
-        CHECK(seats.at(3) == 13);
-    }
-
-    // No bots: unchanged from the plain case -- boards fill from 1 in room order.
+    // We are not first in the room's order: the boards still fill from 1 with
+    // no gap where we were skipped.
     {
         const std::vector<int> room = {4, 5, 6};
-        const std::map<int, int> seats = AssignRemoteSeats(room, 4, {}, 3);
+        const std::map<int, int> seats = AssignRemoteSeats(room, 5, 3);
         CHECK(seats.size() == 2);
-        CHECK(seats.at(1) == 5);
+        CHECK(seats.at(1) == 4);
         CHECK(seats.at(2) == 6);
     }
 
@@ -132,16 +123,53 @@ int main() {
     // rather than written past the last board.
     {
         const std::vector<int> room = {1, 2, 3, 4, 5};
-        const std::map<int, int> seats = AssignRemoteSeats(room, 1, {}, 3);
+        const std::map<int, int> seats = AssignRemoteSeats(room, 1, 3);
         CHECK(seats.size() == 2);
         CHECK(seats.count(3) == 0);
     }
 
-    // Every board is a bot: nothing left to seat, and no infinite scan.
+    // A one-board game seats nobody.
     {
-        const std::map<int, int> botSeats = {{1, 8}, {2, 9}};
-        const std::map<int, int> seats = AssignRemoteSeats({7, 8, 9}, 7, botSeats, 3);
+        const std::map<int, int> seats = AssignRemoteSeats({7, 8}, 7, 1);
         CHECK(seats.empty());
+    }
+
+    // What a client may ignore from a seat it simulates itself.
+    {
+        // Board state: already simulated locally, so replaying it would run
+        // the same move twice.
+        CHECK(!IsConnectionLevelOpcode('f'));   // fire
+        CHECK(!IsConnectionLevelOpcode('s'));   // stick
+        CHECK(!IsConnectionLevelOpcode('g'));   // attack
+        CHECK(!IsConnectionLevelOpcode('M'));   // malus stick
+        CHECK(!IsConnectionLevelOpcode('F'));   // round win
+        CHECK(!IsConnectionLevelOpcode('S'));   // round stats
+        // Connection state: counted per connection, so a hosted bot's own
+        // must be processed like any other player's. Ignoring 'n' here
+        // stalls every round after the first.
+        CHECK(IsConnectionLevelOpcode('n'));    // ready for next round
+        CHECK(IsConnectionLevelOpcode('l'));    // seat left
+    }
+
+    // How many bots a host may ask for. Bots take real seats, so the ceiling
+    // is what the room has left plus the ones already connected.
+    {
+        // A 5-cap room with the host alone in it: four seats free.
+        CHECK(MaxRoomBots(1, 5, 0) == 4);
+        // Two humans in a 5-cap room: three free, so three bots.
+        CHECK(MaxRoomBots(2, 5, 0) == 3);
+        // Two of those seats are already our bots, so the answer is the same
+        // three -- asking for what is already connected must stay legal, or
+        // the count could never be reduced.
+        CHECK(MaxRoomBots(4, 5, 2) == 3);
+        // A full room with no bots of ours: none.
+        CHECK(MaxRoomBots(5, 5, 0) == 0);
+        // A full room that is full *of* our bots: they may stay, or go.
+        CHECK(MaxRoomBots(5, 5, 3) == 3);
+        // A big room is still capped at four bots, not at its own size.
+        CHECK(MaxRoomBots(1, 20, 0) == kMaxRoomBots);
+        // Over-full (a race with a joiner) must not go negative.
+        CHECK(MaxRoomBots(7, 5, 0) == 0);
     }
 
     if (failures == 0) std::printf("netbot tests passed\n");
