@@ -88,8 +88,9 @@ std::vector<std::pair<int, int>> SameColourGroup(const Grid &grid, int row, int 
 }
 
 // Bubbles no longer reachable from the ceiling row -- the same rule
-// CheckAirBubbles applies after a pop.
-int CountDetached(const Grid &grid) {
+// CheckAirBubbles applies after a pop. Clears them out of the grid in place
+// (they would actually fall) and returns how many there were.
+int SweepDetached(Grid &grid) {
     std::set<std::pair<int, int>> connected;
     std::queue<std::pair<int, int>> queue;
     for (size_t col = 0; col < grid[0].size(); ++col) {
@@ -108,12 +109,57 @@ int CountDetached(const Grid &grid) {
         }
     }
     int detached = 0;
-    for (size_t row = 1; row < grid.size(); ++row)
-        for (size_t col = 0; col < grid[row].size(); ++col)
-            if (grid[row][col] != -1 &&
-                !connected.count({static_cast<int>(row), static_cast<int>(col)}))
+    for (size_t row = 1; row < grid.size(); ++row) {
+        for (size_t col = 0; col < grid[row].size(); ++col) {
+            const std::pair<int, int> cell{static_cast<int>(row), static_cast<int>(col)};
+            if (grid[row][col] != -1 && !connected.count(cell)) {
+                grid[row][col] = -1;
                 ++detached;
+            }
+        }
+    }
     return detached;
+}
+
+// Places `colour` at (row, col) and, if that completes a group of three or
+// more, pops it and sweeps whatever it detaches -- mutating `grid` to the
+// board that shot would actually leave behind. Returns the same score
+// ScoreLanding does. Split out from ScoreLanding so a caller that needs the
+// resulting grid (the lookahead below) does not have to re-simulate the shot
+// to get it.
+int PlaceAndScore(Grid &grid, int row, int col, int colour) {
+    if (!InBounds(grid, row, col) || grid[row][col] != -1) return 0;
+    grid[row][col] = colour;
+
+    const auto group = SameColourGroup(grid, row, col);
+    if (group.size() < 3) return 0;
+    for (auto [r, c] : group) grid[r][c] = -1;
+    return static_cast<int>(group.size()) + SweepDetached(grid);
+}
+
+// The best score achievable next turn with `nextColour` -- the bubble the
+// game has already told the bot is coming, the same preview a person reads
+// off the launcher -- played against the board a candidate shot would leave.
+// Only cells bordering an existing bubble of that colour are worth trying:
+// nothing else can complete a group of three, so nothing else can score.
+int BestFollowUpScore(const Grid &grid, int nextColour) {
+    if (nextColour < 0) return 0;
+    int best = 0;
+    for (size_t row = 0; row < grid.size(); ++row) {
+        for (size_t col = 0; col < grid[row].size(); ++col) {
+            if (grid[row][col] != -1) continue;
+            bool reachable = false;
+            for (auto n : Neighbours(grid, static_cast<int>(row), static_cast<int>(col))) {
+                if (grid[n.first][n.second] == nextColour) { reachable = true; break; }
+            }
+            if (!reachable) continue;
+            Grid copy = grid;
+            const int score = PlaceAndScore(copy, static_cast<int>(row),
+                                            static_cast<int>(col), nextColour);
+            if (score > best) best = score;
+        }
+    }
+    return best;
 }
 
 }  // namespace
@@ -153,13 +199,7 @@ bool PredictLanding(BubbleArray &board, float angle, int colour, bool isMini,
 
 int ScoreLanding(const BubbleArray &board, int row, int col, int colour) {
     Grid grid = ColourGrid(board);
-    if (!InBounds(grid, row, col) || grid[row][col] != -1) return 0;
-    grid[row][col] = colour;
-
-    const auto group = SameColourGroup(grid, row, col);
-    if (group.size() < 3) return 0;
-    for (auto [r, c] : group) grid[r][c] = -1;
-    return static_cast<int>(group.size()) + CountDetached(grid);
+    return PlaceAndScore(grid, row, col, colour);
 }
 
 Shot ChooseShot(BubbleArray &board, int colour, bool isMini, Skill skill,
@@ -169,6 +209,15 @@ Shot ChooseShot(BubbleArray &board, int colour, bool isMini, Skill skill,
         return (*rng >> 16) & 0x7fff;
     };
 
+    // How much a candidate's lookahead score counts for. Immediate pops
+    // dominate at a factor of 1000 each, so this only ever breaks a
+    // near-tie between shots that pop about the same amount now -- it
+    // cannot talk the bot into a worse shot for the sake of a combo. Easy
+    // gets none: a bot that does not reliably see the best shot in front of
+    // it has no business planning a second one ahead.
+    const int lookaheadWeight =
+        skill == Skill::Hard ? 60 : skill == Skill::Normal ? 15 : 0;
+
     std::vector<Shot> ranked;
     for (int i = 0; i < kCandidates; ++i) {
         const float angle = kMinAngle +
@@ -177,11 +226,18 @@ Shot ChooseShot(BubbleArray &board, int colour, bool isMini, Skill skill,
         int row = -1, colIdx = -1;
         if (!PredictLanding(board, angle, colour, isMini, &row, &colIdx)) continue;
 
-        const int popped = ScoreLanding(board, row, colIdx, colour);
+        Grid grid = ColourGrid(board);
+        const int popped = PlaceAndScore(grid, row, colIdx, colour);
         // Popping dominates. Failing that, land as high as possible: depth is
         // what ends the round, so a bubble parked near the ceiling costs less
         // than one parked at the bottom.
-        const int score = popped * 1000 - row * 10;
+        int score = popped * 1000 - row * 10;
+        // Look one shot further using the bubble already queued behind this
+        // one -- the same preview a person reads off the launcher, not
+        // information the bot has that a player does not.
+        if (lookaheadWeight > 0) {
+            score += BestFollowUpScore(grid, board.nextBubble) * lookaheadWeight;
+        }
         ranked.push_back({angle, score, row, colIdx, true});
     }
     if (ranked.empty()) return {};

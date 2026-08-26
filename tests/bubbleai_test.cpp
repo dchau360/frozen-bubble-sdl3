@@ -144,6 +144,11 @@ int main() {
         BubbleArray board;
         ShapeCentreBoard(board);
         FillRows(board, 3, 0);
+        // Nothing on the board is this colour, so the lookahead below finds
+        // no reachable follow-up and cannot add to the score -- leaving
+        // "nothing to pop" an honest reading of shot.score. (The default,
+        // 0, would land on the very wall this test builds and defeat that.)
+        board.nextBubble = 9;
 
         unsigned rng = 999;
         const BubbleAI::Shot shot =
@@ -151,6 +156,35 @@ int main() {
         CHECK(shot.valid);
         CHECK(shot.score <= 0);   // nothing to pop
         CHECK(shot.row == 4);     // as high as a shot can reach here
+    }
+
+    // A bot planning ahead credits a shot for the combo the bubble already
+    // queued behind it can now make -- the same preview a person reads off
+    // the launcher, not information a player would not have.
+    {
+        BubbleArray board;
+        ShapeCentreBoard(board);
+        FillRows(board, 3, 0);
+        board.bubbleMap[3][3].bubbleId = 6;
+        board.bubbleMap[3][4].bubbleId = 6;
+
+        // No lookahead credit: nothing of this colour survives on the board.
+        board.nextBubble = 9;
+        unsigned rngA = 7;
+        const auto plain = BubbleAI::ChooseShot(board, 6, false, BubbleAI::Skill::Hard, &rngA);
+        CHECK(plain.valid && plain.score > 0);
+
+        // Real credit: colour 0 still walls most of the board after this
+        // pop, so a bubble of that colour would have plenty to land next to.
+        board.nextBubble = 0;
+        unsigned rngB = 7;
+        const auto planned = BubbleAI::ChooseShot(board, 6, false, BubbleAI::Skill::Hard, &rngB);
+        CHECK(planned.valid);
+        // Same physical shot either way: the pop that just happened is worth
+        // 1000 points per bubble, which nothing here is large enough to beat.
+        CHECK(planned.row == plain.row && planned.col == plain.col);
+        // But it is credited more for the combo the known next bubble sets up.
+        CHECK(planned.score > plain.score);
     }
 
     // Skill is which ranked shot it settles for. An easy bot must actually

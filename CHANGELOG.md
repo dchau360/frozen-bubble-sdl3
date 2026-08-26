@@ -26,6 +26,16 @@
   that only the room's creator may do it; no client had ever sent the command,
   and a player who was kicked was left looking at a room the server had
   already removed them from.
+- **Bots plan one shot ahead, and react faster on Hard.** The bot already
+  knows what colour is queued behind its current shot -- the same preview a
+  person reads off the launcher -- and now credits a candidate shot for the
+  combo that bubble could make next, on top of whatever it pops immediately.
+  It cannot talk the bot into a worse shot for the sake of a setup: an
+  immediate pop is still worth a thousand points a bubble, so the lookahead
+  only ever breaks a near-tie between shots that do about the same right now.
+  Hard weighs this most, Normal less, and Easy not at all. Reaction time is
+  now skill-scaled too (previously the same short, semi-fixed pause for every
+  bot): Hard commits to its shot in roughly a tenth of the time Easy does.
 - **Fix: attack bubbles could hang in mid-air.** A malus bubble rises from the
   bottom of the board and parks one row under whatever it meets. Both halves of
   that journey scanned its column starting from row 0, which cannot tell "the

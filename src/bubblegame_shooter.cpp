@@ -99,8 +99,17 @@ void BubbleGame::DriveBot(BubbleArray &bArray) {
             BubbleAI::ChooseShot(bArray, bArray.curLaunch, isMini, skill, &bArray.botRng);
         // No angle lands anywhere -- fire straight up rather than freezing.
         bArray.botTargetAngle = shot.valid ? shot.angle : (float)PI / 2.0f;
-        // A short, varying pause so several bots do not move in lockstep.
-        bArray.botThinkFrames = 8 + (int)(bArray.botRng % 18);
+
+        // A short, varying pause so several bots do not move in lockstep,
+        // scaled by skill -- a stronger player also reacts faster, not just
+        // aims better. Advanced unconditionally rather than reusing whatever
+        // ChooseShot left in botRng: Hard's branch never calls its own
+        // random draw, so without this every one of a Hard bot's shots would
+        // pause for exactly the same number of frames all match.
+        bArray.botRng = bArray.botRng * 1103515245u + 12345u;
+        const int thinkBase   = bArray.botSkill <= 0 ? 20 : bArray.botSkill == 1 ? 10 : 4;
+        const int thinkSpread = bArray.botSkill <= 0 ? 24 : bArray.botSkill == 1 ? 18 : 10;
+        bArray.botThinkFrames = thinkBase + (int)((bArray.botRng >> 16) % thinkSpread);
     }
 
     if (bArray.botThinkFrames > 0) {
