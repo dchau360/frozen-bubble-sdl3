@@ -41,6 +41,13 @@ struct BubbleGameTestAccess {
             false);
     }
     static void depart(BubbleGame& game, int idx) { game.HandlePlayerDeparture(idx); }
+    static int connected(const BubbleGame& game) { return game.connectedPlayerCount; }
+    static int& readyCount(BubbleGame& game) { return game.opponentsReadyCount; }
+    // The condition ProcessNetworkMessages tests to decide the round-end
+    // handshake is complete, in both the 'n' and 'l' branches.
+    static bool everyoneAnswered(const BubbleGame& game) {
+        return game.opponentsReadyCount >= game.connectedPlayerCount - 1;
+    }
     static bool& chatting(BubbleGame& game) { return game.chattingMode; }
     static bool owns(const BubbleGame& game, int idx) {
         return game.OwnsArray(game.bubbleArrays[idx]);
@@ -462,6 +469,33 @@ int main() {
         BubbleGameTestAccess::depart(game, 2);
         CHECK(BubbleGameTestAccess::matchOver(game));
         CHECK(BubbleGameTestAccess::player(game, 0).winCount == 1);
+
+        // A player leaving mid-match must not strand the survivors: the seat
+        // that left will never send its 'n', so the count it is measured
+        // against has to come down with it. This is the arithmetic behind the
+        // re-check in ProcessNetworkMessages' 'l' branch -- without it, three
+        // players minus one leaves two waiting forever on a third answer.
+        {
+            BubbleGameTestAccess::reset(game, 4, true, false);
+            BubbleGameTestAccess::settings(game).continueWhenPlayersLeave = true;
+            CHECK(BubbleGameTestAccess::connected(game) == 4);
+
+            // Two of the three opponents have answered; the third has not.
+            BubbleGameTestAccess::beginWaiting(game);
+            BubbleGameTestAccess::readyCount(game) = 2;
+            CHECK(!BubbleGameTestAccess::everyoneAnswered(game));
+
+            // The silent one leaves. The round can now go ahead.
+            BubbleGameTestAccess::depart(game, 3);
+            CHECK(BubbleGameTestAccess::connected(game) == 3);
+            CHECK(BubbleGameTestAccess::everyoneAnswered(game));
+
+            // And a player who had already answered leaving cannot push the
+            // count back below the line.
+            BubbleGameTestAccess::depart(game, 2);
+            CHECK(BubbleGameTestAccess::connected(game) == 2);
+            CHECK(BubbleGameTestAccess::everyoneAnswered(game));
+        }
 
         // A late departure cannot restart an already-finished 2P match alone.
         BubbleGameTestAccess::reset(game, 2, true, false);
