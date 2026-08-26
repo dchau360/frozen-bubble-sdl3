@@ -117,6 +117,7 @@ set(FROZEN_BUBBLE_CORE_SOURCES
     src/bubblegame_render.cpp
     src/bubblegame_shooter.cpp
     src/bubblegame_state.cpp
+    src/netbot.cpp
     src/netview.cpp
     src/netteams.cpp
     src/roundstats_color.cpp
@@ -352,6 +353,19 @@ if(BUILD_TESTING AND NOT EMSCRIPTEN AND NOT ANDROID AND NOT IOS)
         target_link_libraries(bot-play-test PRIVATE ws2_32)
     endif()
     add_test(NAME bot-play-test COMMAND bot-play-test)
+
+    add_executable(netbot-test
+        tests/netbot_test.cpp
+        src/netbot.cpp
+    )
+    set_property(TARGET netbot-test PROPERTY CXX_STANDARD 17)
+    set_property(TARGET netbot-test PROPERTY CXX_EXTENSIONS OFF)
+    target_include_directories(netbot-test PRIVATE src)
+    target_link_libraries(netbot-test PRIVATE SDL3::SDL3)
+    if(WIN32 OR MINGW)
+        target_link_libraries(netbot-test PRIVATE ws2_32)
+    endif()
+    add_test(NAME netbot-test COMMAND netbot-test)
 
     add_executable(persistence-save-test
         tests/persistence_save_test.cpp

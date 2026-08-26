@@ -484,6 +484,23 @@ public:
     void UpdatePenguin(BubbleArray &bArray);
     void DriveBot(BubbleArray &bArray);
 
+    // True when this client simulates the array's physics and is the
+    // authority for what happens on it: every array in a local game, the
+    // local player in a network game, and any bot this client is hosting.
+    // Remote players' boards are replayed from their messages instead, so
+    // simulating them here would fight the sync rather than agree with it.
+    bool OwnsArray(const BubbleArray &bArray) const {
+        return !currentSettings.networkGame || bArray.playerAssigned == 0 || bArray.isBot;
+    }
+    bool OwnsArrayIndex(int idx) const {
+        return idx >= 0 && idx < MAX_NET_PLAYERS && OwnsArray(bubbleArrays[idx]);
+    }
+    // Route one in-game payload to whichever connection speaks for this
+    // array: the player's own, or the bot's separate socket. The server tags
+    // messages by the connection they arrive on, so a bot's move cannot be
+    // sent down the host's link.
+    bool SendGameDataFor(const BubbleArray &bArray, const char *payload);
+
     void LoadLevelset(const char *path);
     void LoadLevel(int id);
 
