@@ -57,12 +57,25 @@ def build_next_colors_str(rng: random.Random, num_colors: int) -> str:
     return " ".join(str(rng.randrange(num_colors)) for _ in range(8))
 
 
+# Rows 0..4 of a freshly generated board carry colours (RandomLevel fills up to
+# `untilend = 13 / 2 - 1`), so the first bubble a player lands in a column comes
+# to rest on row 5.
+FIRST_FREE_ROW = 5
+BOARD_COLUMNS = 7
+LAST_ROW = 12
+
+
 @dataclass
 class BotRuntimeState:
-    row: int = 0
     shot_count: int = 0
     round_index: int = 0
     last_fire_at: float = 0.0
+    # Next free row per column, so a stuck bubble lands against the bubble
+    # above it instead of somewhere arbitrary.
+    column_rows: list = field(default_factory=lambda: [FIRST_FREE_ROW] * BOARD_COLUMNS)
+
+    def reset_board(self) -> None:
+        self.column_rows = [FIRST_FREE_ROW] * BOARD_COLUMNS
 
 
 @dataclass
@@ -85,13 +98,28 @@ def build_fire_message(rng: random.Random, num_colors: int) -> str:
 
 
 def build_stick_message(state: BotRuntimeState, rng: random.Random, num_colors: int) -> str:
-    col = state.shot_count % 8
-    row = min(state.row, 12)
+    """Where this bot's shot comes to rest.
+
+    Every client renders its opponents' boards purely from these messages, so
+    the positions have to be ones a real client could actually produce. A real
+    bubble stops where it collides, which is always against the bubble above it
+    -- so walk each column down from the level's first free row rather than
+    stamping a diagonal across the grid, which left a staircase of bubbles
+    visibly floating in mid-air on every mini board.
+    """
+    col = state.shot_count % BOARD_COLUMNS
+    # Prefer a column that still has room; fall back to the chosen one when the
+    # whole board is full, which the danger-zone check ends shortly anyway.
+    for offset in range(BOARD_COLUMNS):
+        candidate = (col + offset) % BOARD_COLUMNS
+        if state.column_rows[candidate] <= LAST_ROW:
+            col = candidate
+            break
+    row = min(state.column_rows[col], LAST_ROW)
     color = rng.randrange(num_colors)
     next_colors = build_next_colors_str(rng, num_colors)
     state.shot_count += 1
-    if state.row < 12:
-        state.row += 1
+    state.column_rows[col] = row + 1
     return f"s{col}:{row}:{color}:{next_colors}"
 
 
@@ -264,7 +292,7 @@ class BotClient:
             # (ready) message, so ack the first peer 'n' of each transition
             # exactly once; the client guards against double-counting repeats.
             if not self.ready_acked:
-                self.state.row = 0
+                self.state.reset_board()
                 self.state.shot_count = 0
                 self.state.round_index += 1
                 self.pending_stick_payload = None

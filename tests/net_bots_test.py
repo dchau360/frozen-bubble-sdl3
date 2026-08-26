@@ -40,13 +40,49 @@ class ProtocolHelpersTest(unittest.TestCase):
         next_colors = net_bots.build_next_colors_str(rng, 8)
         self.assertEqual(next_colors, "7 1 0 1 0 1 1 5")
 
-    def test_build_stick_message_uses_monotonic_rows_and_rolls_columns(self):
-        state = net_bots.BotRuntimeState(row=11, shot_count=7)
+    def test_build_stick_message_stacks_bubbles_down_a_column(self):
+        # Every client draws its opponents' boards straight from these
+        # messages, so a bot has to land where a real client could: against
+        # whatever is already above it in that column.
+        state = net_bots.BotRuntimeState()
         rng = random.Random(99)
-        stick = net_bots.build_stick_message(state, rng, num_colors=8)
-        self.assertEqual(stick, "s7:11:6:6 3 2 3 3 2 1 4")
-        self.assertEqual(state.row, 12)
-        self.assertEqual(state.shot_count, 8)
+
+        first = net_bots.build_stick_message(state, rng, num_colors=8)
+        self.assertTrue(first.startswith(f"s0:{net_bots.FIRST_FREE_ROW}:"))
+        self.assertEqual(state.column_rows[0], net_bots.FIRST_FREE_ROW + 1)
+        self.assertEqual(state.shot_count, 1)
+
+        # The next shot rolls to the next column, still at the first free row.
+        second = net_bots.build_stick_message(state, rng, num_colors=8)
+        self.assertTrue(second.startswith(f"s1:{net_bots.FIRST_FREE_ROW}:"))
+
+        # Coming back round to column 0 stacks on top of the first bubble.
+        for _ in range(net_bots.BOARD_COLUMNS - 2):
+            net_bots.build_stick_message(state, rng, num_colors=8)
+        again = net_bots.build_stick_message(state, rng, num_colors=8)
+        self.assertTrue(again.startswith(f"s0:{net_bots.FIRST_FREE_ROW + 1}:"))
+
+    def test_build_stick_message_never_passes_the_last_row(self):
+        state = net_bots.BotRuntimeState()
+        rng = random.Random(3)
+        for _ in range(200):
+            stick = net_bots.build_stick_message(state, rng, num_colors=8)
+            col, row = (int(part) for part in stick[1:].split(":")[:2])
+            self.assertGreaterEqual(row, 0)
+            self.assertLessEqual(row, net_bots.LAST_ROW)
+            self.assertGreaterEqual(col, 0)
+            self.assertLess(col, net_bots.BOARD_COLUMNS)
+
+    def test_reset_board_clears_column_heights(self):
+        state = net_bots.BotRuntimeState()
+        rng = random.Random(1)
+        for _ in range(20):
+            net_bots.build_stick_message(state, rng, num_colors=8)
+        state.reset_board()
+        self.assertEqual(
+            state.column_rows,
+            [net_bots.FIRST_FREE_ROW] * net_bots.BOARD_COLUMNS,
+        )
 
 
 class RunBotsFailurePropagationTest(unittest.TestCase):
