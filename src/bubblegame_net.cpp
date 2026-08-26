@@ -35,6 +35,46 @@
 #include <algorithm>
 #include "bubblegame_internal.h"
 
+
+bool BubbleGame::SendReadyForNextRound() {
+    // The round handshake counts one 'n' per connected player, so every seat
+    // this client holds has to answer for itself. A bot that stayed silent
+    // would stall the next round for the whole room -- the same deadlock a
+    // phantom player caused before 37e0237c, with the same cause: a seat the
+    // count expects to hear from and never will.
+    if (!currentSettings.networkGame) return false;
+    bool sentAny = false;
+    for (int idx = 0; idx < currentSettings.playerCount; ++idx) {
+        if (!OwnsArray(bubbleArrays[idx])) continue;
+        if (SendGameDataFor(bubbleArrays[idx], "n")) sentAny = true;
+    }
+    // Reported so callers can keep the old behaviour of not entering the
+    // waiting state when nothing could be sent -- a dropped connection must
+    // not leave the round waiting on answers that can never arrive.
+    return sentAny;
+}
+
+bool BubbleGame::SendGameDataFor(const BubbleArray &bArray, const char *payload) {
+    if (!currentSettings.networkGame || payload == nullptr) return false;
+
+    if (bArray.isBot) {
+        // A bot's move has to leave over the bot's own socket: the server
+        // stamps every in-game message with the connection it arrived on, so
+        // sending it down the host's link would attribute it to the host.
+        auto it = botConnections.find(bArray.playerAssigned);
+        if (it == botConnections.end() || !it->second) return false;
+        return it->second->SendGamePayload(payload);
+    }
+
+    // Only the local player's own board is ours to speak for; a remote
+    // player's messages are theirs to send.
+    if (bArray.playerAssigned != 0) return false;
+    NetworkClient *netClient = NetworkClient::Instance();
+    if (!netClient || !netClient->IsConnected() || netClient->GetState() != IN_GAME)
+        return false;
+    return netClient->SendGameData(payload);
+}
+
 void BubbleGame::SendNetworkBubbleShot(BubbleArray &bArray) {
     if (!currentSettings.networkGame) return;
 
@@ -56,7 +96,7 @@ void BubbleGame::SendNetworkBubbleShot(BubbleArray &bArray) {
                 bArray.nextBubble);  // Send the NEW next bubble color, not the launched bubble's color
             SDL_Log("Sending shot: angle=%.3f, nextBubble=%d (launched=%d)",
                     sBubble.direction, bArray.nextBubble, sBubble.bubbleId);
-            netClient->SendGameData(shotData);
+            SendGameDataFor(bArray, shotData);
             break;
         }
     }
@@ -166,11 +206,7 @@ void BubbleGame::ProcessNetworkMessages() {
                         // This means only ONE player needs to press a key; everyone else auto-responds.
                         if (!waitingForOpponentNewGame && gameFinish && !gameMatchOver) {
                             SDL_Log("Opponent pressed key first - auto-sending 'n' (%dP game)", currentSettings.playerCount);
-                            NetworkClient* netClient = NetworkClient::Instance();
-                            if (netClient->IsConnected() && netClient->GetState() == IN_GAME) {
-                                netClient->SendGameData("n");
-                                waitingForOpponentNewGame = true;
-                            }
+                            if (SendReadyForNextRound()) waitingForOpponentNewGame = true;
                         }
                         break;
                     }

@@ -426,7 +426,7 @@ void BubbleGame::CheckPossibleDestroy(BubbleArray &bArray){
                     totalDestroyed += groupedCount;  // Excludes activator, matching original @will_destroy
 
                     // Stats: count popped bubbles (group incl. activator) for locally-owned arrays.
-                    if (!currentSettings.networkGame || bArray.playerAssigned == 0)
+                    if (OwnsArray(bArray))
                         bArray.rPopped += groupedCount + 1;
 
                     bool isMiniPop = (currentSettings.playerCount >= 3 && bArray.playerAssigned >= 1);
@@ -459,11 +459,11 @@ void BubbleGame::CheckPossibleDestroy(BubbleArray &bArray){
         // Assign chain reaction targets to newly falling bubbles (original line 814-865)
         // This happens ONCE per stick event, not every frame
         // In network games, only run chain reactions for the LOCAL player (array 0).
-        // Remote players handle chain reactions on their own clients; running AssignChainReactions
-        // on mini-player arrays (1+) would use wrong 32px column spacing for the 16px mini grid,
-        // corrupting the singleBubbles list and potentially interfering with local chain reactions.
+        // Chain reactions run only on boards this client simulates. A remote
+        // player runs their own and tells us the outcome; running them here
+        // too would fight that rather than agree with it.
         bool shouldRunChainReactions = currentSettings.chainReaction && fallingCount > 0 &&
-            (!currentSettings.networkGame || bArray.playerAssigned == 0);
+            OwnsArray(bArray);
         if (shouldRunChainReactions) {
             AssignChainReactions(bArray);
         }
@@ -486,11 +486,11 @@ void BubbleGame::CheckPossibleDestroy(BubbleArray &bArray){
         if (currentSettings.mpTraining && bArray.playerAssigned == 0) {
             // mp_train: malus converted to score (original malus_change at line 1185)
             mpTrainScore += malusValue;
-        } else if (currentSettings.networkGame && bArray.playerAssigned == 0) {
-            // Only local player (array 0) sends malus
+        } else if (currentSettings.networkGame && OwnsArray(bArray)) {
+            // Every board we simulate attacks on its own behalf.
             SDL_Log("Awarding %d malus to opponent (%d destroyed + %d falling - 2)",
                     malusValue, totalDestroyed, fallingCount);
-            SendMalusToOpponent(malusValue);
+            SendMalusToOpponent(malusValue, bArray);
         } else if (!currentSettings.networkGame && currentSettings.playerCount >= 2) {
             // Local multiplayer: send the full malus to every other living player's queue.
             // Original (line 1191-1216, !is_mp_game() branch) sends the undivided count to

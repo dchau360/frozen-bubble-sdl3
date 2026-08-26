@@ -23,6 +23,7 @@
 #include "audiomixer.h"
 #include "platform.h"
 #define PI 3.1415926535897932384626433832795028841972
+#include "netbot.h"
 
 #include <SDL3/SDL.h>
 #include <SDL3_image/SDL_image.h>
@@ -30,6 +31,8 @@
 #include "ttftext.h"
 #include "networkclient.h"
 
+#include <map>
+#include <memory>
 #include <vector>
 #include <array>
 #include <algorithm>
@@ -500,6 +503,8 @@ public:
     // messages by the connection they arrive on, so a bot's move cannot be
     // sent down the host's link.
     bool SendGameDataFor(const BubbleArray &bArray, const char *payload);
+    // Answer the end-of-round handshake for every seat this client holds.
+    bool SendReadyForNextRound();
 
     void LoadLevelset(const char *path);
     void LoadLevel(int id);
@@ -657,7 +662,16 @@ private:
     void CheckPossibleDestroy(BubbleArray &bArray);
     void AssignChainReactions(BubbleArray &bArray);  // Assign chain reaction targets to falling bubbles (original line 814-865)
     int CheckAirBubbles(BubbleArray &bArray);  // Returns falling bubble count
-    void SendMalusToOpponent(int malusCount);   // Send malus attack to opponent
+    // Living boards this attacker's malus can land on (not itself, not its
+    // own team). Split out from SendMalusToOpponent so the targeting rules
+    // can be checked without a live connection.
+    std::vector<int> LivingOpponentsOf(const BubbleArray &attacker) const;
+    void SendMalusToOpponent(int malusCount, const BubbleArray &attacker);  // Send malus attack to opponent
+
+    // Sockets for the bots this client is hosting, keyed by the board they
+    // play. Empty in a local game and for anyone who is not the host: a bot
+    // belongs to whoever added it, and only that client simulates it.
+    std::map<int, std::unique_ptr<NetBotConnection>> botConnections;
     void SetSendMalusToOne(int opponentIdx);    // Set/clear single-player targeting (original: set_sendmalustoone)
     void ProcessMalusQueue(BubbleArray &bArray, int currentFrame);  // Generate malus bubbles from queue
     void CheckGameState(BubbleArray &bArray, bool countForRoot = true);

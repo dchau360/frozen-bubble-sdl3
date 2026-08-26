@@ -35,8 +35,30 @@
 #include <algorithm>
 #include "bubblegame_internal.h"
 
-void BubbleGame::SendMalusToOpponent(int malusCount) {
+std::vector<int> BubbleGame::LivingOpponentsOf(const BubbleArray &attacker) const {
+    // Who this board's attacks can land on: everyone still alive except the
+    // attacker itself and, in team mode, its own side. Written against the
+    // attacker rather than array 0 because a bot attacks from its own board
+    // and its own team, not the player's.
+    std::vector<int> opponents;
+    const int attackerIdx = attacker.playerAssigned;
+    const int attackerTeam = currentSettings.playerTeams[attackerIdx];
+    for (int i = 0; i < currentSettings.playerCount; i++) {
+        if (i == attackerIdx) continue;
+        if (bubbleArrays[i].playerState != BubbleArray::PlayerState::ALIVE) continue;
+        if (currentSettings.teamMode && currentSettings.playerTeams[i] == attackerTeam) continue;
+        opponents.push_back(i);
+    }
+    return opponents;
+}
+
+void BubbleGame::SendMalusToOpponent(int malusCount, const BubbleArray &attacker) {
     if (!currentSettings.networkGame) return;
+    // Who is attacking. Was implicitly array 0 throughout: a bot this client
+    // hosts attacks on its own behalf, from its own board, over its own
+    // connection, and its stats belong to it rather than to the player.
+    const int attackerIdx = attacker.playerAssigned;
+    if (!OwnsArray(attacker)) return;
 
     // >5-player royale mini-board blink: 2 full cycles of the render's 20-frame
     // blink period (bubblegame_render.cpp) at 60fps.
@@ -53,14 +75,7 @@ void BubbleGame::SendMalusToOpponent(int malusCount) {
     // 2. Send ALL malus to ONE specific target (single player targetting mode)
 
     // Count living opponents (exclude local player at array 0, and teammates in team mode)
-    std::vector<int> livingOpponents;
-    int localTeam = currentSettings.playerTeams[0];
-    for (int i = 1; i < currentSettings.playerCount; i++) {
-        if (bubbleArrays[i].playerState == BubbleArray::PlayerState::ALIVE) {
-            if (!currentSettings.teamMode || currentSettings.playerTeams[i] != localTeam)
-                livingOpponents.push_back(i);
-        }
-    }
+    std::vector<int> livingOpponents = LivingOpponentsOf(attacker);
 
     if (livingOpponents.empty()) {
         SDL_Log("No living opponents to send malus to");
@@ -81,7 +96,9 @@ void BubbleGame::SendMalusToOpponent(int malusCount) {
             if (bubbleArrays[i].playerState == BubbleArray::PlayerState::ALIVE) livingPlayers++;
         }
         if (currentSettings.networkGame && livingPlayers > 5) {
-            bool randomPick = (sendMalusToOne == -1);
+            // sendMalusToOne is the target the player picked on their own
+            // screen; a bot has no such intent and picks at random.
+            bool randomPick = (attackerIdx != 0 || sendMalusToOne == -1);
             if (!randomPick &&
                 !(sendMalusToOne >= 1 && sendMalusToOne < currentSettings.playerCount &&
                   bubbleArrays[sendMalusToOne].playerState == BubbleArray::PlayerState::ALIVE)) {
@@ -132,13 +149,13 @@ void BubbleGame::SendMalusToOpponent(int malusCount) {
             if (!targetNick.empty()) {
                 char malusMsg[128];
                 snprintf(malusMsg, sizeof(malusMsg), "g%s:%d", targetNick.c_str(), malusCount);
-                netClient->SendGameData(malusMsg);
-                bubbleArrays[0].rSent += malusCount;  // Stats: malus sent (focus-fire)
+                SendGameDataFor(attacker, malusMsg);
+                bubbleArrays[attackerIdx].rSent += malusCount;  // Stats: malus sent (focus-fire)
                 bubbleArrays[resolvedTarget].rRecv += malusCount;  // Stats: locally credit target's Def
                 bubbleArrays[resolvedTarget].attackFlashFramesLeft = kAttackFlashDurationFrames;
                 // Kill attribution: the sender never sees its own 'g' echoed back, so
                 // credit this locally too, same as the Def stat above.
-                bubbleArrays[resolvedTarget].lastAttackerIdx = 0;
+                bubbleArrays[resolvedTarget].lastAttackerIdx = attackerIdx;
             }
             if (randomPick) sendMalusToOne = -1;  // re-roll on the next attack
             return;
@@ -149,7 +166,8 @@ void BubbleGame::SendMalusToOpponent(int malusCount) {
     // actively selected a target (original lines 1217-1227). With no target selected
     // (sendMalusToOne == -1), fall through to splitting among all living opponents — matching
     // the original (line 1204: "if (!sendmalustoone) { split }"). In team mode we always split.
-    if (currentSettings.singlePlayerTargetting && !currentSettings.teamMode && sendMalusToOne != -1) {
+    if (currentSettings.singlePlayerTargetting && !currentSettings.teamMode &&
+        attackerIdx == 0 && sendMalusToOne != -1) {
         if (sendMalusToOne < currentSettings.playerCount &&
             bubbleArrays[sendMalusToOne].playerState == BubbleArray::PlayerState::ALIVE) {
             std::string targetNick = bubbleArrays[sendMalusToOne].playerNickname;
@@ -181,10 +199,10 @@ void BubbleGame::SendMalusToOpponent(int malusCount) {
                 snprintf(malusMsg, sizeof(malusMsg), "g%s:%d", targetNick.c_str(), malusCount);
                 SDL_Log("Targeting: Sending all %d malus to %s (array %d)",
                         malusCount, targetNick.c_str(), sendMalusToOne);
-                netClient->SendGameData(malusMsg);
-                bubbleArrays[0].rSent += malusCount;  // Stats: malus sent (focus-fire)
+                SendGameDataFor(attacker, malusMsg);
+                bubbleArrays[attackerIdx].rSent += malusCount;  // Stats: malus sent (focus-fire)
                 bubbleArrays[sendMalusToOne].attackFlashFramesLeft = kAttackFlashDurationFrames;
-                bubbleArrays[sendMalusToOne].lastAttackerIdx = 0;
+                bubbleArrays[sendMalusToOne].lastAttackerIdx = attackerIdx;
                 return;
             }
         }
@@ -236,11 +254,11 @@ void BubbleGame::SendMalusToOpponent(int malusCount) {
         SDL_Log("  -> Sending %d malus to %s (array %d, lobbyId=%d)",
                 malusPerOpponent, targetNick.c_str(), opponentIdx,
                 bubbleArrays[opponentIdx].lobbyPlayerId);
-        netClient->SendGameData(malusMsg);
-        bubbleArrays[0].rSent += malusPerOpponent;  // Stats: malus sent (split among opponents)
+        SendGameDataFor(attacker, malusMsg);
+        bubbleArrays[attackerIdx].rSent += malusPerOpponent;  // Stats: malus sent (split among opponents)
         // Split hits every living opponent at once, so all of their boards blink together.
         bubbleArrays[opponentIdx].attackFlashFramesLeft = kAttackFlashDurationFrames;
-        bubbleArrays[opponentIdx].lastAttackerIdx = 0;
+        bubbleArrays[opponentIdx].lastAttackerIdx = attackerIdx;
     }
 }
 
@@ -650,10 +668,11 @@ void BubbleGame::CommitRoundWin(int winnerIdx,
 
     if (sendNetworkFinish &&
         bubbleArrays[winnerIdx].playerState != BubbleArray::PlayerState::LEFT) {
-        NetworkClient* netClient = NetworkClient::Instance();
-        if (netClient && netClient->IsConnected() && netClient->GetState() == IN_GAME) {
+        // Announced by whoever simulates the winning board -- the player for
+        // their own, or the host on behalf of a bot it is running.
+        {
             std::string finishMessage = "F" + bubbleArrays[winnerIdx].playerNickname;
-            netClient->SendGameData(finishMessage.c_str());
+            SendGameDataFor(bubbleArrays[winnerIdx], finishMessage.c_str());
             SDL_Log("Sent win notification: %s",
                     bubbleArrays[winnerIdx].playerNickname.c_str());
         }
@@ -726,7 +745,7 @@ void BubbleGame::CheckGameState(BubbleArray &bArray, bool countForRoot) {
             ResolveRoundOutcome(
                 bArray.playerAssigned,
                 RoundWinCause::Clear,
-                currentSettings.networkGame && bArray.playerAssigned == 0);
+                currentSettings.networkGame && OwnsArray(bArray));
         }
     }
     // Check if ANY player hit the danger zone (original: verify_if_end() at line 1970-1975)
@@ -754,19 +773,22 @@ void BubbleGame::FinalizeRoundStats() {
     // into their match totals, and (in network games) broadcasts the local player's
     // round stats so all clients can render an accurate per-player table.
     if (currentSettings.networkGame) {
-        BubbleArray &me = bubbleArrays[0];  // local player is authoritative for itself
-        me.mFired += me.rFired;
-        me.mPopped += me.rPopped;
-        me.mSent  += me.rSent;
-        me.mRecv  += me.rRecv;
-        me.mKills += me.rKills;
+        // Each client is authoritative for the boards it simulates, which is
+        // its own player plus any bot it is hosting. Everyone else's row in
+        // the table arrives as their own 'S'.
+        for (int idx = 0; idx < currentSettings.playerCount; ++idx) {
+            BubbleArray &mine = bubbleArrays[idx];
+            if (!OwnsArray(mine)) continue;
+            mine.mFired += mine.rFired;
+            mine.mPopped += mine.rPopped;
+            mine.mSent  += mine.rSent;
+            mine.mRecv  += mine.rRecv;
+            mine.mKills += mine.rKills;
 
-        NetworkClient* netClient = NetworkClient::Instance();
-        if (netClient && netClient->IsConnected() && netClient->GetState() == IN_GAME) {
             char statsMsg[64];
             snprintf(statsMsg, sizeof(statsMsg), "S%d:%d:%d:%d:%d",
-                     me.rFired, me.rPopped, me.rSent, me.rRecv, me.rKills);
-            netClient->SendGameData(statsMsg);
+                     mine.rFired, mine.rPopped, mine.rSent, mine.rRecv, mine.rKills);
+            SendGameDataFor(mine, statsMsg);
         }
         // Remote arrays' totals are accumulated as their 'S' messages arrive.
     } else {

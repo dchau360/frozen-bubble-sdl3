@@ -351,9 +351,7 @@ void BubbleGame::HandleInput(SDL_Event *e) {
                         if (!waitingForOpponentNewGame) {
                             SDL_Log("Sending newgame signal 'n' to opponent (gameFinish=%d, gameWon=%d, gameLost=%d)",
                                     gameFinish, gameWon, gameLost);
-                            NetworkClient* netClient = NetworkClient::Instance();
-                            if (netClient->IsConnected() && netClient->GetState() == IN_GAME) {
-                                netClient->SendGameData("n");
+                            if (SendReadyForNextRound()) {
                                 waitingForOpponentNewGame = true;
                                 // Don't reset opponentsReadyCount here — 'n' messages from peers may have
                                 // already arrived before we pressed ENTER, and resetting would lose them.

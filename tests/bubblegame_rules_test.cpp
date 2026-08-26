@@ -42,6 +42,12 @@ struct BubbleGameTestAccess {
     }
     static void depart(BubbleGame& game, int idx) { game.HandlePlayerDeparture(idx); }
     static bool& chatting(BubbleGame& game) { return game.chattingMode; }
+    static bool owns(const BubbleGame& game, int idx) {
+        return game.OwnsArray(game.bubbleArrays[idx]);
+    }
+    static std::vector<int> opponentsOf(const BubbleGame& game, int idx) {
+        return game.LivingOpponentsOf(game.bubbleArrays[idx]);
+    }
     static void assignChains(BubbleGame& game, int idx) {
         game.AssignChainReactions(game.bubbleArrays[idx]);
     }
@@ -785,6 +791,88 @@ int main() {
         CHECK(deepest < 230.0f);
         if (deepest >= 230.0f)
             std::fprintf(stderr, "  (mini chain bubble sank to y=%.1f)\n", deepest);
+    }
+
+    // --- Board ownership ---------------------------------------------------
+    // Which boards this client simulates. Every site that used to ask
+    // "is this array 0?" now asks this, so a bot the host runs is simulated
+    // and spoken for exactly as the player's own board is, while a remote
+    // player's board stays replayed from their messages.
+    {
+        BubbleGame game(renderer);
+
+        // Local game: every board is ours, bot or not.
+        BubbleGameTestAccess::reset(game, 4, false, false);
+        for (int p = 0; p < 4; ++p) CHECK(BubbleGameTestAccess::owns(game, p));
+
+        // Network game: only our own player.
+        BubbleGameTestAccess::reset(game, 4, true, false);
+        CHECK(BubbleGameTestAccess::owns(game, 0));
+        for (int p = 1; p < 4; ++p) CHECK(!BubbleGameTestAccess::owns(game, p));
+
+        // ...plus any bot we are hosting, which is the whole point.
+        BubbleGameTestAccess::player(game, 2).isBot = true;
+        CHECK(BubbleGameTestAccess::owns(game, 0));
+        CHECK(!BubbleGameTestAccess::owns(game, 1));
+        CHECK(BubbleGameTestAccess::owns(game, 2));
+        CHECK(!BubbleGameTestAccess::owns(game, 3));
+    }
+
+    // --- Malus targeting from a bot's board --------------------------------
+    // SendMalusToOpponent was written throughout around array 0 being the
+    // attacker. A bot attacks from its own board, so its own seat has to be
+    // excluded and its own team consulted -- not the player's.
+    {
+        BubbleGame game(renderer);
+        BubbleGameTestAccess::reset(game, 5, true, false);
+        BubbleGameTestAccess::player(game, 3).isBot = true;
+
+        // A bot never targets itself, and does target the player.
+        const std::vector<int> fromBot = BubbleGameTestAccess::opponentsOf(game, 3);
+        CHECK(std::find(fromBot.begin(), fromBot.end(), 3) == fromBot.end());
+        CHECK(std::find(fromBot.begin(), fromBot.end(), 0) != fromBot.end());
+        CHECK(fromBot.size() == 4);
+
+        // The player's own list is unchanged by any of this.
+        const std::vector<int> fromPlayer = BubbleGameTestAccess::opponentsOf(game, 0);
+        CHECK(std::find(fromPlayer.begin(), fromPlayer.end(), 0) == fromPlayer.end());
+        CHECK(fromPlayer.size() == 4);
+
+        // The dead are not targets.
+        BubbleGameTestAccess::player(game, 1).playerState = BubbleArray::PlayerState::LOST;
+        BubbleGameTestAccess::player(game, 4).playerState = BubbleArray::PlayerState::LEFT;
+        const std::vector<int> living = BubbleGameTestAccess::opponentsOf(game, 3);
+        CHECK(living.size() == 2);
+        CHECK(std::find(living.begin(), living.end(), 1) == living.end());
+        CHECK(std::find(living.begin(), living.end(), 4) == living.end());
+    }
+
+    // Team mode reads the attacker's team, so a bot does not shell its own
+    // side just because the player is on a different one.
+    {
+        BubbleGame game(renderer);
+        BubbleGameTestAccess::reset(game, 4, true, false);
+        SetupSettings& settings = BubbleGameTestAccess::settings(game);
+        settings.teamMode = true;
+        settings.playerTeams[0] = 1;
+        settings.playerTeams[1] = 2;
+        settings.playerTeams[2] = 1;
+        settings.playerTeams[3] = 2;
+        BubbleGameTestAccess::player(game, 1).isBot = true;
+
+        // The bot is on team 2 with player 3, and attacks team 1 only.
+        const std::vector<int> fromBot = BubbleGameTestAccess::opponentsOf(game, 1);
+        CHECK(fromBot.size() == 2);
+        CHECK(std::find(fromBot.begin(), fromBot.end(), 0) != fromBot.end());
+        CHECK(std::find(fromBot.begin(), fromBot.end(), 2) != fromBot.end());
+        CHECK(std::find(fromBot.begin(), fromBot.end(), 3) == fromBot.end());
+
+        // The player, on team 1, attacks the other half.
+        const std::vector<int> fromPlayer = BubbleGameTestAccess::opponentsOf(game, 0);
+        CHECK(fromPlayer.size() == 2);
+        CHECK(std::find(fromPlayer.begin(), fromPlayer.end(), 1) != fromPlayer.end());
+        CHECK(std::find(fromPlayer.begin(), fromPlayer.end(), 3) != fromPlayer.end());
+        CHECK(std::find(fromPlayer.begin(), fromPlayer.end(), 2) == fromPlayer.end());
     }
 
     SDL_DestroyRenderer(renderer);

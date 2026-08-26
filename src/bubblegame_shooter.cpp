@@ -51,13 +51,14 @@ void BubbleGame::LaunchBubble(BubbleArray &bArray) {
     PickNextBubble(bArray);
     FrozenBubble::Instance()->totalBubbles++;
     // Stats: count shots for locally-owned arrays only (remote arrays sync via 'S').
-    if (!currentSettings.networkGame || bArray.playerAssigned == 0) bArray.rFired++;
+    if (OwnsArray(bArray)) bArray.rFired++;
     bArray.hurryTimer = 0;
     bArray.chainLevel = 0; // Reset chain level for new shot
 
-    // Send shot to network if this is a network game AND this is the local player
-    // Don't send if this is a remote player's shot (we're just replicating their fire from mpFirePending)
-    if (currentSettings.networkGame && bArray.playerAssigned == 0) {
+    // Announce the shot for every board we simulate. A remote player's fire
+    // is only being replayed here from their own message, so re-sending it
+    // would echo their move back at them.
+    if (currentSettings.networkGame && OwnsArray(bArray)) {
         SendNetworkBubbleShot(bArray);
     }
 }
@@ -129,7 +130,7 @@ void BubbleGame::UpdatePenguin(BubbleArray &bArray) {
     // But we still need to process the fire logic for all players (original: iter_players at line 2105)
     // Original checks mp_fire for ALL players, not just local (line 2141)
     // In local multiplayer, ALL players are local (each uses their own controller)
-    bool isLocalPlayer = (bArray.playerAssigned == 0) || !currentSettings.networkGame;
+    bool isLocalPlayer = OwnsArray(bArray);
 
     // Process keyboard input only for local players (original: is_local_player($::p))
     if (isLocalPlayer) {
@@ -268,9 +269,12 @@ void BubbleGame::UpdatePenguin(BubbleArray &bArray) {
     // Check if we should fire: either local player action or remote player mp_fire flag (original line 2141)
     // Block local player from firing while malus bubbles are falling (original line 2146: !@{$malus_bubble{$::p}})
     bool localMalusInFlight = false;
-    if (currentSettings.networkGame && bArray.playerAssigned == 0) {
+    if (currentSettings.networkGame && OwnsArray(bArray)) {
         for (const auto& mb : malusBubbles)
-            if (mb.assignedArray == 0 && !mb.shouldClear) { localMalusInFlight = true; break; }
+            if (mb.assignedArray == bArray.playerAssigned && !mb.shouldClear) {
+                localMalusInFlight = true;
+                break;
+            }
     }
 
     // For remote players (mp_fire), fire immediately regardless of newShoot state
@@ -529,7 +533,7 @@ void BubbleGame::UpdateSingleBubblesAtScale(float deltaScale) {
 
         const bool locallySimulatedLaunch =
             sBubble.launching &&
-            (!currentSettings.networkGame || sBubble.assignedArray == 0);
+            OwnsArrayIndex(sBubble.assignedArray);
 
         // Local launches are advanced below in collision-safe substeps. Everything
         // else retains one full-scale position update per frame, including remote
@@ -558,7 +562,7 @@ void BubbleGame::UpdateSingleBubblesAtScale(float deltaScale) {
                 bool chainInFlight = false;
                 for (const auto& sb : singleBubbles)
                     if (!sb.shouldClear && sb.assignedArray == arr && sb.chainExists && !sb.chainReachedDest) { chainInFlight = true; break; }
-                if (!chainInFlight && (currentSettings.networkGame ? arr == 0 : (currentSettings.playerCount >= 2 || currentSettings.mpTraining)))
+                if (!chainInFlight && (currentSettings.networkGame ? OwnsArrayIndex(arr) : (currentSettings.playerCount >= 2 || currentSettings.mpTraining)))
                     ProcessMalusQueue(bubbleArrays[arr], frameCount);
             }
             // Chain-reaction landings don't count toward the compressor/new-root counter
@@ -591,8 +595,8 @@ void BubbleGame::UpdateSingleBubblesAtScale(float deltaScale) {
 
             // In network games, skip collision detection for remote players' bubbles
             // They will be placed via 's' message to ensure sync (handled above)
-            if (currentSettings.networkGame && sBubble.assignedArray != 0) {
-                // This is remote player's bubble - wait for 's' message
+            if (currentSettings.networkGame && !OwnsArrayIndex(sBubble.assignedArray)) {
+                // This is a remote player's bubble - wait for their 's' message
                 continue;
             }
 
@@ -606,14 +610,11 @@ void BubbleGame::UpdateSingleBubblesAtScale(float deltaScale) {
                     int row, col;
                     GetClosestFreeCell(sBubble, *bArray, &row, &col, -1, -1, isMini);
                     SDL_Log("Ceiling hit: placing at row=%d col=%d pos=(%.1f,%.1f)", row, col, (float)sBubble.pos.x, (float)sBubble.pos.y);
-                    if (currentSettings.networkGame && sBubble.assignedArray == 0) {
-                        NetworkClient* netClient = NetworkClient::Instance();
-                        if (netClient->IsConnected() && netClient->GetState() == IN_GAME) {
-                            char stickData[128];
-                            snprintf(stickData, sizeof(stickData), "s%d:%d:%d:%s", col, row, sBubble.bubbleId,
-                                     BuildNextColorsStr(*bArray).c_str());
-                            netClient->SendGameData(stickData);
-                        }
+                    if (currentSettings.networkGame && OwnsArray(*bArray)) {
+                        char stickData[128];
+                        snprintf(stickData, sizeof(stickData), "s%d:%d:%d:%s", col, row, sBubble.bubbleId,
+                                 BuildNextColorsStr(*bArray).c_str());
+                        SendGameDataFor(*bArray, stickData);
                     }
                     bArray->PlacePlayerBubble(sBubble.bubbleId, row, col);
                     bArray->newShoot = true;
@@ -638,18 +639,15 @@ void BubbleGame::UpdateSingleBubblesAtScale(float deltaScale) {
                                     row, col, (float)sBubble.pos.x, (float)sBubble.pos.y);
 
                             // In network game, send stick position to opponent
-                            if (currentSettings.networkGame && sBubble.assignedArray == 0) {
-                                NetworkClient* netClient = NetworkClient::Instance();
-                                if (netClient->IsConnected() && netClient->GetState() == IN_GAME) {
-                                    // Send: s{cx}:{cy}:{bubbleColor}:{nextcolors...}
-                                    // Perl format (frozen-bubble line 2199): "s$cx:$cy:$col:@{nextcolors}"
-                                    char stickData[256];
-                                    snprintf(stickData, sizeof(stickData), "s%d:%d:%d:%s",
+                            if (currentSettings.networkGame && OwnsArray(*bArray)) {
+                                // Send: s{cx}:{cy}:{bubbleColor}:{nextcolors...}
+                                // Perl format (frozen-bubble line 2199): "s$cx:$cy:$col:@{nextcolors}"
+                                char stickData[256];
+                                snprintf(stickData, sizeof(stickData), "s%d:%d:%d:%s",
+                                    col, row, sBubble.bubbleId, BuildNextColorsStr(*bArray).c_str());
+                                SDL_Log("Sending stick: col=%d row=%d color=%d nextColors=%s",
                                         col, row, sBubble.bubbleId, BuildNextColorsStr(*bArray).c_str());
-                                    SDL_Log("Sending stick: col=%d row=%d color=%d nextColors=%s",
-                                            col, row, sBubble.bubbleId, BuildNextColorsStr(*bArray).c_str());
-                                    netClient->SendGameData(stickData);
-                                }
+                                SendGameDataFor(*bArray, stickData);
                             }
 
                             bArray->PlacePlayerBubble(sBubble.bubbleId, row, col);
@@ -666,7 +664,7 @@ void BubbleGame::UpdateSingleBubblesAtScale(float deltaScale) {
                                 bool chainInFlight = false;
                                 for (const auto& sb : singleBubbles)
                                     if (sb.assignedArray == arr && sb.chainExists && !sb.chainReachedDest) { chainInFlight = true; break; }
-                                if (!chainInFlight && (currentSettings.networkGame ? arr == 0 : (currentSettings.playerCount >= 2 || currentSettings.mpTraining)))
+                                if (!chainInFlight && (currentSettings.networkGame ? OwnsArrayIndex(arr) : (currentSettings.playerCount >= 2 || currentSettings.mpTraining)))
                                     ProcessMalusQueue(bubbleArrays[arr], frameCount);
                             }
                             CheckGameState(*bArray);
@@ -740,14 +738,11 @@ void BubbleGame::UpdateSingleBubblesAtScale(float deltaScale) {
             malusArray->newShoot = true;
 
             // Send 'M' message to sync sticking (original line 1456-1466)
-            if (currentSettings.networkGame && malusArray->playerAssigned == 0) {
-                NetworkClient* netClient = NetworkClient::Instance();
-                if (netClient && netClient->IsConnected()) {
-                    char MMsg[64];
-                    snprintf(MMsg, sizeof(MMsg), "M%d:%d", malus.cx, malus.stickY);
-                    SDL_Log("Sending malus stick: cx=%d stickY=%d", malus.cx, malus.stickY);
-                    netClient->SendGameData(MMsg);
-                }
+            if (currentSettings.networkGame && OwnsArray(*malusArray)) {
+                char MMsg[64];
+                snprintf(MMsg, sizeof(MMsg), "M%d:%d", malus.cx, malus.stickY);
+                SDL_Log("Sending malus stick: cx=%d stickY=%d", malus.cx, malus.stickY);
+                SendGameDataFor(*malusArray, MMsg);
             }
 
             malus.shouldClear = true;
