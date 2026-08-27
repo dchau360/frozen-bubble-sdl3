@@ -99,7 +99,7 @@ public:
     int gfxLevel() { return gfxQuality; }
     SDL_Point curResolution() { return {windowWidth, windowHeight}; }
     bool fullscreenMode() { return useFullscreen; }
-    bool linearScaling;
+    bool linearScaling = false;
     bool canPlayMusic() { return playMusic; }
     bool canPlaySFX() { return playSfx; }
     bool useClassicAudio() { return classicSound; }
@@ -206,8 +206,16 @@ private:
     void CreateDefaultSettings();
     dictionary *optDict;
 
-    int gfxQuality, windowWidth, windowHeight;
-    bool useFullscreen, colorblindBubbles, playMusic, playSfx, classicSound;
+    // Every one of these is written by ReadSettings() on a normal start, but
+    // nothing guarantees that ran: a test harness constructs the singleton
+    // directly, and a malformed or partial settings.ini leaves individual
+    // keys untouched. Reading an uninitialised bool is undefined behaviour --
+    // UBSan flags it as "load of value 190, which is not a valid value for
+    // type 'bool'" -- and an indeterminate gfxQuality silently changes which
+    // rendering path the game takes. Defaults here match CreateDefaultSettings().
+    int gfxQuality = 1, windowWidth = 640, windowHeight = 480;
+    bool useFullscreen = false, colorblindBubbles = false;
+    bool playMusic = true, playSfx = true, classicSound = false;
     bool showFps = false;
 
     GameSettings(){};

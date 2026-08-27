@@ -76,14 +76,23 @@ int main() {
 
     // A four-player game where player 1 is a person who never touches the
     // controls and 2-4 are bots.
-    {
+    //
+    // Run over several seeds rather than one. Both sources of randomness have
+    // to be pinned for that to mean anything: the level comes from the game's
+    // own rand(), and NewGame seeds each bot from the wall clock so a real
+    // game never repeats itself. Leaving either loose made this block a
+    // different experiment on every run -- which is exactly how it eventually
+    // failed in CI while passing locally.
+    for (unsigned seed = 1; seed <= 5; ++seed) {
         LocalMultiplayerOptions options;
         options.playerCount = 4;
         options.botCount = 3;
         options.botSkill = 2;   // hard, so the result is not luck
 
+        std::srand(seed * 22699u);
         BubbleGame game(renderer);
         game.NewGame(BuildLocalMultiplayerSettings(options));
+        BubbleGameTestAccess::seedBots(game, 4, seed * 55291u);
 
         CHECK(!BubbleGameTestAccess::player(game, 0).isBot);
         for (int p = 1; p < 4; ++p)
@@ -105,6 +114,9 @@ int main() {
             CHECK(bot.rPopped > 0);
             // Clearing bubbles keeps the board off the floor.
             CHECK(Occupied(bot) < 13 * 8);
+            if (bot.rPopped == 0 || Occupied(bot) >= 13 * 8)
+                std::fprintf(stderr, "  (seed %u, bot %d: fired %d popped %d occupied %d)\n",
+                             seed, p, bot.rFired, bot.rPopped, Occupied(bot));
         }
     }
 
