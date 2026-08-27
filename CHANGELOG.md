@@ -1,5 +1,26 @@
 # Changelog
 
+## Unreleased
+
+- **Local multiplayer goes up to five players.** The cap was four, but the
+  engine's own ceiling has always been five: `NewGame`'s case 5 is a
+  hand-authored layout (one full board in the centre, four minis in the
+  corners) that five-player network rooms already used, and the per-seat
+  state -- `player1Keys`..`player5Keys`, `controllerInputs[5]`,
+  `CTRL_SC_PLAYERS` -- was sized for five throughout. Only the local setup
+  screen's own limit was lower. It now lives in one named constant rather
+  than as literals spread across the menu, the clamps and the round-end
+  check.
+
+  One of those literals would have bitten: the round-completion state that
+  lets you move on after a round only fired for local games of four or
+  fewer, so a five-player round would have ended and then refused to
+  continue. Also fixed the Team Mode label, which named a fixed
+  "P1+P3 vs P2+P4" pairing regardless of the count -- it now derives from
+  the same rule the teams themselves come from, so it reads
+  "P1+P3+P5 vs P2+P4" at five and cannot promise a split the game does not
+  play.
+
 ## v2.4.41
 
 - **New: bots in local multiplayer.** The setup screen takes a bot count and a

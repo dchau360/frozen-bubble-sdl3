@@ -379,6 +379,12 @@ int main() {
         CHECK(ClampLocalBotCount(4, 4) == 3);   // one seat always stays human
         CHECK(ClampLocalBotCount(9, 2) == 1);
         CHECK(ClampLocalBotCount(-2, 3) == 0);
+        // A five-player game can hold four bots, one short of every seat.
+        CHECK(ClampLocalBotCount(4, 5) == 4);
+        CHECK(ClampLocalBotCount(5, 5) == 4);
+        // Past the seat cap the clamp still answers for the largest game
+        // that exists, rather than scaling with a count that cannot happen.
+        CHECK(ClampLocalBotCount(9, 99) == kMaxLocalPlayers - 1);
 
         LocalMultiplayerOptions options;
         options.playerCount = 4;
@@ -413,12 +419,60 @@ int main() {
         CHECK(BuildLocalMultiplayerSettings(options).botSkill == 0);
     }
 
+    // --- Five seats -------------------------------------------------------
+    // Five is the largest local game, and the layout it lands on (NewGame's
+    // case 5) is the same one a five-player network room uses.
+    {
+        LocalMultiplayerOptions options;
+        options.playerCount = 5;
+        const SetupSettings settings = BuildLocalMultiplayerSettings(options);
+        CHECK(settings.playerCount == 5);
+        CHECK(settings.localMultiplayer);
+
+        // Anything past the cap is trimmed to it rather than reaching a
+        // layout that was never authored.
+        options.playerCount = 6;
+        CHECK(BuildLocalMultiplayerSettings(options).playerCount == kMaxLocalPlayers);
+        options.playerCount = 1;
+        CHECK(BuildLocalMultiplayerSettings(options).playerCount == kMinLocalPlayers);
+
+        // Team Mode splits odd slots against even, so the fifth player joins
+        // player 1's side -- and the label has to say so, or it would promise
+        // a pairing the game does not play.
+        options.playerCount = 5;
+        options.teamMode = true;
+        const SetupSettings teams = BuildLocalMultiplayerSettings(options);
+        CHECK(teams.playerTeams[0] == 1 && teams.playerTeams[2] == 1 &&
+              teams.playerTeams[4] == 1);
+        CHECK(teams.playerTeams[1] == 2 && teams.playerTeams[3] == 2);
+        for (int i = 0; i < 5; ++i)
+            CHECK(teams.playerTeams[i] == LocalMPTeamOf(i));
+
+        char label[48];
+        LocalMPTeamSplitLabel(label, sizeof(label), 5);
+        CHECK(std::string(label) == "P1+P3+P5 vs P2+P4");
+        LocalMPTeamSplitLabel(label, sizeof(label), 4);
+        CHECK(std::string(label) == "P1+P3 vs P2+P4");
+        LocalMPTeamSplitLabel(label, sizeof(label), 2);
+        CHECK(std::string(label) == "P1 vs P2");
+        // A buffer too small must truncate, never run past its end.
+        char tiny[6];
+        LocalMPTeamSplitLabel(tiny, sizeof(tiny), 5);
+        CHECK(std::string(tiny).size() < sizeof(tiny));
+    }
+
     // The panel and the key handler both index rows through these helpers, so
     // the two can only disagree if the helpers themselves are wrong.
     {
         CHECK(LocalMPAimGuideRow(0) == kLocalMPFirstPlayerRow);
         CHECK(LocalMPColorsRow(0, 4) == kLocalMPFirstPlayerRow + 4);
         CHECK(LocalMPStartRow(4) == kLocalMPFirstPlayerRow + 8);
+        // The rows a fifth player adds land past the fourth player's, and
+        // Start moves down with them.
+        CHECK(LocalMPColorsRow(0, 5) == kLocalMPFirstPlayerRow + 5);
+        CHECK(LocalMPAimGuideRow(4) < LocalMPColorsRow(0, 5));
+        CHECK(LocalMPColorsRow(4, 5) < LocalMPStartRow(5));
+        CHECK(LocalMPStartRow(5) == kLocalMPFirstPlayerRow + 10);
         // Every row index in a 4-player panel is distinct and contiguous.
         std::set<int> rows;
         for (int i = 0; i <= LocalMPStartRow(4); ++i) rows.insert(i);

@@ -4,10 +4,20 @@
 #include "bubblegame.h"
 
 #include <array>
+#include <cstddef>
 
 inline constexpr std::array<int, 18> kVictoriesLimits = {
     0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 15, 20, 30, 50, 100
 };
+
+// Seats a local game can hold. Five is the engine's own ceiling, not an
+// arbitrary one: NewGame's case 5 is the last hand-authored layout (one full
+// board centre, four minis in the corners), and everything a local seat needs
+// is sized to match -- player1Keys..player5Keys, controllerInputs[5], and
+// CTRL_SC_PLAYERS. Above this a game has to be a network room, which pages
+// opponent boards instead of showing them all.
+inline constexpr int kMinLocalPlayers = 2;
+inline constexpr int kMaxLocalPlayers = 5;
 
 struct LocalMultiplayerOptions {
     int playerCount = 2;
@@ -53,6 +63,18 @@ inline constexpr int LocalMPStartRow(int playerCount) {
 inline const char* LocalMPBotSkillName(int skill) {
     return skill <= 0 ? "easy" : skill == 1 ? "normal" : "hard";
 }
+
+// Which team a local player slot belongs to (1-based team, 0-based slot):
+// odd slots on team 1, even on team 2. The setup panel's "Team Mode" label
+// and the teams the game actually starts with both derive from this, so the
+// label cannot claim a pairing the game does not use.
+inline constexpr int LocalMPTeamOf(int playerIndex) {
+    return (playerIndex % 2) + 1;
+}
+
+// Writes the team split for `playerCount` players, e.g. "P1+P3+P5 vs P2+P4".
+// Needs room for kMaxLocalPlayers slots; 48 bytes is comfortably enough.
+void LocalMPTeamSplitLabel(char* out, size_t outSize, int playerCount);
 
 enum class LocalMultiplayerMenuCommand {
     Left,

@@ -363,7 +363,7 @@ private:
     bool localMPNoCompress = false;  // Disable row compression for all players
     bool localMPClearMode = false;   // Clear Mode (win by clearing board; defaults compression+malus off)
     bool localMPDisableMalus = false; // Disable malus attacks
-    bool localMPTeamMode = false;    // Team Mode (P1+P3 vs P2+P4, etc.)
+    bool localMPTeamMode = false;    // Team Mode: odd player slots vs even (see LocalMPTeamOf)
     int localMPVictoriesIndex = 5;   // Index into kVictoriesLimits
     // Snapshot taken when Clear Mode is switched on, restored when switching away
     // from it (see the matching netPreClear* fields above for why).

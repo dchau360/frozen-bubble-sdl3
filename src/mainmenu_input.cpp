@@ -784,10 +784,12 @@ bool MainMenu::LocalMPPanelKey(SDL_Event *e) {
                     if (localMPMenuIndex == kLocalMPRowPlayers) {
                         if (e->key.key == SDLK_LEFT) {
                             localMPPlayerCount--;
-                            if (localMPPlayerCount < 2) localMPPlayerCount = 4;
+                            if (localMPPlayerCount < kMinLocalPlayers)
+                                localMPPlayerCount = kMaxLocalPlayers;
                         } else {
                             localMPPlayerCount++;
-                            if (localMPPlayerCount > 4) localMPPlayerCount = 2;
+                            if (localMPPlayerCount > kMaxLocalPlayers)
+                                localMPPlayerCount = kMinLocalPlayers;
                         }
                         // Fewer players can mean fewer seats for bots; leaving
                         // a stale count would start a game with no human in it.
@@ -866,7 +868,8 @@ bool MainMenu::LocalMPPanelKey(SDL_Event *e) {
                     }
                     if (localMPMenuIndex == kLocalMPRowPlayers) {
                         localMPPlayerCount++;
-                        if (localMPPlayerCount > 4) localMPPlayerCount = 2;
+                        if (localMPPlayerCount > kMaxLocalPlayers)
+                            localMPPlayerCount = kMinLocalPlayers;
                         localMPBotCount =
                             ClampLocalBotCount(localMPBotCount, localMPPlayerCount);
                         if (localMPMenuIndex > LocalMPStartRow(localMPPlayerCount))

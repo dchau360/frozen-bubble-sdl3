@@ -289,6 +289,17 @@ void MainMenu::LocalMPPanelRender() {
         snprintf(botsText + pos, sizeof(botsText) - pos, ")");
     }
 
+    // Team Mode splits odd slots against even, so which players face which
+    // depends on the count -- spell it out rather than naming a fixed pairing.
+    char teamModeText[48];
+    if (localMPTeamMode) {
+        char split[40];
+        LocalMPTeamSplitLabel(split, sizeof(split), localMPPlayerCount);
+        snprintf(teamModeText, sizeof(teamModeText), "ON (%s)", split);
+    } else {
+        snprintf(teamModeText, sizeof(teamModeText), "OFF");
+    }
+
     // Exactly one blank line separates the header (title + optional warning)
     // from the settings list, whether or not the warning is shown.
     char pnltxt[1024];
@@ -317,7 +328,7 @@ void MainMenu::LocalMPPanelRender() {
         localMPMenuIndex == 4 ? ">" : " ",
         localMPDisableMalus ? "disabled" : "enabled",
         localMPMenuIndex == 5 ? ">" : " ",
-        localMPTeamMode ? "ON (P1+P3 vs P2+P4)" : "OFF",
+        teamModeText,
         localMPMenuIndex == kLocalMPRowVictories ? ">" : " ",
         victoriesText,
         localMPMenuIndex == kLocalMPRowBots ? ">" : " ",

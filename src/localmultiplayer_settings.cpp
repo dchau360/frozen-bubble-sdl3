@@ -1,6 +1,7 @@
 #include "localmultiplayer_settings.h"
 
 #include <algorithm>
+#include <cstdio>
 
 bool ApplyLocalMultiplayerVictoriesInput(
     int menuIndex,
@@ -22,8 +23,31 @@ bool ApplyLocalMultiplayerVictoriesInput(
     return true;
 }
 
+void LocalMPTeamSplitLabel(char* out, size_t outSize, int playerCount) {
+    if (out == nullptr || outSize == 0) return;
+    const int players =
+        std::clamp(playerCount, kMinLocalPlayers, kMaxLocalPlayers);
+    size_t pos = 0;
+    for (int team = 1; team <= 2; ++team) {
+        if (team == 2) {
+            const int n = snprintf(out + pos, outSize - pos, " vs ");
+            if (n < 0 || static_cast<size_t>(n) >= outSize - pos) return;
+            pos += static_cast<size_t>(n);
+        }
+        bool first = true;
+        for (int i = 0; i < players; ++i) {
+            if (LocalMPTeamOf(i) != team) continue;
+            const int n = snprintf(out + pos, outSize - pos, "%sP%d",
+                                   first ? "" : "+", i + 1);
+            if (n < 0 || static_cast<size_t>(n) >= outSize - pos) return;
+            pos += static_cast<size_t>(n);
+            first = false;
+        }
+    }
+}
+
 int ClampLocalBotCount(int botCount, int playerCount) {
-    const int players = std::clamp(playerCount, 2, 4);
+    const int players = std::clamp(playerCount, kMinLocalPlayers, kMaxLocalPlayers);
     return std::clamp(botCount, 0, players - 1);
 }
 
@@ -59,7 +83,8 @@ LocalMultiplayerOptions BuildLocalMultiplayerOptions(
 SetupSettings BuildLocalMultiplayerSettings(
     const LocalMultiplayerOptions& options) {
     SetupSettings settings;
-    settings.playerCount = std::clamp(options.playerCount, 2, 4);
+    settings.playerCount =
+        std::clamp(options.playerCount, kMinLocalPlayers, kMaxLocalPlayers);
     settings.chainReaction = options.chainReaction;
     settings.randomLevels = true;
     settings.localMultiplayer = true;

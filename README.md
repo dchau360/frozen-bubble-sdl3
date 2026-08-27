@@ -34,9 +34,9 @@ Building from source: [docs/BUILDING.md](docs/BUILDING.md).
 
 **Single player** — 100 levels, scoring, chain reactions.
 
-**Local multiplayer (2–4 players)** — same keyboard or controllers. Player 1 uses the arrow keys with Up to fire; player 2 uses C/X/V with D to fire. The setup screen can fill any remaining slots with 0–4 bots and a skill (Easy/Normal/Hard), so you don't need a full set of controllers to play a 3- or 4-player match — player 1 is always a person.
+**Local multiplayer (2–5 players)** — same keyboard or controllers. Player 1 uses the arrow keys with Up to fire; player 2 uses C/X/V with D to fire. Five is the ceiling: that is the last hand-authored layout (one full board in the centre, four minis in the corners), and above it a game has to be a network room. The setup screen can fill any remaining slots with bots and a skill (Easy/Normal/Hard), so you don't need a full set of controllers to play a bigger match — player 1 is always a person.
 
-> Three- and four-player local games are **experimental** — far less
+> Local games above two players are **experimental** — far less
 > play-tested than two-player and network play, and the smaller side boards
 > have had rendering glitches. Two causes are fixed (see
 > [CHANGELOG.md](CHANGELOG.md)); the mode has not had a full pass since.

@@ -140,5 +140,5 @@ All of these are in original `fb-server` code and are still present upstream.
 
 | | |
 |---|---|
-| **Local multiplayer above 4 players** | `LocalMultiplayerSettings` clamps the count to 2–4. Use a network room for 5 and above |
+| **Local multiplayer above 5 players** | `LocalMultiplayerSettings` clamps the count to 2–5, the last hand-authored board layout. Use a network room above that |
 | **Intel macOS** | Releases are Apple Silicon only; Intel Macs can build from source or play in the browser |

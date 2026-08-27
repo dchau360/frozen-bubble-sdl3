@@ -37,6 +37,7 @@
 #include <cmath>
 #include <algorithm>
 #include "bubblegame_internal.h"
+#include "localmultiplayer_settings.h"
 #include "roundstats_color.h"
 
 void BubbleGame::Update2PText() {
@@ -529,11 +530,13 @@ void BubbleGame::UpdateMultiplayerCompletionState() {
     if (!gameFinish || currentSettings.playerCount < 2) return;
 
     // Network rendering historically aggregates the two-player animation
-    // pair. Local multiplayer extends the same rule to every reachable 2-4P
-    // setup so HandleInput can consume the finished round.
+    // pair. Local multiplayer extends the same rule to every reachable local
+    // setup so HandleInput can consume the finished round -- bounded by the
+    // seat cap rather than a literal, since a count this misses leaves the
+    // round finished but impossible to move on from.
     const bool supported = currentSettings.playerCount == 2 ||
         (!currentSettings.networkGame && currentSettings.localMultiplayer &&
-         currentSettings.playerCount <= 4);
+         currentSettings.playerCount <= kMaxLocalPlayers);
     if (!supported) return;
 
     gameMpDone = true;
