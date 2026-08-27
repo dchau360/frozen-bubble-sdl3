@@ -95,6 +95,7 @@ static char wn_flooding[] = "FLOODING";
 static char wn_others_not_ready[] = "OTHERS_NOT_READY";
 static char wn_invalid_platform[] = "INVALID_PLATFORM";
 static char wn_report_failed[] = "REPORT_FAILED";
+static char wn_bot_limit_reached[] = "BOT_LIMIT_REACHED";
 
 /* Absolute path for the abuse-report log. The server daemonizes with cwd="/"
  * (see net.c), so a bare relative fopen() lands in the filesystem root and
@@ -157,6 +158,10 @@ char* geoloc[256];
 char* IP[256];
 int remote_proto_minor[256];
 int admin_authorized[256];
+// Set by the BOT command; cleared and counted back down in conn_terminated
+// (net.c), the same place nick[]/geoloc[]/IP[] are torn down for this fd.
+int is_bot[256];
+int bots_connected = 0;
 
 // calculate the list of players for a given game
 static char* list_game(const struct game * g)
@@ -770,6 +775,23 @@ int process_msg(int fd, char* msg)
 
         if (streq(current_command, "PING")) {
                 send_line_log(fd, ok_pong, msg_orig);
+        } else if (streq(current_command, "BOT")) {
+                // Self-declared: a bot is otherwise an ordinary connection,
+                // indistinguishable from a person at the protocol level, so
+                // there is no way to enforce this against a client that lies
+                // -- it exists so an honest client (this project's own) can
+                // be capped, not as a security boundary. Idempotent: a
+                // second BOT from the same fd is a no-op rather than
+                // double-counting it against the cap.
+                if (is_bot[fd]) {
+                        send_ok(fd, msg_orig);
+                } else if (bots_connected >= max_bots) {
+                        send_line_log(fd, wn_bot_limit_reached, msg_orig);
+                } else {
+                        is_bot[fd] = 1;
+                        bots_connected++;
+                        send_ok(fd, msg_orig);
+                }
         } else if (streq(current_command, "NICK")) {
                 if (!args) {
                         send_line_log(fd, wn_missing_arguments, msg_orig);

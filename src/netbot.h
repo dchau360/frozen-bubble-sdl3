@@ -70,6 +70,13 @@ int MaxRoomBots(int roomPlayers, int maxPlayers, int currentBots);
 // would have every bot in the room quit whenever any one of them was kicked.
 bool IsKickedMePush(const std::string& line);
 
+// True for the server's reply to our own BOT command when the server-wide
+// bot cap (fb-server's -b) is already at its limit. The response is a
+// lobby-command reply, not a PUSH -- it answers the BOT this connection
+// itself sent, so there is no "about someone else" case to rule out the
+// way IsKickedMePush has to.
+bool IsBotLimitReachedReply(const std::string& line);
+
 // Whether an in-game opcode is about the connection that sent it rather than
 // about the contents of a board.
 //
@@ -122,6 +129,12 @@ public:
     void Update();
 
     bool IsConnected() const { return sockfd >= 0; }
+    // True once the server has told this connection its own BOT command
+    // was refused -- the server-wide bot cap (fb-server's -b) was already
+    // at its limit. Leave() disconnects on the same line that sets this,
+    // but does not clear it, so a caller finding !IsConnected() can still
+    // read why: capped, versus any other disconnect.
+    bool WasRejectedByServer() const { return rejectedByServer; }
     // Non-zero once the server has announced the game and told us who we are.
     int PlayerId() const { return myPlayerId; }
     bool GameStarted() const { return myPlayerId != 0; }
@@ -147,6 +160,7 @@ private:
 
     int sockfd = -1;
     int myPlayerId = 0;
+    bool rejectedByServer = false;
     // Last time anything was written, for the keepalive below.
     unsigned lastSendTicks = 0;
     std::string nick;

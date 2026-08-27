@@ -72,6 +72,10 @@ bool IsKickedMePush(const std::string& line) {
     return line.find_first_not_of(" \r\t", at + sizeof(kKicked) - 1) == std::string::npos;
 }
 
+bool IsBotLimitReachedReply(const std::string& line) {
+    return line.find("BOT_LIMIT_REACHED") != std::string::npos;
+}
+
 bool IsGameMessageLine(const std::string& line) {
     return !line.empty() && static_cast<unsigned char>(line[0]) < 0x20;
 }
@@ -186,13 +190,24 @@ bool NetBotConnection::JoinRoom(const std::string& host, int port,
 
     nick = botNick;
     myPlayerId = 0;
+    rejectedByServer = false;
     roster.clear();
     gameMessages.clear();
     incoming.clear();
 
     // The server truncates nicknames the same way it does for a person, and
     // the roster is matched by nickname, so send what it will echo back.
+    //
+    // BOT is sent before JOIN and its answer is not waited for here -- these
+    // sends are fire-and-forget, like the rest of this function. A server
+    // that enforces a bot cap answers asynchronously (HandleLine watches for
+    // BOT_LIMIT_REACHED and sets rejectedByServer, which disconnects); an
+    // older server that has never heard of BOT just answers UNKNOWN_COMMAND
+    // and otherwise ignores it, so this is safe to send unconditionally.
+    // Sending it first, ahead of JOIN, means a capped bot never actually
+    // takes a room seat before it is turned away.
     if (!SendLine("NICK " + nick) ||
+        !SendLine("BOT") ||
         !SendLine("JOIN " + roomCreator + " " + nick)) {
         Leave();
         return false;
@@ -252,6 +267,14 @@ void NetBotConnection::HandleLine(const std::string& line) {
     // in the server's player list forever.
     if (IsKickedMePush(line)) {
         SDL_Log("netbot %s: kicked from the room, disconnecting", nick.c_str());
+        Leave();
+        return;
+    }
+
+    if (IsBotLimitReachedReply(line)) {
+        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
+                    "netbot %s: server bot limit reached, disconnecting", nick.c_str());
+        rejectedByServer = true;
         Leave();
         return;
     }

@@ -38,3 +38,5 @@ extern char* geoloc[256];
 extern char* IP[256];
 extern int remote_proto_minor[256];
 extern int admin_authorized[256];
+extern int is_bot[256];
+extern int bots_connected;

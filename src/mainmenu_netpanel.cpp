@@ -127,16 +127,37 @@ void MainMenu::PumpLobbyBots() {
         if (bot) bot->Update();
     }
     // A bot's connection can go without us asking -- the host can kick it
-    // like any other room member, and the server drops it if the room does.
-    // Forget it here so the count on screen still means what it says, and so
-    // asking for the same number again actually reconnects one.
+    // like any other room member, the server drops it if the room does, or
+    // (only knowable once its BOT command has actually been answered, which
+    // is why this is checked here rather than where JoinRoom fires it) the
+    // server's own -b bot cap turned it away. Forget it here so the count on
+    // screen still means what it says, and so asking for the same number
+    // again actually reconnects one.
+    int rejectedCount = 0;
     const size_t before = lobbyBots.size();
     lobbyBots.erase(std::remove_if(lobbyBots.begin(), lobbyBots.end(),
-                                   [](const std::unique_ptr<NetBotConnection>& b) {
-                                       return !b || !b->IsConnected();
+                                   [&rejectedCount](const std::unique_ptr<NetBotConnection>& b) {
+                                       if (!b || !b->IsConnected()) {
+                                           if (b && b->WasRejectedByServer()) ++rejectedCount;
+                                           return true;
+                                       }
+                                       return false;
                                    }),
                     lobbyBots.end());
     if (lobbyBots.size() != before) netRoomBotCount = (int)lobbyBots.size();
+    if (rejectedCount > 0) {
+        NetworkClient* netClient = NetworkClient::Instance();
+        if (netClient) {
+            char msg[96];
+            if (rejectedCount == 1) {
+                snprintf(msg, sizeof(msg), "Server bot limit reached -- one bot could not join");
+            } else {
+                snprintf(msg, sizeof(msg), "Server bot limit reached -- %d bots could not join",
+                         rejectedCount);
+            }
+            netClient->AddStatusMessage(msg);
+        }
+    }
 }
 
 void MainMenu::DropLobbyBots() {

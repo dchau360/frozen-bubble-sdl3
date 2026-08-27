@@ -453,6 +453,8 @@ if(BUILD_TESTING AND NOT EMSCRIPTEN AND NOT ANDROID AND NOT IOS)
     if(TARGET fb-server)
         add_test(NAME server-list-cap-test
             COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tests/server_list_cap_test.py $<TARGET_FILE:fb-server>)
+        add_test(NAME server-bot-cap-test
+            COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tests/server_bot_cap_test.py $<TARGET_FILE:fb-server>)
         add_test(NAME server-massleave-test
             COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tests/server_massleave_test.py $<TARGET_FILE:fb-server>)
         # Follow-a-server notifications: registration, the join hook, cooldown,

@@ -36,6 +36,7 @@ extern char* pidfile;
 extern char* user_to_switch;
 extern GList* alert_words;
 extern int interval_reregister;
+extern int max_bots;  // -b; how many BOT-registered connections may be live at once, server-wide
 
 extern int amount_talk_flood[256];
 

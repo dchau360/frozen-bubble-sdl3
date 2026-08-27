@@ -95,11 +95,19 @@ static double date_amount_transmitted_reset;
 #define DEFAULT_MAX_TRANSMISSION_RATE 100000
 #define DEFAULT_OUTPUT "INFO"
 #define DEFAULT_GRACETIME 900
+// A bot is an ordinary connection running unattended, so -m's cap on total
+// users already bounds it indirectly -- this is a second, tighter knob for
+// it specifically. A bot costs the operator CPU (level generation, malus,
+// chain reactions) that a lobby-only connection never touches, and an
+// operator worried about that resource wants to cap it separately from
+// "how many people can be on the server," which they may want left high.
+#define DEFAULT_MAX_BOTS 20
 static int port = DEFAULT_PORT;
 static int max_users = DEFAULT_MAX_USERS;
 int interval_reregister = DEFAULT_INTERVAL_REREGISTER;
 static int max_transmission_rate = DEFAULT_MAX_TRANSMISSION_RATE;
 static int gracetime = DEFAULT_GRACETIME;
+int max_bots = DEFAULT_MAX_BOTS;
 
 static int lan_game_mode = 0;
 
@@ -249,6 +257,10 @@ void conn_terminated(int fd, char* reason)
                 }
                 free(IP[fd]);
                 IP[fd] = NULL;
+                if (is_bot[fd]) {
+                        is_bot[fd] = 0;
+                        bots_connected--;
+                }
                 new_conns = g_list_remove(new_conns, GINT_TO_POINTER(fd));
                 player_part_game(fd);                       // this is where the recursive call can come from (process_msg_prio with a failed send)
                 player_disconnects(fd);
@@ -859,6 +871,7 @@ static void help(void)
         printf("\n");
         printf("     -a lang                   set the preferred language of the server (it is just an indication used by players when choosing a server, so that they can chat using their native language - you can choose none with -z)\n");
         printf("     -A alert_words_file       set the file containing alert words (one POSIX regexp by line) - this file is reread when receiving the ADMIN_REREAD command from 127.0.0.1\n");
+        printf("     -b max_bots               set the maximum number of bots (clients that identify themselves as one with the BOT command) connected at once, across every room; further bots are refused BOT_LIMIT_REACHED (defaults to %d; 0 disables bots entirely)\n", DEFAULT_MAX_BOTS);
         printf("     -c conffile               specify the path of the configuration file\n");
         printf("     -d                        debug mode: do not daemonize, and log on STDERR rather than through syslog (implies -q)\n");
         printf("     -f pidfile                set the file in which the pid of the daemon must be written\n");
@@ -1008,6 +1021,25 @@ static void handle_parameter(char command, char * param) {
                         fprintf(stderr, "    valid languages are: af, ar, az, bg, br, bs, ca, cs, cy, da, de, el, en, eo, eu, es, fi, fr, ga, gl, hr, hu, id, ir, is, it, ja, ko, lt, lv, mk, ms, nl, ne, no, pl, pt, pt_BR, ro, ru, sk, sl, sq, sv, tg, tr, uk, uz, vi, wa, zh_CN, zh_TW\n" );
                 }
                 break;
+        case 'b': {
+                // charstar_to_int returns 0 both for a genuine "0" and for
+                // anything non-numeric, and 0 is a real, meaningful value
+                // here (no bots at all) rather than an error case to fall
+                // back from -- unlike -g/-m, which never accept 0. Validate
+                // the digits first so a typo cannot silently mean "disable
+                // bots" and a deliberate "-b 0" is not silently ignored.
+                int valid = param[0] != '\0';
+                for (const char *p = param; valid && *p; p++)
+                        valid = isdigit((unsigned char)*p);
+                if (valid) {
+                        max_bots = charstar_to_int(param);
+                        printf("-b: setting maximum concurrent bots to '%d'\n", max_bots);
+                } else {
+                        fprintf(stderr, "-b: '%s' not convertible to a non-negative int, ignoring\n", param);
+                        max_bots = DEFAULT_MAX_BOTS;
+                }
+                break;
+        }
         case 'A':
                 response = read_alert_words(param);
                 if (response) {
@@ -1165,7 +1197,7 @@ void create_server(int argc, char **argv)
         int valone = 1;
 
         while (1) {
-                int c = getopt(argc, argv, "a:A:c:df:g:hH:i:lLm:n:o:p:P:qt:u:z");
+                int c = getopt(argc, argv, "a:A:b:c:df:g:hH:i:lLm:n:o:p:P:qt:u:z");
                 if (c == -1)
                         break;
 

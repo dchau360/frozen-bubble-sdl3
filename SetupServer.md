@@ -201,6 +201,35 @@ protocol and internals.
 
 ---
 
+## Optional — Limit Concurrent Bots
+
+Clients can add bots — either in a local game or, on the server, in a network
+room — and a bot that joins your server identifies itself with a `BOT`
+command right after connecting. Unlike a person, a bot costs you CPU on every
+shot it takes (level generation, malus, chain reactions all run per board),
+so if that is a resource concern, cap how many can be registered at once,
+server-wide:
+
+```yaml
+    command: ["-d", "-q", "-l", "-z", "-o", "CONNECT", "-b", "20"]
+```
+
+Add that under the `fb-server` service in `docker-compose.yml` — it overrides
+the image's default command (`docker/Dockerfile`'s `CMD`), so include every
+flag you want, not just `-b`. `-b 0` refuses every bot outright; the default
+without this override is 20. Once the cap is reached, a further bot's `BOT`
+command gets `BOT_LIMIT_REACHED` and the client shows the player a message —
+the connection itself is unaffected, so a capped-out bot is simply not a bot:
+it can still join and play as an ordinary person would. `docker compose up -d
+--build fb-server` to apply.
+
+This is a global cap across every room on the server, not a per-room one —
+clients already limit a single room to 4 bots on their own, but nothing stops
+a modified client from opening more connections and registering each as a
+bot, which is exactly the case this flag is for.
+
+---
+
 ## How Players Connect
 
 | Client | Host | Port |

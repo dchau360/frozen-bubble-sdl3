@@ -2,6 +2,18 @@
 
 ## v2.4.41
 
+- **fb-server can cap concurrent bots** (`-b`, default 20; `-b 0` refuses
+  every bot). A bot identifies itself with a `BOT` command right after
+  connecting -- it is otherwise an ordinary connection, indistinguishable
+  from a person at the protocol level -- so this is opt-in and server-wide,
+  not a limit on connections generally (that is already `-m`'s job). Unlike
+  a person, a bot's shots run level generation, malus and chain-reaction
+  logic on the operator's CPU on every one of them, which is the resource
+  this flag is actually about. Past the cap a `BOT` command gets
+  `BOT_LIMIT_REACHED`, the client shows the player why and drops that
+  connection back to being a plain lobby client -- it can still join and
+  play as a person, just not register as a bot. See
+  [SetupServer.md](SetupServer.md#optional--limit-concurrent-bots).
 - **Local multiplayer goes up to five players.** The cap was four, but the
   engine's own ceiling has always been five: `NewGame`'s case 5 is a
   hand-authored layout (one full board in the centre, four minis in the

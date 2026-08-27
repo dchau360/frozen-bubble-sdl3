@@ -162,6 +162,16 @@ int main() {
         CHECK(!IsKickedMePush(""));
     }
 
+    // The server's answer to our own BOT command, when its -b cap is
+    // already full. Wire format matches net.c's send_line ("FB/M.m
+    // <command>: <reply>"), so the command name (BOT) is part of the line.
+    {
+        CHECK(IsBotLimitReachedReply("FB/1.3 BOT: BOT_LIMIT_REACHED"));
+        CHECK(!IsBotLimitReachedReply("FB/1.3 BOT: OK"));
+        CHECK(!IsBotLimitReachedReply("FB/1.3 CREATE: GAME_FULL"));
+        CHECK(!IsBotLimitReachedReply(""));
+    }
+
     // How many bots a host may ask for. Bots take real seats, so the ceiling
     // is what the room has left plus the ones already connected.
     {
