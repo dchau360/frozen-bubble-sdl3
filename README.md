@@ -34,7 +34,7 @@ Building from source: [docs/BUILDING.md](docs/BUILDING.md).
 
 **Single player** — 100 levels, scoring, chain reactions.
 
-**Local multiplayer (2–4 players)** — same keyboard or controllers. Player 1 uses the arrow keys with Up to fire; player 2 uses C/X/V with D to fire.
+**Local multiplayer (2–4 players)** — same keyboard or controllers. Player 1 uses the arrow keys with Up to fire; player 2 uses C/X/V with D to fire. The setup screen can fill any remaining slots with 0–4 bots and a skill (Easy/Normal/Hard), so you don't need a full set of controllers to play a 3- or 4-player match — player 1 is always a person.
 
 > Three- and four-player local games are **experimental** — far less
 > play-tested than two-player and network play, and the smaller side boards
@@ -57,7 +57,7 @@ The host configures malus, chain reactions, victories limit, per-player colours 
 
 After each round a per-player stats table shows bubbles fired and popped, malus sent and received, and kills. In-game chat works during play (**Enter** or **T**, gamepad **X**) and between rounds.
 
-**Bots.** The host of a room can add up to four bots from the setting under the player list. Each one joins as an ordinary member — everyone sees it in the roster and it counts against the room's cap — and plays with the same aiming as a local-multiplayer bot. Handy for filling out a room, or for playing on a quiet server.
+**Bots.** The host of a room can add up to four bots from the setting under the player list, with a skill of Easy/Normal/Hard. Each one joins as an ordinary member — everyone sees it in the roster and it counts against the room's cap — and plays with the same aiming as a local-multiplayer bot: a Hard bot plans one shot ahead using the next-bubble preview, on top of always taking the best pop it can find, and reacts roughly 10x faster than an Easy one. Handy for filling out a room, or for playing on a quiet server. Native builds only (desktop, Android) — a browser tab can't open the extra connection a bot needs, so the itch.io build won't offer it.
 
 **Dealing with abusive players.** If you host the room, `/kick p2` removes the player in that roster position (`/kick <nick>` works too). Type `/block <nick>` in chat to hide someone's messages — in the lobby and mid-match both, and it takes effect immediately without needing the server's cooperation. `/unblock <nick>` undoes it, `/blocked` lists who you have blocked, and the list is saved per device. `/report <nick> <what happened>` sends a report to that server's operator; each server is run by a different person, so what happens next is up to them — blocking is the part that is in your hands. Type `/help` in chat for the full list.
 

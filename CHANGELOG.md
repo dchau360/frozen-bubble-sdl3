@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v2.4.41
 
 - **New: bots in local multiplayer.** The setup screen takes a bot count and a
   skill, and the bots fill the highest player slots so player 1 is always a
