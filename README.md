@@ -53,6 +53,7 @@ The host configures malus, chain reactions, victories limit, per-player colours 
 
 <p align="center">
   <img src="docs/screenshots/game-room.png" alt="Game room screen: match rules, per-player setup grid, and a 20-slot player roster" width="480">
+  <img src="docs/screenshots/net-5player.png" alt="Live 5-player network game: one full board in the centre, four opponent boards in the corners" width="480">
 </p>
 
 After each round a per-player stats table shows bubbles fired and popped, malus sent and received, and kills. In-game chat works during play (**Enter** or **T**, gamepad **X**) and between rounds.
