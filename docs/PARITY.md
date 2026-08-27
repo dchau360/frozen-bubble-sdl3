@@ -30,6 +30,8 @@ would be dishonest. A fix only appears below if it lands in original code.
 | **Clear Mode** — first to clear their board wins the round; last survivor also wins. Defaults to row compression off and malus disabled, both overridable | v2.4.26 |
 | **Team Mode** — 2–5 teams; malus only lands on living opponents outside your team. Per-player grid in rooms of 5 or fewer, dedicated roster above that | v2.4.26 |
 | **Malus disable** — turn attack bubbles off entirely, independently of the mode | v2.4.26 |
+| **Local multiplayer above two players** — up to five share one device, on the same centre-plus-four-corners layout a five-player network game uses. The original's local game was exactly two players (`is_2p_game()` in `bin/frozen-bubble` is `@PLAYERS == 2 && !is_mp_game()`); anything more had to be a network game, even sitting at the same machine | v2.4.41 |
+| **Bots**, in local multiplayer and in network rooms, at three skill levels. They aim by flying a probe bubble through the game's own launch physics rather than modelling the board separately, and drive the same shooter controls a player does. A network-room bot joins as an ordinary member with its own connection, so it counts against the room's cap and every other client sees it as a player. Native builds only — a browser tab cannot open the extra connection | v2.4.41 |
 
 ### Multiplayer beyond five players
 
@@ -70,7 +72,7 @@ twenty, which needed new UI to be playable at all:
 
 | Feature | Added |
 |---|---|
-| **Follow a server** — mark a server with **F** (or tap the star on its row, or the same toggle in the online lobby's header once connected) and it notifies your phone when a player joins, so you can be told a game is starting without leaving the app open. A server that doesn't understand the follow protocol (an older `fb-server`, or anything else on that port) says so instead of the toggle silently doing nothing. Requires the server operator to run the `notify-relay` sidecar; see [SetupServer.md](../SetupServer.md) | unreleased |
+| **Follow a server** — mark a server with **F** (or tap the star on its row, or the same toggle in the online lobby's header once connected) and it notifies your phone when a player joins, so you can be told a game is starting without leaving the app open. A server that doesn't understand the follow protocol (an older `fb-server`, or anything else on that port) says so instead of the toggle silently doing nothing. Requires the server operator to run the `notify-relay` sidecar; see [SetupServer.md](../SetupServer.md) | v2.4.37 |
 
 The notification is delivered by the OS, so it arrives whether the app is
 backgrounded or fully closed. It is deliberately suppressed while the app is in

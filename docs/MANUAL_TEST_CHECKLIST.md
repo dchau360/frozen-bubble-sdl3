@@ -14,15 +14,17 @@ Grouped by how much effort the check takes.
 None of these procedures was executed during the automated remediation work.
 
 - [ ] **Local victories row, keyboard and controller:** open Local Multiplayer
-  setup with 2–4 players, navigate to **Victories limit**, and use Left, Right,
+  setup with 2–5 players, navigate to **Victories limit**, and use Left, Right,
   and confirm/Enter through the available values and both wrap points. Repeat
   with a controller and confirm the selected row and value remain visibly in
   sync with each input.
-- [ ] **Local finite-match continuation:** start 3- and 4-player matches with a
-  victories limit of 2. After the first round, wait for every player's
+- [ ] **Local finite-match continuation:** start 3-, 4- and 5-player matches
+  with a victories limit of 2. After the first round, wait for every player's
   round-end animation and confirm the next round starts. After one player
   reaches the second win, confirm Enter/fire returns to the menu instead of
-  silently starting another round.
+  silently starting another round. (Five players is the case that used to be
+  excluded from the round-completion check, so it is the one worth repeating
+  after any change there.)
 - [ ] **Classic continuation and Clear Mode win:** empty a local multiplayer
   board in Classic mode and confirm the round continues. Repeat in Clear Mode
   and confirm exactly one win, the correct winner presentation, and the

@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v2.4.41
 
 - **Local multiplayer goes up to five players.** The cap was four, but the
   engine's own ceiling has always been five: `NewGame`'s case 5 is a
@@ -20,8 +20,6 @@
   the same rule the teams themselves come from, so it reads
   "P1+P3+P5 vs P2+P4" at five and cannot promise a split the game does not
   play.
-
-## v2.4.41
 
 - **New: bots in local multiplayer.** The setup screen takes a bot count and a
   skill, and the bots fill the highest player slots so player 1 is always a
