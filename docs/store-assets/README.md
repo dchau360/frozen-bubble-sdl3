@@ -15,8 +15,8 @@
   doesn't require portrait screenshots, just 2–8 images between 320px and
   3840px per side with an aspect ratio no more extreme than 2:1. All three
   qualify.
-- **`screenshot-4-local-2player.png`**, **`screenshot-5-local-4player.png`**,
-  **`screenshot-6-net-5player.png`** (800×600, 24-bit RGB) — gameplay
+- **`screenshot-4-local-2player.png`**, **`screenshot-6-net-5player.png`**
+  (800×600, 24-bit RGB) — gameplay
   captures taken on a real Android tablet with `adb screenrecord`/`screencap`,
   cropped to the game viewport (the app renders 4:3 letterboxed inside the
   device's portrait screen, so the status and navigation bars are cropped
@@ -24,6 +24,11 @@
   `tools/net_bots.py` clients, captured after the long-nickname roster fix in
   `37e0237c` — an earlier capture of the same scene showed a phantom sixth
   player and is not the one checked in here.
+- **`screenshot-7-main-menu.png`** (640×480, 24-bit RGB, no alpha) — the
+  title screen, captured straight off the canvas (`canvas.toDataURL()`) of a
+  locally served WASM build (`tools/serve-wasm.py`) rather than a device
+  screenshot, since there's no letterboxing or OS chrome to crop out that
+  way.
 
 - **`icon-512.png`** (512×512, 24-bit RGB) — Play's high-res store icon.
   Foreground is the in-game pause-screen penguin portrait
