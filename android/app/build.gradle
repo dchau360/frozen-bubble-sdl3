@@ -44,7 +44,7 @@ def admobTestDeviceId = localProps.getProperty('admob.testDeviceId', '')
 // the root CMakeLists.txt, so without passing it down the Settings panel falls
 // back to platform.h's "v0.0.0-nocmake" placeholder. This is already one of the
 // files the release checklist bumps, so it is not a new place to remember.
-def appVersionName = "2.4.41"
+def appVersionName = "2.4.42"
 
 android {
     namespace 'org.frozenbubble'
@@ -59,7 +59,7 @@ android {
         minSdk 21
         targetSdk 36
         ndkVersion "25.2.9519653"
-        versionCode 24
+        versionCode 25
         versionName appVersionName
 
         buildConfigField "String", "ADMOB_TEST_DEVICE_ID", "\"${admobTestDeviceId}\""
@@ -67,7 +67,18 @@ android {
         externalNativeBuild {
             cmake {
                 cppFlags "-std=c++17"
-                arguments "-DANDROID_STL=c++_shared",
+                // c++_static, not c++_shared: with c++_shared, NDK r25 (pinned
+                // above) packages its own prebuilt libc++_shared.so verbatim --
+                // we never compile it, so the CMakeLists.txt linker flag for
+                // 16 KB page alignment can't reach it, and Play now rejects any
+                // upload containing an unaligned .so. Static linking bakes libc++
+                // into each of our own .so's instead, which the aligned build
+                // already covers. Safe here specifically because every boundary
+                // between our shared libraries (main <-> SDL3/SDL3_image/
+                // SDL3_mixer/SDL3_ttf) is SDL3's plain C API, not C++ objects or
+                // exceptions crossing library edges -- which is the actual case
+                // NDK's own docs warn a static runtime is unsafe for.
+                arguments "-DANDROID_STL=c++_static",
                           "-DAPP_VERSION_NAME=${appVersionName}"
             }
         }

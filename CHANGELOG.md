@@ -1,5 +1,22 @@
 # Changelog
 
+## v2.4.42
+
+- **Fix: Android build rejected by Play Console for not supporting 16 KB
+  memory pages.** Two causes, both in `android/app/`. First, the pinned NDK
+  (r25) doesn't 16 KB-align a shared library's LOAD segments by default --
+  that only became automatic in NDK r28+ -- so every `.so` this build
+  produces needed the linker flag explicitly (`CMakeLists.txt`). Second,
+  `libc++_shared.so` is a prebuilt file NDK r25 copies into the APK
+  verbatim; we never compile it, so no linker flag can reach it, and it
+  stayed 4 KB-aligned regardless. Switched `ANDROID_STL` from `c++_shared`
+  to `c++_static` (`build.gradle`) so libc++ is baked into each of our own
+  (now-aligned) libraries instead of shipped as that separate prebuilt file
+  at all. Safe here specifically because every boundary between this app's
+  shared libraries is SDL3's plain C API, not C++ objects or exceptions
+  crossing library edges. Verified on-device: clean launch, no
+  `UnsatisfiedLinkError`, all three ABIs' `.so` files 16 KB-aligned.
+
 ## v2.4.41
 
 - **fb-server can cap concurrent bots** (`-b`, default 20; `-b 0` refuses

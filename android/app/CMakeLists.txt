@@ -10,6 +10,20 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 # native build (IMP-022).
 add_compile_options(-Wall -Wextra -pedantic -Wno-pointer-arith)
 
+# Google Play now rejects any upload containing a shared library that isn't
+# 16 KB-page-size aligned (Android 15+ devices can run with a 16 KB page
+# size instead of 4 KB, and an unaligned .so crashes on them). That
+# alignment only became the linker's default in NDK r28+; build.gradle
+# pins ndkVersion to r25, so every .so this build produces needs the flag
+# explicitly. Set before the add_subdirectory() calls below so it applies
+# to SDL3/SDL3_image/SDL3_mixer/SDL3_ttf too, not just our own `main` --
+# those are vendored submodules built from source right alongside it, and
+# per-target flags on `main` alone would leave their .so files unaligned.
+if(ANDROID)
+    string(APPEND CMAKE_SHARED_LINKER_FLAGS " -Wl,-z,max-page-size=16384")
+    string(APPEND CMAKE_EXE_LINKER_FLAGS " -Wl,-z,max-page-size=16384")
+endif()
+
 # SDL3 and extension libs built from source in jni/ (git submodules)
 set(JNI_DIR "${CMAKE_SOURCE_DIR}/jni")
 
