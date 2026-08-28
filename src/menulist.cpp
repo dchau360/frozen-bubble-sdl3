@@ -59,6 +59,28 @@ int DrawText(SDL_Renderer* rend, TTFText& text, const std::string& s, int size, 
     return w;
 }
 
+// Shrinks s (assumed ASCII -- pop_back() one char at a time is not
+// UTF-8-safe, but every label this widget draws is an English string or a
+// hostname/nickname) until "<s>..." fits within maxW, so a long server name
+// can never run into the right-aligned value column next to it. Re-renders
+// the candidate a few times in the (rare) case a label actually overflows --
+// not a hot path, this runs once per visible overflowing row per frame.
+std::string TruncateToWidth(SDL_Renderer* rend, TTFText& text, const std::string& s,
+                             int maxW, int size, int style) {
+    if (maxW <= 0) return "";
+    text.UpdateStyle(size, style);
+    text.UpdateText(rend, s.c_str(), 0);
+    if (text.Coords()->w <= maxW) return s;
+    std::string truncated = s;
+    while (!truncated.empty()) {
+        truncated.pop_back();
+        std::string candidate = truncated + "...";
+        text.UpdateText(rend, candidate.c_str(), 0);
+        if (text.Coords()->w <= maxW) return candidate;
+    }
+    return "...";
+}
+
 } // namespace
 
 void DrawHeaderBar(SDL_Renderer* rend, TTFText& text, const SDL_Rect& bar,
@@ -205,11 +227,27 @@ int List::End(SDL_Renderer* rend, TTFText& text, SDL_Texture* panelBG,
             addTapRow(row.index, {viewport_.x + 4, y, 32, rowH_}, -1, false, row.prefixKey);
         }
 
-        DrawText(rend, text, row.label, 20, TTF_STYLE_NORMAL,
+        // Value measured (not yet drawn) before the label, so a long label
+        // -- a server's name, chosen by whoever runs that server, not by
+        // this game -- gets truncated to whatever room is actually left
+        // instead of running into the value's screen space and overlapping
+        // it, like the LAN/Net server rows used to before this widget
+        // existed to catch it in one place.
+        std::string val;
+        int valueW = 0;
+        if (!row.value.empty()) {
+            val = row.splitAdjust ? ("<  " + row.value + "  >") : row.value;
+            text.UpdateStyle(20, TTF_STYLE_BOLD);
+            text.UpdateText(rend, val.c_str(), 0);
+            valueW = text.Coords()->w;
+        }
+        int maxLabelW = (viewport_.x + viewport_.w - 14) - textX - (valueW > 0 ? valueW + 12 : 0);
+        std::string label = TruncateToWidth(rend, text, row.label, maxLabelW, 20, TTF_STYLE_NORMAL);
+
+        DrawText(rend, text, label, 20, TTF_STYLE_NORMAL,
                  kText, textX, y + (rowH_ - 24) / 2, true);
 
-        if (!row.value.empty()) {
-            std::string val = row.splitAdjust ? ("<  " + row.value + "  >") : row.value;
+        if (!val.empty()) {
             DrawText(rend, text, val, 20, TTF_STYLE_BOLD, row.valueColor,
                      viewport_.x + viewport_.w - 14, y + (rowH_ - 24) / 2, false);
         }
