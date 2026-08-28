@@ -68,6 +68,13 @@ enum KeyConfigRow {
     kKeyRowLast = kKeyRowResetAll
 };
 
+// Fake row indices for the sidebar's P1..P4 player-switch rows (see
+// KeysPanelRender). Kept well clear of KeyConfigRow's real range so a tap
+// landing on one never gets mistaken for a real settings row -- the
+// select-then-activate dance still applies (see HandlePanelTap), it just
+// activates via SDLK_1..4 (mainmenu_input.cpp) instead of Left/Right/Return.
+static const int kKeyPlayerTapBase = 900;
+
 // Row indices for the game room's action list (selectedActionIndex). The list
 // is built positionally in mainmenu_netpanel.cpp and acted on by index in
 // mainmenu_input.cpp, so every row that is added or removed renumbers the ones

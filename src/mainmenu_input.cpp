@@ -633,6 +633,21 @@ bool MainMenu::KeysPanelKey(SDL_Event *e) {
                         resetAllArmed = false;
                         AudioMixer::Instance()->PlaySFX("menu_change");
                         return true;
+                    } else if (e->key.key == SDLK_1 || e->key.key == SDLK_2 ||
+                               e->key.key == SDLK_3 || e->key.key == SDLK_4) {
+                        // Jump straight to a player, both a real keyboard shortcut
+                        // and what a tap on that player's sidebar row sends (see
+                        // KeysPanelRender's kKeyPlayerTapBase rows) -- the two-tap
+                        // select-then-activate dance every other tap row uses, so
+                        // touch keeps behaving exactly like a keypress.
+                        if (e->key.key == SDLK_1) keyConfigPlayer = 1;
+                        else if (e->key.key == SDLK_2) keyConfigPlayer = 2;
+                        else if (e->key.key == SDLK_3) keyConfigPlayer = 3;
+                        else keyConfigPlayer = 4;
+                        keyConfigIndex = 0;
+                        resetAllArmed = false;
+                        AudioMixer::Instance()->PlaySFX("menu_change");
+                        return true;
                     } else if (e->key.key == SDLK_RETURN) {
                         if (keyConfigIndex == kKeyRowResetCtrl) {
                             // Reset current player to default controller bindings
