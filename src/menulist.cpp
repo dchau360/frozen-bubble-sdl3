@@ -1,0 +1,236 @@
+/*
+ * Frozen-Bubble SDL2 C++ Port
+ * Copyright (c) 2000-2012 The Frozen-Bubble Team
+ * Copyright (c) 2026 dchau360
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * version 2, as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+ * General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software Foundation,
+ * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
+ */
+
+#include "menulist.h"
+#include "sdl3_compat.h"
+
+#include <algorithm>
+
+namespace menulist {
+
+namespace {
+
+void DrawPanel(SDL_Renderer* rend, const SDL_Rect& rect, SDL_Color fill, SDL_Color outline) {
+    SDL_SetRenderDrawBlendMode(rend, SDL_BLENDMODE_BLEND);
+    SDL_SetRenderDrawColor(rend, fill.r, fill.g, fill.b, fill.a);
+    SDL_FRect fr = ToFRect(rect);
+    SDL_RenderFillRect(rend, &fr);
+    SDL_SetRenderDrawColor(rend, outline.r, outline.g, outline.b, outline.a);
+    SDL_RenderRect(rend, &fr);
+}
+
+void DrawSelection(SDL_Renderer* rend, const SDL_Rect& rect) {
+    SDL_SetRenderDrawBlendMode(rend, SDL_BLENDMODE_BLEND);
+    SDL_SetRenderDrawColor(rend, kSelFill.r, kSelFill.g, kSelFill.b, kSelFill.a);
+    SDL_FRect fr = ToFRect(rect);
+    SDL_RenderFillRect(rend, &fr);
+    SDL_SetRenderDrawColor(rend, kSelEdge.r, kSelEdge.g, kSelEdge.b, kSelEdge.a);
+    SDL_RenderRect(rend, &fr);
+}
+
+// left=true draws with its left edge at x; left=false draws with its right
+// edge at x (used for the right-aligned value column).
+int DrawText(SDL_Renderer* rend, TTFText& text, const std::string& s, int size, int style,
+             SDL_Color fg, int x, int y, bool alignLeft) {
+    if (s.empty()) return 0;
+    text.UpdateStyle(size, style);
+    text.UpdateColor(fg, kTextShadow);
+    text.UpdateText(rend, s.c_str(), 0);
+    int w = text.Coords()->w;
+    text.UpdatePosition({alignLeft ? x : x - w, y});
+    SDL_FRect fr = ToFRect(*text.Coords());
+    SDL_RenderTexture(rend, text.Texture(), nullptr, &fr);
+    return w;
+}
+
+} // namespace
+
+void DrawHeaderBar(SDL_Renderer* rend, TTFText& text, const SDL_Rect& bar,
+                    const char* title, const char* action, bool actionSelected,
+                    int actionIndex, const TapRowFn& addTapRow) {
+    DrawPanel(rend, bar, kHeaderFill, kEdge);
+    DrawText(rend, text, title, 20, TTF_STYLE_BOLD, kGold, bar.x + 10, bar.y + 4, true);
+
+    if (action && action[0] && actionIndex >= 0) {
+        SDL_Color color = actionSelected ? kGold : kText;
+        text.UpdateStyle(18, TTF_STYLE_BOLD);
+        text.UpdateColor(color, kTextShadow);
+        text.UpdateText(rend, action, 0);
+        int tw = text.Coords()->w;
+        int sx = bar.x + bar.w - 8 - tw;
+        SDL_Rect actRect = {sx - 6, bar.y + 3, tw + 12, bar.h - 6};
+        // Selection band first, so the already-rendered text draws on top.
+        if (actionSelected) DrawSelection(rend, actRect);
+        text.UpdatePosition({sx, bar.y + 5});
+        { SDL_FRect fr = ToFRect(*text.Coords()); SDL_RenderTexture(rend, text.Texture(), nullptr, &fr); }
+        addTapRow(actionIndex, actRect, -1, false, 0);
+    }
+}
+
+int DrawSidebarHeader(SDL_Renderer* rend, TTFText& text, const SDL_Rect& sidebar,
+                       const char* title) {
+    DrawPanel(rend, sidebar, kSidebarFill, kEdge);
+    DrawText(rend, text, title, 14, TTF_STYLE_BOLD, kGold, sidebar.x + 12, sidebar.y + 10, true);
+    int ruleY = sidebar.y + 32;
+    SDL_SetRenderDrawBlendMode(rend, SDL_BLENDMODE_BLEND);
+    SDL_SetRenderDrawColor(rend, kEdge.r, kEdge.g, kEdge.b, 128);
+    SDL_RenderLine(rend, (float)(sidebar.x + 12), (float)ruleY,
+                   (float)(sidebar.x + sidebar.w - 12), (float)ruleY);
+    return ruleY + 10;
+}
+
+void DrawFooterHint(SDL_Renderer* rend, TTFText& text, const char* hint) {
+    text.UpdateStyle(14, TTF_STYLE_NORMAL);
+    text.UpdateColor(kMuted, kTextShadow);
+    text.UpdateText(rend, hint, 0);
+    int w = text.Coords()->w;
+    text.UpdatePosition({(640 - w) / 2, kFooterY});
+    SDL_FRect fr = ToFRect(*text.Coords());
+    SDL_RenderTexture(rend, text.Texture(), nullptr, &fr);
+}
+
+List::List(const SDL_Rect& viewport, int selectedIndex, int rowH)
+    : viewport_(viewport), selectedIndex_(selectedIndex), rowH_(rowH) {}
+
+void List::Header(const std::string& title) {
+    rows_.push_back({-1, title, "", "", kGold, false, true, false, kGold, 0});
+}
+
+void List::Row(int index, const std::string& label, const std::string& value,
+               bool emphasize, bool splitAdjust) {
+    rows_.push_back({index, label, value, "", emphasize ? kGold : kMuted,
+                      splitAdjust, false, false, kGold, 0});
+}
+
+void List::RowColored(int index, const std::string& label, const std::string& value,
+                       SDL_Color valueColor, bool splitAdjust) {
+    rows_.push_back({index, label, value, "", valueColor, splitAdjust, false, false, kGold, 0});
+}
+
+void List::RowWithPrefix(int index, const std::string& prefixGlyph, SDL_Color prefixColor,
+                          const std::string& label, const std::string& value,
+                          bool emphasize, SDL_Keycode prefixKey) {
+    rows_.push_back({index, label, value, prefixGlyph, emphasize ? kGold : kMuted,
+                      false, false, true, prefixColor, prefixKey});
+}
+
+int List::End(SDL_Renderer* rend, TTFText& text, SDL_Texture* panelBG,
+              const TapRowFn& addTapRow) {
+    // Background first, at the full viewport, unclipped, so its border comes
+    // out crisp -- rows are clipped to the viewport below, the panel itself
+    // is not.
+    if (panelBG) {
+        SDL_FRect fr = ToFRect(viewport_);
+        SDL_RenderTexture(rend, panelBG, nullptr, &fr);
+    } else {
+        DrawPanel(rend, viewport_, kListFill, kEdge);
+    }
+
+    const int total = (int)rows_.size();
+    const int visibleRows = std::max(1, viewport_.h / rowH_);
+
+    // Find this row list's copy of the current selection, if it has one --
+    // a header-bar action (Start game!, Follow this server) can be the
+    // selected index while never appearing as a row here at all.
+    int selPos = -1;
+    for (int i = 0; i < total; i++) {
+        if (rows_[i].index == selectedIndex_) { selPos = i; break; }
+    }
+
+    // Pins the selected row one slot from the top rather than remembering a
+    // scroll offset across frames: stateless, so there is nothing to get out
+    // of sync with the row list a screen rebuilds fresh every frame, and it
+    // still clamps to the ends so the list never scrolls past its own content.
+    int maxScroll = std::max(0, total - visibleRows);
+    int scrollTop = 0;
+    if (selPos >= 0) scrollTop = std::clamp(selPos - 1, 0, maxScroll);
+
+    SDL_Rect clip = viewport_;
+    SDL_SetRenderClipRect(rend, &clip);
+
+    const int lastVisible = std::min(total, scrollTop + visibleRows + 1);
+    for (int i = scrollTop; i < lastVisible; i++) {
+        const Entry& row = rows_[i];
+        int y = viewport_.y + (i - scrollTop) * rowH_;
+        SDL_Rect slot = {viewport_.x, y, viewport_.w, rowH_};
+
+        if (row.header) {
+            DrawText(rend, text, row.label, 14, TTF_STYLE_BOLD, kGold,
+                     viewport_.x + 14, y + rowH_ - 24, true);
+            SDL_SetRenderDrawBlendMode(rend, SDL_BLENDMODE_BLEND);
+            SDL_SetRenderDrawColor(rend, kEdge.r, kEdge.g, kEdge.b, 110);
+            SDL_RenderLine(rend, (float)(viewport_.x + 14), (float)(y + rowH_ - 4),
+                           (float)(viewport_.x + viewport_.w - 14), (float)(y + rowH_ - 4));
+            continue;
+        }
+
+        bool selected = (row.index == selectedIndex_);
+        if (selected) {
+            DrawSelection(rend, {viewport_.x + 6, y + 2, viewport_.w - 12, rowH_ - 4});
+        }
+
+        int textX = viewport_.x + 14;
+        if (row.hasPrefix) {
+            int pw = DrawText(rend, text, row.prefix, 20, TTF_STYLE_NORMAL, row.prefixColor,
+                               textX, y + (rowH_ - 24) / 2, true);
+            // Fixed prefix column (rather than pw itself) keeps every row's
+            // label starting at the same x regardless of glyph width.
+            textX += std::max(pw, 24) + 8;
+            // Registered before the row's own full-width band below, so it
+            // wins the hit test (first match wins -- see PanelTapRow).
+            addTapRow(row.index, {viewport_.x + 4, y, 32, rowH_}, -1, false, row.prefixKey);
+        }
+
+        DrawText(rend, text, row.label, 20, TTF_STYLE_NORMAL,
+                 kText, textX, y + (rowH_ - 24) / 2, true);
+
+        if (!row.value.empty()) {
+            std::string val = row.splitAdjust ? ("<  " + row.value + "  >") : row.value;
+            DrawText(rend, text, val, 20, TTF_STYLE_BOLD, row.valueColor,
+                     viewport_.x + viewport_.w - 14, y + (rowH_ - 24) / 2, false);
+        }
+
+        addTapRow(row.index, slot, -1, row.splitAdjust, 0);
+    }
+
+    SDL_SetRenderClipRect(rend, nullptr);
+
+    // Scrollbar: only when content overflows the viewport, matching every
+    // other "nothing to scroll" screen simply not drawing one.
+    if (total > visibleRows) {
+        int trackX = viewport_.x + viewport_.w - 10;
+        int trackY = viewport_.y + 6;
+        int trackH = viewport_.h - 12;
+        SDL_SetRenderDrawBlendMode(rend, SDL_BLENDMODE_BLEND);
+        SDL_SetRenderDrawColor(rend, 255, 255, 255, 40);
+        SDL_FRect trackRect = {(float)trackX, (float)trackY, 4.0f, (float)trackH};
+        SDL_RenderFillRect(rend, &trackRect);
+
+        int thumbH = std::max(16, trackH * visibleRows / total);
+        int thumbY = trackY + (maxScroll > 0 ? (trackH - thumbH) * scrollTop / maxScroll : 0);
+        SDL_SetRenderDrawColor(rend, kEdge.r, kEdge.g, kEdge.b, 210);
+        SDL_FRect thumbRect = {(float)trackX, (float)thumbY, 4.0f, (float)thumbH};
+        SDL_RenderFillRect(rend, &thumbRect);
+    }
+
+    int drawnRows = lastVisible - scrollTop;
+    return viewport_.y + drawnRows * rowH_;
+}
+
+} // namespace menulist

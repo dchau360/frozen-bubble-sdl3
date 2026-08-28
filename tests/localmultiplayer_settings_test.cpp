@@ -181,13 +181,15 @@ int main() {
     std::unique_ptr<MainMenu> menu = MainMenuTestAccess::Create(renderer);
 
     // localMPMenuIndex is fixed at 6 (kLocalMPRowVictories) by the helper
-    // above, so this row is always the selected one: bracketed, like every
-    // other selected row in the game's other settings panels.
+    // above. lastLocalMPPanelText is a plain "Label: Value" dump of every
+    // row menulist::List was fed that frame (see LocalMPPanelRender's row()
+    // lambda) -- selection itself drives which row menulist highlights on
+    // screen, not this text, so the check is just that the row's content is
+    // what SetVictories() asked for.
     std::string rendered = MainMenuTestAccess::RenderVictories(*menu, 0);
-    CHECK(rendered.find("[ Victories limit: none (unlimited) ]")
-        != std::string::npos);
+    CHECK(rendered.find("Victories limit: none (unlimited)") != std::string::npos);
     rendered = MainMenuTestAccess::RenderVictories(*menu, 15);
-    CHECK(rendered.find("[ Victories limit: 30 ]") != std::string::npos);
+    CHECK(rendered.find("Victories limit: 30") != std::string::npos);
 
     MainMenuTestAccess::SetVictories(*menu, 0);
     CHECK(MainMenuTestAccess::PressKey(*menu, SDLK_LEFT));

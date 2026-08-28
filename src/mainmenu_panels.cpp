@@ -21,6 +21,7 @@
 #include "audiomixer.h"
 #include "frozenbubble.h"
 #include "localmultiplayer_settings.h"
+#include "menulist.h"
 #include "transitionmanager.h"
 #include "networkclient.h"
 #include "platform.h"
@@ -254,17 +255,12 @@ void MainMenu::LocalMPPanelRender() {
 
     int connected = 0;
     { SDL_JoystickID *joys = SDL_GetJoysticks(&connected); SDL_free(joys); }
-    char warningText[128] = "";
     // Bots need no controller, so only the human slots count toward the
     // warning -- otherwise adding bots to fix "not enough controllers" would
     // leave the warning up, which reads as though it had not worked.
-    const int humansNeeded =
-        localMPPlayerCount - ClampLocalBotCount(localMPBotCount, localMPPlayerCount);
-    if (connected < humansNeeded) {
-        snprintf(warningText, sizeof(warningText),
-            "WARNING: %d controller(s) connected, need %d",
-            connected, humansNeeded);
-    }
+    const int botCount = ClampLocalBotCount(localMPBotCount, localMPPlayerCount);
+    const int humansNeeded = localMPPlayerCount - botCount;
+    const bool shortOnControllers = connected < humansNeeded;
 
     char victoriesText[32];
     if (localMPVictoriesIndex == 0) {
@@ -274,206 +270,131 @@ void MainMenu::LocalMPPanelRender() {
             kVictoriesLimits[localMPVictoriesIndex]);
     }
 
-    // Bots occupy the last slots, so name them: "P3+P4" reads better than a
-    // bare count when the player is deciding who they are actually playing.
-    const int botCount = ClampLocalBotCount(localMPBotCount, localMPPlayerCount);
-    char botsText[48];
-    if (botCount == 0) {
-        snprintf(botsText, sizeof(botsText), "none");
-    } else {
-        int pos = snprintf(botsText, sizeof(botsText), "%d (", botCount);
-        for (int i = localMPPlayerCount - botCount; i < localMPPlayerCount; ++i) {
-            pos += snprintf(botsText + pos, sizeof(botsText) - pos, "%sP%d",
-                            i == localMPPlayerCount - botCount ? "" : "+", i + 1);
-        }
-        snprintf(botsText + pos, sizeof(botsText) - pos, ")");
-    }
+    char botsText[16];
+    snprintf(botsText, sizeof(botsText), botCount == 0 ? "none" : "%d", botCount);
 
     // Team Mode splits odd slots against even, so which players face which
     // depends on the count -- spell it out rather than naming a fixed pairing.
-    char teamModeText[48];
-    if (localMPTeamMode) {
-        char split[40];
-        LocalMPTeamSplitLabel(split, sizeof(split), localMPPlayerCount);
-        snprintf(teamModeText, sizeof(teamModeText), "ON (%s)", split);
-    } else {
-        snprintf(teamModeText, sizeof(teamModeText), "OFF");
-    }
-
-    SDL_Color white  = {255, 255, 255, 255};
-    SDL_Color yellow = {255, 220, 50, 255};
-    SDL_Color black  = {0, 0, 0, 255};
+    char teamModeText[40] = "OFF";
+    if (localMPTeamMode) LocalMPTeamSplitLabel(teamModeText, sizeof(teamModeText), localMPPlayerCount);
 
     SDL_Renderer* rend = const_cast<SDL_Renderer*>(renderer);
-    panelText.UpdateText(rend, "Xy", 0);
-    const int lineH = panelText.Coords()->h;
+    const int startRow = LocalMPStartRow(localMPPlayerCount);
 
-    // Every other settings panel (KeysPanelRender, the Net-game panels)
-    // colours its selected row yellow on top of the "[ ]" bracket; this one
-    // used to rely on a bare ">" prefix with no colour at all, which is the
-    // inconsistency this rewrite fixes. Built as a list of rows and both
-    // measured and drawn from that same list, same reasoning as
-    // KeysPanelRender: a row added to one pass and not the other silently
-    // desyncs the panel's size from what it actually draws.
-    struct PanelLine {
-        std::string text;
-        SDL_Color   color;
-    };
-    std::vector<PanelLine> lines;
-    auto addLine = [&](const std::string& txt, SDL_Color c) {
-        lines.push_back({txt, c});
+    auto tap = [&](int index, const SDL_Rect& rect, int subIndex, bool splitAdjust, SDL_Keycode key) {
+        AddPanelTapRow(index, rect, subIndex, splitAdjust, key);
     };
 
-    char lineBuf[256];
+    BeginPanelTapRows(&localMPMenuIndex);
 
-    addLine("Local multiplayer", white);
-    if (warningText[0]) addLine(warningText, white);
-    addLine("", white);  // exactly one blank line, warning or not
+    char title[64];
+    snprintf(title, sizeof(title), "LOCAL MULTIPLAYER  \xe2\x80\x94  %d players", localMPPlayerCount);
+    menulist::DrawHeaderBar(rend, panelText, menulist::kHeaderBar, title,
+        "Start game!", localMPMenuIndex == startRow, startRow, tap);
 
-    bool sel = (localMPMenuIndex == kLocalMPRowPlayers);
-    snprintf(lineBuf, sizeof(lineBuf), sel ? "[ Players: %d ]" : "  Players: %d  ",
-             localMPPlayerCount);
-    addLine(lineBuf, sel ? yellow : white);
-
-    sel = (localMPMenuIndex == kLocalMPRowChain);
-    snprintf(lineBuf, sizeof(lineBuf), sel ? "[ Chain-reaction: %s ]" : "  Chain-reaction: %s  ",
-             localMPCR ? "enabled" : "disabled");
-    addLine(lineBuf, sel ? yellow : white);
-
-    sel = (localMPMenuIndex == kLocalMPRowCollapse);
-    snprintf(lineBuf, sizeof(lineBuf), sel ? "[ Row collapse: %s ]" : "  Row collapse: %s  ",
-             localMPNoCompress ? "disabled" : "enabled");
-    addLine(lineBuf, sel ? yellow : white);
-
-    sel = (localMPMenuIndex == kLocalMPRowMode);
-    snprintf(lineBuf, sizeof(lineBuf), sel ? "[ Mode: %s ]" : "  Mode: %s  ",
-             localMPClearMode ? "Clear" : "Classic");
-    addLine(lineBuf, sel ? yellow : white);
-
-    sel = (localMPMenuIndex == kLocalMPRowMalus);
-    snprintf(lineBuf, sizeof(lineBuf), sel ? "[ Malus: %s ]" : "  Malus: %s  ",
-             localMPDisableMalus ? "disabled" : "enabled");
-    addLine(lineBuf, sel ? yellow : white);
-
-    sel = (localMPMenuIndex == kLocalMPRowTeam);
-    snprintf(lineBuf, sizeof(lineBuf), sel ? "[ Team Mode: %s ]" : "  Team Mode: %s  ",
-             teamModeText);
-    addLine(lineBuf, sel ? yellow : white);
-
-    sel = (localMPMenuIndex == kLocalMPRowVictories);
-    snprintf(lineBuf, sizeof(lineBuf), sel ? "[ Victories limit: %s ]" : "  Victories limit: %s  ",
-             victoriesText);
-    addLine(lineBuf, sel ? yellow : white);
-
-    sel = (localMPMenuIndex == kLocalMPRowBots);
-    snprintf(lineBuf, sizeof(lineBuf), sel ? "[ Bots: %s ]" : "  Bots: %s  ", botsText);
-    addLine(lineBuf, sel ? yellow : white);
-
-    sel = (localMPMenuIndex == kLocalMPRowBotSkill);
-    snprintf(lineBuf, sizeof(lineBuf), sel ? "[ Bot skill: %s ]" : "  Bot skill: %s  ",
-             LocalMPBotSkillName(localMPBotSkill));
-    addLine(lineBuf, sel ? yellow : white);
-
-    // Per-player rows stay collapsed onto one line each (instead of one line
-    // per player) so the panel's height stays constant regardless of player
-    // count; the selected player's field is still bracketed, since a whole
-    // line can't stand for one item here, but the whole row now also goes
-    // yellow while any of its players is the current selection, matching
-    // every other row instead of being the one place colour never appears.
-    bool aimGuideSel = localMPMenuIndex >= kLocalMPFirstPlayerRow &&
-                        localMPMenuIndex < LocalMPAimGuideRow(localMPPlayerCount);
-    int pos = snprintf(lineBuf, sizeof(lineBuf), "  Aim guide:");
-    for (int pi = 0; pi < localMPPlayerCount && pi < 5; pi++) {
-        bool pSel = localMPMenuIndex == LocalMPAimGuideRow(pi);
-        pos += snprintf(lineBuf + pos, sizeof(lineBuf) - pos,
-            pSel ? " [P%d:%s]" : " P%d:%s",
-            pi + 1, localMPAimGuide[pi] ? "on" : "off");
-    }
-    addLine(lineBuf, aimGuideSel ? yellow : white);
-
-    bool colorsSel = localMPMenuIndex >= LocalMPColorsRow(0, localMPPlayerCount) &&
-                      localMPMenuIndex < LocalMPStartRow(localMPPlayerCount);
-    pos = snprintf(lineBuf, sizeof(lineBuf), "  Max colors:");
-    for (int pi = 0; pi < localMPPlayerCount && pi < 5; pi++) {
-        bool pSel = localMPMenuIndex == LocalMPColorsRow(pi, localMPPlayerCount);
-        pos += snprintf(lineBuf + pos, sizeof(lineBuf) - pos,
-            pSel ? " [P%d:%d]" : " P%d:%d",
-            pi + 1, playerColorCounts[pi]);
-    }
-    addLine(lineBuf, colorsSel ? yellow : white);
-
-    sel = (localMPMenuIndex == LocalMPStartRow(localMPPlayerCount));
-    addLine(sel ? "[ Start game! ]" : "  Start game!  ", sel ? yellow : white);
-
-    addLine("", white);
-    addLine("Each player needs a controller.", white);
-    addLine("Use UP/DOWN to select", white);
-    addLine("LEFT/RIGHT or ENTER to change", white);
-    addLine("Press ESC to cancel", white);
-
-    // See the member's own comment (mainmenu.h): panelText itself only ends
-    // up holding the last row drawn once the loop below is done with it.
+    // MainMenuTestAccess reads lastLocalMPPanelText to check row content
+    // without a real renderer walking pixels (see mainmenu.h). row() is the
+    // single place that both feeds the widget and keeps that dump in sync,
+    // so no row can appear in one and not the other.
     lastLocalMPPanelText.clear();
-    for (const PanelLine& l : lines) {
-        lastLocalMPPanelText += l.text;
-        lastLocalMPPanelText += '\n';
-    }
-
-    // Size and centre the panel around the actual content instead of a fixed
-    // box, so it always fully contains it on-screen -- unlike KeysPanelRender,
-    // this panel's per-player rows can run wider than the standard panel
-    // width, so width is measured (the widest line), not fixed. Measuring
-    // pass first, exactly like KeysPanelRender's height-only version, so
-    // sizing and drawing can never read a different row list.
-    int maxW = 0;
-    for (const PanelLine& l : lines) {
-        if (l.text.empty()) continue;
-        panelText.UpdateText(rend, l.text.c_str(), 0);
-        maxW = std::max(maxW, panelText.Coords()->w);
-    }
-    const int contentH = (int)lines.size() * lineH;
-
-    // padTop must clear the header bar's own height (~18px) — that bar is
-    // drawn at ~18% opacity, so text sitting on top of it lets the
-    // title-screen background show through the letters instead of a solid
-    // backdrop.
-    const int padX = 24, padTop = 20, padBottom = 20;
-    SDL_Rect panelRect = {
-        (640 - (maxW + padX * 2)) / 2,
-        std::max(10, (480 - (contentH + padTop + padBottom)) / 2),
-        maxW + padX * 2,
-        std::min(contentH + padTop + padBottom, 480 - 20),
+    menulist::List list(menulist::kListFull, localMPMenuIndex);
+    auto row = [&](int index, const std::string& label, const std::string& value,
+                   bool emphasize = true, bool splitAdjust = false) {
+        list.Row(index, label, value, emphasize, splitAdjust);
+        lastLocalMPPanelText += label + ": " + value + "\n";
     };
 
-    // Slices are drawn top, then mid, then bottom, each overlapping the next
-    // by a couple pixels — abutting them exactly leaves a hairline seam
-    // where linear texture filtering samples across the crop boundary and
-    // shows the background through as a see-through gap.
-    float srcW, srcH;
-    SDL_GetTextureSize(voidPanelBG, &srcW, &srcH);
-    float topCap = srcH * 0.11f, bottomCap = srcH * 0.14f;
-    float overlap = 2.0f;
-    SDL_FRect topSrc = {0, 0, srcW, topCap + overlap};
-    SDL_FRect topDst = {(float)panelRect.x, (float)panelRect.y, (float)panelRect.w, topCap + overlap};
-    SDL_FRect bottomSrc = {0, srcH - bottomCap - overlap, srcW, bottomCap + overlap};
-    SDL_FRect bottomDst = {(float)panelRect.x, panelRect.y + panelRect.h - bottomCap - overlap, (float)panelRect.w, bottomCap + overlap};
-    SDL_FRect midSrc = {0, topCap, srcW, srcH - topCap - bottomCap};
-    SDL_FRect midDst = {(float)panelRect.x, panelRect.y + topCap, (float)panelRect.w, panelRect.h - topCap - bottomCap};
-    SDL_RenderTexture(rend, voidPanelBG, &topSrc, &topDst);
-    SDL_RenderTexture(rend, voidPanelBG, &midSrc, &midDst);
-    SDL_RenderTexture(rend, voidPanelBG, &bottomSrc, &bottomDst);
+    list.Header("Match rules");
+    row(kLocalMPRowPlayers, "Players", std::to_string(localMPPlayerCount), true, true);
+    row(kLocalMPRowChain, "Chain reaction", localMPCR ? "ON" : "OFF", localMPCR);
+    row(kLocalMPRowCollapse, "Row collapse", localMPNoCompress ? "OFF" : "ON", !localMPNoCompress);
+    row(kLocalMPRowMode, "Mode", localMPClearMode ? "Clear" : "Classic", true, true);
+    row(kLocalMPRowMalus, "Attack bubbles", localMPDisableMalus ? "OFF" : "ON", !localMPDisableMalus);
+    row(kLocalMPRowTeam, "Team mode", teamModeText, localMPTeamMode);
+    row(kLocalMPRowVictories, "Victories limit", victoriesText, true, true);
 
-    int y = panelRect.y + padTop;
-    for (const PanelLine& l : lines) {
-        if (!l.text.empty()) {
-            panelText.UpdateColor(l.color, black);
-            panelText.UpdateText(rend, l.text.c_str(), 0);
-            panelText.UpdatePosition({(640 / 2) - (panelText.Coords()->w / 2), y});
-            SDL_FRect fr = ToFRect(*panelText.Coords());
-            SDL_RenderTexture(rend, panelText.Texture(), nullptr, &fr);
-        }
-        y += lineH;
+    list.Header("Bots");
+    row(kLocalMPRowBots, "Bots", botsText, botCount > 0, true);
+    row(kLocalMPRowBotSkill, "Bot skill", LocalMPBotSkillName(localMPBotSkill), true, true);
+
+    list.Header("Per-player");
+    for (int pi = 0; pi < localMPPlayerCount && pi < 5; pi++) {
+        char label[16];
+        snprintf(label, sizeof(label), "P%d aim guide", pi + 1);
+        row(LocalMPAimGuideRow(pi), label, localMPAimGuide[pi] ? "ON" : "OFF", localMPAimGuide[pi]);
     }
+    for (int pi = 0; pi < localMPPlayerCount && pi < 5; pi++) {
+        char label[16], val[8];
+        snprintf(label, sizeof(label), "P%d max colors", pi + 1);
+        snprintf(val, sizeof(val), "%d", playerColorCounts[pi]);
+        row(LocalMPColorsRow(pi, localMPPlayerCount), label, val, true, true);
+    }
+    // nullptr, not voidPanelBG: that texture is a small wood panel meant for
+    // the ~341x280 popups (SPPanelRender, OptPanelRender...), and stretching
+    // it to fill this much larger list blows its watermark up into a giant,
+    // blurry crest instead of a backdrop. List::End's own solid navy fill is
+    // the frame every other converted screen uses.
+    list.End(rend, panelText, nullptr, tap);
+
+    // Sidebar: one row per player (human vs bot, and which input device a
+    // human is bound to -- reusing the same virtual-scancode test
+    // ControllerScancodeName() uses, not a fabricated guess), plus the
+    // controller-shortage warning docked at the bottom where it stays next
+    // to the slots it's actually talking about, instead of pushing every
+    // settings row down like the old single-panel layout did.
+    int sy = menulist::DrawSidebarHeader(rend, panelText, menulist::kSidebarFull, "Players");
+    GameSettings* gs = GameSettings::Instance();
+    PlayerKeys* allKeys[5] = {&gs->player1Keys, &gs->player2Keys, &gs->player3Keys,
+                              &gs->player4Keys, &gs->player5Keys};
+    const SDL_Rect& sb = menulist::kSidebarFull;
+    for (int pi = 0; pi < localMPPlayerCount && pi < 5; pi++) {
+        bool isBot = pi >= localMPPlayerCount - botCount;
+        SDL_Rect rowRect = {sb.x + 10, sy, sb.w - 20, 26};
+        SDL_SetRenderDrawBlendMode(rend, SDL_BLENDMODE_BLEND);
+        SDL_SetRenderDrawColor(rend, 10, 38, 48, isBot ? 90 : 170);
+        { SDL_FRect fr = ToFRect(rowRect); SDL_RenderFillRect(rend, &fr); }
+
+        char pname[8];
+        snprintf(pname, sizeof(pname), "P%d", pi + 1);
+        panelText.UpdateStyle(16, TTF_STYLE_NORMAL);
+        panelText.UpdateColor(menulist::kText, menulist::kTextShadow);
+        panelText.UpdateText(rend, pname, 0);
+        panelText.UpdatePosition({rowRect.x + 6, sy + 4});
+        { SDL_FRect fr = ToFRect(*panelText.Coords()); SDL_RenderTexture(rend, panelText.Texture(), nullptr, &fr); }
+
+        std::string device;
+        if (isBot) device = "Bot";
+        else device = IsVirtualScancode(allKeys[pi]->fire) ? "Controller" : "Keyboard";
+        panelText.UpdateColor(menulist::kMuted, menulist::kTextShadow);
+        panelText.UpdateText(rend, device.c_str(), 0);
+        panelText.UpdatePosition({rowRect.x + 40, sy + 4});
+        { SDL_FRect fr = ToFRect(*panelText.Coords()); SDL_RenderTexture(rend, panelText.Texture(), nullptr, &fr); }
+
+        sy += 30;
+    }
+
+    if (shortOnControllers) {
+        char l1[48], l2[48];
+        snprintf(l1, sizeof(l1), "%d controller(s) found.", connected);
+        snprintf(l2, sizeof(l2), "%d needed to start.", humansNeeded);
+        SDL_Rect warnRect = {sb.x + 8, sb.y + sb.h - 66, sb.w - 16, 54};
+        SDL_SetRenderDrawBlendMode(rend, SDL_BLENDMODE_BLEND);
+        SDL_SetRenderDrawColor(rend, 120, 30, 30, 130);
+        { SDL_FRect fr = ToFRect(warnRect); SDL_RenderFillRect(rend, &fr); }
+        SDL_SetRenderDrawColor(rend, menulist::kBad.r, menulist::kBad.g, menulist::kBad.b, 220);
+        { SDL_FRect fr = ToFRect(warnRect); SDL_RenderRect(rend, &fr); }
+        panelText.UpdateStyle(14, TTF_STYLE_NORMAL);
+        panelText.UpdateColor(menulist::kBad, menulist::kTextShadow);
+        panelText.UpdateText(rend, l1, 0);
+        panelText.UpdatePosition({warnRect.x + 8, warnRect.y + 8});
+        { SDL_FRect fr = ToFRect(*panelText.Coords()); SDL_RenderTexture(rend, panelText.Texture(), nullptr, &fr); }
+        panelText.UpdateText(rend, l2, 0);
+        panelText.UpdatePosition({warnRect.x + 8, warnRect.y + 30});
+        { SDL_FRect fr = ToFRect(*panelText.Coords()); SDL_RenderTexture(rend, panelText.Texture(), nullptr, &fr); }
+    }
+
+    menulist::DrawFooterHint(rend, panelText,
+        "UP/DOWN select    LEFT/RIGHT change    ENTER confirm    ESC cancel");
 }
 
 

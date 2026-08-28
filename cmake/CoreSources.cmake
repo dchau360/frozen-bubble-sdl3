@@ -31,6 +31,7 @@ set(FROZEN_BUBBLE_CORE_SOURCES
     ${FB_SRC}/mainmenu_netpanel.cpp
     ${FB_SRC}/mainmenu_panels.cpp
     ${FB_SRC}/mainmenu_server.cpp
+    ${FB_SRC}/menulist.cpp
     ${FB_SRC}/localmultiplayer_settings.cpp
     ${FB_SRC}/gamesettings.cpp
     ${FB_SRC}/audiomixer.cpp
