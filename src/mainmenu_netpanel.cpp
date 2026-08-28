@@ -437,7 +437,6 @@ void MainMenu::NetPanelLobbyActionsRender() {
         SDL_RenderRect(roomRenderer, &fr);
     };
 
-    const SDL_Color panelFill = {26, 18, 48, 222};
     const SDL_Color panelEdge = {255, 190, 46, 225};
     const SDL_Color textMain  = {248, 250, 239, 255};
     const SDL_Color textMuted = {174, 211, 202, 255};
@@ -612,72 +611,25 @@ void MainMenu::NetPanelLobbyActionsRender() {
                 }
             }
 
-            drawPanel({10, 42, 428, 276}, panelFill, panelEdge);
-            drawPanel({446, 42, 184, 276}, {18, 55, 65, 225}, panelEdge);
-            drawLabel("GAME ROOMS", 20, 48, textGold);
         }
 
-        // Room list scroll window: "selection-follows" — no dedicated
-        // scroll-offset state, this is recomputed from selectedActionIndex
-        // every frame. Shows exactly 5 rooms at a time.
-        int firstVisibleRoom = 0;
-        if (!currentGame && selectedActionIndex >= kLobbyFollow + 1) {
-            firstVisibleRoom = selectedActionIndex - (kLobbyFollow + 1);
-            int maxFirst = std::max(0, (int)actions.size() - (kLobbyFollow + 1) - 5);
-            if (firstVisibleRoom > maxFirst) firstVisibleRoom = maxFirst;
-        }
-
-        // Render the lobby's room-card list and action rows. In a game room,
-        // this loop no longer draws anything at all: rows 1..gridStart-1 are
-        // now menulist::List rows (below), the grid/bots/start rows were
-        // already skipped here before this rewrite. Left in place rather
-        // than special-cased away so the lobby branch -- room cards, Create
-        // Game Room, Chat -- keeps working exactly as it did.
-        for (size_t i = 0; i < actions.size() && i < 18; i++) {
-            // Chat's own row is rendered by the persistent chat dock instead.
-            if (i == 0) continue;
-            if (currentGame) continue;  // fully replaced by menulist::List, see below
-            // Follow this server is rendered in the header bar above.
-            if (!currentGame && (int)i == kLobbyFollow) continue;
-            // Outside the lobby room-list scroll window.
-            if (!currentGame && i >= (size_t)(kLobbyFollow + 1) &&
-                ((int)i - (kLobbyFollow + 1) < firstVisibleRoom ||
-                 (int)i - (kLobbyFollow + 1) >= firstVisibleRoom + 5)) continue;
-
-            int renderY = 0;
-            int renderX = actionStartX;
-            int highlightW = 396;
-            if (i == 1) {
-                renderY = 68;
-                highlightW = 340;
-            } else {
-                renderY = 98 + ((int)i - (kLobbyFollow + 1) - firstVisibleRoom) * 40;
-                renderX = 20;
-                highlightW = 408;
+        // Lobby room browser, as a menulist::List -- same widget, same
+        // kListDocked geometry, same navy/gold row style as the game room's
+        // own Match rules list below, instead of the hand-rolled teal cards
+        // this replaced (found live: the lobby and the room it leads into
+        // read as two different screens). Scrolling is List::End's own, so
+        // the old fixed "5 rooms at a time" window and its firstVisibleRoom
+        // math are gone too -- List already does that for any row count.
+        if (!currentGame) {
+            menulist::List lobbyList(menulist::kListDocked, selectedActionIndex, 32);
+            lobbyList.Header("Game rooms");
+            char createValue[16];
+            snprintf(createValue, sizeof(createValue), "%d players", kRoomSizes[netRoomSizeChoice]);
+            lobbyList.Row(1, "Create Game Room", createValue, true, true);
+            for (size_t i = (size_t)(kLobbyFollow + 1); i < actions.size() && i < 18; i++) {
+                lobbyList.Row((int)i, actions[i], "");
             }
-
-            // Card border behind lobby room entries.
-            if (i >= (size_t)(kLobbyFollow + 1)) {
-                SDL_Rect card = {14, renderY - 6, 420, 34};
-                SDL_SetRenderDrawColor(roomRenderer, 20, 72, 79, 215);
-                { SDL_FRect fr = ToFRect(card); SDL_RenderFillRect(roomRenderer, &fr); }
-                SDL_SetRenderDrawColor(roomRenderer, 105, 196, 176, 220);
-                { SDL_FRect fr = ToFRect(card); SDL_RenderRect(roomRenderer, &fr); }
-            }
-
-            SDL_Rect rowRect = {renderX - 4, renderY - 3, highlightW, 30};
-            if (i == (size_t)selectedActionIndex) {
-                drawSelection(rowRect);
-            }
-            AddPanelTapRow((int)i, rowRect);
-
-            char actionText[128];
-            snprintf(actionText, sizeof(actionText), "%s", actions[i].c_str());
-            if (i == 1) {
-                snprintf(actionText, sizeof(actionText), "Create Game Room    < %d players >",
-                         kRoomSizes[netRoomSizeChoice]);
-            }
-            drawLabel(actionText, renderX, renderY, i == (size_t)selectedActionIndex ? textGold : textMain);
+            lobbyList.End(roomRenderer, panelText, nullptr, menulistTap);
         }
 
         // Game room: match rules + controls as menulist rows -- 28px pitch
@@ -689,7 +641,17 @@ void MainMenu::NetPanelLobbyActionsRender() {
         // spending more of that budget than the grid itself needs.
         int gridHeaderY = 0;
         if (currentGame) {
-            menulist::List roomList(menulist::kListDocked, selectedActionIndex, 28);
+            // A >5-cap room's roster sidebar (below) is the wider 2-column
+            // layout starting at x=354, not the fat single-column one at
+            // x=450 -- kListDocked's width alone would run 60px into it
+            // (found live, on device: a 20-player room's "Classic" value
+            // was rendering clipped exactly at that seam). The per-player
+            // grid a few lines down already accounts for this same seam
+            // (its own width tops out at 348), this just matches it.
+            const bool bigRoomLayout = currentGame->maxPlayers > 5;
+            SDL_Rect roomListRect = menulist::kListDocked;
+            if (bigRoomLayout) roomListRect.w = 336;
+            menulist::List roomList(roomListRect, selectedActionIndex, 28);
             roomList.Header("Match rules");
             const char* mode = netTeamMode ? "Teams" : (netClearMode ? "Clear" : "Classic");
             roomList.Row(kRoomMode, "Game mode", mode);
@@ -1042,25 +1004,28 @@ void MainMenu::NetPanelLobbyActionsRender() {
                           selectedActionIndex == kRoomBotSkill ? textGold : textMuted);
             }
         } else {
-            // Lobby online-player sidebar: green status dot + nickname per
-            // free player, excluding self, capped at 11 shown (no scroll).
+            // Lobby online-player sidebar: same DrawSidebarHeader frame as
+            // every other sidebar (LocalMP's Players, the room's own Players
+            // list below) instead of a hand-rolled panel a few pixels off
+            // from kSidebarDocked -- green status dot + nickname per free
+            // player, excluding self, capped by however many rows actually
+            // fit above the chat dock.
+            int sy = menulist::DrawSidebarHeader(roomRenderer, panelText, menulist::kSidebarDocked, "Online");
+            const SDL_Rect& sb = menulist::kSidebarDocked;
             std::vector<NetworkPlayer> openPlayers = netClient->GetOpenPlayers();
-            char onlineHeader[32];
-            snprintf(onlineHeader, sizeof(onlineHeader), "ONLINE  %d", (int)openPlayers.size());
-            drawLabel(onlineHeader, 456, 50, textGold);
             int shown = 0;
             for (const NetworkPlayer& player : openPlayers) {
                 if (player.nick == netClient->GetPlayerNick()) continue;
-                if (shown >= 11) break;
+                if (sy + shown * 20 + 14 > sb.y + sb.h) break;
                 SDL_SetRenderDrawColor(roomRenderer, 104, 220, 151, 255);
-                SDL_FRect dot = {458.0f, (float)(76 + shown * 20), 7.0f, 7.0f};
+                SDL_FRect dot = {(float)(sb.x + 10), (float)(sy + shown * 20 + 4), 7.0f, 7.0f};
                 SDL_RenderFillRect(roomRenderer, &dot);
                 char shortNick[24];
                 snprintf(shortNick, sizeof(shortNick), "%.18s", player.nick.c_str());
-                drawLabel(shortNick, 474, 70 + shown * 20, textMain);
+                drawLabel(shortNick, sb.x + 26, sy + shown * 20, textMain);
                 shown++;
             }
-            if (shown == 0) drawLabel("No free players", 458, 74, textMuted);
+            if (shown == 0) drawLabel("No free players", sb.x + 10, sy, textMuted);
         }
 }
 
