@@ -30,7 +30,7 @@ struct MainMenuTestAccess {
         menu.localMPMenuIndex = 6;
         menu.localMPVictoriesIndex = victoriesIndex;
         menu.LocalMPPanelRender();
-        return menu.panelText.Text();
+        return menu.lastLocalMPPanelText;
     }
 
     static void SetVictories(MainMenu& menu, int victoriesIndex) {
@@ -180,11 +180,14 @@ int main() {
 
     std::unique_ptr<MainMenu> menu = MainMenuTestAccess::Create(renderer);
 
+    // localMPMenuIndex is fixed at 6 (kLocalMPRowVictories) by the helper
+    // above, so this row is always the selected one: bracketed, like every
+    // other selected row in the game's other settings panels.
     std::string rendered = MainMenuTestAccess::RenderVictories(*menu, 0);
-    CHECK(rendered.find("> Victories limit: none (unlimited)")
+    CHECK(rendered.find("[ Victories limit: none (unlimited) ]")
         != std::string::npos);
     rendered = MainMenuTestAccess::RenderVictories(*menu, 15);
-    CHECK(rendered.find("> Victories limit: 30") != std::string::npos);
+    CHECK(rendered.find("[ Victories limit: 30 ]") != std::string::npos);
 
     MainMenuTestAccess::SetVictories(*menu, 0);
     CHECK(MainMenuTestAccess::PressKey(*menu, SDLK_LEFT));

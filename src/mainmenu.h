@@ -200,6 +200,14 @@ private:
 
     TTFText panelText;
 
+    // LocalMPPanelRender draws each row through panelText separately (one
+    // per-row colour), so panelText.Text() only ever holds whatever the last
+    // row drawn was by the time the function returns -- unlike every other
+    // panel here, which still renders as one block. This is where the whole
+    // row list ends up instead, purely so MainMenuTestAccess can inspect a
+    // specific row without a real renderer walking pixels.
+    std::string lastLocalMPPanelText;
+
     //singleplayer panel
     SDL_Texture *singlePanelBG;
     SDL_Texture *singleButtonAct, *singleButtonIdle;

@@ -262,7 +262,7 @@ void MainMenu::LocalMPPanelRender() {
         localMPPlayerCount - ClampLocalBotCount(localMPBotCount, localMPPlayerCount);
     if (connected < humansNeeded) {
         snprintf(warningText, sizeof(warningText),
-            "WARNING: %d controller(s) connected, need %d\n",
+            "WARNING: %d controller(s) connected, need %d",
             connected, humansNeeded);
     }
 
@@ -300,90 +300,155 @@ void MainMenu::LocalMPPanelRender() {
         snprintf(teamModeText, sizeof(teamModeText), "OFF");
     }
 
-    // Exactly one blank line separates the header (title + optional warning)
-    // from the settings list, whether or not the warning is shown.
-    char pnltxt[1024];
-    int pos = snprintf(pnltxt, sizeof(pnltxt),
-        "Local multiplayer\n"
-        "%s"
-        "\n"
-        "%s Players: %d\n"
-        "%s Chain-reaction: %s\n"
-        "%s Row collapse: %s\n"
-        "%s Mode: %s\n"
-        "%s Malus: %s\n"
-        "%s Team Mode: %s\n"
-        "%s Victories limit: %s\n"
-        "%s Bots: %s\n"
-        "%s Bot skill: %s\n",
-        warningText,
-        localMPMenuIndex == 0 ? ">" : " ",
-        localMPPlayerCount,
-        localMPMenuIndex == 1 ? ">" : " ",
-        localMPCR ? "enabled" : "disabled",
-        localMPMenuIndex == 2 ? ">" : " ",
-        localMPNoCompress ? "disabled" : "enabled",
-        localMPMenuIndex == 3 ? ">" : " ",
-        localMPClearMode ? "Clear" : "Classic",
-        localMPMenuIndex == 4 ? ">" : " ",
-        localMPDisableMalus ? "disabled" : "enabled",
-        localMPMenuIndex == 5 ? ">" : " ",
-        teamModeText,
-        localMPMenuIndex == kLocalMPRowVictories ? ">" : " ",
-        victoriesText,
-        localMPMenuIndex == kLocalMPRowBots ? ">" : " ",
-        botsText,
-        localMPMenuIndex == kLocalMPRowBotSkill ? ">" : " ",
-        LocalMPBotSkillName(localMPBotSkill));
+    SDL_Color white  = {255, 255, 255, 255};
+    SDL_Color yellow = {255, 220, 50, 255};
+    SDL_Color black  = {0, 0, 0, 255};
 
-    // Per-player rows are collapsed onto one line each (instead of one line
+    SDL_Renderer* rend = const_cast<SDL_Renderer*>(renderer);
+    panelText.UpdateText(rend, "Xy", 0);
+    const int lineH = panelText.Coords()->h;
+
+    // Every other settings panel (KeysPanelRender, the Net-game panels)
+    // colours its selected row yellow on top of the "[ ]" bracket; this one
+    // used to rely on a bare ">" prefix with no colour at all, which is the
+    // inconsistency this rewrite fixes. Built as a list of rows and both
+    // measured and drawn from that same list, same reasoning as
+    // KeysPanelRender: a row added to one pass and not the other silently
+    // desyncs the panel's size from what it actually draws.
+    struct PanelLine {
+        std::string text;
+        SDL_Color   color;
+    };
+    std::vector<PanelLine> lines;
+    auto addLine = [&](const std::string& txt, SDL_Color c) {
+        lines.push_back({txt, c});
+    };
+
+    char lineBuf[256];
+
+    addLine("Local multiplayer", white);
+    if (warningText[0]) addLine(warningText, white);
+    addLine("", white);  // exactly one blank line, warning or not
+
+    bool sel = (localMPMenuIndex == kLocalMPRowPlayers);
+    snprintf(lineBuf, sizeof(lineBuf), sel ? "[ Players: %d ]" : "  Players: %d  ",
+             localMPPlayerCount);
+    addLine(lineBuf, sel ? yellow : white);
+
+    sel = (localMPMenuIndex == kLocalMPRowChain);
+    snprintf(lineBuf, sizeof(lineBuf), sel ? "[ Chain-reaction: %s ]" : "  Chain-reaction: %s  ",
+             localMPCR ? "enabled" : "disabled");
+    addLine(lineBuf, sel ? yellow : white);
+
+    sel = (localMPMenuIndex == kLocalMPRowCollapse);
+    snprintf(lineBuf, sizeof(lineBuf), sel ? "[ Row collapse: %s ]" : "  Row collapse: %s  ",
+             localMPNoCompress ? "disabled" : "enabled");
+    addLine(lineBuf, sel ? yellow : white);
+
+    sel = (localMPMenuIndex == kLocalMPRowMode);
+    snprintf(lineBuf, sizeof(lineBuf), sel ? "[ Mode: %s ]" : "  Mode: %s  ",
+             localMPClearMode ? "Clear" : "Classic");
+    addLine(lineBuf, sel ? yellow : white);
+
+    sel = (localMPMenuIndex == kLocalMPRowMalus);
+    snprintf(lineBuf, sizeof(lineBuf), sel ? "[ Malus: %s ]" : "  Malus: %s  ",
+             localMPDisableMalus ? "disabled" : "enabled");
+    addLine(lineBuf, sel ? yellow : white);
+
+    sel = (localMPMenuIndex == kLocalMPRowTeam);
+    snprintf(lineBuf, sizeof(lineBuf), sel ? "[ Team Mode: %s ]" : "  Team Mode: %s  ",
+             teamModeText);
+    addLine(lineBuf, sel ? yellow : white);
+
+    sel = (localMPMenuIndex == kLocalMPRowVictories);
+    snprintf(lineBuf, sizeof(lineBuf), sel ? "[ Victories limit: %s ]" : "  Victories limit: %s  ",
+             victoriesText);
+    addLine(lineBuf, sel ? yellow : white);
+
+    sel = (localMPMenuIndex == kLocalMPRowBots);
+    snprintf(lineBuf, sizeof(lineBuf), sel ? "[ Bots: %s ]" : "  Bots: %s  ", botsText);
+    addLine(lineBuf, sel ? yellow : white);
+
+    sel = (localMPMenuIndex == kLocalMPRowBotSkill);
+    snprintf(lineBuf, sizeof(lineBuf), sel ? "[ Bot skill: %s ]" : "  Bot skill: %s  ",
+             LocalMPBotSkillName(localMPBotSkill));
+    addLine(lineBuf, sel ? yellow : white);
+
+    // Per-player rows stay collapsed onto one line each (instead of one line
     // per player) so the panel's height stays constant regardless of player
-    // count; the selected player's field is bracketed instead of using a
-    // leading "> " marker, since a whole line can no longer stand for one item.
-    pos += snprintf(pnltxt + pos, sizeof(pnltxt) - pos, "  Aim guide:");
+    // count; the selected player's field is still bracketed, since a whole
+    // line can't stand for one item here, but the whole row now also goes
+    // yellow while any of its players is the current selection, matching
+    // every other row instead of being the one place colour never appears.
+    bool aimGuideSel = localMPMenuIndex >= kLocalMPFirstPlayerRow &&
+                        localMPMenuIndex < LocalMPAimGuideRow(localMPPlayerCount);
+    int pos = snprintf(lineBuf, sizeof(lineBuf), "  Aim guide:");
     for (int pi = 0; pi < localMPPlayerCount && pi < 5; pi++) {
-        bool sel = localMPMenuIndex == LocalMPAimGuideRow(pi);
-        pos += snprintf(pnltxt + pos, sizeof(pnltxt) - pos,
-            sel ? " [P%d:%s]" : " P%d:%s",
+        bool pSel = localMPMenuIndex == LocalMPAimGuideRow(pi);
+        pos += snprintf(lineBuf + pos, sizeof(lineBuf) - pos,
+            pSel ? " [P%d:%s]" : " P%d:%s",
             pi + 1, localMPAimGuide[pi] ? "on" : "off");
     }
-    pos += snprintf(pnltxt + pos, sizeof(pnltxt) - pos, "\n  Max colors:");
+    addLine(lineBuf, aimGuideSel ? yellow : white);
+
+    bool colorsSel = localMPMenuIndex >= LocalMPColorsRow(0, localMPPlayerCount) &&
+                      localMPMenuIndex < LocalMPStartRow(localMPPlayerCount);
+    pos = snprintf(lineBuf, sizeof(lineBuf), "  Max colors:");
     for (int pi = 0; pi < localMPPlayerCount && pi < 5; pi++) {
-        bool sel = localMPMenuIndex == LocalMPColorsRow(pi, localMPPlayerCount);
-        pos += snprintf(pnltxt + pos, sizeof(pnltxt) - pos,
-            sel ? " [P%d:%d]" : " P%d:%d",
+        bool pSel = localMPMenuIndex == LocalMPColorsRow(pi, localMPPlayerCount);
+        pos += snprintf(lineBuf + pos, sizeof(lineBuf) - pos,
+            pSel ? " [P%d:%d]" : " P%d:%d",
             pi + 1, playerColorCounts[pi]);
     }
-    snprintf(pnltxt + pos, sizeof(pnltxt) - pos,
-        "\n%s Start game!\n\n"
-        "Each player needs a controller.\n"
-        "Use UP/DOWN to select\n"
-        "LEFT/RIGHT or ENTER to change\n"
-        "Press ESC to cancel",
-        localMPMenuIndex == LocalMPStartRow(localMPPlayerCount) ? ">" : " ");
+    addLine(lineBuf, colorsSel ? yellow : white);
 
-    panelText.UpdateText(const_cast<SDL_Renderer *>(renderer), pnltxt, 0);
+    sel = (localMPMenuIndex == LocalMPStartRow(localMPPlayerCount));
+    addLine(sel ? "[ Start game! ]" : "  Start game!  ", sel ? yellow : white);
 
-    // Size and center the panel around the actual measured text instead of a
-    // fixed box, so it always fully contains its content on-screen. padTop
-    // must clear the header bar's own height (~18px) — that bar is drawn at
-    // ~18% opacity, so text sitting on top of it lets the title-screen
-    // background show through the letters instead of a solid backdrop.
+    addLine("", white);
+    addLine("Each player needs a controller.", white);
+    addLine("Use UP/DOWN to select", white);
+    addLine("LEFT/RIGHT or ENTER to change", white);
+    addLine("Press ESC to cancel", white);
+
+    // See the member's own comment (mainmenu.h): panelText itself only ends
+    // up holding the last row drawn once the loop below is done with it.
+    lastLocalMPPanelText.clear();
+    for (const PanelLine& l : lines) {
+        lastLocalMPPanelText += l.text;
+        lastLocalMPPanelText += '\n';
+    }
+
+    // Size and centre the panel around the actual content instead of a fixed
+    // box, so it always fully contains it on-screen -- unlike KeysPanelRender,
+    // this panel's per-player rows can run wider than the standard panel
+    // width, so width is measured (the widest line), not fixed. Measuring
+    // pass first, exactly like KeysPanelRender's height-only version, so
+    // sizing and drawing can never read a different row list.
+    int maxW = 0;
+    for (const PanelLine& l : lines) {
+        if (l.text.empty()) continue;
+        panelText.UpdateText(rend, l.text.c_str(), 0);
+        maxW = std::max(maxW, panelText.Coords()->w);
+    }
+    const int contentH = (int)lines.size() * lineH;
+
+    // padTop must clear the header bar's own height (~18px) — that bar is
+    // drawn at ~18% opacity, so text sitting on top of it lets the
+    // title-screen background show through the letters instead of a solid
+    // backdrop.
     const int padX = 24, padTop = 20, padBottom = 20;
-    SDL_Rect textCoords = *panelText.Coords();
     SDL_Rect panelRect = {
-        (640 - (textCoords.w + padX * 2)) / 2,
-        std::max(10, (480 - (textCoords.h + padTop + padBottom)) / 2),
-        textCoords.w + padX * 2,
-        std::min(textCoords.h + padTop + padBottom, 480 - 20),
+        (640 - (maxW + padX * 2)) / 2,
+        std::max(10, (480 - (contentH + padTop + padBottom)) / 2),
+        maxW + padX * 2,
+        std::min(contentH + padTop + padBottom, 480 - 20),
     };
-    panelText.UpdatePosition({panelRect.x + padX, panelRect.y + padTop});
 
     // Slices are drawn top, then mid, then bottom, each overlapping the next
     // by a couple pixels — abutting them exactly leaves a hairline seam
     // where linear texture filtering samples across the crop boundary and
     // shows the background through as a see-through gap.
-    SDL_Renderer* rend = const_cast<SDL_Renderer*>(renderer);
     float srcW, srcH;
     SDL_GetTextureSize(voidPanelBG, &srcW, &srcH);
     float topCap = srcH * 0.11f, bottomCap = srcH * 0.14f;
@@ -398,7 +463,17 @@ void MainMenu::LocalMPPanelRender() {
     SDL_RenderTexture(rend, voidPanelBG, &midSrc, &midDst);
     SDL_RenderTexture(rend, voidPanelBG, &bottomSrc, &bottomDst);
 
-    { SDL_FRect fr = ToFRect(*panelText.Coords()); SDL_RenderTexture(rend, panelText.Texture(), nullptr, &fr); };
+    int y = panelRect.y + padTop;
+    for (const PanelLine& l : lines) {
+        if (!l.text.empty()) {
+            panelText.UpdateColor(l.color, black);
+            panelText.UpdateText(rend, l.text.c_str(), 0);
+            panelText.UpdatePosition({(640 / 2) - (panelText.Coords()->w / 2), y});
+            SDL_FRect fr = ToFRect(*panelText.Coords());
+            SDL_RenderTexture(rend, panelText.Texture(), nullptr, &fr);
+        }
+        y += lineH;
+    }
 }
 
 
