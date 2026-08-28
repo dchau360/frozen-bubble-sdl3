@@ -21,6 +21,7 @@
 #include "netteams.h"
 #include "audiomixer.h"
 #include "frozenbubble.h"
+#include "menulist.h"
 #include "transitionmanager.h"
 #include "networkclient.h"
 #include "platform.h"
@@ -1287,222 +1288,22 @@ void MainMenu::RefreshFollowRegistration() {
 void MainMenu::NetPanelConnectionScreensRender() {
     NetworkClient* netClient = NetworkClient::Instance();
 
+    // The two server-list screens are full-screen menulist panels, drawn
+    // before the small wood popup below is ever touched -- everything past
+    // this point still uses that popup, so the two are kept firmly separate.
+    if (!networkInLobby && networkInputMode == 7) {
+        ServerListPanelRender(/*isLAN=*/true);
+        return;
+    }
+    if (!networkInLobby && networkInputMode == 10) {
+        ServerListPanelRender(/*isLAN=*/false);
+        return;
+    }
+
     // For non-lobby screens, use void panel
     { SDL_FRect fr = ToFRect(voidPanelRct); SDL_RenderTexture(const_cast<SDL_Renderer*>(renderer), voidPanelBG, nullptr, &fr); };
 
     char netText[512];
-
-    if (!networkInLobby && networkInputMode == 7) {
-        // LAN server list screen
-        BeginPanelTapRows(&lanMenuIndex);
-        SDL_Color white  = {255, 255, 255, 255};
-        SDL_Color black  = {0, 0, 0, 255};
-        SDL_Color yellow = {255, 220, 50, 255};
-        SDL_Color red    = {255, 80, 80, 255};
-
-        auto renderLine = [&](const char* txt, SDL_Color fg, int& y) {
-            panelText.UpdateColor(fg, black);
-            panelText.UpdateText(const_cast<SDL_Renderer*>(renderer), txt, 0);
-            panelText.UpdatePosition({(640/2) - (panelText.Coords()->w / 2), y});
-            { SDL_FRect fr = ToFRect(*panelText.Coords()); SDL_RenderTexture(const_cast<SDL_Renderer*>(renderer), panelText.Texture(), nullptr, &fr); };
-            y += panelText.Coords()->h;
-        };
-        // Registers the row's tappable band as it is drawn. Full panel width
-        // rather than the glyphs' own: the entries are centred and of varying
-        // length, and a hit box that tight is hard to hit with a thumb.
-        auto renderMenuRow = [&](int index, const char* txt, SDL_Color fg, int& y) {
-            int top = y;
-            renderLine(txt, fg, y);
-            AddPanelTapRow(index, { voidPanelRct.x, top, voidPanelRct.w, y - top });
-        };
-        // A server row carries a second, smaller target: the follow star at its
-        // left edge. Registered before the full-width row so that the narrower
-        // band wins the hit test, since the first matching band is the one
-        // used.
-        auto renderServerRow = [&](int index, const char* txt, SDL_Color fg, int& y) {
-            int top = y;
-            renderLine(txt, fg, y);
-            const SDL_Rect& drawn = *panelText.Coords();
-            const int len = (int)strlen(txt);
-            if (len > 0 && drawn.w > 0) {
-                // "[ * " -- four glyphs in, derived from the drawn width rather
-                // than a pixel guess so it holds if the font changes.
-                const int starW = (drawn.w / len) * 4;
-                AddPanelTapRow(index, { drawn.x, top, starW, y - top }, -1, false,
-                               SDLK_F);
-            }
-            AddPanelTapRow(index, { voidPanelRct.x, top, voidPanelRct.w, y - top });
-        };
-
-        int y = (480/2) - 120;
-        char lineBuf[280];
-
-        renderLine("LAN Game\n", white, y);
-
-        // Menu item 0: Host a server
-        bool hostSel = (lanMenuIndex == 0);
-        snprintf(lineBuf, sizeof(lineBuf),
-            hostSel ? "[ %s ]" : "  %s  ",
-            serverHosting ? "Server running (rescan)" : "Host a server");
-        renderMenuRow(0, lineBuf, hostSel ? yellow : white, y);
-
-        // Menu items 1+: discovered servers (includes 127.0.0.1 if local server running)
-        if (discoveredServers.empty()) {
-            renderLine("  (no servers found)", white, y);
-            renderLine("  Start server with: ./build/server/fb-server -l", white, y);
-        } else {
-            for (int i = 0; i < (int)discoveredServers.size(); i++) {
-                bool sel = (lanMenuIndex == i + 1);
-                const std::string& dname = discoveredServers[i].name.empty()
-                    ? discoveredServers[i].host + ":" + std::to_string(discoveredServers[i].port)
-                    : discoveredServers[i].name;
-                char latBuf[16];
-                int lat = discoveredServers[i].latencyMs;
-                if (lat < 0) snprintf(latBuf, sizeof(latBuf), "offline");
-                else         snprintf(latBuf, sizeof(latBuf), "%dms", lat);
-                const bool followed = GameSettings::Instance()->IsServerFollowed(
-                    discoveredServers[i].host, discoveredServers[i].port);
-                snprintf(lineBuf, sizeof(lineBuf),
-                    sel ? "[ %s %-26s %7s ]" : "  %s %-26s %7s  ",
-                    followed ? "*" : " ", dname.c_str(), latBuf);
-                renderServerRow(i + 1, lineBuf, sel ? yellow : white, y);
-            }
-        }
-
-        // Last menu item: Set Name
-        {
-            int lanMenuMax = 2 + (int)discoveredServers.size(); // 0=Host, 1..n=servers, n+1=SetName
-            bool sel = (lanMenuIndex == lanMenuMax - 1);
-            #ifdef __ANDROID__
-            const char* curNick = networkPreNick[0] != '\0' ? networkPreNick : (getenv("USER") ? getenv("USER") : "android_user");
-#else
-            const char* curNick = networkPreNick[0] != '\0' ? networkPreNick : (getenv("USER") ? getenv("USER") : "unnamed");
-#endif
-            snprintf(lineBuf, sizeof(lineBuf), sel ? "[ Set Name: %-20s ]" : "  Set Name: %-20s  ", curNick);
-            renderMenuRow(lanMenuMax - 1, lineBuf, sel ? yellow : white, y);
-        }
-
-        snprintf(lineBuf, sizeof(lineBuf), "\nUP/DOWN  ENTER to select  R to rescan\nF to follow (notify on join)  ESC to cancel");
-        renderLine(lineBuf, white, y);
-
-        if (!connectErrorMsg.empty()) {
-            snprintf(lineBuf, sizeof(lineBuf), "\n%s", connectErrorMsg.c_str());
-            renderLine(lineBuf, red, y);
-        }
-
-        return;
-    }
-
-    if (!networkInLobby && networkInputMode == 10) {
-#ifndef __WASM_PORT__
-        // Poll background server fetch result
-        if (!serverFetchInProgress.load() && publicServers.empty()) {
-            std::lock_guard<std::mutex> lock(serverFetchMutex);
-            publicServers = std::move(serverFetchResult);
-            serverFetchResult.clear();
-        }
-#endif
-
-        // Net game public server list screen
-        BeginPanelTapRows(&netMenuIndex);
-        SDL_Color white  = {255, 255, 255, 255};
-        SDL_Color black  = {0, 0, 0, 255};
-        SDL_Color yellow = {255, 220, 50, 255};
-        SDL_Color red    = {255, 80, 80, 255};
-        SDL_Color grey   = {160, 160, 160, 255};
-
-        auto renderLine = [&](const char* txt, SDL_Color fg, int& y) {
-            panelText.UpdateColor(fg, black);
-            panelText.UpdateText(const_cast<SDL_Renderer*>(renderer), txt, 0);
-            panelText.UpdatePosition({(640/2) - (panelText.Coords()->w / 2), y});
-            { SDL_FRect fr = ToFRect(*panelText.Coords()); SDL_RenderTexture(const_cast<SDL_Renderer*>(renderer), panelText.Texture(), nullptr, &fr); };
-            y += panelText.Coords()->h;
-        };
-
-        // See the LAN screen above: registers each row's tappable band, panel
-        // width rather than glyph width.
-        auto renderMenuRow = [&](int index, const char* txt, SDL_Color fg, int& y) {
-            int top = y;
-            renderLine(txt, fg, y);
-            AddPanelTapRow(index, { voidPanelRct.x, top, voidPanelRct.w, y - top });
-        };
-        // See the LAN screen: the follow star is a narrower band registered
-        // ahead of the row it sits inside.
-        auto renderServerRow = [&](int index, const char* txt, SDL_Color fg, int& y) {
-            int top = y;
-            renderLine(txt, fg, y);
-            const SDL_Rect& drawn = *panelText.Coords();
-            const int len = (int)strlen(txt);
-            if (len > 0 && drawn.w > 0) {
-                const int starW = (drawn.w / len) * 4;
-                AddPanelTapRow(index, { drawn.x, top, starW, y - top }, -1, false,
-                               SDLK_F);
-            }
-            AddPanelTapRow(index, { voidPanelRct.x, top, voidPanelRct.w, y - top });
-        };
-
-        int y = (480/2) - 120;
-        char lineBuf[320];
-
-        renderLine("Net Game\n", white, y);
-
-        // Menu item 0: Manual entry
-        bool manualSel = (netMenuIndex == 0);
-        renderMenuRow(0, manualSel ? "[ Manual entry ]" : "  Manual entry  ", manualSel ? yellow : white, y);
-
-        // Menu items 1+: public internet servers only
-        // (Local LAN server is accessible via the LAN Game panel instead)
-        if (serverFetchInProgress.load()) {
-            renderLine("  (fetching server list...)", grey, y);
-        } else if (publicServers.empty()) {
-            renderLine("  (no public servers listed)", white, y);
-        } else {
-            for (int i = 0; i < (int)publicServers.size(); i++) {
-                bool sel = (netMenuIndex == i + 1);
-                bool offline = (publicServers[i].latencyMs < 0);
-                const std::string& displayName = publicServers[i].name.empty()
-                    ? publicServers[i].host + ":" + std::to_string(publicServers[i].port)
-                    : publicServers[i].name;
-                char latencyBuf[16];
-                if (offline) snprintf(latencyBuf, sizeof(latencyBuf), "offline");
-                else         snprintf(latencyBuf, sizeof(latencyBuf), "%dms", publicServers[i].latencyMs);
-                const bool followed = GameSettings::Instance()->IsServerFollowed(
-                    publicServers[i].host, publicServers[i].port);
-                snprintf(lineBuf, sizeof(lineBuf),
-                    sel ? "[ %s %-26s %7s ]" : "  %s %-26s %7s  ",
-                    followed ? "*" : " ", displayName.c_str(), latencyBuf);
-                SDL_Color col = offline ? grey : (sel ? yellow : white);
-                // Offline servers stay tappable: selecting one is how the player
-                // reads its address, and the keyboard can land on them too.
-                renderServerRow(i + 1, lineBuf, col, y);
-            }
-        }
-
-        // Last menu item: Set Name
-        {
-            int netMenuMax = 2 + (int)publicServers.size(); // 0=Manual, 1..n=servers, n+1=SetName
-            bool sel = (netMenuIndex == netMenuMax - 1);
-            #ifdef __ANDROID__
-            const char* curNick = networkPreNick[0] != '\0' ? networkPreNick : (getenv("USER") ? getenv("USER") : "android_user");
-#else
-            const char* curNick = networkPreNick[0] != '\0' ? networkPreNick : (getenv("USER") ? getenv("USER") : "unnamed");
-#endif
-            snprintf(lineBuf, sizeof(lineBuf), sel ? "[ Set Name: %-20s ]" : "  Set Name: %-20s  ", curNick);
-            renderMenuRow(netMenuMax - 1, lineBuf, sel ? yellow : white, y);
-        }
-
-        snprintf(lineBuf, sizeof(lineBuf), "\nUP/DOWN  ENTER to select  R to refresh\nF to follow (notify on join)  ESC to cancel");
-        renderLine(lineBuf, white, y);
-
-        if (pendingLobbyConnect) {
-            renderLine("\nConnecting...", yellow, y);
-        } else if (!connectErrorMsg.empty()) {
-            snprintf(lineBuf, sizeof(lineBuf), "\n%s", connectErrorMsg.c_str());
-            renderLine(lineBuf, red, y);
-        }
-
-        return;
-    }
 
     if (!networkInLobby && networkInputMode == 11) {
         // Pre-lobby nickname input screen
@@ -1744,4 +1545,121 @@ void MainMenu::NetPanelConnectionScreensRender() {
     panelText.UpdateText(const_cast<SDL_Renderer *>(renderer), netText, 0);
     panelText.UpdatePosition({(640/2) - (panelText.Coords()->w / 2), (480/2) - 120});
     { SDL_FRect fr = ToFRect(*panelText.Coords()); SDL_RenderTexture(const_cast<SDL_Renderer*>(renderer), panelText.Texture(), nullptr, &fr); };
+}
+
+void MainMenu::ServerListPanelRender(bool isLAN) {
+    SDL_Renderer* rend = const_cast<SDL_Renderer*>(renderer);
+    int& menuIndex = isLAN ? lanMenuIndex : netMenuIndex;
+    std::vector<ServerInfo>& servers = isLAN ? discoveredServers : publicServers;
+
+#ifndef __WASM_PORT__
+    if (!isLAN) {
+        // Poll background server fetch result -- unchanged from before this
+        // rewrite, just relocated with the rest of the Net-list logic.
+        if (!serverFetchInProgress.load() && publicServers.empty()) {
+            std::lock_guard<std::mutex> lock(serverFetchMutex);
+            publicServers = std::move(serverFetchResult);
+            serverFetchResult.clear();
+        }
+    }
+#endif
+
+    BeginPanelTapRows(&menuIndex);
+    auto tap = [&](int index, const SDL_Rect& rect, int subIndex, bool splitAdjust, SDL_Keycode key) {
+        AddPanelTapRow(index, rect, subIndex, splitAdjust, key);
+    };
+
+    menulist::DrawHeaderBar(rend, panelText, menulist::kHeaderBar,
+        isLAN ? "LAN GAME" : "NET GAME", nullptr, false, -1, tap);
+
+    menulist::List list(menulist::kListFull, menuIndex);
+    list.Header(isLAN ? "Local network" : "Public servers");
+
+    // Row 0: LAN hosts a server here; Net opens the manual-entry form. Both
+    // reuse the same slot so the rows below never renumber between screens.
+    if (isLAN) {
+        list.Row(0, serverHosting ? "Server running (rescan)" : "Host a server", "");
+    } else {
+        list.Row(0, "Manual entry...", "");
+    }
+
+    if (!isLAN && serverFetchInProgress.load()) {
+        list.Row(-1, "Fetching server list...", "");
+    } else if (servers.empty()) {
+        list.Row(-1, isLAN ? "No servers found" : "No public servers listed", "");
+        if (isLAN) list.Row(-1, "Start one: fb-server -l", "");
+    } else {
+        for (int i = 0; i < (int)servers.size(); i++) {
+            const ServerInfo& s = servers[i];
+            bool offline = (s.latencyMs < 0);
+            const std::string& name = s.name.empty()
+                ? s.host + ":" + std::to_string(s.port) : s.name;
+            std::string latency = offline ? "offline" : std::to_string(s.latencyMs) + " ms";
+            bool followed = GameSettings::Instance()->IsServerFollowed(s.host, s.port);
+            // Offline servers stay tappable: selecting one is how the player
+            // reads its address, and keyboard/gamepad nav can land on them too.
+            list.RowWithPrefix(i + 1, followed ? "★" : "☆",
+                followed ? menulist::kGold : menulist::kMuted,
+                name, latency, !offline, SDLK_F);
+        }
+    }
+
+    // Last row: Set Name.
+    int lastIdx = 1 + (int)servers.size();
+    const char* curNick = networkPreNick[0] != '\0' ? networkPreNick
+#ifdef __ANDROID__
+        : (getenv("USER") ? getenv("USER") : "android_user");
+#else
+        : (getenv("USER") ? getenv("USER") : "unnamed");
+#endif
+    list.Row(lastIdx, "Set name", curNick, true, true);
+
+    list.End(rend, panelText, nullptr, tap);
+
+    // Sidebar: details for whichever server row is currently selected, plus
+    // connection status -- everything that used to be squeezed onto extra
+    // lines below the list (offline/error text, "Connecting...") now has a
+    // fixed home instead of pushing the row list itself around.
+    int sy = menulist::DrawSidebarHeader(rend, panelText, menulist::kSidebarFull, "Selected");
+    const SDL_Rect& sb = menulist::kSidebarFull;
+    auto sidebarLine = [&](const std::string& txt, SDL_Color color, int size = 15) {
+        panelText.UpdateStyle(size, TTF_STYLE_NORMAL);
+        panelText.UpdateColor(color, menulist::kTextShadow);
+        panelText.UpdateText(rend, txt.c_str(), 0);
+        panelText.UpdatePosition({sb.x + 12, sy});
+        { SDL_FRect fr = ToFRect(*panelText.Coords()); SDL_RenderTexture(rend, panelText.Texture(), nullptr, &fr); }
+        sy += size + 10;
+    };
+
+    if (menuIndex >= 1 && menuIndex <= (int)servers.size()) {
+        const ServerInfo& s = servers[menuIndex - 1];
+        bool offline = (s.latencyMs < 0);
+        bool followed = GameSettings::Instance()->IsServerFollowed(s.host, s.port);
+        sidebarLine(s.name.empty() ? s.host : s.name, menulist::kText, 16);
+        sidebarLine(s.host + "  :" + std::to_string(s.port), menulist::kMuted);
+        sidebarLine(offline ? "offline" : std::to_string(s.latencyMs) + " ms",
+                    offline ? menulist::kBad : menulist::kMuted);
+        sy += 10;
+        sidebarLine(followed ? "★ Following" : "☆ Not followed",
+                    followed ? menulist::kGold : menulist::kMuted);
+        sidebarLine("notified when someone joins", menulist::kMuted, 13);
+    } else if (!isLAN && servers.empty() && !serverFetchInProgress.load()) {
+        sidebarLine("No servers to show yet.", menulist::kMuted);
+        sidebarLine("Press R to refresh.", menulist::kMuted);
+    } else {
+        sidebarLine(isLAN ? "Pick a server, or host" : "Pick a server, or enter",
+                    menulist::kMuted);
+        sidebarLine(isLAN ? "one from this list." : "one manually.", menulist::kMuted);
+    }
+
+    sy = sb.y + sb.h - 70;
+    if (!isLAN && pendingLobbyConnect) {
+        sidebarLine("Connecting...", menulist::kGold);
+    } else if (!connectErrorMsg.empty()) {
+        sidebarLine(connectErrorMsg, menulist::kBad, 13);
+    }
+
+    menulist::DrawFooterHint(rend, panelText, isLAN
+        ? "UP/DOWN select    ENTER connect    R rescan    F follow    ESC cancel"
+        : "UP/DOWN select    ENTER connect    R refresh    F follow    ESC cancel");
 }

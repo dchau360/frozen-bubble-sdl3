@@ -350,6 +350,12 @@ private:
     // a keyboard over the bottom half of the screen.
     void NetPanelChatDockRender(bool expanded = false);
     void NetPanelConnectionScreensRender(); // Pre-login screens: LAN list, manual entry, public list
+    // LAN discovery (mode 7) and the public Net list (mode 10) are the same
+    // screen shape -- a scrolling server list plus a details sidebar -- with
+    // only the first row's action and the discovery-in-progress state
+    // differing. One function serves both rather than keeping two ~110-line
+    // near-duplicates in sync by hand.
+    void ServerListPanelRender(bool isLAN);
     void NetSetupPanelRender(); // Chain reaction prompt for network games
     void SavePreNick();         // Persist networkPreNick (localStorage on WASM, INI elsewhere)
     void StartLocalServer();
