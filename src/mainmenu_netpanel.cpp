@@ -541,11 +541,17 @@ void MainMenu::NetPanelLobbyActionsRender() {
 
         const int gridStart = kRoomGridFirst;  // First grid row index
 
-        // Header bar establishes location and role at a glance.
-        drawPanel({10, 8, 620, 28}, {38, 20, 57, 235}, panelEdge);
-
         bool hasStartRow = currentGame && currentGame->creator == netClient->GetPlayerNick()
                             && currentGame->players.size() > 1;
+
+        // menulist's tap-row signature, for the two menulist:: calls below --
+        // this function still drives its own selection through
+        // selectedActionIndex/currentPlayerCol via BeginPanelTapRows above,
+        // menulist just needs a matching callback shape to register into it.
+        auto menulistTap = [&](int index, const SDL_Rect& rect, int subIndex,
+                                bool splitAdjust, SDL_Keycode key) {
+            AddPanelTapRow(index, rect, subIndex, splitAdjust, key);
+        };
 
         if (currentGame) {
             char title[160];
@@ -553,26 +559,12 @@ void MainMenu::NetPanelLobbyActionsRender() {
             snprintf(title, sizeof(title), "%.24s's GAME ROOM   |   %s   |   %d players",
                      currentGame->creator.c_str(), isHost ? "HOST" : "GUEST",
                      (int)currentGame->players.size());
-            drawLabel(title, 20, 14, textGold);
-            if (hasStartRow) {
-                // Right-aligned in the header so it can never collide with
-                // the title text (whose length varies with the creator's
-                // nickname) or the player sidebar panel drawn later.
-                bool startSel = (selectedActionIndex == kRoomStart);
-                SDL_Color startColor = startSel ? textGold : textMain;
-                panelText.UpdateColor(startColor, {20, 12, 32, 255});
-                panelText.UpdateText(roomRenderer, "Start game!", 0);
-                int tw = panelText.Coords()->w;
-                int sx = 622 - tw;
-                if (startSel) drawSelection({sx - 6, 10, tw + 12, 24});
-                drawLabel("Start game!", sx, 14, startColor);
-                AddPanelTapRow(kRoomStart, {sx - 6, 10, tw + 12, 24});
-            }
-            drawPanel({10, 42, 430, 286}, panelFill, panelEdge);
-            drawLabel("MATCH RULES", 20, 48, textGold);
-            drawLabel("CONTROLS", 20, 180, textGold);
-            drawLabel("PLAYER SETUP", 20, 218, textGold);
+            menulist::DrawHeaderBar(roomRenderer, panelText, menulist::kHeaderBar, title,
+                hasStartRow ? "Start game!" : nullptr, selectedActionIndex == kRoomStart,
+                hasStartRow ? kRoomStart : -1, menulistTap);
         } else {
+            // Header bar establishes location and role at a glance.
+            drawPanel({10, 8, 620, 28}, {38, 20, 57, 235}, panelEdge);
             char title[160];
             snprintf(title, sizeof(title), "ONLINE LOBBY   |   %s", netClient->GetPlayerNick().c_str());
             drawLabel(title, 20, 14, textGold);
@@ -635,27 +627,16 @@ void MainMenu::NetPanelLobbyActionsRender() {
             if (firstVisibleRoom > maxFirst) firstVisibleRoom = maxFirst;
         }
 
-        // Render actions with highlight
+        // Render the lobby's room-card list and action rows. In a game room,
+        // this loop no longer draws anything at all: rows 1..gridStart-1 are
+        // now menulist::List rows (below), the grid/bots/start rows were
+        // already skipped here before this rewrite. Left in place rather
+        // than special-cased away so the lobby branch -- room cards, Create
+        // Game Room, Chat -- keeps working exactly as it did.
         for (size_t i = 0; i < actions.size() && i < 18; i++) {
             // Chat's own row is rendered by the persistent chat dock instead.
             if (i == 0) continue;
-            // For grid rows (Colors/Rows/Aim/Team in a game room), skip the label text here — rendered as table below
-            if (currentGame && (int)i >= gridStart && (int)i <= gridStart + 3) {
-                continue;
-            }
-            // Bots belong with the roster they join, and the settings column
-            // has no vertical room left anyway — drawn in the players panel.
-            if (currentGame && ((int)i == kRoomBots || (int)i == kRoomBotSkill)) {
-                continue;
-            }
-            // "Start game!" is drawn right-aligned in the header bar. It has
-            // no entry in the settingY table below, so letting it through
-            // here drew a second copy at y=0, on top of the header.
-            if (currentGame && (int)i == kRoomStart) {
-                continue;
-            }
-            // Start Match/Start game is rendered in the header bar above.
-            if (currentGame && i == 12 && hasStartRow) continue;
+            if (currentGame) continue;  // fully replaced by menulist::List, see below
             // Follow this server is rendered in the header bar above.
             if (!currentGame && (int)i == kLobbyFollow) continue;
             // Outside the lobby room-list scroll window.
@@ -666,18 +647,7 @@ void MainMenu::NetPanelLobbyActionsRender() {
             int renderY = 0;
             int renderX = actionStartX;
             int highlightW = 396;
-            if (currentGame) {
-                // Y position per settings-row index, in on-screen top-to-bottom
-                // order. Must track the actions.push_back() order built above
-                // (index 1=Mode ... 7=Mouse/Touch aim) — this table is what
-                // actually controls visual layout, independent of navigation
-                // order. Index 7's y=198 is also where the per-player grid's
-                // firstDataRowY is derived from, below.
-                static const int settingY[] = {0, 68, 86, 104, 122, 140, 158, 198,
-                                                0, 0, 0, 0, 0};
-                size_t sy = (i < 13) ? i : 12;
-                renderY = settingY[sy];
-            } else if (i == 1) {
+            if (i == 1) {
                 renderY = 68;
                 highlightW = 340;
             } else {
@@ -687,7 +657,7 @@ void MainMenu::NetPanelLobbyActionsRender() {
             }
 
             // Card border behind lobby room entries.
-            if (!currentGame && i >= (size_t)(kLobbyFollow + 1)) {
+            if (i >= (size_t)(kLobbyFollow + 1)) {
                 SDL_Rect card = {14, renderY - 6, 420, 34};
                 SDL_SetRenderDrawColor(roomRenderer, 20, 72, 79, 215);
                 { SDL_FRect fr = ToFRect(card); SDL_RenderFillRect(roomRenderer, &fr); }
@@ -695,7 +665,7 @@ void MainMenu::NetPanelLobbyActionsRender() {
                 { SDL_FRect fr = ToFRect(card); SDL_RenderRect(roomRenderer, &fr); }
             }
 
-            SDL_Rect rowRect = {renderX - 4, renderY - 3, highlightW, currentGame ? 18 : 30};
+            SDL_Rect rowRect = {renderX - 4, renderY - 3, highlightW, 30};
             if (i == (size_t)selectedActionIndex) {
                 drawSelection(rowRect);
             }
@@ -703,11 +673,41 @@ void MainMenu::NetPanelLobbyActionsRender() {
 
             char actionText[128];
             snprintf(actionText, sizeof(actionText), "%s", actions[i].c_str());
-            if (!currentGame && i == 1) {
+            if (i == 1) {
                 snprintf(actionText, sizeof(actionText), "Create Game Room    < %d players >",
                          kRoomSizes[netRoomSizeChoice]);
             }
             drawLabel(actionText, renderX, renderY, i == (size_t)selectedActionIndex ? textGold : textMain);
+        }
+
+        // Game room: match rules + controls as menulist rows -- 28px pitch
+        // rather than the shared 32px default, so the per-player grid below
+        // still fits above the persistent chat dock at y=334 without either
+        // of them scrolling. Still a real jump from the 15px this replaced,
+        // and the grid's own bordered header row is enough of a section
+        // break on its own, so there's no separate "Player setup" label
+        // spending more of that budget than the grid itself needs.
+        int gridHeaderY = 0;
+        if (currentGame) {
+            menulist::List roomList(menulist::kListDocked, selectedActionIndex, 28);
+            roomList.Header("Match rules");
+            const char* mode = netTeamMode ? "Teams" : (netClearMode ? "Clear" : "Classic");
+            roomList.Row(kRoomMode, "Game mode", mode);
+            roomList.Row(kRoomMalus, "Attack bubbles", netDisableMalus ? "OFF" : "ON", !netDisableMalus);
+            roomList.Row(kRoomChain, "Chain reaction", chainReactionEnabled ? "ON" : "OFF", chainReactionEnabled);
+            roomList.Row(kRoomTarget, "Solo targetting", singlePlayerTargetting ? "ON" : "OFF", singlePlayerTargetting);
+            const char* victoriesLimits[] = {"none (unlimited)", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "15", "20", "30", "50", "100"};
+            roomList.Row(kRoomVictories, "Victories limit", victoriesLimits[victoriesLimitIndex]);
+            roomList.Row(kRoomMouse, "Mouse / touch aim", netRoomMouseEnabled ? "ON" : "OFF", netRoomMouseEnabled);
+            int nextY = roomList.End(roomRenderer, panelText, nullptr, menulistTap);
+
+            // List::End leaves panelText sized/styled for its own last draw
+            // (20px bold); the grid below never sets its own style, it just
+            // relies on whatever panelText was last left at, so this is
+            // where that gets reset to a size the grid was actually
+            // designed around instead of silently inheriting the list's.
+            panelText.UpdateStyle(16, TTF_STYLE_NORMAL);
+            gridHeaderY = nextY + 6;
         }
 
         // Render the per-player settings grid (only in a game room)
@@ -735,15 +735,14 @@ void MainMenu::NetPanelLobbyActionsRender() {
                 SDL_RenderFillRect(const_cast<SDL_Renderer*>(renderer), &fr);
             };
 
-            // Derived from where the linear settings rows actually land above
-            // (settingY[7]=198, the "Mouse/Touch aim" row, matching the header
-            // bar's "PLAYER SETUP" label at y=218 just below it): one gap down
-            // to the "PLAYER SETUP" label, one more gap down to the grid's own
-            // header row (ALL/P1..PN), then one lineHeight down to the first
-            // data row.
-            const int lastLinearSettingRowY = 198;
-            const int sectionGap = lineHeight + 4;
-            int headerY = lastLinearSettingRowY + 2 * sectionGap;
+            // gridHeaderY comes from where the menulist rows above actually
+            // ended this frame (roomList.End()'s return value, plus the
+            // "Player setup" section header drawn under it) rather than a
+            // hardcoded constant -- the row count above it (and so its
+            // height) can change with room state (Team mode adds no row
+            // today, but the point of deriving this is that it wouldn't
+            // silently misalign the grid if that changes).
+            int headerY = gridHeaderY;
             int firstDataRowY = headerY + lineHeight;
 
             // Draw grid lines

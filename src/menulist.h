@@ -96,6 +96,14 @@ int DrawSidebarHeader(SDL_Renderer* rend, TTFText& text, const SDL_Rect& sidebar
 // One footer hint line, shared style, at the fixed y every screen uses.
 void DrawFooterHint(SDL_Renderer* rend, TTFText& text, const char* hint);
 
+// A section header (bold gold, uppercase-style, own rule below) outside a
+// List -- for a caller that has its own non-row content (the game room's
+// per-player grid) to introduce with the same visual language a List's own
+// Header() rows use, so the two don't read as two different conventions
+// sitting back to back on the same panel.
+void DrawSectionHeader(SDL_Renderer* rend, TTFText& text, int x, int y, int w,
+                        const char* title);
+
 // The scrolling row list itself. Build it with Header()/Row() calls (order
 // is draw order), then End() to draw it: panel background, only the rows
 // currently scrolled into view (keeping the selected row visible), the

@@ -105,6 +105,14 @@ void DrawFooterHint(SDL_Renderer* rend, TTFText& text, const char* hint) {
     SDL_RenderTexture(rend, text.Texture(), nullptr, &fr);
 }
 
+void DrawSectionHeader(SDL_Renderer* rend, TTFText& text, int x, int y, int w,
+                        const char* title) {
+    DrawText(rend, text, title, 14, TTF_STYLE_BOLD, kGold, x, y, true);
+    SDL_SetRenderDrawBlendMode(rend, SDL_BLENDMODE_BLEND);
+    SDL_SetRenderDrawColor(rend, kEdge.r, kEdge.g, kEdge.b, 110);
+    SDL_RenderLine(rend, (float)x, (float)(y + 22), (float)(x + w), (float)(y + 22));
+}
+
 List::List(const SDL_Rect& viewport, int selectedIndex, int rowH)
     : viewport_(viewport), selectedIndex_(selectedIndex), rowH_(rowH) {}
 
