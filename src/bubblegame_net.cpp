@@ -177,17 +177,44 @@ bool BubbleGame::OwnsSenderId(int senderId) const {
 
 void BubbleGame::PumpBotConnections() {
     // The server relays an in-game message to every seat but the sender, so
-    // a bot's socket receives the whole room's traffic -- all of which this
-    // client already has on its own connection. The messages are dropped,
-    // but the socket still has to be read: an unread socket backs up, and
+    // a bot's socket receives the whole room's traffic -- almost all of
+    // which this client already has on its own connection (netClient), via
+    // the room's broadcast to every connection except whoever sent it. The
+    // socket still has to be drained regardless: an unread one backs up, and
     // the server drops any connection whose send falls short (game.c
     // "destination is not reading data"), taking the bot out of the game.
+    //
+    // The one message this client's own connection never receives a copy of
+    // is one it sent itself -- the server excludes the sender's own
+    // connection from the relay, and for a message the local player sends,
+    // that connection is netClient. So a human-hosted malus attack aimed at
+    // a bot arrives nowhere else: it has to be read here, off that bot's own
+    // socket, or it is lost even though SendMalusToOpponent successfully
+    // sent it. Every other 'g' (bot attacks human, bot attacks bot, remote
+    // player attacks bot) is also delivered to netClient by the same
+    // broadcast and is handled once there instead -- reapplying it here too
+    // would double the malus.
+    NetworkClient* netClient = NetworkClient::Instance();
+    const int myId = netClient ? (int)netClient->GetMyPlayerId() : -1;
     for (auto &entry : botConnections) {
         if (!entry.second) continue;
         entry.second->Update();
+        const int botIdx = entry.first;
         int senderId = 0;
         std::string payload;
         while (entry.second->TakeGameMessage(&senderId, &payload)) {
+            if (senderId != myId || payload.empty() || payload[0] != 'g') continue;
+            if (botIdx < 0 || botIdx >= currentSettings.playerCount) continue;
+            char destNick[64];
+            int malusCount;
+            if (sscanf(payload.c_str() + 1, "%63[^:]:%d", destNick, &malusCount) != 2) continue;
+            if (bubbleArrays[botIdx].playerNickname != destNick) continue;
+            for (int i = 0; i < malusCount; i++) {
+                bubbleArrays[botIdx].malusQueue.push_back(frameCount);
+            }
+            bubbleArrays[botIdx].rRecv += malusCount;
+            bubbleArrays[botIdx].lastAttackerIdx = 0;  // only the local player's own connection reaches here
+            AddMalusAlert(bubbleArrays[botIdx], netClient->GetPlayerNick(), malusCount);
         }
     }
 }
@@ -225,9 +252,15 @@ void BubbleGame::ProcessNetworkMessages() {
                 // Replaying it would run the shot twice.
                 //
                 // That reasoning only covers messages that describe the
-                // contents of a board -- see IsConnectionLevelOpcode for the
-                // ones it does not, and why they must go through.
-                if (!IsConnectionLevelOpcode(msgType) && OwnsSenderId(senderId)) {
+                // contents of the SENDER's own board -- see
+                // IsConnectionLevelOpcode for the ones it does not, and why
+                // they must go through. 'g' is neither: it is a malus attack
+                // aimed at a *different* board, so a hosted bot's own 'g'
+                // (arriving here on our main connection, since the bot's
+                // separate socket is the only one the server excludes from
+                // the relay) must reach the handler below or every attack a
+                // bot lands is silently dropped.
+                if (msgType != 'g' && !IsConnectionLevelOpcode(msgType) && OwnsSenderId(senderId)) {
                     SDL_Log("Ignoring a message from a seat we own (ID=%d)", senderId);
                     continue;
                 }
@@ -389,11 +422,9 @@ void BubbleGame::ProcessNetworkMessages() {
                         char destNick[64];
                         int malusCount;
                         if (sscanf(gameData + 1, "%63[^:]:%d", destNick, &malusCount) == 2) {
-                            // Only process if this message is for us (original line 1428)
                             NetworkClient* netClient = NetworkClient::Instance();
-                            std::string myNick = netClient ? netClient->GetPlayerNick() : "";
-                            SDL_Log("'g' message: dest='%s' count=%d myNick='%s' senderId=%d myId=%d",
-                                    destNick, malusCount, myNick.c_str(), senderId,
+                            SDL_Log("'g' message: dest='%s' count=%d senderId=%d myId=%d",
+                                    destNick, malusCount, senderId,
                                     netClient ? netClient->GetMyPlayerId() : -1);
 
                             // Kill attribution: every client sees every 'g' message broadcast
@@ -405,21 +436,30 @@ void BubbleGame::ProcessNetworkMessages() {
                                 if (bubbleArrays[i].lobbyPlayerId == senderId) { senderIdx = i; break; }
                             }
 
-                            if (netClient && myNick == destNick) {
-                                SDL_Log("  -> YES, this malus is FOR ME! Adding to my queue");
+                            // The destination can be the local player OR a bot this
+                            // client hosts -- a hosted bot's malus queue lives here
+                            // too, and nothing else ever credits it. Match against
+                            // every board we simulate, not just array 0.
+                            int targetIdx = -1;
+                            for (int i = 0; i < currentSettings.playerCount; i++) {
+                                if (!OwnsArrayIndex(i)) continue;
+                                if (bubbleArrays[i].playerNickname == destNick) { targetIdx = i; break; }
+                            }
 
-
-                                // Add to local player's malus queue (opponent attacks us, so array 0)
-                                // Store current frame number for each malus
+                            if (targetIdx >= 0) {
+                                SDL_Log("  -> Malus is for array %d ('%s'), adding to its queue",
+                                        targetIdx, destNick);
                                 for (int i = 0; i < malusCount; i++) {
-                                    bubbleArrays[0].malusQueue.push_back(frameCount);
+                                    bubbleArrays[targetIdx].malusQueue.push_back(frameCount);
                                 }
-                                bubbleArrays[0].rRecv += malusCount;  // Stats: malus received
-                                if (senderIdx >= 0) bubbleArrays[0].lastAttackerIdx = senderIdx;
-                                AddMalusAlert(bubbleArrays[0], netClient->GetPlayerNickname(senderId), malusCount);
+                                bubbleArrays[targetIdx].rRecv += malusCount;  // Stats: malus received
+                                if (senderIdx >= 0) bubbleArrays[targetIdx].lastAttackerIdx = senderIdx;
+                                if (netClient) {
+                                    AddMalusAlert(bubbleArrays[targetIdx],
+                                                   netClient->GetPlayerNickname(senderId), malusCount);
+                                }
                             } else {
-                                SDL_Log("  -> NO, not for me (dest='%s' != myNick='%s'), IGNORING",
-                                        destNick, myNick.c_str());
+                                SDL_Log("  -> NO board we own is '%s', IGNORING", destNick);
                             }
                         } else {
                             SDL_Log("ERROR: Failed to parse malus message: %s", gameData);
