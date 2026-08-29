@@ -995,12 +995,20 @@ void MainMenu::NetPanelLobbyActionsRender() {
                 const int maxBots = MaxRoomBots((int)currentGame->players.size(),
                                                 currentGame->maxPlayers, netRoomBotCount);
                 char botsText[64];
+#ifdef __WASM_PORT__
+                // A bot needs its own raw TCP connection (netbot.cpp), which
+                // a browser tab cannot open -- say so on the row itself
+                // rather than only after a host tries and gets a status-line
+                // explanation (MenuLeftRightKey / GameRoomHostReturn).
+                snprintf(botsText, sizeof(botsText), "Bots: desktop & Android only");
+#else
                 if (maxBots <= 0 && netRoomBotCount == 0) {
                     snprintf(botsText, sizeof(botsText), "Bots: 0  (room full)");
                 } else {
                     snprintf(botsText, sizeof(botsText), "Bots: < %d >  of %d",
                              netRoomBotCount, maxBots);
                 }
+#endif
                 char skillText[64];
                 snprintf(skillText, sizeof(skillText), "Skill: < %s >",
                          LocalMPBotSkillName(netRoomBotSkill));

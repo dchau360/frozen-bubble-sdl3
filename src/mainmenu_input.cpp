@@ -1146,6 +1146,16 @@ void MainMenu::MenuLeftRightKey(SDL_Event *e) {
                                 AudioMixer::Instance()->PlaySFX("menu_change");
                                 settingChanged = true;
                             } else if (selectedActionIndex == kRoomBots) {
+#ifdef __WASM_PORT__
+                                // A bot needs its own raw TCP connection
+                                // (netbot.cpp), which a browser tab cannot
+                                // open -- say so plainly instead of letting
+                                // SyncLobbyBots()'s generic failure path
+                                // flash the count to 1 and silently revert
+                                // it to 0 with an unexplained status line.
+                                netClient->AddStatusMessage(
+                                    "Bots need the desktop or Android app");
+#else
                                 // Each bot is a real seat in the room, so the
                                 // ceiling is what the room has left.
                                 const int maxBots = MaxRoomBots(
@@ -1155,6 +1165,7 @@ void MainMenu::MenuLeftRightKey(SDL_Event *e) {
                                 if (netRoomBotCount < 0) netRoomBotCount = maxBots;
                                 if (netRoomBotCount > maxBots) netRoomBotCount = 0;
                                 SyncLobbyBots();
+#endif
                                 AudioMixer::Instance()->PlaySFX("menu_change");
                             } else if (selectedActionIndex == kRoomBotSkill) {
                                 netRoomBotSkill += (e->key.key == SDLK_LEFT) ? -1 : 1;
@@ -1517,10 +1528,15 @@ void MainMenu::GameRoomHostReturn(NetworkClient *netClient, GameRoom *currentGam
         settingChanged = true;
     } else if (selectedActionIndex == kRoomBots && currentGame) {
         // ENTER: add one more bot, wrapping at the room's ceiling (same as RIGHT)
+#ifdef __WASM_PORT__
+        // See the LEFT/RIGHT handler in MenuLeftRightKey for why.
+        netClient->AddStatusMessage("Bots need the desktop or Android app");
+#else
         const int maxBots = MaxRoomBots((int)currentGame->players.size(),
                                         currentGame->maxPlayers, netRoomBotCount);
         netRoomBotCount = (netRoomBotCount >= maxBots) ? 0 : netRoomBotCount + 1;
         SyncLobbyBots();
+#endif
         AudioMixer::Instance()->PlaySFX("menu_change");
     } else if (selectedActionIndex == kRoomBotSkill) {
         netRoomBotSkill = (netRoomBotSkill >= 2) ? 0 : netRoomBotSkill + 1;
