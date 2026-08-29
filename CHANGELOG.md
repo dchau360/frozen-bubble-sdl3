@@ -1,5 +1,51 @@
 # Changelog
 
+## v2.4.43
+
+- **Redesigned every full-screen sub-menu around a shared `menulist::List`
+  widget** (`src/menulist.h`/`.cpp`, new) — Local Multiplayer, Change Keys,
+  the LAN/Net server lists, the joined-server lobby, and the game room all
+  now share one scrolling row list, sidebar, header bar, and footer hint at
+  a 20px type size instead of five independently hand-rolled layouts (a
+  small wood popup covering under half the canvas at 15px type, plus the
+  game room's own hardcoded row table). The list scrolls instead of forcing
+  rows to be relocated or deleted for want of space, and every row is a tap
+  target on top of the existing keyboard/gamepad navigation. The room
+  screen's own per-player settings grid and roster sidebar keep their
+  bespoke rendering — the shared widget wraps around them rather than
+  replacing them.
+- **World-map backdrop on every one of those screens**, not just the lobby
+  and room that already had it — `menulist::DrawWorldMapBackdrop()` draws
+  `share/gfx/back_netgame.png` full-canvas and masks its own baked-in
+  watermark behind the footer hint, and every screen's panels now use a
+  shared lower fill opacity (`kMapFillAlpha`) so the map actually shows
+  through instead of reading as a sliver at the edges. An earlier attempt
+  that lowered panel opacity without swapping the backdrop was tried and
+  reverted after it made text hard to read against the busier main-menu
+  artwork — the map first, then the lower opacity, is what makes it work.
+- **`back_netgame.png` itself replaced** with a colorful political-boundary
+  map (teal ocean, pastel per-country fills) — the previous texture, unedited
+  since the project's original Perl-era "netgame first try" commit, was a
+  flat monochrome red/tan/sepia image.
+- Three real overlap bugs found and fixed while live-testing the above on a
+  real Android device: a long server name or room-role label ran into its
+  right-aligned value with no truncation (`menulist::List` now measures the
+  value first and truncates the label to fit); a >5-cap room's Match Rules
+  list overlapped the wider 2-column roster sidebar by 60px (the list now
+  narrows to match); a long room title could overlap the header's "Start
+  game!" button (the header bar now truncates the title the same way).
+- Fixed the lobby's "Create Game Room" row losing tap-to-create along the
+  way — an early version of the conversion made it a `splitAdjust` row for
+  its "< 20 players >" display, which sends Left/Right on every tap and
+  never Return, so touch players could resize the room but never actually
+  create it. Restored non-`splitAdjust` behavior (tap = create) while
+  keeping the same bracketed value text.
+- Fixed the Local Multiplayer panel never highlighting its own selected row.
+- `docs/store-assets/screenshot-1-follow-server.png` and
+  `screenshot-2-game-room.png` (and their `docs/screenshots/` masters)
+  recaptured against the new UI and map — the previous captures still
+  showed the old wood-popup panels.
+
 ## v2.4.42
 
 - **Fix: Android build rejected by Play Console for not supporting 16 KB
