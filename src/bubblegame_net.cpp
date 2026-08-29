@@ -208,6 +208,8 @@ void BubbleGame::PumpBotConnections() {
             char destNick[64];
             int malusCount;
             if (sscanf(payload.c_str() + 1, "%63[^:]:%d", destNick, &malusCount) != 2) continue;
+            SDL_Log("PumpBotConnections: 'g' from local player on bot socket %d: dest='%s' count=%d botNick='%s'",
+                    botIdx, destNick, malusCount, bubbleArrays[botIdx].playerNickname.c_str());
             if (bubbleArrays[botIdx].playerNickname != destNick) continue;
             for (int i = 0; i < malusCount; i++) {
                 bubbleArrays[botIdx].malusQueue.push_back(frameCount);
@@ -215,6 +217,8 @@ void BubbleGame::PumpBotConnections() {
             bubbleArrays[botIdx].rRecv += malusCount;
             bubbleArrays[botIdx].lastAttackerIdx = 0;  // only the local player's own connection reaches here
             AddMalusAlert(bubbleArrays[botIdx], netClient->GetPlayerNick(), malusCount);
+            SDL_Log("PumpBotConnections: credited %d malus to bot array %d, queue size now %zu",
+                    malusCount, botIdx, bubbleArrays[botIdx].malusQueue.size());
         }
     }
 }

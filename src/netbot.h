@@ -90,11 +90,6 @@ bool IsBotLimitReachedReply(const std::string& line);
 // player's, or the round waits forever for a seat that already answered.
 bool IsConnectionLevelOpcode(char opcode);
 
-// True for a line that carries an in-game payload rather than a lobby reply.
-// Lobby lines are text beginning "FB/"; in-game ones are prefixed with the
-// sender's player id, a low byte no printable line starts with.
-bool IsGameMessageLine(const std::string& line);
-
 // One bot's connection to the game server.
 //
 // The server tags every in-game message with the connection it arrived on, so

@@ -79,19 +79,6 @@ int main() {
         CHECK(roster.myPlayerId == 2);
     }
 
-    // Lobby replies versus in-game payloads.
-    {
-        CHECK(!IsGameMessageLine("FB/1.3 OK"));
-        CHECK(!IsGameMessageLine("FB/1.3 PUSH: JOINED: bot01"));
-        CHECK(!IsGameMessageLine(""));
-        // Player ids are small integers, well below any printable byte.
-        CHECK(IsGameMessageLine(std::string(1, '\x03') + "f1.234:5"));
-        CHECK(IsGameMessageLine(std::string(1, '\x01') + "n"));
-        // 0x20 is a space -- the first byte of no line this protocol sends,
-        // and the boundary the check is written against.
-        CHECK(!IsGameMessageLine(" leading space"));
-    }
-
     // Seat assignment. A host's bots are room players like any other, so
     // they are seated by the same rule on every client -- what makes a board
     // a bot's is the host recognising the id afterwards, not the seating.

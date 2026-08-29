@@ -76,10 +76,6 @@ bool IsBotLimitReachedReply(const std::string& line) {
     return line.find("BOT_LIMIT_REACHED") != std::string::npos;
 }
 
-bool IsGameMessageLine(const std::string& line) {
-    return !line.empty() && static_cast<unsigned char>(line[0]) < 0x20;
-}
-
 #ifndef __WASM_PORT__
 
 #include "socket_compat.h"
@@ -279,7 +275,17 @@ void NetBotConnection::HandleLine(const std::string& line) {
         return;
     }
 
-    if (IsGameMessageLine(line)) {
+    // Once OK_GAME_START is acknowledged (above) the server switches this
+    // connection into binary prio mode (game.c ok_start_game -> add_prio),
+    // and every line from here on is a raw {id byte}{payload} game frame --
+    // exactly the same signal NetworkClient::ProcessIncomingData gates on
+    // (state == IN_GAME) rather than sniffing the byte. There is no byte
+    // value that reliably marks a game frame on its own: real player ids
+    // are 'A'-'z' (game.c next_seat_id), ordinary printable ASCII, not some
+    // low control range -- a prior version of this check assumed otherwise
+    // and so never actually matched a real game message, silently leaving
+    // gameMessages empty for the whole match.
+    if (myPlayerId != 0) {
         gameMessages.emplace_back(static_cast<unsigned char>(line[0]), line.substr(1));
     }
 }
