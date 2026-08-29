@@ -45,6 +45,41 @@
   `screenshot-2-game-room.png` (and their `docs/screenshots/` masters)
   recaptured against the new UI and map — the previous captures still
   showed the old wood-popup panels.
+- **Windows, Linux, and the WASM browser build now use the same
+  close-up-penguin-face icon macOS already had** (`tools/make-desktop-icons.py`,
+  new) — `SDL_SetWindowIcon` was already loading that art natively on macOS
+  (doubling as the Dock icon), so it was carried to the other three platforms
+  that can use a 48x48 source without a blurry upscale: `frozen-bubble.ico`
+  (Windows, compiled into the .exe), the Linux AppImage's hicolor icon, and
+  a base64-inlined browser-tab favicon for the WASM build. iOS and Android
+  are untouched — both need much larger masters (1024px, 512px) than this
+  source could usefully upscale to, and already have dedicated sources.
+- **Fix: a network room's Up/Down navigation could never reach "Start
+  game!"** — `maxActions` in the room's key handler was a stale hand-count
+  that predated the `Bots`/`Bot skill` rows, undercounting the true row
+  total by up to two, so wraparound skipped the Start row entirely.
+  Rederived from the same row-index enum the room's own renderer uses so
+  the two can't drift apart again.
+- **Fix: a hosted bot's malus attacks never reached the human player, and
+  a human's attacks on a bot never reached the bot** — two independent bugs
+  in the netcode added for in-room AI bots, both found live while
+  reproducing a "no malus with bots" report and fixed together:
+  - `OwnsSenderId()` (added to stop a bot's own fire/stick messages from
+    being replayed onto its own board) also caught the bot's own `'g'`
+    malus-attack messages, which are not a replay of the sender's board —
+    they are a hit on a *different* one. `'g'` is now exempted from that
+    suppression, and the receive handler now credits whichever board this
+    client owns matches the destination nick, not just the local player's.
+  - Separately, a bot's own connection never recognized *any* incoming game
+    message as one: the check gating it assumed player ids were small
+    integers, but the server actually assigns `'A'`-`'z'` (ordinary
+    printable ASCII) — so the check never matched, silently leaving that
+    queue empty for the bot's entire match, every match, since bots were
+    added. Replaced with the same state-based gate `NetworkClient` already
+    uses (`myPlayerId != 0`, i.e. past the game-start handshake) rather
+    than sniffing the byte's value.
+  - Both directions verified live against a local test server with a real
+    hosted bot, not just by inspection.
 
 ## v2.4.42
 
