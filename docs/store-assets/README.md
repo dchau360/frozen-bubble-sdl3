@@ -6,24 +6,29 @@
   logo (`share/gfx/menu/fblogo.png`) and bubble sprites (`share/gfx/balls/`),
   composited on a gradient echoing the title screen's two glass panels.
   Meets Play's feature graphic spec exactly.
-- **`screenshot-1-follow-server.png`**, **`screenshot-2-game-room.png`**,
-  **`screenshot-3-round-stats.png`** (640×480, 24-bit RGB, no alpha) — real
-  captures from a live build (same source as the ones in
+- **`screenshot-3-round-stats.png`** (640×480, 24-bit RGB, no alpha) — a real
+  capture from a live build (same source as the one in
   [`docs/screenshots/`](../screenshots), alpha-flattened for Play's
   requirements). Landscape, not portrait: the game is TV/landscape-first
-  and these are honest to how it actually looks, which is fine — Play
-  doesn't require portrait screenshots, just 2–8 images between 320px and
-  3840px per side with an aspect ratio no more extreme than 2:1. All three
-  qualify.
-- **`screenshot-4-local-2player.png`**, **`screenshot-6-net-5player.png`**
-  (800×600, 24-bit RGB) — gameplay
+  and this is honest to how it actually looks, which is fine — Play doesn't
+  require portrait screenshots, just 2–8 images between 320px and 3840px per
+  side with an aspect ratio no more extreme than 2:1.
+- **`screenshot-1-follow-server.png`**, **`screenshot-2-game-room.png`**,
+  **`screenshot-4-local-2player.png`**, **`screenshot-6-net-5player.png`**
+  (800×600, 24-bit RGB) — gameplay/menu
   captures taken on a real Android tablet with `adb screenrecord`/`screencap`,
   cropped to the game viewport (the app renders 4:3 letterboxed inside the
   device's portrait screen, so the status and navigation bars are cropped
   away). The 5-player shot is a live network game against four headless
   `tools/net_bots.py` clients, captured after the long-nickname roster fix in
   `37e0237c` — an earlier capture of the same scene showed a phantom sixth
-  player and is not the one checked in here.
+  player and is not the one checked in here. The follow-server and game-room
+  shots were recaptured after the full-screen `menulist`-based menu redesign
+  (`src/menulist.h`/`.cpp`): a locally hosted `fb-server`
+  (`tools/net_bots.py --count 1` supplying the second roster slot for the
+  room shot) reached over `adb reverse tcp:1511 tcp:<port>`, same rig as the
+  promo-video steps below. Superseded the previous 640×480 WASM-canvas
+  captures of these two, which still showed the old wood-popup panels.
 - **`screenshot-7-main-menu.png`** (640×480, 24-bit RGB, no alpha) — the
   title screen, captured straight off the canvas (`canvas.toDataURL()`) of a
   locally served WASM build (`tools/serve-wasm.py`) rather than a device
