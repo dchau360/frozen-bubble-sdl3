@@ -89,7 +89,21 @@ void DrawHeaderBar(SDL_Renderer* rend, TTFText& text, const SDL_Rect& bar,
     SDL_Color fill = kHeaderFill;
     if (fillAlpha >= 0) fill.a = (Uint8)fillAlpha;
     DrawPanel(rend, bar, fill, kEdge);
-    DrawText(rend, text, title, 20, TTF_STYLE_BOLD, kGold, bar.x + 10, bar.y + 4, true);
+
+    // Action's width measured first (not yet drawn) so a long title -- a
+    // room's own name, chosen by whoever created it, not by this game --
+    // gets truncated to whatever room is actually left of it instead of
+    // running underneath it (found live: "android_us's GAME ROOM | HOST |
+    // 2 players" overlapped "Start game!" outright).
+    int actionLeft = bar.x + bar.w - 8;
+    if (action && action[0] && actionIndex >= 0) {
+        text.UpdateStyle(18, TTF_STYLE_BOLD);
+        text.UpdateText(rend, action, 0);
+        actionLeft -= text.Coords()->w + 6;
+    }
+    int maxTitleW = actionLeft - (bar.x + 10) - 10;
+    std::string titleStr = TruncateToWidth(rend, text, title, maxTitleW, 20, TTF_STYLE_BOLD);
+    DrawText(rend, text, titleStr, 20, TTF_STYLE_BOLD, kGold, bar.x + 10, bar.y + 4, true);
 
     if (action && action[0] && actionIndex >= 0) {
         SDL_Color color = actionSelected ? kGold : kText;
