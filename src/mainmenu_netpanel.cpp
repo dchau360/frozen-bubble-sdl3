@@ -1543,15 +1543,19 @@ void MainMenu::ServerListPanelRender(bool isLAN) {
     }
 #endif
 
+    // Same world-map backdrop the lobby/room screens use -- see
+    // kMapFillAlpha below and menulist::DrawWorldMapBackdrop's own comment.
+    menulist::DrawWorldMapBackdrop(rend, netGameBackground);
+
     BeginPanelTapRows(&menuIndex);
     auto tap = [&](int index, const SDL_Rect& rect, int subIndex, bool splitAdjust, SDL_Keycode key) {
         AddPanelTapRow(index, rect, subIndex, splitAdjust, key);
     };
 
     menulist::DrawHeaderBar(rend, panelText, menulist::kHeaderBar,
-        isLAN ? "LAN GAME" : "NET GAME", nullptr, false, -1, tap);
+        isLAN ? "LAN GAME" : "NET GAME", nullptr, false, -1, tap, menulist::kMapFillAlpha);
 
-    menulist::List list(menulist::kListFull, menuIndex);
+    menulist::List list(menulist::kListFull, menuIndex, menulist::kRowH, menulist::kMapFillAlpha);
     list.Header(isLAN ? "Local network" : "Public servers");
 
     // Row 0: LAN hosts a server here; Net opens the manual-entry form. Both
@@ -1599,7 +1603,8 @@ void MainMenu::ServerListPanelRender(bool isLAN) {
     // connection status -- everything that used to be squeezed onto extra
     // lines below the list (offline/error text, "Connecting...") now has a
     // fixed home instead of pushing the row list itself around.
-    int sy = menulist::DrawSidebarHeader(rend, panelText, menulist::kSidebarFull, "Selected");
+    int sy = menulist::DrawSidebarHeader(rend, panelText, menulist::kSidebarFull, "Selected",
+                                          menulist::kMapFillAlpha);
     const SDL_Rect& sb = menulist::kSidebarFull;
     auto sidebarLine = [&](const std::string& txt, SDL_Color color, int size = 15) {
         panelText.UpdateStyle(size, TTF_STYLE_NORMAL);

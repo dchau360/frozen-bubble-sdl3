@@ -281,6 +281,10 @@ void MainMenu::LocalMPPanelRender() {
     SDL_Renderer* rend = const_cast<SDL_Renderer*>(renderer);
     const int startRow = LocalMPStartRow(localMPPlayerCount);
 
+    // Same world-map backdrop the lobby/room screens use -- see
+    // kMapFillAlpha below and menulist::DrawWorldMapBackdrop's own comment.
+    menulist::DrawWorldMapBackdrop(rend, netGameBackground);
+
     auto tap = [&](int index, const SDL_Rect& rect, int subIndex, bool splitAdjust, SDL_Keycode key) {
         AddPanelTapRow(index, rect, subIndex, splitAdjust, key);
     };
@@ -290,14 +294,14 @@ void MainMenu::LocalMPPanelRender() {
     char title[64];
     snprintf(title, sizeof(title), "LOCAL MULTIPLAYER  \xe2\x80\x94  %d players", localMPPlayerCount);
     menulist::DrawHeaderBar(rend, panelText, menulist::kHeaderBar, title,
-        "Start game!", localMPMenuIndex == startRow, startRow, tap);
+        "Start game!", localMPMenuIndex == startRow, startRow, tap, menulist::kMapFillAlpha);
 
     // MainMenuTestAccess reads lastLocalMPPanelText to check row content
     // without a real renderer walking pixels (see mainmenu.h). row() is the
     // single place that both feeds the widget and keeps that dump in sync,
     // so no row can appear in one and not the other.
     lastLocalMPPanelText.clear();
-    menulist::List list(menulist::kListFull, localMPMenuIndex);
+    menulist::List list(menulist::kListFull, localMPMenuIndex, menulist::kRowH, menulist::kMapFillAlpha);
     auto row = [&](int index, const std::string& label, const std::string& value,
                    bool emphasize = true, bool splitAdjust = false) {
         list.Row(index, label, value, emphasize, splitAdjust);
@@ -342,7 +346,8 @@ void MainMenu::LocalMPPanelRender() {
     // controller-shortage warning docked at the bottom where it stays next
     // to the slots it's actually talking about, instead of pushing every
     // settings row down like the old single-panel layout did.
-    int sy = menulist::DrawSidebarHeader(rend, panelText, menulist::kSidebarFull, "Players");
+    int sy = menulist::DrawSidebarHeader(rend, panelText, menulist::kSidebarFull, "Players",
+                                          menulist::kMapFillAlpha);
     GameSettings* gs = GameSettings::Instance();
     PlayerKeys* allKeys[5] = {&gs->player1Keys, &gs->player2Keys, &gs->player3Keys,
                               &gs->player4Keys, &gs->player5Keys};
@@ -469,15 +474,20 @@ void MainMenu::KeysPanelRender() {
 
     SDL_Renderer* rend = const_cast<SDL_Renderer*>(renderer);
 
+    // Same world-map backdrop the lobby/room screens use -- see
+    // kMapFillAlpha below and menulist::DrawWorldMapBackdrop's own comment.
+    menulist::DrawWorldMapBackdrop(rend, netGameBackground);
+
     auto tap = [&](int index, const SDL_Rect& rect, int subIndex, bool splitAdjust, SDL_Keycode key) {
         AddPanelTapRow(index, rect, subIndex, splitAdjust, key);
     };
 
     char title[64];
     snprintf(title, sizeof(title), "CONTROLS & SETTINGS  (" APP_VERSION ")");
-    menulist::DrawHeaderBar(rend, panelText, menulist::kHeaderBar, title, nullptr, false, -1, tap);
+    menulist::DrawHeaderBar(rend, panelText, menulist::kHeaderBar, title, nullptr, false, -1, tap,
+                             menulist::kMapFillAlpha);
 
-    menulist::List list(menulist::kListFull, keyConfigIndex);
+    menulist::List list(menulist::kListFull, keyConfigIndex, menulist::kRowH, menulist::kMapFillAlpha);
 
     char header[32];
     snprintf(header, sizeof(header), "Player %d keys", keyConfigPlayer);
@@ -551,7 +561,8 @@ void MainMenu::KeysPanelRender() {
     // jump straight to any of the other three -- LEFT/RIGHT already did this
     // from a keyboard, but had no touch equivalent at all before this panel
     // gained a tap system.
-    int sy = menulist::DrawSidebarHeader(rend, panelText, menulist::kSidebarFull, "Editing");
+    int sy = menulist::DrawSidebarHeader(rend, panelText, menulist::kSidebarFull, "Editing",
+                                          menulist::kMapFillAlpha);
     const SDL_Rect& sb = menulist::kSidebarFull;
     for (int p = 1; p <= 4; p++) {
         bool isCurrent = (p == keyConfigPlayer);

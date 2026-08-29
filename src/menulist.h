@@ -106,6 +106,16 @@ int DrawSidebarHeader(SDL_Renderer* rend, TTFText& text, const SDL_Rect& sidebar
 // One footer hint line, shared style, at the fixed y every screen uses.
 void DrawFooterHint(SDL_Renderer* rend, TTFText& text, const char* hint);
 
+// The world-map backdrop every full-screen panel now shares (the same
+// texture the joined-server lobby and room have always drawn over) --
+// full-canvas, then its own baked-in "NETWORK PLAY..." watermark (bottom-
+// right corner) masked behind a solid bar sized for the footer hint every
+// screen draws at kFooterY, so the hint's own right-hand words don't render
+// on top of it (found live testing the NET GAME list). bg is the caller's
+// own MainMenu::netGameBackground -- menulist doesn't own the texture, so a
+// null bg is a no-op rather than a crash.
+void DrawWorldMapBackdrop(SDL_Renderer* rend, SDL_Texture* bg);
+
 // A section header (bold gold, uppercase-style, own rule below) outside a
 // List -- for a caller that has its own non-row content (the game room's
 // per-player grid) to introduce with the same visual language a List's own

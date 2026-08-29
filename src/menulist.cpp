@@ -131,6 +131,15 @@ void DrawFooterHint(SDL_Renderer* rend, TTFText& text, const char* hint) {
     SDL_RenderTexture(rend, text.Texture(), nullptr, &fr);
 }
 
+void DrawWorldMapBackdrop(SDL_Renderer* rend, SDL_Texture* bg) {
+    if (!bg) return;
+    SDL_RenderTexture(rend, bg, nullptr, nullptr);
+    SDL_SetRenderDrawBlendMode(rend, SDL_BLENDMODE_BLEND);
+    SDL_SetRenderDrawColor(rend, kHeaderFill.r, kHeaderFill.g, kHeaderFill.b, kHeaderFill.a);
+    SDL_FRect footerBar = {0, (float)(kFooterY - 6), 640, 26};
+    SDL_RenderFillRect(rend, &footerBar);
+}
+
 void DrawSectionHeader(SDL_Renderer* rend, TTFText& text, int x, int y, int w,
                         const char* title) {
     DrawText(rend, text, title, 14, TTF_STYLE_BOLD, kGold, x, y, true);
