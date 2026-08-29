@@ -980,11 +980,19 @@ void MainMenu::MenuUpKey() {
 
                             int maxActions;
                             if (currentGame && isHostRoom) {
-                                // Host: Chat(1) + Mode/Malus(2) + CR/Continue/Target/Victories(4) + Mouse(1) + grid rows(4) + optional Start(1)
-                                maxActions = 12 + ((int)currentGame->players.size() > 1 ? 1 : 0);
+                                // Host always sees Bots/BotSkill (kRoomBotSkill is the last
+                                // row before the optional Start one), which this hand-counted
+                                // total used to leave out entirely -- Down from Bot skill
+                                // wrapped straight back to Chat instead of ever reaching
+                                // "Start game!" (found live: could not tab to Start with
+                                // arrow keys). Derived from the same row enum
+                                // NetPanelLobbyActionsRender builds the list from instead of
+                                // a second hand count, so the two can't drift apart again.
+                                maxActions = kRoomBotSkill + 1 + ((int)currentGame->players.size() > 1 ? 1 : 0);
                             } else if (currentGame) {
-                                // Joiner: navigate same rows (read-only except Teams)
-                                maxActions = 12;
+                                // Joiner: navigate the same rows host does through
+                                // kRoomTeam, minus the host-only Bots/BotSkill/Start ones.
+                                maxActions = kRoomTeam + 1;
                             } else {
                                 // In lobby
                                 std::vector<GameRoom> games = netClient->GetGameList();
@@ -1030,11 +1038,19 @@ void MainMenu::MenuDownKey() {
 
                             int maxActions;
                             if (currentGame && isHostRoom) {
-                                // Host: Chat(1) + Mode/Malus(2) + CR/Continue/Target/Victories(4) + Mouse(1) + grid rows(4) + optional Start(1)
-                                maxActions = 12 + ((int)currentGame->players.size() > 1 ? 1 : 0);
+                                // Host always sees Bots/BotSkill (kRoomBotSkill is the last
+                                // row before the optional Start one), which this hand-counted
+                                // total used to leave out entirely -- Down from Bot skill
+                                // wrapped straight back to Chat instead of ever reaching
+                                // "Start game!" (found live: could not tab to Start with
+                                // arrow keys). Derived from the same row enum
+                                // NetPanelLobbyActionsRender builds the list from instead of
+                                // a second hand count, so the two can't drift apart again.
+                                maxActions = kRoomBotSkill + 1 + ((int)currentGame->players.size() > 1 ? 1 : 0);
                             } else if (currentGame) {
-                                // Joiner: navigate same rows (read-only except Teams)
-                                maxActions = 12;
+                                // Joiner: navigate the same rows host does through
+                                // kRoomTeam, minus the host-only Bots/BotSkill/Start ones.
+                                maxActions = kRoomTeam + 1;
                             } else {
                                 // In lobby
                                 std::vector<GameRoom> games = netClient->GetGameList();
