@@ -69,6 +69,14 @@ constexpr SDL_Color kSelEdge     = {255, 218, 92, 240};
 constexpr SDL_Color kListFill    = {26, 18, 48, 222};
 constexpr SDL_Color kSidebarFill = {18, 55, 65, 225};
 constexpr SDL_Color kHeaderFill  = {38, 20, 57, 235};
+// A lower-opacity variant of the three fills above, for the two screens
+// that sit over the world-map backdrop (the joined-server lobby and the
+// game room) rather than the busier main-menu artwork every other screen
+// uses -- the map is flat and muted enough to show through without hurting
+// legibility; the title art and penguin renders behind LocalMP/Keys/the
+// server lists are not (found live: dropping every screen's opacity together
+// made those three hard to read, so only the map-backed two get it).
+constexpr Uint8 kMapFillAlpha = 150;
 constexpr SDL_Color kTextShadow  = {20, 12, 32, 255};
 
 // Forwards to MainMenu::AddPanelTapRow's signature exactly, so a caller's
@@ -82,16 +90,18 @@ using TapRowFn = std::function<void(int index, const SDL_Rect& rect,
 // left and, optionally, one right-aligned action ("Start game!", "Follow
 // this server") that becomes its own tap row when interactive. Pass
 // actionIndex < 0 when this screen has no header action this frame.
+// fillAlpha overrides kHeaderFill's own alpha when >= 0 -- see kMapFillAlpha.
 void DrawHeaderBar(SDL_Renderer* rend, TTFText& text, const SDL_Rect& bar,
                     const char* title, const char* action, bool actionSelected,
-                    int actionIndex, const TapRowFn& addTapRow);
+                    int actionIndex, const TapRowFn& addTapRow, int fillAlpha = -1);
 
 // Draws a sidebar's background plus its own section header and rule, and
 // returns the y at which the caller's own content should start. The frame
 // is shared; sidebar content (roster rows, warnings, connection details) is
-// bespoke per screen and drawn by the caller below that y.
+// bespoke per screen and drawn by the caller below that y. fillAlpha
+// overrides kSidebarFill's own alpha when >= 0 -- see kMapFillAlpha.
 int DrawSidebarHeader(SDL_Renderer* rend, TTFText& text, const SDL_Rect& sidebar,
-                       const char* title);
+                       const char* title, int fillAlpha = -1);
 
 // One footer hint line, shared style, at the fixed y every screen uses.
 void DrawFooterHint(SDL_Renderer* rend, TTFText& text, const char* hint);
@@ -111,7 +121,8 @@ void DrawSectionHeader(SDL_Renderer* rend, TTFText& text, int x, int y, int w,
 // selectable row.
 class List {
 public:
-    List(const SDL_Rect& viewport, int selectedIndex, int rowH = kRowH);
+    // fillAlpha overrides kListFill's own alpha when >= 0 -- see kMapFillAlpha.
+    List(const SDL_Rect& viewport, int selectedIndex, int rowH = kRowH, int fillAlpha = -1);
 
     // A section header: bold gold, uppercase, its own rule below. Not
     // selectable -- does not participate in Up/Down or take a tap row.
@@ -163,6 +174,7 @@ private:
     SDL_Rect viewport_;
     int selectedIndex_;
     int rowH_;
+    int fillAlpha_;
     std::vector<Entry> rows_;
 };
 

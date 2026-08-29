@@ -85,8 +85,10 @@ std::string TruncateToWidth(SDL_Renderer* rend, TTFText& text, const std::string
 
 void DrawHeaderBar(SDL_Renderer* rend, TTFText& text, const SDL_Rect& bar,
                     const char* title, const char* action, bool actionSelected,
-                    int actionIndex, const TapRowFn& addTapRow) {
-    DrawPanel(rend, bar, kHeaderFill, kEdge);
+                    int actionIndex, const TapRowFn& addTapRow, int fillAlpha) {
+    SDL_Color fill = kHeaderFill;
+    if (fillAlpha >= 0) fill.a = (Uint8)fillAlpha;
+    DrawPanel(rend, bar, fill, kEdge);
     DrawText(rend, text, title, 20, TTF_STYLE_BOLD, kGold, bar.x + 10, bar.y + 4, true);
 
     if (action && action[0] && actionIndex >= 0) {
@@ -106,8 +108,10 @@ void DrawHeaderBar(SDL_Renderer* rend, TTFText& text, const SDL_Rect& bar,
 }
 
 int DrawSidebarHeader(SDL_Renderer* rend, TTFText& text, const SDL_Rect& sidebar,
-                       const char* title) {
-    DrawPanel(rend, sidebar, kSidebarFill, kEdge);
+                       const char* title, int fillAlpha) {
+    SDL_Color fill = kSidebarFill;
+    if (fillAlpha >= 0) fill.a = (Uint8)fillAlpha;
+    DrawPanel(rend, sidebar, fill, kEdge);
     DrawText(rend, text, title, 14, TTF_STYLE_BOLD, kGold, sidebar.x + 12, sidebar.y + 10, true);
     int ruleY = sidebar.y + 32;
     SDL_SetRenderDrawBlendMode(rend, SDL_BLENDMODE_BLEND);
@@ -135,8 +139,8 @@ void DrawSectionHeader(SDL_Renderer* rend, TTFText& text, int x, int y, int w,
     SDL_RenderLine(rend, (float)x, (float)(y + 22), (float)(x + w), (float)(y + 22));
 }
 
-List::List(const SDL_Rect& viewport, int selectedIndex, int rowH)
-    : viewport_(viewport), selectedIndex_(selectedIndex), rowH_(rowH) {}
+List::List(const SDL_Rect& viewport, int selectedIndex, int rowH, int fillAlpha)
+    : viewport_(viewport), selectedIndex_(selectedIndex), rowH_(rowH), fillAlpha_(fillAlpha) {}
 
 void List::Header(const std::string& title) {
     rows_.push_back({-1, title, "", "", kGold, false, true, false, kGold, 0});
@@ -169,7 +173,9 @@ int List::End(SDL_Renderer* rend, TTFText& text, SDL_Texture* panelBG,
         SDL_FRect fr = ToFRect(viewport_);
         SDL_RenderTexture(rend, panelBG, nullptr, &fr);
     } else {
-        DrawPanel(rend, viewport_, kListFill, kEdge);
+        SDL_Color fill = kListFill;
+        if (fillAlpha_ >= 0) fill.a = (Uint8)fillAlpha_;
+        DrawPanel(rend, viewport_, fill, kEdge);
     }
 
     const int total = (int)rows_.size();

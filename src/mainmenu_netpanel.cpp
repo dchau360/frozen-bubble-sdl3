@@ -560,10 +560,13 @@ void MainMenu::NetPanelLobbyActionsRender() {
                      (int)currentGame->players.size());
             menulist::DrawHeaderBar(roomRenderer, panelText, menulist::kHeaderBar, title,
                 hasStartRow ? "Start game!" : nullptr, selectedActionIndex == kRoomStart,
-                hasStartRow ? kRoomStart : -1, menulistTap);
+                hasStartRow ? kRoomStart : -1, menulistTap, menulist::kMapFillAlpha);
         } else {
-            // Header bar establishes location and role at a glance.
-            drawPanel({10, 8, 620, 28}, {38, 20, 57, 235}, panelEdge);
+            // Header bar establishes location and role at a glance. Lower
+            // alpha than the other hand-rolled panels in this branch --
+            // see kMapFillAlpha -- so the world map behind it actually
+            // shows through instead of being fully hidden.
+            drawPanel({10, 8, 620, 28}, {38, 20, 57, menulist::kMapFillAlpha}, panelEdge);
             char title[160];
             snprintf(title, sizeof(title), "ONLINE LOBBY   |   %s", netClient->GetPlayerNick().c_str());
             drawLabel(title, 20, 14, textGold);
@@ -621,11 +624,21 @@ void MainMenu::NetPanelLobbyActionsRender() {
         // the old fixed "5 rooms at a time" window and its firstVisibleRoom
         // math are gone too -- List already does that for any row count.
         if (!currentGame) {
-            menulist::List lobbyList(menulist::kListDocked, selectedActionIndex, 32);
+            menulist::List lobbyList(menulist::kListDocked, selectedActionIndex, 32,
+                                      menulist::kMapFillAlpha);
             lobbyList.Header("Game rooms");
-            char createValue[16];
-            snprintf(createValue, sizeof(createValue), "%d players", kRoomSizes[netRoomSizeChoice]);
-            lobbyList.Row(1, "Create Game Room", createValue, true, true);
+            // Not splitAdjust: this row's tap has always meant "create" (the
+            // synthetic Return HandlePanelTap sends for a non-splitAdjust
+            // row) -- room-size is keyboard Left/Right only, same as before
+            // this conversion (see the `!currentGame && selectedActionIndex
+            // == 1` branch below). A real splitAdjust row here would eat
+            // every tap as a Left/Right step instead, breaking the only way
+            // touch players have to actually create a room. The "< N
+            // players >" bracket format is kept by building the value
+            // string ourselves rather than letting splitAdjust add it.
+            char createValue[32];
+            snprintf(createValue, sizeof(createValue), "<  %d players  >", kRoomSizes[netRoomSizeChoice]);
+            lobbyList.Row(1, "Create Game Room", createValue, true, false);
             for (size_t i = (size_t)(kLobbyFollow + 1); i < actions.size() && i < 18; i++) {
                 lobbyList.Row((int)i, actions[i], "");
             }
@@ -651,7 +664,8 @@ void MainMenu::NetPanelLobbyActionsRender() {
             const bool bigRoomLayout = currentGame->maxPlayers > 5;
             SDL_Rect roomListRect = menulist::kListDocked;
             if (bigRoomLayout) roomListRect.w = 336;
-            menulist::List roomList(roomListRect, selectedActionIndex, 28);
+            menulist::List roomList(roomListRect, selectedActionIndex, 28,
+                                     menulist::kMapFillAlpha);
             roomList.Header("Match rules");
             const char* mode = netTeamMode ? "Teams" : (netClearMode ? "Clear" : "Classic");
             roomList.Row(kRoomMode, "Game mode", mode);
@@ -861,7 +875,7 @@ void MainMenu::NetPanelLobbyActionsRender() {
             const int panelX = bigRoom ? 354 : 450;
             const int panelY = 42;
             const int panelW = bigRoom ? 276 : 180;
-            drawPanel({panelX, panelY, panelW, 286}, {18, 55, 65, 225}, panelEdge);
+            drawPanel({panelX, panelY, panelW, 286}, {18, 55, 65, menulist::kMapFillAlpha}, panelEdge);
 
             char hdr[32];
             if (bigRoom)
@@ -1010,7 +1024,8 @@ void MainMenu::NetPanelLobbyActionsRender() {
             // from kSidebarDocked -- green status dot + nickname per free
             // player, excluding self, capped by however many rows actually
             // fit above the chat dock.
-            int sy = menulist::DrawSidebarHeader(roomRenderer, panelText, menulist::kSidebarDocked, "Online");
+            int sy = menulist::DrawSidebarHeader(roomRenderer, panelText, menulist::kSidebarDocked,
+                                                  "Online", menulist::kMapFillAlpha);
             const SDL_Rect& sb = menulist::kSidebarDocked;
             std::vector<NetworkPlayer> openPlayers = netClient->GetOpenPlayers();
             int shown = 0;
