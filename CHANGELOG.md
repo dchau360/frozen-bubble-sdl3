@@ -1,5 +1,34 @@
 # Changelog
 
+## v2.4.44
+
+- **WASM/browser hosts can now add real network bots.** A browser tab can't
+  open a raw TCP socket, so `netbot.cpp`'s WASM half was a permanent stub —
+  a WASM host could add a "Bots" row but it would always fail. Replaced with
+  a real transport: each bot is its own WebSocket connection to the same
+  server the host is already using (fb-server already speaks WebSocket on
+  its normal port), lobby lines as text frames and in-game payloads as
+  binary frames. A leader now waits (up to 3s) for every bot's async
+  WebSocket handshake to finish before broadcasting the level sync, closing
+  a start-order gap the async connect uncovers. Verified against a real
+  server + browser session: two bots played two full rounds, exchanged
+  malus in every direction, correct per-round stats.
+- **Bot AI scores landings on position and cluster shape, not just pops.**
+  Previously any non-popping shot tied at the same score regardless of
+  where it landed, so most non-popping play was effectively random, and any
+  pop — however weak — always dominated by three orders of magnitude.
+  Ported the scoring model (pop/detach/cluster weights, positional heatmap)
+  from the zepr/fbjs clone's bot, scaled to integers: a deep pop can now
+  lose to a strong cluster placed high up, and a non-popping shot has a
+  real preference for its own color instead of a coin flip.
+- **Fix: a stepped row (Game speed, Victories limit, bot count, ...)
+  decreased via its left half, but tapping there was frequently read as a
+  swipe-back gesture instead** — an ordinary tap can drift 40+ logical
+  units while the finger is down, especially on a narrow phone, which is
+  exactly the threshold the swipe-back heuristic used with no equivalent
+  check on the right half. A stepped row's tap zone now gets first look at
+  a touch landing on it before swipe gestures apply.
+
 ## v2.4.43
 
 - **Redesigned every full-screen sub-menu around a shared `menulist::List`
