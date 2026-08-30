@@ -37,9 +37,18 @@
 // (which tags the synthesized one with SDL_TOUCH_MOUSEID so it can be
 // skipped), Emscripten's tagging can't be trusted -- so on WASM both were
 // processed, dispatching every menu tap through HandlePanelTap twice with
-// two independently-computed coordinates. IsWithinMenuTapDebounce is what
-// the mouse path now checks before acting, to recognize that second
-// dispatch as the browser's own echo of the tap FINGER_UP already handled.
+// two independently-computed coordinates. IsWithinMenuTapDebounce still
+// guards FINGER_UP itself against rapid re-fires (multi-finger, OS double
+// events), but the mouse path no longer uses it to recognize the browser's
+// own echo of a tap FINGER_UP already handled -- a millisecond window can
+// only assume the echo arrives promptly, which held under light load but
+// not always: reported live as the network room's Bots row occasionally
+// re-incrementing itself with no further tap, intermittently rather than
+// every time, exactly what a delayed echo slipping past a fixed window
+// would produce on a busier frame. awaitingWasmMouseEcho (frozenbubble.cpp)
+// replaced it with actual state -- "does the browser still owe this tap's
+// echo" -- so an arbitrarily late echo is still recognized whenever it
+// shows up, not just within some fixed window.
 //
 // Neither of those was the actual bug, confirmed by driving the real,
 // deployed build with a mouse click (which goes through neither gesture
@@ -502,11 +511,11 @@ int main() {
         CHECK(menu->HandlePanelTap(100.f, 100.f) == false);
     }
 
-    // --- IsWithinMenuTapDebounce -----------------------------------------
+    // --- IsWithinMenuTapDebounce -------------------------------------------
+    // Now only backs FINGER_UP's own anti-rapid-refire guard (multi-finger
+    // touch, OS double-events) -- WasmMouseEchoGuard below took over the
+    // mouse-echo purpose this used to also serve.
 
-    // The exact defect: a synthesized MOUSE_BUTTON_DOWN arriving a few
-    // milliseconds after the FINGER_UP for the same physical tap must read
-    // as the same gesture, not a second, independent one.
     CHECK(IsWithinMenuTapDebounce(1000, 1000));
     CHECK(IsWithinMenuTapDebounce(1050, 1000));
 
@@ -515,10 +524,50 @@ int main() {
     CHECK(IsWithinMenuTapDebounce(1000 + kMenuTapDebounceMs - 1, 1000));
     CHECK(!IsWithinMenuTapDebounce(1000 + kMenuTapDebounceMs, 1000));
 
-    // A genuinely later, independent tap -- e.g. a real desktop-in-browser
-    // mouse click with no preceding touch at all, or a second physical tap
-    // well after the first -- must not be swallowed.
+    // A genuinely later, independent event must not be swallowed.
     CHECK(!IsWithinMenuTapDebounce(5000, 1000));
+
+    // --- WasmMouseEchoGuard -------------------------------------------------
+    //
+    // The exact defect this replaced: a synthesized MOUSE_BUTTON_DOWN that
+    // arrives late (past any fixed millisecond window, because the
+    // browser's main thread was busy) used to slip through and dispatch as
+    // an independent second tap, re-activating whatever row the first tap
+    // had just selected -- reported live as the network room's Bots row
+    // occasionally re-incrementing itself with no further tap. This guard
+    // tracks state instead of a clock, so lateness alone can't defeat it.
+    {
+        WasmMouseEchoGuard guard;
+
+        // No touch has happened yet -- a genuine standalone mouse click
+        // (desktop-in-browser, no touch involved) must never be swallowed.
+        CHECK(!guard.ShouldSwallowMouseDown());
+
+        // A tap dispatches, and the browser owes it an echo. However late
+        // that echo arrives, it must still be recognized -- this guard has
+        // no notion of elapsed time at all, so "arbitrarily late" and
+        // "immediately" are indistinguishable to it by construction.
+        guard.OnFingerUpDispatched();
+        CHECK(guard.ShouldSwallowMouseDown());
+
+        // Consumed: exactly one echo per tap. A second MOUSE_BUTTON_DOWN
+        // right after (no new FINGER_UP in between) is independent input,
+        // not a leftover echo, and must be let through.
+        CHECK(!guard.ShouldSwallowMouseDown());
+
+        // A new touch starting must clear a still-pending flag -- otherwise
+        // a previous tap's (apparently lost) echo would wrongly consume
+        // this new, unrelated tap's own upcoming activation.
+        guard.OnFingerUpDispatched();
+        guard.OnFingerDown();
+        CHECK(!guard.ShouldSwallowMouseDown());
+
+        // The ordinary cycle repeats cleanly for a second tap.
+        guard.OnFingerDown();
+        guard.OnFingerUpDispatched();
+        CHECK(guard.ShouldSwallowMouseDown());
+        CHECK(!guard.ShouldSwallowMouseDown());
+    }
 
     if (failures == 0) {
         std::printf("menu touch gesture tests passed\n");

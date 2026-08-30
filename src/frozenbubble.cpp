@@ -837,6 +837,11 @@ void FrozenBubble::HandleInput(SDL_Event *e) {
         static float touchStartX = 0.f, touchStartY = 0.f;
         static bool touchStarted = false;
         static Uint32 lastMenuTapMs = 0;
+#ifdef __WASM_PORT__
+        // See WasmMouseEchoGuard (frozenbubble.h) for what this guards and
+        // why it replaced a millisecond-based check for that purpose.
+        static WasmMouseEchoGuard wasmMouseEcho;
+#endif
         Uint32 nowMs = SDL_GetTicks();
         auto getMenuButtonAt = [](float lx, float ly) -> int {
             if (lx < 89.f || lx > 291.f) return -1;
@@ -848,6 +853,9 @@ void FrozenBubble::HandleInput(SDL_Event *e) {
         };
 
         if (e->type == SDL_EVENT_FINGER_DOWN) {
+#ifdef __WASM_PORT__
+            wasmMouseEcho.OnFingerDown();
+#endif
             TouchToLogical(e, &touchStartX, &touchStartY);
             touchStarted = true;
         } else if (e->type == SDL_EVENT_FINGER_UP) {
@@ -857,6 +865,14 @@ void FrozenBubble::HandleInput(SDL_Event *e) {
                 return;
             }
             lastMenuTapMs = nowMs;
+#ifdef __WASM_PORT__
+            // This tap is about to dispatch a real menu action below; the
+            // browser owes it exactly one synthetic MOUSE_BUTTON_DOWN echo
+            // afterward (see that branch). Set unconditionally here, before
+            // dispatch, since every path below (button press, swipe, panel
+            // tap, or the RETURN fallback) dispatches exactly once.
+            wasmMouseEcho.OnFingerUpDispatched();
+#endif
             float lx, ly;
             TouchToLogical(e, &lx, &ly);
             float dx = touchStarted ? (lx - touchStartX) : 0.f;
@@ -916,11 +932,12 @@ void FrozenBubble::HandleInput(SDL_Event *e) {
             // coordinate conversion can disagree with the first's about
             // which half of the row was touched, which is what let a tap
             // aimed at decreasing read as broken while increasing did not.
-            // lastMenuTapMs is already the FINGER_UP debounce's own record
-            // of "a menu tap was just accepted"; a mouse event that follows
-            // one within the same window is that browser echo, not an
-            // independent tap, so it is dropped rather than handled again.
-            if (IsWithinMenuTapDebounce(nowMs, lastMenuTapMs)) return;
+            //
+            // This used to be a millisecond check against lastMenuTapMs
+            // (drop a mouse event that follows a tap within a short
+            // window). See WasmMouseEchoGuard (frozenbubble.h) for why a
+            // fixed window isn't reliable and what replaced it.
+            if (wasmMouseEcho.ShouldSwallowMouseDown()) return;
 #endif
             float lx, ly;
             SDL_RenderCoordinatesFromWindow(renderer, e->button.x, e->button.y, &lx, &ly);
