@@ -321,15 +321,10 @@ private:
     // members with their own connections; only this client simulates them.
     int netRoomBotCount = 0;
     int netRoomBotSkill = 1;           // index into BubbleAI::Skill
+    // Each bot carries the skill it was added at (NetBotConnection::SetSkill)
+    // rather than all sharing netRoomBotSkill live, so a skill change only
+    // affects bots added after it -- a room can mix "bot1-high", "bot2-low".
     std::vector<std::unique_ptr<NetBotConnection>> lobbyBots;
-    // The skill lobbyBots' own nicknames ("bot1-low", ...) were last built
-    // for. SyncLobbyBots() compares this against netRoomBotSkill so a Bot
-    // skill change while bots are already seated rebuilds their nicknames
-    // to match -- otherwise a bot joined at "low" would still be named
-    // "bot1-low" after the host bumped skill to "high", even though
-    // AdoptBots() applies whatever netRoomBotSkill is at game-start time to
-    // every bot uniformly, making the stale name an outright lie by then.
-    int lobbyBotsSkill = -1;
     // Bring the number of connected bots in line with netRoomBotCount.
     void SyncLobbyBots();
     // Read the bots' sockets so they answer the server while in the lobby.

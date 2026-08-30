@@ -140,6 +140,16 @@ public:
     const std::string& Nick() const { return nick; }
     const std::map<int, std::string>& Roster() const { return roster; }
 
+    // The BubbleAI::Skill index this bot plays at, set once by the lobby at
+    // the moment it is added (SyncLobbyBots, mainmenu_netpanel.cpp) and
+    // carried with the connection from then on -- a later change to the
+    // room's Bot skill setting only affects bots added after that change,
+    // so a room can mix difficulties ("bot1-high", "bot2-low", ...).
+    // SeatBots (bubblegame_net.cpp) reads this per bot instead of one
+    // room-wide value.
+    void SetSkill(int s) { skill = s; }
+    int Skill() const { return skill; }
+
     // Send one in-game payload ("f1.234:5", "s3:7:2:...", "g4", "n", ...)
     // as this bot. No-op before the game has started.
     bool SendGamePayload(const std::string& payload);
@@ -163,6 +173,9 @@ private:
     // Last time anything was written, for the keepalive below.
     unsigned lastSendTicks = 0;
     std::string nick;
+    // Default matches LocalMPBotSkillName's Med tier -- only reached if a
+    // caller seats a bot without ever calling SetSkill.
+    int skill = 1;
 #ifdef __WASM_PORT__
     // Who created the room this bot is joining. Native consumes it inside
     // JoinRoom and never needs it again; a WebSocket is asynchronous, so the

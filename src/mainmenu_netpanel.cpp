@@ -94,33 +94,17 @@ void MainMenu::SyncLobbyBots() {
         return;
     }
 
-    // A Bot skill change while bots are already seated leaves their
-    // nicknames naming the skill they joined at, not the one they'll
-    // actually play at -- AdoptBots() applies netRoomBotSkill uniformly to
-    // every bot at game-start time, whatever it is by then. Rebuilding
-    // everyone under the new nickname keeps the roster honest; churning a
-    // handful of lobby-only bot connections is cheap next to that.
-    if (!lobbyBots.empty() && lobbyBotsSkill != netRoomBotSkill) {
-        for (auto& bot : lobbyBots) {
-            if (bot) bot->Leave();
-        }
-        lobbyBots.clear();
-    }
-    // Any bot (re)built from here on reads netRoomBotSkill live for its own
-    // nickname regardless of this tracker; it exists only to decide, next
-    // time, whether already-seated bots need rebuilding at all -- so it's
-    // caught up here whether or not any bots actually exist to rebuild.
-    lobbyBotsSkill = netRoomBotSkill;
-
     while ((int)lobbyBots.size() > netRoomBotCount) {
         if (lobbyBots.back()) lobbyBots.back()->Leave();
         lobbyBots.pop_back();
     }
 
     while ((int)lobbyBots.size() < netRoomBotCount) {
-        // "bot<N>-<skill>" reads the difficulty straight off the roster --
-        // all of a room's bots share one skill (netRoomBotSkill), so that's
-        // also what tells the other players what they're up against.
+        // A bot is born at whatever Bot skill is set right now and keeps it
+        // for good (NetBotConnection::SetSkill) -- changing the setting
+        // afterward only affects bots added from here on, so one room can
+        // mix "bot1-high", "bot2-low", etc. "bot<N>-<skill>" reads each
+        // bot's own difficulty straight off the roster.
         const std::string botNick = LobbyBotNick((int)lobbyBots.size() + 1, netRoomBotSkill);
         auto bot = std::make_unique<NetBotConnection>();
         if (!bot->JoinRoom(netClient->GetHost(), netClient->GetPort(),
@@ -129,6 +113,7 @@ void MainMenu::SyncLobbyBots() {
             netRoomBotCount = (int)lobbyBots.size();
             return;
         }
+        bot->SetSkill(netRoomBotSkill);
         lobbyBots.push_back(std::move(bot));
     }
 

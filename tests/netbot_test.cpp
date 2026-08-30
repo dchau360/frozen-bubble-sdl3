@@ -180,6 +180,21 @@ int main() {
         CHECK(MaxRoomBots(7, 5, 0) == 0);
     }
 
+    // A bot's skill is a plain stored value, set once by the lobby when it
+    // is added and read back by SeatBots (bubblegame_net.cpp) when the round
+    // starts -- no socket involved, so it is safe to construct one here
+    // without ever calling JoinRoom.
+    {
+        NetBotConnection bot;
+        // Matches LocalMPBotSkillName's Med tier: the only sane default for
+        // a bot nobody ever assigned a skill to.
+        CHECK(bot.Skill() == 1);
+        bot.SetSkill(0);
+        CHECK(bot.Skill() == 0);
+        bot.SetSkill(2);
+        CHECK(bot.Skill() == 2);
+    }
+
     if (failures == 0) std::printf("netbot tests passed\n");
     return failures == 0 ? 0 : 1;
 }
