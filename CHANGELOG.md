@@ -1,5 +1,20 @@
 # Changelog
 
+## v2.4.57
+
+- **Fix: the "Set name" row on the LAN/Net server-list screen was untappable
+  by mouse or touch.** It was registered as a stepped row (the "<  value  >"
+  look), which made every tap on it send LEFT/RIGHT instead of RETURN --
+  but that row has no actual left/right-steppable value, and neither
+  server-list screen has a LEFT/RIGHT handler at all, so every tap or click
+  silently did nothing. A literal keyboard Enter still worked (it reaches
+  the activation code directly, bypassing row taps entirely), which is why
+  this stayed hidden until reported live on itch.io: "I can highlight Set
+  Name but nothing happens" -- reproduced on both iPhone touch and a plain
+  desktop mouse click, ruling out anything touch-specific. The row no
+  longer claims to be stepped; a tap on it now activates it like any other
+  action row.
+
 ## v2.4.56
 
 - **Fix: the WASM mouse-echo debounce could lose a race under load.** The
