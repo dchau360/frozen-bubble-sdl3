@@ -716,7 +716,24 @@ MenuSwipeGesture ClassifyMenuSwipe(float dx, float dy, bool onSteppedRow) {
     // second tap on the row already selected as "activate", that
     // misreading is what changed the row's own value instead of moving
     // the selection off it.
-    if (!onSteppedRow && dx < -40.f && fabsf(dy) < fabsf(dx)) return MenuSwipeGesture::Back;
+    //
+    // But that suppression is only meant to catch an ordinary TAP that
+    // wandered a little -- a stepped row is never adjusted by swiping, only
+    // by a stationary second tap, so nobody drags 100+ logical units to
+    // decrease one. Once a swipe travels well past the drift an accidental
+    // tap can produce, it is unambiguously a deliberate Back gesture and
+    // must fire even if it happens to release on a stepped row -- found
+    // live on itch.io/iPhone once a stepped row (the LAN/Net "Set name"
+    // section) started being pinned to the panel's own bottom edge on every
+    // screen: a full, deliberate edge-to-edge swipe back now routinely
+    // released right on top of it, and unconditional suppression broke
+    // "swipe back" there entirely rather than just the narrow drift case it
+    // was written for.
+    constexpr float kBackThreshold = 40.f;
+    constexpr float kSteppedRowDriftCap = 100.f;
+    if (dx < -kBackThreshold && fabsf(dy) < fabsf(dx)) {
+        if (!onSteppedRow || -dx > kSteppedRowDriftCap) return MenuSwipeGesture::Back;
+    }
     if (fabsf(dy) > 15.f) return dy < 0 ? MenuSwipeGesture::Up : MenuSwipeGesture::Down;
     return MenuSwipeGesture::None;
 }
