@@ -1,5 +1,23 @@
 # Changelog
 
+## v2.4.59
+
+- **Fix: the WASM build showed a permanent black screen on some Android
+  devices** (confirmed live on a tablet with a fractional device pixel
+  ratio, in both Chrome and Brave, via itch.io and locally). The game
+  itself ran completely normally underneath -- menus, input, audio,
+  networking all worked -- but SDL's browser backend misjudges the
+  canvas size on any device whose CSS pixels don't divide evenly into
+  device pixels, sizing the window (and canvas) 0x0 so no pixel ever
+  reached the screen. Corrected by re-asserting the game's real
+  resolution right after the renderer is created.
+- **Network-room bots can now mix difficulty levels.** A bot keeps
+  whatever Bot skill was set at the moment it was added to the room,
+  instead of every bot in the room being retuned to whatever skill is
+  current when the round starts. Change the skill setting between adds
+  and a single room can run "bot1-high" alongside "bot2-low" at the
+  same time.
+
 ## v2.4.58
 
 - **Bot difficulty renamed to Low/Med/High, and network-room bots now name
