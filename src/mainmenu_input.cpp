@@ -552,6 +552,16 @@ bool MainMenu::HandlePanelTap(float lx, float ly) {
     return false;
 }
 
+bool MainMenu::IsSteppedRowAt(float lx, float ly) const {
+    for (const PanelTapRow& row : panelTapRows) {
+        if (!row.splitAdjust) continue;
+        if (lx < row.rect.x || lx >= row.rect.x + row.rect.w) continue;
+        if (ly < row.rect.y || ly >= row.rect.y + row.rect.h) continue;
+        return true;
+    }
+    return false;
+}
+
 bool MainMenu::KeysPanelKey(SDL_Event *e) {
             if (showingKeysPanel) {
                 if (awaitKp && e->key.key != SDLK_ESCAPE) {
