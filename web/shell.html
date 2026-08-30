@@ -63,10 +63,35 @@
 
     function fitCanvas() {
       var canvas = document.getElementById('canvas');
-      var scale = Math.min(window.innerWidth / 640, window.innerHeight / 480);
+      // visualViewport tracks the actual on-screen viewport (excluding
+      // Safari's address/toolbar chrome); window.innerWidth/Height is the
+      // fallback for browsers without it.
+      var vv = window.visualViewport;
+      var vw = vv ? vv.width : window.innerWidth;
+      var vh = vv ? vv.height : window.innerHeight;
+      var scale = Math.min(vw / 640, vh / 480);
       canvas.style.transform = 'translate(-50%, -50%) scale(' + scale + ')';
     }
-    window.addEventListener('resize', fitCanvas);
+    // iOS Safari reports window.innerWidth/innerHeight (and even
+    // visualViewport) still mid-transition for a few frames after a
+    // rotation -- a single fitCanvas() run off the first resize/
+    // orientationchange event can compute the scale against the pre-
+    // rotation viewport and never get corrected, leaving the canvas
+    // wrongly sized/cropped in the new orientation. Recompute repeatedly
+    // for a short window after any of these fire rather than trusting the
+    // first one.
+    function refitSoon() {
+      fitCanvas();
+      requestAnimationFrame(fitCanvas);
+      setTimeout(fitCanvas, 100);
+      setTimeout(fitCanvas, 300);
+      setTimeout(fitCanvas, 600);
+    }
+    window.addEventListener('resize', refitSoon);
+    window.addEventListener('orientationchange', refitSoon);
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener('resize', refitSoon);
+    }
     // Re-apply scale whenever SDL changes the canvas width/height/style attributes
     var canvasObserver = new MutationObserver(fitCanvas);
     canvasObserver.observe(document.getElementById('canvas'), {
