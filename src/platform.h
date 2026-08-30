@@ -159,9 +159,10 @@ bool AdsRemoved();
 
 // Localized price for a purchase row, or "" when Play has not answered yet
 // (the row says so rather than showing a made-up number). Index 0 is the
-// yearly subscription, 1 is the permanent purchase. Never hardcode a price:
-// Play sets them per country, and showing one figure while charging another
-// is its own problem in several jurisdictions.
+// monthly subscription, 1 is the yearly subscription, 2 is the permanent
+// purchase. Never hardcode a price: Play sets them per country, and showing
+// one figure while charging another is its own problem in several
+// jurisdictions.
 std::string AdsPrice(int productIndex);
 #endif
 

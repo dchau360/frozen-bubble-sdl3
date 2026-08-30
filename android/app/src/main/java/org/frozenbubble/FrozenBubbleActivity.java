@@ -32,6 +32,7 @@ import java.net.URL;
  *   0x8001 — show interstitial ad (called when entering network lobby)
  *   0x8002 — buy the yearly ad-removal subscription
  *   0x8003 — buy permanent ad removal
+ *   0x8004 — buy the monthly ad-removal subscription
  */
 public class FrozenBubbleActivity extends SDLActivity {
 
@@ -39,6 +40,7 @@ public class FrozenBubbleActivity extends SDLActivity {
     private static final int MSG_SHOW_AD           = 0x8001;
     private static final int MSG_BUY_ADS_YEAR      = 0x8002;
     private static final int MSG_BUY_ADS_FOREVER   = 0x8003;
+    private static final int MSG_BUY_ADS_MONTH     = 0x8004;
 
     /** Extracted asset directory path — read by C++ InitDataDir() via JNI. */
     public static String sExtractedDataDir = "";
@@ -101,6 +103,10 @@ public class FrozenBubbleActivity extends SDLActivity {
                 runOnUiThread(() ->
                         mBillingManager.launchPurchaseFlow(BillingManager.PRODUCT_FOREVER));
                 return true;
+            case MSG_BUY_ADS_MONTH:
+                runOnUiThread(() ->
+                        mBillingManager.launchPurchaseFlow(BillingManager.PRODUCT_MONTH));
+                return true;
             default:
                 return false;
         }
@@ -121,15 +127,16 @@ public class FrozenBubbleActivity extends SDLActivity {
     /**
      * Called from C++ via JNI: the localized price to show on a purchase row,
      * or "" if Play has not answered yet (the row then says so rather than
-     * inventing a number). productIndex 0 = yearly, 1 = permanent -- an int
-     * rather than a string keeps the JNI signature trivial.
+     * inventing a number). productIndex 0 = monthly, 1 = yearly, 2 = permanent
+     * -- an int rather than a string keeps the JNI signature trivial.
      */
     public static String adsPrice(int productIndex) {
         // No context needed: getPrice() reads the cached ProductDetails and
         // returns "" when Play has not answered yet.
-        return BillingManager.getPrice(
-                productIndex == 0 ? BillingManager.PRODUCT_YEAR
-                                  : BillingManager.PRODUCT_FOREVER);
+        String productId = productIndex == 0 ? BillingManager.PRODUCT_MONTH
+                          : productIndex == 1 ? BillingManager.PRODUCT_YEAR
+                                              : BillingManager.PRODUCT_FOREVER;
+        return BillingManager.getPrice(productId);
     }
 
     /**

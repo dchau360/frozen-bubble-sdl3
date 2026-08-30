@@ -31,20 +31,21 @@ import java.util.Map;
 import androidx.annotation.NonNull;
 
 /**
- * Handles Google Play Billing for the two "Remove Ads" products.
+ * Handles Google Play Billing for the three "Remove Ads" products.
  *
  * Product IDs to create in Google Play Console:
- *   "remove_ads_year"    -- SUBSCRIPTION, ~$5/year, auto-renewing
- *   "remove_ads_forever" -- ONE-TIME purchase, ~$15
+ *   "remove_ads_month"   -- SUBSCRIPTION, $0.99/month, auto-renewing
+ *   "remove_ads_year"    -- SUBSCRIPTION, $10/year, auto-renewing
+ *   "remove_ads_forever" -- ONE-TIME purchase, $20
  *
- * The yearly one is a real subscription rather than a self-expiring one-time
- * purchase on purpose. Without a backend, a "1 year pass" sold as a one-time
- * product can only track its own expiry from Purchase.getPurchaseTime() -- and
- * letting somebody buy a second year means consuming the first, which throws
- * that timestamp away and takes the entitlement with it on the next reinstall.
- * Play tracks subscription state itself, so queryPurchasesAsync(SUBS) answers
- * "is it active right now" correctly across reinstalls and new devices with no
- * server of ours involved.
+ * The month/year tiers are real subscriptions rather than self-expiring
+ * one-time purchases on purpose. Without a backend, a "1 year pass" sold as a
+ * one-time product can only track its own expiry from Purchase.getPurchaseTime()
+ * -- and letting somebody buy a second year means consuming the first, which
+ * throws that timestamp away and takes the entitlement with it on the next
+ * reinstall. Play tracks subscription state itself, so
+ * queryPurchasesAsync(SUBS) answers "is it active right now" correctly across
+ * reinstalls and new devices with no server of ours involved.
  *
  * Usage:
  *   BillingManager mgr = new BillingManager(activity);
@@ -54,6 +55,8 @@ import androidx.annotation.NonNull;
 public class BillingManager implements PurchasesUpdatedListener {
     private static final String TAG = "FBubble.Billing";
 
+    /** Auto-renewing monthly subscription. */
+    public  static final String PRODUCT_MONTH   = "remove_ads_month";
     /** Auto-renewing yearly subscription. */
     public  static final String PRODUCT_YEAR    = "remove_ads_year";
     /** One-time permanent purchase. */
@@ -81,8 +84,8 @@ public class BillingManager implements PurchasesUpdatedListener {
     }
 
     /**
-     * Start the Play purchase UI for one product id (PRODUCT_YEAR or
-     * PRODUCT_FOREVER).
+     * Start the Play purchase UI for one product id (PRODUCT_MONTH,
+     * PRODUCT_YEAR, or PRODUCT_FOREVER).
      */
     public void launchPurchaseFlow(String productId) {
         ProductDetails details = mProductDetails.get(productId);
@@ -98,8 +101,10 @@ public class BillingManager implements PurchasesUpdatedListener {
 
         // A subscription purchase must name which base plan / offer is being
         // bought; a one-time product has no such token and setting one is an
-        // error. This is the only structural difference between the two flows.
-        if (PRODUCT_YEAR.equals(productId)) {
+        // error. This is the only structural difference between the flows --
+        // both subscription tiers (month, year) need it, only the one-time
+        // forever purchase does not.
+        if (!PRODUCT_FOREVER.equals(productId)) {
             List<ProductDetails.SubscriptionOfferDetails> offers =
                     details.getSubscriptionOfferDetails();
             if (offers == null || offers.isEmpty()) {
@@ -137,7 +142,8 @@ public class BillingManager implements PurchasesUpdatedListener {
                 // to stop now, not on the next launch. Only ever set true here
                 // -- lapsing is decided by restorePurchases(), which sees the
                 // whole picture.
-                if (isActive(p, PRODUCT_FOREVER) || isActive(p, PRODUCT_YEAR)) {
+                if (isActive(p, PRODUCT_FOREVER) || isActive(p, PRODUCT_YEAR)
+                        || isActive(p, PRODUCT_MONTH)) {
                     applyEntitlement(true);
                 }
             }
@@ -226,7 +232,7 @@ public class BillingManager implements PurchasesUpdatedListener {
                     if (billingResult.getResponseCode() == BillingClient.BillingResponseCode.OK) {
                         for (Purchase p : purchases) {
                             handlePurchase(p);
-                            if (isActive(p, PRODUCT_YEAR)) owned[1] = true;
+                            if (isActive(p, PRODUCT_YEAR) || isActive(p, PRODUCT_MONTH)) owned[1] = true;
                         }
                         ok[1] = true;
                     } else {
@@ -270,6 +276,7 @@ public class BillingManager implements PurchasesUpdatedListener {
         // INAPP and SUBS products.
         queryDetailsFor(PRODUCT_FOREVER, BillingClient.ProductType.INAPP);
         queryDetailsFor(PRODUCT_YEAR,    BillingClient.ProductType.SUBS);
+        queryDetailsFor(PRODUCT_MONTH,   BillingClient.ProductType.SUBS);
     }
 
     private void queryDetailsFor(String productId, String productType) {
@@ -330,7 +337,8 @@ public class BillingManager implements PurchasesUpdatedListener {
 
     private void handlePurchase(Purchase purchase) {
         boolean ours = purchase.getProducts().contains(PRODUCT_FOREVER)
-                    || purchase.getProducts().contains(PRODUCT_YEAR);
+                    || purchase.getProducts().contains(PRODUCT_YEAR)
+                    || purchase.getProducts().contains(PRODUCT_MONTH);
         if (!ours) return;
         if (purchase.getPurchaseState() != Purchase.PurchaseState.PURCHASED) return;
 

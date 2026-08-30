@@ -530,20 +530,25 @@ void MainMenu::KeysPanelRender() {
         // for them -- index -1 keeps this line itself unselectable.
         list.Row(-1, "Ads removed -- thank you!", "");
     } else {
-        const std::string yearPrice = AdsPrice(0);
-        const std::string everPrice = AdsPrice(1);
+        const std::string monthPrice = AdsPrice(0);
+        const std::string yearPrice = AdsPrice(1);
+        const std::string everPrice = AdsPrice(2);
         // Play's own price string when it has arrived, and an honest
         // placeholder when it has not -- never a hardcoded number, which
         // would be wrong in every currency but one.
+        list.Row(kKeyRowRemoveAdsMonth, "Remove ads (1 month)",
+                 monthPrice.empty() ? "..." : monthPrice + "/mo", true);
         list.Row(kKeyRowRemoveAdsYear, "Remove ads (1 year)",
                  yearPrice.empty() ? "..." : yearPrice + "/yr", true);
         list.Row(kKeyRowRemoveAdsForever, "Remove ads (forever)",
                  everPrice.empty() ? "..." : everPrice, true);
-        if (keyConfigIndex == kKeyRowRemoveAdsYear) {
+        if (keyConfigIndex == kKeyRowRemoveAdsMonth) {
             // Play policy requires auto-renewal be disclosed before purchase,
-            // and it is the thing a player most needs to know about the
-            // yearly option -- so it is shown on the panel, not buried in
-            // the store.
+            // and it is the thing a player most needs to know about either
+            // subscription tier -- so it is shown on the panel, not buried
+            // in the store.
+            list.Row(-1, "renews monthly, cancel in Play", "");
+        } else if (keyConfigIndex == kKeyRowRemoveAdsYear) {
             list.Row(-1, "renews yearly, cancel in Play", "");
         }
     }
