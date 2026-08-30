@@ -1,5 +1,20 @@
 # Changelog
 
+## v2.4.53
+
+- **Fix: swipe-back was too easily swallowed on any stepped row.** v2.4.51's
+  fix let a deliberate swipe back still fire on a stepped row, but only past
+  a 100-logical-unit drift cap meant to leave room for a full edge-to-edge
+  swipe. Every counter/value row (Players, Mode, Victories limit, Bots, Bot
+  skill, per-player colors, ...) is a stepped row, and a normal deliberate
+  swipe-back on a phone commonly travels only 60-90 logical units -- short
+  of that cap. It fell through to the tap handler instead, which reads a
+  release on the already-selected row as "activate" -- nudging the row's
+  value rather than leaving the screen. Reported live as the "Bots" row on
+  itch.io/iPhone feeling stuck: every attempt to swipe back out of it just
+  changed the bot count again. The cap is now 60, still comfortably past
+  ordinary tap jitter but low enough for a real swipe to clear it.
+
 ## v2.4.52
 
 - **Fix: the aim guide display was gittery.** `SDL_GetTicks()` has
