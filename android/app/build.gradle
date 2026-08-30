@@ -21,17 +21,18 @@ if (firebaseEnabled) {
     logger.lifecycle("google-services.json absent -- push notifications disabled (see docs/PUSH_SETUP.md)")
 }
 
-// Optional AdMob test-device ID, read from local.properties (git-ignored,
+// Optional AdMob test-device ID(s), read from local.properties (git-ignored,
 // same file `sdk.dir` already lives in) rather than hardcoded into source.
-// This hashes to one specific physical device -- committing it here would
-// tie a public GPL repo to a maintainer's real device for no benefit, since
-// nothing else needs it. Google's Mobile Ads SDK logs the exact hash to
-// Logcat once an ad is requested from a device not yet on this list; add it
-// as `admob.testDeviceId=<hash>` in android/local.properties to always get
-// safe test ads on that device even with the real ad unit ID below. Absent
-// -> compiles to an empty string, which AdsManager treats as "no test
-// device configured" and serves real ads -- the correct default for CI and
-// for a real release build.
+// Each one hashes to a specific physical device -- committing them here
+// would tie a public GPL repo to a maintainer's real devices for no benefit,
+// since nothing else needs it. Google's Mobile Ads SDK logs the exact hash
+// to Logcat once an ad is requested from a device not yet on this list; add
+// it as `admob.testDeviceId=<hash>` in android/local.properties to always
+// get safe test ads on that device even with the real ad unit ID below.
+// Comma-separate multiple hashes to whitelist more than one device (see
+// AdsManager.configureTestDeviceIfNeeded). Absent -> compiles to an empty
+// string, which AdsManager treats as "no test device configured" and serves
+// real ads -- the correct default for CI and for a real release build.
 def localProps = new Properties()
 def localPropsFile = rootProject.file('local.properties')
 if (localPropsFile.exists()) {
@@ -106,10 +107,24 @@ android {
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt')
+            // The real AdMob App ID -- see AndroidManifest.xml. This is what
+            // ships to GitHub Releases and any store: real users installing
+            // and organically viewing/clicking ads is exactly the traffic
+            // AdMob exists for, not a policy risk.
+            manifestPlaceholders = [admobAppId: "ca-app-pub-7736855769799322~9200045587"]
         }
         debug {
             debuggable true
             jniDebuggable true
+            // Google's own published always-test AdMob App ID (see
+            // https://developers.google.com/admob/android/test-ads), paired
+            // with AdsManager's debug-only test ad unit ID below. Every
+            // debug build -- this developer's own devices, CI, anyone
+            // building from source -- gets guaranteed test ads no matter
+            // which physical device it lands on, instead of relying on each
+            // one being individually whitelisted via admob.testDeviceId
+            // first.
+            manifestPlaceholders = [admobAppId: "ca-app-pub-3940256099942544~3347511713"]
         }
     }
 

@@ -31,10 +31,17 @@
         android:isGame="true"
         android:theme="@android:style/Theme.NoTitleBar.Fullscreen">
 
-        <!-- Real AdMob App ID (Frozen Bubble app, created in AdMob 2026-08-24) -->
+        <!-- AdMob App ID. ${admobAppId} is the real Frozen Bubble app ID
+             (created in AdMob 2026-08-24) for a release build, and Google's
+             own published always-test App ID for a debug build; see
+             build.gradle buildTypes. A debug build (every local/CI build a
+             developer runs, on however many devices) must never be able to
+             generate a live ad request at all: per-device whitelisting via
+             admob.testDeviceId is a second, redundant safety net, not the
+             only one. -->
         <meta-data
             android:name="com.google.android.gms.ads.APPLICATION_ID"
-            android:value="ca-app-pub-7736855769799322~9200045587"/>
+            android:value="${admobAppId}"/>
 
         <!-- Disable AdMob auto-init ContentProvider: MobileAds.initialize() called on SDL
              surfaces conflicts with HWUI thread pool (CommonPool), causing a destroyed-mutex
