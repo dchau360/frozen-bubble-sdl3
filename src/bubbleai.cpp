@@ -40,6 +40,26 @@ constexpr int kCandidates = 61;
 // the tallest board takes well under this many substeps even bouncing.
 constexpr int kMaxSubsteps = 4000;
 
+// Shot scoring, ported from the zepr/fbjs clone's cpu.js (popped=4,
+// detached=6, cluster=4*groupSize, plus a hand-tuned 1..5 positional
+// heatmap), scaled up by 3 to stay in integers. The old score was
+// `popped * 1000 - row * 10 + followUp * weight`, which had two defects:
+// nothing rewarded a shot that lands next to its own colour without popping,
+// so when no candidate popped every candidate tied at -row*10 and
+// std::sort's instability picked an arbitrary one; and a pop, however bad,
+// always dwarfed every other consideration. Their `4*groupSize` counts the
+// placed bubble itself, so the decision-relevant delta between an isolated
+// landing and a cluster join is 4 -- one popped bubble -- and their whole
+// positional spread is likewise worth about one popped bubble.
+constexpr int kPopped = 12;         // per bubble in the popped group
+constexpr int kDetached = 18;        // per bubble cut loose; a cut is worth more than a match
+constexpr int kCluster = 12;        // per same-colour neighbour joined when the group is < 3
+constexpr int kRowPenalty = 1;      // per row down; the whole board's spread is ~one popped bubble
+constexpr int kCeilingPenalty = 6;  // a row-0 bubble is a permanent anchor and can never fall in a cut
+constexpr int kEdgeBonus = 4;       // keep the centre lane open
+constexpr int kDangerPenalty = 30;  // rows >= 11 are close to ending the round
+constexpr int kDangerRow = 11;
+
 using Grid = std::array<std::vector<int>, 13>;
 
 Grid ColourGrid(const BubbleArray &board) {
@@ -124,17 +144,66 @@ int SweepDetached(Grid &grid) {
 // Places `colour` at (row, col) and, if that completes a group of three or
 // more, pops it and sweeps whatever it detaches -- mutating `grid` to the
 // board that shot would actually leave behind. Returns the same score
-// ScoreLanding does. Split out from ScoreLanding so a caller that needs the
-// resulting grid (the lookahead below) does not have to re-simulate the shot
-// to get it.
-int PlaceAndScore(Grid &grid, int row, int col, int colour) {
-    if (!InBounds(grid, row, col) || grid[row][col] != -1) return 0;
+// ScoreLanding does (the popped group plus everything it detaches), so
+// callers that only want the total need not change. Split out from
+// ScoreLanding so a caller that needs the resulting grid (the lookahead
+// below) does not have to re-simulate the shot to get it. The optional
+// out-params expose the pieces separately so ChooseShot can weight a popped
+// bubble differently from a detached one; every one is null-checked because
+// they all default to nullptr.
+int PlaceAndScore(Grid &grid, int row, int col, int colour,
+                  int *poppedOut = nullptr, int *detachedOut = nullptr,
+                  int *groupSizeOut = nullptr) {
+    if (!InBounds(grid, row, col) || grid[row][col] != -1) {
+        if (poppedOut) *poppedOut = 0;
+        if (detachedOut) *detachedOut = 0;
+        if (groupSizeOut) *groupSizeOut = 0;
+        return 0;
+    }
     grid[row][col] = colour;
 
     const auto group = SameColourGroup(grid, row, col);
-    if (group.size() < 3) return 0;
+    if (group.size() < 3) {
+        // Too small to pop: the shot only matters for the cluster it joined.
+        // groupSizeOut is the connected same-colour group containing the
+        // landing cell after the placement, so a caller can count how many
+        // of its own colour it has landed beside.
+        if (poppedOut) *poppedOut = 0;
+        if (detachedOut) *detachedOut = 0;
+        if (groupSizeOut) *groupSizeOut = static_cast<int>(group.size());
+        return 0;
+    }
     for (auto [r, c] : group) grid[r][c] = -1;
-    return static_cast<int>(group.size()) + SweepDetached(grid);
+    const int detached = SweepDetached(grid);
+    if (poppedOut) *poppedOut = static_cast<int>(group.size());
+    if (detachedOut) *detachedOut = detached;
+    if (groupSizeOut) *groupSizeOut = static_cast<int>(group.size());
+    return static_cast<int>(group.size()) + detached;
+}
+
+// The ranking ChooseShot applies to a single landing, minus the lookahead
+// term. It runs the placement itself so the caller gets the resulting grid
+// back for free -- the lookahead below needs the exact board the shot would
+// leave, and simulating the shot twice per candidate would double the cost.
+// Split out of ChooseShot so the header can expose it to tests, which must
+// bind to the real weights instead of restating them.
+int LandingScore(Grid &grid, int row, int col, int colour) {
+    int popped = 0, detached = 0, groupSize = 0;
+    PlaceAndScore(grid, row, col, colour, &popped, &detached, &groupSize);
+    // Weight the pieces separately: a pop is good, but so is parking next
+    // to the bot's own colour when nothing pops, and a deep pop is worse
+    // than building a cluster high up. Rows keep their width after
+    // PlaceAndScore mutates the grid, so the edge test can still read the
+    // last column here.
+    const int lastColumnOfThatRow = static_cast<int>(grid[row].size()) - 1;
+    int score = kPopped * popped + kDetached * detached;
+    if (popped == 0 && detached == 0)
+        score += kCluster * (groupSize - 1);
+    score -= kRowPenalty * row;
+    if (row == 0) score -= kCeilingPenalty;
+    if (col == 0 || col == lastColumnOfThatRow) score += kEdgeBonus;
+    if (row >= kDangerRow) score -= kDangerPenalty;
+    return score;
 }
 
 // The best score achievable next turn with `nextColour` -- the bubble the
@@ -202,6 +271,11 @@ int ScoreLanding(const BubbleArray &board, int row, int col, int colour) {
     return PlaceAndScore(grid, row, col, colour);
 }
 
+int ScoreShot(const BubbleArray &board, int row, int col, int colour) {
+    Grid grid = ColourGrid(board);
+    return LandingScore(grid, row, col, colour);
+}
+
 Shot ChooseShot(BubbleArray &board, int colour, bool isMini, Skill skill,
                 unsigned *rng) {
     auto next_random = [rng]() {
@@ -209,14 +283,15 @@ Shot ChooseShot(BubbleArray &board, int colour, bool isMini, Skill skill,
         return (*rng >> 16) & 0x7fff;
     };
 
-    // How much a candidate's lookahead score counts for. Immediate pops
-    // dominate at a factor of 1000 each, so this only ever breaks a
-    // near-tie between shots that pop about the same amount now -- it
-    // cannot talk the bot into a worse shot for the sake of a combo. Easy
-    // gets none: a bot that does not reliably see the best shot in front of
-    // it has no business planning a second one ahead.
+    // How much a candidate's lookahead score counts for. The base score used
+    // to run in the thousands (`popped * 1000`), so the old weights were only
+    // ever a near-tie breaker; the new weights run in the tens, so these drop
+    // by the same factor (~80x) or the lookahead would dominate the shot.
+    // They still cannot talk the bot into a worse shot for the sake of a
+    // combo. Easy gets none: a bot that does not reliably see the best shot
+    // in front of it has no business planning a second one ahead.
     const int lookaheadWeight =
-        skill == Skill::Hard ? 60 : skill == Skill::Normal ? 15 : 0;
+        skill == Skill::Hard ? 6 : skill == Skill::Normal ? 2 : 0;
 
     std::vector<Shot> ranked;
     for (int i = 0; i < kCandidates; ++i) {
@@ -227,11 +302,7 @@ Shot ChooseShot(BubbleArray &board, int colour, bool isMini, Skill skill,
         if (!PredictLanding(board, angle, colour, isMini, &row, &colIdx)) continue;
 
         Grid grid = ColourGrid(board);
-        const int popped = PlaceAndScore(grid, row, colIdx, colour);
-        // Popping dominates. Failing that, land as high as possible: depth is
-        // what ends the round, so a bubble parked near the ceiling costs less
-        // than one parked at the bottom.
-        int score = popped * 1000 - row * 10;
+        int score = LandingScore(grid, row, colIdx, colour);
         // Look one shot further using the bubble already queued behind this
         // one -- the same preview a person reads off the launcher, not
         // information the bot has that a player does not.
