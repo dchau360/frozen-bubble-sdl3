@@ -19,6 +19,11 @@
 
 #include "netbot.h"
 
+// SDL lives here, not just in the native half: the shared Update() and
+// HandleLine() below are compiled on WASM too, and they read SDL_GetTicks()
+// for the keepalive and log through SDL_Log/SDL_LogWarn.
+#include <SDL3/SDL.h>
+
 // Parsing is wire-format handling, not socket handling, so it is built on
 // every platform including WASM -- and tested there too.
 GameCanStartRoster ParseGameCanStart(const std::string& payload,
@@ -76,11 +81,105 @@ bool IsBotLimitReachedReply(const std::string& line) {
     return line.find("BOT_LIMIT_REACHED") != std::string::npos;
 }
 
+namespace {
+
+// The push that announces a game and carries the id-to-nickname roster.
+// Hoisted out of the native block because the platform-shared HandleLine()
+// below matches on it on every build.
+constexpr char kStartPush[] = "PUSH: GAME_CAN_START: ";
+
+}  // namespace
+
+// The destructor is shared too: on every platform the only teardown the
+// connection needs is whatever Leave() decides is right for the transport.
+NetBotConnection::~NetBotConnection() { Leave(); }
+
+void NetBotConnection::HandleLine(const std::string& line) {
+    // Before the game starts everything is a lobby line. The one that matters
+    // carries the id-to-nickname map, including this bot's own id, which every
+    // in-game message it sends has to be prefixed with.
+    const size_t at = line.find(kStartPush);
+    if (at != std::string::npos) {
+        const GameCanStartRoster parsed =
+            ParseGameCanStart(line.substr(at + sizeof(kStartPush) - 1), nick);
+        roster = parsed.players;
+        myPlayerId = parsed.myPlayerId;
+        SDL_Log("netbot %s: game starting, id=%d, %zu players",
+                nick.c_str(), myPlayerId, roster.size());
+        // Acknowledging is what puts this connection into the server's prio
+        // mode (game.c ok_start_game -> add_prio). Without it the server
+        // keeps reading this socket as lobby text: the bot's shots would
+        // never be relayed, and the leader's own start would stall waiting
+        // for an acknowledgement that never came.
+        SendLine("OK_GAME_START");
+        return;
+    }
+
+    // The server's kick only puts a player back in the lobby -- the socket
+    // stays open. For a person that is the right thing; a bot nobody is
+    // hosting any more has nothing to sit in the lobby for, and would show up
+    // in the server's player list forever.
+    if (IsKickedMePush(line)) {
+        SDL_Log("netbot %s: kicked from the room, disconnecting", nick.c_str());
+        Leave();
+        return;
+    }
+
+    if (IsBotLimitReachedReply(line)) {
+        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
+                    "netbot %s: server bot limit reached, disconnecting", nick.c_str());
+        rejectedByServer = true;
+        Leave();
+        return;
+    }
+
+    // Once OK_GAME_START is acknowledged (above) the server switches this
+    // connection into binary prio mode (game.c ok_start_game -> add_prio),
+    // and every line from here on is a raw {id byte}{payload} game frame --
+    // exactly the same signal NetworkClient::ProcessIncomingData gates on
+    // (state == IN_GAME) rather than sniffing the byte. There is no byte
+    // value that reliably marks a game frame on its own: real player ids
+    // are 'A'-'z' (game.c next_seat_id), ordinary printable ASCII, not some
+    // low control range -- a prior version of this check assumed otherwise
+    // and so never actually matched a real game message, silently leaving
+    // gameMessages empty for the whole match.
+    if (myPlayerId != 0) {
+        gameMessages.emplace_back(static_cast<unsigned char>(line[0]), line.substr(1));
+    }
+}
+
+void NetBotConnection::Update() {
+    Drain();
+    for (;;) {
+        const size_t nl = incoming.find('\n');
+        if (nl == std::string::npos) break;
+        const std::string line = incoming.substr(0, nl);
+        incoming.erase(0, nl + 1);
+        if (!line.empty()) HandleLine(line);
+    }
+
+    // Keepalive. A bot goes quiet the moment its board is out of the round --
+    // it has no shots left to send -- and five seconds later the server drops
+    // it for inactivity, which reads to everyone else as the bot rage-quitting
+    // mid-match. The human client sends the same 'p' once a second for the
+    // same reason; the server consumes it and does not relay it.
+    if (sockfd >= 0 && myPlayerId != 0) {
+        const unsigned now = SDL_GetTicks();
+        if (now - lastSendTicks >= 1000) SendGamePayload("p");
+    }
+}
+
+bool NetBotConnection::TakeGameMessage(int* senderId, std::string* payload) {
+    if (gameMessages.empty()) return false;
+    if (senderId) *senderId = gameMessages.front().first;
+    if (payload) *payload = gameMessages.front().second;
+    gameMessages.pop_front();
+    return true;
+}
+
 #ifndef __WASM_PORT__
 
 #include "socket_compat.h"
-
-#include <SDL3/SDL.h>
 
 #include <cerrno>
 #include <cstring>
@@ -93,7 +192,6 @@ namespace {
 
 constexpr int kProtoMajor = 1;
 constexpr int kProtoMinor = 3;
-constexpr char kStartPush[] = "PUSH: GAME_CAN_START: ";
 // A bot's own messages are short; the level sync it receives is not, so the
 // read buffer is sized for a burst rather than a line.
 constexpr size_t kReadChunk = 16384;
@@ -134,8 +232,6 @@ bool SendAllBytes(int fd, const char* data, size_t len) {
 }
 
 }  // namespace
-
-NetBotConnection::~NetBotConnection() { Leave(); }
 
 bool NetBotConnection::SendLine(const std::string& command) {
     if (sockfd < 0) return false;
@@ -236,81 +332,6 @@ void NetBotConnection::Drain() {
     }
 }
 
-void NetBotConnection::HandleLine(const std::string& line) {
-    // Before the game starts everything is a lobby line. The one that matters
-    // carries the id-to-nickname map, including this bot's own id, which every
-    // in-game message it sends has to be prefixed with.
-    const size_t at = line.find(kStartPush);
-    if (at != std::string::npos) {
-        const GameCanStartRoster parsed =
-            ParseGameCanStart(line.substr(at + sizeof(kStartPush) - 1), nick);
-        roster = parsed.players;
-        myPlayerId = parsed.myPlayerId;
-        SDL_Log("netbot %s: game starting, id=%d, %zu players",
-                nick.c_str(), myPlayerId, roster.size());
-        // Acknowledging is what puts this connection into the server's prio
-        // mode (game.c ok_start_game -> add_prio). Without it the server
-        // keeps reading this socket as lobby text: the bot's shots would
-        // never be relayed, and the leader's own start would stall waiting
-        // for an acknowledgement that never came.
-        SendLine("OK_GAME_START");
-        return;
-    }
-
-    // The server's kick only puts a player back in the lobby -- the socket
-    // stays open. For a person that is the right thing; a bot nobody is
-    // hosting any more has nothing to sit in the lobby for, and would show up
-    // in the server's player list forever.
-    if (IsKickedMePush(line)) {
-        SDL_Log("netbot %s: kicked from the room, disconnecting", nick.c_str());
-        Leave();
-        return;
-    }
-
-    if (IsBotLimitReachedReply(line)) {
-        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
-                    "netbot %s: server bot limit reached, disconnecting", nick.c_str());
-        rejectedByServer = true;
-        Leave();
-        return;
-    }
-
-    // Once OK_GAME_START is acknowledged (above) the server switches this
-    // connection into binary prio mode (game.c ok_start_game -> add_prio),
-    // and every line from here on is a raw {id byte}{payload} game frame --
-    // exactly the same signal NetworkClient::ProcessIncomingData gates on
-    // (state == IN_GAME) rather than sniffing the byte. There is no byte
-    // value that reliably marks a game frame on its own: real player ids
-    // are 'A'-'z' (game.c next_seat_id), ordinary printable ASCII, not some
-    // low control range -- a prior version of this check assumed otherwise
-    // and so never actually matched a real game message, silently leaving
-    // gameMessages empty for the whole match.
-    if (myPlayerId != 0) {
-        gameMessages.emplace_back(static_cast<unsigned char>(line[0]), line.substr(1));
-    }
-}
-
-void NetBotConnection::Update() {
-    Drain();
-    for (;;) {
-        const size_t nl = incoming.find('\n');
-        if (nl == std::string::npos) break;
-        const std::string line = incoming.substr(0, nl);
-        incoming.erase(0, nl + 1);
-        if (!line.empty()) HandleLine(line);
-    }
-
-    // Keepalive. A bot goes quiet the moment its board is out of the round --
-    // it has no shots left to send -- and five seconds later the server drops
-    // it for inactivity, which reads to everyone else as the bot rage-quitting
-    // mid-match. The human client sends the same 'p' once a second for the
-    // same reason; the server consumes it and does not relay it.
-    if (sockfd >= 0 && myPlayerId != 0) {
-        const unsigned now = SDL_GetTicks();
-        if (now - lastSendTicks >= 1000) SendGamePayload("p");
-    }
-}
-
 bool NetBotConnection::SendGamePayload(const std::string& payload) {
     if (sockfd < 0 || myPlayerId == 0) return false;
     std::string framed;
@@ -320,14 +341,6 @@ bool NetBotConnection::SendGamePayload(const std::string& payload) {
     framed.push_back('\n');
     lastSendTicks = SDL_GetTicks();
     return SendAllBytes(sockfd, framed.c_str(), framed.size());
-}
-
-bool NetBotConnection::TakeGameMessage(int* senderId, std::string* payload) {
-    if (gameMessages.empty()) return false;
-    if (senderId) *senderId = gameMessages.front().first;
-    if (payload) *payload = gameMessages.front().second;
-    gameMessages.pop_front();
-    return true;
 }
 
 void NetBotConnection::Leave() {
@@ -344,18 +357,241 @@ void NetBotConnection::Leave() {
 
 #else  // __WASM_PORT__
 
-// A browser tab cannot open the extra raw sockets a bot needs, and the
-// WebSocket path would need one proxied connection per bot. Bots are a
-// native/mobile feature; the stubs keep the call sites uniform.
-NetBotConnection::~NetBotConnection() {}
-bool NetBotConnection::JoinRoom(const std::string&, int, const std::string&,
-                                const std::string&) { return false; }
-void NetBotConnection::Update() {}
-bool NetBotConnection::SendGamePayload(const std::string&) { return false; }
-bool NetBotConnection::TakeGameMessage(int*, std::string*) { return false; }
-void NetBotConnection::Leave() {}
-bool NetBotConnection::SendLine(const std::string&) { return false; }
-void NetBotConnection::Drain() {}
-void NetBotConnection::HandleLine(const std::string&) {}
+#include <emscripten/emscripten.h>
+#include <emscripten/websocket.h>
+
+namespace {
+
+constexpr int kProtoMajor = 1;
+constexpr int kProtoMinor = 3;
+
+}  // namespace
+
+// A browser tab cannot open the raw TCP socket the native half uses, but it is
+// not limited to a single network connection either: a tab may hold several
+// WebSockets at once, so a bot is simply a second WebSocket to the same server
+// the host is already talking to. The transport is the only part that differs
+// -- handshake order, framing, line splitting and the keepalive are all the
+// shared code above, and the call sites in MainMenu never notice.
+struct BotSocketHandle {
+    EMSCRIPTEN_WEBSOCKET_T socket;
+    NetBotConnection* owner;
+
+    // The callbacks are static members of this struct rather than free
+    // functions so that NetBotConnection's `friend struct BotSocketHandle`
+    // declaration covers them: they need to reach private state (nick,
+    // roomCreator, incoming, sockfd) that the public interface deliberately
+    // does not expose. Being static member functions they are ordinary
+    // function pointers, which is all emscripten_websocket_set_*_callback
+    // wants.
+    static EM_BOOL OnOpen(int eventType, const EmscriptenWebSocketOpenEvent* e,
+                          void* userData);
+    static EM_BOOL OnMessage(int eventType, const EmscriptenWebSocketMessageEvent* e,
+                             void* userData);
+    static EM_BOOL OnClose(int eventType, const EmscriptenWebSocketCloseEvent* e,
+                           void* userData);
+    static EM_BOOL OnError(int eventType, const EmscriptenWebSocketErrorEvent* e,
+                           void* userData);
+};
+
+EM_BOOL BotSocketHandle::OnOpen(int, const EmscriptenWebSocketOpenEvent*, void* userData) {
+    BotSocketHandle* handle = static_cast<BotSocketHandle*>(userData);
+    if (!handle || !handle->owner) return EM_TRUE;
+    NetBotConnection* bot = handle->owner;
+
+    // Native JoinRoom sends these three the moment connect() returns. A
+    // WebSocket is not usable until its onopen fires -- after JoinRoom has
+    // already returned -- so the same handshake moves here instead.
+    //
+    // BOT is sent before JOIN and its answer is not waited for: a server that
+    // enforces a bot cap answers asynchronously (HandleLine watches for
+    // BOT_LIMIT_REACHED and sets rejectedByServer, which disconnects), and an
+    // older server that has never heard of BOT just answers UNKNOWN_COMMAND
+    // and otherwise ignores it, so this is safe to send unconditionally.
+    // Sending it first, ahead of JOIN, means a capped bot never actually
+    // takes a room seat before it is turned away.
+    if (!bot->SendLine("NICK " + bot->nick) ||
+        !bot->SendLine("BOT") ||
+        !bot->SendLine("JOIN " + bot->roomCreator + " " + bot->nick)) {
+        bot->Leave();
+    }
+    return EM_TRUE;
+}
+
+EM_BOOL BotSocketHandle::OnMessage(int, const EmscriptenWebSocketMessageEvent* e,
+                                   void* userData) {
+    BotSocketHandle* handle = static_cast<BotSocketHandle*>(userData);
+    if (!handle || !handle->owner) return EM_TRUE;
+    if (!e->data || e->numBytes == 0) return EM_TRUE;
+
+    // Append the bytes and stop: Update()'s line-splitting loop does the rest.
+    // The server newline-terminates both lobby text and in-game binary frames,
+    // and HandleLine's myPlayerId != 0 gate already tells a game frame from a
+    // lobby line, so there is nothing for a NetworkClient-style IN_GAME-aware
+    // parser to add here -- reimplementing one would just be a second,
+    // divergent copy of the same framing logic.
+    handle->owner->incoming.append(reinterpret_cast<const char*>(e->data), e->numBytes);
+    return EM_TRUE;
+}
+
+EM_BOOL BotSocketHandle::OnClose(int, const EmscriptenWebSocketCloseEvent*, void* userData) {
+    BotSocketHandle* handle = static_cast<BotSocketHandle*>(userData);
+    if (!handle || !handle->owner) return EM_TRUE;
+    // Mark the connection dead and do nothing else. The BotSocketHandle that
+    // carries this very userData is freed by Leave(), so tearing anything
+    // down here would race a Leave() that is about to run -- or already has
+    // -- and touch freed memory. Clearing sockfd is the whole job: it is what
+    // IsConnected() reads, and Leave() still frees the handle when it runs.
+    handle->owner->sockfd = -1;
+    return EM_TRUE;
+}
+
+EM_BOOL BotSocketHandle::OnError(int, const EmscriptenWebSocketErrorEvent*, void* userData) {
+    BotSocketHandle* handle = static_cast<BotSocketHandle*>(userData);
+    if (!handle || !handle->owner) return EM_TRUE;
+    // Same minimal treatment as OnClose. A socket error is followed by a close
+    // event, but not always before some other code notices, so the dead flag
+    // is set here as well; real teardown is still exclusively Leave()'s job.
+    handle->owner->sockfd = -1;
+    return EM_TRUE;
+}
+
+bool NetBotConnection::SendLine(const std::string& command) {
+    if (sockfd < 0) return false;
+    const std::string line =
+        "FB/" + std::to_string(kProtoMajor) + "." + std::to_string(kProtoMinor) +
+        " " + command + "\n";
+    lastSendTicks = SDL_GetTicks();
+    const EMSCRIPTEN_RESULT result =
+        emscripten_websocket_send_utf8_text(sockfd, line.c_str());
+    if (result != EMSCRIPTEN_RESULT_SUCCESS) {
+        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "netbot %s: send failed (%d)",
+                    nick.c_str(), static_cast<int>(result));
+        return false;
+    }
+    return true;
+}
+
+bool NetBotConnection::JoinRoom(const std::string& host, int port,
+                                const std::string& roomCreator,
+                                const std::string& botNick) {
+    Leave();
+
+    // Stash the names the handshake needs before the connection even opens:
+    // on WASM the NICK/BOT/JOIN commands cannot go out until the socket's
+    // onopen fires, which is long after this function has returned, so
+    // OnOpen reaches back here for both.
+    nick = botNick;
+    this->roomCreator = roomCreator;
+    myPlayerId = 0;
+    rejectedByServer = false;
+    roster.clear();
+    gameMessages.clear();
+    incoming.clear();
+
+    // Browsers block mixed content outright, so the scheme has to follow the
+    // page's own: wss:// when served over HTTPS, ws:// otherwise. This is the
+    // same check NetworkClient::Connect uses, and getting it wrong means the
+    // browser refuses the connection before any bytes move.
+    const char* scheme = (EM_ASM_INT({ return location.protocol === 'https:' ? 1 : 0; }))
+                         ? "wss://" : "ws://";
+    std::string wsUrl = scheme;
+    wsUrl += host;
+    wsUrl += ":";
+    wsUrl += std::to_string(port);
+
+    BotSocketHandle* handle = new BotSocketHandle();
+    handle->owner = this;
+
+    EmscriptenWebSocketCreateAttributes attrs;
+    emscripten_websocket_init_create_attributes(&attrs);
+    attrs.url = wsUrl.c_str();
+    attrs.protocols = nullptr;
+    attrs.createOnMainThread = EM_TRUE;
+
+    EMSCRIPTEN_WEBSOCKET_T ws = emscripten_websocket_new(&attrs);
+    if (ws <= 0) {
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
+                     "netbot %s: failed to create WebSocket", nick.c_str());
+        delete handle;
+        // sockfd is still -1 from Leave() above, so IsConnected() stays false.
+        return false;
+    }
+
+    handle->socket = ws;
+    wsHandle = handle;
+    // Emscripten's socket type is just an int and valid handles are > 0, so
+    // the handle is stored in sockfd exactly as a native fd would be. That
+    // keeps the inlined IsConnected() (sockfd >= 0) correct on both platforms
+    // with no change to the method; the only oddity is that this "fd" is also
+    // the value the websocket API takes back in its calls.
+    sockfd = ws;
+
+    emscripten_websocket_set_onopen_callback(ws, handle, BotSocketHandle::OnOpen);
+    emscripten_websocket_set_onmessage_callback(ws, handle, BotSocketHandle::OnMessage);
+    emscripten_websocket_set_onclose_callback(ws, handle, BotSocketHandle::OnClose);
+    emscripten_websocket_set_onerror_callback(ws, handle, BotSocketHandle::OnError);
+
+    return true;
+}
+
+void NetBotConnection::Drain() {
+    // Nothing to poll: WebSocket bytes arrive through OnMessage, which appends
+    // them straight onto `incoming`. Update() still splits that buffer into
+    // lines on every platform.
+}
+
+bool NetBotConnection::SendGamePayload(const std::string& payload) {
+    if (sockfd < 0 || myPlayerId == 0) return false;
+    std::string framed;
+    framed.reserve(payload.size() + 2);
+    framed.push_back(static_cast<char>(myPlayerId));
+    framed.append(payload);
+    framed.push_back('\n');
+    lastSendTicks = SDL_GetTicks();
+    // This has to be a binary frame: that is what routes it to the server's
+    // process_msg_prio instead of process_msg, which would expect the
+    // "FB/1.3 " text-protocol prefix that game messages deliberately do not
+    // carry (the same reason NetworkClient::SendGameData sends binary).
+    const EMSCRIPTEN_RESULT result =
+        emscripten_websocket_send_binary(sockfd, framed.data(),
+                                         static_cast<uint32_t>(framed.size()));
+    if (result != EMSCRIPTEN_RESULT_SUCCESS) {
+        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "netbot %s: game send failed (%d)",
+                    nick.c_str(), static_cast<int>(result));
+        return false;
+    }
+    return true;
+}
+
+void NetBotConnection::Leave() {
+    BotSocketHandle* handle = static_cast<BotSocketHandle*>(wsHandle);
+    if (handle) {
+        // Tell the server we are going while the socket is still open -- a bot
+        // that vanishes without PART is left sitting in the lobby forever.
+        // sockfd is the test, not handle->socket: if onclose has already run
+        // it set sockfd to -1 and there is no peer left to tell.
+        if (sockfd >= 0) SendLine("PART");
+
+        // Detach before tearing down so a callback that fires during
+        // close/delete finds owner == nullptr and does nothing instead of
+        // touching a connection that is being destroyed.
+        handle->owner = nullptr;
+        if (handle->socket > 0) {
+            // Taken from handle->socket, never from sockfd: onclose may have
+            // cleared sockfd already, and the socket still has to be closed
+            // and deleted either way before the handle itself is freed.
+            emscripten_websocket_close(handle->socket, 1000, "");
+            emscripten_websocket_delete(handle->socket);
+        }
+        delete handle;
+        wsHandle = nullptr;
+    }
+    sockfd = -1;
+    myPlayerId = 0;
+    roster.clear();
+    gameMessages.clear();
+    incoming.clear();
+}
 
 #endif  // __WASM_PORT__

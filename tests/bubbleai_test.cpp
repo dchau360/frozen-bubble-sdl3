@@ -10,7 +10,6 @@
 #include "bubblegame_internal.h"
 
 #include <cstdio>
-#include <set>
 
 static int failures = 0;
 #define CHECK(expression) do { \
@@ -46,6 +45,30 @@ static void FillRows(BubbleArray &board, int through, int colour) {
     for (int row = 0; row <= through; ++row)
         for (int col = 0; col < (int)board.bubbleMap[row].size(); ++col)
             board.bubbleMap[row][col].bubbleId = colour;
+}
+
+// Hex adjacency for a board, using the same oddswap convention as the game.
+static bool TestAdjacent(const BubbleArray &board, int row, int col,
+                         int otherRow, int otherCol) {
+    const int oddswap = board.bubbleMap[0].size() == 8 ? 0 : 1;
+    for (auto [dr, dc] : GridNeighborOffsets(row, oddswap)) {
+        if (row + dr == otherRow && col + dc == otherCol) return true;
+    }
+    return false;
+}
+
+// Same candidate-angle sweep ChooseShot runs, so a case can prove a given
+// cell is actually reachable by some angle.
+static bool ReachableAt(BubbleArray &board, int colour, bool isMini,
+                        int row, int col) {
+    for (int i = 0; i < 61; ++i) {
+        const float angle = 0.1f + (float(PI) - 0.2f) * (float)i / 60.0f;
+        int r = -1, c = -1;
+        if (BubbleAI::PredictLanding(board, angle, colour, isMini, &r, &c) &&
+            r == row && c == col)
+            return true;
+    }
+    return false;
 }
 
 int main() {
@@ -180,8 +203,8 @@ int main() {
         unsigned rngB = 7;
         const auto planned = BubbleAI::ChooseShot(board, 6, false, BubbleAI::Skill::Hard, &rngB);
         CHECK(planned.valid);
-        // Same physical shot either way: the pop that just happened is worth
-        // 1000 points per bubble, which nothing here is large enough to beat.
+        // Same physical shot either way: the pop's base score dwarfs the
+        // lookahead credit, which only tips the total up.
         CHECK(planned.row == plain.row && planned.col == plain.col);
         // But it is credited more for the combo the known next bubble sets up.
         CHECK(planned.score > plain.score);
@@ -244,6 +267,137 @@ int main() {
         const auto shot = BubbleAI::ChooseShot(board, 6, true, BubbleAI::Skill::Hard, &rng);
         CHECK(shot.valid);
         CHECK(shot.score > 0);
+    }
+
+    // When nothing can pop, the cluster term is what picks the shot: the bot
+    // parks beside its own colour rather than anywhere else, because landing
+    // next to a matching bubble is the only way a dead shot can set up a later
+    // pop. With a single reachable colour-6 bubble the best any angle can do
+    // is a pair, so the chosen cell must touch that bubble.
+    {
+        BubbleArray board;
+        ShapeCentreBoard(board);
+        FillRows(board, 2, 0);
+        board.bubbleMap[3][3].bubbleId = 6;
+        // No colour 9 exists anywhere, so the lookahead cannot add anything
+        // and the cluster term above decides the shot on its own.
+        board.nextBubble = 9;
+
+        unsigned rng = 4242;
+        const auto shot = BubbleAI::ChooseShot(board, 6, false,
+                                               BubbleAI::Skill::Hard, &rng);
+        CHECK(shot.valid);
+        // The premise: this shot cannot complete a group of three.
+        CHECK(BubbleAI::ScoreLanding(board, shot.row, shot.col, 6) == 0);
+
+        bool besideOwnColour = false;
+        for (int r = 0; r < 13; ++r)
+            for (int c = 0; c < (int)board.bubbleMap[r].size(); ++c)
+                if (board.bubbleMap[r][c].bubbleId == 6 &&
+                    TestAdjacent(board, shot.row, shot.col, r, c))
+                    besideOwnColour = true;
+        CHECK(besideOwnColour);
+    }
+
+    // A smaller pop that cuts a stem loose is worth more than a bigger pop
+    // that leaves the board hanging from the ceiling. The two landings sit on
+    // one board; the colour-2 tail only falls when the colour-7 stem above it
+    // goes, so it counts against that landing and no other.
+    //
+    // The margins are deliberate. The landings trade two popped bubbles
+    // against two detached ones, and sit in the same row and both on an edge,
+    // so every other term cancels and the assertion holds if and only if
+    // kDetached > kPopped -- exactly the claim the weights are meant to
+    // encode. An earlier version traded one popped bubble against four
+    // detached and so still passed with kDetached as low as 5, which is
+    // *below* kPopped and inverts the whole point of the term.
+    {
+        BubbleArray board;
+        ShapeCentreBoard(board);
+        // Left side: a two-bubble colour-7 stem at the ceiling with a
+        // colour-2 tail hanging off it. Landing at (1,0) pops the stem of
+        // three and drops the tail of two.
+        board.bubbleMap[0][0].bubbleId = 7;
+        board.bubbleMap[0][1].bubbleId = 7;
+        board.bubbleMap[1][1].bubbleId = 2;
+        board.bubbleMap[2][1].bubbleId = 2;
+        // Right side: a five-bubble colour-7 run ending in the landing (1,6),
+        // which pops five and leaves nothing dangling.
+        board.bubbleMap[0][5].bubbleId = 7;
+        board.bubbleMap[0][6].bubbleId = 7;
+        board.bubbleMap[0][7].bubbleId = 7;
+        board.bubbleMap[1][5].bubbleId = 7;
+
+        const int pop5 = BubbleAI::ScoreShot(board, 1, 6, 7);
+        const int pop3Cut2 = BubbleAI::ScoreShot(board, 1, 0, 7);
+        CHECK(pop3Cut2 > pop5);
+    }
+
+    // A bubble parked on the ceiling row is a permanent anchor that can never
+    // be shaken loose by a cut, so the bot mildly avoids it: the same shot one
+    // row lower scores better even though neither pops anything.
+    {
+        BubbleArray board;
+        ShapeCentreBoard(board);
+        // Both landings are isolated (no neighbour of the launch colour) and
+        // mid-row, so only the row differs.
+        CHECK(BubbleAI::ScoreShot(board, 1, 3, 5) > BubbleAI::ScoreShot(board, 0, 3, 5));
+    }
+
+    // The centre lane is where a deep column is most likely to reach the
+    // floor, so the bot prefers the outside of a row when all else is equal.
+    {
+        BubbleArray board;
+        ShapeCentreBoard(board);
+        // Same row, same isolated landing; only the column differs.
+        CHECK(BubbleAI::ScoreShot(board, 1, 0, 5) > BubbleAI::ScoreShot(board, 1, 3, 5));
+    }
+
+    // The headline change: a deep pop near the floor is worth less than
+    // building a cluster high up, because depth is what actually ends a
+    // round. The bot declines the three-pop at the danger line in favour of a
+    // pair beside its own colour near the ceiling. nextBubble is a colour that
+    // exists nowhere, so the lookahead cannot muddy the comparison.
+    {
+        BubbleArray board;
+        ShapeCentreBoard(board);
+        FillRows(board, 2, 0);
+        board.bubbleMap[3][3].bubbleId = 6;   // high cluster target
+        board.bubbleMap[12][5].bubbleId = 6;  // deep pair: landing at (11,4)
+        board.bubbleMap[12][6].bubbleId = 6;  // pops three, near the floor
+        board.nextBubble = 9;
+
+        // Both the high pair and the deep pop are genuinely on offer; without
+        // this the case would be vacuous.
+        CHECK(ReachableAt(board, 6, false, 3, 2));
+        CHECK(ReachableAt(board, 6, false, 11, 4));
+
+        unsigned rng = 4242;
+        const auto shot = BubbleAI::ChooseShot(board, 6, false,
+                                               BubbleAI::Skill::Hard, &rng);
+        CHECK(shot.valid);
+        // It chose the high cluster, not the deep pop.
+        CHECK(shot.row == 3);
+        CHECK(BubbleAI::ScoreLanding(board, shot.row, shot.col, 6) == 0);
+    }
+
+    // The counterweight to the cluster preference: when the board is already
+    // deep, a real pop is worth far more than another cluster, and the bot
+    // takes it. A bot that only built clusters while the rows descended would
+    // lose here; the pop's own weight keeps it honest.
+    {
+        BubbleArray board;
+        ShapeCentreBoard(board);
+        FillRows(board, 8, 0);
+        board.bubbleMap[9][3].bubbleId = 6;  // mid-board pair: landing at
+        board.bubbleMap[9][4].bubbleId = 6;  // (9,2) or (9,5) pops three
+        board.nextBubble = 9;
+
+        unsigned rng = 4242;
+        const auto shot = BubbleAI::ChooseShot(board, 6, false,
+                                               BubbleAI::Skill::Hard, &rng);
+        CHECK(shot.valid);
+        CHECK(BubbleAI::ScoreLanding(board, shot.row, shot.col, 6) >= 3);
     }
 
     SDL_Quit();

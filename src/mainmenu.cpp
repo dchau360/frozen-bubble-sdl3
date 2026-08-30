@@ -705,6 +705,7 @@ void MainMenu::ReturnToNetLobby() {
     networkInputMode = 0;
     networkGameStarting = false;
     wasmSyncWaitStart = 0;
+    wasmBotWaitStart = 0;
     pendingLobbyConnect = false;
     SDL_StopTextInput(SDL_GetKeyboardFocus());
 

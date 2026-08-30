@@ -268,6 +268,7 @@ private:
     bool networkInLobby = false;
     bool networkGameStarting = false; // Track if game start has been initiated
     Uint32 wasmSyncWaitStart = 0; // WASM joiner: timestamp when we started waiting for sync messages
+    Uint32 wasmBotWaitStart = 0;  // WASM leader: timestamp when we started waiting for our bots to enter the game
     bool serverHosting = false;
     int serverPid = -1;
     char networkHost[256] = "127.0.0.1";

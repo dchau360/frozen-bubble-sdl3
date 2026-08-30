@@ -58,6 +58,12 @@ bool PredictLanding(BubbleArray &board, float angle, int colour, bool isMini,
 // whatever that detaches from the ceiling. Zero when the group is under three.
 int ScoreLanding(const BubbleArray &board, int row, int col, int colour);
 
+// The ranking ChooseShot applies to one landing, minus the lookahead
+// term. Exposed so tests bind to the real weights instead of restating
+// them -- a test that restates the formula only ever proves the test
+// file's own arithmetic.
+int ScoreShot(const BubbleArray &board, int row, int col, int colour);
+
 // The angle to fire at. `rng` is advanced, so a caller keeps its own stream
 // and bots stay independent of the game's own rand() sequence.
 Shot ChooseShot(BubbleArray &board, int colour, bool isMini, Skill skill,
