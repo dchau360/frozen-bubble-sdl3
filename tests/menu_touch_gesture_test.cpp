@@ -62,10 +62,13 @@
 #include "gamesettings.h"
 #include "mainmenu.h"
 #include "mainmenu_internal.h"
+#include "menulist.h"
+#include "networkclient.h"
 #include "platform.h"
 
 #include <cstdio>
 #include <memory>
+#include <string>
 #include <vector>
 
 static int failures = 0;
@@ -123,6 +126,21 @@ struct MainMenuTestAccess {
             ++seen;
         }
         return 0;
+    }
+    // Renders the real LAN/Net server list panel with a caller-chosen public
+    // server list, so the "Set name" section's position under test is
+    // whatever ServerListPanelRender really lays out for that server count,
+    // not a hand-built stand-in for it.
+    static void SetPublicServers(MainMenu& menu, std::vector<ServerInfo> servers) {
+        menu.publicServers = std::move(servers);
+    }
+    static void RenderServerList(MainMenu& menu, bool isLAN) {
+        menu.ServerListPanelRender(isLAN);
+    }
+    // Renders the real lobby action list -- "Create Game Room" among them --
+    // with no current game, matching a freshly-connected client.
+    static void RenderLobbyActions(MainMenu& menu) {
+        menu.NetPanelLobbyActionsRender();
     }
 };
 
@@ -315,6 +333,83 @@ int main() {
             CHECK(SDL_PollEvent(&ev) && ev.type == SDL_EVENT_KEY_DOWN);
             CHECK(ev.key.key == SDLK_LEFT);
         }
+    }
+
+    // --- NetPanelLobbyActionsRender: "Create Game Room" is touch-adjustable
+    // ---------------------------------------------------------------------
+    //
+    // Room size (kRoomSizes[netRoomSizeChoice]) used to be keyboard
+    // Left/Right only: a plain splitAdjust row's L/R split runs across the
+    // row's own raw midpoint, which for "Create Game Room  <  20 players  >"
+    // sits inside the "Create Game Room" label itself, so a tap meant to
+    // select/activate the row could instead silently step the room size (or
+    // vice versa) depending on which half of the label it landed on -- the
+    // same class of bug fixed earlier for Game speed, but with no safe tap
+    // target left for the row's own primary action at all. labelActivateKey
+    // fixes it by confining the L/R split to the drawn value block itself,
+    // leaving the label its own tap zone that still creates the room. This
+    // drives the real lobby render and checks the row now has all three
+    // zones, left-to-right, in the right order.
+    {
+        std::unique_ptr<MainMenu> menu = MainMenuTestAccess::Create(renderer);
+        MainMenuTestAccess::RenderLobbyActions(*menu);
+
+        const std::vector<SDL_Rect> rects = MainMenuTestAccess::RectsForIndex(*menu, 1);
+        CHECK(rects.size() == 3);
+        if (rects.size() == 3) {
+            CHECK(MainMenuTestAccess::ActivateKeyAt(*menu, 1, 0) == SDLK_RETURN);
+            CHECK(MainMenuTestAccess::ActivateKeyAt(*menu, 1, 1) == SDLK_LEFT);
+            CHECK(MainMenuTestAccess::ActivateKeyAt(*menu, 1, 2) == SDLK_RIGHT);
+
+            // Label zone, then the value's left half, then its right half --
+            // one uninterrupted row, nothing to fall between and hit none of
+            // the three.
+            CHECK(rects[0].x == menulist::kListDocked.x);
+            CHECK(rects[0].x + rects[0].w == rects[1].x);
+            CHECK(rects[1].x + rects[1].w == rects[2].x);
+        }
+    }
+
+    // --- ServerListPanelRender: "Set name" pinned to the panel's own
+    // bottom, not wherever the server list happens to end ---------------
+    //
+    // "Set name" used to be the row list's own last row, so with few public
+    // servers it landed right under them near the top of an otherwise-empty
+    // panel instead of reading as anchored to the screen (reported live:
+    // wanted "at the very bottom, in its own section"). It is now a second,
+    // fixed-position menulist::List rendered below the scrollable server
+    // list. This drives the real ServerListPanelRender with two different
+    // server counts and checks that the section's position does not move
+    // with the content above it, and that its bottom edge lines up with the
+    // shared panel's own bottom edge (menulist::kListFull).
+    {
+        auto setNameRowY = [&](int serverCount) -> int {
+            std::unique_ptr<MainMenu> menu = MainMenuTestAccess::Create(renderer);
+            std::vector<ServerInfo> servers;
+            for (int i = 0; i < serverCount; i++) {
+                servers.push_back({"host" + std::to_string(i), 1511, "", 10});
+            }
+            MainMenuTestAccess::SetPublicServers(*menu, servers);
+            MainMenuTestAccess::RenderServerList(*menu, false);
+            int lastIdx = 1 + serverCount;
+            const std::vector<SDL_Rect> rects =
+                MainMenuTestAccess::RectsForIndex(*menu, lastIdx);
+            return rects.empty() ? -1 : rects[0].y;
+        };
+
+        const int yFewServers = setNameRowY(1);
+        const int yManyServers = setNameRowY(5);
+        CHECK(yFewServers >= 0 && yManyServers >= 0);
+
+        // The defect this pins: as an ordinary last row, this y would shift
+        // with how many rows came before it. Pinned to its own section, it
+        // must not move at all between a 1-server and a 5-server list.
+        CHECK(yFewServers == yManyServers);
+
+        // And that fixed position must actually be the panel's own bottom
+        // edge -- not just some other constant a future refactor could drift
+        // away from the visible bottom without this test noticing.
+        CHECK(yFewServers + menulist::kRowH == menulist::kListFull.y + menulist::kListFull.h);
     }
 
     // --- IsWithinMenuTapDebounce -----------------------------------------

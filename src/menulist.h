@@ -145,8 +145,19 @@ public:
     // already used informally. splitAdjust wraps the value in "<  >" and
     // marks the row so a second tap on either half steps it, matching the
     // existing PanelTapRow::splitAdjust contract.
+    //
+    // labelActivateKey is for the rare row where the label is its own
+    // action distinct from the value being stepped (the lobby's "Create
+    // Game Room  <  N players  >"): 0 (default) behaves exactly as before
+    // -- the whole row is the value, same as Game speed or Victories limit.
+    // Nonzero confines the L/R split to the drawn value block itself and
+    // gives everything left of it its own tap zone sending this key, so a
+    // tap on the label still activates the row while a tap on the value
+    // adjusts it, instead of the value's own left half eating into the
+    // label the way a plain splitAdjust row's does.
     void Row(int index, const std::string& label, const std::string& value = "",
-             bool emphasize = true, bool splitAdjust = false);
+             bool emphasize = true, bool splitAdjust = false,
+             SDL_Keycode labelActivateKey = 0);
 
     // Same as Row(), but the value is drawn in an explicit colour instead of
     // the on/off convention -- for a value whose meaning is a hue, not a
@@ -180,6 +191,13 @@ private:
         bool hasPrefix;
         SDL_Color prefixColor;
         SDL_Keycode prefixKey;
+        // Nonzero only for a row whose label is its own action, separate
+        // from the value it steps (the lobby's "Create Game Room  <  N
+        // players  >" -- unlike every other splitAdjust row, where the
+        // whole row IS the value, this one needs a tap on the label itself
+        // to still create the room, not just adjust the count). See End()'s
+        // splitAdjust branch and Row()'s labelActivateKey parameter.
+        SDL_Keycode labelActivateKey;
     };
     SDL_Rect viewport_;
     int selectedIndex_;
