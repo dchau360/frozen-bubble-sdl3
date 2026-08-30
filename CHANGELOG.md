@@ -1,5 +1,21 @@
 # Changelog
 
+## v2.4.49
+
+- **Fix: an undershot swipe (especially in the game room) could still
+  change the currently highlighted setting's value.** v2.4.48 stopped a
+  swipe from being suppressed once it traveled far enough, but a vertical
+  swipe attempt that falls short of the navigation threshold releases the
+  same way a tap does — and since most rows are shorter than that travel,
+  it commonly lands right back on the row it started from. Because that
+  row is already selected, the "second tap on the highlighted row
+  activates it" rule fired, changing the value exactly as if it had been
+  deliberately double-tapped (most visible on the game room's Bots/Skill
+  rows, but affecting every row type). Activating an already-selected row
+  from a release now additionally requires the touch stayed within
+  ordinary tap-jitter range; past that it does nothing, whether or not it
+  ever cleared the swipe-navigation threshold either.
+
 ## v2.4.48
 
 - **Fix: v2.4.47 caused a black screen on iPhone on itch.io.** That
