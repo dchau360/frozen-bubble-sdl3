@@ -5,7 +5,9 @@
 #include "localmultiplayer_settings.h"
 #include "platform.h"
 
+#include <algorithm>
 #include <cstdio>
+#include <limits>
 #include <set>
 #include <utility>
 
@@ -907,6 +909,45 @@ int main() {
         CHECK(std::find(fromPlayer.begin(), fromPlayer.end(), 1) != fromPlayer.end());
         CHECK(std::find(fromPlayer.begin(), fromPlayer.end(), 3) != fromPlayer.end());
         CHECK(std::find(fromPlayer.begin(), fromPlayer.end(), 2) == fromPlayer.end());
+    }
+
+    // --- SmoothTowards: damps the aim guide's per-frame deltaScale jitter --
+    //
+    // SDL_GetTicks() has whole-millisecond resolution, so a steady 60fps
+    // frame's own "elapsed" alternates between 16ms and 17ms every single
+    // frame -- an exact, persistent oscillation in deltaScale (see
+    // FrozenBubble::RunOneFrame), not incidental noise. DrawAimGuide
+    // re-simulates its entire multi-hundred-step preview path from scratch
+    // every frame, so that oscillation used to accumulate over the path and
+    // visibly shimmer the dotted line every frame even with the aim held
+    // perfectly still (reported live: "the autoaim display is gittery").
+    {
+        // The 16/17ms pair at 60fps and speedMultiplier=1.0: deltaScale
+        // alternates between (16/16.667) = 0.96 and (17/16.667) = 1.02.
+        const float lo = 0.96f, hi = 1.02f;
+        float smoothed = 1.0f;
+        float minSeen = smoothed, maxSeen = smoothed;
+        for (int i = 0; i < 40; i++) {
+            smoothed = SmoothTowards(smoothed, (i % 2 == 0) ? lo : hi);
+            minSeen = std::min(minSeen, smoothed);
+            maxSeen = std::max(maxSeen, smoothed);
+        }
+        // The defect this pins: passed straight through (rate=1.0, the
+        // pre-fix behavior of using deltaScale raw), the smoothed value
+        // would alternate across the whole 0.96-1.02 range every step. The
+        // fix must hold it far tighter than that once settled.
+        CHECK(maxSeen - minSeen < (hi - lo) * 0.5f);
+
+        // It must still track a real, sustained change (an actual
+        // frame-rate drop, or the player raising the speed-multiplier
+        // setting) within a handful of frames, not lag indefinitely.
+        float tracking = 1.0f;
+        for (int i = 0; i < 30; i++) tracking = SmoothTowards(tracking, 3.0f);
+        CHECK(fabsf(tracking - 3.0f) < 0.01f);
+
+        // A non-finite target (a stalled/garbage deltaScale reading) must
+        // leave the running smoothed value alone rather than poisoning it.
+        CHECK(SmoothTowards(1.5f, std::numeric_limits<float>::quiet_NaN()) == 1.5f);
     }
 
     SDL_DestroyRenderer(renderer);
