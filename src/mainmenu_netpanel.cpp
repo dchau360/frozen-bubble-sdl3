@@ -212,6 +212,7 @@ void MainMenu::NetPanelRender() {
                 networkInputMode = 0;
                 networkGameStarting = false;
                 wasmSyncWaitStart = 0;
+                wasmBotWaitStart = 0;
                 RefreshFollowRegistration();
                 netClient->RequestList();
                 lastListRequest = SDL_GetTicks();
@@ -272,6 +273,37 @@ void MainMenu::NetPanelRender() {
                 }
                 SDL_Log("WASM joiner: proceeding with queue=%d timedOut=%d", (int)qSize, timedOut);
                 wasmSyncWaitStart = 0;
+            } else if (!lobbyBots.empty()) {
+                // WASM leader hosting bots. A native leader blocks in
+                // LEADER_CHECK_GAME_START until every other connection has
+                // acknowledged, pumping its bots through leaderWaitTick as it
+                // goes; that loop is compiled out on WASM, so this client
+                // would otherwise walk straight into SyncNetworkLevel and
+                // start broadcasting b|/N/T while its own bots are still
+                // lobby-side. The server only relays those to connections in
+                // prio mode, so a bot that had not answered yet would miss
+                // the level entirely and play a different board all round.
+                //
+                // Waiting here rather than in a loop is the whole point: a
+                // bot answers from its WebSocket callback, and callbacks only
+                // fire when we return to the browser's event loop. A blocking
+                // wait could never observe the thing it waits for.
+                bool allBotsIn = true;
+                for (const auto& bot : lobbyBots) {
+                    if (bot && !bot->GameStarted()) { allBotsIn = false; break; }
+                }
+                if (!allBotsIn) {
+                    if (wasmBotWaitStart == 0) wasmBotWaitStart = SDL_GetTicks();
+                    // Give up eventually: a bot that never answers must not
+                    // strand the human players in the lobby. Starting without
+                    // it costs one desynced board, not the whole game.
+                    if (SDL_GetTicks() - wasmBotWaitStart <= 3000) {
+                        return;  // Come back next frame, after PumpLobbyBots
+                    }
+                    SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
+                                "WASM leader: bots did not enter the game in time, starting anyway");
+                }
+                wasmBotWaitStart = 0;
             }
 #endif
             SDL_Log("Game starting - transitioning to network game");
@@ -995,20 +1027,12 @@ void MainMenu::NetPanelLobbyActionsRender() {
                 const int maxBots = MaxRoomBots((int)currentGame->players.size(),
                                                 currentGame->maxPlayers, netRoomBotCount);
                 char botsText[64];
-#ifdef __WASM_PORT__
-                // A bot needs its own raw TCP connection (netbot.cpp), which
-                // a browser tab cannot open -- say so on the row itself
-                // rather than only after a host tries and gets a status-line
-                // explanation (MenuLeftRightKey / GameRoomHostReturn).
-                snprintf(botsText, sizeof(botsText), "Bots: desktop & Android only");
-#else
                 if (maxBots <= 0 && netRoomBotCount == 0) {
                     snprintf(botsText, sizeof(botsText), "Bots: 0  (room full)");
                 } else {
                     snprintf(botsText, sizeof(botsText), "Bots: < %d >  of %d",
                              netRoomBotCount, maxBots);
                 }
-#endif
                 char skillText[64];
                 snprintf(skillText, sizeof(skillText), "Skill: < %s >",
                          LocalMPBotSkillName(netRoomBotSkill));

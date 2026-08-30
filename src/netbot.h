@@ -25,6 +25,10 @@
 #include <string>
 #include <vector>
 
+#ifdef __WASM_PORT__
+struct BotSocketHandle;  // defined in netbot.cpp's WASM half; see friend decl below
+#endif
+
 // The id-to-nickname map the server sends when a game starts, as
 // <idByte><nick>,<idByte><nick>,... Split out from the connection so the
 // parsing -- a binary format with an embedded separator, where a mis-read
@@ -159,6 +163,24 @@ private:
     // Last time anything was written, for the keepalive below.
     unsigned lastSendTicks = 0;
     std::string nick;
+#ifdef __WASM_PORT__
+    // Who created the room this bot is joining. Native consumes it inside
+    // JoinRoom and never needs it again; a WebSocket is asynchronous, so the
+    // JOIN command cannot go out until the socket's onopen fires -- long
+    // after JoinRoom has returned -- and the name has to live here until
+    // then. Guarded because native never reads it and would otherwise warn
+    // about an unused private field.
+    std::string roomCreator;
+    // BotSocketHandle* -- the Emscripten socket plus the back-pointer the
+    // callbacks use to reach this object. void* keeps the emscripten headers
+    // out of this file; only the WASM half of netbot.cpp casts it back.
+    void* wsHandle = nullptr;
+    // The callbacks are static members of BotSocketHandle and have to reach
+    // the private state above (send the join handshake, append to `incoming`,
+    // clear `sockfd` on close), so the struct is a friend. It is only defined
+    // in the WASM half of netbot.cpp.
+    friend struct BotSocketHandle;
+#endif
     std::string incoming;                       // partial line carry-over
     std::map<int, std::string> roster;          // player id -> nick
     std::deque<std::pair<int, std::string>> gameMessages;
