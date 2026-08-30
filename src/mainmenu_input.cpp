@@ -563,7 +563,29 @@ bool MainMenu::HandlePanelTap(float lx, float ly, float verticalDrift) {
         SDL_PushEvent(&ev);
         return true;
     }
-    return false;
+
+    // The tap hit no row. Returning false here means "this panel doesn't
+    // hit-test taps", and the caller answers that by injecting RETURN
+    // (tap anywhere confirms) -- which activates whatever row is currently
+    // SELECTED. On a panel that does hit-test its rows that is badly wrong:
+    // a near-miss doesn't do nothing, it re-fires the selected row.
+    //
+    // Reported live on the network game room's bot rows, where it is a trap
+    // with no way out. Those rows are 18 logical units tall (the band under
+    // "ESC Leave room" is all the space left on that panel), which on a
+    // phone is a couple of millimetres, so with "Bots" selected almost every
+    // tap aimed at another row misses everything, lands here, and injects
+    // RETURN -- which cycles the bot count again. Trying to move somewhere
+    // else just added another bot, over and over, with the selection never
+    // leaving the row: "I can't navigate out of that location". The local
+    // multiplayer panel's own Bots row does the same thing for the same
+    // reason.
+    //
+    // So a miss is consumed once this panel registered any row at all.
+    // Panels that register none still report false and keep the original
+    // tap-anywhere-to-confirm behaviour, which is the only thing that makes
+    // them tappable.
+    return !panelTapRows.empty();
 }
 
 bool MainMenu::IsSteppedRowAt(float lx, float ly) const {

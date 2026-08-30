@@ -118,6 +118,20 @@ struct MainMenuTestAccess {
             if (row.index == index) out.push_back(row.rect);
         return out;
     }
+    static size_t RowCount(const MainMenu& menu) {
+        return menu.panelTapRows.size();
+    }
+    // Whether any registered row actually covers a point -- lets a test
+    // assert "this really is a miss" instead of trusting a guessed
+    // coordinate to stay outside every row as layouts change.
+    static bool AnyRowCovers(const MainMenu& menu, float x, float y) {
+        for (const auto& row : menu.panelTapRows) {
+            if (x < row.rect.x || x >= row.rect.x + row.rect.w) continue;
+            if (y < row.rect.y || y >= row.rect.y + row.rect.h) continue;
+            return true;
+        }
+        return false;
+    }
     static SDL_Keycode ActivateKeyAt(const MainMenu& menu, int index, size_t which) {
         size_t seen = 0;
         for (const auto& row : menu.panelTapRows) {
@@ -433,6 +447,59 @@ int main() {
         // edge -- not just some other constant a future refactor could drift
         // away from the visible bottom without this test noticing.
         CHECK(yFewServers + menulist::kRowH == menulist::kListFull.y + menulist::kListFull.h);
+    }
+
+    // --- A tap that lands on no row, on a panel that hit-tests its rows ---
+    //
+    // The defect this pins, and the one actually reported: the caller
+    // (FrozenBubble::HandleInput, SDL_EVENT_FINGER_UP) falls back to
+    // "tap anywhere confirms" whenever HandlePanelTap returns false, by
+    // injecting RETURN -- and RETURN activates whatever row is currently
+    // SELECTED. So on a panel that does hit-test its own rows, a tap that
+    // MISSED every row did not do nothing: it re-fired the selected row.
+    //
+    // On the network game room's bot rows that is a trap with no way out.
+    // Those rows are 18 logical units tall (mainmenu_netpanel.cpp, the band
+    // under "ESC Leave room"), which on a phone-sized canvas is a couple of
+    // millimetres -- so with "Bots" selected, most taps aimed at anything
+    // else miss every row, fall through here, and inject RETURN, which
+    // cycles the bot count again (mainmenu_input.cpp, kRoomBots). Every
+    // attempt to move somewhere else just changed the bot count instead,
+    // which is exactly what "I can't navigate out of that location" is.
+    // The same fall-through does the same thing on the local-multiplayer
+    // panel's own Bots row.
+    //
+    // A miss on such a panel must be consumed and do nothing. Panels that
+    // register no rows at all keep the tap-anywhere-confirms behaviour --
+    // that is what the panelTapRows.empty() half of the fix preserves, and
+    // what the second block below pins.
+    {
+        std::unique_ptr<MainMenu> menu = MainMenuTestAccess::Create(renderer);
+        MainMenuTestAccess::RenderLobbyActions(*menu);
+        CHECK(MainMenuTestAccess::RowCount(*menu) > 0);
+
+        // Asserted, not assumed: if a layout change ever puts a row here,
+        // this test says so rather than silently testing nothing.
+        const float missX = 600.f, missY = 474.f;
+        CHECK(!MainMenuTestAccess::AnyRowCovers(*menu, missX, missY));
+
+        SDL_PumpEvents();
+        for (SDL_Event drain; SDL_PollEvent(&drain); ) {}
+
+        CHECK(menu->HandlePanelTap(missX, missY) == true);  // consumed
+        SDL_Event ev;
+        CHECK(!SDL_PollEvent(&ev));  // and nothing activated
+    }
+
+    // The other side of that fix: a panel that hit-tests nothing (no rows
+    // registered this frame) must still let the caller treat a tap as
+    // "confirm", or every such screen becomes untappable.
+    {
+        std::unique_ptr<MainMenu> menu = MainMenuTestAccess::Create(nullptr);
+        int selection = 0;
+        MainMenuTestAccess::BeginRows(*menu, &selection);
+        CHECK(MainMenuTestAccess::RowCount(*menu) == 0);
+        CHECK(menu->HandlePanelTap(100.f, 100.f) == false);
     }
 
     // --- IsWithinMenuTapDebounce -----------------------------------------
