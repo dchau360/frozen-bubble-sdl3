@@ -1,5 +1,21 @@
 # Changelog
 
+## v2.4.52
+
+- **Fix: the aim guide display was gittery.** `SDL_GetTicks()` has
+  whole-millisecond resolution, so a steady 60fps frame's own measured
+  "elapsed" alternates between 16ms and 17ms every single frame -- an
+  exact, persistent few-percent oscillation in `deltaScale`, not
+  incidental noise. The real bubble's own incremental per-frame movement
+  never shows this, but the aim guide re-simulates its entire
+  multi-hundred-step preview path from scratch every frame using that
+  same raw value, so the oscillation accumulated over the path length
+  and visibly shimmered the dotted line every frame even while the aim
+  was held perfectly still. The guide now uses a smoothed deltaScale
+  that damps that alternation while still tracking a real, sustained
+  change (an actual frame-rate drop, or the player changing the
+  speed-multiplier setting) within a handful of frames.
+
 ## v2.4.51
 
 - **Fix: v2.4.50 broke swipe-back on the LAN/Net screens.** v2.4.50 pinned
