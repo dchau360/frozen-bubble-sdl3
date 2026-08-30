@@ -701,8 +701,22 @@ void FrozenBubble::TouchToLogical(const SDL_Event *e, float *lx, float *ly) cons
 }
 
 MenuSwipeGesture ClassifyMenuSwipe(float dx, float dy, bool onSteppedRow) {
-    if (onSteppedRow) return MenuSwipeGesture::None;
-    if (dx < -40.f && fabsf(dy) < fabsf(dx)) return MenuSwipeGesture::Back;
+    // A stepped row's own left-half tap ("decrease") is indistinguishable
+    // from a deliberate "swipe back" once ordinary touch jitter is added --
+    // an ordinary tap can drift 40+ logical units on a narrow phone, past
+    // the Back threshold below -- so Back is suppressed on a stepped row.
+    // That collision is purely horizontal: a stepped row's own tap only
+    // ever reads which *half* (left/right) was touched, never how far up
+    // or down the finger moved. Up/Down must not be suppressed the same
+    // way -- a stepped row's tap band is a full row tall (~46-56 logical
+    // units), far more than the 15-unit Up/Down threshold needs to fire,
+    // so gating it on onSteppedRow meant an intentional swipe starting or
+    // landing on a stepped row was silently read as a stationary tap
+    // instead of a navigation swipe -- and since HandlePanelTap treats a
+    // second tap on the row already selected as "activate", that
+    // misreading is what changed the row's own value instead of moving
+    // the selection off it.
+    if (!onSteppedRow && dx < -40.f && fabsf(dy) < fabsf(dx)) return MenuSwipeGesture::Back;
     if (fabsf(dy) > 15.f) return dy < 0 ? MenuSwipeGesture::Up : MenuSwipeGesture::Down;
     return MenuSwipeGesture::None;
 }

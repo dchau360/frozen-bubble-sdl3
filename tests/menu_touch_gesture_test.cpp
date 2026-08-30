@@ -158,13 +158,20 @@ int main() {
     CHECK(ClassifyMenuSwipe(-45.f, 2.f, false) == MenuSwipeGesture::Back);
     CHECK(ClassifyMenuSwipe(-45.f, 2.f, true)  == MenuSwipeGesture::None);
 
-    // The same collision exists vertically: a tap's second half of the
-    // gesture can drift up or down enough to look like list-scroll
-    // navigation. Off a stepped row that's still real navigation; on one,
-    // it must yield to the row's own split.
+    // Unlike Back, Up/Down has no collision with a stepped row's own tap --
+    // that tap only ever reads which horizontal half was touched, never
+    // vertical travel -- so a real vertical swipe must still register as
+    // navigation even when the release point sits on a stepped row. A
+    // stepped row's tap band is a full row tall, far more than the 15-unit
+    // Up/Down threshold needs to trigger, so suppressing this case the same
+    // way Back is suppressed used to silently swallow an intentional swipe
+    // off (or onto) a stepped row as a stationary tap -- and since a second
+    // tap on the row already selected activates it, that swallowed swipe
+    // ended up changing the row's own value instead of moving off it.
     CHECK(ClassifyMenuSwipe(2.f, 20.f, false)  == MenuSwipeGesture::Down);
     CHECK(ClassifyMenuSwipe(2.f, -20.f, false) == MenuSwipeGesture::Up);
-    CHECK(ClassifyMenuSwipe(2.f, 20.f, true)   == MenuSwipeGesture::None);
+    CHECK(ClassifyMenuSwipe(2.f, 20.f, true)   == MenuSwipeGesture::Down);
+    CHECK(ClassifyMenuSwipe(2.f, -20.f, true)  == MenuSwipeGesture::Up);
 
     // A swipe with real vertical travel doesn't dominate horizontally, so
     // it does not get misread as "go back" -- fabsf(dy) < fabsf(dx) guards
