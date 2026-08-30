@@ -206,6 +206,38 @@ FrozenBubble::FrozenBubble() {
     // "Parameter 'texture' is invalid" at DEBUG priority during internal initialization).
     SDL_SetLogPriority(SDL_LOG_CATEGORY_ERROR, SDL_LOG_PRIORITY_WARN);
 
+#ifdef __WASM_PORT__
+    // SDL's emscripten backend decides whether the page is sizing the canvas
+    // itself by shrinking the canvas to 1x1 and measuring what the browser
+    // lays out: a result that does not floor() back to exactly 1 is read as
+    // "the page owns this canvas", and SDL adopts the measurement as the
+    // window size. That probe cannot survive a fractional device pixel
+    // ratio. Found live on an Android tablet at dpr 1.33125: one CSS pixel
+    // does not land on a whole device pixel, the browser truncates the box
+    // to 85/64 device pixels, and the probe measures 0.9977 -- which floors
+    // to 0. SDL sized the window 0x0, sized the canvas to match, and the
+    // page stayed black forever while the game ran perfectly behind it:
+    // menus, input, audio and network all fine, only pixels never arrived.
+    // Nothing on the page can prevent that truncation, so correct the size
+    // afterwards instead -- and it has to be after the renderer, not after
+    // the window: GLES2_CreateRenderer wants a window carrying
+    // SDL_WINDOW_OPENGL and reaches SDL_RecreateWindow to get one, which
+    // runs the whole 1x1 probe a second time and throws away any correction
+    // made before it. The canvas is always the game's own fixed resolution
+    // and the shell scales it for display, so a size that came back
+    // different is this misdetection and nothing else.
+    if (window) {
+        int canvasW = 0, canvasH = 0;
+        SDL_GetWindowSize(window, &canvasW, &canvasH);
+        if (canvasW != resolution.x || canvasH != resolution.y) {
+            SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
+                        "Browser reported the canvas as %dx%d, forcing %dx%d",
+                        canvasW, canvasH, resolution.x, resolution.y);
+            SDL_SetWindowSize(window, resolution.x, resolution.y);
+        }
+    }
+#endif
+
 #ifdef __IOS_PORT__
     // Ask for notification permission and start APNs registration. Done after
     // the window exists so SDL's application delegate -- the one the APNs
