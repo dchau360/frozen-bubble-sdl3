@@ -1,5 +1,24 @@
 # Changelog
 
+## v2.4.46
+
+- **Fix: Game speed (and every other stepped row) still could not be
+  lowered via touch after v2.4.45** — the actual root cause, found by
+  driving the deployed build with a plain mouse click (which bypasses both
+  of the last two fixes' code paths entirely) and watching the value go
+  the wrong way. A stepped row's `"<  value  >"` is drawn right-aligned
+  near the row's right edge, but the tap target was one wide rect split
+  down the row's own raw geometric middle — so on a row with a long label
+  and a short value (Game speed's `"<  3.0  >"`), the visible `<` sat
+  physically inside what a 50/50 split called the row's right half, and
+  tapping it increased the value instead of decreasing it. `>` — further
+  right, safely past either boundary — correctly increased either way,
+  which is exactly why this read as "raising works, lowering doesn't"
+  across two prior fix attempts. The tap target now splits at the drawn
+  value block's own midpoint instead of the row's. Re-verified live: the
+  exact click that increased the value on the deployed v2.4.45 build now
+  decreases it.
+
 ## v2.4.45
 
 - **Fix: Game speed (and every other stepped row) still could not be
