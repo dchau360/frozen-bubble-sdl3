@@ -1,5 +1,31 @@
 # Changelog
 
+## v2.4.47
+
+- **Fix: Android tablets could not rotate to landscape** — a single APK
+  serves phones, tablets, and TV boxes, and the check used to tell a TV
+  apart from a handheld (`DeviceHasTouchscreen()`) can't also tell a tablet
+  apart from a phone, since both report a touchscreen. Every tablet fell
+  into the phone branch and got hard-locked to portrait. A tablet is now
+  detected directly (`smallestScreenWidthDp >= 600`, Android's own
+  phone/tablet threshold) and given the same landscape treatment as a TV
+  box. Not verified on a physical tablet — none available in this
+  environment.
+- **Fix: rotating to landscape on iPhone (itch.io/WASM) could leave the
+  game canvas wrong-sized** — cropped or mis-scaled after rotation, while
+  simulating the same rotation in a desktop browser never reproduced
+  anything wrong. iOS Safari can report stale `window.innerWidth/
+  innerHeight` (and even `visualViewport`) for a few frames while its own
+  layout and toolbar-chrome animation settle after a rotation; the CSS
+  canvas-fit logic only recomputed once per `resize` event, so a run that
+  landed mid-settle locked in a wrong scale with no later event to correct
+  it. It now prefers `visualViewport` dimensions and recomputes repeatedly
+  for a short window after `resize`/`orientationchange` instead of trusting
+  the first pass. Not verified against real iPhone hardware — the
+  underlying race is a real-device timing quirk that a desktop browser's
+  atomic resize can't reproduce, so this could only be checked for
+  regressions on the normal (non-rotating) path.
+
 ## v2.4.46
 
 - **Fix: Game speed (and every other stepped row) still could not be
