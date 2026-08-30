@@ -1,5 +1,25 @@
 # Changelog
 
+## v2.4.55
+
+- **Fix: a tap missing every panel row re-activated the selected row instead
+  of doing nothing.** `MainMenu::HandlePanelTap` returned `false` on a miss,
+  which the caller reads as "this panel doesn't hit-test taps" and answers
+  with its tap-anywhere-to-confirm fallback -- injecting RETURN, which
+  activates whatever row is currently selected. On a panel that does
+  register rows that turned a miss into an unintended re-activation. The
+  network game room's Bots/Bot-skill rows are only 18 logical units tall (a
+  couple of millimetres on a phone), so with "Bots" selected, nearly every
+  tap aimed elsewhere missed, fell through, and cycled the bot count again
+  instead of moving the selection -- reported live as being unable to
+  navigate out of the bot-count control. The local multiplayer panel's own
+  Bots row hit the identical trap, reported separately as that screen
+  feeling "stuck." Neither was the swipe-vs-tap classification fixed in
+  v2.4.53/v2.4.54 -- both are the same underlying defect: HandlePanelTap now
+  consumes a miss (no selection change, no event) once any row was
+  registered, and only falls back to tap-anywhere-to-confirm on a screen
+  that registers no rows at all.
+
 ## v2.4.54
 
 - **Fix: iOS Safari's own edge-swipe-back could beat the game's.** v2.4.53
