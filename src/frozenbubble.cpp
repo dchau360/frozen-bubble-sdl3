@@ -723,12 +723,15 @@ MenuSwipeGesture ClassifyMenuSwipe(float dx, float dy, bool onSteppedRow) {
     // just to decrease one. Once a swipe travels meaningfully past the drift
     // an accidental tap can produce, it is unambiguously a deliberate Back
     // gesture and must fire even if it happens to release on a stepped row --
-    // found live on itch.io/iPhone once a stepped row (the LAN/Net "Set name"
-    // section) started being pinned to the panel's own bottom edge on every
-    // screen: a full, deliberate edge-to-edge swipe back now routinely
-    // released right on top of it, and unconditional suppression broke
-    // "swipe back" there entirely rather than just the narrow drift case it
-    // was written for.
+    // found live on itch.io/iPhone once a stepped row happened to be pinned
+    // to the panel's own bottom edge (the LAN/Net "Set name" section did,
+    // at the time -- it has since turned out that row was never really
+    // stepped at all, see the comment where it's registered in
+    // mainmenu_netpanel.cpp; the collision this fixes is a real one for any
+    // genuinely stepped row in that position): a full, deliberate
+    // edge-to-edge swipe back now routinely released right on top of it,
+    // and unconditional suppression broke "swipe back" there entirely
+    // rather than just the narrow drift case it was written for.
     //
     // The cap was originally 100: comfortably past the ~40-45-unit jitter
     // ceiling above, but that margin turned out to be too generous the other
