@@ -693,6 +693,13 @@ void FrozenBubble::TouchToLogical(const SDL_Event *e, float *lx, float *ly) cons
                                     e->tfinger.y * (float)wh, lx, ly);
 }
 
+MenuSwipeGesture ClassifyMenuSwipe(float dx, float dy, bool onSteppedRow) {
+    if (onSteppedRow) return MenuSwipeGesture::None;
+    if (dx < -40.f && fabsf(dy) < fabsf(dx)) return MenuSwipeGesture::Back;
+    if (fabsf(dy) > 15.f) return dy < 0 ? MenuSwipeGesture::Up : MenuSwipeGesture::Down;
+    return MenuSwipeGesture::None;
+}
+
 void FrozenBubble::HandleInput(SDL_Event *e) {
     switch(e->type) {
         case SDL_EVENT_WINDOW_CLOSE_REQUESTED:
@@ -804,17 +811,35 @@ void FrozenBubble::HandleInput(SDL_Event *e) {
             if (!mainMenu->HasAnyPanelOpen()) {
                 int btn = getMenuButtonAt(lx, ly);
                 if (btn >= 0) mainMenu->SelectAndPressButton(btn);
-            } else if (dx < -40.f && fabsf(dy) < fabsf(dx)) {
-                injectKey(SDLK_ESCAPE);
-                if (mainMenu->IsTextEditActive()) {
-                    injectKey(SDLK_ESCAPE); // close keyboard then actually go back
+            } else {
+                // A stepped row (Game speed, Victories limit, ...) is
+                // adjusted by which half a tap lands on, and its left half
+                // is exactly the direction the swipe-back gesture below also
+                // claims -- see ClassifyMenuSwipe for why that conflict is
+                // real, not hypothetical. Checked here, ahead of dx/dy, so
+                // that row always gets first look at a touch that lands on it.
+                switch (ClassifyMenuSwipe(dx, dy, mainMenu->IsSteppedRowAt(lx, ly))) {
+                    case MenuSwipeGesture::Back:
+                        injectKey(SDLK_ESCAPE);
+                        if (mainMenu->IsTextEditActive()) {
+                            injectKey(SDLK_ESCAPE); // close keyboard then actually go back
+                        }
+                        break;
+                    case MenuSwipeGesture::Up:
+                        injectKey(SDLK_UP);
+                        break;
+                    case MenuSwipeGesture::Down:
+                        injectKey(SDLK_DOWN);
+                        break;
+                    case MenuSwipeGesture::None:
+                        if (!mainMenu->HandlePanelTap(lx, ly)) {
+                            // Panels that hit-test their own rows consume the
+                            // tap; the rest keep the original
+                            // tap-anywhere-to-confirm behaviour.
+                            injectKey(SDLK_RETURN);
+                        }
+                        break;
                 }
-            } else if (fabsf(dy) > 15.f) {
-                injectKey(dy < 0 ? SDLK_UP : SDLK_DOWN);
-            } else if (!mainMenu->HandlePanelTap(lx, ly)) {
-                // Panels that hit-test their own rows consume the tap; the rest
-                // keep the original tap-anywhere-to-confirm behaviour.
-                injectKey(SDLK_RETURN);
             }
         } else if (e->type == SDL_EVENT_MOUSE_BUTTON_DOWN && e->button.button == SDL_BUTTON_LEFT) {
             // On native SDL3, touch synthesizes MOUSE_BUTTON_DOWN with SDL_TOUCH_MOUSEID — skip it,

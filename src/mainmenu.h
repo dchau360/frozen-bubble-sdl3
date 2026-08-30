@@ -67,6 +67,13 @@ public:
     // Returns true when consumed. First tap on a row highlights it, a second tap
     // on the same row activates it.
     bool HandlePanelTap(float lx, float ly);
+    // True when (lx, ly) sits on a row registered with splitAdjust -- a row
+    // stepped by which half a second tap lands on (Game speed, Victories
+    // limit, bot count, ...). A pure query, never mutating the selection: it
+    // lets a caller ask "does HandlePanelTap need first look here?" before
+    // applying a swipe gesture that would otherwise compete with it. See the
+    // call site in FrozenBubble::HandleInput for why that competition is real.
+    bool IsSteppedRowAt(float lx, float ly) const;
     bool IsAwaitingKeyBind() const { return showingKeysPanel && awaitKp; }
     bool IsTextEditActive() const { return networkFieldEditing; }
     bool HasAnyPanelOpen() const {

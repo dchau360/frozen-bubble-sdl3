@@ -411,6 +411,30 @@ if(BUILD_TESTING AND NOT EMSCRIPTEN AND NOT ANDROID AND NOT IOS)
     # rather than passing without having checked anything.
     set_tests_properties(touch-letterbox-test PROPERTIES SKIP_RETURN_CODE 77)
 
+    add_executable(menu-touch-gesture-test
+        tests/menu_touch_gesture_test.cpp
+        ${FROZEN_BUBBLE_CORE_SOURCES}
+    )
+    set_property(TARGET menu-touch-gesture-test PROPERTY CXX_STANDARD 17)
+    set_property(TARGET menu-touch-gesture-test PROPERTY CXX_EXTENSIONS OFF)
+    target_include_directories(menu-touch-gesture-test PRIVATE src)
+    target_compile_definitions(menu-touch-gesture-test PRIVATE
+        FROZEN_BUBBLE_TEST_ACCESS
+        DATA_DIR="${ASSET_PATH}"
+        APP_VERSION="v${PROJECT_VERSION}"
+    )
+    target_link_libraries(menu-touch-gesture-test PRIVATE
+        SDL3::SDL3
+        SDL3_image::SDL3_image
+        SDL3_mixer::SDL3_mixer
+        SDL3_ttf::SDL3_ttf
+        iniparser-static
+    )
+    if(WIN32 OR MINGW)
+        target_link_libraries(menu-touch-gesture-test PRIVATE ws2_32)
+    endif()
+    add_test(NAME menu-touch-gesture-test COMMAND menu-touch-gesture-test)
+
     add_executable(netview-test
         tests/netview_test.cpp
         src/netview.cpp

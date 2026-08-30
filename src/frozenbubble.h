@@ -44,6 +44,28 @@ enum GameState {
     Highscores = 4
 };
 
+// What a finger-up's overall movement on a menu panel means, before any of
+// it has been turned into a key press.
+enum class MenuSwipeGesture { None, Back, Up, Down };
+
+// Classifies a completed touch as a deliberate swipe (go back, move the
+// selection) or a plain tap that happened to drift a little while the
+// finger was down -- the two look identical as raw (dx, dy); only how far
+// they travelled tells them apart.
+//
+// `onSteppedRow` overrides that distance test to None. A row stepped by
+// which half a second tap lands on (MainMenu::IsSteppedRowAt --
+// PanelTapRow::splitAdjust; Game speed, Victories limit, bot count, ...)
+// needs its *left* half tapped to decrease, and that is exactly the
+// direction "swipe left to go back" also claims at a mere 40-unit
+// threshold -- one an ordinary tap can cross by drifting a little, especially
+// on a narrow phone where a run of device points maps to more than one
+// logical unit. There is no equivalent conflict on the right half, which is
+// why decreasing a stepped row read as broken on a touchscreen while
+// increasing did not: every tap that landed a bit left of where it started
+// was read as "go back" before HandlePanelTap ever saw it.
+MenuSwipeGesture ClassifyMenuSwipe(float dx, float dy, bool onSteppedRow);
+
 class FrozenBubble
 {
 public:
