@@ -281,7 +281,32 @@ int List::End(SDL_Renderer* rend, TTFText& text, SDL_Texture* panelBG,
                      viewport_.x + viewport_.w - 14, y + (rowH_ - 24) / 2, false);
         }
 
-        addTapRow(row.index, slot, -1, row.splitAdjust, 0);
+        // A stepped row's "<  value  >" is drawn right-aligned, so on a row
+        // with a long label and a short value (Game speed, "<  3.0  >"
+        // against a wide row) the whole bracketed block -- including the
+        // "<" a player actually taps to decrease -- sits well into what a
+        // 50/50 split of the row would call its right half. Splitting the
+        // row itself, not the text, is what let tapping the visible "<"
+        // silently increase instead of decrease: the one thing that looks
+        // tappable for "down" was on the wrong side of the boundary.
+        //
+        // Two adjacent tap rows sharing this row's index, split at the
+        // bracketed block's own midpoint, fix that without changing
+        // anything else -- HandlePanelTap's "not yet selected" branch still
+        // just highlights the row regardless of which half was hit, exactly
+        // as a single wide row did, and activateKey now says which key a
+        // second tap sends outright instead of HandlePanelTap re-deriving a
+        // midpoint of its own that this same mismatch would reintroduce.
+        if (row.splitAdjust && valueW > 0) {
+            const int valueBlockRight = viewport_.x + viewport_.w - 14;
+            const int splitX = valueBlockRight - valueW / 2;
+            const SDL_Rect leftHalf  = {slot.x, slot.y, splitX - slot.x, slot.h};
+            const SDL_Rect rightHalf = {splitX, slot.y, slot.x + slot.w - splitX, slot.h};
+            addTapRow(row.index, leftHalf, -1, false, SDLK_LEFT);
+            addTapRow(row.index, rightHalf, -1, false, SDLK_RIGHT);
+        } else {
+            addTapRow(row.index, slot, -1, row.splitAdjust, 0);
+        }
     }
 
     SDL_SetRenderClipRect(rend, nullptr);
