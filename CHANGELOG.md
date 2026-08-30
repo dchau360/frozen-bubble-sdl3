@@ -2,6 +2,17 @@
 
 ## v2.4.48
 
+- **Fix: v2.4.47 caused a black screen on iPhone on itch.io.** That
+  release's landscape-rotation fix made the canvas-fit logic prefer
+  `window.visualViewport` over `window.innerWidth/innerHeight`, reasoning
+  that it excludes Safari's toolbar chrome — but `visualViewport` has a
+  documented history of misreporting inside nested iframes on iOS Safari,
+  and itch.io serves this game inside exactly that. A bad readout at first
+  load collapsed the canvas to scale 0, with nothing to correct it
+  afterward since nothing re-triggers a resize on a plain page load.
+  Reverted to `window.innerWidth/innerHeight`, kept the (unrelated, safe)
+  retry-burst behavior on rotation, and added a guard against ever
+  committing an invalid scale again.
 - **Fix: menu swipe up/down on touch was unreliable, and swiping down could
   change the currently selected setting instead of moving off it.** The
   gesture classifier suppressed *every* swipe direction whenever the touch
