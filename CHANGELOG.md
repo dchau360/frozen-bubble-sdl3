@@ -1,5 +1,31 @@
 # Changelog
 
+## v2.4.50
+
+- **Fix: every debug Android build could request a real ad on any
+  device.** AdMob's per-device test whitelist (`admob.testDeviceId`) only
+  covered devices a maintainer had thought to add ahead of time — anyone
+  building from source, or CI, could still trigger a live ad request on
+  an untested device. Debug builds now use Google's own published
+  always-test AdMob App ID and a Google test ad unit ID
+  (`AdsManager`/`BuildConfig.DEBUG`), so every debug build gets guaranteed
+  test ads regardless of device; the per-device whitelist is now a
+  redundant second layer rather than the only safety net. Release builds
+  are unaffected.
+- **Fix: "Create Game Room" room size was keyboard-only on touch.** The
+  lobby's "Create Game Room  <  N players  >" row's value-adjust split ran
+  across the row's own raw midpoint, which sits inside the "Create Game
+  Room" label itself, leaving no safe tap target for either creating the
+  room or changing its size. `menulist::List` rows can now separate a
+  label's own action from the value's own adjust zone, so a tap on the
+  label still creates the room while a tap on "< N players >" changes it.
+- **Fix: "Set name" in the LAN/Net server lists didn't read as anchored to
+  the screen.** It was the row list's own last row, so with few public
+  servers listed it landed right under them near the top of an otherwise
+  mostly-empty panel. It's now its own fixed "Account" section, pinned to
+  the bottom of the panel regardless of how many servers are listed above
+  it.
+
 ## v2.4.49
 
 - **Fix: an undershot swipe (especially in the game room) could still
