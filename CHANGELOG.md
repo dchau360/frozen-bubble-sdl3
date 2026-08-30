@@ -1,5 +1,19 @@
 # Changelog
 
+## v2.4.51
+
+- **Fix: v2.4.50 broke swipe-back on the LAN/Net screens.** v2.4.50 pinned
+  the "Set name" row to the very bottom of the LAN/Net server-list panel.
+  That row is a stepped row, and the swipe-vs-tap fix from v2.4.49
+  unconditionally suppresses "swipe back" on any stepped row -- a rule
+  meant to catch an ordinary tap that drifted a little, not a real swipe.
+  With "Set name" now always occupying the bottom of the panel, a
+  deliberate edge-to-edge swipe back on iPhone (itch.io) routinely
+  released right on top of it, breaking swipe-back there entirely. Back
+  is now only suppressed on a stepped row within accidental-tap-drift
+  range; a swipe well past that fires Back regardless of what it
+  released on.
+
 ## v2.4.50
 
 - **Fix: every debug Android build could request a real ad on any
