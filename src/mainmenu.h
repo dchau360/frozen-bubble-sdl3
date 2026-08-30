@@ -66,7 +66,17 @@ public:
     // Handles a tap/click at logical canvas coords while a panel is open.
     // Returns true when consumed. First tap on a row highlights it, a second tap
     // on the same row activates it.
-    bool HandlePanelTap(float lx, float ly);
+    //
+    // verticalDrift is how far the finger moved vertically before release
+    // (0 for a mouse click, which has no such ambiguity). A touch that
+    // travels a real distance but falls short of ClassifyMenuSwipe's own
+    // Up/Down threshold is an undershot swipe attempt, not a stationary
+    // tap -- and since most rows are shorter than that travel, it easily
+    // lands right back on the row it started from. Activating an
+    // already-selected row on release is still consumed here (the tap
+    // landed on a real row) but does nothing further when the drift is
+    // past tap-jitter range, instead of mutating that row's value.
+    bool HandlePanelTap(float lx, float ly, float verticalDrift = 0.f);
     // True when (lx, ly) sits on a row registered with splitAdjust -- a row
     // stepped by which half a second tap lands on (Game speed, Victories
     // limit, bot count, ...). A pure query, never mutating the selection: it

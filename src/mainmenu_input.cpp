@@ -499,7 +499,7 @@ void MainMenu::AddPanelTapRow(int index, const SDL_Rect& rect, int subIndex,
     panelTapRows.push_back({rect, index, subIndex, splitAdjust, activateKey});
 }
 
-bool MainMenu::HandlePanelTap(float lx, float ly) {
+bool MainMenu::HandlePanelTap(float lx, float ly, float verticalDrift) {
     // While the key panel is waiting for a key to bind, or a text field is being
     // edited, a tap is not a row press. Consuming it here would swallow the
     // gesture that gets the player back out of that state.
@@ -517,6 +517,20 @@ bool MainMenu::HandlePanelTap(float lx, float ly) {
         // immediately changing the cell that happens to be under the finger.
         if (sameRow && row.subIndex >= 0 && panelTapSubSelection != nullptr)
             sameRow = (*panelTapSubSelection == row.subIndex);
+
+        if (sameRow) {
+            // A vertical swipe attempt that falls short of the Up/Down
+            // threshold in FrozenBubble::HandleInput often still lands back
+            // on the row it started from -- most rows are shorter than that
+            // travel. Reaching this activation branch does not by itself
+            // mean the player meant to activate the row rather than
+            // navigate off it; only a near-stationary release does. Past
+            // this budget the tap is still consumed (it landed on a real
+            // row -- the caller must not fall back to tap-anywhere-confirms
+            // either), just without mutating anything.
+            constexpr float kActivateMaxVerticalDrift = 8.f;
+            if (fabsf(verticalDrift) > kActivateMaxVerticalDrift) return true;
+        }
 
         if (!sameRow) {
             // First tap only moves the highlight. Most rows change a setting on

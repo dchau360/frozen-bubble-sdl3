@@ -857,7 +857,11 @@ void FrozenBubble::HandleInput(SDL_Event *e) {
                         injectKey(SDLK_DOWN);
                         break;
                     case MenuSwipeGesture::None:
-                        if (!mainMenu->HandlePanelTap(lx, ly)) {
+                        // Real vertical drift (see HandlePanelTap) so a
+                        // touch that traveled and fell back onto the row it
+                        // started from is not treated as a confirming
+                        // second tap on that row.
+                        if (!mainMenu->HandlePanelTap(lx, ly, dy)) {
                             // Panels that hit-test their own rows consume the
                             // tap; the rest keep the original
                             // tap-anywhere-to-confirm behaviour.
