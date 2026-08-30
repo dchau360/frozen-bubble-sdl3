@@ -700,6 +700,10 @@ MenuSwipeGesture ClassifyMenuSwipe(float dx, float dy, bool onSteppedRow) {
     return MenuSwipeGesture::None;
 }
 
+bool IsWithinMenuTapDebounce(Uint32 nowMs, Uint32 lastMenuTapMs) {
+    return nowMs - lastMenuTapMs < kMenuTapDebounceMs;
+}
+
 void FrozenBubble::HandleInput(SDL_Event *e) {
     switch(e->type) {
         case SDL_EVENT_WINDOW_CLOSE_REQUESTED:
@@ -798,7 +802,7 @@ void FrozenBubble::HandleInput(SDL_Event *e) {
             touchStarted = true;
         } else if (e->type == SDL_EVENT_FINGER_UP) {
             // Debounce: ignore rapid re-fires (multi-finger or OS double events)
-            if (nowMs - lastMenuTapMs < 200) {
+            if (IsWithinMenuTapDebounce(nowMs, lastMenuTapMs)) {
                 touchStarted = false;
                 return;
             }
@@ -843,10 +847,26 @@ void FrozenBubble::HandleInput(SDL_Event *e) {
             }
         } else if (e->type == SDL_EVENT_MOUSE_BUTTON_DOWN && e->button.button == SDL_BUTTON_LEFT) {
             // On native SDL3, touch synthesizes MOUSE_BUTTON_DOWN with SDL_TOUCH_MOUSEID — skip it,
-            // handled by FINGER_UP above. In WASM, Emscripten may not set SDL_TOUCH_MOUSEID correctly,
-            // so allow the mouse path to handle touch there.
+            // handled by FINGER_UP above. In WASM, Emscripten may not set SDL_TOUCH_MOUSEID
+            // correctly, so that tag can't be trusted there.
 #ifndef __WASM_PORT__
             if (e->button.which == SDL_TOUCH_MOUSEID) return;
+#else
+            // A real touch in a browser still fires both FINGER_UP (handled
+            // above, with the letterbox-aware coordinate conversion and the
+            // swipe/stepped-row classification this branch does not have)
+            // and a synthesized MOUSE_BUTTON_DOWN a moment later for legacy
+            // mouse-only code -- processing both dispatches every menu tap
+            // and button press twice. For a stepped row (Game speed, ...)
+            // that is not just "twice as fast": the second dispatch's own
+            // coordinate conversion can disagree with the first's about
+            // which half of the row was touched, which is what let a tap
+            // aimed at decreasing read as broken while increasing did not.
+            // lastMenuTapMs is already the FINGER_UP debounce's own record
+            // of "a menu tap was just accepted"; a mouse event that follows
+            // one within the same window is that browser echo, not an
+            // independent tap, so it is dropped rather than handled again.
+            if (IsWithinMenuTapDebounce(nowMs, lastMenuTapMs)) return;
 #endif
             float lx, ly;
             SDL_RenderCoordinatesFromWindow(renderer, e->button.x, e->button.y, &lx, &ly);

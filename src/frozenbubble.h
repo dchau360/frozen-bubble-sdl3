@@ -66,6 +66,21 @@ enum class MenuSwipeGesture { None, Back, Up, Down };
 // was read as "go back" before HandlePanelTap ever saw it.
 MenuSwipeGesture ClassifyMenuSwipe(float dx, float dy, bool onSteppedRow);
 
+// The window (in SDL_GetTicks() milliseconds) within which two menu taps are
+// treated as one physical gesture rather than two independent ones. Backs
+// two different dedups in HandleInput: a FINGER_UP that re-fires from a
+// multi-finger touch or an OS double-event, and -- in a WASM browser build,
+// where SDL_TOUCH_MOUSEID can't be trusted to tell a synthesized click from
+// a real one -- the MOUSE_BUTTON_DOWN Emscripten fires a moment after every
+// real touch's own FINGER_UP. Without the second use, that synthesized
+// click dispatches the same tap through HandlePanelTap a second time, with
+// its own, independently-computed coordinate; for a stepped row (Game
+// speed, ...) that second dispatch can disagree with the first about which
+// half was touched, which is what let a tap aimed at decreasing read as
+// broken while increasing did not.
+constexpr Uint32 kMenuTapDebounceMs = 200;
+bool IsWithinMenuTapDebounce(Uint32 nowMs, Uint32 lastMenuTapMs);
+
 class FrozenBubble
 {
 public:

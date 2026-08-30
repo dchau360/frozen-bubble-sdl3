@@ -30,6 +30,16 @@
 // This pins the fix: ClassifyMenuSwipe (the pure decision the finger-up
 // handler now delegates to) and MainMenu::IsSteppedRowAt (what tells it a
 // stepped row's own left/right split must win) each in isolation.
+//
+// It also pins a second, related defect found afterward on the itch.io WASM
+// build: a browser fires both a real SDL_EVENT_FINGER_UP and a synthesized
+// SDL_EVENT_MOUSE_BUTTON_DOWN for one physical tap, and unlike native SDL
+// (which tags the synthesized one with SDL_TOUCH_MOUSEID so it can be
+// skipped), Emscripten's tagging can't be trusted -- so on WASM both were
+// processed, dispatching every menu tap through HandlePanelTap twice with
+// two independently-computed coordinates. IsWithinMenuTapDebounce is what
+// the mouse path now checks before acting, to recognize that second
+// dispatch as the browser's own echo of the tap FINGER_UP already handled.
 
 #include <SDL3/SDL.h>
 
@@ -130,6 +140,24 @@ int main() {
         // would do (no selection or event side effect to accidentally trip).
         CHECK(menu->IsSteppedRowAt(20.f, 55.f));
     }
+
+    // --- IsWithinMenuTapDebounce -----------------------------------------
+
+    // The exact defect: a synthesized MOUSE_BUTTON_DOWN arriving a few
+    // milliseconds after the FINGER_UP for the same physical tap must read
+    // as the same gesture, not a second, independent one.
+    CHECK(IsWithinMenuTapDebounce(1000, 1000));
+    CHECK(IsWithinMenuTapDebounce(1050, 1000));
+
+    // Right at the edge of the window and just past it -- pins the
+    // threshold itself rather than only "clearly inside/outside" cases.
+    CHECK(IsWithinMenuTapDebounce(1000 + kMenuTapDebounceMs - 1, 1000));
+    CHECK(!IsWithinMenuTapDebounce(1000 + kMenuTapDebounceMs, 1000));
+
+    // A genuinely later, independent tap -- e.g. a real desktop-in-browser
+    // mouse click with no preceding touch at all, or a second physical tap
+    // well after the first -- must not be swallowed.
+    CHECK(!IsWithinMenuTapDebounce(5000, 1000));
 
     if (failures == 0) {
         std::printf("menu touch gesture tests passed\n");
