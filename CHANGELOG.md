@@ -1,5 +1,22 @@
 # Changelog
 
+## v2.4.48
+
+- **Fix: menu swipe up/down on touch was unreliable, and swiping down could
+  change the currently selected setting instead of moving off it.** The
+  gesture classifier suppressed *every* swipe direction whenever the touch
+  released on a stepped row (Game speed, Victories limit, ...), but the
+  underlying collision this guarded against is purely horizontal — a
+  stepped row's own tap only reads which half was touched, never how far
+  up or down the finger moved. A stepped row's tap band is a full row
+  tall, far more travel than the vertical swipe threshold needs, so an
+  intentional swipe landing on one (common on any settings screen mixing
+  stepped and toggle rows) was read as a stationary tap instead — and a
+  second tap on the already-selected row activates it, which is what
+  changed the value instead of navigating away. Vertical swipes are no
+  longer suppressed by this guard; only the horizontal "swipe back"
+  gesture still is, which is the one that actually collides.
+
 ## v2.4.47
 
 - **Fix: Android tablets could not rotate to landscape** — a single APK
