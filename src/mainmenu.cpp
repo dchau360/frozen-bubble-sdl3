@@ -612,8 +612,7 @@ void MainMenu::SetupNewGame(int mode) {
                 // The game takes the bots over from here: it simulates their
                 // boards and sends for them. Which board each one lands on is
                 // decided inside NewGame, once the room's players are seated.
-                FrozenBubble::Instance()->bubbleGame()->AdoptBots(std::move(lobbyBots),
-                                                                 netRoomBotSkill);
+                FrozenBubble::Instance()->bubbleGame()->AdoptBots(std::move(lobbyBots));
                 lobbyBots.clear();
                 FrozenBubble::Instance()->bubbleGame()->NewGame(ns);
             }

@@ -102,15 +102,15 @@ void BubbleGame::SendNetworkBubbleShot(BubbleArray &bArray) {
     }
 }
 
-void BubbleGame::AdoptBots(std::vector<std::unique_ptr<NetBotConnection>> bots,
-                           int skill) {
+void BubbleGame::AdoptBots(std::vector<std::unique_ptr<NetBotConnection>> bots) {
     // The lobby holds the bots while the room fills; which board each one
     // ends up on is not known until the room's players are seated, so they
-    // wait here and SeatBots claims their boards.
+    // wait here and SeatBots claims their boards. Each bot already knows its
+    // own skill (set by the lobby when it was added), so nothing here needs
+    // to track one for the whole batch.
     for (auto &bot : bots) {
         if (bot) pendingBots.push_back(std::move(bot));
     }
-    adoptedBotSkill = skill;
 }
 
 void BubbleGame::SeatBots() {
@@ -129,7 +129,7 @@ void BubbleGame::SeatBots() {
         for (int i = 1; i < currentSettings.playerCount; i++) {
             if (bubbleArrays[i].lobbyPlayerId != botId) continue;
             bubbleArrays[i].isBot = true;
-            bubbleArrays[i].botSkill = adoptedBotSkill;
+            bubbleArrays[i].botSkill = bot->Skill();
             bubbleArrays[i].botTargetAngle = -1.0f;
             bubbleArrays[i].botThinkFrames = 0;
             SDL_Log("Seated bot '%s' (id %d) on board %d",
