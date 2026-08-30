@@ -214,10 +214,23 @@ int main() {
         MainMenuTestAccess::AddRow(*menu, 2, {100, 140, 0, 0});
         CHECK(MainMenuTestAccess::RowCount(*menu) == 2);
 
-        // A tap outside every row is not consumed, so the caller can fall back
-        // to the old tap-anywhere-to-confirm gesture.
-        CHECK(!MainMenuTestAccess::Tap(*menu, 50.f, 50.f));
-        CHECK(!MainMenuTestAccess::Tap(*menu, 150.f, 145.f));
+        // A tap outside every row IS consumed, now that this panel has
+        // registered rows at all. This assertion used to be the other way
+        // round -- a miss fell through so the caller could apply its
+        // tap-anywhere-to-confirm fallback -- and that fallback is what the
+        // caller implements by injecting RETURN, which activates whatever
+        // row is currently SELECTED rather than doing nothing.
+        //
+        // On a panel whose rows are small that turns a near-miss into an
+        // unintended activation of the selected row, with no way out:
+        // reported live on the network game room's 18-logical-unit bot rows,
+        // where with "Bots" selected essentially every tap aimed elsewhere
+        // missed, fell through, and cycled the bot count again instead of
+        // moving the selection. See MainMenu::HandlePanelTap.
+        //
+        // A miss must still never move the selection either way.
+        CHECK(MainMenuTestAccess::Tap(*menu, 50.f, 50.f));
+        CHECK(MainMenuTestAccess::Tap(*menu, 150.f, 145.f));
         CHECK(selection == 0);
 
         // First tap on an unselected row only moves the selection.
