@@ -66,20 +66,51 @@ enum class MenuSwipeGesture { None, Back, Up, Down };
 // was read as "go back" before HandlePanelTap ever saw it.
 MenuSwipeGesture ClassifyMenuSwipe(float dx, float dy, bool onSteppedRow);
 
-// The window (in SDL_GetTicks() milliseconds) within which two menu taps are
-// treated as one physical gesture rather than two independent ones. Backs
-// two different dedups in HandleInput: a FINGER_UP that re-fires from a
-// multi-finger touch or an OS double-event, and -- in a WASM browser build,
-// where SDL_TOUCH_MOUSEID can't be trusted to tell a synthesized click from
-// a real one -- the MOUSE_BUTTON_DOWN Emscripten fires a moment after every
-// real touch's own FINGER_UP. Without the second use, that synthesized
-// click dispatches the same tap through HandlePanelTap a second time, with
-// its own, independently-computed coordinate; for a stepped row (Game
-// speed, ...) that second dispatch can disagree with the first about which
-// half was touched, which is what let a tap aimed at decreasing read as
-// broken while increasing did not.
+// The window (in SDL_GetTicks() milliseconds) within which two FINGER_UP
+// events are treated as one physical release rather than two independent
+// taps -- guards against a multi-finger touch or an OS double-event
+// re-firing FINGER_UP for what was really one release.
 constexpr Uint32 kMenuTapDebounceMs = 200;
 bool IsWithinMenuTapDebounce(Uint32 nowMs, Uint32 lastMenuTapMs);
+
+// In a WASM browser build, where SDL_TOUCH_MOUSEID can't be trusted to tell
+// a synthesized click from a real one, Emscripten fires a MOUSE_BUTTON_DOWN
+// for every real touch's own FINGER_UP -- a moment after it, almost always,
+// but "almost always" is not "always": on a busy frame (rendering a full
+// screen, GC, whatever else the browser's main thread is doing that tick)
+// the echo can lag past any fixed window. A HandleInput that dispatches the
+// FINGER_UP tap and then waits a fixed number of milliseconds for that echo
+// (the older approach) drops the guard the moment the echo is late, letting
+// it dispatch as a second, independent tap -- reactivating whatever row the
+// first tap just selected. Found live: the network room's Bots row
+// occasionally re-incrementing itself with no further tap, intermittently
+// rather than every time, which is exactly what a delayed echo slipping
+// past a fixed window looks like.
+//
+// This tracks the actual state instead of a clock: "does the browser still
+// owe this tap its echo". An arbitrarily late echo is still recognized
+// whenever it shows up, not just within some window -- and a genuine
+// independent mouse click (no touch involved, e.g. a desktop browser)
+// never sets `awaiting`, so it always passes through untouched.
+struct WasmMouseEchoGuard {
+    bool awaiting = false;
+    // A new touch beginning means the browser was never going to deliver
+    // the previous tap's echo anymore (should never actually be pending
+    // this long -- a real device fires it promptly after its own
+    // FINGER_UP -- but a leftover flag must not survive to wrongly
+    // swallow this new tap's own, unrelated echo).
+    void OnFingerDown() { awaiting = false; }
+    // Every FINGER_UP that reaches menu dispatch earns the browser's own
+    // MOUSE_BUTTON_DOWN echo a moment later, however delayed.
+    void OnFingerUpDispatched() { awaiting = true; }
+    // Call once per MOUSE_BUTTON_DOWN. True means: this is that echo,
+    // consume it and do not dispatch it as an independent tap.
+    bool ShouldSwallowMouseDown() {
+        if (!awaiting) return false;
+        awaiting = false;
+        return true;
+    }
+};
 
 class FrozenBubble
 {
