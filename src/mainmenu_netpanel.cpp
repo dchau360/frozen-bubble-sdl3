@@ -94,17 +94,34 @@ void MainMenu::SyncLobbyBots() {
         return;
     }
 
+    // A Bot skill change while bots are already seated leaves their
+    // nicknames naming the skill they joined at, not the one they'll
+    // actually play at -- AdoptBots() applies netRoomBotSkill uniformly to
+    // every bot at game-start time, whatever it is by then. Rebuilding
+    // everyone under the new nickname keeps the roster honest; churning a
+    // handful of lobby-only bot connections is cheap next to that.
+    if (!lobbyBots.empty() && lobbyBotsSkill != netRoomBotSkill) {
+        for (auto& bot : lobbyBots) {
+            if (bot) bot->Leave();
+        }
+        lobbyBots.clear();
+    }
+    // Any bot (re)built from here on reads netRoomBotSkill live for its own
+    // nickname regardless of this tracker; it exists only to decide, next
+    // time, whether already-seated bots need rebuilding at all -- so it's
+    // caught up here whether or not any bots actually exist to rebuild.
+    lobbyBotsSkill = netRoomBotSkill;
+
     while ((int)lobbyBots.size() > netRoomBotCount) {
         if (lobbyBots.back()) lobbyBots.back()->Leave();
         lobbyBots.pop_back();
     }
 
     while ((int)lobbyBots.size() < netRoomBotCount) {
-        // The server truncates nicknames to ten characters and the roster is
-        // matched by nickname, so the name has to stay distinct within that.
-        char botNick[16];
-        snprintf(botNick, sizeof(botNick), "bot%d-%03d",
-                 (int)lobbyBots.size() + 1, (int)(SDL_GetTicks() % 1000));
+        // "bot<N>-<skill>" reads the difficulty straight off the roster --
+        // all of a room's bots share one skill (netRoomBotSkill), so that's
+        // also what tells the other players what they're up against.
+        const std::string botNick = LobbyBotNick((int)lobbyBots.size() + 1, netRoomBotSkill);
         auto bot = std::make_unique<NetBotConnection>();
         if (!bot->JoinRoom(netClient->GetHost(), netClient->GetPort(),
                            room->creator, botNick)) {

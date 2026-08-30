@@ -5,6 +5,8 @@
 
 #include <array>
 #include <cstddef>
+#include <cstdio>
+#include <string>
 
 inline constexpr std::array<int, 18> kVictoriesLimits = {
     0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 15, 20, 30, 50, 100
@@ -61,7 +63,27 @@ inline constexpr int LocalMPStartRow(int playerCount) {
 }
 
 inline const char* LocalMPBotSkillName(int skill) {
-    return skill <= 0 ? "easy" : skill == 1 ? "normal" : "hard";
+    return skill <= 0 ? "Low" : skill == 1 ? "Med" : "High";
+}
+
+// Lowercase form used in a network room bot's own nickname (LobbyBotNick
+// below) rather than LocalMPBotSkillName's capitalized display label -- a
+// nickname reads as one lowercase token ("bot1-low"), not a settings-row
+// value.
+inline const char* LocalMPBotSkillNickSuffix(int skill) {
+    return skill <= 0 ? "low" : skill == 1 ? "med" : "high";
+}
+
+// A network room bot's own nickname (SyncLobbyBots, mainmenu_netpanel.cpp).
+// `seatNumber` is 1-based (the room's first bot is bot1, not bot0) and
+// stays the only thing distinguishing two bots at the same skill -- the
+// server truncates nicknames to ten characters and matches the roster by
+// nickname, and the longest form this produces, "bot1-high", is 9 of those
+// 10, leaving no room for anything else.
+inline std::string LobbyBotNick(int seatNumber, int skill) {
+    char nick[16];
+    snprintf(nick, sizeof(nick), "bot%d-%s", seatNumber, LocalMPBotSkillNickSuffix(skill));
+    return nick;
 }
 
 // Which team a local player slot belongs to (1-based team, 0-based slot):

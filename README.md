@@ -177,3 +177,4 @@ This port is independently developed and not affiliated with the original projec
 
 - [iniparser](https://github.com/ndevilla/iniparser) by Nicolas Devillard — MIT licensed, vendored in `third_party/iniparser/` and compiled into every release artifact. See [LICENSE](third_party/iniparser/LICENSE) and [PROVENANCE.md](third_party/iniparser/PROVENANCE.md).
 - SDL3, SDL3_image, SDL3_mixer, SDL3_ttf — zlib licensed, linked at build time.
+- Bot shot-scoring model (`src/bubbleai.cpp`) ported from [zepr/fbjs](https://github.com/zepr/fbjs)'s [`cpu.js`](https://github.com/zepr/fbjs/blob/master/src/main/resources/static/game/scripts/cpu.js) — GPL-3.0 licensed. Not vendored code: the scoring weights (popped/detached/cluster bonuses, the positional heatmap) were reimplemented in C++ against this port's own board representation.
