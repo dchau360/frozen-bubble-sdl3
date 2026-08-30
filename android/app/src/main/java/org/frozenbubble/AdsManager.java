@@ -25,7 +25,8 @@ import com.google.android.gms.ads.interstitial.InterstitialAdLoadCallback;
 
 import androidx.annotation.NonNull;
 
-import java.util.Collections;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Manages AdMob interstitial ads and the "ads removed" preference.
@@ -40,9 +41,25 @@ public class AdsManager {
     private static final String PREFS_NAME  = "FrozenBubblePrefs";
     private static final String KEY_NO_ADS  = "ads_removed";
 
-    // Real interstitial ad unit ID (Frozen Bubble app, created in AdMob 2026-08-24)
-    private static final String AD_UNIT_ID =
+    // Real interstitial ad unit ID (Frozen Bubble app, created in AdMob 2026-08-24).
+    // Used only in a release build (see AD_UNIT_ID below) -- the build that
+    // actually ships to GitHub Releases or a store, where a real user
+    // organically viewing/clicking an ad is exactly the traffic AdMob is
+    // for, not a policy risk.
+    private static final String REAL_AD_UNIT_ID =
             "ca-app-pub-7736855769799322/5410693019";
+
+    // Google's own published always-test interstitial ad unit ID (see
+    // https://developers.google.com/admob/android/test-ads). Every debug
+    // build -- this developer's own devices, CI, anyone building from
+    // source -- must never be able to request a live ad at all, on however
+    // many physical devices it ends up installed on. Per-device whitelisting
+    // via admob.testDeviceId (configureTestDeviceIfNeeded below) is a second,
+    // redundant safety net on top of this, not the only one.
+    private static final String TEST_AD_UNIT_ID =
+            "ca-app-pub-3940256099942544/1033173712";
+
+    private static final String AD_UNIT_ID = BuildConfig.DEBUG ? TEST_AD_UNIT_ID : REAL_AD_UNIT_ID;
 
     private static InterstitialAd sInterstitial = null;
     private static boolean sInitialized = false;
@@ -129,22 +146,32 @@ public class AdsManager {
 
     /**
      * Registers this device as an AdMob test device, if android/local.properties
-     * (git-ignored) set one -- see build.gradle. Must run before the *first*
-     * ad request of the process, since RequestConfiguration only affects
-     * requests made after it's set. This is the actual call path that runs in
-     * this app (init() above does not -- see its comment), reached lazily via
-     * loadAd() rather than eagerly in onCreate() for the same HWUI-thread
-     * reason MobileAds.initialize() itself is deferred there.
+     * (git-ignored) set one or more -- see build.gradle. Must run before the
+     * *first* ad request of the process, since RequestConfiguration only
+     * affects requests made after it's set. This is the actual call path that
+     * runs in this app (init() above does not -- see its comment), reached
+     * lazily via loadAd() rather than eagerly in onCreate() for the same
+     * HWUI-thread reason MobileAds.initialize() itself is deferred there.
+     *
+     * ADMOB_TEST_DEVICE_ID holds a comma-separated list rather than one
+     * device: this app gets tested on more than one physical device over its
+     * life, and each of them needs to keep serving test ads on every future
+     * build, not just whichever one is newest in local.properties.
      */
     private static void configureTestDeviceIfNeeded() {
         if (sTestDeviceConfigured) return;
         sTestDeviceConfigured = true;
         if (!BuildConfig.ADMOB_TEST_DEVICE_ID.isEmpty()) {
+            List<String> testDeviceIds = new ArrayList<>();
+            for (String id : BuildConfig.ADMOB_TEST_DEVICE_ID.split(",")) {
+                String trimmed = id.trim();
+                if (!trimmed.isEmpty()) testDeviceIds.add(trimmed);
+            }
             RequestConfiguration config = new RequestConfiguration.Builder()
-                    .setTestDeviceIds(Collections.singletonList(BuildConfig.ADMOB_TEST_DEVICE_ID))
+                    .setTestDeviceIds(testDeviceIds)
                     .build();
             MobileAds.setRequestConfiguration(config);
-            Log.d(TAG, "AdMob test device configured");
+            Log.d(TAG, "AdMob test device(s) configured: " + testDeviceIds.size());
         }
     }
 
