@@ -719,18 +719,30 @@ MenuSwipeGesture ClassifyMenuSwipe(float dx, float dy, bool onSteppedRow) {
     //
     // But that suppression is only meant to catch an ordinary TAP that
     // wandered a little -- a stepped row is never adjusted by swiping, only
-    // by a stationary second tap, so nobody drags 100+ logical units to
-    // decrease one. Once a swipe travels well past the drift an accidental
-    // tap can produce, it is unambiguously a deliberate Back gesture and
-    // must fire even if it happens to release on a stepped row -- found
-    // live on itch.io/iPhone once a stepped row (the LAN/Net "Set name"
+    // by a stationary second tap, so nobody drags well past ordinary jitter
+    // just to decrease one. Once a swipe travels meaningfully past the drift
+    // an accidental tap can produce, it is unambiguously a deliberate Back
+    // gesture and must fire even if it happens to release on a stepped row --
+    // found live on itch.io/iPhone once a stepped row (the LAN/Net "Set name"
     // section) started being pinned to the panel's own bottom edge on every
     // screen: a full, deliberate edge-to-edge swipe back now routinely
     // released right on top of it, and unconditional suppression broke
     // "swipe back" there entirely rather than just the narrow drift case it
     // was written for.
+    //
+    // The cap was originally 100: comfortably past the ~40-45-unit jitter
+    // ceiling above, but that margin turned out to be too generous the other
+    // way. Reported live: on the "Bots" row (and every other stepped row --
+    // Players, Mode, Victories, Bot skill, per-player colors, all share this
+    // same menulist::List machinery) a normal, deliberate swipe-back on an
+    // iPhone routinely traveled 60-90 logical units, well short of 100, so it
+    // fell through to HandlePanelTap and silently nudged the row's value
+    // instead of leaving the screen -- every attempt to back out from a
+    // stepped row just changed it again, which read as the screen being
+    // stuck. 60 keeps a real margin over the jitter ceiling above while
+    // giving an ordinary swipe a realistic chance to clear it.
     constexpr float kBackThreshold = 40.f;
-    constexpr float kSteppedRowDriftCap = 100.f;
+    constexpr float kSteppedRowDriftCap = 60.f;
     if (dx < -kBackThreshold && fabsf(dy) < fabsf(dx)) {
         if (!onSteppedRow || -dx > kSteppedRowDriftCap) return MenuSwipeGesture::Back;
     }
