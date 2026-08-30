@@ -235,7 +235,14 @@ int main() {
                                                    BubbleAI::Skill::Easy, &easyRng);
             if (shot.score > 0) ++easyBest;
         }
-        CHECK(easyBest < 24);
+        // The regression this pins: Easy used to connect about half the
+        // time (miss 50%, and even a miss drew uniformly from every ranked
+        // shot including the near-best ones) -- reported live as still too
+        // strong a floor. It now connects closer to a fifth of the time,
+        // and a miss is restricted to the worse half of the ranked list;
+        // this measured 6/24 against the fixed seed above, so the bound
+        // leaves real margin without letting the old ~12/24 behaviour back in.
+        CHECK(easyBest <= 10);
     }
 
     // A mini side board uses half-size bubbles and its own geometry; the same

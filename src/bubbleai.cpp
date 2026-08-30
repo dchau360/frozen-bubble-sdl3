@@ -40,9 +40,11 @@ constexpr int kCandidates = 61;
 // the tallest board takes well under this many substeps even bouncing.
 constexpr int kMaxSubsteps = 4000;
 
-// Shot scoring, ported from the zepr/fbjs clone's cpu.js (popped=4,
-// detached=6, cluster=4*groupSize, plus a hand-tuned 1..5 positional
-// heatmap), scaled up by 3 to stay in integers. The old score was
+// Shot scoring, ported from the zepr/fbjs clone's cpu.js:
+// https://github.com/zepr/fbjs/blob/master/src/main/resources/static/game/scripts/cpu.js
+// (GPL-3.0; see README.md's Credits section) -- popped=4, detached=6,
+// cluster=4*groupSize, plus a hand-tuned 1..5 positional heatmap -- scaled
+// up by 3 to stay in integers. The old score was
 // `popped * 1000 - row * 10 + followUp * weight`, which had two defects:
 // nothing rewarded a shot that lands next to its own colour without popping,
 // so when no candidate popped every candidate tied at -row*10 and
@@ -336,10 +338,21 @@ Shot ChooseShot(BubbleArray &board, int colour, bool isMini, Skill skill,
             if (distinct.size() > 1 && next_random() % 4 == 0) pick = 1;
             break;
         case Skill::Easy:
-            // Half the time it simply does not spot the match, which is what
-            // a weak player actually looks like -- not a wobbly aim.
-            if (distinct.size() > 1 && next_random() % 2 == 0)
-                pick = next_random() % distinct.size();
+            // Reported live as still too strong: half the time landing the
+            // objectively best shot on the board, and the other half
+            // picking uniformly from EVERY distinct landing (`distinct` is
+            // sorted best-to-worst end to end) still had good odds of
+            // something perfectly playable, since most boards have several
+            // decent options clustered near the top. A weak player mostly
+            // does not find the good options at all, not "a random option
+            // among all of them" -- so a miss now restricts the draw to the
+            // worse half of the ranked list, and misses happen far more
+            // often than they connect.
+            if (distinct.size() > 1 && next_random() % 10 >= 2) {
+                const size_t worseHalfStart = distinct.size() / 2;
+                pick = worseHalfStart +
+                       next_random() % (distinct.size() - worseHalfStart);
+            }
             break;
     }
     return distinct[pick];
