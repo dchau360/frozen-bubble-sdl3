@@ -187,6 +187,18 @@ int main() {
     // tap, so this must still fire Back even on a stepped row.
     CHECK(ClassifyMenuSwipe(-300.f, 2.f, true) == MenuSwipeGesture::Back);
 
+    // The regression that pin above didn't catch: an edge-to-edge swipe is
+    // unambiguous, but most real swipe-back attempts on a phone aren't
+    // edge-to-edge -- reported live on the "Bots" row (a stepped row, same
+    // as every other Players/Mode/Victories/Bot-skill/per-player-color row):
+    // a normal deliberate swipe-back travels something like 60-90 logical
+    // units, comfortably past the ~40-45-unit jitter ceiling above but well
+    // short of the old 100-unit cap, so it fell through to HandlePanelTap
+    // and nudged the row's value instead of leaving the screen -- every
+    // attempt to back out just changed "Bots" again, which is what made the
+    // screen feel stuck rather than merely slow to back out of.
+    CHECK(ClassifyMenuSwipe(-70.f, 2.f, true) == MenuSwipeGesture::Back);
+
     // Unlike Back, Up/Down has no collision with a stepped row's own tap --
     // that tap only ever reads which horizontal half was touched, never
     // vertical travel -- so a real vertical swipe must still register as
