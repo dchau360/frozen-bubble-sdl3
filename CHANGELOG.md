@@ -1,5 +1,18 @@
 # Changelog
 
+## v2.4.54
+
+- **Fix: iOS Safari's own edge-swipe-back could beat the game's.** v2.4.53
+  fixed a real bug in the swipe-vs-tap classifier, but that only covers
+  touches the game's own handlers actually receive. Mobile Safari has a
+  system-level "swipe from the left edge to navigate back" gesture that is
+  recognized below the DOM's touch dispatch -- it can claim a leftward drag
+  before SDL's finger-down/up handlers ever see it, no matter what the
+  page's JS does. The game's own "swipe left to go back" competed for that
+  same gesture and lost, which read as the swipe doing nothing. The WASM
+  shell template now opts out via `touch-action: none` and
+  `overscroll-behavior: none`, the documented way to disable it.
+
 ## v2.4.53
 
 - **Fix: swipe-back was too easily swallowed on any stepped row.** v2.4.51's
