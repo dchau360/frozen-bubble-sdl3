@@ -1,5 +1,28 @@
 # Changelog
 
+## v2.4.58
+
+- **Bot difficulty renamed to Low/Med/High, and network-room bots now name
+  their own skill.** The Bot skill row (local multiplayer settings and the
+  network room alike) showed "easy/normal/hard"; it now reads Low/Med/High.
+  A network room's bots used to get a random numeric suffix ("bot1-482");
+  they're now named "bot1-low", "bot2-med", "bot1-high", etc., so the
+  roster itself tells the other players what they're up against. Also
+  fixes a related bug found while making this change: changing Bot skill
+  after bots had already joined the lobby left their nicknames naming the
+  skill they joined at, even though the game applies whatever skill is
+  current at game-start time to every bot uniformly -- a stale name could
+  quietly lie about what a bot would actually play at.
+- **Credit where it's due:** the bot AI's shot-scoring model was ported
+  from [zepr/fbjs](https://github.com/zepr/fbjs)'s `cpu.js` (GPL-3.0);
+  this is now noted in `bubbleai.cpp` and in the README's Credits list.
+- **Fix: the bots were too hard, even on the lowest setting.** Reported
+  live as still strong enough to beat casual players consistently. Low
+  now misses about 4 times out of 5 (was half the time), and a miss no
+  longer has a decent chance of landing a near-optimal shot anyway --
+  it's now restricted to the worse half of the ranked options. Med and
+  High are unchanged.
+
 ## v2.4.57
 
 - **Fix: the "Set name" row on the LAN/Net server-list screen was untappable
