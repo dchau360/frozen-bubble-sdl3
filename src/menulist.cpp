@@ -166,25 +166,25 @@ List::List(const SDL_Rect& viewport, int selectedIndex, int rowH, int fillAlpha)
     : viewport_(viewport), selectedIndex_(selectedIndex), rowH_(rowH), fillAlpha_(fillAlpha) {}
 
 void List::Header(const std::string& title) {
-    rows_.push_back({-1, title, "", "", kGold, false, true, false, kGold, 0});
+    rows_.push_back({-1, title, "", "", kGold, false, true, false, kGold, 0, 0});
 }
 
 void List::Row(int index, const std::string& label, const std::string& value,
-               bool emphasize, bool splitAdjust) {
+               bool emphasize, bool splitAdjust, SDL_Keycode labelActivateKey) {
     rows_.push_back({index, label, value, "", emphasize ? kGold : kMuted,
-                      splitAdjust, false, false, kGold, 0});
+                      splitAdjust, false, false, kGold, 0, labelActivateKey});
 }
 
 void List::RowColored(int index, const std::string& label, const std::string& value,
                        SDL_Color valueColor, bool splitAdjust) {
-    rows_.push_back({index, label, value, "", valueColor, splitAdjust, false, false, kGold, 0});
+    rows_.push_back({index, label, value, "", valueColor, splitAdjust, false, false, kGold, 0, 0});
 }
 
 void List::RowWithPrefix(int index, const std::string& prefixGlyph, SDL_Color prefixColor,
                           const std::string& label, const std::string& value,
                           bool emphasize, SDL_Keycode prefixKey) {
     rows_.push_back({index, label, value, prefixGlyph, emphasize ? kGold : kMuted,
-                      false, false, true, prefixColor, prefixKey});
+                      false, false, true, prefixColor, prefixKey, 0});
 }
 
 int List::End(SDL_Renderer* rend, TTFText& text, SDL_Texture* panelBG,
@@ -299,8 +299,23 @@ int List::End(SDL_Renderer* rend, TTFText& text, SDL_Texture* panelBG,
         // midpoint of its own that this same mismatch would reintroduce.
         if (row.splitAdjust && valueW > 0) {
             const int valueBlockRight = viewport_.x + viewport_.w - 14;
+            const int valueBlockLeft = valueBlockRight - valueW;
             const int splitX = valueBlockRight - valueW / 2;
-            const SDL_Rect leftHalf  = {slot.x, slot.y, splitX - slot.x, slot.h};
+            // labelActivateKey != 0: this row's label is its own action
+            // (e.g. "Create Game Room"), not just more of the value being
+            // stepped, so the L/R split is confined to the value block
+            // itself and the label gets its own zone -- otherwise the
+            // value's own left half would run all the way back to the
+            // row's start, over the label, same as it does for a plain
+            // stepped row (Game speed, ...) where that's correct because
+            // there the whole row IS the value.
+            int leftEdge = slot.x;
+            if (row.labelActivateKey != 0) {
+                const SDL_Rect labelZone = {slot.x, slot.y, valueBlockLeft - slot.x, slot.h};
+                addTapRow(row.index, labelZone, -1, false, row.labelActivateKey);
+                leftEdge = valueBlockLeft;
+            }
+            const SDL_Rect leftHalf  = {leftEdge, slot.y, splitX - leftEdge, slot.h};
             const SDL_Rect rightHalf = {splitX, slot.y, slot.x + slot.w - splitX, slot.h};
             addTapRow(row.index, leftHalf, -1, false, SDLK_LEFT);
             addTapRow(row.index, rightHalf, -1, false, SDLK_RIGHT);

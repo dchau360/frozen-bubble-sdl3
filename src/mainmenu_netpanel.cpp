@@ -659,18 +659,20 @@ void MainMenu::NetPanelLobbyActionsRender() {
             menulist::List lobbyList(menulist::kListDocked, selectedActionIndex, 32,
                                       menulist::kMapFillAlpha);
             lobbyList.Header("Game rooms");
-            // Not splitAdjust: this row's tap has always meant "create" (the
-            // synthetic Return HandlePanelTap sends for a non-splitAdjust
-            // row) -- room-size is keyboard Left/Right only, same as before
-            // this conversion (see the `!currentGame && selectedActionIndex
-            // == 1` branch below). A real splitAdjust row here would eat
-            // every tap as a Left/Right step instead, breaking the only way
-            // touch players have to actually create a room. The "< N
-            // players >" bracket format is kept by building the value
-            // string ourselves rather than letting splitAdjust add it.
+            // splitAdjust + labelActivateKey=SDLK_RETURN: room-size used to
+            // be keyboard Left/Right only (see the `!currentGame &&
+            // selectedActionIndex == 1` branch below) because a plain
+            // splitAdjust row's value-half runs all the way back over the
+            // label, and this row's tap has always meant "create" -- a
+            // touch player had no way to reach the size at all. Confining
+            // the split to the value block (see menulist::List::End) fixes
+            // that: the label keeps sending Return to create, the "< N
+            // players >" block's own halves send Left/Right, same as any
+            // other stepped row. Value passed unbracketed now -- splitAdjust
+            // adds the "<  >" itself, same as every other stepped row.
             char createValue[32];
-            snprintf(createValue, sizeof(createValue), "<  %d players  >", kRoomSizes[netRoomSizeChoice]);
-            lobbyList.Row(1, "Create Game Room", createValue, true, false);
+            snprintf(createValue, sizeof(createValue), "%d players", kRoomSizes[netRoomSizeChoice]);
+            lobbyList.Row(1, "Create Game Room", createValue, true, true, SDLK_RETURN);
             for (size_t i = (size_t)(kLobbyFollow + 1); i < actions.size() && i < 18; i++) {
                 lobbyList.Row((int)i, actions[i], "");
             }
@@ -1587,7 +1589,23 @@ void MainMenu::ServerListPanelRender(bool isLAN) {
     menulist::DrawHeaderBar(rend, panelText, menulist::kHeaderBar,
         isLAN ? "LAN GAME" : "NET GAME", nullptr, false, -1, tap, menulist::kMapFillAlpha);
 
-    menulist::List list(menulist::kListFull, menuIndex, menulist::kRowH, menulist::kMapFillAlpha);
+    // "Set name" gets its own fixed section pinned to the very bottom of the
+    // panel, below the scrollable server list, rather than being the list's
+    // own last row -- as a normal row it rode wherever the row list happened
+    // to end, so with few servers it sat right under them near the top of a
+    // mostly-empty panel instead of reading as anchored to the screen (found
+    // live: reported as wanting it "at the very bottom, in its own section").
+    // Carved out of kListFull's own footprint (same x/width/bottom edge) so
+    // the two sections together fill exactly the space one List used to.
+    const int kSetNameSectionH = 2 * menulist::kRowH;  // header row + the one row
+    const int kSetNameGap = 8;
+    SDL_Rect serverListViewport = menulist::kListFull;
+    serverListViewport.h -= kSetNameSectionH + kSetNameGap;
+    SDL_Rect setNameViewport = menulist::kListFull;
+    setNameViewport.y = menulist::kListFull.y + serverListViewport.h + kSetNameGap;
+    setNameViewport.h = kSetNameSectionH;
+
+    menulist::List list(serverListViewport, menuIndex, menulist::kRowH, menulist::kMapFillAlpha);
     list.Header(isLAN ? "Local network" : "Public servers");
 
     // Row 0: LAN hosts a server here; Net opens the manual-entry form. Both
@@ -1619,7 +1637,10 @@ void MainMenu::ServerListPanelRender(bool isLAN) {
         }
     }
 
-    // Last row: Set Name.
+    list.End(rend, panelText, nullptr, tap);
+
+    // Set Name: its own section, pinned to the bottom of the panel -- see
+    // serverListViewport/setNameViewport above.
     int lastIdx = 1 + (int)servers.size();
     const char* curNick = networkPreNick[0] != '\0' ? networkPreNick
 #ifdef __ANDROID__
@@ -1627,9 +1648,10 @@ void MainMenu::ServerListPanelRender(bool isLAN) {
 #else
         : (getenv("USER") ? getenv("USER") : "unnamed");
 #endif
-    list.Row(lastIdx, "Set name", curNick, true, true);
-
-    list.End(rend, panelText, nullptr, tap);
+    menulist::List setNameList(setNameViewport, menuIndex, menulist::kRowH, menulist::kMapFillAlpha);
+    setNameList.Header("Account");
+    setNameList.Row(lastIdx, "Set name", curNick, true, true);
+    setNameList.End(rend, panelText, nullptr, tap);
 
     // Sidebar: details for whichever server row is currently selected, plus
     // connection status -- everything that used to be squeezed onto extra
