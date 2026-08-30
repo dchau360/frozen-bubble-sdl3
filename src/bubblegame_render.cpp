@@ -212,7 +212,25 @@ static void DrawAimGuide(SDL_Renderer* rend, const BubbleArray& bArray, bool isM
     // speed setting on a perfectly steady frame - at any other speed, or under frame
     // pacing variance, the guide's wall-bounce and grid-collision checks run at a
     // different granularity than actual gameplay and can predict the wrong landing cell.
-    const float ds = FrozenBubble::Instance()->deltaScale;
+    //
+    // Smoothed rather than the raw per-frame value: unlike the real bubble, this
+    // whole preview path is re-simulated from scratch every frame, so the exact
+    // 16ms/17ms alternation SDL_GetTicks() produces at a steady 60fps (see
+    // SmoothTowards) would otherwise visibly shimmer the dotted line every frame
+    // even while the aim itself is perfectly still (found live: "the autoaim
+    // display is gittery"). One shared smoothed value per real frame, not per
+    // board: multiple players' own aim guides all read the same instantaneous
+    // deltaScale in a single frame, and re-smoothing an unchanged raw value would
+    // just re-apply the same delta harmlessly, but skipping repeats keeps the
+    // smoothing's own time constant meaning "per frame" regardless of player count.
+    static float smoothedDs = 1.0f;
+    static float lastRawDs = -1.0f;
+    const float rawDs = FrozenBubble::Instance()->deltaScale;
+    if (rawDs != lastRawDs) {
+        lastRawDs = rawDs;
+        smoothedDs = SmoothTowards(smoothedDs, rawDs);
+    }
+    const float ds = smoothedDs;
     const int substeps = LaunchSubstepCount(BUBBLE_SIZE, ds);
     const float subscale = ds / static_cast<float>(substeps);
     float dx = speed * cosf(angle) * subscale;

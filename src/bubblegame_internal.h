@@ -43,6 +43,26 @@ inline int LaunchSubstepCount(int bubbleSize, float deltaScale) {
     return std::max(1, static_cast<int>(std::ceil(distance / collisionRadius)));
 }
 
+// Exponential smoothing toward a freshly-read value, for a per-frame input
+// that is noisier than what it represents. FrozenBubble::deltaScale is
+// derived from SDL_GetTicks(), whose whole-millisecond resolution makes a
+// steady 60fps frame's own "elapsed" alternate between 16ms and 17ms every
+// single frame -- an exact, persistent few-percent oscillation in
+// deltaScale, not incidental noise. That is invisible to the real bubble's
+// own incremental per-frame movement, but the aim guide re-simulates its
+// entire multi-hundred-step preview path from scratch every frame, so that
+// oscillation accumulates over the path length and visibly shimmers the
+// dotted line even while the aim angle itself is perfectly still. A rate of
+// 0.2 damps that alternation to a small fraction of its raw size within a
+// couple of frames while still tracking a real, sustained change (an actual
+// frame-rate drop, or the player changing the speed-multiplier setting)
+// within a handful of frames -- imperceptible for a preview line, unlike
+// the flicker it replaces.
+inline float SmoothTowards(float current, float target, float rate = 0.2f) {
+    if (!std::isfinite(target)) return current;
+    return current + (target - current) * rate;
+}
+
 struct SingleBubble {
     int assignedArray; // assigned board to use
     int bubbleId; // id to use bubble image
