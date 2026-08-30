@@ -221,23 +221,19 @@ void RequestPersistentStorageFlush() {
 }
 
 #ifdef __ANDROID__
-// Calls FrozenBubbleActivity.isTelevision(). Same Activity-object route as
-// androidPushToken() below, and for the same JNI-classloader reason.
-//
-// Cached: the answer cannot change while the process lives, and one caller
-// (the chat row in mainmenu_input.cpp) asks once per frame.
-static bool androidIsTelevision() {
-    static int cached = -1;
-    if (cached >= 0) return cached != 0;
-
+// Calls a no-arg static boolean method on FrozenBubbleActivity by name. Same
+// Activity-object route as androidPushToken() below, and for the same
+// JNI-classloader reason. Shared by androidIsTelevision() and
+// androidIsTablet() below, which differ only in which method they call.
+static bool callAndroidStaticBoolMethod(const char *methodName) {
     JNIEnv *env = (JNIEnv *)SDL_GetAndroidJNIEnv();
     jobject activity = (jobject)SDL_GetAndroidActivity();
-    if (!env || !activity) return false;   // not cached: try again once it exists
+    if (!env || !activity) return false;   // not cached by caller: try again once it exists
 
     jclass cls = env->GetObjectClass(activity);
-    jmethodID mid = env->GetStaticMethodID(cls, "isTelevision", "()Z");
+    jmethodID mid = env->GetStaticMethodID(cls, methodName, "()Z");
     if (!mid) {
-        SDL_Log("androidIsTelevision: isTelevision method not found");
+        SDL_Log("callAndroidStaticBoolMethod: %s method not found", methodName);
         env->ExceptionClear();
         env->DeleteLocalRef(cls);
         env->DeleteLocalRef(activity);
@@ -253,9 +249,32 @@ static bool androidIsTelevision() {
     }
     env->DeleteLocalRef(cls);
     env->DeleteLocalRef(activity);
+    return result;
+}
 
+// Cached: the answer cannot change while the process lives, and one caller
+// (the chat row in mainmenu_input.cpp) asks once per frame.
+static bool androidIsTelevision() {
+    static int cached = -1;
+    if (cached >= 0) return cached != 0;
+    JNIEnv *env = (JNIEnv *)SDL_GetAndroidJNIEnv();
+    jobject activity = (jobject)SDL_GetAndroidActivity();
+    if (!env || !activity) return false;   // not cached: try again once it exists
+    bool result = callAndroidStaticBoolMethod("isTelevision");
     cached = result ? 1 : 0;
-    return cached != 0;
+    return result;
+}
+
+// Cached for the same reason as androidIsTelevision() above.
+static bool androidIsTablet() {
+    static int cached = -1;
+    if (cached >= 0) return cached != 0;
+    JNIEnv *env = (JNIEnv *)SDL_GetAndroidJNIEnv();
+    jobject activity = (jobject)SDL_GetAndroidActivity();
+    if (!env || !activity) return false;   // not cached: try again once it exists
+    bool result = callAndroidStaticBoolMethod("isTablet");
+    cached = result ? 1 : 0;
+    return result;
 }
 #endif
 
@@ -273,6 +292,14 @@ bool DeviceHasTouchscreen() {
     SDL_TouchID *devices = SDL_GetTouchDevices(&count);
     SDL_free(devices);
     return count > 0;
+}
+
+bool AndroidIsTablet() {
+#ifdef __ANDROID__
+    return androidIsTablet();
+#else
+    return false;
+#endif
 }
 
 void SetTextInputAreaLogical(SDL_Renderer *renderer, const SDL_Rect &logical) {
