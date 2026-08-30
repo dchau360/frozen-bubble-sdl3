@@ -295,6 +295,25 @@ int main() {
             SDL_Event ev;
             CHECK(SDL_PollEvent(&ev) && ev.type == SDL_EVENT_KEY_DOWN);
             CHECK(ev.key.key == SDLK_LEFT);
+
+            // The defect this pins: an undershot vertical swipe (real
+            // travel, but short of ClassifyMenuSwipe's own Up/Down
+            // threshold) that releases back on the row it started from --
+            // already selected, since it barely moved -- must not activate
+            // that row. It is still consumed (true): the tap landed on a
+            // real row, so the caller must not fall back to
+            // tap-anywhere-confirms either.
+            SDL_PumpEvents();
+            for (SDL_Event drain; SDL_PollEvent(&drain); ) {}
+            CHECK(menu->HandlePanelTap(headlineX, rowY, 20.f) == true);
+            CHECK(!SDL_PollEvent(&ev));  // nothing pushed -- no LEFT, no RETURN
+
+            // A near-stationary release (ordinary tap jitter, not a failed
+            // swipe) on the same already-selected row must still activate
+            // normally -- this guard must not eat real taps.
+            CHECK(menu->HandlePanelTap(headlineX, rowY, 3.f) == true);
+            CHECK(SDL_PollEvent(&ev) && ev.type == SDL_EVENT_KEY_DOWN);
+            CHECK(ev.key.key == SDLK_LEFT);
         }
     }
 
