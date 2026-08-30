@@ -1,5 +1,23 @@
 # Changelog
 
+## v2.4.56
+
+- **Fix: the WASM mouse-echo debounce could lose a race under load.** The
+  browser's synthesized `MOUSE_BUTTON_DOWN` echo of a real touch tap was
+  only dropped if it arrived within a fixed 200ms of the tap's own
+  `FINGER_UP` -- an assumption that held under light load but not always:
+  on a busier frame the echo can arrive later, dispatching as its own,
+  independent tap that re-activates whatever row the real tap just
+  selected. For a row with no dedicated activation key (the network room's
+  Bots count, where a second tap just sends RETURN) that means the row
+  re-increments itself with no further tap from the player. Reported live
+  on itch.io/iPhone as the Bots row occasionally getting stuck this way --
+  intermittently, not every time, exactly what a timing race that only
+  loses sometimes looks like. Replaced the fixed window with
+  `WasmMouseEchoGuard`, which tracks "does the browser still owe this tap
+  its echo" as actual state instead of a clock, so an arbitrarily late echo
+  is still recognized whenever it shows up.
+
 ## v2.4.55
 
 - **Fix: a tap missing every panel row re-activated the selected row instead
