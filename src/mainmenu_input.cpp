@@ -554,7 +554,18 @@ bool MainMenu::HandlePanelTap(float lx, float ly) {
 
 bool MainMenu::IsSteppedRowAt(float lx, float ly) const {
     for (const PanelTapRow& row : panelTapRows) {
-        if (!row.splitAdjust) continue;
+        // menulist::List no longer registers a stepped row as one wide
+        // splitAdjust rect (see List::End()) -- it registers two adjacent
+        // rects sharing an index, each with activateKey pinned to the
+        // direction its own half sends, so the boundary can sit at the
+        // drawn "< value >" text instead of the row's raw geometric middle.
+        // A caller asking "is this a stepped row" has to recognize both
+        // shapes, or every List-rendered stepped row would silently stop
+        // registering as one -- reopening the exact swipe-vs-tap collision
+        // this function exists to prevent.
+        const bool stepped = row.splitAdjust ||
+                             row.activateKey == SDLK_LEFT || row.activateKey == SDLK_RIGHT;
+        if (!stepped) continue;
         if (lx < row.rect.x || lx >= row.rect.x + row.rect.w) continue;
         if (ly < row.rect.y || ly >= row.rect.y + row.rect.h) continue;
         return true;

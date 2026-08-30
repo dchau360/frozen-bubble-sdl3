@@ -40,14 +40,33 @@
 // two independently-computed coordinates. IsWithinMenuTapDebounce is what
 // the mouse path now checks before acting, to recognize that second
 // dispatch as the browser's own echo of the tap FINGER_UP already handled.
+//
+// Neither of those was the actual bug, confirmed by driving the real,
+// deployed build with a mouse click (which goes through neither gesture
+// path at all) and watching the value go the wrong way. menulist::List
+// drew a stepped row's "<  value  >" right-aligned, near the row's right
+// edge, but split its TAP ROW down the row's own raw geometric middle --
+// so on a row with a long label and a short value (Game speed's "<  3.0  >"
+// against the whole width of the row), the visible "<" a player would
+// naturally tap to decrease sat physically inside what the code called the
+// row's right half, and tapping it increased the value instead. This is
+// what the last two fixes' own asymmetry ("raising always worked") was
+// actually evidence of the whole time. The section below drives a real
+// menulist::List render of this exact row and checks where the resulting
+// tap boundary actually landed.
 
 #include <SDL3/SDL.h>
+#include <SDL3_ttf/SDL_ttf.h>
 
 #include "frozenbubble.h"
+#include "gamesettings.h"
 #include "mainmenu.h"
+#include "mainmenu_internal.h"
+#include "platform.h"
 
 #include <cstdio>
 #include <memory>
+#include <vector>
 
 static int failures = 0;
 #define CHECK(expression) do { \
@@ -59,11 +78,11 @@ static int failures = 0;
 } while (false)
 
 // Mirrors the minimal slice of MainMenuTestAccess (tests/localmultiplayer_settings_test.cpp)
-// this file needs: BeginPanelTapRows and AddPanelTapRow are private, published
-// through the same friend declaration that access grants. IsSteppedRowAt
-// itself is public -- a caller deciding whether a touch needs HandlePanelTap's
-// own left/right split is exactly the production use case, so it needs no
-// special access.
+// this file needs: BeginPanelTapRows, AddPanelTapRow, KeysPanelRender and
+// keyConfigIndex are private, published through the same friend declaration
+// that access grants. IsSteppedRowAt and HandlePanelTap are public -- a
+// caller deciding whether, and how, a touch should reach a row is exactly
+// the production use case, so neither needs special access.
 struct MainMenuTestAccess {
     static std::unique_ptr<MainMenu> Create(const SDL_Renderer* renderer) {
         return std::unique_ptr<MainMenu>(
@@ -72,14 +91,53 @@ struct MainMenuTestAccess {
     static void BeginRows(MainMenu& menu, int* sel) {
         menu.BeginPanelTapRows(sel);
     }
-    static void AddRow(MainMenu& menu, int index, SDL_Rect rect, bool splitAdjust) {
-        menu.AddPanelTapRow(index, rect, -1, splitAdjust, 0);
+    static void AddRow(MainMenu& menu, int index, SDL_Rect rect, bool splitAdjust,
+                       SDL_Keycode activateKey = 0) {
+        menu.AddPanelTapRow(index, rect, -1, splitAdjust, activateKey);
+    }
+    // Renders the real Keys/Settings panel -- the one KeysPanelRender a
+    // player actually sees -- so the tap rows under test are whatever
+    // menulist::List really registered for the current speedMultiplier,
+    // not a hand-built stand-in for it.
+    static void RenderKeysPanel(MainMenu& menu, int selectedIndex) {
+        menu.showingKeysPanel = true;
+        menu.keyConfigIndex = selectedIndex;
+        menu.KeysPanelRender();
+    }
+    static void SelectKeysRow(MainMenu& menu, int index) {
+        menu.keyConfigIndex = index;
+    }
+    // Every registered rect sharing this row index, in registration order
+    // (menulist::List now emits two for a stepped row -- see List::End()).
+    static std::vector<SDL_Rect> RectsForIndex(const MainMenu& menu, int index) {
+        std::vector<SDL_Rect> out;
+        for (const auto& row : menu.panelTapRows)
+            if (row.index == index) out.push_back(row.rect);
+        return out;
+    }
+    static SDL_Keycode ActivateKeyAt(const MainMenu& menu, int index, size_t which) {
+        size_t seen = 0;
+        for (const auto& row : menu.panelTapRows) {
+            if (row.index != index) continue;
+            if (seen == which) return row.activateKey;
+            ++seen;
+        }
+        return 0;
     }
 };
 
 int main() {
     SDL_SetEnvironmentVariable(SDL_GetEnvironment(), "SDL_VIDEODRIVER", "dummy", true);
     SDL_Init(SDL_INIT_VIDEO);
+    TTF_Init();
+    InitDataDir();
+    SDL_Window* window = SDL_CreateWindow(
+        "menu-touch-gesture-test", 64, 64, SDL_WINDOW_HIDDEN);
+    SDL_Renderer* renderer = window ? SDL_CreateRenderer(window, nullptr) : nullptr;
+    if (renderer == nullptr) {
+        std::fprintf(stderr, "headless renderer setup failed: %s\n", SDL_GetError());
+        return 1;
+    }
 
     // --- ClassifyMenuSwipe ---------------------------------------------
 
@@ -139,6 +197,98 @@ int main() {
         // A pure query: asking twice must not change what a real tap there
         // would do (no selection or event side effect to accidentally trip).
         CHECK(menu->IsSteppedRowAt(20.f, 55.f));
+    }
+
+    // A hand-built row can carry activateKey directly instead of splitAdjust
+    // -- the shape menulist::List now actually emits (see List::End()).
+    // IsSteppedRowAt has to recognize this shape too, or every List-rendered
+    // stepped row stops registering as one the moment List stopped setting
+    // splitAdjust, silently reopening the swipe-vs-tap collision above.
+    {
+        std::unique_ptr<MainMenu> menu = MainMenuTestAccess::Create(nullptr);
+        int selection = 0;
+        MainMenuTestAccess::BeginRows(*menu, &selection);
+        MainMenuTestAccess::AddRow(*menu, 1, SDL_Rect{10, 44, 300, 32}, false, SDLK_LEFT);
+        MainMenuTestAccess::AddRow(*menu, 1, SDL_Rect{310, 44, 104, 32}, false, SDLK_RIGHT);
+        CHECK(menu->IsSteppedRowAt(20.f, 55.f));
+        CHECK(menu->IsSteppedRowAt(350.f, 55.f));
+    }
+
+    // --- menulist::List's stepped-row split, against a real render --------
+    //
+    // The actual bug: the tap boundary was the row's own raw geometric
+    // middle, but "<  value  >" is drawn right-aligned near the row's right
+    // edge. On a row with a long label and a short value -- exactly Game
+    // speed's shape -- the visible "<" sat inside what the old boundary
+    // called the right half, so tapping the one thing that looks like
+    // "decrease" increased instead. This drives the real KeysPanelRender,
+    // at the real current speedMultiplier, and checks where the boundary
+    // menulist::List actually drew it landed -- not a hand-built stand-in.
+    {
+        GameSettings* gs = GameSettings::Instance();
+        gs->speedMultiplier = 3.0f;  // pinned rather than trusting a local settings file
+
+        std::unique_ptr<MainMenu> menu = MainMenuTestAccess::Create(renderer);
+        MainMenuTestAccess::RenderKeysPanel(*menu, kKeyRowSpeed);
+
+        const std::vector<SDL_Rect> rects =
+            MainMenuTestAccess::RectsForIndex(*menu, kKeyRowSpeed);
+        CHECK(rects.size() == 2);
+        // The row's own y, read from the real render rather than guessed --
+        // where it falls among KeysPanelRender's other rows is an
+        // implementation detail this test has no business hardcoding.
+        const float rowY = rects.empty() ? 0.f : rects[0].y + rects[0].h * 0.5f;
+        if (rects.size() == 2) {
+            const SDL_Rect& left = rects[0];
+            const SDL_Rect& right = rects[1];
+
+            // The two halves must still be one uninterrupted row: nothing
+            // between them a tap could fall into and hit neither, and
+            // nothing sent twice.
+            CHECK(left.y == right.y && left.h == right.h);
+            CHECK(left.x + left.w == right.x);
+
+            // menulist.h's own kListFull viewport is {10, 44, 404, ...}, so
+            // the row spans x:[10, 414) and its OLD, buggy midpoint was
+            // exactly 212. The fixed boundary must sit well to the right of
+            // that -- close to the row's own right edge, where "<  3.0  >"
+            // is actually drawn -- not at the row's raw geometric middle.
+            // (This also bounds the headline point picked below: it is
+            // always inside `left` by construction, but only meaningfully
+            // pins the regression if `left` reaches well past the old 212
+            // midpoint -- which these two checks establish independently.)
+            CHECK(left.x + left.w > 300);
+            CHECK(left.x + left.w < 414);
+
+            CHECK(MainMenuTestAccess::ActivateKeyAt(*menu, kKeyRowSpeed, 0) == SDLK_LEFT);
+            CHECK(MainMenuTestAccess::ActivateKeyAt(*menu, kKeyRowSpeed, 1) == SDLK_RIGHT);
+
+            // The headline case: a point just inside the LEFT zone's own
+            // right edge -- i.e. right where "<" actually renders, not a
+            // guessed pixel that depends on font metrics this test doesn't
+            // control. Given the >300 check above, this is always well past
+            // the OLD, buggy midpoint of 212, which would have called it
+            // the increase half.
+            const float headlineX = left.x + left.w - 5.f;
+
+            // Drain whatever's already queued (window setup enqueues its
+            // own events, e.g. SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED) so the
+            // poll below can only see what this tap sequence pushes.
+            SDL_PumpEvents();
+            for (SDL_Event drain; SDL_PollEvent(&drain); ) {}
+
+            // Genuinely reproduce the two-tap dance: the row starts
+            // deselected (RenderKeysPanel left it selected, which would let
+            // the first tap double as an adjust too), a first tap only
+            // selects, and only the second, on the visible "<", adjusts it.
+            MainMenuTestAccess::SelectKeysRow(*menu, kKeyRowLeft);
+            CHECK(menu->HandlePanelTap(20.f, rowY));       // select (first tap)
+            CHECK(menu->HandlePanelTap(headlineX, rowY));  // adjust (second tap)
+
+            SDL_Event ev;
+            CHECK(SDL_PollEvent(&ev) && ev.type == SDL_EVENT_KEY_DOWN);
+            CHECK(ev.key.key == SDLK_LEFT);
+        }
     }
 
     // --- IsWithinMenuTapDebounce -----------------------------------------
