@@ -199,15 +199,17 @@ int main() {
     CHECK(ClassifyMenuSwipe(-45.f, 2.f, false) == MenuSwipeGesture::Back);
     CHECK(ClassifyMenuSwipe(-45.f, 2.f, true)  == MenuSwipeGesture::None);
 
-    // The regression this pins: once "Set name" (a stepped row) started
-    // being pinned to the panel's own bottom edge on every LAN/Net screen,
-    // a full, deliberate edge-to-edge swipe back on an iPhone routinely
-    // released right on top of it -- and unconditional suppression on any
-    // stepped row broke "swipe back" there entirely, not just the narrow
-    // accidental-drift case above. A swipe that travels well past what an
-    // ordinary tap can drift is unambiguous: nobody adjusts a stepped row's
-    // value by dragging 100+ logical units, only by a stationary second
-    // tap, so this must still fire Back even on a stepped row.
+    // The regression this pins: when a stepped row is pinned to the panel's
+    // own bottom edge (the LAN/Net "Set name" section was, at the time --
+    // see mainmenu_netpanel.cpp for why it turned out not to actually be a
+    // stepped row at all), a full, deliberate edge-to-edge swipe back on an
+    // iPhone routinely released right on top of it -- and unconditional
+    // suppression on any stepped row broke "swipe back" there entirely, not
+    // just the narrow accidental-drift case above. A swipe that travels
+    // well past what an ordinary tap can drift is unambiguous: nobody
+    // adjusts a stepped row's value by dragging 100+ logical units, only by
+    // a stationary second tap, so this must still fire Back even on a
+    // stepped row.
     CHECK(ClassifyMenuSwipe(-300.f, 2.f, true) == MenuSwipeGesture::Back);
 
     // The regression that pin above didn't catch: an edge-to-edge swipe is
@@ -456,6 +458,49 @@ int main() {
         // edge -- not just some other constant a future refactor could drift
         // away from the visible bottom without this test noticing.
         CHECK(yFewServers + menulist::kRowH == menulist::kListFull.y + menulist::kListFull.h);
+    }
+
+    // --- "Set name" must activate on tap, not step left/right ------------
+    //
+    // The actual defect, reported live on itch.io on both iPhone touch and
+    // a plain desktop mouse click: the row was registered with
+    // splitAdjust=true, which gives it the "<  value  >" look but also
+    // means menulist::List::End splits it into two zones that each send
+    // SDLK_LEFT or SDLK_RIGHT on a second tap -- never SDLK_RETURN. Neither
+    // the LAN nor the Net server-list screen has a LEFT/RIGHT handler at
+    // all (there is nothing to step -- the "value" is just the current
+    // nickname, on display, not adjustable), so every tap silently did
+    // nothing. A literal keyboard Enter still worked throughout, because it
+    // reaches MenuReturnKey() directly and never consults a row's
+    // activateKey at all -- which is exactly why this was invisible to
+    // keyboard testing and only showed up as "the row highlights but
+    // tapping it does nothing."
+    {
+        std::unique_ptr<MainMenu> menu = MainMenuTestAccess::Create(renderer);
+        MainMenuTestAccess::SetPublicServers(*menu, {{"host0", 1511, "", 10}});
+        MainMenuTestAccess::RenderServerList(*menu, false);
+        const int lastIdx = 1 + 1;  // 1 server -> Set name is index 2
+
+        const std::vector<SDL_Rect> rects =
+            MainMenuTestAccess::RectsForIndex(*menu, lastIdx);
+        CHECK(rects.size() == 1);  // one plain zone, not a left/right split
+        if (!rects.empty()) {
+            CHECK(MainMenuTestAccess::ActivateKeyAt(*menu, lastIdx, 0) == 0);
+
+            const SDL_Rect& row = rects[0];
+            const float x = row.x + row.w * 0.5f;
+            const float y = row.y + row.h * 0.5f;
+
+            SDL_PumpEvents();
+            for (SDL_Event drain; SDL_PollEvent(&drain); ) {}
+
+            CHECK(menu->HandlePanelTap(x, y));       // select (first tap)
+            CHECK(menu->HandlePanelTap(x, y));       // activate (second tap)
+
+            SDL_Event ev;
+            CHECK(SDL_PollEvent(&ev) && ev.type == SDL_EVENT_KEY_DOWN);
+            CHECK(ev.key.key == SDLK_RETURN);
+        }
     }
 
     // --- A tap that lands on no row, on a panel that hit-tests its rows ---

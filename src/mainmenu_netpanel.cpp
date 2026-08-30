@@ -1650,7 +1650,21 @@ void MainMenu::ServerListPanelRender(bool isLAN) {
 #endif
     menulist::List setNameList(setNameViewport, menuIndex, menulist::kRowH, menulist::kMapFillAlpha);
     setNameList.Header("Account");
-    setNameList.Row(lastIdx, "Set name", curNick, true, true);
+    // Not splitAdjust: "Set name" has no left/right-steppable value -- the
+    // whole row is one action (open the nickname editor), the same as a
+    // plain Row anywhere else. Passing splitAdjust=true here used to give
+    // it the "<  value  >" stepped-row look, but that also makes every tap
+    // on the row send SDLK_LEFT/SDLK_RIGHT instead of SDLK_RETURN (see
+    // menulist::List::End's split-rect registration) -- and neither the
+    // LAN nor Net server-list screen (networkInputMode 7/10) has a
+    // LEFT/RIGHT handler at all, so every tap silently did nothing. A
+    // literal keyboard Enter still worked, because MenuReturnKey() is
+    // reached directly from a real key event and never goes through
+    // HandlePanelTap's row-activation lookup at all -- which is exactly
+    // why this only ever showed up as "the row highlights but tapping (or
+    // clicking) it does nothing," reported live on itch.io on both iPhone
+    // touch and desktop mouse.
+    setNameList.Row(lastIdx, "Set name", curNick, true);
     setNameList.End(rend, panelText, nullptr, tap);
 
     // Sidebar: details for whichever server row is currently selected, plus
