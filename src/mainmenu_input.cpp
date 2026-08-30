@@ -614,7 +614,8 @@ bool MainMenu::KeysPanelKey(SDL_Event *e) {
                     // presses on a row that isn't drawn.
                     auto skippableRow = [](int row) {
 #ifdef __ANDROID__
-                        return (row == kKeyRowRemoveAdsYear ||
+                        return (row == kKeyRowRemoveAdsMonth ||
+                                row == kKeyRowRemoveAdsYear ||
                                 row == kKeyRowRemoveAdsForever) && AdsRemoved();
 #else
                         (void)row;
@@ -728,15 +729,18 @@ bool MainMenu::KeysPanelKey(SDL_Event *e) {
                             AudioMixer::Instance()->PlaySFX("menu_change");
 #endif
 #ifdef __ANDROID__
-                        } else if (keyConfigIndex == kKeyRowRemoveAdsYear ||
+                        } else if (keyConfigIndex == kKeyRowRemoveAdsMonth ||
+                                   keyConfigIndex == kKeyRowRemoveAdsYear ||
                                    keyConfigIndex == kKeyRowRemoveAdsForever) {
                             // Already paid: the rows render as a thank-you line
                             // with nothing to activate, so ignore the press
                             // rather than reopening Play on a purchase they
                             // already own.
                             if (!AdsRemoved()) {
-                                SDL_SendAndroidMessage(
-                                    keyConfigIndex == kKeyRowRemoveAdsYear ? 0x8002 : 0x8003, 0);
+                                int msg = keyConfigIndex == kKeyRowRemoveAdsMonth  ? 0x8004
+                                        : keyConfigIndex == kKeyRowRemoveAdsYear   ? 0x8002
+                                                                                   : 0x8003;
+                                SDL_SendAndroidMessage(msg, 0);
                                 AudioMixer::Instance()->PlaySFX("menu_selected");
                             }
 #endif

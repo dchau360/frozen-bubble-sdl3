@@ -52,13 +52,14 @@ enum KeyConfigRow {
     // the canvas there, so the CSS shell does the scaling instead.
     kKeyRowFullscreen = 8,
 # ifdef __ANDROID__
-    // Ads and in-app purchases are Android-only, so these two rows exist
+    // Ads and in-app purchases are Android-only, so these three rows exist
     // nowhere else. They replaced an [R]-to-buy hint that was unreachable in
     // practice: nothing maps a controller or a touch to R, so no phone,
     // tablet, or TV box could ever trigger it.
-    kKeyRowRemoveAdsYear   = 9,
-    kKeyRowRemoveAdsForever = 10,
-    kKeyRowResetAll   = 11,
+    kKeyRowRemoveAdsMonth   = 9,
+    kKeyRowRemoveAdsYear    = 10,
+    kKeyRowRemoveAdsForever = 11,
+    kKeyRowResetAll   = 12,
 # else
     kKeyRowResetAll   = 9,
 # endif
