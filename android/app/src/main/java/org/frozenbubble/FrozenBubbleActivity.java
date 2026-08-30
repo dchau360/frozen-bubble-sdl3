@@ -195,6 +195,29 @@ public class FrozenBubbleActivity extends SDLActivity {
                     || pm.hasSystemFeature("android.hardware.type.television"));
     }
 
+    /**
+     * Called from C++ via JNI. True on a tablet, false on a phone or TV box.
+     *
+     * A phone and a tablet both report a touchscreen, so
+     * DeviceHasTouchscreen() (native side) cannot tell them apart the way
+     * isTelevision() above already separates a TV box -- this fills that
+     * gap. {@code smallestScreenWidthDp >= 600} is the platform's own
+     * phone/tablet threshold: it is what the "sw600dp" resource-qualifier
+     * bucket means, and what Android's developer guidance recommends for
+     * this exact split.
+     *
+     * Wrapped as a static on this class for the same JNI-classloader reason
+     * as {@link #getPushToken()} above.
+     */
+    public static boolean isTablet() {
+        Context ctx = SDL.getContext();
+        if (ctx == null) {
+            return false;
+        }
+        Configuration config = ctx.getResources().getConfiguration();
+        return config.smallestScreenWidthDp >= 600;
+    }
+
     public static String fetchUrl(String urlStr) {
         try {
             URL url = new URL(urlStr);

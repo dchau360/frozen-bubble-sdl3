@@ -156,18 +156,25 @@ FrozenBubble::FrozenBubble() {
     // size whenever this hint is unset. The window is 640x480, so SDL decides
     // landscape-only by itself and the plist never gets a say.
     //
-    // On Android a single APK serves TV boxes and phones, so the manifest
-    // cannot pick per device; SDL's setRequestedOrientation at window creation
-    // overrides whatever the manifest asked for. A TV is landscape hardware and
-    // stays landscape. A phone gets portrait, which is how it is already being
-    // held.
+    // On Android a single APK serves TV boxes, phones and tablets, so the
+    // manifest cannot pick per device; SDL's setRequestedOrientation at
+    // window creation overrides whatever the manifest asked for. A TV is
+    // landscape hardware and stays landscape. A phone gets portrait, which
+    // is how it is already being held. A tablet is screen-large enough that
+    // DeviceHasTouchscreen() alone cannot tell it apart from a phone (both
+    // report a touchscreen), but it is normally held either way rather than
+    // fixed in portrait like a phone -- AndroidIsTablet() checked first
+    // gives it the TV's landscape treatment instead of falling into the
+    // phone branch and locking out rotation entirely.
     //
     // Naming both orientations would not give a phone free rotation anyway:
     // for a non-resizable window SDL breaks the tie by aspect (see
     // SDLActivity.setOrientationBis), and 640x480 is wider than tall, so
     // "Portrait LandscapeLeft LandscapeRight" resolves right back to landscape.
 #if defined(__ANDROID__)
-    if (DeviceHasTouchscreen()) {
+    if (AndroidIsTablet()) {
+        SDL_SetHint(SDL_HINT_ORIENTATIONS, "LandscapeLeft LandscapeRight");
+    } else if (DeviceHasTouchscreen()) {
         SDL_SetHint(SDL_HINT_ORIENTATIONS, "Portrait");
     } else {
         SDL_SetHint(SDL_HINT_ORIENTATIONS, "LandscapeLeft LandscapeRight");
