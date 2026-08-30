@@ -1,5 +1,22 @@
 # Changelog
 
+## v2.4.45
+
+- **Fix: Game speed (and every other stepped row) still could not be
+  lowered via touch on the WASM/browser build**, reported live on itch.io
+  after v2.4.44 shipped the native version of this fix. A browser fires
+  both a real `FINGER_UP` and a synthesized `MOUSE_BUTTON_DOWN` for one
+  physical tap; native SDL tags the synthesized one so it can be skipped,
+  but Emscripten's tagging can't be trusted, so on WASM both ran —
+  dispatching every menu tap and main-menu button press twice, from two
+  independently computed coordinates, which is what let the two dispatches
+  of one tap on a stepped row's left half disagree about which half it
+  actually was. A short debounce, keyed off the same clock already used to
+  dedupe a multi-finger `FINGER_UP` re-fire, now recognizes the WASM mouse
+  event as that tap's own browser echo and drops it — `FINGER_UP` alone
+  drives WASM menu touch, matching how the in-game aim code already picks
+  one input path on that platform.
+
 ## v2.4.44
 
 - **WASM/browser hosts can now add real network bots.** A browser tab can't
