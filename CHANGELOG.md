@@ -1,5 +1,21 @@
 # Changelog
 
+## v2.4.60
+
+- **Fix: a player who had already lost a round could keep firing bubbles.**
+  Reported live in online multiplayer -- the board was frozen and the
+  round had moved on for everyone else, but mouse/touch clicks still
+  launched bubbles. Keyboard and gamepad already stopped for a player
+  who had lost; mouse/touch aim and fire went through a separate path
+  that skipped that check entirely.
+- **Fix: a bot rejected when joining a room could sit invisibly stuck.**
+  If the server ever turns away a bot's attempt to join a room (the
+  room wasn't ready yet, was full, or the name collided), the bot's
+  connection stayed open with no indication anything had gone wrong --
+  it would show as connected in the general lobby while never actually
+  appearing in the room. The client now notices the rejection, drops
+  the bot, and tells the host why.
+
 ## v2.4.59
 
 - **Fix: the WASM build showed a permanent black screen on some Android
