@@ -137,11 +137,22 @@ void MainMenu::PumpLobbyBots() {
     // screen still means what it says, and so asking for the same number
     // again actually reconnects one.
     int rejectedCount = 0;
+    // A JOIN can be turned away for a reason that has nothing to do with the
+    // bot cap (the room not existing yet, being full, a name collision) --
+    // tracked separately so the two cases get their own, honest message
+    // rather than "server bot limit reached" for something that was not the
+    // cap at all.
+    int joinRejectedCount = 0;
+    std::string lastJoinRejectReason;
     const size_t before = lobbyBots.size();
     lobbyBots.erase(std::remove_if(lobbyBots.begin(), lobbyBots.end(),
-                                   [&rejectedCount](const std::unique_ptr<NetBotConnection>& b) {
+                                   [&](const std::unique_ptr<NetBotConnection>& b) {
                                        if (!b || !b->IsConnected()) {
                                            if (b && b->WasRejectedByServer()) ++rejectedCount;
+                                           if (b && b->WasJoinRejected()) {
+                                               ++joinRejectedCount;
+                                               lastJoinRejectReason = b->JoinRejectReason();
+                                           }
                                            return true;
                                        }
                                        return false;
@@ -157,6 +168,27 @@ void MainMenu::PumpLobbyBots() {
             } else {
                 snprintf(msg, sizeof(msg), "Server bot limit reached -- %d bots could not join",
                          rejectedCount);
+            }
+            netClient->AddStatusMessage(msg);
+        }
+    }
+    if (joinRejectedCount > 0) {
+        NetworkClient* netClient = NetworkClient::Instance();
+        if (netClient) {
+            // The known reasons get a plain-English message; anything else
+            // (a future server response this client does not recognize by
+            // name) still gets said out loud rather than staying silent.
+            const char* why = "could not join";
+            if (lastJoinRejectReason == "NO_SUCH_GAME") why = "room not found -- try again";
+            else if (lastJoinRejectReason == "GAME_FULL") why = "room is full";
+            else if (lastJoinRejectReason == "NICK_IN_USE") why = "name already taken -- try again";
+            else if (lastJoinRejectReason == "ALREADY_IN_GAME") why = "already in a room -- try again";
+            else if (lastJoinRejectReason == "INVALID_NICK") why = "invalid bot name";
+            char msg[128];
+            if (joinRejectedCount == 1) {
+                snprintf(msg, sizeof(msg), "Could not add a bot: %s", why);
+            } else {
+                snprintf(msg, sizeof(msg), "Could not add %d bots: %s", joinRejectedCount, why);
             }
             netClient->AddStatusMessage(msg);
         }
