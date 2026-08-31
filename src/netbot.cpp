@@ -81,6 +81,27 @@ bool IsBotLimitReachedReply(const std::string& line) {
     return line.find("BOT_LIMIT_REACHED") != std::string::npos;
 }
 
+bool IsJoinRejectedReply(const std::string& line, std::string* reason) {
+    // The reply is on the same line as any other command reply -- "FB/1.3
+    // JOIN: <reason>" -- so anchoring on "JOIN: " keeps this from firing on
+    // an unrelated command that happens to mention one of these words (a
+    // chat message, say). server/game.c's JOIN handler is the only source
+    // of these five strings.
+    static const char kJoinReply[] = "JOIN: ";
+    const size_t at = line.find(kJoinReply);
+    if (at == std::string::npos) return false;
+    static const char* const kReasons[] = {
+        "NO_SUCH_GAME", "GAME_FULL", "NICK_IN_USE", "ALREADY_IN_GAME", "INVALID_NICK"
+    };
+    for (const char* r : kReasons) {
+        if (line.find(r, at) != std::string::npos) {
+            if (reason) *reason = r;
+            return true;
+        }
+    }
+    return false;
+}
+
 namespace {
 
 // The push that announces a game and carries the id-to-nickname roster.
@@ -129,6 +150,17 @@ void NetBotConnection::HandleLine(const std::string& line) {
         SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
                     "netbot %s: server bot limit reached, disconnecting", nick.c_str());
         rejectedByServer = true;
+        Leave();
+        return;
+    }
+
+    std::string joinReason;
+    if (IsJoinRejectedReply(line, &joinReason)) {
+        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
+                    "netbot %s: JOIN rejected (%s), disconnecting", nick.c_str(),
+                    joinReason.c_str());
+        joinRejected = true;
+        joinRejectReason = joinReason;
         Leave();
         return;
     }

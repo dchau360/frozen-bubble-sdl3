@@ -81,6 +81,16 @@ bool IsKickedMePush(const std::string& line);
 // way IsKickedMePush has to.
 bool IsBotLimitReachedReply(const std::string& line);
 
+// True for the server's reply rejecting our own JOIN command: the room did
+// not exist (a race with the leader's own CREATE), was already full, or the
+// bot's nickname collided with someone already in a room (server/game.c's
+// JOIN handler, NO_SUCH_GAME/GAME_FULL/NICK_IN_USE/ALREADY_IN_GAME/
+// INVALID_NICK). None of these close the socket, so without detecting the
+// reply itself a rejected bot just sits there indefinitely: connected to the
+// server (visible in the general lobby) but never seated in the room, with
+// nothing telling the host it never actually joined.
+bool IsJoinRejectedReply(const std::string& line, std::string* reason);
+
 // Whether an in-game opcode is about the connection that sent it rather than
 // about the contents of a board.
 //
@@ -128,6 +138,15 @@ public:
     void Update();
 
     bool IsConnected() const { return sockfd >= 0; }
+    // True once the server has told this connection its own JOIN command
+    // was rejected (IsJoinRejectedReply) -- the room did not exist, was
+    // full, or the nickname collided. Leave() disconnects on the same line
+    // that sets this, but does not clear it, so a caller finding
+    // !IsConnected() can still read why. `reason` is the raw protocol
+    // string (e.g. "GAME_FULL") for a caller that wants to say more than
+    // "could not join".
+    bool WasJoinRejected() const { return joinRejected; }
+    const std::string& JoinRejectReason() const { return joinRejectReason; }
     // True once the server has told this connection its own BOT command
     // was refused -- the server-wide bot cap (fb-server's -b) was already
     // at its limit. Leave() disconnects on the same line that sets this,
@@ -170,6 +189,8 @@ private:
     int sockfd = -1;
     int myPlayerId = 0;
     bool rejectedByServer = false;
+    bool joinRejected = false;
+    std::string joinRejectReason;
     // Last time anything was written, for the keepalive below.
     unsigned lastSendTicks = 0;
     std::string nick;

@@ -50,6 +50,12 @@ void BubbleGame::HandleMouseAim(float mx, float my) {
     if (chattingMode) return;
     if (!currentSettings.mouseEnabled) return;
     if (currentSettings.playerCount < 1) return;
+    // A dead player's board is frozen (UpdatePenguin clears their keyboard/gamepad
+    // shooter flags the same way), but mouse/touch aim+fire are injected as a
+    // separate path that bypasses that gate entirely -- without this, a player
+    // who has already lost the round could keep aiming and firing by mouse for
+    // as long as the round runs on for everyone else.
+    if (bubbleArrays[0].playerState != BubbleArray::PlayerState::ALIVE) return;
     BubbleArray& bArr = bubbleArrays[0];
     const SDL_Rect& r = bArr.shooterSprite.rect;
     float sx = r.x + r.w * 0.5f;
@@ -88,6 +94,13 @@ void BubbleGame::HandleMouseFire() {
     if (chattingMode) return;
     if (!currentSettings.mouseEnabled) return;
     if (currentSettings.playerCount < 1) return;
+    // See the matching check in HandleMouseAim: mouseFirePending is applied in
+    // UpdatePenguin() unconditionally, after the keyboard/gamepad path has
+    // already cleared shooterAction for a dead player -- without this, a
+    // stray click or tap in the game area (IsGameFinished() only covers the
+    // whole round ending, not this player losing while others still play)
+    // would fire a bubble for a board that has already lost.
+    if (bubbleArrays[0].playerState != BubbleArray::PlayerState::ALIVE) return;
     bubbleArrays[0].mouseFirePending = true;
 }
 

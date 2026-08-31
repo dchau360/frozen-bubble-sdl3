@@ -159,6 +159,33 @@ int main() {
         CHECK(!IsBotLimitReachedReply(""));
     }
 
+    // The server's answer to our own JOIN command, when the room did not
+    // exist, was full, or the nickname collided. Same wire format as the
+    // BOT-cap reply above, but anchored on "JOIN: " so an unrelated command
+    // that happens to mention one of these words does not false-positive.
+    {
+        std::string reason;
+        CHECK(IsJoinRejectedReply("FB/1.3 JOIN: NO_SUCH_GAME", &reason));
+        CHECK(reason == "NO_SUCH_GAME");
+        CHECK(IsJoinRejectedReply("FB/1.3 JOIN: GAME_FULL", &reason));
+        CHECK(reason == "GAME_FULL");
+        CHECK(IsJoinRejectedReply("FB/1.3 JOIN: NICK_IN_USE", &reason));
+        CHECK(reason == "NICK_IN_USE");
+        CHECK(IsJoinRejectedReply("FB/1.3 JOIN: ALREADY_IN_GAME", &reason));
+        CHECK(reason == "ALREADY_IN_GAME");
+        CHECK(IsJoinRejectedReply("FB/1.3 JOIN: INVALID_NICK", &reason));
+        CHECK(reason == "INVALID_NICK");
+        // A successful JOIN, and an unrelated command that happens to
+        // mention GAME_FULL, must not be mistaken for a rejection of ours.
+        CHECK(!IsJoinRejectedReply("FB/1.3 JOIN: OK", nullptr));
+        CHECK(!IsJoinRejectedReply("FB/1.3 CREATE: GAME_FULL", nullptr));
+        CHECK(!IsJoinRejectedReply("", nullptr));
+        // A null reason pointer must not crash a caller that only wants
+        // the bool (Update()'s HandleLine passes one, but a future caller
+        // that only checks the return value should not have to).
+        CHECK(IsJoinRejectedReply("FB/1.3 JOIN: GAME_FULL", nullptr));
+    }
+
     // How many bots a host may ask for. Bots take real seats, so the ceiling
     // is what the room has left plus the ones already connected.
     {

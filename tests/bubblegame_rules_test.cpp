@@ -950,6 +950,41 @@ int main() {
         CHECK(SmoothTowards(1.5f, std::numeric_limits<float>::quiet_NaN()) == 1.5f);
     }
 
+    // --- Mouse/touch fire must respect a dead player's board --
+    //
+    // Reported live in online multiplayer: a player who has already lost a
+    // round (their board frozen, other players still going) could keep
+    // firing bubbles. UpdatePenguin's keyboard/gamepad path already clears
+    // shooterAction for a dead player, but HandleMouseFire/HandleMouseAim
+    // are a separate injection path (mouseFirePending, applied
+    // unconditionally in UpdatePenguin) that bypassed that gate entirely --
+    // IsGameFinished() only covers the whole round ending, not this one
+    // player losing while the round continues for everyone else.
+    {
+        BubbleGame game(renderer);
+        BubbleGameTestAccess::reset(game, 2, true, false);
+        BubbleGameTestAccess::settings(game).mouseEnabled = true;
+        BubbleArray& local = BubbleGameTestAccess::player(game, 0);
+
+        // Sanity check: a live player's click/aim still goes through.
+        local.playerState = BubbleArray::PlayerState::ALIVE;
+        game.HandleMouseFire();
+        CHECK(local.mouseFirePending);
+        local.mouseFirePending = false;
+        game.HandleMouseAim(local.shooterSprite.rect.x + local.shooterSprite.rect.w * 0.5f,
+                             local.shooterSprite.rect.y - 40.f);
+        CHECK(local.mouseTargetAngle >= 0.f);
+
+        // A dead player must not be able to aim or fire by mouse/touch.
+        local.playerState = BubbleArray::PlayerState::LOST;
+        local.mouseTargetAngle = -1.f;
+        game.HandleMouseFire();
+        CHECK(!local.mouseFirePending);
+        game.HandleMouseAim(local.shooterSprite.rect.x + local.shooterSprite.rect.w * 0.5f,
+                             local.shooterSprite.rect.y - 40.f);
+        CHECK(local.mouseTargetAngle < 0.f);
+    }
+
     SDL_DestroyRenderer(renderer);
     SDL_DestroyWindow(window);
     TTF_Quit();
