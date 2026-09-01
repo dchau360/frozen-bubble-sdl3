@@ -1,5 +1,17 @@
 # Changelog
 
+## v2.4.61
+
+- **Fix: Android phones and tablets were each locked to one screen
+  orientation instead of rotating with the device.** A tablet stayed
+  landscape and a phone stayed portrait no matter how it was held.
+  Android only grants real rotation when the window is both resizable
+  and has every allowed orientation named at once; the window was
+  never created resizable, so the OS picked one orientation at startup
+  and never revisited it. Both device classes now rotate freely, the
+  same as iOS already does -- TV boxes are unaffected and stay
+  landscape-locked.
+
 ## v2.4.60
 
 - **Fix: a player who had already lost a round could keep firing bubbles.**
