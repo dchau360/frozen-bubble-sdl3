@@ -141,7 +141,7 @@ Sideload with the **Downloader** app from the Amazon Appstore: enter code **1308
 
 **If the game feels sluggish** — slow menus, laggy aiming, a late-responding remote — reboot the Fire TV (Settings → My Fire TV → Restart) and launch it again. Fire TV boxes and sticks are memory-tight, and a device that has been up a long time with other apps behind it leaves the game much less to work with. This is worth trying before assuming a bug; if it is still slow on a freshly rebooted device, that is worth a [bug report](https://github.com/dchau360/frozen-bubble-sdl3/issues).
 
-**On a phone or tablet**, the same APK installs and runs in portrait, decided automatically from the device's UI mode — a TV box stays landscape. Mouse/touch aim is also on by default there; see [Controls](#controls).
+**On a phone or tablet**, the same APK installs and rotates freely with the device, decided automatically from the device's UI mode — a TV box stays landscape-locked. Mouse/touch aim is also on by default there; see [Controls](#controls).
 
 ---
 

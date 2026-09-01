@@ -159,23 +159,21 @@ FrozenBubble::FrozenBubble() {
     // On Android a single APK serves TV boxes, phones and tablets, so the
     // manifest cannot pick per device; SDL's setRequestedOrientation at
     // window creation overrides whatever the manifest asked for. A TV is
-    // landscape hardware and stays landscape. A phone gets portrait, which
-    // is how it is already being held. A tablet is screen-large enough that
-    // DeviceHasTouchscreen() alone cannot tell it apart from a phone (both
-    // report a touchscreen), but it is normally held either way rather than
-    // fixed in portrait like a phone -- AndroidIsTablet() checked first
-    // gives it the TV's landscape treatment instead of falling into the
-    // phone branch and locking out rotation entirely.
+    // landscape hardware (fixed to the HDMI port, no accelerometer worth
+    // reading) and stays landscape-locked -- rotation makes no sense for it
+    // and its remote has no way to ask for it anyway.
     //
-    // Naming both orientations would not give a phone free rotation anyway:
-    // for a non-resizable window SDL breaks the tie by aspect (see
-    // SDLActivity.setOrientationBis), and 640x480 is wider than tall, so
-    // "Portrait LandscapeLeft LandscapeRight" resolves right back to landscape.
+    // A phone or tablet gets both orientations and real rotation as the
+    // device turns -- see SDLActivity.setOrientationBis: naming both
+    // orientations only produces free rotation (SCREEN_ORIENTATION_FULL_USER)
+    // when the window is also resizable. Without SDL_WINDOW_RESIZABLE a fixed
+    // window with both named just breaks the tie by aspect once at startup
+    // and never revisits it -- which is also why the TV case below stays
+    // non-resizable: one orientation, chosen once, is exactly what it wants.
 #if defined(__ANDROID__)
-    if (AndroidIsTablet()) {
-        SDL_SetHint(SDL_HINT_ORIENTATIONS, "LandscapeLeft LandscapeRight");
-    } else if (DeviceHasTouchscreen()) {
-        SDL_SetHint(SDL_HINT_ORIENTATIONS, "Portrait");
+    if (DeviceHasTouchscreen()) {
+        SDL_SetHint(SDL_HINT_ORIENTATIONS, "LandscapeLeft LandscapeRight Portrait");
+        fullscreen |= SDL_WINDOW_RESIZABLE;
     } else {
         SDL_SetHint(SDL_HINT_ORIENTATIONS, "LandscapeLeft LandscapeRight");
     }

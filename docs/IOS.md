@@ -82,13 +82,16 @@ is unset. The window is 640×480, so SDL decides landscape-only by itself and th
 plist never gets a say. `frozenbubble.cpp` sets that hint before creating the
 window.
 
-Android differs in a second way: it does not rotate freely either way. A phone
-is portrait-*locked* and a TV box is landscape-locked, decided once at startup
-from whether the device has a touchscreen — a single APK serves both, and the
-manifest cannot express a per-device answer, so the choice is made in code
-instead (`DeviceHasTouchscreen()` in `frozenbubble.cpp`, the same check the
-mouse/touch-aim default already used). iOS is the only platform that actually
-rotates.
+Android differs in a second way: only a TV box is locked, to landscape,
+decided once at startup from whether the device has a touchscreen — a single
+APK serves both, and the manifest cannot express a per-device answer, so the
+choice is made in code instead (`DeviceHasTouchscreen()` in `frozenbubble.cpp`,
+the same check the mouse/touch-aim default already used). A phone or tablet
+rotates freely, same as iOS, but needs a second change beyond naming both
+orientations: Android's `SDLActivity.setOrientationBis` only grants free
+rotation (`SCREEN_ORIENTATION_FULL_USER`) when the window is also created with
+`SDL_WINDOW_RESIZABLE` — without it, a fixed window with both orientations
+named just breaks the tie by aspect once at startup and never revisits it.
 
 **Mouse/touch aim is on by default.** There is no keyboard to aim with, and with
 it off the only gesture is tapping a screen half, which cannot pick an angle.
