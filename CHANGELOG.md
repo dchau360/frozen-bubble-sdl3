@@ -1,5 +1,17 @@
 # Changelog
 
+## v2.4.62
+
+- **Fix: tapping Start more than once in an online lobby could autofire a
+  shot into the round.** A local game starts synchronously, too fast for
+  an extra tap to matter, but an online game waits on a server round-trip
+  between the tap and the round actually starting -- long enough for an
+  impatient second tap to still be sitting in the input queue when the
+  screen switches to the game, where it was misread as the first shot.
+  Queued pointer input is now discarded at that transition, and the Start
+  row itself is debounced against repeat taps while a request is already
+  in flight.
+
 ## v2.4.61
 
 - **Fix: Android phones and tablets were each locked to one screen
