@@ -271,6 +271,7 @@ void MainMenu::HandleInput(SDL_Event *e){
                         NetworkClient* netClient = NetworkClient::Instance();
                         if (netClient->GetState() == IN_LOBBY) {
                             netRosterEditMode = false;
+                            netStartRequested = false;  // don't carry a pending Start into the next room
                             DropLobbyBots();  // our bots leave with us
                             netClient->PartGame();
                             netClient->RequestList();  // Immediate list after parting
@@ -1586,8 +1587,23 @@ void MainMenu::GameRoomHostReturn(NetworkClient *netClient, GameRoom *currentGam
     } else if (selectedActionIndex == kRoomBotSkill) {
         netRoomBotSkill = (netRoomBotSkill >= 2) ? 0 : netRoomBotSkill + 1;
         AudioMixer::Instance()->PlaySFX("menu_change");
-    } else if (selectedActionIndex == kRoomStart && currentGame && currentGame->players.size() > 1) {
-        // Start game
+    } else if (selectedActionIndex == kRoomStart && currentGame && currentGame->players.size() > 1
+               && !netStartRequested) {
+        // Start game. Guarded on netStartRequested (distinct from
+        // networkGameStarting, which latches once the transition into the
+        // game itself begins -- reusing that one here would suppress the
+        // transition entirely once GAME_CAN_START finally arrived) so
+        // mashing this row while waiting on the server's reply -- a
+        // round-trip, unlike a local game's instant start -- doesn't resend
+        // "START" once per extra tap. Harmless to the server, but each such
+        // tap is also a stray click left sitting in the input queue that
+        // could otherwise be delivered on the very first frame of the game
+        // that follows, misread there as a shot (see the queue flush in
+        // BubbleGame::NewGame()). Times out in NetPanelRender() so a
+        // rejected or dropped START (e.g. the room emptied out in the
+        // meantime) doesn't lock this row forever.
+        netStartRequested = true;
+        netStartRequestedMs = SDL_GetTicks();
         netClient->StartGame();
         netClient->AddStatusMessage("Starting game...");
         AudioMixer::Instance()->PlaySFX("menu_selected");
@@ -1906,6 +1922,7 @@ void MainMenu::MenuReturnKey() {
                                     networkInLobby = true;
                                     networkInputMode = 0;  // Switch to lobby mode so C/J/T/U keys work
                                     networkGameStarting = false;
+                                    netStartRequested = false;
                                     wasmSyncWaitStart = 0;
                                     wasmBotWaitStart = 0;
                                     RefreshFollowRegistration();
@@ -1990,6 +2007,7 @@ void MainMenu::MenuEscapeKey() {
                             if (currentGame) {
                                 // Leave the game (like original)
                                 netRosterEditMode = false;
+                                netStartRequested = false;  // don't carry a pending Start into the next room
                                 DropLobbyBots();  // our bots leave with us
                                 netClient->PartGame();
                                 netClient->RequestList();  // Immediate list after parting

@@ -284,6 +284,8 @@ private:
     bool showingNetSetupPanel = false; // For chain reaction prompt before network lobby
     bool networkInLobby = false;
     bool networkGameStarting = false; // Track if game start has been initiated
+    bool netStartRequested = false; // We've sent START and are waiting on GAME_CAN_START (see mainmenu_input.cpp)
+    Uint32 netStartRequestedMs = 0; // Timestamp of that request, for the timeout in NetPanelRender()
     Uint32 wasmSyncWaitStart = 0; // WASM joiner: timestamp when we started waiting for sync messages
     Uint32 wasmBotWaitStart = 0;  // WASM leader: timestamp when we started waiting for our bots to enter the game
     bool serverHosting = false;
