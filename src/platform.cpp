@@ -265,17 +265,6 @@ static bool androidIsTelevision() {
     return result;
 }
 
-// Cached for the same reason as androidIsTelevision() above.
-static bool androidIsTablet() {
-    static int cached = -1;
-    if (cached >= 0) return cached != 0;
-    JNIEnv *env = (JNIEnv *)SDL_GetAndroidJNIEnv();
-    jobject activity = (jobject)SDL_GetAndroidActivity();
-    if (!env || !activity) return false;   // not cached: try again once it exists
-    bool result = callAndroidStaticBoolMethod("isTablet");
-    cached = result ? 1 : 0;
-    return result;
-}
 #endif
 
 bool DeviceHasTouchscreen() {
@@ -292,14 +281,6 @@ bool DeviceHasTouchscreen() {
     SDL_TouchID *devices = SDL_GetTouchDevices(&count);
     SDL_free(devices);
     return count > 0;
-}
-
-bool AndroidIsTablet() {
-#ifdef __ANDROID__
-    return androidIsTablet();
-#else
-    return false;
-#endif
 }
 
 void SetTextInputAreaLogical(SDL_Renderer *renderer, const SDL_Rect &logical) {

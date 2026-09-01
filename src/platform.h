@@ -78,14 +78,6 @@ bool ReplaceFileAtomically(const std::string& tempPath,
 // before it, so callers must not run earlier than that.
 bool DeviceHasTouchscreen();
 
-// True only on an Android tablet -- false for a phone, a TV box, or any other
-// platform. DeviceHasTouchscreen() cannot make this distinction: a phone and
-// a tablet both report a touchscreen. Used to give a tablet the same "let the
-// OS pick the orientation" treatment other free-rotating platforms already
-// get, instead of the phone-only portrait lock (see frozenbubble.cpp).
-// Always false outside __ANDROID__.
-bool AndroidIsTablet();
-
 // Tells the platform where the text field being edited is, so iOS and Android
 // can lift the view clear of the on-screen keyboard instead of letting it cover
 // the field. The rect is in 640x480 logical canvas coordinates and is converted
