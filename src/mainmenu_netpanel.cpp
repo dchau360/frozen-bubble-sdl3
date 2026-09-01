@@ -245,6 +245,7 @@ void MainMenu::NetPanelRender() {
                 networkInLobby = true;
                 networkInputMode = 0;
                 networkGameStarting = false;
+                netStartRequested = false;
                 wasmSyncWaitStart = 0;
                 wasmBotWaitStart = 0;
                 RefreshFollowRegistration();
@@ -286,6 +287,17 @@ void MainMenu::NetPanelRender() {
                 SDL_Log("Applied host options: cr=%d cl=%d st=%d vl=%d colors=%d,%d,%d,%d,%d mouse=%d cm=%d dm=%d tm=%d",
                     cr,cl,st,vl,pc[0],pc[1],pc[2],pc[3],pc[4],me,cm,dm,tm);
             }
+        }
+
+        // A START we sent got no reply within a reasonable window -- either
+        // rejected outright (the room emptied to one player, most likely) or
+        // just dropped. Release the guard so the host can try again instead
+        // of the row being stuck disabled with no way to retry and no
+        // visible reason why.
+        if (netStartRequested && netClient->GetState() != IN_GAME &&
+            SDL_GetTicks() - netStartRequestedMs > 5000) {
+            netStartRequested = false;
+            netClient->AddStatusMessage("Start request timed out -- try again");
         }
 
         // Check if game is ready to start (state transitioned to IN_GAME)

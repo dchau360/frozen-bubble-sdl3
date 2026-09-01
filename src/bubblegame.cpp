@@ -1036,6 +1036,19 @@ void BubbleGame::NewGame(SetupSettings setup) {
     FrozenBubble::Instance()->startTime = SDL_GetTicks();
     FrozenBubble::Instance()->currentState = MainGame;
 
+    // Discard any pointer input still sitting in the queue from before this
+    // transition. A tap/click already delivered to SDL but not yet drained
+    // by this frame's event pump would otherwise be processed on the very
+    // first MainGame frame, where SDL_EVENT_MOUSE_BUTTON_DOWN/FINGER_UP mean
+    // "fire" (see HandleMouseFire) -- an unintended shot the instant the
+    // round begins. Harmless for a local game, which reaches here the same
+    // frame Start was pressed, but a network game waits on a server
+    // round-trip between the tap and this call -- long enough that an
+    // impatient extra tap on Start lands right in this window.
+    SDL_PumpEvents();
+    SDL_FlushEvents(SDL_EVENT_MOUSE_MOTION, SDL_EVENT_MOUSE_REMOVED);
+    SDL_FlushEvents(SDL_EVENT_FINGER_DOWN, SDL_EVENT_FINGER_CANCELED);
+
     // Only choose random bubbles if not synced via network
     // Network games with randomLevels call SyncNetworkLevel() which already sets curLaunch and nextBubble
     if (!(currentSettings.networkGame && currentSettings.randomLevels)) {
