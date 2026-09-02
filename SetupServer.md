@@ -117,12 +117,21 @@ On first run certbot will:
 
 ---
 
-## Step 6 — Copy the Certificates into Place
+## Step 6 — Link the Certificates into Place
 
 ```bash
-sudo cp /etc/letsencrypt/live/yourdomain.com/fullchain.pem docker/ssl/fullchain.pem
-sudo cp /etc/letsencrypt/live/yourdomain.com/privkey.pem   docker/ssl/privkey.pem
+sudo ln -sf /etc/letsencrypt/live/yourdomain.com/fullchain.pem docker/ssl/fullchain.pem
+sudo ln -sf /etc/letsencrypt/live/yourdomain.com/privkey.pem   docker/ssl/privkey.pem
 ```
+
+Symlink rather than copy: `/etc/letsencrypt/live/yourdomain.com/*.pem` is
+itself a symlink into `archive/`, and `certbot renew` repoints it to the
+freshly renewed file without ever changing that `live/` path. Linking
+`docker/ssl/*.pem` to it means renewal never needs a copy step again —
+restarting the stack (Step 7's `docker compose down` / `up`) re-resolves the
+symlink chain and picks up the renewed cert. A copy must be re-run after
+every renewal or the container keeps serving the old file, silently, since
+nothing checks the served cert's expiry.
 
 ---
 
@@ -280,22 +289,23 @@ cd ~/frozen-bubble-sdl3 && git pull && cd docker && docker compose up --build -d
 
 ## Renewing the Certificate
 
-Let's Encrypt certificates expire after 90 days. To renew:
+Let's Encrypt certificates expire after 90 days. If `docker/ssl/*.pem` are the
+symlinks Step 6 set up, `certbot renew` updates what they point to in place —
+no copy step needed, just a restart to pick it up:
 
 ```bash
 cd ~/frozen-bubble-sdl3/docker
 docker compose down                  # free port 80
 sudo certbot renew
-sudo cp /etc/letsencrypt/live/yourdomain.com/fullchain.pem ssl/fullchain.pem
-sudo cp /etc/letsencrypt/live/yourdomain.com/privkey.pem   ssl/privkey.pem
 ./setup.sh -d
 ```
 
-The `cp` destinations are `ssl/…`, relative to `docker/`. They previously read
-`docker/ssl/…`, which does not exist once you have `cd`-ed into `docker` — both
-copies failed, and `./setup.sh -d` then restarted on the *old* certificate.
-Nothing reported this, because the validity check only confirms the file parses,
-not that it is still in date.
+(Older deploys that copied the cert instead of symlinking it still need the
+two `sudo cp` commands from Step 6 re-run here, every time — easy to forget,
+and nothing catches it if you do: `setup.sh`'s validity check only confirms
+the file parses, not that it is still in date, so a stale copy runs silently
+until browser clients start failing to connect. Switching to a symlink once
+removes the step entirely.)
 
 Verify the renewal actually took effect before trusting it:
 

@@ -6,9 +6,11 @@
 # For a PUBLIC server (required for browser/WASM clients):
 #   1. Point a domain name at this machine
 #   2. Run: sudo certbot certonly --standalone -d yourdomain.com
-#   3. Copy the certs:
-#        sudo cp /etc/letsencrypt/live/yourdomain.com/fullchain.pem ssl/fullchain.pem
-#        sudo cp /etc/letsencrypt/live/yourdomain.com/privkey.pem   ssl/privkey.pem
+#   3. Link the certs (symlink, not copy -- certbot renew updates the target
+#      of live/yourdomain.com/*.pem in place, so a symlink here never goes
+#      stale and never needs re-running after a renewal; a copy does):
+#        sudo ln -sf /etc/letsencrypt/live/yourdomain.com/fullchain.pem ssl/fullchain.pem
+#        sudo ln -sf /etc/letsencrypt/live/yourdomain.com/privkey.pem   ssl/privkey.pem
 #      (These real cert files are git-ignored; only *.pem.example templates are tracked.)
 #   4. Run this script again.
 
