@@ -56,7 +56,7 @@ LocalMultiplayerOptions BuildLocalMultiplayerOptions(
     bool chainReaction,
     bool noCompression,
     bool clearMode,
-    bool disableMalus,
+    AttackMode attackMode,
     bool teamMode,
     int victoriesIndex,
     const int colors[5],
@@ -68,7 +68,7 @@ LocalMultiplayerOptions BuildLocalMultiplayerOptions(
     options.chainReaction = chainReaction;
     options.noCompression = noCompression;
     options.clearMode = clearMode;
-    options.disableMalus = disableMalus;
+    options.attackMode = attackMode;
     options.teamMode = teamMode;
     options.victoriesIndex = victoriesIndex;
     for (int i = 0; i < 5; ++i) {
@@ -89,7 +89,7 @@ SetupSettings BuildLocalMultiplayerSettings(
     settings.randomLevels = true;
     settings.localMultiplayer = true;
     settings.clearMode = options.clearMode;
-    settings.disableMalus = options.disableMalus;
+    settings.attackMode = options.attackMode;
     settings.teamMode = options.teamMode;
     settings.teamCount = 2;
 

@@ -9,6 +9,7 @@
 #include <cstdio>
 #include <limits>
 #include <set>
+#include <string>
 #include <utility>
 
 static int failures = 0;
@@ -59,6 +60,9 @@ struct BubbleGameTestAccess {
     }
     static void assignChains(BubbleGame& game, int idx) {
         game.AssignChainReactions(game.bubbleArrays[idx]);
+    }
+    static void checkDestroy(BubbleGame& game, int idx) {
+        game.CheckPossibleDestroy(game.bubbleArrays[idx]);
     }
     static int checkAir(BubbleGame& game, int idx) {
         return game.CheckAirBubbles(game.bubbleArrays[idx]);
@@ -230,7 +234,7 @@ int main() {
         options.chainReaction = true;
         options.victoriesIndex = 15;
         options.clearMode = false;
-        options.disableMalus = true;
+        options.attackMode = AttackMode::Off;
         options.teamMode = true;
         options.colors = {5, 6, 7, 8, 8};
         options.aimGuide = {true, false, true, false, false};
@@ -983,6 +987,157 @@ int main() {
         game.HandleMouseAim(local.shooterSprite.rect.x + local.shooterSprite.rect.w * 0.5f,
                              local.shooterSprite.rect.y - 40.f);
         CHECK(local.mouseTargetAngle < 0.f);
+    }
+
+    // ---- Attack bubbles: canceling, end to end -------------------------
+    // The arithmetic is pinned below; this drives the real thing -- a genuine
+    // match on a real board, through CheckPossibleDestroy -- so the queue
+    // erase, the reduced send and the toast are all exercised, not just the
+    // helper they are built on.
+    //
+    // Board: six matching bubbles across the ceiling row, one of them the
+    // activator. CheckPossibleDestroy counts the group excluding the
+    // activator (5), nothing is left hanging afterwards (0 falling), so the
+    // attack earned is 5 + 0 - 2 = 3.
+    auto SixInARow = [](BubbleArray& board) {
+        for (int row = 0; row < 13; ++row)
+            for (auto& b : board.bubbleMap[row]) { b.bubbleId = -1; b.playerBubble = false; }
+        for (int col = 0; col < 6; ++col) board.bubbleMap[0][col].bubbleId = 1;
+        board.bubbleMap[0][0].playerBubble = true;
+    };
+
+    // Control: with canceling OFF the queue is untouched and the full 3 goes out.
+    {
+        BubbleGame game(renderer);
+        BubbleGameTestAccess::reset(game, 2, false, false);
+        BubbleGameTestAccess::settings(game).attackMode = AttackMode::On;
+        BubbleArray& me = BubbleGameTestAccess::player(game, 0);
+        BubbleArray& foe = BubbleGameTestAccess::player(game, 1);
+        SixInARow(me);
+        me.malusQueue.push_back(0);
+        me.malusQueue.push_back(0);
+        singleBubbles.clear();
+        BubbleGameTestAccess::checkDestroy(game, 0);
+        CHECK(me.malusQueue.size() == 2);      // nothing blocked
+        CHECK(foe.malusQueue.size() == 3);     // whole attack sent
+        CHECK(me.malusAlerts.empty());         // no "Blocked" toast
+    }
+
+    // Partial: earn 3 while owing 2 -- both blocked, 1 sent, queue emptied.
+    {
+        BubbleGame game(renderer);
+        BubbleGameTestAccess::reset(game, 2, false, false);
+        BubbleGameTestAccess::settings(game).attackMode = AttackMode::Canceling;
+        BubbleArray& me = BubbleGameTestAccess::player(game, 0);
+        BubbleArray& foe = BubbleGameTestAccess::player(game, 1);
+        SixInARow(me);
+        me.malusQueue.push_back(0);
+        me.malusQueue.push_back(0);
+        singleBubbles.clear();
+        BubbleGameTestAccess::checkDestroy(game, 0);
+        CHECK(me.malusQueue.empty());          // both blocked
+        CHECK(foe.malusQueue.size() == 1);     // surplus only
+        CHECK(me.malusAlerts.size() == 1);     // one "Blocked" toast...
+        if (me.malusAlerts.size() == 1) {
+            CHECK(me.malusAlerts[0].blocked);
+            CHECK(me.malusAlerts[0].count == 2);   // ...naming what it blocked
+        }
+    }
+
+    // Fully absorbed: earn 3 while owing 5 -- 3 blocked, nothing sent, and the
+    // queue keeps the 2 that were not paid off rather than going negative.
+    {
+        BubbleGame game(renderer);
+        BubbleGameTestAccess::reset(game, 2, false, false);
+        BubbleGameTestAccess::settings(game).attackMode = AttackMode::Canceling;
+        BubbleArray& me = BubbleGameTestAccess::player(game, 0);
+        BubbleArray& foe = BubbleGameTestAccess::player(game, 1);
+        SixInARow(me);
+        for (int i = 0; i < 5; ++i) me.malusQueue.push_back(0);
+        singleBubbles.clear();
+        BubbleGameTestAccess::checkDestroy(game, 0);
+        CHECK(me.malusQueue.size() == 2);      // 5 owed - 3 blocked, not -3
+        CHECK(foe.malusQueue.empty());         // nothing sent on
+    }
+
+    // Owing nothing: canceling must not eat the attack when there is no queue
+    // to pay down -- the whole 3 still goes out.
+    {
+        BubbleGame game(renderer);
+        BubbleGameTestAccess::reset(game, 2, false, false);
+        BubbleGameTestAccess::settings(game).attackMode = AttackMode::Canceling;
+        BubbleArray& me = BubbleGameTestAccess::player(game, 0);
+        BubbleArray& foe = BubbleGameTestAccess::player(game, 1);
+        SixInARow(me);
+        singleBubbles.clear();
+        BubbleGameTestAccess::checkDestroy(game, 0);
+        CHECK(me.malusQueue.empty());
+        CHECK(foe.malusQueue.size() == 3);
+        CHECK(me.malusAlerts.empty());         // nothing was blocked, so no toast
+    }
+
+    // Attacks OFF still blocks nothing and sends nothing, even while owing.
+    {
+        BubbleGame game(renderer);
+        BubbleGameTestAccess::reset(game, 2, false, false);
+        BubbleGameTestAccess::settings(game).attackMode = AttackMode::Off;
+        BubbleArray& me = BubbleGameTestAccess::player(game, 0);
+        BubbleArray& foe = BubbleGameTestAccess::player(game, 1);
+        SixInARow(me);
+        me.malusQueue.push_back(0);
+        me.malusQueue.push_back(0);
+        singleBubbles.clear();
+        BubbleGameTestAccess::checkDestroy(game, 0);
+        CHECK(me.malusQueue.size() == 2);
+        CHECK(foe.malusQueue.empty());
+    }
+
+    // ---- Attack bubbles: canceling ------------------------------------
+    // The rule the setting promises is "what you earn pays down what you owe,
+    // and it can never go negative". These pin both halves of that.
+    {
+        // Off and On never cancel, whatever is queued.
+        CHECK(MalusCancelled(AttackMode::On, 5, 3) == 0);
+        CHECK(MalusCancelled(AttackMode::Off, 5, 3) == 0);
+
+        // Partial: 5 earned against 3 queued clears the queue and leaves 2 to send.
+        CHECK(MalusCancelled(AttackMode::Canceling, 5, 3) == 3);
+
+        // Fully absorbed: 2 earned against 6 queued blocks 2 and sends none.
+        CHECK(MalusCancelled(AttackMode::Canceling, 2, 6) == 2);
+
+        // Exactly even.
+        CHECK(MalusCancelled(AttackMode::Canceling, 4, 4) == 4);
+
+        // Nothing owed, nothing blocked -- the whole attack goes out.
+        CHECK(MalusCancelled(AttackMode::Canceling, 7, 0) == 0);
+
+        // No credit banked: blocking more than is owed still only blocks what
+        // was owed, so the surplus stays positive rather than going negative.
+        const int earned = 9, queued = 2;
+        const int blocked = MalusCancelled(AttackMode::Canceling, earned, queued);
+        CHECK(blocked == 2);
+        CHECK(earned - blocked == 7);
+
+        // Degenerate inputs cannot produce a negative or a phantom block.
+        CHECK(MalusCancelled(AttackMode::Canceling, 0, 5) == 0);
+        CHECK(MalusCancelled(AttackMode::Canceling, -3, 5) == 0);
+        CHECK(MalusCancelled(AttackMode::Canceling, 5, -1) == 0);
+    }
+
+    // The setting's own cycle, in both directions, returning to where it began.
+    {
+        AttackMode m = AttackMode::On;
+        m = NextAttackMode(m); CHECK(m == AttackMode::Canceling);
+        m = NextAttackMode(m); CHECK(m == AttackMode::Off);
+        m = NextAttackMode(m); CHECK(m == AttackMode::On);
+        m = PrevAttackMode(m); CHECK(m == AttackMode::Off);
+        m = PrevAttackMode(m); CHECK(m == AttackMode::Canceling);
+        m = PrevAttackMode(m); CHECK(m == AttackMode::On);
+
+        CHECK(std::string(AttackModeName(AttackMode::On)) == "ON");
+        CHECK(std::string(AttackModeName(AttackMode::Off)) == "OFF");
+        CHECK(std::string(AttackModeName(AttackMode::Canceling)) == "Blockable");
     }
 
     SDL_DestroyRenderer(renderer);

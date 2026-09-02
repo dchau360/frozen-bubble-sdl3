@@ -1,5 +1,36 @@
 # Changelog
 
+## Unreleased
+
+- **New: "Attack bubbles" is now three-way -- ON, OFF, or Blockable.** Blockable
+  makes the attack you just earned pay down whatever is still queued
+  against you, sending only the surplus onward. It cannot go negative:
+  blocking more than you owe empties your queue and sends nothing rather
+  than banking credit for the next wave, and only bubbles still queued can
+  be blocked -- once one has started falling it is committed and will land.
+  A "Blocked -N" toast shows when it happens. Available in both the online
+  game room and local multiplayer.
+
+  On the wire, `DISABLEMALUS` keeps its original 0/1 meaning and the third
+  state rides alongside it in a new `MALUSCANCEL` field, so a client built
+  before this still reads on-vs-off correctly; it simply does not cancel.
+
+- **New: a HELP box opens a full settings guide, on both the online game
+  room and the local multiplayer panel.** It sits at the right-hand end of
+  the Bot skill row on each, and F1 opens it from either screen. In a room
+  it is there for joiners as well as the host -- a joiner cannot change the
+  settings but still has to play by them.
+
+  Each screen gets its own page rather than one page with parts hidden,
+  because the rule that matters most differs between them. Online, an
+  attack is split evenly among all living opponents -- until six or more
+  are alive, at which point it goes to a single opponent instead, since
+  splitting would multiply one pop into an attack on up to nineteen boards
+  at once. Locally, an attack is not divided at all: every living opponent
+  receives the full count, which is the original game's local rule and
+  makes a big local match considerably more violent than an online one of
+  the same size. One shared page would have stated one of those wrongly.
+
 ## v2.4.62
 
 - **Fix: tapping Start more than once in an online lobby could autofire a

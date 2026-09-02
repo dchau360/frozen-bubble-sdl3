@@ -268,7 +268,7 @@ void MainMenu::NetPanelRender() {
 
         // Apply any options broadcast by the host (joiners receive SETOPTIONS push)
         {
-            bool cr, cl, st; int vl; int pc[5]; bool nc[5]; bool ag[5]; bool me; bool cm; bool dm; bool tm; int pt[5]; int rcvTc;
+            bool cr, cl, st; int vl; int pc[5]; bool nc[5]; bool ag[5]; bool me; bool cm; AttackMode dm; bool tm; int pt[5]; int rcvTc;
             if (netClient->GetAndClearPendingOptions(cr, cl, st, vl, pc, nc, ag, me, cm, dm, tm, pt, rcvTc)) {
                 chainReactionEnabled = cr;
                 (void)cl;  // "continue when players leave" is always on now
@@ -280,12 +280,12 @@ void MainMenu::NetPanelRender() {
                 for (int i = 0; i < 5; i++) { playerColorCounts[i] = pc[i]; playerNoCompress[i] = nc[i]; playerAimGuide[i] = ag[i]; }
                 netRoomMouseEnabled = me;
                 netClearMode = cm;
-                netDisableMalus = dm;
+                netAttackMode = dm;
                 netTeamMode = tm;
                 if (rcvTc >= 2 && rcvTc <= 5) netTeamCount = rcvTc;
                 for (int i = 0; i < 5; i++) netPlayerTeams[i] = pt[i];
                 SDL_Log("Applied host options: cr=%d cl=%d st=%d vl=%d colors=%d,%d,%d,%d,%d mouse=%d cm=%d dm=%d tm=%d",
-                    cr,cl,st,vl,pc[0],pc[1],pc[2],pc[3],pc[4],me,cm,dm,tm);
+                    cr,cl,st,vl,pc[0],pc[1],pc[2],pc[3],pc[4],me,cm,(int)dm,tm);
             }
         }
 
@@ -540,7 +540,7 @@ void MainMenu::NetPanelLobbyActionsRender() {
             char modeText[64], malusText[64];
             const char* mode = netTeamMode ? "Teams" : (netClearMode ? "Clear" : "Classic");
             snprintf(modeText, sizeof(modeText), "Game mode: %s", mode);
-            snprintf(malusText, sizeof(malusText), "Attack bubbles: %s", netDisableMalus ? "OFF" : "ON");
+            snprintf(malusText, sizeof(malusText), "Attack bubbles: %s", AttackModeName(netAttackMode));
             actions.push_back(modeText);  // index 1
             actions.push_back(malusText); // index 2
 
@@ -749,7 +749,8 @@ void MainMenu::NetPanelLobbyActionsRender() {
             roomList.Header("Match rules");
             const char* mode = netTeamMode ? "Teams" : (netClearMode ? "Clear" : "Classic");
             roomList.Row(kRoomMode, "Game mode", mode);
-            roomList.Row(kRoomMalus, "Attack bubbles", netDisableMalus ? "OFF" : "ON", !netDisableMalus);
+            roomList.Row(kRoomMalus, "Attack bubbles", AttackModeName(netAttackMode),
+                         netAttackMode != AttackMode::Off, true);
             roomList.Row(kRoomChain, "Chain reaction", chainReactionEnabled ? "ON" : "OFF", chainReactionEnabled);
             roomList.Row(kRoomTarget, "Solo targetting", singlePlayerTargetting ? "ON" : "OFF", singlePlayerTargetting);
             const char* victoriesLimits[] = {"none (unlimited)", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "15", "20", "30", "50", "100"};
@@ -1064,6 +1065,32 @@ void MainMenu::NetPanelLobbyActionsRender() {
             }
             drawLabel("ESC  Leave room", panelX + 12, panelY + 238, textMuted);
 
+            // HELP box, far right of the bot-skill row. Drawn for everyone in
+            // the room, not just the host: a joiner cannot change these
+            // settings but still has to play by them, so the guide is at
+            // least as useful to them. On a joiner's screen the rest of that
+            // band is empty, so the box simply sits there on its own.
+            //
+            // Registered before the bot rows below so it wins the hit test
+            // where they overlap (first match wins -- see PanelTapRow), and
+            // it uses kRoomHelpTapIndex rather than a real GameRoomRow slot;
+            // see that constant for why.
+            {
+                const int helpW = 48, helpH = 18;
+                const int helpX = panelX + panelW - 8 - helpW;
+                const int helpY = panelY + 270 - 3;
+                SDL_Rect helpRect = {helpX, helpY, helpW, helpH};
+                const bool helpSel = (selectedActionIndex == kRoomHelpTapIndex);
+                SDL_SetRenderDrawBlendMode(roomRenderer, SDL_BLENDMODE_BLEND);
+                SDL_SetRenderDrawColor(roomRenderer, 255, 196, 64, helpSel ? 90 : 40);
+                { SDL_FRect fr = ToFRect(helpRect); SDL_RenderFillRect(roomRenderer, &fr); }
+                SDL_SetRenderDrawColor(roomRenderer, menulist::kSelEdge.r, menulist::kSelEdge.g,
+                                       menulist::kSelEdge.b, helpSel ? 240 : 150);
+                { SDL_FRect fr = ToFRect(helpRect); SDL_RenderRect(roomRenderer, &fr); }
+                AddPanelTapRow(kRoomHelpTapIndex, helpRect, -1, false, SDLK_F1);
+                drawLabel("HELP ?", helpX + 5, helpY + 3, helpSel ? textGold : textMain);
+            }
+
             // Bots, below the roster they will appear in. Host only: a bot is
             // an ordinary room member to everyone else. The band under the
             // ESC line is the only clear space left on this screen -- the
@@ -1091,7 +1118,10 @@ void MainMenu::NetPanelLobbyActionsRender() {
                 drawLabel(botsText, panelX + 12, botsY,
                           selectedActionIndex == kRoomBots ? textGold : textMain);
 
-                SDL_Rect skillRect = {panelX + 8, skillY - 3, rowW, 18};
+                // Narrower than the Bots row above it: the HELP box occupies
+                // the right end of this row, and a full-width selection
+                // highlight would be drawn underneath it.
+                SDL_Rect skillRect = {panelX + 8, skillY - 3, rowW - 52, 18};
                 if (selectedActionIndex == kRoomBotSkill) drawSelection(skillRect);
                 AddPanelTapRow(kRoomBotSkill, skillRect);
                 drawLabel(skillText, panelX + 12, skillY,
@@ -1235,7 +1265,7 @@ void MainMenu::NetPanelChatDockRender(bool expanded) {
                             netClient->SendOptions(chainReactionEnabled, /*continueWhenLeave=*/true,
                                 singlePlayerTargetting, vLimits[victoriesLimitIndex], playerColorCounts,
                                 playerNoCompress, playerAimGuide, netRoomMouseEnabled, netClearMode,
-                                netDisableMalus, netTeamMode, netPlayerTeams, netTeamCount);
+                                netAttackMode, netTeamMode, netPlayerTeams, netTeamCount);
                             break;
                         }
                     }

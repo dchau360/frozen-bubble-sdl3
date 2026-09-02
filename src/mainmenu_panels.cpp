@@ -87,6 +87,10 @@ void MainMenu::Render(void) {
     KeysPanelRender();
     NetSetupPanelRender();
     NetPanelRender();
+    // Last: the guide overlays the room it was opened from, and its own
+    // BeginPanelTapRows must be the one that survives the frame so a tap
+    // cannot reach the room list underneath.
+    HelpPanelRender();
 }
 
 
@@ -303,8 +307,11 @@ void MainMenu::LocalMPPanelRender() {
     lastLocalMPPanelText.clear();
     menulist::List list(menulist::kListFull, localMPMenuIndex, menulist::kRowH, menulist::kMapFillAlpha);
     auto row = [&](int index, const std::string& label, const std::string& value,
-                   bool emphasize = true, bool splitAdjust = false) {
-        list.Row(index, label, value, emphasize, splitAdjust);
+                   bool emphasize = true, bool splitAdjust = false,
+                   SDL_Keycode suffixKey = 0, const std::string& suffixText = "",
+                   int suffixIndex = -1) {
+        list.Row(index, label, value, emphasize, splitAdjust, 0,
+                 suffixKey, suffixText, suffixIndex);
         lastLocalMPPanelText += label + ": " + value + "\n";
     };
 
@@ -313,13 +320,22 @@ void MainMenu::LocalMPPanelRender() {
     row(kLocalMPRowChain, "Chain reaction", localMPCR ? "ON" : "OFF", localMPCR);
     row(kLocalMPRowCollapse, "Row collapse", localMPNoCompress ? "OFF" : "ON", !localMPNoCompress);
     row(kLocalMPRowMode, "Mode", localMPClearMode ? "Clear" : "Classic", true, true);
-    row(kLocalMPRowMalus, "Attack bubbles", localMPDisableMalus ? "OFF" : "ON", !localMPDisableMalus);
+    // Stepped (splitAdjust) rather than a plain toggle now that it has three
+    // states -- a row a tap flips is fine for on/off, but not for a cycle.
+    row(kLocalMPRowMalus, "Attack bubbles", AttackModeName(localMPAttackMode),
+        localMPAttackMode != AttackMode::Off, true);
     row(kLocalMPRowTeam, "Team mode", teamModeText, localMPTeamMode);
     row(kLocalMPRowVictories, "Victories limit", victoriesText, true, true);
 
     list.Header("Bots");
     row(kLocalMPRowBots, "Bots", botsText, botCount > 0, true);
-    row(kLocalMPRowBotSkill, "Bot skill", LocalMPBotSkillName(localMPBotSkill), true, true);
+    // HELP box at the right-hand end of the Bot skill row, matching where the
+    // game room puts its own. menulist carves the box's width out of the space
+    // the value is right-aligned into, so "< Med >" moves left rather than
+    // being drawn under it, and registers the box's tap zone ahead of the
+    // row's own stepped halves.
+    row(kLocalMPRowBotSkill, "Bot skill", LocalMPBotSkillName(localMPBotSkill),
+        true, true, SDLK_F1, "HELP", kLocalMPHelpTapIndex);
 
     list.Header("Per-player");
     for (int pi = 0; pi < localMPPlayerCount && pi < 5; pi++) {

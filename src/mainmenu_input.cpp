@@ -132,6 +132,33 @@ void MainMenu::HandleInput(SDL_Event *e){
                 }
             }
 
+            // The settings guide is modal over whatever opened it, so it takes
+            // keys before every other panel -- otherwise Up/Down would scroll
+            // the page and move the room's selection underneath it at once.
+            if (HelpPanelKey(e)) break;
+
+            // F1 opens the guide from either screen that has a HELP box, and
+            // is also the key those boxes' tap targets send (see
+            // kRoomHelpTapIndex / kLocalMPHelpTapIndex) -- so touch and
+            // keyboard reach the same place through one path. Which page opens
+            // is decided by which screen asked, not by the box that was
+            // tapped, so the two cannot disagree.
+            if (!showingHelpPanel && e->key.key == SDLK_F1) {
+                const bool inRoom = showingNetPanel && networkInLobby &&
+                                    networkInputMode == 0 &&
+                                    NetworkClient::Instance()->GetCurrentGame() != nullptr;
+                const bool inLocalMP = showingLocalMPPanel && !runDelay;
+                if (inRoom || inLocalMP) {
+                    showingHelpPanel = true;
+                    helpTopic = (int)(inRoom ? HelpTopic::OnlineRoom
+                                             : HelpTopic::LocalMultiplayer);
+                    helpScroll = 0;
+                    helpMenuIndex = kHelpRowClose;
+                    PlayMenuSFX("menu_selected");
+                    break;
+                }
+            }
+
             if (MenuEditingKey(e)) break;
 
             if (KeysPanelKey(e)) break;
@@ -610,6 +637,44 @@ bool MainMenu::IsSteppedRowAt(float lx, float ly) const {
     return false;
 }
 
+// Keys for the settings guide (mainmenu_help.cpp). Returns true when the key
+// was consumed, so HandleInput stops before the room underneath sees it.
+bool MainMenu::HelpPanelKey(SDL_Event *e) {
+    if (!showingHelpPanel) return false;
+    switch (e->key.key) {
+        case SDLK_UP:       helpScroll -= 1;  break;
+        case SDLK_DOWN:     helpScroll += 1;  break;
+        case SDLK_PAGEUP:   helpScroll -= 12; break;
+        case SDLK_PAGEDOWN: helpScroll += 12; break;
+        case SDLK_HOME:     helpScroll = 0;   break;
+        case SDLK_LEFT:
+        case SDLK_RIGHT:
+            // The page has one header action and nothing to step, so L/R
+            // would otherwise fall through to the room and quietly change a
+            // setting the player cannot see.
+            break;
+        case SDLK_RETURN:
+        case SDLK_ESCAPE:
+        case SDLK_AC_BACK:
+        case SDLK_F1:
+            showingHelpPanel = false;
+            // The selection is still parked on whichever HELP box was tapped.
+            // Neither fake index is a real row, so leave the player somewhere
+            // Up/Down can work from rather than off the end of the list.
+            if (selectedActionIndex == kRoomHelpTapIndex) selectedActionIndex = kRoomMalus;
+            if (localMPMenuIndex == kLocalMPHelpTapIndex) localMPMenuIndex = kLocalMPRowBotSkill;
+            PlayMenuSFX("menu_change");
+            return true;
+        default:
+            // Swallow everything else: the guide is modal.
+            return true;
+    }
+    if (helpScroll < 0) helpScroll = 0;   // upper clamp is in HelpPanelRender,
+                                          // which knows the page length
+    PlayMenuSFX("menu_change");
+    return true;
+}
+
 bool MainMenu::KeysPanelKey(SDL_Event *e) {
             if (showingKeysPanel) {
                 if (awaitKp && e->key.key != SDLK_ESCAPE) {
@@ -837,6 +902,12 @@ bool MainMenu::LocalMPPanelKey(SDL_Event *e) {
                 // localmultiplayer_settings.h, shared with the panel that
                 // draws them.
                 int localMaxIdx = LocalMPStartRow(localMPPlayerCount);
+                // The HELP box parks localMPMenuIndex on kLocalMPHelpTapIndex,
+                // which is deliberately outside this list. Fold it back onto
+                // the row the box sits on before stepping, or Up would walk
+                // off the end and leave nothing highlighted. (Down already
+                // wraps to 0 for any index past the end.)
+                if (localMPMenuIndex > localMaxIdx) localMPMenuIndex = kLocalMPRowBotSkill;
                 if (e->key.key == SDLK_UP) {
                     localMPMenuIndex--;
                     if (localMPMenuIndex < 0) localMPMenuIndex = localMaxIdx;
@@ -886,16 +957,18 @@ bool MainMenu::LocalMPPanelKey(SDL_Event *e) {
                         if (localMPClearMode) {
                             // Entering Clear Mode: remember current settings so leaving it can restore them.
                             localMPPreClearNoCompress = localMPNoCompress;
-                            localMPPreClearDisableMalus = localMPDisableMalus;
+                            localMPPreClearAttackMode = localMPAttackMode;
                             localMPNoCompress = true;
-                            localMPDisableMalus = true;
+                            localMPAttackMode = AttackMode::Off;
                         } else {
                             localMPNoCompress = localMPPreClearNoCompress;
-                            localMPDisableMalus = localMPPreClearDisableMalus;
+                            localMPAttackMode = localMPPreClearAttackMode;
                         }
                         AudioMixer::Instance()->PlaySFX("menu_change");
                     } else if (localMPMenuIndex == 4) {
-                        localMPDisableMalus = !localMPDisableMalus;
+                        localMPAttackMode = e->key.key == SDLK_LEFT
+                            ? PrevAttackMode(localMPAttackMode)
+                            : NextAttackMode(localMPAttackMode);
                         AudioMixer::Instance()->PlaySFX("menu_change");
                     } else if (localMPMenuIndex == 5) {
                         localMPTeamMode = !localMPTeamMode;
@@ -963,16 +1036,16 @@ bool MainMenu::LocalMPPanelKey(SDL_Event *e) {
                         if (localMPClearMode) {
                             // Entering Clear Mode: remember current settings so leaving it can restore them.
                             localMPPreClearNoCompress = localMPNoCompress;
-                            localMPPreClearDisableMalus = localMPDisableMalus;
+                            localMPPreClearAttackMode = localMPAttackMode;
                             localMPNoCompress = true;
-                            localMPDisableMalus = true;
+                            localMPAttackMode = AttackMode::Off;
                         } else {
                             localMPNoCompress = localMPPreClearNoCompress;
-                            localMPDisableMalus = localMPPreClearDisableMalus;
+                            localMPAttackMode = localMPPreClearAttackMode;
                         }
                         AudioMixer::Instance()->PlaySFX("menu_change");
                     } else if (localMPMenuIndex == 4) {
-                        localMPDisableMalus = !localMPDisableMalus;
+                        localMPAttackMode = NextAttackMode(localMPAttackMode);
                         AudioMixer::Instance()->PlaySFX("menu_change");
                     } else if (localMPMenuIndex == 5) {
                         localMPTeamMode = !localMPTeamMode;
@@ -1060,6 +1133,12 @@ void MainMenu::MenuUpKey() {
                                 std::vector<GameRoom> games = netClient->GetGameList();
                                 maxActions = (kLobbyFollow + 1) + games.size(); // Chat + Create + Follow + Join games
                             }
+                            // The HELP box parks selectedActionIndex on
+                            // kRoomHelpTapIndex, which is deliberately outside
+                            // this list. Fold it back to the last real row
+                            // first, or stepping from it would walk off the
+                            // end and leave nothing highlighted.
+                            if (selectedActionIndex >= maxActions) selectedActionIndex = maxActions - 1;
                             selectedActionIndex--;
                             if (selectedActionIndex < 0) selectedActionIndex = maxActions - 1;
                             AudioMixer::Instance()->PlaySFX("menu_change");
@@ -1175,17 +1254,22 @@ void MainMenu::MenuLeftRightKey(SDL_Event *e) {
                                 if (netClearMode && !wasClear) {
                                     // Entering Clear Mode: remember current settings so leaving it can restore them.
                                     for (int i = 0; i < 5; i++) netPreClearNoCompress[i] = playerNoCompress[i];
-                                    netPreClearDisableMalus = netDisableMalus;
+                                    netPreClearAttackMode = netAttackMode;
                                     for (int i = 0; i < 5; i++) playerNoCompress[i] = true;
-                                    netDisableMalus = true;
+                                    netAttackMode = AttackMode::Off;
                                 } else if (wasClear && !netClearMode) {
                                     for (int i = 0; i < 5; i++) playerNoCompress[i] = netPreClearNoCompress[i];
-                                    netDisableMalus = netPreClearDisableMalus;
+                                    netAttackMode = netPreClearAttackMode;
                                 }
                                 AudioMixer::Instance()->PlaySFX("menu_change");
                                 settingChanged = true;
                             } else if (selectedActionIndex == kRoomMalus) {
-                                netDisableMalus = !netDisableMalus;
+                                // Three states now, so Left has to walk back
+                                // rather than forward -- same as kRoomMode
+                                // above, and unlike the plain toggles below.
+                                netAttackMode = (e->key.key == SDLK_LEFT)
+                                    ? PrevAttackMode(netAttackMode)
+                                    : NextAttackMode(netAttackMode);
                                 AudioMixer::Instance()->PlaySFX("menu_change");
                                 settingChanged = true;
                             } else if (selectedActionIndex == kRoomChain) {
@@ -1261,7 +1345,7 @@ void MainMenu::MenuLeftRightKey(SDL_Event *e) {
                             if (settingChanged) {
                                 static const int vLimits[] = {0,1,2,3,4,5,6,7,8,9,10,11,12,15,20,30,50,100};
                                 netClient->SendOptions(chainReactionEnabled, /*continueWhenLeave=*/true,
-                                    singlePlayerTargetting, vLimits[victoriesLimitIndex], playerColorCounts, playerNoCompress, playerAimGuide, netRoomMouseEnabled, netClearMode, netDisableMalus, netTeamMode, netPlayerTeams, netTeamCount);
+                                    singlePlayerTargetting, vLimits[victoriesLimitIndex], playerColorCounts, playerNoCompress, playerAimGuide, netRoomMouseEnabled, netClearMode, netAttackMode, netTeamMode, netPlayerTeams, netTeamCount);
                             }
                         } else if (!currentGame && selectedActionIndex == 1) {
                             // Lobby "Create Game Room" row: Left/Right cycles the room-size choice
@@ -1498,17 +1582,17 @@ void MainMenu::GameRoomHostReturn(NetworkClient *netClient, GameRoom *currentGam
             if (netClearMode && !wasClear) {
                 // Entering Clear Mode: remember current settings so leaving it can restore them.
                 for (int i = 0; i < 5; i++) netPreClearNoCompress[i] = playerNoCompress[i];
-                netPreClearDisableMalus = netDisableMalus;
+                netPreClearAttackMode = netAttackMode;
                 for (int i = 0; i < 5; i++) playerNoCompress[i] = true;
-                netDisableMalus = true;
+                netAttackMode = AttackMode::Off;
             } else if (wasClear && !netClearMode) {
                 for (int i = 0; i < 5; i++) playerNoCompress[i] = netPreClearNoCompress[i];
-                netDisableMalus = netPreClearDisableMalus;
+                netAttackMode = netPreClearAttackMode;
             }
             settingChanged = true;
         }
     } else if (selectedActionIndex == kRoomMalus) {
-        netDisableMalus = !netDisableMalus;
+        netAttackMode = NextAttackMode(netAttackMode);
         AudioMixer::Instance()->PlaySFX("menu_change");
         settingChanged = true;
     } else if (selectedActionIndex == kRoomChain) {
@@ -1611,7 +1695,7 @@ void MainMenu::GameRoomHostReturn(NetworkClient *netClient, GameRoom *currentGam
     if (settingChanged) {
         static const int vLimits[] = {0,1,2,3,4,5,6,7,8,9,10,11,12,15,20,30,50,100};
         netClient->SendOptions(chainReactionEnabled, /*continueWhenLeave=*/true,
-            singlePlayerTargetting, vLimits[victoriesLimitIndex], playerColorCounts, playerNoCompress, playerAimGuide, netRoomMouseEnabled, netClearMode, netDisableMalus, netTeamMode, netPlayerTeams, netTeamCount);
+            singlePlayerTargetting, vLimits[victoriesLimitIndex], playerColorCounts, playerNoCompress, playerAimGuide, netRoomMouseEnabled, netClearMode, netAttackMode, netTeamMode, netPlayerTeams, netTeamCount);
     }
 }
 

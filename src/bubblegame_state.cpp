@@ -151,10 +151,10 @@ void BubbleGame::SendMalusToOpponent(int malusCount, const BubbleArray &attacker
                 snprintf(malusMsg, sizeof(malusMsg), "g%s:%d", targetNick.c_str(), malusCount);
                 SendGameDataFor(attacker, malusMsg);
                 bubbleArrays[attackerIdx].rSent += malusCount;  // Stats: malus sent (focus-fire)
-                bubbleArrays[resolvedTarget].rRecv += malusCount;  // Stats: locally credit target's Def
+                bubbleArrays[resolvedTarget].rRecv += malusCount;  // Stats: locally credit target's Rcv
                 bubbleArrays[resolvedTarget].attackFlashFramesLeft = kAttackFlashDurationFrames;
                 // Kill attribution: the sender never sees its own 'g' echoed back, so
-                // credit this locally too, same as the Def stat above.
+                // credit this locally too, same as the Rcv stat above.
                 bubbleArrays[resolvedTarget].lastAttackerIdx = attackerIdx;
             }
             if (randomPick) sendMalusToOne = -1;  // re-roll on the next attack
@@ -784,10 +784,15 @@ void BubbleGame::FinalizeRoundStats() {
             mine.mSent  += mine.rSent;
             mine.mRecv  += mine.rRecv;
             mine.mKills += mine.rKills;
+            mine.mBlk   += mine.rBlk;
 
-            char statsMsg[64];
-            snprintf(statsMsg, sizeof(statsMsg), "S%d:%d:%d:%d:%d",
-                     mine.rFired, mine.rPopped, mine.rSent, mine.rRecv, mine.rKills);
+            // The trailing :{blk} field is newer than :{kills}; the 'S' handler
+            // (bubblegame_net.cpp) accepts 4, 5, or 6 fields for the same reason
+            // that one is newer than the first four -- so an older peer parsing
+            // this string simply stops after :{kills} and defaults blk to 0.
+            char statsMsg[80];
+            snprintf(statsMsg, sizeof(statsMsg), "S%d:%d:%d:%d:%d:%d",
+                     mine.rFired, mine.rPopped, mine.rSent, mine.rRecv, mine.rKills, mine.rBlk);
             SendGameDataFor(mine, statsMsg);
         }
         // Remote arrays' totals are accumulated as their 'S' messages arrive.
@@ -799,24 +804,28 @@ void BubbleGame::FinalizeRoundStats() {
             bubbleArrays[i].mSent   += bubbleArrays[i].rSent;
             bubbleArrays[i].mRecv   += bubbleArrays[i].rRecv;
             bubbleArrays[i].mKills  += bubbleArrays[i].rKills;
+            bubbleArrays[i].mBlk    += bubbleArrays[i].rBlk;
         }
     }
     roundsPlayed++;
 }
 
-void BubbleGame::AddMalusAlert(BubbleArray &target, const std::string &fromNick, int count) {
+void BubbleGame::AddMalusAlert(BubbleArray &target, const std::string &fromNick, int count,
+                               bool blocked) {
     if (count <= 0) return;
     const int ALERT_FRAMES = 150;  // ~2.5s at 60fps
     std::string nick = fromNick.empty() ? "Someone" : fromNick;
-    // Aggregate repeated hits from the same sender into one toast.
+    // Aggregate repeated hits from the same sender into one toast. A blocked
+    // toast only ever merges with another blocked one: "nick +3" and
+    // "Blocked -3" are opposite events and must not collapse into each other.
     for (auto &a : target.malusAlerts) {
-        if (a.fromNick == nick && a.framesLeft > 0) {
+        if (a.fromNick == nick && a.blocked == blocked && a.framesLeft > 0) {
             a.count += count;
             a.framesLeft = ALERT_FRAMES;
             return;
         }
     }
-    target.malusAlerts.push_back({nick, count, ALERT_FRAMES});
+    target.malusAlerts.push_back({nick, count, ALERT_FRAMES, blocked});
     if (target.malusAlerts.size() > 4) target.malusAlerts.erase(target.malusAlerts.begin());
 }
 
@@ -838,9 +847,9 @@ void BubbleGame::SendLobbyMatchSummary() {
         BubbleArray &p = bubbleArrays[i];
         std::string name = StatsPlayerName(p, i, true);
         snprintf(line, sizeof(line),
-                 "%s: %d win%s | fired %d, popped %d, atk %d, def %d",
+                 "%s: %d win%s | fired %d, popped %d, sent %d, rcv %d, blk %d",
                  name.c_str(), p.winCount, p.winCount == 1 ? "" : "s",
-                 p.mFired, p.mPopped, p.mSent, p.mRecv);
+                 p.mFired, p.mPopped, p.mSent, p.mRecv, p.mBlk);
         netClient->SendTalk(line);
     }
 }

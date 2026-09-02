@@ -30,6 +30,7 @@
 #include "sdl3_compat.h"
 #include "ttftext.h"
 #include "networkclient.h"
+#include "attackmode.h"
 
 #include <map>
 #include <memory>
@@ -283,7 +284,7 @@ struct SetupSettings {
     int victoriesLimit = 0;  // 0 = unlimited; >0 = first to reach this wins the match
     bool mouseEnabled = false;  // Mouse/touchscreen aim+fire for player 1
     bool clearMode = false;    // Clear Mode: win by clearing the board
-    bool disableMalus = false; // Disable malus attacks
+    AttackMode attackMode = AttackMode::On;  // Attack bubbles: ON / OFF / with canceling
     bool teamMode = false;
     // Per-player team number (1..teamCount). Widened to MAX_NET_PLAYERS to
     // match playerColors/disableCompression/aimGuide; fully resolved at game
@@ -330,11 +331,12 @@ struct BubbleArray {
     int lobbyPlayerId = -1;  // The lobby/network player ID (for mapping network messages to player arrays)
     std::string playerNickname = "";  // Player nickname for display
     int winCount = 0;  // Number of rounds won by this player
-    // Round/match statistics (bubbles fired, bubbles popped, malus sent, malus received).
+    // Round/match statistics (bubbles fired, bubbles popped, malus sent, malus
+    // received, malus blocked by canceling -- see AttackMode::Canceling).
     // r* = current round (reset every round); m* = whole match (reset at NewGame).
     // In network games each client owns array 0's stats; remote arrays are filled from 'S' sync messages.
-    int rFired = 0, rPopped = 0, rSent = 0, rRecv = 0, rKills = 0;
-    int mFired = 0, mPopped = 0, mSent = 0, mRecv = 0, mKills = 0;
+    int rFired = 0, rPopped = 0, rSent = 0, rRecv = 0, rKills = 0, rBlk = 0;
+    int mFired = 0, mPopped = 0, mSent = 0, mRecv = 0, mKills = 0, mBlk = 0;
     // Array index of whoever last sent this player malus (-1 = never attacked this
     // round). Set at every real malus send site (network and local multiplayer);
     // ApplyPlayerLoss credits this player's attacker with a kill on death. Not
@@ -342,7 +344,10 @@ struct BubbleArray {
     // credit, matching "last attacker gets the kill" with no time limit.
     int lastAttackerIdx = -1;
     // Transient on-screen alerts: "who just sent you malus and how many" (fades out over time).
-    struct MalusAlert { std::string fromNick; int count; int framesLeft; };
+    // `blocked` marks the toast a cancel raises ("Blocked  -3") rather than an
+    // incoming hit ("nick  +3"). Without it the mechanic is invisible: the
+    // queue silently shrinks and nothing on screen says why.
+    struct MalusAlert { std::string fromNick; int count; int framesLeft; bool blocked = false; };
     std::vector<MalusAlert> malusAlerts;
     int numColors = 8;  // Number of bubble colors for this player (5-8)
     bool compressionDisabled = false;  // If true, rows never drop down for this player
@@ -694,7 +699,8 @@ private:
     void SetSendMalusToOne(int opponentIdx);    // Set/clear single-player targeting (original: set_sendmalustoone)
     void ProcessMalusQueue(BubbleArray &bArray, int currentFrame);  // Generate malus bubbles from queue
     void CheckGameState(BubbleArray &bArray, bool countForRoot = true);
-    void AddMalusAlert(BubbleArray &target, const std::string &fromNick, int count);  // Queue an incoming-malus toast
+    void AddMalusAlert(BubbleArray &target, const std::string &fromNick, int count,
+                       bool blocked = false);  // Queue an incoming-malus (or blocked-malus) toast
     void RenderMalusAlerts(SDL_Renderer *rend);  // Draw + age the incoming-malus toasts
     void FinalizeRoundStats();   // Roll per-round stats into match totals; broadcast 'S' in network games
     void RenderRoundStats(SDL_Renderer *rend);  // Post-round per-player stats table overlay

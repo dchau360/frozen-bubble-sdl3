@@ -304,7 +304,10 @@ void BubbleGame::RenderMalusAlerts(SDL_Renderer *rend) {
             // framesLeft countdown still ages below regardless of paging.
             if (!p.boardVisible) { line++; continue; }
             char buf[96];
-            snprintf(buf, sizeof(buf), "%s  +%d", a.fromNick.c_str(), a.count);
+            if (a.blocked)
+                snprintf(buf, sizeof(buf), "Blocked  -%d", a.count);
+            else
+                snprintf(buf, sizeof(buf), "%s  +%d", a.fromNick.c_str(), a.count);
             malusAlertText.UpdateText(rend, buf, 0);
             int tw = malusAlertText.Coords()->w;
             int x = ax;
@@ -397,7 +400,7 @@ void BubbleGame::RenderRoundStats(SDL_Renderer *rend) {
     const int n = currentSettings.playerCount;
     if (n < 2) return;
 
-    const int boxW = 494, boxX = (640 - boxW) / 2, boxY = 6;
+    const int boxW = 544, boxX = (640 - boxW) / 2, boxY = 6;
     const int rowH = 16, headH = 22;
     const int hintH = currentSettings.networkGame ? rowH : 0;
 
@@ -430,7 +433,8 @@ void BubbleGame::RenderRoundStats(SDL_Renderer *rend) {
     const int colPopped = boxX + 264;
     const int colSent = boxX + 320;
     const int colRecv = boxX + 372;
-    const int colKills = boxX + 424;
+    const int colBlk = boxX + 424;
+    const int colKills = boxX + 476;
 
     auto cell = [&](const char *txt, int x, int y, SDL_Color c) {
         statsText.UpdateColor(c, {0, 0, 0, 0});
@@ -457,8 +461,9 @@ void BubbleGame::RenderRoundStats(SDL_Renderer *rend) {
     cell("Win", colWin, y, hdr);
     cell("Fire", colFired, y, hdr);
     cell("Pop", colPopped, y, hdr);
-    cell("Atk", colSent, y, hdr);
-    cell("Def", colRecv, y, hdr);
+    cell("Sent", colSent, y, hdr);
+    cell("Rcv", colRecv, y, hdr);
+    cell("Blk", colBlk, y, hdr);
     cell("KO", colKills, y, hdr);
     y += rowH;
 
@@ -485,6 +490,7 @@ void BubbleGame::RenderRoundStats(SDL_Renderer *rend) {
         snprintf(buf, sizeof(buf), "%d", p.rPopped); cell(buf, colPopped, y, c);
         snprintf(buf, sizeof(buf), "%d", p.rSent);   cell(buf, colSent, y, c);
         snprintf(buf, sizeof(buf), "%d", p.rRecv);   cell(buf, colRecv, y, c);
+        snprintf(buf, sizeof(buf), "%d", p.rBlk);    cell(buf, colBlk, y, c);
         snprintf(buf, sizeof(buf), "%d", p.rKills);  cell(buf, colKills, y, c);
         y += rowH;
     }
@@ -493,12 +499,12 @@ void BubbleGame::RenderRoundStats(SDL_Renderer *rend) {
         cell("TEAM TOTALS", colName, y, hdr);
         y += rowH;
         for (int t : teams) {
-            int tFired = 0, tPopped = 0, tSent = 0, tRecv = 0, tKills = 0;
+            int tFired = 0, tPopped = 0, tSent = 0, tRecv = 0, tBlk = 0, tKills = 0;
             for (int i = 0; i < n; i++) {
                 if (currentSettings.playerTeams[i] != t) continue;
                 BubbleArray &p = bubbleArrays[i];
                 tFired += p.rFired; tPopped += p.rPopped; tSent += p.rSent; tRecv += p.rRecv;
-                tKills += p.rKills;
+                tBlk += p.rBlk; tKills += p.rKills;
             }
             SDL_Color c = kTeamColors[t - 1];
             snprintf(buf, sizeof(buf), "TEAM %d", t); cell(buf, colName, y, c);
@@ -506,6 +512,7 @@ void BubbleGame::RenderRoundStats(SDL_Renderer *rend) {
             snprintf(buf, sizeof(buf), "%d", tPopped); cell(buf, colPopped, y, c);
             snprintf(buf, sizeof(buf), "%d", tSent);   cell(buf, colSent, y, c);
             snprintf(buf, sizeof(buf), "%d", tRecv);   cell(buf, colRecv, y, c);
+            snprintf(buf, sizeof(buf), "%d", tBlk);    cell(buf, colBlk, y, c);
             snprintf(buf, sizeof(buf), "%d", tKills);  cell(buf, colKills, y, c);
             y += rowH;
         }

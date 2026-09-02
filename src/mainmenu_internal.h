@@ -108,6 +108,35 @@ enum GameRoomRow {
     kRoomGridLast   = kRoomAim,   // Team is edited through the roster, not here
 };
 
+// Row indices for the settings-guide page (helpMenuIndex, mainmenu_help.cpp).
+// Its own tiny space: the page has no settings list, just a header action and
+// the two tap bands that page its body.
+enum HelpRow {
+    kHelpRowClose      = 0,
+    kHelpRowScrollUp   = 1,
+    kHelpRowScrollDown = 2,
+};
+
+// Which page the settings guide is showing. The two screens share the frame,
+// the scrolling and the key handling, but not a word of the content: the
+// online room's rows and the local panel's rows barely overlap, and the rules
+// that differ (splitting vs the >5-alive royale target, undivided local
+// attacks) are exactly the parts a player opens the guide to check.
+enum class HelpTopic { OnlineRoom, LocalMultiplayer };
+
+// Fake row index for the local multiplayer panel's HELP box. Same reasoning as
+// kRoomHelpTapIndex below: it is a button on a row, not a row, and the panel's
+// real indices are computed from the player count (LocalMPStartRow and
+// friends), so a real slot for it would shift every per-player row.
+static const int kLocalMPHelpTapIndex = 951;
+
+// Fake row index for the game room's HELP box, in the same spirit as
+// kKeyPlayerTapBase above: it is a tap target on a screen whose real rows are
+// numbered by GameRoomRow, so it has to sit well clear of that range rather
+// than take a slot in the action list -- taking one would renumber every row
+// after it, and the list is built differently for a host and a joiner.
+static const int kRoomHelpTapIndex = 950;
+
 // The plain lobby's "Follow this server" toggle (0 = chat, 1 = create,
 // 2 = follow, 3+ = one per room). Rendered in the header bar rather than as
 // a list row -- the same treatment kRoomStart gets for "Start game!" -- but

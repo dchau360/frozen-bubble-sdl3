@@ -620,23 +620,26 @@ void BubbleGame::ProcessNetworkMessages() {
                         break;
                     }
                     case 'S': {
-                        // Round stats sync from a remote player: S{fired}:{popped}:{sent}:{recv}:{kills}
-                        // Sent once per round by each client when its round ends. The trailing
-                        // :{kills} field is newer than the rest; sscanf fills rf/rp/rs/rr from the
-                        // same call even if it stops at 4 (kills stays at its 0 default), so this
-                        // stays compatible with any peer still on the old 4-field format.
-                        int rf, rp, rs, rr, rk = 0;
-                        if (sscanf(gameData + 1, "%d:%d:%d:%d:%d", &rf, &rp, &rs, &rr, &rk) >= 4) {
+                        // Round stats sync from a remote player:
+                        // S{fired}:{popped}:{sent}:{recv}:{kills}:{blocked}
+                        // Sent once per round by each client when its round ends. The
+                        // trailing :{kills} and :{blocked} fields were each added after
+                        // the first four; sscanf fills the earlier fields from the same
+                        // call even if it stops short (kills/blocked stay at their 0
+                        // defaults), so this stays compatible with any peer still on an
+                        // older 4- or 5-field format.
+                        int rf, rp, rs, rr, rk = 0, rb = 0;
+                        if (sscanf(gameData + 1, "%d:%d:%d:%d:%d:%d", &rf, &rp, &rs, &rr, &rk, &rb) >= 4) {
                             int idx = -1;
                             for (int i = 0; i < currentSettings.playerCount; i++) {
                                 if (bubbleArrays[i].lobbyPlayerId == senderId) { idx = i; break; }
                             }
                             if (idx >= 1) {
                                 BubbleArray &pa = bubbleArrays[idx];
-                                pa.rFired = rf; pa.rPopped = rp; pa.rSent = rs; pa.rRecv = rr; pa.rKills = rk;
-                                pa.mFired += rf; pa.mPopped += rp; pa.mSent += rs; pa.mRecv += rr; pa.mKills += rk;
-                                SDL_Log("Round stats from player %d (array %d): F%d P%d A%d D%d K%d",
-                                        senderId, idx, rf, rp, rs, rr, rk);
+                                pa.rFired = rf; pa.rPopped = rp; pa.rSent = rs; pa.rRecv = rr; pa.rKills = rk; pa.rBlk = rb;
+                                pa.mFired += rf; pa.mPopped += rp; pa.mSent += rs; pa.mRecv += rr; pa.mKills += rk; pa.mBlk += rb;
+                                SDL_Log("Round stats from player %d (array %d): F%d P%d Sent%d Rcv%d K%d Blk%d",
+                                        senderId, idx, rf, rp, rs, rr, rk, rb);
                             } else {
                                 SDL_Log("'S' stats from unknown senderId %d, ignoring", senderId);
                             }

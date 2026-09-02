@@ -26,7 +26,7 @@ struct LocalMultiplayerOptions {
     bool chainReaction = true;
     bool noCompression = false;
     bool clearMode = false;
-    bool disableMalus = false;
+    AttackMode attackMode = AttackMode::On;
     bool teamMode = false;
     int victoriesIndex = 5;
     std::array<int, 5> colors = {8, 8, 8, 8, 8};
@@ -114,7 +114,7 @@ LocalMultiplayerOptions BuildLocalMultiplayerOptions(
     bool chainReaction,
     bool noCompression,
     bool clearMode,
-    bool disableMalus,
+    AttackMode attackMode,
     bool teamMode,
     int victoriesIndex,
     const int colors[5],

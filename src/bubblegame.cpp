@@ -305,6 +305,7 @@ static void ResetRoundInputState(BubbleArray &player) {
     player.wasInDanger = false;
     player.attackFlashFramesLeft = 0;
     player.rKills = 0;
+    player.rBlk = 0;
     player.lastAttackerIdx = -1;
 }
 
@@ -411,6 +412,7 @@ void BubbleGame::NewGame(SetupSettings setup) {
         bubbleArrays[i].rFired = bubbleArrays[i].rPopped = bubbleArrays[i].rSent = bubbleArrays[i].rRecv = 0;
         bubbleArrays[i].mFired = bubbleArrays[i].mPopped = bubbleArrays[i].mSent = bubbleArrays[i].mRecv = 0;
         bubbleArrays[i].rKills = bubbleArrays[i].mKills = 0;
+        bubbleArrays[i].rBlk = bubbleArrays[i].mBlk = 0;
         // Apply per-player color count (5-8); default 8 for single player
         int nc = (setup.playerCount >= 2) ? setup.playerColors[i] : 8;
         nc = (nc < 5) ? 5 : (nc > 8) ? 8 : nc;
@@ -1298,6 +1300,7 @@ void BubbleGame::ReloadGame(int level) {
         bubbleArrays[i].rFired = bubbleArrays[i].rPopped = 0;
         bubbleArrays[i].rSent = bubbleArrays[i].rRecv = 0;
         bubbleArrays[i].rKills = 0;
+        bubbleArrays[i].rBlk = 0;
         bubbleArrays[i].malusAlerts.clear();
     }
     roundStatsFinalized = false;
