@@ -36,6 +36,28 @@ key_ok()  { openssl pkey  -in "$KEY"  -noout 2>/dev/null; }
 
 if cert_ok && key_ok; then
     echo "SSL certificates found — skipping generation."
+elif { [ -L "$CERT" ] && [ ! -s "$CERT" ]; } || { [ -L "$KEY" ] && [ ! -s "$KEY" ]; }; then
+    # A symlink whose target this user can't reach reads as "absent" to every
+    # test below -- -s stats through the link and fails silently on EACCES,
+    # indistinguishable from the file never having been linked at all. -L only
+    # stats the link itself, so it still succeeds here and is what tells the
+    # two cases apart. Caught this live: Let's Encrypt's archive/ directory is
+    # 0700 root:root, so a symlink into it (see Step 6 above) is unreadable to
+    # anyone who isn't root -- this fell into the self-signed branch below
+    # instead, which then failed to even write its own output ("Can't open
+    # ssl/privkey.pem for writing, Permission denied"), one confusing error
+    # hiding behind another.
+    unreadable=""
+    { [ -L "$CERT" ] && [ ! -s "$CERT" ]; } && unreadable="$CERT"
+    { [ -L "$KEY" ]  && [ ! -s "$KEY"  ]; } && unreadable="$unreadable${unreadable:+ }$KEY"
+    echo ""
+    echo "ERROR: $unreadable is a symlink this user can't read through."
+    echo "Its target is almost certainly Let's Encrypt's, which is root-only."
+    echo "Re-run with sudo:"
+    echo ""
+    echo "    sudo ./setup.sh $*"
+    echo ""
+    exit 1
 elif [ -s "$CERT" ] || [ -s "$KEY" ]; then
     # Something is there but did not validate. Never overwrite it: these are
     # the files the operator copied out of /etc/letsencrypt, and regenerating
