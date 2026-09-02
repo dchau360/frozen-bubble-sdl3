@@ -764,6 +764,12 @@ jobs:
     steps:
       - uses: actions/download-artifact@v4
 
+      # The AAB is deliberately not attached here. It isn't installable by
+      # sideloading -- only Play Console (or bundletool) can do anything with
+      # it -- so publishing it on the public Release page just hands visitors
+      # a file they can't use. build-android still produces it as the
+      # "Android-AAB" workflow artifact for whoever is about to do the Play
+      # Console upload to grab directly from that run.
       - uses: softprops/action-gh-release@v2
         with:
           generate_release_notes: true
@@ -772,7 +778,6 @@ jobs:
             macOS/frozen-bubble-macos-arm64.dmg
             Windows/frozen-bubble-windows-setup.exe
             Android/frozen-bubble-android-tv.apk
-            Android-AAB/frozen-bubble-android-tv.aab
             WASM/frozen-bubble-wasm.zip
 
   # ────────────────────────────────────────────────────────────────
