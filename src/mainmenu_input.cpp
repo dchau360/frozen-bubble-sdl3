@@ -425,6 +425,20 @@ bool MainMenu::MenuEditingKey(SDL_Event *e) {
                     if (len > 0) networkChatInput[len - 1] = '\0';
                     return true;
                 }
+#ifdef __WASM_PORT__
+                // See the matching fix in BubbleGame::HandleInput's chattingMode
+                // block: Emscripten's SDL3 port never emits a space through
+                // SDL_EVENT_TEXT_INPUT, so it has to be appended from the keydown
+                // instead. Native builds already get a real space through TEXT_INPUT.
+                else if (e->key.key == SDLK_SPACE) {
+                    size_t len = strlen(networkChatInput);
+                    if (len + 1 < sizeof(networkChatInput)) {
+                        networkChatInput[len] = ' ';
+                        networkChatInput[len + 1] = '\0';
+                    }
+                    return true;
+                }
+#endif
             } else if (showingNetPanel && networkInLobby && networkInputMode == 5) {
                 // Username input - characters handled by SDL_EVENT_TEXT_INPUT
                 if (e->key.key == SDLK_BACKSPACE) {
@@ -432,6 +446,16 @@ bool MainMenu::MenuEditingKey(SDL_Event *e) {
                     if (len > 0) networkUsername[len - 1] = '\0';
                     return true;
                 }
+#ifdef __WASM_PORT__
+                else if (e->key.key == SDLK_SPACE) {
+                    size_t len = strlen(networkUsername);
+                    if (len + 1 < sizeof(networkUsername)) {
+                        networkUsername[len] = ' ';
+                        networkUsername[len + 1] = '\0';
+                    }
+                    return true;
+                }
+#endif
             } else if (showingNetPanel && !networkInLobby && networkInputMode == 11) {
                 // Pre-lobby nickname input - characters handled by SDL_EVENT_TEXT_INPUT
                 if (e->key.key == SDLK_BACKSPACE) {
@@ -439,6 +463,16 @@ bool MainMenu::MenuEditingKey(SDL_Event *e) {
                     if (len > 0) networkPreNick[len - 1] = '\0';
                     return true;
                 }
+#ifdef __WASM_PORT__
+                else if (e->key.key == SDLK_SPACE) {
+                    size_t len = strlen(networkPreNick);
+                    if (len < 15) {  // matches MenuTextInputEvent's cap for this field
+                        networkPreNick[len] = ' ';
+                        networkPreNick[len + 1] = '\0';
+                    }
+                    return true;
+                }
+#endif
             }
 
             // Handle backspace in level panel

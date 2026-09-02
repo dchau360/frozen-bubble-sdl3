@@ -225,6 +225,24 @@ void BubbleGame::HandleInput(SDL_Event *e) {
                            (e->key.key == SDLK_ESCAPE || e->key.key == SDLK_AC_BACK)) {
                     FinishInGameChat(false);
                 }
+#ifdef __WASM_PORT__
+                // Reported live (desktop itch.io): every other character in a chat
+                // message came through, but Space never did. Emscripten's SDL3 port
+                // never emits a space through SDL_EVENT_TEXT_INPUT while composing --
+                // confirmed the same gap in the nickname field's identical
+                // TEXT_INPUT-only pipeline. Append it directly from the keydown
+                // instead, same workaround LobbyChatTypingKey already uses for the
+                // lobby's own chat box. Native builds don't need this (real SDL text
+                // input already delivers a space character there) and must not get
+                // it, or holding Space would insert two per press.
+                else if (e->key.key == SDLK_SPACE) {
+                    size_t len = strlen(chatInputBuf);
+                    if (len + 1 < sizeof(chatInputBuf)) {
+                        chatInputBuf[len] = ' ';
+                        chatInputBuf[len + 1] = '\0';
+                    }
+                }
+#endif
                 return;
             }
             if(e->key.repeat) break;
