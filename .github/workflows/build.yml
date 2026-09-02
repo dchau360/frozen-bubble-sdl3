@@ -170,7 +170,7 @@ jobs:
             git clone --depth 1 --branch "$tag" \
               "https://github.com/libsdl-org/${repo}.git" /tmp/$repo
             cmake -S /tmp/$repo -B /tmp/$repo/build -G Ninja \
-              -DCMAKE_BUILD_TYPE=Release \
+              -DCMAKE_BUILD_TYPE=RelWithDebInfo \
               -DSDL_TEST_LIBRARY=OFF \
               -DSDLIMAGE_SAMPLES=OFF \
               -DSDLMIXER_TESTS=OFF -DSDLMIXER_EXAMPLES=OFF \
@@ -195,13 +195,21 @@ jobs:
       - name: Configure & build (sanitizer)
         run: |
           cmake -B build-asan -G Ninja -DCMAKE_BUILD_TYPE=Debug \
-            -DCMAKE_C_FLAGS=-fsanitize=address,undefined \
-            -DCMAKE_CXX_FLAGS=-fsanitize=address,undefined
+            -DCMAKE_C_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer" \
+            -DCMAKE_CXX_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer"
           cmake --build build-asan --parallel
 
+      # fast_unwind_on_malloc=0 trades speed for correctness: the default fast
+      # unwinder walks frame pointers only, and breaks the moment it steps into
+      # SDL3/FreeType/HarfBuzz -- built above without -fsanitize and, before
+      # this, without frame pointers or debug info either -- producing leak
+      # reports whose frames are unresolvable addresses ("<unknown module>")
+      # instead of real call sites. The slow unwinder uses DWARF CFI (present
+      # in every one of these libs' .eh_frame, C++ exceptions need it too) so
+      # it can identify the module even for statically-linked/stripped code.
       - name: Run tests under ASan/UBSan
         env:
-          ASAN_OPTIONS: detect_leaks=1
+          ASAN_OPTIONS: detect_leaks=1:fast_unwind_on_malloc=0
           UBSAN_OPTIONS: print_stacktrace=1
         run: ctest --test-dir build-asan --output-on-failure
 

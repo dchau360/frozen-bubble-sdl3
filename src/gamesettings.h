@@ -74,7 +74,18 @@ inline bool IsKeyPressed(SDL_Scancode sc) {
 }
 
 struct PlayerKeys {
-    SDL_Scancode left, right, fire, center;
+    // Defaulted to SDL_SCANCODE_UNKNOWN (0), a valid enumerator, rather than
+    // left uninitialized: ReadSettings() overwrites these from the ini file
+    // (or its own hardcoded defaults) in the normal startup path, but code
+    // that constructs GameSettings without calling ReadSettings() first --
+    // e.g. the headless test MainMenu constructor -- previously left these
+    // as raw uninitialized memory, which is undefined behavior the moment
+    // anything reads an SDL_Scancode-typed field (UBSan: "load of value
+    // ..., which is not a valid value for type 'SDL_Scancode'").
+    SDL_Scancode left = SDL_SCANCODE_UNKNOWN;
+    SDL_Scancode right = SDL_SCANCODE_UNKNOWN;
+    SDL_Scancode fire = SDL_SCANCODE_UNKNOWN;
+    SDL_Scancode center = SDL_SCANCODE_UNKNOWN;
 };
 
 // A server the player asked to be notified about. Marking one as followed

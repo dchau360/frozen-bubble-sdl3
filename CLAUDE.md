@@ -26,11 +26,21 @@ ordinary build they report as skipped rather than passing without running. To
 actually run them:
 ```bash
 cmake -B build-asan -G Ninja -DCMAKE_BUILD_TYPE=Debug \
-  -DCMAKE_C_FLAGS=-fsanitize=address,undefined \
-  -DCMAKE_CXX_FLAGS=-fsanitize=address,undefined
+  -DCMAKE_C_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer" \
+  -DCMAKE_CXX_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer"
 cmake --build build-asan --parallel
-ctest --test-dir build-asan --output-on-failure
+ASAN_OPTIONS=detect_leaks=1:fast_unwind_on_malloc=0 UBSAN_OPTIONS=print_stacktrace=1 \
+  ctest --test-dir build-asan --output-on-failure
 ```
+`fast_unwind_on_malloc=0` matters here: the default frame-pointer-based
+unwinder breaks the moment a leak's call stack passes through SDL3/FreeType/
+HarfBuzz (built without `-fsanitize`, so ASan's malloc interceptor still
+catches their allocations via its process-global hook, but can't identify
+frames inside them without this) — reports come back with unresolvable
+`<unknown module>` frames instead of real call sites. The slow unwinder walks
+DWARF CFI (`.eh_frame`, present in every one of these libs since C++
+exceptions need it) instead, and can identify the module even when it can't
+name the function.
 
 **Server (Linux/macOS only, built alongside game automatically):**
 ```bash
