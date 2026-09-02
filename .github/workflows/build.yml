@@ -86,7 +86,16 @@ jobs:
       # sanitizer-only server tests report themselves SKIPPED here (they need an
       # ASan build — see the test-server-sanitizer job) rather than passing
       # vacuously.
+      #
+      # SDL_AUDIODRIVER=dummy: this runner has no sound card, so the first
+      # test that touches AudioMixer::Instance() makes SDL probe real ALSA
+      # hardware, which fails ("cannot find card '0'") and spams stderr. The
+      # dummy driver skips hardware probing entirely instead of failing into
+      # it — see the sanitizer job below for where that failure path turned
+      # out to also leak memory inside ALSA's own config parser.
       - name: Run tests
+        env:
+          SDL_AUDIODRIVER: dummy
         run: ctest --test-dir build --output-on-failure
 
       - name: Install into AppDir
@@ -211,6 +220,17 @@ jobs:
         env:
           ASAN_OPTIONS: detect_leaks=1:fast_unwind_on_malloc=0
           UBSAN_OPTIONS: print_stacktrace=1
+          # This runner has no sound card. Without this, the first test that
+          # touches AudioMixer::Instance() (localmultiplayer-settings-test,
+          # via LocalMPPanelKey) makes SDL probe real ALSA hardware, which
+          # fails ("cannot find card '0'") -- and the newly-symbolized leak
+          # report above confirmed libasound's own config parser leaks its
+          # partially-parsed tree on that failure path (ALSA_guess_device_prefix
+          # -> ALSA_DetectDevices -> SDL_InitAudio), 2048 allocations' worth.
+          # Not our bug to fix; the dummy driver just avoids exercising the
+          # real-hardware probe at all, which is what every other CI job here
+          # already does implicitly by never triggering it before this fix.
+          SDL_AUDIODRIVER: dummy
         run: ctest --test-dir build-asan --output-on-failure
 
   # ────────────────────────────────────────────────────────────────
