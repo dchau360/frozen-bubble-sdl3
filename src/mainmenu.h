@@ -340,6 +340,18 @@ private:
     // members with their own connections; only this client simulates them.
     int netRoomBotCount = 0;
     int netRoomBotSkill = 1;           // index into BubbleAI::Skill
+    // Pushes the host's current room-rule settings (the block above --
+    // chainReactionEnabled through netRoomSizeChoice) to the server, so
+    // every joiner sees them, and persists them via GameSettings, so the
+    // next room this device creates starts from what was last configured
+    // here instead of resetting to hardcoded defaults. Wraps every call to
+    // NetworkClient::SendOptions().
+    void SyncRoomOptions();
+    // Persists only, for the two settings above that never go through
+    // SendOptions (bot skill and room size are local-only, decided before
+    // or independently of the room's broadcast rules). SyncRoomOptions()
+    // calls this too, so a room-rule change saves everything at once.
+    void SaveHostDefaults();
     // Each bot carries the skill it was added at (NetBotConnection::SetSkill)
     // rather than all sharing netRoomBotSkill live, so a skill change only
     // affects bots added after it -- a room can mix "bot1-high", "bot2-low".

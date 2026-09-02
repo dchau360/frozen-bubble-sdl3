@@ -137,6 +137,27 @@ public:
     char savedNickname[32] = "";
     bool mouseEnabled = false;  // Mouse/touchscreen aim+fire (player 1)
 
+    // Room-creation ("host") defaults for network games: the game rules a
+    // host last configured (chain reactions, attack mode, victories limit,
+    // etc.), so the next room this device creates starts from what was last
+    // used instead of MainMenu's hardcoded defaults. Loaded by ReadSettings();
+    // MainMenu calls SaveHostSettings() every time the host changes one,
+    // alongside the SendOptions() call that pushes it to the room's joiners.
+    // AttackMode is stored as a plain int (its own underlying type) rather
+    // than pulling attackmode.h into this header for one field.
+    bool hostChainReactions = true;
+    bool hostSinglePlayerTargetting = true;
+    int hostVictoriesLimitIndex = 5;
+    bool hostClearMode = false;
+    int hostAttackMode = 0;
+    bool hostTeamMode = false;
+    int hostTeamCount = 5;
+    int hostBotSkill = 1;
+    int hostRoomSizeChoice = 2;
+    void SaveHostSettings(bool chainReactions, bool singlePlayerTargetting,
+                          int victoriesLimitIndex, bool clearMode, int attackMode,
+                          bool teamMode, int teamCount, int botSkill, int roomSizeChoice);
+
     // Servers the player follows for join notifications. Bounded rather than
     // unbounded because the ini format here stores fixed numbered slots (the
     // same shape as the P1-P5 key bindings above) and because a device that

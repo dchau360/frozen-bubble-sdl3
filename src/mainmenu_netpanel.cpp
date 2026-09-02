@@ -1261,11 +1261,7 @@ void MainMenu::NetPanelChatDockRender(bool expanded) {
                     for (int i = 0; i < (int)currentGame->players.size(); i++) {
                         if (currentGame->players[i].nick == senderNick) {
                             netPlayerTeams[i] = newTeam;
-                            static const int vLimits[] = {0,1,2,3,4,5,6,7,8,9,10,11,12,15,20,30,50,100};
-                            netClient->SendOptions(chainReactionEnabled, /*continueWhenLeave=*/true,
-                                singlePlayerTargetting, vLimits[victoriesLimitIndex], playerColorCounts,
-                                playerNoCompress, playerAimGuide, netRoomMouseEnabled, netClearMode,
-                                netAttackMode, netTeamMode, netPlayerTeams, netTeamCount);
+                            SyncRoomOptions();
                             break;
                         }
                     }

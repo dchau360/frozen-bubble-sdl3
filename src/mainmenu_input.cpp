@@ -1340,6 +1340,7 @@ void MainMenu::MenuLeftRightKey(SDL_Event *e) {
                                 netRoomBotSkill += (e->key.key == SDLK_LEFT) ? -1 : 1;
                                 if (netRoomBotSkill < 0) netRoomBotSkill = 2;
                                 if (netRoomBotSkill > 2) netRoomBotSkill = 0;
+                                SaveHostDefaults();
                                 AudioMixer::Instance()->PlaySFX("menu_change");
                             } else if (selectedActionIndex >= kRoomGridFirst &&
                                        selectedActionIndex <= kRoomGridLast) {
@@ -1377,9 +1378,7 @@ void MainMenu::MenuLeftRightKey(SDL_Event *e) {
                                 settingChanged = true;
                             }
                             if (settingChanged) {
-                                static const int vLimits[] = {0,1,2,3,4,5,6,7,8,9,10,11,12,15,20,30,50,100};
-                                netClient->SendOptions(chainReactionEnabled, /*continueWhenLeave=*/true,
-                                    singlePlayerTargetting, vLimits[victoriesLimitIndex], playerColorCounts, playerNoCompress, playerAimGuide, netRoomMouseEnabled, netClearMode, netAttackMode, netTeamMode, netPlayerTeams, netTeamCount);
+                                SyncRoomOptions();
                             }
                         } else if (!currentGame && selectedActionIndex == 1) {
                             // Lobby "Create Game Room" row: Left/Right cycles the room-size choice
@@ -1390,6 +1389,7 @@ void MainMenu::MenuLeftRightKey(SDL_Event *e) {
                                 netRoomSizeChoice++;
                                 if (netRoomSizeChoice > 2) netRoomSizeChoice = 0;
                             }
+                            SaveHostDefaults();
                             AudioMixer::Instance()->PlaySFX("menu_change");
                         }
                     }
@@ -1704,6 +1704,7 @@ void MainMenu::GameRoomHostReturn(NetworkClient *netClient, GameRoom *currentGam
         AudioMixer::Instance()->PlaySFX("menu_change");
     } else if (selectedActionIndex == kRoomBotSkill) {
         netRoomBotSkill = (netRoomBotSkill >= 2) ? 0 : netRoomBotSkill + 1;
+        SaveHostDefaults();
         AudioMixer::Instance()->PlaySFX("menu_change");
     } else if (selectedActionIndex == kRoomStart && currentGame && currentGame->players.size() > 1
                && !netStartRequested) {
@@ -1727,9 +1728,7 @@ void MainMenu::GameRoomHostReturn(NetworkClient *netClient, GameRoom *currentGam
         AudioMixer::Instance()->PlaySFX("menu_selected");
     }
     if (settingChanged) {
-        static const int vLimits[] = {0,1,2,3,4,5,6,7,8,9,10,11,12,15,20,30,50,100};
-        netClient->SendOptions(chainReactionEnabled, /*continueWhenLeave=*/true,
-            singlePlayerTargetting, vLimits[victoriesLimitIndex], playerColorCounts, playerNoCompress, playerAimGuide, netRoomMouseEnabled, netClearMode, netAttackMode, netTeamMode, netPlayerTeams, netTeamCount);
+        SyncRoomOptions();
     }
 }
 

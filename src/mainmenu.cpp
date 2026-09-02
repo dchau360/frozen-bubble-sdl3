@@ -198,6 +198,42 @@ MainMenu::MainMenu(const SDL_Renderer *renderer)
         if (saved[0] != '\0') snprintf(networkPreNick, sizeof(networkPreNick), "%s", saved);
     }
 #endif
+
+    // Restore the host's last-used room settings (see SyncRoomOptions()) so
+    // the first room this device creates this session already reflects them,
+    // not just rooms created after visiting the net panel once (which is all
+    // the netClearMode/netAttackMode/netTeamMode loads above cover -- those
+    // three are re-loaded every time the panel opens since a room's Clear
+    // Mode temporarily overrides them; the rest only need setting once here).
+    {
+        GameSettings* gs = GameSettings::Instance();
+        chainReactionEnabled = gs->hostChainReactions;
+        singlePlayerTargetting = gs->hostSinglePlayerTargetting;
+        victoriesLimitIndex = gs->hostVictoriesLimitIndex;
+        netClearMode = gs->hostClearMode;
+        netAttackMode = (AttackMode)gs->hostAttackMode;
+        netTeamMode = gs->hostTeamMode;
+        netTeamCount = gs->hostTeamCount;
+        netRoomBotSkill = gs->hostBotSkill;
+        netRoomSizeChoice = gs->hostRoomSizeChoice;
+    }
+}
+
+void MainMenu::SaveHostDefaults() {
+    GameSettings::Instance()->SaveHostSettings(chainReactionEnabled, singlePlayerTargetting,
+        victoriesLimitIndex, netClearMode, (int)netAttackMode, netTeamMode, netTeamCount,
+        netRoomBotSkill, netRoomSizeChoice);
+}
+
+void MainMenu::SyncRoomOptions() {
+    NetworkClient* netClient = NetworkClient::Instance();
+    if (!netClient) return;
+    static const int vLimits[] = {0,1,2,3,4,5,6,7,8,9,10,11,12,15,20,30,50,100};
+    netClient->SendOptions(chainReactionEnabled, /*continueWhenLeave=*/true,
+        singlePlayerTargetting, vLimits[victoriesLimitIndex], playerColorCounts,
+        playerNoCompress, playerAimGuide, netRoomMouseEnabled, netClearMode,
+        netAttackMode, netTeamMode, netPlayerTeams, netTeamCount);
+    SaveHostDefaults();
 }
 
 #ifdef FROZEN_BUBBLE_TEST_ACCESS
@@ -468,10 +504,13 @@ void MainMenu::ShowPanel(int which) {
             showingNetPanel = true;
             networkInLobby = false;
             networkInputMode = 7; // LAN server list
+            // Loaded from GameSettings rather than reset to hardcoded defaults:
+            // these are what the host last configured on this device (possibly
+            // in an earlier session), see MainMenu::SyncRoomOptions().
             netRoomMouseEnabled = GameSettings::Instance()->mouseEnabled; // load persisted default
-            netClearMode = false;
-            netAttackMode = AttackMode::On;
-            netTeamMode = false;
+            netClearMode = GameSettings::Instance()->hostClearMode;
+            netAttackMode = (AttackMode)GameSettings::Instance()->hostAttackMode;
+            netTeamMode = GameSettings::Instance()->hostTeamMode;
             for (int i = 0; i < 5; i++) netPlayerTeams[i] = i + 1;
             lastProcessedChatCount = 0;
             break;
@@ -483,10 +522,11 @@ void MainMenu::ShowPanel(int which) {
             showingNetPanel = true;
             networkInLobby = false;
             networkInputMode = 10; // Public server list
+            // See the matching comment in case 4 just above.
             netRoomMouseEnabled = GameSettings::Instance()->mouseEnabled; // load persisted default
-            netClearMode = false;
-            netAttackMode = AttackMode::On;
-            netTeamMode = false;
+            netClearMode = GameSettings::Instance()->hostClearMode;
+            netAttackMode = (AttackMode)GameSettings::Instance()->hostAttackMode;
+            netTeamMode = GameSettings::Instance()->hostTeamMode;
             for (int i = 0; i < 5; i++) netPlayerTeams[i] = i + 1;
             lastProcessedChatCount = 0;
             publicServers.clear();

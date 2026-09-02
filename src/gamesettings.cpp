@@ -275,6 +275,22 @@ void GameSettings::ReadSettings()
     mouseEnabled = iniparser_getboolean(optDict, "Keys:MouseEnabled",
                                         DefaultMouseEnabled());
 
+    hostChainReactions = iniparser_getboolean(optDict, "Host:ChainReactions", true);
+    hostSinglePlayerTargetting =
+        iniparser_getboolean(optDict, "Host:SinglePlayerTargetting", true);
+    hostVictoriesLimitIndex = iniparser_getint(optDict, "Host:VictoriesLimitIndex", 5);
+    if (hostVictoriesLimitIndex < 0 || hostVictoriesLimitIndex > 17) hostVictoriesLimitIndex = 5;
+    hostClearMode = iniparser_getboolean(optDict, "Host:ClearMode", false);
+    hostAttackMode = iniparser_getint(optDict, "Host:AttackMode", 0);
+    if (hostAttackMode < 0 || hostAttackMode > 2) hostAttackMode = 0;
+    hostTeamMode = iniparser_getboolean(optDict, "Host:TeamMode", false);
+    hostTeamCount = iniparser_getint(optDict, "Host:TeamCount", 5);
+    if (hostTeamCount < 2 || hostTeamCount > 5) hostTeamCount = 5;
+    hostBotSkill = iniparser_getint(optDict, "Host:BotSkill", 1);
+    if (hostBotSkill < 0 || hostBotSkill > 2) hostBotSkill = 1;
+    hostRoomSizeChoice = iniparser_getint(optDict, "Host:RoomSizeChoice", 2);
+    if (hostRoomSizeChoice < 0 || hostRoomSizeChoice > 2) hostRoomSizeChoice = 2;
+
     LoadFollowedServers();
     LoadBlockedPlayers();
 
@@ -586,6 +602,37 @@ void GameSettings::setSoundEnabled(bool on) {
     playSfx = on;
     iniparser_set(optDict, "Sound:EnableMusic", on ? "true" : "false");
     iniparser_set(optDict, "Sound:EnableSFX", on ? "true" : "false");
+    SaveSettings();
+}
+
+void GameSettings::SaveHostSettings(bool chainReactions, bool singlePlayerTargetting,
+                                    int victoriesLimitIndex, bool clearMode, int attackMode,
+                                    bool teamMode, int teamCount, int botSkill,
+                                    int roomSizeChoice)
+{
+    hostChainReactions = chainReactions;
+    hostSinglePlayerTargetting = singlePlayerTargetting;
+    hostVictoriesLimitIndex = victoriesLimitIndex;
+    hostClearMode = clearMode;
+    hostAttackMode = attackMode;
+    hostTeamMode = teamMode;
+    hostTeamCount = teamCount;
+    hostBotSkill = botSkill;
+    hostRoomSizeChoice = roomSizeChoice;
+
+    // Section header has to exist or iniparser_dump_ini drops every key under it.
+    iniparser_set(optDict, "Host", NULL);
+    iniparser_set(optDict, "Host:ChainReactions", chainReactions ? "true" : "false");
+    iniparser_set(optDict, "Host:SinglePlayerTargetting",
+                  singlePlayerTargetting ? "true" : "false");
+    iniparser_set(optDict, "Host:VictoriesLimitIndex",
+                  std::to_string(victoriesLimitIndex).c_str());
+    iniparser_set(optDict, "Host:ClearMode", clearMode ? "true" : "false");
+    iniparser_set(optDict, "Host:AttackMode", std::to_string(attackMode).c_str());
+    iniparser_set(optDict, "Host:TeamMode", teamMode ? "true" : "false");
+    iniparser_set(optDict, "Host:TeamCount", std::to_string(teamCount).c_str());
+    iniparser_set(optDict, "Host:BotSkill", std::to_string(botSkill).c_str());
+    iniparser_set(optDict, "Host:RoomSizeChoice", std::to_string(roomSizeChoice).c_str());
     SaveSettings();
 }
 
