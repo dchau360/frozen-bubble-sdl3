@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v2.4.63
 
 - **New: "Attack bubbles" is now three-way -- ON, OFF, or Blockable.** Blockable
   makes the attack you just earned pay down whatever is still queued
