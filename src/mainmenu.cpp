@@ -149,6 +149,14 @@ MainMenu::MainMenu(const SDL_Renderer *renderer)
     panelText.UpdateAlignment(TTF_HORIZONTAL_ALIGN_CENTER);
     panelText.UpdateColor({255, 255, 255, 255}, {0, 0, 0, 255});
 
+    // See the comment on these members in mainmenu.h -- loaded once at their
+    // final size/style so HelpPanelRender never has to resize a shared font.
+    helpHeadingText.LoadFont(ASSET("/gfx/DroidSans.ttf").c_str(), 15);
+    helpHeadingText.UpdateStyle(TTF_STYLE_BOLD);
+    helpBodyText.LoadFont(ASSET("/gfx/DroidSans.ttf").c_str(), 14);
+    helpNoteText.LoadFont(ASSET("/gfx/DroidSans.ttf").c_str(), 13);
+    helpNoteText.UpdateStyle(TTF_STYLE_ITALIC);
+
     networkText.LoadFont(ASSET("/gfx/DroidSans.ttf").c_str(), 14);
     networkText.UpdateAlignment(TTF_HORIZONTAL_ALIGN_LEFT);
     networkText.UpdateColor({255, 255, 255, 255}, {0, 0, 0, 255});
@@ -204,6 +212,13 @@ MainMenu::MainMenu(const SDL_Renderer *renderer, HeadlessTestTag)
     panelText.LoadFont(ASSET("/gfx/DroidSans.ttf").c_str(), 15);
     panelText.UpdateAlignment(TTF_HORIZONTAL_ALIGN_CENTER);
     panelText.UpdateColor({255, 255, 255, 255}, {0, 0, 0, 255});
+
+    // See the comment on these members in mainmenu.h.
+    helpHeadingText.LoadFont(ASSET("/gfx/DroidSans.ttf").c_str(), 15);
+    helpHeadingText.UpdateStyle(TTF_STYLE_BOLD);
+    helpBodyText.LoadFont(ASSET("/gfx/DroidSans.ttf").c_str(), 14);
+    helpNoteText.LoadFont(ASSET("/gfx/DroidSans.ttf").c_str(), 13);
+    helpNoteText.UpdateStyle(TTF_STYLE_ITALIC);
 }
 #endif
 

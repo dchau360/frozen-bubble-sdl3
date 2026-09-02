@@ -338,41 +338,37 @@ void MainMenu::HelpPanelRender() {
             case HelpLine::Blank:
                 break;
             case HelpLine::Heading:
-                panelText.UpdateStyle(15, TTF_STYLE_BOLD);
-                panelText.UpdateColor(menulist::kGold, menulist::kTextShadow);
-                panelText.UpdateText(rend, l.text, 0);
-                panelText.UpdatePosition({body.x + 14, y});
-                { SDL_FRect fr = ToFRect(*panelText.Coords());
-                  SDL_RenderTexture(rend, panelText.Texture(), nullptr, &fr); }
+                helpHeadingText.UpdateColor(menulist::kGold, menulist::kTextShadow);
+                helpHeadingText.UpdateText(rend, l.text, 0);
+                helpHeadingText.UpdatePosition({body.x + 14, y});
+                { SDL_FRect fr = ToFRect(*helpHeadingText.Coords());
+                  SDL_RenderTexture(rend, helpHeadingText.Texture(), nullptr, &fr); }
                 SDL_SetRenderDrawColor(rend, menulist::kEdge.r, menulist::kEdge.g,
                                        menulist::kEdge.b, 110);
                 SDL_RenderLine(rend, (float)(body.x + 14), (float)(y + lineH - 2),
                                (float)(body.x + body.w - 14), (float)(y + lineH - 2));
                 break;
             case HelpLine::Bullet:
-                panelText.UpdateStyle(14, TTF_STYLE_NORMAL);
-                panelText.UpdateColor(menulist::kText, menulist::kTextShadow);
-                panelText.UpdateText(rend, l.text, 0);
-                panelText.UpdatePosition({body.x + 24, y});
-                { SDL_FRect fr = ToFRect(*panelText.Coords());
-                  SDL_RenderTexture(rend, panelText.Texture(), nullptr, &fr); }
+                helpBodyText.UpdateColor(menulist::kText, menulist::kTextShadow);
+                helpBodyText.UpdateText(rend, l.text, 0);
+                helpBodyText.UpdatePosition({body.x + 24, y});
+                { SDL_FRect fr = ToFRect(*helpBodyText.Coords());
+                  SDL_RenderTexture(rend, helpBodyText.Texture(), nullptr, &fr); }
                 break;
             case HelpLine::Note:
-                panelText.UpdateStyle(13, TTF_STYLE_ITALIC);
-                panelText.UpdateColor(menulist::kMuted, menulist::kTextShadow);
-                panelText.UpdateText(rend, l.text, 0);
-                panelText.UpdatePosition({body.x + 24, y});
-                { SDL_FRect fr = ToFRect(*panelText.Coords());
-                  SDL_RenderTexture(rend, panelText.Texture(), nullptr, &fr); }
+                helpNoteText.UpdateColor(menulist::kMuted, menulist::kTextShadow);
+                helpNoteText.UpdateText(rend, l.text, 0);
+                helpNoteText.UpdatePosition({body.x + 24, y});
+                { SDL_FRect fr = ToFRect(*helpNoteText.Coords());
+                  SDL_RenderTexture(rend, helpNoteText.Texture(), nullptr, &fr); }
                 break;
             case HelpLine::Body:
             default:
-                panelText.UpdateStyle(14, TTF_STYLE_NORMAL);
-                panelText.UpdateColor(menulist::kText, menulist::kTextShadow);
-                panelText.UpdateText(rend, l.text, 0);
-                panelText.UpdatePosition({body.x + 14, y});
-                { SDL_FRect fr = ToFRect(*panelText.Coords());
-                  SDL_RenderTexture(rend, panelText.Texture(), nullptr, &fr); }
+                helpBodyText.UpdateColor(menulist::kText, menulist::kTextShadow);
+                helpBodyText.UpdateText(rend, l.text, 0);
+                helpBodyText.UpdatePosition({body.x + 14, y});
+                { SDL_FRect fr = ToFRect(*helpBodyText.Coords());
+                  SDL_RenderTexture(rend, helpBodyText.Texture(), nullptr, &fr); }
                 break;
         }
         y += lineH;

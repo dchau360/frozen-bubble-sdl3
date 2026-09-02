@@ -219,6 +219,21 @@ private:
 
     TTFText panelText;
 
+    // HelpPanelRender renders up to ~24 lines per page, each one a fresh
+    // UpdateText() call. Every other panel that shares panelText resizes it
+    // only once or twice per render (a header title, a footer hint), but
+    // cycling one TTF_Font through three sizes/styles (15 Bold / 14 Normal /
+    // 13 Italic) tens of times per render, called repeatedly across a help
+    // page's scroll range, is what tripped LeakSanitizer on
+    // localmultiplayer-settings-test (CI run for v2.4.63: 66728 bytes leaked,
+    // stack entirely inside SDL_ttf/FreeType with no frames of our own code
+    // -- resizing a shared TTF_Font that many times doesn't fully release
+    // its previous glyph cache in the SDL_ttf/FreeType build CI uses). Three
+    // dedicated, fixed-size fonts loaded once sidestep the resize churn
+    // entirely, matching how every other TTFText member in this class is
+    // used (LoadFont once at construction, never resized afterward).
+    TTFText helpHeadingText, helpBodyText, helpNoteText;
+
     // LocalMPPanelRender draws each row through panelText separately (one
     // per-row colour), so panelText.Text() only ever holds whatever the last
     // row drawn was by the time the function returns -- unlike every other

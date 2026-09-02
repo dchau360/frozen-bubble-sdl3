@@ -30,8 +30,8 @@
 #ifndef __WASM_PORT__
 // Raw sockets not available in WebAssembly
 #include "socket_compat.h"
-#include "attackmode.h"
 #endif
+#include "attackmode.h"  // AttackMode is used below regardless of platform
 
 #define PROTO_MAJOR 1
 #define PROTO_MINOR 3
