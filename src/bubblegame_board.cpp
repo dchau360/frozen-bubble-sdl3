@@ -482,7 +482,47 @@ void BubbleGame::CheckPossibleDestroy(BubbleArray &bArray){
 
     // Calculate malus: destroyed + falling - 2 (original formula at line 958)
     int malusValue = totalDestroyed + fallingCount - 2;
-    if (malusValue > 0 && !currentSettings.disableMalus) {
+
+    // "Attack bubbles: with canceling" -- what you just earned pays down what
+    // you still owe before any of it is sent on. Only bubbles still queued can
+    // be cancelled: once ProcessMalusQueue has turned one into a falling
+    // MalusBubble it is committed and on its way down, so the queue is exactly
+    // the "not yet landed" set. The count is clamped by the queue's own size,
+    // which is what keeps it from going negative -- cancelling more than you
+    // owe empties the queue and sends nothing, it never banks credit.
+    //
+    // Applied to every board rather than only the ones this client owns, and
+    // before the OwnsArray-gated send below: each client runs this same
+    // function for each board off the same stick events, so cancelling here
+    // keeps every client's view of a remote player's queue in step with the
+    // owner's, instead of the owner quietly cancelling and everyone else
+    // still drawing malus that is never going to land.
+    {
+        // Clamped again here, not because MalusCancelled is expected to be
+        // wrong, but because this is an erase range: a count past the queue's
+        // end is memory corruption rather than a wrong number, and that is too
+        // sharp an edge to leave resting on one function's arithmetic.
+        int cancelled = MalusCancelled(currentSettings.attackMode, malusValue,
+                                       (int)bArray.malusQueue.size());
+        cancelled = std::clamp(cancelled, 0, (int)bArray.malusQueue.size());
+        if (cancelled > 0) {
+            bArray.malusQueue.erase(bArray.malusQueue.begin(),
+                                    bArray.malusQueue.begin() + cancelled);
+            malusValue -= cancelled;
+            // Stat: malus blocked. Counted here on every client's copy of every
+            // board, same as the erase above and for the same reason -- but
+            // only the owning client's rBlk is ever broadcast (FinalizeRoundStats)
+            // or shown as this player's own row, so a non-owner's local count for
+            // someone else's board is discarded rather than double-counted; see
+            // the 'S' handler in bubblegame_net.cpp, which overwrites it outright.
+            bArray.rBlk += cancelled;
+            AddMalusAlert(bArray, "", cancelled, /*blocked=*/true);
+            SDL_Log("Malus canceling: blocked %d incoming, %d left to send",
+                    cancelled, malusValue);
+        }
+    }
+
+    if (malusValue > 0 && currentSettings.attackMode != AttackMode::Off) {
         if (currentSettings.mpTraining && bArray.playerAssigned == 0) {
             // mp_train: malus converted to score (original malus_change at line 1185)
             mpTrainScore += malusValue;

@@ -166,25 +166,27 @@ List::List(const SDL_Rect& viewport, int selectedIndex, int rowH, int fillAlpha)
     : viewport_(viewport), selectedIndex_(selectedIndex), rowH_(rowH), fillAlpha_(fillAlpha) {}
 
 void List::Header(const std::string& title) {
-    rows_.push_back({-1, title, "", "", kGold, false, true, false, kGold, 0, 0});
+    rows_.push_back({-1, title, "", "", kGold, false, true, false, kGold, 0, 0, 0, "", -1});
 }
 
 void List::Row(int index, const std::string& label, const std::string& value,
-               bool emphasize, bool splitAdjust, SDL_Keycode labelActivateKey) {
+               bool emphasize, bool splitAdjust, SDL_Keycode labelActivateKey,
+               SDL_Keycode suffixKey, const std::string& suffixText, int suffixIndex) {
     rows_.push_back({index, label, value, "", emphasize ? kGold : kMuted,
-                      splitAdjust, false, false, kGold, 0, labelActivateKey});
+                      splitAdjust, false, false, kGold, 0, labelActivateKey,
+                      suffixKey, suffixText, suffixIndex});
 }
 
 void List::RowColored(int index, const std::string& label, const std::string& value,
                        SDL_Color valueColor, bool splitAdjust) {
-    rows_.push_back({index, label, value, "", valueColor, splitAdjust, false, false, kGold, 0, 0});
+    rows_.push_back({index, label, value, "", valueColor, splitAdjust, false, false, kGold, 0, 0, 0, "", -1});
 }
 
 void List::RowWithPrefix(int index, const std::string& prefixGlyph, SDL_Color prefixColor,
                           const std::string& label, const std::string& value,
                           bool emphasize, SDL_Keycode prefixKey) {
     rows_.push_back({index, label, value, prefixGlyph, emphasize ? kGold : kMuted,
-                      false, false, true, prefixColor, prefixKey, 0});
+                      false, false, true, prefixColor, prefixKey, 0, 0, "", -1});
 }
 
 int List::End(SDL_Renderer* rend, TTFText& text, SDL_Texture* panelBG,
@@ -256,6 +258,33 @@ int List::End(SDL_Renderer* rend, TTFText& text, SDL_Texture* panelBG,
             addTapRow(row.index, {viewport_.x + 4, y, 32, rowH_}, -1, false, row.prefixKey);
         }
 
+        // Right-edge button (the HELP box), measured and reserved before the
+        // value is laid out so the value's right-alignment stops short of it
+        // rather than being drawn underneath. Its tap zone goes in here, ahead
+        // of every zone this row registers below, so it wins the hit test.
+        int rightEdge = viewport_.x + viewport_.w - 14;
+        if (row.suffixKey != 0) {
+            const int sw = 46, sh = 18;
+            // Clear of the scrollbar this list draws at viewport_.w - 10 when
+            // its content overflows -- at w - 8 the box's right border sat
+            // under the scrollbar, so a tap on what looked like the scrollbar
+            // opened the guide instead.
+            const int sx = viewport_.x + viewport_.w - 16 - sw;
+            const int sy = y + (rowH_ - sh) / 2;
+            const SDL_Rect box = {sx, sy, sw, sh};
+            const int suffixSel = row.suffixIndex >= 0 ? row.suffixIndex : row.index;
+            const bool on = (selectedIndex_ == suffixSel);
+            SDL_SetRenderDrawBlendMode(rend, SDL_BLENDMODE_BLEND);
+            SDL_SetRenderDrawColor(rend, kSelFill.r, kSelFill.g, kSelFill.b, on ? 130 : 55);
+            { SDL_FRect fr = ToFRect(box); SDL_RenderFillRect(rend, &fr); }
+            SDL_SetRenderDrawColor(rend, kSelEdge.r, kSelEdge.g, kSelEdge.b, on ? 240 : 150);
+            { SDL_FRect fr = ToFRect(box); SDL_RenderRect(rend, &fr); }
+            DrawText(rend, text, row.suffixText, 14, TTF_STYLE_BOLD,
+                     on ? kGold : kText, sx + 6, sy + 2, true);
+            addTapRow(suffixSel, box, -1, false, row.suffixKey);
+            rightEdge = sx - 8;
+        }
+
         // Value measured (not yet drawn) before the label, so a long label
         // -- a server's name, chosen by whoever runs that server, not by
         // this game -- gets truncated to whatever room is actually left
@@ -270,7 +299,7 @@ int List::End(SDL_Renderer* rend, TTFText& text, SDL_Texture* panelBG,
             text.UpdateText(rend, val.c_str(), 0);
             valueW = text.Coords()->w;
         }
-        int maxLabelW = (viewport_.x + viewport_.w - 14) - textX - (valueW > 0 ? valueW + 12 : 0);
+        int maxLabelW = rightEdge - textX - (valueW > 0 ? valueW + 12 : 0);
         std::string label = TruncateToWidth(rend, text, row.label, maxLabelW, 20, TTF_STYLE_NORMAL);
 
         DrawText(rend, text, label, 20, TTF_STYLE_NORMAL,
@@ -278,7 +307,7 @@ int List::End(SDL_Renderer* rend, TTFText& text, SDL_Texture* panelBG,
 
         if (!val.empty()) {
             DrawText(rend, text, val, 20, TTF_STYLE_BOLD, row.valueColor,
-                     viewport_.x + viewport_.w - 14, y + (rowH_ - 24) / 2, false);
+                     rightEdge, y + (rowH_ - 24) / 2, false);
         }
 
         // A stepped row's "<  value  >" is drawn right-aligned, so on a row
@@ -298,7 +327,7 @@ int List::End(SDL_Renderer* rend, TTFText& text, SDL_Texture* panelBG,
         // second tap sends outright instead of HandlePanelTap re-deriving a
         // midpoint of its own that this same mismatch would reintroduce.
         if (row.splitAdjust && valueW > 0) {
-            const int valueBlockRight = viewport_.x + viewport_.w - 14;
+            const int valueBlockRight = rightEdge;
             const int valueBlockLeft = valueBlockRight - valueW;
             const int splitX = valueBlockRight - valueW / 2;
             // labelActivateKey != 0: this row's label is its own action
@@ -316,7 +345,8 @@ int List::End(SDL_Renderer* rend, TTFText& text, SDL_Texture* panelBG,
                 leftEdge = valueBlockLeft;
             }
             const SDL_Rect leftHalf  = {leftEdge, slot.y, splitX - leftEdge, slot.h};
-            const SDL_Rect rightHalf = {splitX, slot.y, slot.x + slot.w - splitX, slot.h};
+            const int rowRight = row.suffixKey != 0 ? rightEdge + 8 : slot.x + slot.w;
+            const SDL_Rect rightHalf = {splitX, slot.y, rowRight - splitX, slot.h};
             addTapRow(row.index, leftHalf, -1, false, SDLK_LEFT);
             addTapRow(row.index, rightHalf, -1, false, SDLK_RIGHT);
         } else {

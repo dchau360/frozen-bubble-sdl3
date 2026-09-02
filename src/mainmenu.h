@@ -88,7 +88,8 @@ public:
     bool IsTextEditActive() const { return networkFieldEditing; }
     bool HasAnyPanelOpen() const {
         return showingKeysPanel || showingSPPanel || showingOptPanel
-            || showingNetPanel || showingLevelPanel || showingLocalMPPanel || showingNetSetupPanel;
+            || showingNetPanel || showingLevelPanel || showingLocalMPPanel
+            || showingNetSetupPanel || showingHelpPanel;
     }
     void SetupNewGame(int mode);
     void ShowPanel(int which);
@@ -200,6 +201,7 @@ private:
     void MenuTextInputEvent(SDL_Event *e);
     bool MenuEditingKey(SDL_Event *e);
     bool KeysPanelKey(SDL_Event *e);
+    bool HelpPanelKey(SDL_Event *e);
     bool LobbyChatTypingKey(SDL_Event *e);
     bool LocalMPPanelKey(SDL_Event *e);
     void PlayMenuSFX(const char *name);
@@ -317,7 +319,7 @@ private:
     int currentPlayerCol = 0;  // Focused player column when navigating per-player grid settings
     bool netRoomMouseEnabled = false;  // Per-session mouse/touch for network games (defaults OFF)
     bool netClearMode = false;         // Clear Mode for network game
-    bool netDisableMalus = false;      // Disable malus for network game
+    AttackMode netAttackMode = AttackMode::On;  // Attack bubbles for network game (ON/OFF/Cancel)
     bool netTeamMode = false;          // Team Mode for network game
     // Bots the host has added to the current game room. They are real room
     // members with their own connections; only this client simulates them.
@@ -343,11 +345,11 @@ private:
     size_t teamOverrideChatCount = 0;  // all clients: chat msgs scanned for !team: -> override map (>5 path)
     int netRosterCursor = 0;           // host override: selected roster row (0-based)
     bool netRosterEditMode = false;    // host override: true while navigating the roster to reassign teams
-    // Snapshot of playerNoCompress/netDisableMalus taken the moment Clear Mode is
+    // Snapshot of playerNoCompress/netAttackMode taken the moment Clear Mode is
     // switched on, restored when switching away from it (Clear Mode forces both
     // on; without this, leaving Clear Mode left them stuck on forever).
     bool netPreClearNoCompress[5] = {false, false, false, false, false};
-    bool netPreClearDisableMalus = false;
+    AttackMode netPreClearAttackMode = AttackMode::On;
 
     // Geolocation state
     float myGeoLat = 0.0f, myGeoLon = 0.0f;
@@ -399,15 +401,27 @@ private:
     bool localMPCR = true;          // Chain reaction enabled
     bool localMPNoCompress = false;  // Disable row compression for all players
     bool localMPClearMode = false;   // Clear Mode (win by clearing board; defaults compression+malus off)
-    bool localMPDisableMalus = false; // Disable malus attacks
+    AttackMode localMPAttackMode = AttackMode::On;  // Attack bubbles (ON/OFF/Cancel)
     bool localMPTeamMode = false;    // Team Mode: odd player slots vs even (see LocalMPTeamOf)
     int localMPVictoriesIndex = 5;   // Index into kVictoriesLimits
     // Snapshot taken when Clear Mode is switched on, restored when switching away
     // from it (see the matching netPreClear* fields above for why).
     bool localMPPreClearNoCompress = false;
-    bool localMPPreClearDisableMalus = false;
+    AttackMode localMPPreClearAttackMode = AttackMode::On;
     bool localMPAimGuide[5] = {false, false, false, false, false};  // Per-player aim guide
     void LocalMPPanelRender();
+
+    // Settings guide (mainmenu_help.cpp), opened by either screen's HELP box.
+    // One frame, two pages: which one is showing is helpTopic.
+    bool showingHelpPanel = false;
+    // 0 == HelpTopic::OnlineRoom; the enum lives in mainmenu_internal.h,
+    // which includes this header, so it cannot be named here.
+    int helpTopic = 0;
+    int helpScroll = 0;        // first visible line
+    // kHelpRowClose; the enum lives in mainmenu_internal.h, which includes
+    // this header, so it cannot be named here.
+    int helpMenuIndex = 0;
+    void HelpPanelRender();
 };
 
 #endif // MAINMENU_H

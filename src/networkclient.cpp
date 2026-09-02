@@ -653,7 +653,7 @@ void NetworkClient::ProbeNotifySupportIfNeeded() {
     SendCommand("NOTIFYUNREG fb-follow-capability-probe");
 }
 
-bool NetworkClient::SendOptions(bool chainReaction, bool continueWhenLeave, bool singleTarget, int victoriesLimit, const int playerColors[5], const bool noCompress[5], const bool aimGuide[5], bool mouseEnabled, bool clearMode, bool disableMalus, bool teamMode, const int playerTeams[5], int teamCount) {
+bool NetworkClient::SendOptions(bool chainReaction, bool continueWhenLeave, bool singleTarget, int victoriesLimit, const int playerColors[5], const bool noCompress[5], const bool aimGuide[5], bool mouseEnabled, bool clearMode, AttackMode attackMode, bool teamMode, const int playerTeams[5], int teamCount) {
     // Send game options using SETOPTIONS command (original line 4468-4474)
     // Format: SETOPTIONS CHAINREACTION:0/1,...,NUMCOLORS_P1:N,...,NUMCOLORS_P5:N
     char cmd[768];
@@ -662,7 +662,13 @@ bool NetworkClient::SendOptions(bool chainReaction, bool continueWhenLeave, bool
              ",NUMCOLORS_P1:%d,NUMCOLORS_P2:%d,NUMCOLORS_P3:%d,NUMCOLORS_P4:%d,NUMCOLORS_P5:%d"
              ",NOCOMPRESS_P1:%d,NOCOMPRESS_P2:%d,NOCOMPRESS_P3:%d,NOCOMPRESS_P4:%d,NOCOMPRESS_P5:%d"
              ",AIMGUIDE_P1:%d,AIMGUIDE_P2:%d,AIMGUIDE_P3:%d,AIMGUIDE_P4:%d,AIMGUIDE_P5:%d"
-             ",MOUSEENABLED:%d,CLEARMODE:%d,DISABLEMALUS:%d"
+             // DISABLEMALUS keeps its original 0/1 meaning so a client built
+             // before canceling existed still reads "on" vs "off" correctly;
+             // MALUSCANCEL rides alongside it and is simply not found by that
+             // client's parser, which falls back to its default of 0. The
+             // degradation is that such a client attacks without cancelling
+             // -- a rule difference, not a desync.
+             ",MOUSEENABLED:%d,CLEARMODE:%d,DISABLEMALUS:%d,MALUSCANCEL:%d"
              ",TEAMMODE:%d,TEAMCOUNT:%d,PLAYERTEAM_P1:%d,PLAYERTEAM_P2:%d,PLAYERTEAM_P3:%d,PLAYERTEAM_P4:%d,PLAYERTEAM_P5:%d",
              chainReaction ? 1 : 0,
              continueWhenLeave ? 1 : 0,
@@ -671,7 +677,9 @@ bool NetworkClient::SendOptions(bool chainReaction, bool continueWhenLeave, bool
              playerColors[0], playerColors[1], playerColors[2], playerColors[3], playerColors[4],
              noCompress[0] ? 1 : 0, noCompress[1] ? 1 : 0, noCompress[2] ? 1 : 0, noCompress[3] ? 1 : 0, noCompress[4] ? 1 : 0,
              aimGuide[0] ? 1 : 0, aimGuide[1] ? 1 : 0, aimGuide[2] ? 1 : 0, aimGuide[3] ? 1 : 0, aimGuide[4] ? 1 : 0,
-             mouseEnabled ? 1 : 0, clearMode ? 1 : 0, disableMalus ? 1 : 0,
+             mouseEnabled ? 1 : 0, clearMode ? 1 : 0,
+             attackMode == AttackMode::Off ? 1 : 0,
+             attackMode == AttackMode::Canceling ? 1 : 0,
              teamMode ? 1 : 0, teamCount, playerTeams[0], playerTeams[1], playerTeams[2], playerTeams[3], playerTeams[4]);
     SDL_Log("Sending game options: %s", cmd);
     return SendCommand(cmd);
@@ -1388,7 +1396,11 @@ void NetworkClient::HandlePushMessage(const std::string& pushMsg) {
         rcvAimGuide[4] = parseVal("AIMGUIDE_P5", 0) != 0;
         rcvMouseEnabled = parseVal("MOUSEENABLED", 0) != 0;
         rcvClearMode = parseVal("CLEARMODE", 0) != 0;
-        rcvDisableMalus = parseVal("DISABLEMALUS", 0) != 0;
+        // Off wins over canceling if a malformed push somehow sets both:
+        // "no attacks at all" is the safer of the two to land on.
+        rcvAttackMode = parseVal("DISABLEMALUS", 0) != 0 ? AttackMode::Off
+                      : parseVal("MALUSCANCEL", 0) != 0 ? AttackMode::Canceling
+                      : AttackMode::On;
         rcvTeamMode = parseVal("TEAMMODE", 0) != 0;
         rcvTeamCount = (int)parseVal("TEAMCOUNT", 2);
         if (rcvTeamCount < 2) rcvTeamCount = 2;

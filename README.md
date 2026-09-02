@@ -49,21 +49,23 @@ All three game modes are available in both local and network play, chosen by the
 - **Clear Mode** — first player to clear their entire board wins the round (the last survivor also wins). Malus and row compression are off by default here, though the host can override both.
 - **Team Mode** — players split into teams; malus only lands on living opponents outside your team.
 
-The host configures malus, chain reactions, victories limit, per-player colours and aim guides, mouse/touch aim and more from the game room — all joined players see changes live. Rooms above 5 players get battle-royale UI: four opponent boards on screen at a time, ranked by who's most relevant to you, with **Tab** to page manually, keys **1–4** to target a visible opponent, and a spectate mode after you're knocked out.
+The host configures chain reactions, victories limit, per-player colours and aim guides, mouse/touch aim and more from the game room — all joined players see changes live. Rooms above 5 players get battle-royale UI: four opponent boards on screen at a time, ranked by who's most relevant to you, with **Tab** to page manually, keys **1–4** to target a visible opponent, and a spectate mode after you're knocked out.
+
+**Attack bubbles** is a three-way setting, host-controlled in the room and per-player in local multiplayer: **ON** sends every malus you earn straight at your opponents, **OFF** turns attacks off entirely, and **Blockable** has the malus you earn pay down whatever is still queued against you first, sending only the surplus — it can't go negative, so blocking more than you owe just empties your queue rather than banking credit. A HELP button next to Bot skill (or **F1** anytime) opens a full settings guide covering this and everything else on the panel, including how malus targeting differs once a room has 6 or more players alive.
 
 <p align="center">
   <img src="docs/screenshots/game-room.png" alt="Game room screen: match rules, per-player setup grid, and a 20-slot player roster" width="480">
   <img src="docs/screenshots/net-5player.png" alt="Live 5-player network game: one full board in the centre, four opponent boards in the corners" width="480">
 </p>
 
-After each round a per-player stats table shows bubbles fired and popped, malus sent and received, and kills. In-game chat works during play (**Enter** or **T**, gamepad **X**) and between rounds.
+After each round a per-player stats table shows bubbles fired and popped, malus sent, received, and blocked, and kills. In-game chat works during play (**Enter** or **T**, gamepad **X**) and between rounds.
 
 **Bots.** The host of a room can add up to four bots from the setting under the player list, with a skill of Low/Med/High — each bot keeps whatever skill was set at the moment it was added, so a room can mix difficulties (add a High bot, change the setting, add a Low one). Each one joins as an ordinary member — everyone sees it in the roster and it counts against the room's cap — and plays with the same aiming as a local-multiplayer bot: a High bot plans one shot ahead using the next-bubble preview, on top of always taking the best pop it can find, and reacts roughly 3x faster than a Low one. Handy for filling out a room, or for playing on a quiet server. Works on every platform, including the itch.io browser build — a browser bot opens its own WebSocket to the server instead of a raw socket. Bot thinking happens on the host's own device, not the server: each bot's board runs inside the host's client like a hidden extra player, so a room full of bots draws on the host's CPU (and, on a laptop or phone, its battery), not the server's. A server can also cap how many bots may be running across the whole server, in which case adding one past that limit fails with a chat message rather than a crash — that's the server operator's setting, not yours ([SetupServer.md](SetupServer.md#optional--limit-concurrent-bots)).
 
 **Dealing with abusive players.** If you host the room, `/kick p2` removes the player in that roster position (`/kick <nick>` works too). Type `/block <nick>` in chat to hide someone's messages — in the lobby and mid-match both, and it takes effect immediately without needing the server's cooperation. `/unblock <nick>` undoes it, `/blocked` lists who you have blocked, and the list is saved per device. `/report <nick> <what happened>` sends a report to that server's operator; each server is run by a different person, so what happens next is up to them — blocking is the part that is in your hands. Type `/help` in chat for the full list.
 
 <p align="center">
-  <img src="docs/screenshots/round-stats.png" alt="Post-round stats table showing each player's wins, bubbles fired and popped, attack and defense malus, and kills" width="480">
+  <img src="docs/screenshots/round-stats.png" alt="Post-round stats table showing each player's wins, bubbles fired and popped, malus sent, received, and blocked, and kills" width="480">
 </p>
 
 ---

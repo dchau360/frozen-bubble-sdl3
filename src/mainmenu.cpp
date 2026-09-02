@@ -455,7 +455,7 @@ void MainMenu::ShowPanel(int which) {
             networkInputMode = 7; // LAN server list
             netRoomMouseEnabled = GameSettings::Instance()->mouseEnabled; // load persisted default
             netClearMode = false;
-            netDisableMalus = false;
+            netAttackMode = AttackMode::On;
             netTeamMode = false;
             for (int i = 0; i < 5; i++) netPlayerTeams[i] = i + 1;
             lastProcessedChatCount = 0;
@@ -470,7 +470,7 @@ void MainMenu::ShowPanel(int which) {
             networkInputMode = 10; // Public server list
             netRoomMouseEnabled = GameSettings::Instance()->mouseEnabled; // load persisted default
             netClearMode = false;
-            netDisableMalus = false;
+            netAttackMode = AttackMode::On;
             netTeamMode = false;
             for (int i = 0; i < 5; i++) netPlayerTeams[i] = i + 1;
             lastProcessedChatCount = 0;
@@ -582,7 +582,7 @@ void MainMenu::SetupNewGame(int mode) {
                 ns.randomLevels = true;
                 ns.singlePlayerTargetting = singlePlayerTargetting;
                 ns.clearMode = netClearMode;
-                ns.disableMalus = netDisableMalus;
+                ns.attackMode = netAttackMode;
                 ns.teamMode = netTeamMode;
                 // Always on: the room option that used to disable it is gone.
                 ns.continueWhenPlayersLeave = true;
@@ -633,7 +633,7 @@ void MainMenu::SetupNewGame(int mode) {
                 localMPCR,
                 localMPNoCompress,
                 localMPClearMode,
-                localMPDisableMalus,
+                localMPAttackMode,
                 localMPTeamMode,
                 localMPVictoriesIndex,
                 playerColorCounts,

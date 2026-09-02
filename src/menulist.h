@@ -155,9 +155,18 @@ public:
     // tap on the label still activates the row while a tap on the value
     // adjusts it, instead of the value's own left half eating into the
     // label the way a plain splitAdjust row's does.
+    //
+    // suffixKey/suffixText add a small boxed button at the row's right edge
+    // (the local multiplayer panel's HELP box), carving its width out of the
+    // space the value is right-aligned into so the two never overlap. Its tap
+    // zone is registered before the row's own, so it wins the hit test. Pass
+    // suffixIndex when the button should select as something other than the
+    // row it sits on -- it is a separate target, not part of the value.
     void Row(int index, const std::string& label, const std::string& value = "",
              bool emphasize = true, bool splitAdjust = false,
-             SDL_Keycode labelActivateKey = 0);
+             SDL_Keycode labelActivateKey = 0,
+             SDL_Keycode suffixKey = 0, const std::string& suffixText = "",
+             int suffixIndex = -1);
 
     // Same as Row(), but the value is drawn in an explicit colour instead of
     // the on/off convention -- for a value whose meaning is a hue, not a
@@ -198,6 +207,10 @@ private:
         // to still create the room, not just adjust the count). See End()'s
         // splitAdjust branch and Row()'s labelActivateKey parameter.
         SDL_Keycode labelActivateKey;
+        // Right-edge button; see Row()'s suffixKey parameter.
+        SDL_Keycode suffixKey;
+        std::string suffixText;
+        int suffixIndex;
     };
     SDL_Rect viewport_;
     int selectedIndex_;

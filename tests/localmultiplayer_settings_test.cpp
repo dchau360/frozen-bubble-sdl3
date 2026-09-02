@@ -3,6 +3,7 @@
 #include "localmultiplayer_settings.h"
 #include "mainmenu.h"
 #include "platform.h"
+#include "mainmenu_internal.h"
 
 #include <cstdio>
 #include <set>
@@ -32,6 +33,64 @@ struct MainMenuTestAccess {
         menu.LocalMPPanelRender();
         return menu.lastLocalMPPanelText;
     }
+
+    // Renders the panel with the Attack bubbles row selected and returns the
+    // same row dump RenderVictories reads, so the three-state value can be
+    // checked as it is actually drawn rather than as the enum alone.
+    static std::string RenderAttackMode(MainMenu& menu, AttackMode mode) {
+        menu.showingLocalMPPanel = true;
+        menu.runDelay = false;
+        menu.localMPMenuIndex = kLocalMPRowMalus;
+        menu.localMPAttackMode = mode;
+        menu.LocalMPPanelRender();
+        return menu.lastLocalMPPanelText;
+    }
+
+    static void SelectAttackRow(MainMenu& menu, AttackMode mode) {
+        menu.showingLocalMPPanel = true;
+        menu.runDelay = false;
+        menu.localMPMenuIndex = kLocalMPRowMalus;
+        menu.localMPAttackMode = mode;
+    }
+
+    static AttackMode CurrentAttackMode(const MainMenu& menu) {
+        return menu.localMPAttackMode;
+    }
+
+    static void SetClearMode(MainMenu& menu, bool on) {
+        menu.showingLocalMPPanel = true;
+        menu.runDelay = false;
+        menu.localMPMenuIndex = kLocalMPRowMode;
+        menu.localMPClearMode = !on;   // PressKey toggles it to `on`
+    }
+
+    static bool ClearMode(const MainMenu& menu) { return menu.localMPClearMode; }
+
+    // ---- settings guide ----------------------------------------------
+    // The page is only reachable through a live game room, so drive it
+    // directly: it has to render, scroll within its bounds, and close.
+    static void SetHelpTopic(MainMenu& menu, HelpTopic topic) {
+        menu.helpTopic = (int)topic;
+    }
+    static int HelpTopicOf(const MainMenu& menu) { return menu.helpTopic; }
+    static int& LocalSelection(MainMenu& menu) { return menu.localMPMenuIndex; }
+    static void OpenHelp(MainMenu& menu) {
+        menu.showingHelpPanel = true;
+        menu.helpScroll = 0;
+        menu.helpMenuIndex = kHelpRowClose;
+    }
+    static void RenderHelp(MainMenu& menu) { menu.HelpPanelRender(); }
+    // PressKey above goes straight to LocalMPPanelKey; the guide has its own
+    // handler, called earlier than that one from HandleInput.
+    static bool PressHelpKey(MainMenu& menu, SDL_Keycode key) {
+        SDL_Event event{};
+        event.type = SDL_EVENT_KEY_DOWN;
+        event.key.key = key;
+        return menu.HelpPanelKey(&event);
+    }
+    static bool HelpOpen(const MainMenu& menu) { return menu.showingHelpPanel; }
+    static int HelpScroll(const MainMenu& menu) { return menu.helpScroll; }
+    static int& RoomSelection(MainMenu& menu) { return menu.selectedActionIndex; }
 
     static void SetVictories(MainMenu& menu, int victoriesIndex) {
         menu.showingLocalMPPanel = true;
@@ -74,13 +133,13 @@ struct MainMenuTestAccess {
         bool chainReaction,
         bool noCompression,
         bool clearMode,
-        bool disableMalus,
+        AttackMode attackMode,
         bool teamMode) {
         menu.localMPPlayerCount = 4;
         menu.localMPCR = chainReaction;
         menu.localMPNoCompress = noCompression;
         menu.localMPClearMode = clearMode;
-        menu.localMPDisableMalus = disableMalus;
+        menu.localMPAttackMode = attackMode;
         menu.localMPTeamMode = teamMode;
         menu.localMPVictoriesIndex = 15;
         const int colors[5] = {4, 5, 6, 7, 9};
@@ -151,12 +210,12 @@ int main() {
     const int colors[5] = {5, 6, 7, 8, 5};
     const bool aimGuide[5] = {true, false, true, false, true};
     LocalMultiplayerOptions options = BuildLocalMultiplayerOptions(
-        4, false, true, false, true, false, 15, colors, aimGuide);
+        4, false, true, false, AttackMode::Off, false, 15, colors, aimGuide);
     CHECK(options.playerCount == 4);
     CHECK(!options.chainReaction);
     CHECK(options.noCompression);
     CHECK(!options.clearMode);
-    CHECK(options.disableMalus);
+    CHECK(options.attackMode == AttackMode::Off);
     CHECK(!options.teamMode);
     CHECK(options.victoriesIndex == 15);
     CHECK(options.colors[0] == 5 && options.colors[1] == 6
@@ -172,7 +231,7 @@ int main() {
     CHECK(!settings.chainReaction);
     CHECK(settings.disableCompression[3]);
     CHECK(!settings.clearMode);
-    CHECK(settings.disableMalus);
+    CHECK(settings.attackMode == AttackMode::Off);
     CHECK(!settings.teamMode);
     CHECK(settings.victoriesLimit == 30);
     CHECK(settings.playerColors[2] == 7);
@@ -190,6 +249,116 @@ int main() {
     CHECK(rendered.find("Victories limit: none (unlimited)") != std::string::npos);
     rendered = MainMenuTestAccess::RenderVictories(*menu, 15);
     CHECK(rendered.find("Victories limit: 30") != std::string::npos);
+
+    // Attack bubbles is three-state now, so the row has to render all three
+    // and Left/Right have to walk the cycle in opposite directions.
+    rendered = MainMenuTestAccess::RenderAttackMode(*menu, AttackMode::On);
+    CHECK(rendered.find("Attack bubbles: ON") != std::string::npos);
+    rendered = MainMenuTestAccess::RenderAttackMode(*menu, AttackMode::Off);
+    CHECK(rendered.find("Attack bubbles: OFF") != std::string::npos);
+    rendered = MainMenuTestAccess::RenderAttackMode(*menu, AttackMode::Canceling);
+    CHECK(rendered.find("Attack bubbles: Blockable") != std::string::npos);
+
+    MainMenuTestAccess::SelectAttackRow(*menu, AttackMode::On);
+    CHECK(MainMenuTestAccess::PressKey(*menu, SDLK_RIGHT));
+    CHECK(MainMenuTestAccess::CurrentAttackMode(*menu) == AttackMode::Canceling);
+    CHECK(MainMenuTestAccess::PressKey(*menu, SDLK_RIGHT));
+    CHECK(MainMenuTestAccess::CurrentAttackMode(*menu) == AttackMode::Off);
+    CHECK(MainMenuTestAccess::PressKey(*menu, SDLK_RIGHT));
+    CHECK(MainMenuTestAccess::CurrentAttackMode(*menu) == AttackMode::On);
+    CHECK(MainMenuTestAccess::PressKey(*menu, SDLK_LEFT));
+    CHECK(MainMenuTestAccess::CurrentAttackMode(*menu) == AttackMode::Off);
+
+    // Clear Mode forces attacks off and restores the previous choice on the
+    // way back out -- including Blockable, which the old boolean could not hold.
+    MainMenuTestAccess::SelectAttackRow(*menu, AttackMode::Canceling);
+    MainMenuTestAccess::SetClearMode(*menu, true);
+    CHECK(MainMenuTestAccess::PressKey(*menu, SDLK_RIGHT));
+    CHECK(MainMenuTestAccess::ClearMode(*menu));
+    CHECK(MainMenuTestAccess::CurrentAttackMode(*menu) == AttackMode::Off);
+    CHECK(MainMenuTestAccess::PressKey(*menu, SDLK_RIGHT));   // leave Clear Mode
+    CHECK(!MainMenuTestAccess::ClearMode(*menu));
+    CHECK(MainMenuTestAccess::CurrentAttackMode(*menu) == AttackMode::Canceling);
+
+    // ---- settings guide ------------------------------------------------
+    {
+        MainMenuTestAccess::OpenHelp(*menu);
+        MainMenuTestAccess::RenderHelp(*menu);   // must not crash on a headless renderer
+        CHECK(MainMenuTestAccess::HelpOpen(*menu));
+
+        // Up at the top stays at the top rather than scrolling to a negative
+        // line, which would index off the front of the page.
+        CHECK(MainMenuTestAccess::PressHelpKey(*menu, SDLK_UP));
+        CHECK(MainMenuTestAccess::HelpScroll(*menu) == 0);
+
+        CHECK(MainMenuTestAccess::PressHelpKey(*menu, SDLK_DOWN));
+        CHECK(MainMenuTestAccess::HelpScroll(*menu) == 1);
+        CHECK(MainMenuTestAccess::PressHelpKey(*menu, SDLK_PAGEDOWN));
+        CHECK(MainMenuTestAccess::HelpScroll(*menu) == 13);
+        MainMenuTestAccess::RenderHelp(*menu);   // clamps to the page length
+        CHECK(MainMenuTestAccess::HelpScroll(*menu) >= 0);
+        CHECK(MainMenuTestAccess::PressHelpKey(*menu, SDLK_HOME));
+        CHECK(MainMenuTestAccess::HelpScroll(*menu) == 0);
+
+        // Paging far past the end clamps instead of running off it.
+        for (int i = 0; i < 40; ++i) MainMenuTestAccess::PressHelpKey(*menu, SDLK_PAGEDOWN);
+        MainMenuTestAccess::RenderHelp(*menu);
+        CHECK(MainMenuTestAccess::HelpScroll(*menu) > 0);
+
+        // Left/Right are swallowed: the room underneath must not step a
+        // setting the player cannot see.
+        const int before = MainMenuTestAccess::HelpScroll(*menu);
+        CHECK(MainMenuTestAccess::PressHelpKey(*menu, SDLK_LEFT));
+        CHECK(MainMenuTestAccess::PressHelpKey(*menu, SDLK_RIGHT));
+        CHECK(MainMenuTestAccess::HelpScroll(*menu) == before);
+
+        // Closing releases both HELP boxes' fake indices -- neither is a real
+        // row, so stepping from one would walk off the end of its list.
+        MainMenuTestAccess::RoomSelection(*menu) = kRoomHelpTapIndex;
+        MainMenuTestAccess::LocalSelection(*menu) = kLocalMPHelpTapIndex;
+        CHECK(MainMenuTestAccess::PressHelpKey(*menu, SDLK_ESCAPE));
+        CHECK(!MainMenuTestAccess::HelpOpen(*menu));
+        CHECK(MainMenuTestAccess::RoomSelection(*menu) == kRoomMalus);
+        CHECK(MainMenuTestAccess::LocalSelection(*menu) == kLocalMPRowBotSkill);
+
+        // The local page is a different page, not the online one rescrolled:
+        // it has its own length, so a scroll position valid for one is not
+        // automatically valid for the other.
+        MainMenuTestAccess::OpenHelp(*menu);
+        MainMenuTestAccess::SetHelpTopic(*menu, HelpTopic::LocalMultiplayer);
+        CHECK(MainMenuTestAccess::HelpTopicOf(*menu) == (int)HelpTopic::LocalMultiplayer);
+        MainMenuTestAccess::RenderHelp(*menu);
+        for (int i = 0; i < 40; ++i) MainMenuTestAccess::PressHelpKey(*menu, SDLK_PAGEDOWN);
+        MainMenuTestAccess::RenderHelp(*menu);          // clamps to the local page
+        const int localMax = MainMenuTestAccess::HelpScroll(*menu);
+        CHECK(localMax > 0);
+
+        MainMenuTestAccess::SetHelpTopic(*menu, HelpTopic::OnlineRoom);
+        for (int i = 0; i < 40; ++i) MainMenuTestAccess::PressHelpKey(*menu, SDLK_PAGEDOWN);
+        MainMenuTestAccess::RenderHelp(*menu);
+        CHECK(MainMenuTestAccess::HelpScroll(*menu) > 0);
+
+        MainMenuTestAccess::PressHelpKey(*menu, SDLK_ESCAPE);
+        CHECK(!MainMenuTestAccess::HelpOpen(*menu));
+    }
+
+    // The local panel's Up/Down must fold the HELP box's fake index back onto
+    // a real row rather than stepping away from it into nothing.
+    {
+        MainMenuTestAccess::SelectAttackRow(*menu, AttackMode::On);
+        MainMenuTestAccess::LocalSelection(*menu) = kLocalMPHelpTapIndex;
+        CHECK(MainMenuTestAccess::PressKey(*menu, SDLK_UP));
+        CHECK(MainMenuTestAccess::LocalSelection(*menu) == kLocalMPRowBotSkill - 1);
+        MainMenuTestAccess::LocalSelection(*menu) = kLocalMPHelpTapIndex;
+        CHECK(MainMenuTestAccess::PressKey(*menu, SDLK_DOWN));
+        CHECK(MainMenuTestAccess::LocalSelection(*menu) == kLocalMPRowBotSkill + 1);
+    }
+
+    // The Bot skill row still reports its value with the HELP box beside it.
+    {
+        std::string withHelp = MainMenuTestAccess::RenderAttackMode(*menu, AttackMode::On);
+        CHECK(withHelp.find("Bot skill: Med") != std::string::npos);
+    }
 
     MainMenuTestAccess::SetVictories(*menu, 0);
     CHECK(MainMenuTestAccess::PressKey(*menu, SDLK_LEFT));
@@ -357,10 +526,11 @@ int main() {
         const bool chainReaction = enabledField == 0;
         const bool noCompression = enabledField == 1;
         const bool clearMode = enabledField == 2;
-        const bool disableMalus = enabledField == 3;
+        const AttackMode attackMode =
+            enabledField == 3 ? AttackMode::Off : AttackMode::On;
         const bool teamMode = enabledField == 4;
         MainMenuTestAccess::ConfigureLocalGame(
-            *menu, chainReaction, noCompression, clearMode, disableMalus,
+            *menu, chainReaction, noCompression, clearMode, attackMode,
             teamMode);
 
         bool captured = false;
@@ -373,7 +543,7 @@ int main() {
         CHECK(started.disableCompression[0] == noCompression);
         CHECK(started.disableCompression[4] == noCompression);
         CHECK(started.clearMode == clearMode);
-        CHECK(started.disableMalus == disableMalus);
+        CHECK(started.attackMode == attackMode);
         CHECK(started.teamMode == teamMode);
         CHECK(started.victoriesLimit == 30);
         CHECK(started.playerColors[0] == 4);
