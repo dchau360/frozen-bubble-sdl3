@@ -781,16 +781,59 @@ jobs:
 
   # ────────────────────────────────────────────────────────────────
   # Release — only on v*.*.* tag push
+  #
+  # Partial releases: `if:` below uses !cancelled() specifically to opt out of
+  # the default "skip this job if any of `needs` failed" behavior, so a single
+  # platform build failing (say, Windows) no longer blocks the other four --
+  # the release is still created with whatever artifacts actually got
+  # uploaded. actions/download-artifact@v4 with no `name:` just fetches
+  # whatever exists; softprops/action-gh-release@v2 silently drops `files:`
+  # entries that don't match anything on disk, so a missing platform's line
+  # below is a no-op rather than a failure. The failed platform stays on
+  # whatever version its last successful tag shipped until it's fixed and
+  # re-tagged.
+  #
+  # test-linux-sanitizer is deliberately exempted from that leniency: it's the
+  # one job that exists purely to catch memory-safety regressions (it ships no
+  # artifact of its own), so its result is checked explicitly and a failure
+  # there hard-blocks every platform, not just Linux -- see deploy-itchio-html5
+  # below for the same gate applied to the itch.io deploy.
   # ────────────────────────────────────────────────────────────────
   release:
     name: Create Release
     needs: [build-linux, test-linux-sanitizer, build-macos, build-windows, build-android, build-wasm]
-    if: startsWith(github.ref, 'refs/tags/')
+    if: >-
+      startsWith(github.ref, 'refs/tags/') &&
+      !cancelled() &&
+      needs.test-linux-sanitizer.result == 'success'
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
       - uses: actions/download-artifact@v4
+
+      # Cheap visibility for whoever's watching this run: which platforms are
+      # actually about to be attached below, vs. which failed and are being
+      # left out of this release. needs.*.result is one of success/failure/
+      # cancelled/skipped for each job in `needs` above.
+      - name: Summarize which platforms are in this release
+        run: |
+          {
+            echo "### Release contents"
+            echo ""
+            for pair in "Linux:${{ needs.build-linux.result }}" \
+                        "macOS:${{ needs.build-macos.result }}" \
+                        "Windows:${{ needs.build-windows.result }}" \
+                        "Android:${{ needs.build-android.result }}" \
+                        "WASM:${{ needs.build-wasm.result }}"; do
+              plat="${pair%%:*}"; result="${pair#*:}"
+              if [ "$result" = "success" ]; then
+                echo "- ✅ $plat"
+              else
+                echo "- ❌ $plat ($result) -- left out of this release, stays on its previous tag"
+              fi
+            done
+          } >> "$GITHUB_STEP_SUMMARY"
 
       # The AAB is deliberately not attached here. It isn't installable by
       # sideloading -- only Play Console (or bundletool) can do anything with
@@ -823,11 +866,18 @@ jobs:
   # deploy jobs were removed deliberately -- the downloads are distributed
   # through GitHub releases (and Google Play for Android) instead, and having
   # a tag silently repopulate itch.io with binaries would undo that. Restore
-  # them from git history if that changes; the release job below still
+  # them from git history if that changes; the release job above still
   # attaches every platform's artifact to the GitHub release.
+  #
+  # test-linux-sanitizer is a required dependency here too, not just for
+  # release above: a memory-safety regression should block every platform
+  # from shipping, itch.io included. Ordinary needs-failure behavior (no
+  # !cancelled() override, unlike release above) is exactly what's wanted --
+  # this job has only the one artifact to gate on, so there's no partial case
+  # to preserve.
   deploy-itchio-html5:
     name: Deploy WASM to Itch.io
-    needs: build-wasm
+    needs: [build-wasm, test-linux-sanitizer]
     if: startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-latest
     steps:

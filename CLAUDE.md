@@ -133,7 +133,9 @@ Key line references: malus formula (line 958), chain reactions (819–841), win 
 
 ### CI / release
 
-`.github/workflows/build.yml` builds Linux (AppImage), macOS (DMG), Windows (NSIS installer), Android (APK), and WASM on every push to `main`, on PRs to `main`, and on `v*.*.*` tags, then deploys each platform to itch.io via Butler on tag pushes. All five build jobs are enabled; the `release` job `needs` all five and packages each one's artifact. Only the `release` and `deploy-itchio-*` jobs are tag-gated (`startsWith(github.ref, 'refs/tags/')`), so pushes and PRs build without publishing anything.
+`.github/workflows/build.yml` builds Linux (AppImage), macOS (DMG), Windows (NSIS installer), Android (APK), WASM, and a Linux ASan/UBSan sanitizer job (ships no artifact of its own; exists to catch memory-safety regressions) on every push to `main`, on PRs to `main`, and on `v*.*.*` tags. On tag pushes, `release` packages whichever of the five platform builds actually succeeded that run into a GitHub Release, and `deploy-itchio-html5` publishes the WASM build to itch.io via Butler — itch.io gets only the browser build; downloads for the other four platforms are distributed through the GitHub Release (and Google Play for Android) instead.
+
+A failing ASan/UBSan run hard-blocks both: no platform ships, itch.io included, if it catches a memory-safety bug. A single platform build failing on its own (say, Windows) does *not* block the others any more — `release`'s `if:` opts out of the default needs-failure skip (`!cancelled()`) and just omits that platform's file from the release, so the other four still ship and the failed one stays on whatever version its last successful tag published until it's fixed and re-tagged. Only `release` and `deploy-itchio-html5` are tag-gated (`startsWith(github.ref, 'refs/tags/')`), so pushes and PRs build (and, for six jobs, test) without publishing anything.
 
 Android releases are signed with a persistent key held in repository secrets, and a tagged build fails outright rather than shipping an APK that cannot be upgraded — see `docs/ANDROID_SIGNING.md`.
 
