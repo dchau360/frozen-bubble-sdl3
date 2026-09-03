@@ -21,6 +21,7 @@
 #include "audiomixer.h"
 #include "frozenbubble.h"
 #include "localmultiplayer_settings.h"
+#include "menutheme.h"
 #include "transitionmanager.h"
 #include "networkclient.h"
 #include "netteams.h"
@@ -72,8 +73,13 @@ MainMenu::MainMenu(const SDL_Renderer *renderer)
         {"langame", "langame", 70}, 
         {"netgame", "netgame", 89},
         {"graphics", "graphics", 30},
-        {"keys", "keys", 80}, 
-        {"highscores", "highscore", 89}
+        {"keys", "keys", 80},
+        {"highscores", "highscore", 89},
+        // MENU STYLE cycles the title-screen theme (see menutheme.h). It
+        // borrows the level editor's pencil animation, which no row has used
+        // since the editor was dropped from this menu, and lands at y=406 --
+        // the last 56px step that still fits inside the 480px canvas.
+        {"menustyle", "editor", 67}
     };
     uint32_t y_start = 14;
     for(size_t i = 0; i < std::size(texts); i++) {
@@ -266,6 +272,9 @@ MainMenu::~MainMenu() {
     SDL_DestroyTexture(background);
     SDL_DestroyTexture(fbLogo);
     buttons.clear();
+    // The theme's fonts and plate art are shared by every row rather than
+    // owned by one, so they outlive the buttons and have to be released here.
+    MenuThemeShutdown();
 }
 
 

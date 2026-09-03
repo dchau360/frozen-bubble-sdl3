@@ -119,6 +119,9 @@ void GameSettings::CreateDefaultSettings()
         EvalIniResult(rval, dict, "GFX:ColorblindBubbles", "false");
         EvalIniResult(rval, dict, "GFX:ShowFPS", "false");
 
+        EvalIniResult(rval, dict, "Menu", NULL);
+        EvalIniResult(rval, dict, "Menu:Theme", "0");
+
         EvalIniResult(rval, dict, "Sound", NULL);
         EvalIniResult(rval, dict, "Sound:EnableMusic", "true");
         EvalIniResult(rval, dict, "Sound:EnableSFX", "true");
@@ -242,6 +245,8 @@ void GameSettings::ReadSettings()
     }
 
     gfxQuality = iniparser_getint(optDict, "GFX:Quality", 1);
+    menuThemeId = iniparser_getint(optDict, "Menu:Theme", 0);
+    if (menuThemeId < 0 || menuThemeId >= 5) menuThemeId = 0;   // MENU_THEME_COUNT
     linearScaling = iniparser_getboolean(optDict, "GFX:LinearScaling", false);
     useFullscreen = iniparser_getboolean(optDict, "GFX:Fullscreen", false);
     windowWidth = iniparser_getint(optDict, "GFX:WindowWidth", 640);
@@ -645,6 +650,15 @@ void GameSettings::SetValue(const char* option, const char* value)
 
         // gfxQuality needs a hot reload
         iniparser_set(optDict, option, std::to_string(gfxQuality).c_str());
+        SaveSettings();
+        return;
+    }
+    else if (strcmp(option, "Menu:Theme") == 0) {
+        // Forward through the five themes, wrapping back to Classic. The count
+        // is spelled out rather than including menutheme.h, which would drag
+        // SDL_ttf into every translation unit that reads a setting.
+        menuThemeId = (menuThemeId + 1) % 5;
+        iniparser_set(optDict, option, std::to_string(menuThemeId).c_str());
         SaveSettings();
         return;
     }

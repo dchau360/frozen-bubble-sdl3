@@ -22,6 +22,7 @@
 #include "frozenbubble.h"
 #include "gamesettings.h"
 #include "mainmenu.h"
+#include "menutheme.h"
 #include "platform.h"
 
 MenuButton::MenuButton(uint32_t x, uint32_t y, const std::string &name, const SDL_Renderer *renderer, const std::string icontag, const int sheetlen)
@@ -95,7 +96,13 @@ MenuButton::MenuButton(MenuButton &&src) noexcept
     icon_rect(std::move(src.icon_rect)),
     backgroundActive(std::exchange(src.backgroundActive, nullptr)),
     background(std::exchange(src.background, nullptr)),
-    rect(std::move(src.rect))
+    rect(std::move(src.rect)),
+    labelIdle(std::exchange(src.labelIdle, nullptr)),
+    labelActive(std::exchange(src.labelActive, nullptr)),
+    labelIdleSize(src.labelIdleSize),
+    labelActiveSize(src.labelActiveSize),
+    cachedTheme(src.cachedTheme),
+    cachedLabel(std::move(src.cachedLabel))
 {
 }
 
@@ -105,6 +112,41 @@ MenuButton::~MenuButton()
     icons.clear();
     SDL_DestroyTexture(background);
     SDL_DestroyTexture(backgroundActive);
+    ReleaseLabels();
+}
+
+void MenuButton::ReleaseLabels()
+{
+    if (labelIdle) { SDL_DestroyTexture(labelIdle); labelIdle = nullptr; }
+    if (labelActive) { SDL_DestroyTexture(labelActive); labelActive = nullptr; }
+    labelIdleSize = labelActiveSize = SDL_Point{0, 0};
+}
+
+std::string MenuButton::LabelText() const
+{
+    if (buttonName == "1pgame")     return "START 1P GAME";
+    if (buttonName == "2pgame")     return "START 2P GAME";
+    if (buttonName == "langame")    return "START LAN GAME";
+    if (buttonName == "netgame")    return "START NET GAME";
+    if (buttonName == "graphics")   return "GRAPHICS";
+    if (buttonName == "keys")       return "CHANGE KEYS";
+    if (buttonName == "highscores") return "HIGH SCORES";
+    if (buttonName == "menustyle")
+        return std::string("STYLE: ") + MenuThemeName(GameSettings::Instance()->menuTheme());
+    return buttonName;
+}
+
+void MenuButton::EnsureLabels(const SDL_Renderer *renderer)
+{
+    const int theme = GameSettings::Instance()->menuTheme();
+    const std::string text = LabelText();
+    if (labelIdle && theme == cachedTheme && text == cachedLabel) return;
+
+    ReleaseLabels();
+    labelIdle = MenuThemeRenderLabel(renderer, theme, text.c_str(), false, &labelIdleSize);
+    labelActive = MenuThemeRenderLabel(renderer, theme, text.c_str(), true, &labelActiveSize);
+    cachedTheme = theme;
+    cachedLabel = text;
 }
 
 void MenuButton::Render(const SDL_Renderer *renderer)
@@ -146,7 +188,30 @@ void MenuButton::Render(const SDL_Renderer *renderer)
         if(fixedFrame < (int)icons.size() && icons[fixedFrame])
             SDL_SetTextureAlphaMod(icons[fixedFrame], 100);
     }
-    { SDL_FRect fr = ToFRect(rect); SDL_RenderTexture(const_cast<SDL_Renderer*>(renderer), isActive?backgroundActive:background, nullptr, &fr); }
+    // Classic's seven original rows carry their label inside the plate art, so
+    // they blit and are done. Every other theme -- and the MENU STYLE row in
+    // any theme, since its label names whichever theme is selected -- draws a
+    // plate and then its own type on top.
+    const int theme = GameSettings::Instance()->menuTheme();
+    const bool bakedLabel = (theme == MENU_THEME_CLASSIC && buttonName != "menustyle");
+
+    if (bakedLabel) {
+        SDL_FRect fr = ToFRect(rect);
+        SDL_RenderTexture(const_cast<SDL_Renderer*>(renderer), isActive?backgroundActive:background, nullptr, &fr);
+    }
+    else {
+        MenuThemeDrawPlate(renderer, rect, theme, isActive);
+        EnsureLabels(renderer);
+        SDL_Texture *label = isActive ? labelActive : labelIdle;
+        const SDL_Point size = isActive ? labelActiveSize : labelIdleSize;
+        if (label) {
+            const MenuThemeStyle &style = MenuStyleFor(theme);
+            SDL_Rect dst = {rect.x + style.labelX, rect.y + (rect.h - size.y) / 2, size.x, size.y};
+            SDL_FRect fr = ToFRect(dst);
+            SDL_RenderTexture(const_cast<SDL_Renderer*>(renderer), label, nullptr, &fr);
+        }
+    }
+
     if(fixedFrame < (int)icons.size() && icons[fixedFrame])
     { SDL_FRect fr = ToFRect(icon_rect); SDL_RenderTexture(const_cast<SDL_Renderer*>(renderer), icons[fixedFrame], nullptr, &fr); }
 }
@@ -155,6 +220,7 @@ void MenuButton::Pressed(void *parent)
 {
     //oh boy
     if(buttonName == "graphics") GameSettings::Instance()->SetValue("GFX:Quality", "");
+    else if(buttonName == "menustyle") GameSettings::Instance()->SetValue("Menu:Theme", "");
     else if(buttonName == "1pgame") ((MainMenu *)parent)->ShowPanel(0);
     else if(buttonName == "2pgame") ((MainMenu *)parent)->ShowPanel(2); // Local 2-player (same keyboard)
     else if(buttonName == "langame") ((MainMenu *)parent)->ShowPanel(3); // LAN: UDP broadcast discovery

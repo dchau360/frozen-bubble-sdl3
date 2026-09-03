@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+- **New: MENU STYLE, an eighth row on the title screen, restyles the menu.**
+  Press it to cycle five looks -- Classic (the original artwork, untouched),
+  Clear (the same plates with clean type instead of the hand-lettered
+  labels), Slate, Ice and Pop. The original labels were bitmaps baked at
+  640x480 and had gone soft on modern displays; the four new styles draw
+  their type at runtime from Fredoka and Baloo 2 instead, so it stays sharp
+  at any window size. Your choice is saved and comes back next launch.
+
 ## v2.4.64
 
 - **New: hosting a network game now remembers your room settings.** Chain

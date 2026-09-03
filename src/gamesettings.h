@@ -108,6 +108,9 @@ public:
 
     const char *prefPath = nullptr; // Initialized lazily via InitPrefPath() after SDL is ready
     int gfxLevel() { return gfxQuality; }
+    // Which title-screen menu theme is selected; see menutheme.h. Cycled by
+    // the MENU STYLE row through SetValue("Menu:Theme", "").
+    int menuTheme() { return menuThemeId; }
     SDL_Point curResolution() { return {windowWidth, windowHeight}; }
     bool fullscreenMode() { return useFullscreen; }
     bool linearScaling = false;
@@ -246,6 +249,7 @@ private:
     // type 'bool'" -- and an indeterminate gfxQuality silently changes which
     // rendering path the game takes. Defaults here match CreateDefaultSettings().
     int gfxQuality = 1, windowWidth = 640, windowHeight = 480;
+    int menuThemeId = 0;   // MENU_THEME_CLASSIC; the original artwork
     bool useFullscreen = false, colorblindBubbles = false;
     bool playMusic = true, playSfx = true, classicSound = false;
     bool showFps = false;

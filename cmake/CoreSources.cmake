@@ -26,6 +26,7 @@ endif()
 set(FROZEN_BUBBLE_CORE_SOURCES
     ${FB_SRC}/frozenbubble.cpp
     ${FB_SRC}/menubutton.cpp
+    ${FB_SRC}/menutheme.cpp
     ${FB_SRC}/mainmenu.cpp
     ${FB_SRC}/mainmenu_input.cpp
     ${FB_SRC}/mainmenu_netpanel.cpp

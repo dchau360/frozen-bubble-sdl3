@@ -40,6 +40,17 @@ public:
     void Activate();
     void Deactivate();
 private:
+    // Rebuilds labelIdle/labelActive when the theme or the label text has
+    // changed since they were last rendered. Both are full TTF renders plus a
+    // texture upload, so they are cached rather than redone each frame; the
+    // MENU STYLE row is the one whose text moves, and only when pressed.
+    void EnsureLabels(const SDL_Renderer *renderer);
+    // What this row reads on screen. Baked into the artwork for Classic's
+    // seven original rows; drawn from this string for every other theme, and
+    // always for MENU STYLE, whose text names the theme in effect.
+    std::string LabelText() const;
+    void ReleaseLabels();
+
     bool isActive;
     int sheetLen;
     int curFrame;
@@ -50,6 +61,12 @@ private:
     SDL_Texture *backgroundActive;
     SDL_Texture *background;
     SDL_Rect rect;
+
+    SDL_Texture *labelIdle = nullptr;
+    SDL_Texture *labelActive = nullptr;
+    SDL_Point labelIdleSize{}, labelActiveSize{};
+    int cachedTheme = -1;
+    std::string cachedLabel;
 };
 
 #endif // MENUBUTTON_H
