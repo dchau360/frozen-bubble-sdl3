@@ -991,6 +991,15 @@ void FrozenBubble::HandleInput(SDL_Event *e) {
         mainGame->HandleInput(e);
 
         // Mouse aim: convert window coords to logical (640x480) canvas coords
+#ifdef __WASM_PORT__
+        // WASM's own press/release tracking for the swipe-to-quit gesture --
+        // see the MOUSE_BUTTON_DOWN and MOUSE_BUTTON_UP branches below.
+        // Native has the equivalent gameTouchStartX/Y further down, scoped to
+        // the FINGER-events block it belongs to; this one has to be visible
+        // to two separate branches of this same if/else chain instead.
+        static float wasmGameTouchStartX = 0.f, wasmGameTouchStartY = 0.f;
+        static bool wasmGameTouchStarted = false;
+#endif
         if (e->type == SDL_EVENT_MOUSE_MOTION) {
             float lx, ly;
             SDL_RenderCoordinatesFromWindow(renderer, e->motion.x, e->motion.y, &lx, &ly);
@@ -998,6 +1007,23 @@ void FrozenBubble::HandleInput(SDL_Event *e) {
         } else if (e->type == SDL_EVENT_MOUSE_BUTTON_DOWN && e->button.button == SDL_BUTTON_LEFT) {
 #ifndef __WASM_PORT__
             if (e->button.which == SDL_TOUCH_MOUSEID) return; // handled by FINGER_UP; skip synthesized mouse
+#else
+            // Stashed so the matching MOUSE_BUTTON_UP below can tell a
+            // swipe-to-quit from a tap. Recorded ahead of the existing
+            // fire-on-down call, which stays as-is: this app's touch model
+            // fires the instant a finger lands (see the comment above the
+            // FINGER-events block below), and a swipe still starts with that
+            // same touchdown. Firing once at the start of a quit swipe is
+            // harmless -- the round is about to end anyway -- and not worth
+            // changing WASM's already-tuned fire timing to avoid.
+            //
+            // TouchToLogical is not used here: it reads e->tfinger, which a
+            // MOUSE_BUTTON_DOWN event never populates. e->button.x/y in
+            // window pixels is the mouse path's own coordinate, same as the
+            // IsGameFinished branch just below already converts.
+            SDL_RenderCoordinatesFromWindow(renderer, e->button.x, e->button.y,
+                                            &wasmGameTouchStartX, &wasmGameTouchStartY);
+            wasmGameTouchStarted = true;
 #endif
             if (mainGame->IsGameFinished()) {
                 float lx, ly;
@@ -1012,6 +1038,23 @@ void FrozenBubble::HandleInput(SDL_Event *e) {
 #endif
             injectKey(SDLK_ESCAPE);
         }
+#ifdef __WASM_PORT__
+        // Touch has no other way out of a round on WASM: Escape, gamepad B
+        // and Android's back button all reach QuitToTitle, and neither iOS
+        // nor a touchscreen with no such buttons has any of them. Native
+        // gets this from FINGER_DOWN/FINGER_UP below; WASM's in-game input
+        // is mouse-events-only (see the comment on that block for why), so
+        // this mirrors it with MOUSE_BUTTON_DOWN/UP instead of re-deriving
+        // it -- IsTouchBackSwipe takes plain coordinates either way.
+        else if (e->type == SDL_EVENT_MOUSE_BUTTON_UP && e->button.button == SDL_BUTTON_LEFT) {
+            float lx, ly;
+            SDL_RenderCoordinatesFromWindow(renderer, e->button.x, e->button.y, &lx, &ly);
+            bool back = wasmGameTouchStarted &&
+                        mainGame->IsTouchBackSwipe(wasmGameTouchStartX, wasmGameTouchStartY, lx, ly);
+            wasmGameTouchStarted = false;
+            if (back) injectKey(SDLK_ESCAPE);
+        }
+#endif
         // Touch aim+fire via FINGER events (native only).
         // In WASM, Emscripten generates both FINGER_UP and MOUSE_BUTTON_DOWN for one tap —
         // using both would double-inject SDLK_RETURN and fire a bubble on the new round.
