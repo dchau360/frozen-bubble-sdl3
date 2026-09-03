@@ -129,7 +129,12 @@ std::string MenuButton::LabelText() const
     if (buttonName == "langame")    return "START LAN GAME";
     if (buttonName == "netgame")    return "START NET GAME";
     if (buttonName == "graphics")   return "GRAPHICS";
-    if (buttonName == "keys")       return "CHANGE KEYS";
+    // "SETTINGS", not the artwork's "CHANGE KEYS": the panel this row opens
+    // calls itself CONTROLS & SETTINGS and has long since grown past key
+    // bindings into game speed, sound, mouse/touch aim, fullscreen and the
+    // store. Classic keeps the old wording, since that label is painted into
+    // txt_keys_{off,over}.png and is part of the original artwork.
+    if (buttonName == "keys")       return "SETTINGS";
     if (buttonName == "highscores") return "HIGH SCORES";
     if (buttonName == "menustyle")
         return std::string("STYLE: ") + MenuThemeName(GameSettings::Instance()->menuTheme());

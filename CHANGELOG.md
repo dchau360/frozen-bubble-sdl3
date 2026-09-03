@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- **The CHANGE KEYS row now reads SETTINGS in the four new menu styles.**
+  The panel it opens calls itself CONTROLS & SETTINGS and covers game
+  speed, sound, mouse/touch aim and fullscreen as well as key bindings, so
+  the old name undersold it. Classic keeps CHANGE KEYS -- that label is
+  painted into the original artwork.
+
 ## v2.4.65
 
 - **New: MENU STYLE, an eighth row on the title screen, restyles the menu.**
