@@ -2,13 +2,19 @@
 
 ## Unreleased
 
-- **Android: updated the outdated `androidx.fragment` SDK Play Console
-  flagged.** Google's own AdMob/Play Billing libraries still declare a
-  transitive floor of `androidx.fragment:fragment:1.1.0`, even in their
-  current releases, so nothing in the dependency graph had ever pulled in
-  anything newer. Pinned to 1.8.9 directly instead (the newest release that
-  still supports this app's minSdk 21 -- 1.9.0 pulls in a transitive
-  dependency that requires minSdk 23).
+- **Android now needs Android 6.0 (minSdk 23), and every Google SDK is
+  current.** Play Console flagged `androidx.fragment:fragment:1.1.0` as
+  outdated. That version was never chosen -- AdMob and Play Billing pull it
+  in transitively and still declare 1.1.0 as their floor even in their
+  newest releases, so nothing in the build had ever asked for anything
+  better. Fixing it properly meant clearing the same wall Google put in
+  front of its whole SDK line: AdMob, Play Billing and AndroidX all require
+  minSdk 23 in their current releases. So the floor moves from 21 to 23,
+  and AdMob (23.3.0 → 25.4.0), Play Billing (7.1.1 → 9.1.0) and
+  `androidx.fragment` (1.1.0 → 1.9.0) all move to current. The cost is
+  Android 5.0 and 5.1, around 2% of Android devices and none of this app's
+  -- it had not gone public on Play when this changed, so no existing
+  install is stranded.
 
 ## v2.4.68
 

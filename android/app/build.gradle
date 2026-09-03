@@ -57,7 +57,15 @@ android {
 
     defaultConfig {
         applicationId "org.frozenbubble"
-        minSdk 21
+        // 23 (Android 6.0), not SDL3's own floor of 21: Google moved its
+        // entire SDK ecosystem to minSdk 23 in one wave, and every library
+        // here is past that line -- play-services-ads at 24.0.0, billing at
+        // 9.0.0, androidx.fragment at 1.9.0. Staying on 21 means pinning all
+        // three to their last minSdk-21 release and collecting Play Console
+        // SDK Index warnings as they age out, which is what prompted this.
+        // The cost is Android 5.0/5.1, roughly 2% of devices and none of
+        // this app's, since it had not gone public on Play when this changed.
+        minSdk 23
         targetSdk 36
         ndkVersion "25.2.9519653"
         versionCode 51
@@ -151,23 +159,19 @@ android {
 dependencies {
     testImplementation 'junit:junit:4.13.2'
     // Google AdMob
-    implementation 'com.google.android.gms:play-services-ads:23.3.0'
-    // play-services-basement (pulled in transitively by the AdMob and
-    // Play Billing SDKs above) still floors its own androidx.fragment
-    // dependency at 1.1.0 -- true even in its latest release, since a
-    // POM's declared version is a minimum, not what actually ships.
-    // Nothing else in the graph requests anything newer, so without this
-    // Gradle resolves the whole app to fragment 1.1.0, which is exactly
-    // what Play Console's SDK Index flags as outdated on upload. Declaring
-    // it directly here outranks the transitive request (Gradle takes the
-    // highest version asked for) and settles it at a current release.
-    // Pinned to 1.8.9 rather than latest (1.9.0): 1.9.0 pulls in
-    // androidx.tracing:tracing-android:2.0.0 transitively, which declares
-    // minSdk 23 and fails the manifest merge against this app's minSdk 21.
-    // 1.8.9 is the newest release before that jump.
-    implementation 'androidx.fragment:fragment:1.8.9'
+    implementation 'com.google.android.gms:play-services-ads:25.4.0'
+    // Not a transitive dependency we happen to want newer -- this line is
+    // load-bearing. play-services-basement (pulled in by both the AdMob and
+    // Play Billing SDKs) declares androidx.fragment:fragment:1.1.0 as its
+    // own floor, and still does in its current release: a POM's declared
+    // version is a minimum, not what ships. Nothing else in the graph asks
+    // for anything newer, so with this line removed the whole app resolves
+    // back to fragment 1.1.0 -- verified, and exactly what Play Console's
+    // SDK Index flagged as outdated. Declaring it directly outranks the
+    // transitive request, since Gradle takes the highest version asked for.
+    implementation 'androidx.fragment:fragment:1.9.0'
     // Google Play Billing (for "Remove Ads" IAP)
-    implementation 'com.android.billingclient:billing:7.1.1'
+    implementation 'com.android.billingclient:billing:9.1.0'
     // Firebase Cloud Messaging, only when google-services.json is present.
     // PushManager reaches it by reflection, so its absence is a runtime
     // no-op rather than a compile error.

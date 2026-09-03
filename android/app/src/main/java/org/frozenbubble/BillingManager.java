@@ -17,6 +17,7 @@ import com.android.billingclient.api.BillingClient;
 import com.android.billingclient.api.BillingClientStateListener;
 import com.android.billingclient.api.BillingFlowParams;
 import com.android.billingclient.api.BillingResult;
+import com.android.billingclient.api.PendingPurchasesParams;
 import com.android.billingclient.api.ProductDetails;
 import com.android.billingclient.api.Purchase;
 import com.android.billingclient.api.PurchasesUpdatedListener;
@@ -77,7 +78,13 @@ public class BillingManager implements PurchasesUpdatedListener {
         mActivity = activity;
         mBillingClient = BillingClient.newBuilder(activity)
                 .setListener(this)
-                .enablePendingPurchases()
+                // Billing 8 removed the no-argument enablePendingPurchases().
+                // Subscriptions always allow pending purchases; one-time
+                // products have to opt in by name, and PRODUCT_FOREVER is
+                // one, so it is named here.
+                .enablePendingPurchases(PendingPurchasesParams.newBuilder()
+                        .enableOneTimeProducts()
+                        .build())
                 .build();
         sInstance = this;
         connectAndRestore();
@@ -287,7 +294,10 @@ public class BillingManager implements PurchasesUpdatedListener {
                                 .setProductType(productType)
                                 .build()))
                 .build();
-        mBillingClient.queryProductDetailsAsync(params, (billingResult, productDetailsList) -> {
+        // Billing 8 hands the callback a QueryProductDetailsResult rather than
+        // a bare List<ProductDetails>; the list is one accessor in.
+        mBillingClient.queryProductDetailsAsync(params, (billingResult, queryResult) -> {
+            List<ProductDetails> productDetailsList = queryResult.getProductDetailsList();
             if (billingResult.getResponseCode() == BillingClient.BillingResponseCode.OK
                     && !productDetailsList.isEmpty()) {
                 ProductDetails details = productDetailsList.get(0);

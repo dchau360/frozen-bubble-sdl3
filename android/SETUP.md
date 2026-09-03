@@ -9,7 +9,10 @@
 | NDK | **25.2.9519653** | pinned in `app/build.gradle` (`ndkVersion`) |
 | CMake | **3.22.1** | pinned in `app/build.gradle`; install via the SDK Manager |
 
-`minSdk` is 21. The APK is built for `arm64-v8a`, `armeabi-v7a` and `x86_64`.
+`minSdk` is 23 (Android 6.0). SDL3 itself supports 21, but Google's AdMob,
+Play Billing and AndroidX releases all require 23 — see the comment on
+`minSdk` in `app/build.gradle`. The APK is built for `arm64-v8a`,
+`armeabi-v7a` and `x86_64`.
 
 ## SDL3 sources
 
