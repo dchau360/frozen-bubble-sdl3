@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v2.4.65
 
 - **New: MENU STYLE, an eighth row on the title screen, restyles the menu.**
   Press it to cycle five looks -- Classic (the original artwork, untouched),
