@@ -101,9 +101,12 @@ the setting is stored, so changing it sticks.
 **The app icon is compiled at build time.** iOS 11 and later read the icon from
 a compiled `Assets.car`, which only `actool` can produce, so
 [`tools/ios-appicon.sh`](../tools/ios-appicon.sh) runs after the link and merges
-actool's own `CFBundleIcons` keys into the Info.plist. The 1024 master in
-`ios/AppIcon.xcassets` is committed; regenerate it from the game's title art
-with `python3 tools/make-ios-icon.py` (needs Pillow — nothing else does).
+actool's own `CFBundleIcons` keys into the Info.plist. The 1024 image in
+`ios/AppIcon.xcassets` is committed, and is a resize of the same 1024 master
+every platform's icon derives from
+(`share/icons/frozen-bubble-icon-1024x1024.png`); regenerate every platform's
+icon together, iOS included, with `python3 tools/make-app-icons.py` (needs
+Pillow — nothing else does).
 
 **Leaving a round needs a gesture.** Escape, gamepad B and Android's back button
 all reach `QuitToTitle()`; iOS has none of the three, so touch had no way out of

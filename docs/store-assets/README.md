@@ -35,25 +35,20 @@
   screenshot, since there's no letterboxing or OS chrome to crop out that
   way.
 
-- **`icon-512.png`** (512×512, 24-bit RGB) — Play's high-res store icon.
-  Foreground is the in-game pause-screen penguin portrait
-  (`share/gfx/pause_0035.png`, 190×143 native); background is a blurred
-  crop of the bright blue/white glass panel from the multiplayer menu
-  (`share/gfx/back_multiplayer.png`) — both pieces are real game art, not a
-  generic stock image or made-up gradient. This is also now the
-  **actual app launcher icon source** —
-  `share/icons/frozen-bubble-icon-512x512.png` is the same image, and
-  [`.github/workflows/build.yml`](../../.github/workflows/build.yml)'s
-  "Generate app icons from source PNG" step now reads from it instead of
-  the old 64×64 source, so every mipmap density it generates (48–192px) is
-  a downscale from 512 rather than an upscale from 64. The checked-in
-  `android/app/src/main/res/mipmap-hdpi/ic_launcher.png` fallback (used by
-  local/Android-Studio builds that skip that CI step) was regenerated to
-  match.
+- **`icon-512.png`** (512×512, 24-bit RGB) — Play's high-res store icon. A
+  resize of `share/icons/frozen-bubble-icon-1024x1024.png`, the single
+  master every platform's app icon now derives from — two in-game penguins
+  against an icy background, originally an iOS-icon screenshot crop.
+  Regenerate every derived icon at once, this file included, with
+  `python3 tools/make-app-icons.py` (see its docstring for the full list
+  of outputs, including the `android/app/src/main/res/mipmap-hdpi/
+  ic_launcher.png` fallback used by local/Android-Studio builds that skip
+  CI's own icon-generation step).
 
 There's still headroom for a proper redraw or vector source at some point —
-this is a crop of one in-game animation frame, not custom-made icon art —
-but it's a real, presentable, on-brand icon rather than a blurry stopgap.
+this is a crop of one in-game render, not custom-made icon art, and soft at
+full size since the crop itself is small relative to 1024px — but it's real
+game art and on-brand rather than a generic stock image or made-up gradient.
 
 
 ## Promo video

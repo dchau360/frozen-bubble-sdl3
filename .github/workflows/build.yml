@@ -306,6 +306,24 @@ jobs:
             -s /usr/local/lib \
             -s /opt/homebrew/lib
 
+          # .icns is a macOS-only format, built from an iconset directory by
+          # iconutil -- not something the cross-platform tools/make-app-icons.py
+          # (Pillow) can produce, so it's assembled here instead, on the one
+          # runner that actually has iconutil. Source is the same 1024 master
+          # every other platform's icon derives from.
+          ICONSET="$RUNNER_TEMP/FrozenBubble.iconset"
+          mkdir -p "$ICONSET"
+          SRC="share/icons/frozen-bubble-icon-1024x1024.png"
+          for spec in "16:icon_16x16" "32:icon_16x16@2x" "32:icon_32x32" \
+                      "64:icon_32x32@2x" "128:icon_128x128" "256:icon_128x128@2x" \
+                      "256:icon_256x256" "512:icon_256x256@2x" \
+                      "512:icon_512x512" "1024:icon_512x512@2x"; do
+            size="${spec%%:*}"
+            name="${spec##*:}"
+            sips -z "$size" "$size" "$SRC" --out "$ICONSET/$name.png" >/dev/null
+          done
+          iconutil -c icns "$ICONSET" -o "$APP/Resources/FrozenBubble.icns"
+
           cat > "$APP/Info.plist" << 'EOF'
           <?xml version="1.0" encoding="UTF-8"?>
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
@@ -317,6 +335,7 @@ jobs:
             <key>CFBundleVersion</key><string>${{ steps.package_version.outputs.value }}</string>
             <key>CFBundleShortVersionString</key><string>${{ steps.package_version.outputs.value }}</string>
             <key>CFBundleExecutable</key><string>frozen-bubble-sdl3</string>
+            <key>CFBundleIconFile</key><string>FrozenBubble</string>
             <key>CFBundlePackageType</key><string>APPL</string>
             <key>NSHighResolutionCapable</key><true/>
           </dict></plist>
