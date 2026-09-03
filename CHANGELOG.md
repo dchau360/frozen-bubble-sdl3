@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v2.4.68
 
 - **The 1 player sub-menu's five options are legible now.** They used to be
   hand-lettered "carved wood" labels baked into small PNGs, and the wood
