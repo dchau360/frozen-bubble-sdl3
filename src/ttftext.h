@@ -73,4 +73,18 @@ private:
     SDL_Texture *outTexture = nullptr;
 };
 
+// Renders `text` as a new texture, ringed with an outline `ringPx` pixels
+// thick (eight offset copies in `ring`, cheaper and more portable than
+// TTF_SetFontOutline's second font handle) or, when ringPx is 0 and `ring`
+// has alpha, a plain 1px drop-shadow instead. Extracted out of menutheme.cpp
+// (whose MenuThemeRenderLabel is now a thin wrapper over this) so a screen
+// that isn't part of MENU STYLE -- the single-player sub-menu, whose old
+// baked labels this fixed -- can render legible text over a busy background
+// without pulling in the theme system to do it. Caller owns the returned
+// texture (null on failure) and should cache it: a full TTF render plus a
+// texture upload is too costly to repeat every frame.
+SDL_Texture *RenderRingedText(const SDL_Renderer *rend, TTF_Font *font,
+                               const char *text, SDL_Color fg, SDL_Color ring,
+                               int ringPx, SDL_Point *outSize);
+
 #endif //TTFTEXT_H

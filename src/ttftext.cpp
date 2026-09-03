@@ -20,6 +20,52 @@
 #include "ttftext.h"
 #include <utility>
 
+SDL_Texture *RenderRingedText(const SDL_Renderer *rend, TTF_Font *font,
+                               const char *text, SDL_Color fg, SDL_Color ring,
+                               int ringPx, SDL_Point *outSize)
+{
+    if (outSize) *outSize = SDL_Point{0, 0};
+    if (!font || !text || !*text) return nullptr;
+
+    SDL_Surface *front = TTF_RenderText_Blended(font, text, 0, fg);
+    if (!front) return nullptr;
+
+    // Pad by however far the ring or shadow reaches, so neither is clipped.
+    const int pad = ringPx > 0 ? ringPx : (ring.a ? 1 : 0);
+    SDL_Surface *canvas = SDL_CreateSurface(front->w + pad * 2, front->h + pad * 2,
+                                            SDL_PIXELFORMAT_ARGB8888);
+    if (!canvas) { SDL_DestroySurface(front); return nullptr; }
+
+    if (ring.a) {
+        SDL_Surface *shadow = TTF_RenderText_Blended(font, text, 0, ring);
+        if (shadow) {
+            SDL_SetSurfaceBlendMode(shadow, SDL_BLENDMODE_BLEND);
+            if (ringPx > 0) {
+                const int d = ringPx;
+                const int off[8][2] = {{-d,-d},{0,-d},{d,-d},{-d,0},{d,0},{-d,d},{0,d},{d,d}};
+                for (const auto &o : off) {
+                    SDL_Rect dst = {pad + o[0], pad + o[1], shadow->w, shadow->h};
+                    SDL_BlitSurface(shadow, nullptr, canvas, &dst);
+                }
+            } else {
+                SDL_Rect dst = {pad + 1, pad + 1, shadow->w, shadow->h};
+                SDL_BlitSurface(shadow, nullptr, canvas, &dst);
+            }
+            SDL_DestroySurface(shadow);
+        }
+    }
+
+    SDL_SetSurfaceBlendMode(front, SDL_BLENDMODE_BLEND);
+    { SDL_Rect dst = {pad, pad, front->w, front->h}; SDL_BlitSurface(front, nullptr, canvas, &dst); }
+
+    SDL_Texture *tex = SDL_CreateTextureFromSurface(const_cast<SDL_Renderer *>(rend), canvas);
+    if (outSize) *outSize = SDL_Point{canvas->w, canvas->h};
+
+    SDL_DestroySurface(front);
+    SDL_DestroySurface(canvas);
+    return tex;
+}
+
 TTFText::~TTFText(){
     if (ownsFont && textFont) TTF_CloseFont(textFont);
     if (outTexture) SDL_DestroyTexture(outTexture);

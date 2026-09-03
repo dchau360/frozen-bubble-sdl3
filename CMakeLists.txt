@@ -383,6 +383,30 @@ if(BUILD_TESTING AND NOT EMSCRIPTEN AND NOT ANDROID AND NOT IOS)
     endif()
     add_test(NAME localmultiplayer-settings-test COMMAND localmultiplayer-settings-test)
 
+    add_executable(sp-panel-labels-test
+        tests/sp_panel_labels_test.cpp
+        ${FROZEN_BUBBLE_CORE_SOURCES}
+    )
+    set_property(TARGET sp-panel-labels-test PROPERTY CXX_STANDARD 17)
+    set_property(TARGET sp-panel-labels-test PROPERTY CXX_EXTENSIONS OFF)
+    target_include_directories(sp-panel-labels-test PRIVATE src)
+    target_compile_definitions(sp-panel-labels-test PRIVATE
+        FROZEN_BUBBLE_TEST_ACCESS
+        DATA_DIR="${ASSET_PATH}"
+        APP_VERSION="v${PROJECT_VERSION}"
+    )
+    target_link_libraries(sp-panel-labels-test PRIVATE
+        SDL3::SDL3
+        SDL3_image::SDL3_image
+        SDL3_mixer::SDL3_mixer
+        SDL3_ttf::SDL3_ttf
+        iniparser-static
+    )
+    if(WIN32 OR MINGW)
+        target_link_libraries(sp-panel-labels-test PRIVATE ws2_32)
+    endif()
+    add_test(NAME sp-panel-labels-test COMMAND sp-panel-labels-test)
+
     add_executable(localmultiplayer-header-compile-test
         tests/localmultiplayer_header_compile_test.cpp
         src/localmultiplayer_settings.cpp

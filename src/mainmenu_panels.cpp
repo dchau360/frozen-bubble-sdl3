@@ -203,46 +203,77 @@ void MainMenu::CandyRender() {
 }
 
 
+namespace {
+// The real wording behind each row -- was baked into hand-lettered PNGs
+// (txt_<key>_{text,outlined_text}.png) in the same heavily stylized carved
+// font as the pre-rework title screen, which read poorly at this panel's
+// 37px row height with wood grain bleeding straight through the letters.
+// txt_local_multiplayer_*.png also turned out to be a byte-for-byte copy of
+// txt_multiplayer_training_*.png, so two of the five rows read "MULTIPLAYER
+// TRAINING" -- switching to runtime text fixes both problems at once, not
+// just the style.
+constexpr const char *kSPLabel[SP_OPT] = {
+    "PLAY DEFAULT LEVELSET",
+    "PICK LEVELSET AND START LEVEL",
+    "PLAY RANDOM LEVELS",
+    "MULTIPLAYER TRAINING",
+    "LOCAL MULTIPLAYER",
+};
+} // namespace
+
+void MainMenu::EnsureSPLabels() {
+    if (spLabelsReady) return;
+    spLabelsReady = true;
+
+    // A dedicated font handle, not panelText's: this needs its own size and
+    // outline, and outliving a single frame is the whole point of the cache
+    // below -- panelText gets reconfigured by whichever panel drew last.
+    TTF_Font *font = TTF_OpenFont(ASSET("/gfx/Fredoka-Medium.ttf").c_str(), 14.0f);
+    if (!font) {
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
+                     "SP panel: could not open label font (%s)", SDL_GetError());
+        return;
+    }
+    SDL_Renderer *rend = const_cast<SDL_Renderer*>(renderer);
+    for (int i = 0; i < SP_OPT; i++) {
+        // Dark outline on both states, same as the wood-carved original: this
+        // plate's grain runs light-to-dark across the row, so a flat text
+        // color with only a 1px shadow washes out wherever the grain does.
+        spLabelIdle[i] = RenderRingedText(rend, font, kSPLabel[i],
+            {255, 255, 255, 255}, {41, 22, 8, 235}, 2, &spLabelSize[i]);
+        // Same text at the same size in both states, so idle's size applies
+        // equally to active -- no separate measurement needed.
+        spLabelActive[i] = RenderRingedText(rend, font, kSPLabel[i],
+            {255, 238, 176, 255}, {56, 28, 8, 255}, 2, nullptr);
+    }
+    TTF_CloseFont(font);
+}
+
 void MainMenu::SPPanelRender() {
     if (!showingSPPanel) return;
-
-    // activeSPButtons[0] may be null if its asset failed to load; dereferencing
-    // it here crashed the client as soon as the panel opened (BUG-044).
-    if(overlookSfc == nullptr && activeSPButtons[0] != nullptr) {
-        overlookSfc = SDL_CreateSurface(activeSPButtons[0]->w, activeSPButtons[0]->h, SURF_FORMAT);
-        overlook_init_(overlookSfc);
-    }
+    EnsureSPLabels();
 
     // SP panel needs extra height for SP_OPT items: first item at y=191, each 41px apart, 37px tall
     // For 5 items: last item bottom = 191 + (SP_OPT-1)*41 + 37 = 392 -> need panel bottom >= 400
     SDL_Rect spPanelRct = {(640/2) - (341/2), (480/2) - (320/2), 341, 320};
     { SDL_FRect fr = ToFRect(spPanelRct); SDL_RenderTexture(const_cast<SDL_Renderer*>(renderer), singlePanelBG, nullptr, &fr); }
     for (int i = 0; i < SP_OPT; i++){
-        int w = 0, h = 0;
-        { float fw = 0, fh = 0; SDL_GetTextureSize(idleSPButtons[i], &fw, &fh); w = (int)fw; h = (int)fh; }
         SDL_Rect entryRct = {(640/2)-(298/2), ((480/2)-90)+(41 * (i + 1)), 298, 37};
-        SDL_Rect subRct = {(640/2)-(298/2), ((480/2)-90)+(41 * (i + 1)), w, h};
-        if(i == activeSPIdx) {
-            // overlook_ reads orig->format, and overlookSfc is null when the
-            // asset that sizes it failed to load. Fall back to the plain
-            // highlight instead of dereferencing either (BUG-044).
-            if (GameSettings::Instance()->gfxLevel() <= 2
-                && overlookSfc != nullptr && activeSPButtons[i] != nullptr) {
-                overlook_(overlookSfc, activeSPButtons[i], overlookIndex, spOptions[i].pivot);
-                SDL_Rect miniRct = {(640/2)-(298/2), ((480/2)-90)+(41 * (i + 1)), overlookSfc->w, overlookSfc->h};
-                SDL_Texture *miniOverlook = SDL_CreateTextureFromSurface(const_cast<SDL_Renderer*>(renderer), overlookSfc);
-                
-                { SDL_FRect fr = ToFRect(entryRct); SDL_RenderTexture(const_cast<SDL_Renderer*>(renderer), singleButtonAct, nullptr, &fr); }
-                { SDL_FRect fr = ToFRect(miniRct); SDL_RenderTexture(const_cast<SDL_Renderer*>(renderer), miniOverlook, nullptr, &fr); }
-                SDL_DestroyTexture(miniOverlook);
+        bool active = (i == activeSPIdx);
+        { SDL_FRect fr = ToFRect(entryRct);
+          SDL_RenderTexture(const_cast<SDL_Renderer*>(renderer),
+                             active ? singleButtonAct : singleButtonIdle, nullptr, &fr); }
 
-                overlookIndex++;
-                if (overlookIndex >= 70) overlookIndex = 0;
-            }
-            else { SDL_FRect fr = ToFRect(entryRct); SDL_RenderTexture(const_cast<SDL_Renderer*>(renderer), singleButtonAct, nullptr, &fr); }
+        SDL_Texture *label = active ? spLabelActive[i] : spLabelIdle[i];
+        if (label) {
+            // Left-inset and vertically centered, same placement the baked
+            // labels used -- clear of the small penguin doodle baked into the
+            // plate art's right edge.
+            SDL_Rect dst = {entryRct.x + 14, entryRct.y + (entryRct.h - spLabelSize[i].y) / 2,
+                             spLabelSize[i].x, spLabelSize[i].y};
+            SDL_FRect fr = ToFRect(dst);
+            SDL_RenderTexture(const_cast<SDL_Renderer*>(renderer), label, nullptr, &fr);
         }
-        else { SDL_FRect fr = ToFRect(entryRct); SDL_RenderTexture(const_cast<SDL_Renderer*>(renderer), singleButtonIdle, nullptr, &fr); }
-        { SDL_FRect fr = ToFRect(subRct); SDL_RenderTexture(const_cast<SDL_Renderer*>(renderer), idleSPButtons[i], nullptr, &fr); }
     }
 
     { SDL_FRect fr = ToFRect(*panelText.Coords()); SDL_RenderTexture(const_cast<SDL_Renderer*>(renderer), panelText.Texture(), nullptr, &fr); };

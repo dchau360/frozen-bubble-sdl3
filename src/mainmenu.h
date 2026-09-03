@@ -245,16 +245,25 @@ private:
     //singleplayer panel
     SDL_Texture *singlePanelBG;
     SDL_Texture *singleButtonAct, *singleButtonIdle;
-    SDL_Surface *activeSPButtons[SP_OPT];
-    SDL_Surface *overlookSfc = nullptr;
-    SDL_Texture *idleSPButtons[SP_OPT];
-    int activeSPIdx = 0, overlookIndex = 0;
+    int activeSPIdx = 0;
     bool showingSPPanel = false;
-    const struct spPanelEntry {
-        std::string option;
-        int pivot;
-    } spOptions[SP_OPT] = {{"play_all_levels", 90}, {"pick_start_level", 135}, {"play_random_levels", 82}, {"multiplayer_training", 105}, {"local_multiplayer", 100}};
-    
+
+    // Runtime-rendered replacements for this panel's old baked labels
+    // (txt_<option>_{text,outlined_text}.png): a heavily stylized carved-wood
+    // font that read poorly at the row's own 37px height, wood grain bleeding
+    // straight through the letterforms -- and txt_local_multiplayer_*.png
+    // turned out to be a byte-for-byte copy of txt_multiplayer_training_*.png,
+    // so two of the five rows read "MULTIPLAYER TRAINING". Neither is a MENU
+    // STYLE row -- this panel's background art doesn't change with the
+    // player's chosen theme -- so these render once with RenderRingedText
+    // (ttftext.h) using a fixed, deliberately plain font instead of going
+    // through menutheme.h.
+    SDL_Texture *spLabelIdle[SP_OPT] = {};
+    SDL_Texture *spLabelActive[SP_OPT] = {};
+    SDL_Point spLabelSize[SP_OPT] = {};
+    bool spLabelsReady = false;
+    void EnsureSPLabels();
+
     SDL_Rect voidPanelRct = {(640/2) - (341/2), (480/2) - (280/2), 341, 280};
     void SPPanelRender();
 

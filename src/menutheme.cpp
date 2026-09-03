@@ -20,6 +20,7 @@
 #include "menutheme.h"
 #include "platform.h"
 #include "sdl3_compat.h"
+#include "ttftext.h"
 
 #include <SDL3_image/SDL_image.h>
 #include <string>
@@ -208,55 +209,12 @@ void MenuThemeDrawPlate(const SDL_Renderer *rend, const SDL_Rect &rect, int them
 SDL_Texture *MenuThemeRenderLabel(const SDL_Renderer *rend, int theme,
                                   const char *text, bool active, SDL_Point *outSize)
 {
-    if (outSize) *outSize = SDL_Point{0, 0};
     theme = Clamp(theme);
     const MenuThemeStyle &s = kStyles[theme];
     TTF_Font *font = FontFor(theme);
-    if (!font || !text || !*text) return nullptr;
-
     const SDL_Color fg = active ? s.textActive : s.textIdle;
     const SDL_Color sh = active ? s.shadowActive : s.shadowIdle;
-
-    SDL_Surface *front = TTF_RenderText_Blended(font, text, 0, fg);
-    if (!front) return nullptr;
-
-    // Pad by however far the shadow or outline reaches, so neither is clipped.
-    const int pad = s.outline > 0 ? s.outline : (sh.a ? 1 : 0);
-    SDL_Surface *canvas = SDL_CreateSurface(front->w + pad * 2, front->h + pad * 2,
-                                            SDL_PIXELFORMAT_ARGB8888);
-    if (!canvas) { SDL_DestroySurface(front); return nullptr; }
-
-    if (sh.a) {
-        SDL_Surface *shadow = TTF_RenderText_Blended(font, text, 0, sh);
-        if (shadow) {
-            SDL_SetSurfaceBlendMode(shadow, SDL_BLENDMODE_BLEND);
-            if (s.outline > 0) {
-                // Ring the glyphs: eight copies at the outline radius. Cheaper
-                // and more portable than TTF_SetFontOutline, which would need a
-                // second font handle kept in step with this one.
-                const int d = s.outline;
-                const int off[8][2] = {{-d,-d},{0,-d},{d,-d},{-d,0},{d,0},{-d,d},{0,d},{d,d}};
-                for (const auto &o : off) {
-                    SDL_Rect dst = {pad + o[0], pad + o[1], shadow->w, shadow->h};
-                    SDL_BlitSurface(shadow, nullptr, canvas, &dst);
-                }
-            } else {
-                SDL_Rect dst = {pad + 1, pad + 1, shadow->w, shadow->h};
-                SDL_BlitSurface(shadow, nullptr, canvas, &dst);
-            }
-            SDL_DestroySurface(shadow);
-        }
-    }
-
-    SDL_SetSurfaceBlendMode(front, SDL_BLENDMODE_BLEND);
-    { SDL_Rect dst = {pad, pad, front->w, front->h}; SDL_BlitSurface(front, nullptr, canvas, &dst); }
-
-    SDL_Texture *tex = SDL_CreateTextureFromSurface(const_cast<SDL_Renderer *>(rend), canvas);
-    if (outSize) *outSize = SDL_Point{canvas->w, canvas->h};
-
-    SDL_DestroySurface(front);
-    SDL_DestroySurface(canvas);
-    return tex;
+    return RenderRingedText(rend, font, text, fg, sh, s.outline, outSize);
 }
 
 void MenuThemeShutdown()

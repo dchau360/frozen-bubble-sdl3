@@ -123,24 +123,9 @@ MainMenu::MainMenu(const SDL_Renderer *renderer)
     blink_purple_left = {522, 356, GetSize(blinkPurpleL).x, GetSize(blinkPurpleL).y};
     blink_purple_right = {535, 356, GetSize(blinkPurpleR).x, GetSize(blinkPurpleR).y};
 
-    for (int i = 0; i < SP_OPT; i++) {
-        std::string idlePath = ASSET("/gfx/menu/txt_") + spOptions[i].option + "_outlined_text.png";
-        std::string activePath = ASSET("/gfx/menu/txt_") + spOptions[i].option + "_text.png";
-        idleSPButtons[i] = IMG_LoadTexture(rend, idlePath.c_str());
-        activeSPButtons[i] = IMG_Load(activePath.c_str());
-        // Both were stored unchecked. SPPanelRender dereferences
-        // activeSPButtons[0] for its surface size and passes activeSPButtons[i]
-        // into overlook_, which reads orig->format — so one missing
-        // single-player button asset crashed the client the moment the panel
-        // opened (audit finding BUG-044). Log here; the render path now skips
-        // whatever is missing instead of dereferencing null.
-        if (!idleSPButtons[i])
-            SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Missing menu asset: %s (%s)",
-                         idlePath.c_str(), SDL_GetError());
-        if (!activeSPButtons[i])
-            SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Missing menu asset: %s (%s)",
-                         activePath.c_str(), SDL_GetError());
-    }
+    // The five option labels themselves are rendered lazily by
+    // EnsureSPLabels() the first time the panel opens, not loaded here as
+    // assets -- see the member comments in mainmenu.h for why.
     singlePanelBG = IMG_LoadTexture(rend, ASSET("/gfx/menu/1p_panel.png").c_str());
     singleButtonAct = IMG_LoadTexture(rend, ASSET("/gfx/menu/txt_menu_1p_over.png").c_str());
     singleButtonIdle = IMG_LoadTexture(rend, ASSET("/gfx/menu/txt_menu_1p_off.png").c_str());
@@ -275,6 +260,10 @@ MainMenu::~MainMenu() {
     // The theme's fonts and plate art are shared by every row rather than
     // owned by one, so they outlive the buttons and have to be released here.
     MenuThemeShutdown();
+    for (int i = 0; i < SP_OPT; i++) {
+        SDL_DestroyTexture(spLabelIdle[i]);
+        SDL_DestroyTexture(spLabelActive[i]);
+    }
 }
 
 
@@ -364,16 +353,6 @@ void MainMenu::SavePreNick() {
 }
 
 
-void restartOverlook(SDL_Surface *overlookSfc, int &overlookIndex){
-    if(GameSettings::Instance()->gfxLevel() > 2) return;
-    // overlook_init_ dereferences surf->format immediately, and overlookSfc is
-    // null whenever the asset that sizes it failed to load (BUG-044).
-    if(overlookSfc == nullptr) return;
-    overlook_init_(overlookSfc);
-    overlookIndex = 0;
-}
-
-
 void MainMenu::press() {
     if (showingOptPanel || showingLocalMPPanel || showingKeysPanel || showingNetSetupPanel || showingLevelPanel) return;
     AudioMixer::Instance()->PlaySFX("menu_selected");
@@ -421,7 +400,6 @@ void MainMenu::down()
     if (showingSPPanel) {
         if (activeSPIdx == SP_OPT - 1) activeSPIdx = 0;
         else activeSPIdx++;
-        restartOverlook(overlookSfc, overlookIndex);
         return;
     }
 
@@ -444,7 +422,6 @@ void MainMenu::up()
     if (showingSPPanel) {
         if (activeSPIdx == 0) activeSPIdx = SP_OPT - 1;
         else activeSPIdx--;
-        restartOverlook(overlookSfc, overlookIndex);
         return;
     }
 

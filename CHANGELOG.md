@@ -1,5 +1,19 @@
 # Changelog
 
+## Unreleased
+
+- **The 1 player sub-menu's five options are legible now.** They used to be
+  hand-lettered "carved wood" labels baked into small PNGs, and the wood
+  grain behind the letters made them hard to read at the panel's size. All
+  five now render at runtime in clear outlined type, the same technique the
+  MENU STYLE themes already use. Along the way this turned up a real content
+  bug: Local Multiplayer's label art was a byte-for-byte copy of Multiplayer
+  Training's, so both rows read "MULTIPLAYER TRAINING" -- that's fixed too.
+  The panel's old shimmer animation on the active row is gone; it was built
+  around the baked art and doesn't carry over to freshly rendered text, so
+  the active row is now signaled with a highlighted plate and warm text
+  instead, matching how the title screen's own menu rows show selection.
+
 ## v2.4.67
 
 - **A fresh install now opens on the Slate menu style, not Classic.**
