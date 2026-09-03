@@ -253,7 +253,10 @@ private:
     // type 'bool'" -- and an indeterminate gfxQuality silently changes which
     // rendering path the game takes. Defaults here match CreateDefaultSettings().
     int gfxQuality = 1, windowWidth = 640, windowHeight = 480;
-    int menuThemeId = 0;   // MENU_THEME_CLASSIC; the original artwork
+    // MENU_THEME_SLATE (2) -- see menutheme.h. Kept as a raw index rather
+    // than that header's enum: menutheme.h pulls in SDL_ttf, which every
+    // translation unit that merely reads a setting would otherwise pay for.
+    int menuThemeId = 2;
     bool useFullscreen = false, colorblindBubbles = false;
     bool playMusic = true, playSfx = true, classicSound = false;
     bool showFps = false;

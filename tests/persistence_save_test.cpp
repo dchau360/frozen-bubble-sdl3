@@ -165,27 +165,28 @@ int main() {
     settings->SetValue("GFX:ShowFPS", "");
     CHECK(iniHasKeyValue(settingsPath, "showfps", "true"));
 
-    // The MENU STYLE row cycles the title-screen theme forward and wraps back
-    // to Classic (0), and the choice has to survive a restart -- it is written
-    // through to settings.ini on every press, not only at shutdown.
-    CHECK(settings->menuTheme() == 0);
-    for (int expected = 1; expected <= 4; expected++) {
+    // The MENU STYLE row cycles the title-screen theme forward and wraps
+    // around, and the choice has to survive a restart -- it is written
+    // through to settings.ini on every press, not only at shutdown. Slate
+    // (2) is a fresh install's default, not Classic -- CreateDefaultSettings
+    // above writes "2" for exactly this.
+    CHECK(settings->menuTheme() == 2);
+    const int expectedSequence[] = {3, 4, 0, 1, 2};
+    for (int expected : expectedSequence) {
         settings->SetValue("Menu:Theme", "");
         CHECK(settings->menuTheme() == expected);
         CHECK(iniHasKeyValue(settingsPath, "theme", std::to_string(expected)));
     }
-    settings->SetValue("Menu:Theme", "");
-    CHECK(settings->menuTheme() == 0);
-    CHECK(iniHasKeyValue(settingsPath, "theme", "0"));
 
     settings->SetValue("Menu:Theme", "");
-    CHECK(settings->menuTheme() == 1);
+    CHECK(settings->menuTheme() == 3);
     settings->ReadSettings();
-    CHECK(settings->menuTheme() == 1);   // survives a restart
+    CHECK(settings->menuTheme() == 3);   // survives a restart
 
     // A file written by some other build, carrying a theme id this one has no
-    // style entry for, must fall back to Classic rather than index past the
-    // end of the table -- MenuStyleFor() is indexed by this value directly.
+    // style entry for, must fall back to the same default (Slate) rather
+    // than index past the end of the table -- MenuStyleFor() is indexed by
+    // this value directly.
     {
         std::ifstream in(settingsPath);
         std::string ini((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
@@ -198,7 +199,7 @@ int main() {
         std::ofstream(settingsPath) << ini;
     }
     settings->ReadSettings();
-    CHECK(settings->menuTheme() == 0);
+    CHECK(settings->menuTheme() == 2);
 
     HighscoreManager* manager = HighscoreManager::Instance(renderer);
     const std::array<std::vector<int>, 10> literalGrid = {{

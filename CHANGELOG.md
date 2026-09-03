@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- **A fresh install now opens on the Slate menu style, not Classic.**
+  MENU STYLE still remembers whatever you pick after that, same as
+  before -- this only changes the very first launch's starting point, and
+  what an unreadable or corrupted settings file falls back to.
+
 ## v2.4.66
 
 - **The CHANGE KEYS row now reads SETTINGS in the four new menu styles.**

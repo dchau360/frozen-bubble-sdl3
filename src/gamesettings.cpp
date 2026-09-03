@@ -120,7 +120,7 @@ void GameSettings::CreateDefaultSettings()
         EvalIniResult(rval, dict, "GFX:ShowFPS", "false");
 
         EvalIniResult(rval, dict, "Menu", NULL);
-        EvalIniResult(rval, dict, "Menu:Theme", "0");
+        EvalIniResult(rval, dict, "Menu:Theme", "2"); // MENU_THEME_SLATE
 
         EvalIniResult(rval, dict, "Sound", NULL);
         EvalIniResult(rval, dict, "Sound:EnableMusic", "true");
@@ -248,8 +248,12 @@ void GameSettings::ReadSettings()
     }
 
     gfxQuality = iniparser_getint(optDict, "GFX:Quality", 1);
-    menuThemeId = iniparser_getint(optDict, "Menu:Theme", 0);
-    if (menuThemeId < 0 || menuThemeId >= 5) menuThemeId = 0;   // MENU_THEME_COUNT
+    // 2 == MENU_THEME_SLATE, the default for a fresh install (see
+    // CreateDefaultSettings above) and also what an invalid value here falls
+    // back to -- a file from a future build carrying a theme id past
+    // MENU_THEME_COUNT indexes MenuStyleFor() out of bounds otherwise.
+    menuThemeId = iniparser_getint(optDict, "Menu:Theme", 2);
+    if (menuThemeId < 0 || menuThemeId >= 5) menuThemeId = 2;
     linearScaling = iniparser_getboolean(optDict, "GFX:LinearScaling", false);
     useFullscreen = iniparser_getboolean(optDict, "GFX:Fullscreen", false);
     windowWidth = iniparser_getint(optDict, "GFX:WindowWidth", 640);
