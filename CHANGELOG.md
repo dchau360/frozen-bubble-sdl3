@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v2.4.69
 
 - **Android now needs Android 6.0 (minSdk 23), and every Google SDK is
   current.** Play Console flagged `androidx.fragment:fragment:1.1.0` as
