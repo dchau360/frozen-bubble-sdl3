@@ -1,5 +1,22 @@
 # Changelog
 
+## v2.4.64
+
+- **New: hosting a network game now remembers your room settings.** Chain
+  reactions, single-player targetting, victories limit, clear mode, attack
+  mode, team mode/count, bot skill, and room size all carry over to the
+  next room this device creates -- including after quitting and
+  relaunching the app -- instead of resetting to the game's hardcoded
+  defaults every time you host.
+
+- **Fix: typing a space did nothing in chat or nickname fields on the
+  browser build.** Confirmed on desktop itch.io -- every other character
+  worked, but Space was silently dropped in in-game chat, lobby chat, and
+  while entering a username or nickname. Emscripten's SDL3 port never
+  delivers a space through the normal text-input event on this platform;
+  Space is now appended directly on keydown as a targeted workaround,
+  browser build only.
+
 ## v2.4.63
 
 - **New: "Attack bubbles" is now three-way -- ON, OFF, or Blockable.** Blockable
