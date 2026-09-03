@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v2.4.67
 
 - **A fresh install now opens on the Slate menu style, not Classic.**
   MENU STYLE still remembers whatever you pick after that, same as
