@@ -8,11 +8,19 @@
 # iOS 11 and later find the icon in a compiled Assets.car, not in loose PNG
 # files, and only actool can produce one -- which is why this is a build step
 # rather than a handful of images copied into the bundle.
+#
+# <app-bundle-dir> is CMake's best guess at configure time and is correct for
+# Ninja, but not for the Xcode generator -- see the comment in the sibling
+# ios-copy-assets.sh for why, and why this prefers its own inherited
+# BUILT_PRODUCTS_DIR/WRAPPER_NAME environment when Xcode has set it.
 
 set -euo pipefail
 
 XCASSETS="$1"
 APP="$2"
+if [ -n "${BUILT_PRODUCTS_DIR:-}" ] && [ -n "${WRAPPER_NAME:-}" ]; then
+    APP="$BUILT_PRODUCTS_DIR/$WRAPPER_NAME"
+fi
 PLATFORM="$3"
 MIN_OS="$4"
 WORK="$5"

@@ -203,26 +203,56 @@ if(IOS)
     configure_file("${CMAKE_SOURCE_DIR}/cmake/FrozenBubble.entitlements.in"
                    "${CMAKE_BINARY_DIR}/FrozenBubble.entitlements" @ONLY)
 
+    # Off by default so a plain `cmake -B build-ios -G Ninja` (what
+    # tools/build-ios.sh and CI both use) stays unsigned and installable on
+    # any machine -- see docs/IOS.md. Turn this on for a local Xcode-generator
+    # tree (e.g. build-ios-device/) you intend to install via Xcode's own
+    # Signing & Capabilities pane, per that doc's "Xcode" bullet under
+    # Installing.
+    option(FB_IOS_XCODE_MANAGED_SIGNING
+        "Let Xcode automatically manage code signing (Xcode generator only)" OFF)
+
     set_target_properties(frozen-bubble-sdl3 PROPERTIES
         OUTPUT_NAME "${FB_IOS_EXECUTABLE}"
         MACOSX_BUNDLE TRUE
         MACOSX_BUNDLE_INFO_PLIST "${CMAKE_BINARY_DIR}/Info.plist"
+    )
+    if(FB_IOS_XCODE_MANAGED_SIGNING)
+        set_target_properties(frozen-bubble-sdl3 PROPERTIES
+            XCODE_ATTRIBUTE_CODE_SIGN_STYLE "Automatic")
+    else()
         # Unsigned by request. Left explicit so an Xcode-generator build does not
         # quietly pick up a development identity and produce an artifact that
         # only installs on the machine that built it.
-        XCODE_ATTRIBUTE_CODE_SIGNING_ALLOWED "NO"
-        XCODE_ATTRIBUTE_CODE_SIGNING_REQUIRED "NO"
-        XCODE_ATTRIBUTE_CODE_SIGN_IDENTITY ""
-    )
+        set_target_properties(frozen-bubble-sdl3 PROPERTIES
+            XCODE_ATTRIBUTE_CODE_SIGNING_ALLOWED "NO"
+            XCODE_ATTRIBUTE_CODE_SIGNING_REQUIRED "NO"
+            XCODE_ATTRIBUTE_CODE_SIGN_IDENTITY "")
+    endif()
 
-    # An iOS bundle is flat -- resources live at the top level of the .app, not
-    # under Contents/Resources -- which is exactly what TARGET_BUNDLE_CONTENT_DIR
-    # expands to here. copy_directory_if_different keeps incremental builds from
-    # recopying 3000+ sprites on every link.
+    # $<TARGET_BUNDLE_CONTENT_DIR:> can't be resolved at CMake-configure time
+    # under the Xcode generator (EFFECTIVE_PLATFORM_NAME/CONFIGURATION are
+    # chosen in Xcode itself, per build), so CMake defers it to a shell
+    # ${EFFECTIVE_PLATFORM_NAME} reference in the custom commands below -- but
+    # VERBATIM (rightly, in general) escapes every $ in a COMMAND argument so
+    # it reaches the shell as a literal rather than undergoing surprise
+    # expansion, which here backslash-escapes the very reference that needed
+    # to expand (confirmed by reading the generated .sh: it contains a
+    # literal `\$`, never resolved, so the icon-compile step below always
+    # failed with "CFBundleIconName missing" against a bogus literal-named
+    # path). Passing the resolved-at-Xcode-runtime env vars directly as
+    # arguments hits the same escaping; the wrapper scripts below sidestep it
+    # by reading BUILT_PRODUCTS_DIR/WRAPPER_NAME from their own inherited
+    # process environment instead, which Xcode always sets for a Run Script
+    # phase's children regardless of how CMake escaped its argv. Ninja
+    # (tools/build-ios.sh, CI) has none of this -- $<TARGET_BUNDLE_CONTENT_DIR:>
+    # resolves correctly there -- so the scripts fall back to the passed
+    # argument whenever those env vars are absent.
     add_custom_command(TARGET frozen-bubble-sdl3 POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E copy_directory_if_different
+        COMMAND "${CMAKE_SOURCE_DIR}/tools/ios-copy-assets.sh"
+                "${CMAKE_COMMAND}"
                 "${CMAKE_SOURCE_DIR}/share"
-                "$<TARGET_BUNDLE_CONTENT_DIR:frozen-bubble-sdl3>/share"
+                "$<TARGET_BUNDLE_CONTENT_DIR:frozen-bubble-sdl3>"
         COMMENT "Copying game assets into the app bundle"
         VERBATIM)
 

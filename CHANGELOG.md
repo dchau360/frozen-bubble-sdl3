@@ -1,5 +1,39 @@
 # Changelog
 
+## Unreleased
+
+- **Swipe left to quit now works on the WASM/itch.io build.** Native touch
+  already supported it; WASM's in-game touch handling used a different event
+  path entirely (`MOUSE_BUTTON_DOWN` only, since Emscripten synthesizes both
+  a `FINGER_UP` and a `MOUSE_BUTTON_DOWN` for one tap, and using both would
+  double-fire) and never tracked a press/release pair to classify a swipe
+  against. Added WASM-only press/release tracking alongside the existing
+  fire-on-down handling so a long, mostly-horizontal leftward swipe now
+  injects Escape there too.
+- **Xcode-generator iOS builds can now actually be signed, and their app
+  icon compiles correctly.** `CMakeLists.txt` hardcoded
+  `CODE_SIGNING_ALLOWED NO` for every Xcode-generator build, unconditionally
+  -- even though `docs/IOS.md` documents using the Xcode generator with
+  Xcode-managed signing as a supported way to get an installable `.app`.
+  Gated it behind a new `FB_IOS_XCODE_MANAGED_SIGNING` CMake option
+  (off by default, so `tools/build-ios.sh` and CI are unaffected). Separately,
+  the post-build steps that copy game assets into the bundle and compile the
+  app icon asset catalog relied on `$<TARGET_BUNDLE_CONTENT_DIR:>`, which
+  can't resolve at CMake-configure time under the Xcode generator (the
+  platform is chosen inside Xcode, per build) -- CMake deferred it to a
+  shell `${EFFECTIVE_PLATFORM_NAME}` reference, but `VERBATIM` escapes the
+  `$` before it reaches the shell, so the reference never actually expanded.
+  That silently wrote assets into a bogus, literally-named
+  `Debug${EFFECTIVE_PLATFORM_NAME}/` directory instead of the real `.app`,
+  and the real bundle's `Info.plist` never got `CFBundleIconName`/
+  `CFBundleIcons` merged in, failing the build with "CFBundleIconName
+  missing from Info.plist". `tools/ios-appicon.sh` and the new
+  `tools/ios-copy-assets.sh` now read Xcode's own `BUILT_PRODUCTS_DIR`/
+  `WRAPPER_NAME` from their inherited process environment instead, which
+  Xcode always sets correctly regardless of how CMake escaped the argument
+  list; Ninja builds (unaffected by any of this) keep using the
+  CMake-resolved path as before.
+
 ## v2.4.69
 
 - **Android now needs Android 6.0 (minSdk 23), and every Google SDK is
