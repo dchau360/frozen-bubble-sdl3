@@ -239,7 +239,11 @@ public:
     };
 private:
     void CreateDefaultSettings();
-    dictionary *optDict;
+    // Null until ReadSettings() loads it. Both that function and ~GameSettings
+    // free through this pointer, and the default constructor sets no members,
+    // so leaving it indeterminate meant either could free a garbage pointer if
+    // it ever ran before a successful load.
+    dictionary *optDict = nullptr;
 
     // Every one of these is written by ReadSettings() on a normal start, but
     // nothing guarantees that ran: a test harness constructs the singleton

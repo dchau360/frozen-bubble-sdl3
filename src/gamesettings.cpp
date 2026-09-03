@@ -194,14 +194,6 @@ bool GameSettings::DefaultMouseEnabled()
 
 void GameSettings::ResetToDefaults()
 {
-    // Free before rewriting: ReadSettings() below assigns a freshly loaded
-    // dictionary over optDict without looking at what was there, so the old one
-    // would simply be dropped.
-    if (optDict) {
-        iniparser_freedict(optDict);
-        optDict = nullptr;
-    }
-
     // Rewrite the file, then read it back rather than assigning defaults to the
     // members directly. Going through the file is what guarantees a reset the
     // player can see: a purely in-memory reset would be undone by the next
@@ -217,6 +209,17 @@ void GameSettings::ReadSettings()
     InitPrefPath();
     char setPath[256];
     snprintf(setPath, sizeof(setPath), "%ssettings.ini", prefPath);
+
+    // Reloading has to release what is already loaded: the assignment below
+    // overwrites optDict without looking at it, so a second call would simply
+    // drop the first dictionary and everything it strdup'd. ResetToDefaults()
+    // used to free by hand ahead of its own ReadSettings() call for exactly
+    // this reason; owning it here makes the function safe to call twice
+    // instead of leaving that a caller's responsibility to remember.
+    if (optDict) {
+        iniparser_freedict(optDict);
+        optDict = nullptr;
+    }
 
     optDict = iniparser_load(setPath);
 
