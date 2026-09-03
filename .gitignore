@@ -51,3 +51,4 @@ docker/.env
 
 # Output of tools/build-site.py (the GitHub Pages site, rendered at deploy time)
 _site/
+.DS_Store

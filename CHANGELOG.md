@@ -1,6 +1,24 @@
 # Changelog
 
+## Unreleased
+
+- **Android: updated the outdated `androidx.fragment` SDK Play Console
+  flagged.** Google's own AdMob/Play Billing libraries still declare a
+  transitive floor of `androidx.fragment:fragment:1.1.0`, even in their
+  current releases, so nothing in the dependency graph had ever pulled in
+  anything newer. Pinned to 1.8.9 directly instead (the newest release that
+  still supports this app's minSdk 21 -- 1.9.0 pulls in a transitive
+  dependency that requires minSdk 23).
+
 ## v2.4.68
+
+- **One shared app icon across every build.** All five platforms (iOS,
+  Android, Linux, Windows, WASM) now derive their icon from the same
+  source image -- two in-game penguins on an icy background -- generated
+  by a single `tools/make-app-icons.py` script instead of three separate,
+  drifting sources. macOS also gets an actual `.app` bundle icon for the
+  first time; it never had one, so the DMG's app showed a blank generic
+  icon.
 
 - **The 1 player sub-menu's five options are legible now.** They used to be
   hand-lettered "carved wood" labels baked into small PNGs, and the wood
