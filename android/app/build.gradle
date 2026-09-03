@@ -45,7 +45,7 @@ def admobTestDeviceId = localProps.getProperty('admob.testDeviceId', '')
 // the root CMakeLists.txt, so without passing it down the Settings panel falls
 // back to platform.h's "v0.0.0-nocmake" placeholder. This is already one of the
 // files the release checklist bumps, so it is not a new place to remember.
-def appVersionName = "2.4.65"
+def appVersionName = "2.4.66"
 
 android {
     namespace 'org.frozenbubble'
@@ -60,7 +60,7 @@ android {
         minSdk 21
         targetSdk 36
         ndkVersion "25.2.9519653"
-        versionCode 48
+        versionCode 49
         versionName appVersionName
 
         buildConfigField "String", "ADMOB_TEST_DEVICE_ID", "\"${admobTestDeviceId}\""

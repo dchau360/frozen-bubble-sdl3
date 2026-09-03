@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v2.4.66
 
 - **The CHANGE KEYS row now reads SETTINGS in the four new menu styles.**
   The panel it opens calls itself CONTROLS & SETTINGS and covers game
