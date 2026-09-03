@@ -17,13 +17,26 @@ def source_hashes(root: pathlib.Path) -> dict[str, str]:
     }
 
 
+# assets/ is not ours alone: AGP writes the baseline profile here too, as
+# dexopt/baseline.prof and .profm. Those arrive the moment any dependency
+# brings in androidx.profileinstaller -- androidx.fragment does -- and they
+# are wanted, since they carry the AOT hints that speed up a cold start.
+# They are build-tool output rather than game assets, so this check has no
+# source-tree copy to compare them against and skips them by name. The
+# prefix is deliberately narrow: the point of this script is to catch the
+# asset-deployment pipeline packaging the wrong thing, and widening this
+# would blunt that.
+BUILD_TOOL_ASSET_PREFIXES = ("dexopt/",)
+
+
 def apk_hashes(apk: pathlib.Path) -> dict[str, str]:
     with zipfile.ZipFile(apk) as archive:
         return {
-            info.filename.removeprefix("assets/"):
-                sha256(archive.read(info)).hexdigest()
+            name: sha256(archive.read(info)).hexdigest()
             for info in archive.infolist()
             if info.filename.startswith("assets/") and not info.is_dir()
+            and not (name := info.filename.removeprefix("assets/")).startswith(
+                BUILD_TOOL_ASSET_PREFIXES)
         }
 
 
