@@ -711,6 +711,19 @@ bool MainMenu::HelpPanelKey(SDL_Event *e) {
 
 bool MainMenu::KeysPanelKey(SDL_Event *e) {
             if (showingKeysPanel) {
+                if (showingStatsUploadConfirm) {
+                    // Modal: only ENTER (confirm) and ESC (cancel) mean anything
+                    // here, and nothing below this ever sees the keypress.
+                    if (e->key.key == SDLK_RETURN) {
+                        GameSettings::Instance()->SetValue("Stats:UploadHighscore", "");
+                        showingStatsUploadConfirm = false;
+                        AudioMixer::Instance()->PlaySFX("typewriter");
+                    } else if (e->key.key == SDLK_ESCAPE || e->key.key == SDLK_AC_BACK) {
+                        showingStatsUploadConfirm = false;
+                        AudioMixer::Instance()->PlaySFX("menu_change");
+                    }
+                    return true;
+                }
                 if (awaitKp && e->key.key != SDLK_ESCAPE) {
                     // Set the key for the current player/index
                     GameSettings* gs = GameSettings::Instance();
@@ -842,6 +855,19 @@ bool MainMenu::KeysPanelKey(SDL_Event *e) {
                             gs->mouseEnabled = !gs->mouseEnabled;
                             gs->SaveKeys();
                             AudioMixer::Instance()->PlaySFX("menu_change");
+                        } else if (keyConfigIndex == kKeyRowUploadStats) {
+                            GameSettings* gs = GameSettings::Instance();
+                            if (gs->uploadHighscoreStatsEnabled()) {
+                                // Turning it OFF is always safe -- no confirmation needed.
+                                gs->SetValue("Stats:UploadHighscore", "");
+                                AudioMixer::Instance()->PlaySFX("menu_change");
+                            } else {
+                                // Turning it ON needs the player to see what that starts
+                                // sending first -- KeysPanelRender draws the popup,
+                                // and the branch above actually flips the setting.
+                                showingStatsUploadConfirm = true;
+                                AudioMixer::Instance()->PlaySFX("menu_selected");
+                            }
 #ifndef __WASM_PORT__
                         } else if (keyConfigIndex == kKeyRowFullscreen) {
                             // Toggle fullscreen

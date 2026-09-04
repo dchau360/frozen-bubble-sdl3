@@ -43,7 +43,6 @@ elseif(NOT EMSCRIPTEN)
     find_package(SDL3_image REQUIRED)
     find_package(SDL3_mixer REQUIRED)
     find_package(SDL3_ttf REQUIRED)
-    find_package(CURL REQUIRED)
 endif()
 
 # Always build iniparser from the bundled source (vendored iniparser 4.x, MIT).
@@ -101,7 +100,6 @@ include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/CoreSources.cmake)
 
 add_executable(frozen-bubble-sdl3
     src/main.cpp
-    src/sendGameStats.cpp
     ${FROZEN_BUBBLE_CORE_SOURCES}
     ${RES_FILES}
 )
@@ -178,7 +176,6 @@ if(NOT EMSCRIPTEN)
         SDL3_image::SDL3_image
         SDL3_mixer::SDL3_mixer
         SDL3_ttf::SDL3_ttf
-        CURL::libcurl
     )
 endif()
 target_link_libraries(frozen-bubble-sdl3 PRIVATE iniparser-static)
@@ -301,7 +298,6 @@ if(BUILD_TESTING AND NOT EMSCRIPTEN AND NOT ANDROID AND NOT IOS)
         SDL3_mixer::SDL3_mixer
         SDL3_ttf::SDL3_ttf
         iniparser-static
-        CURL::libcurl
     )
     if(WIN32 OR MINGW)
         target_link_libraries(bubblegame-rules-test PRIVATE ws2_32)
@@ -326,7 +322,6 @@ if(BUILD_TESTING AND NOT EMSCRIPTEN AND NOT ANDROID AND NOT IOS)
         SDL3_mixer::SDL3_mixer
         SDL3_ttf::SDL3_ttf
         iniparser-static
-        CURL::libcurl
     )
     if(WIN32 OR MINGW)
         target_link_libraries(bubbleai-test PRIVATE ws2_32)
@@ -351,7 +346,6 @@ if(BUILD_TESTING AND NOT EMSCRIPTEN AND NOT ANDROID AND NOT IOS)
         SDL3_mixer::SDL3_mixer
         SDL3_ttf::SDL3_ttf
         iniparser-static
-        CURL::libcurl
     )
     if(WIN32 OR MINGW)
         target_link_libraries(bot-play-test PRIVATE ws2_32)
@@ -389,7 +383,6 @@ if(BUILD_TESTING AND NOT EMSCRIPTEN AND NOT ANDROID AND NOT IOS)
         SDL3_mixer::SDL3_mixer
         SDL3_ttf::SDL3_ttf
         iniparser-static
-        CURL::libcurl
     )
     if(WIN32 OR MINGW)
         target_link_libraries(persistence-save-test PRIVATE ws2_32)
@@ -414,7 +407,6 @@ if(BUILD_TESTING AND NOT EMSCRIPTEN AND NOT ANDROID AND NOT IOS)
         SDL3_mixer::SDL3_mixer
         SDL3_ttf::SDL3_ttf
         iniparser-static
-        CURL::libcurl
     )
     if(WIN32 OR MINGW)
         target_link_libraries(localmultiplayer-settings-test PRIVATE ws2_32)
@@ -439,7 +431,6 @@ if(BUILD_TESTING AND NOT EMSCRIPTEN AND NOT ANDROID AND NOT IOS)
         SDL3_mixer::SDL3_mixer
         SDL3_ttf::SDL3_ttf
         iniparser-static
-        CURL::libcurl
     )
     if(WIN32 OR MINGW)
         target_link_libraries(sp-panel-labels-test PRIVATE ws2_32)
@@ -459,7 +450,6 @@ if(BUILD_TESTING AND NOT EMSCRIPTEN AND NOT ANDROID AND NOT IOS)
         SDL3_mixer::SDL3_mixer
         SDL3_ttf::SDL3_ttf
         iniparser-static
-        CURL::libcurl
     )
     add_test(NAME localmultiplayer-header-compile-test
         COMMAND localmultiplayer-header-compile-test)
@@ -493,7 +483,6 @@ if(BUILD_TESTING AND NOT EMSCRIPTEN AND NOT ANDROID AND NOT IOS)
         SDL3_mixer::SDL3_mixer
         SDL3_ttf::SDL3_ttf
         iniparser-static
-        CURL::libcurl
     )
     if(WIN32 OR MINGW)
         target_link_libraries(menu-touch-gesture-test PRIVATE ws2_32)

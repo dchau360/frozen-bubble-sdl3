@@ -22,8 +22,10 @@ import android.widget.Toast;
 
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
+import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.nio.charset.StandardCharsets;
 
 /**
  * Frozen Bubble Android TV Activity.
@@ -222,6 +224,34 @@ public class FrozenBubbleActivity extends SDLActivity {
             return sb.toString();
         } catch (Exception e) {
             return "";
+        }
+    }
+
+    // POST counterpart of fetchUrl(), for sendGameStats.cpp's opt-in
+    // highscore-stats upload -- see that file's header comment for the wire
+    // format. Fire-and-forget: nothing reads a return value, so failures
+    // (including a timeout) are swallowed exactly like fetchUrl()'s own "".
+    // Blocking, same as fetchUrl(): the native side calls this from a
+    // detached background thread, never the calling (SDL) thread directly.
+    public static void postJson(String urlStr, String jsonBody) {
+        try {
+            URL url = new URL(urlStr);
+            HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+            conn.setConnectTimeout(2000);
+            conn.setReadTimeout(3000);
+            conn.setRequestMethod("POST");
+            conn.setRequestProperty("User-Agent", "FrozenBubble-SDL3/1.0");
+            conn.setRequestProperty("Content-Type", "application/json");
+            conn.setDoOutput(true);
+            byte[] body = jsonBody.getBytes(StandardCharsets.UTF_8);
+            conn.setFixedLengthStreamingMode(body.length);
+            try (OutputStream out = conn.getOutputStream()) {
+                out.write(body);
+            }
+            conn.getResponseCode();  // forces the request to actually send
+            conn.disconnect();
+        } catch (Exception e) {
+            // Best-effort telemetry: nothing observes whether it landed.
         }
     }
 

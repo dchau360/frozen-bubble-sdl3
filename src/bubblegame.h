@@ -538,8 +538,26 @@ public:
     void ProcessNetworkMessages();
 
     bool playedPause = false;
-    // start time
+    // SDL_GetTicks() when the current attempt started -- set in NewGame() and
+    // ReloadGame(). Used only to compute play_time for the opt-in
+    // highscore-stats upload (see CheckGameState()'s loss branch); nothing
+    // else reads it.
     Uint32 gameStartTime = 0;
+
+    // Which local highscore table a classic solo run counts toward: keyboard
+    // (including gamepad -- both read through the same PlayerKeys/shooterAction
+    // path) and mouse/touch are tracked separately (see HighscoreManager),
+    // because a mouse-aimed run is not comparable to a keyboard/gamepad one.
+    //
+    // Locked to whichever input fires the run's first shot (set in
+    // bubblegame_shooter.cpp, right where a shot actually launches) and reset
+    // for every fresh attempt in NewGame()/ReloadGame(). If a shot from the
+    // *other* input method fires after that, scoringDisqualified latches true
+    // and the run is excluded from both tables -- see SubmitScore().
+    enum class ScoringInputMethod { Unset, Keyboard, Mouse };
+    ScoringInputMethod scoringInputMethod = ScoringInputMethod::Unset;
+    bool scoringDisqualified = false;
+
     bool IsGameFinished() const { return gameFinish; }
     bool IsNetworkGame() const { return currentSettings.networkGame; }
     bool IsChatting() const { return chattingMode; }

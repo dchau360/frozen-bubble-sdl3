@@ -24,6 +24,7 @@
 #include "transitionmanager.h"
 #include "gamesettings.h"
 #include "platform.h"
+#include "sendGameStats.h"
 
 #include <fstream>
 #include <sstream>
@@ -34,10 +35,6 @@
 #include <cmath>
 #include <algorithm>
 #include "bubblegame_internal.h"
-
-// Déclaration de la fonction pour l'informer qu'elle existe ailleurs
-void sendGameStats(int score, int level, const std::string& name);
-void sendGameStats(int score, int level, int playTimeSeconds, const std::string& name);
 
 std::vector<int> BubbleGame::LivingOpponentsOf(const BubbleArray &attacker) const {
     // Who this board's attacks can land on: everyone still alive except the
@@ -434,8 +431,23 @@ void BubbleGame::SubmitScore(BubbleArray &bArray) {
     hm->AppendToLevels(savedLevelGrid, curLevel);
     SDL_Log("SubmitScore: AppendToLevels done");
 
-    // Check if this qualifies as a top-10 score and save it
-    if (hm->CheckAndAddScore(curLevel, elapsedSeconds)) {
+    // Mixed keyboard/gamepad and mouse/touch input this run -- neither table
+    // gets a fair result, so it counts toward neither (see
+    // ScoringInputMethod's own comment in bubblegame.h).
+    if (scoringDisqualified) {
+        SDL_Log("SubmitScore: mixed input methods this run -- not eligible for either highscore table");
+        return;
+    }
+
+    // Check if this qualifies as a top-10 score and save it, in whichever
+    // table this run locked to. Unset (no shot fired at all -- e.g. clearing
+    // a level with bubbles already in flight from the previous one) falls
+    // back to the keyboard/gamepad table rather than silently dropping the
+    // result.
+    HighscoreManager::InputMethod method =
+        (scoringInputMethod == ScoringInputMethod::Mouse) ? HighscoreManager::InputMethod::Mouse
+                                                            : HighscoreManager::InputMethod::Keyboard;
+    if (hm->CheckAndAddScore(curLevel, elapsedSeconds, method)) {
         pendingHighscore = true;
         SDL_Log("New high score! Level %d in %.1fs", curLevel, elapsedSeconds);
     }
@@ -768,30 +780,29 @@ void BubbleGame::CheckGameState(BubbleArray &bArray, bool countForRoot) {
             gameFinish = true;
             gameLost = true;
             roundWinnerIdx = -1;
-            // Submit score when the player loses (original: sub submit_score() at line 2579)
-            // Only submit when not in network mode and not in local multiplayer
-            std::string playerName = GameSettings::Instance()->savedNickname;
-            if (playerName.empty()) {
-                const char* sysUser = nullptr;
-            #if defined(_WIN32) || defined(_WIN64)
-                sysUser = getenv("USERNAME");
-            #else
-                sysUser = getenv("USER");
-            #endif
-                playerName = (sysUser ? sysUser : "Anonyme");
-            }       
-            // On définit la condition pour le mode solo classique par défaut
-            bool isDefaultClassic = !currentSettings.networkGame && 
-                 currentSettings.playerCount == 1 && 
-                 !currentSettings.randomLevels &&
-                 currentSettings.startLevel == 1; // Ajustez si le nom diffère
 
-            if (isDefaultClassic) {
-                int playTimeSeconds = (SDL_GetTicks() - gameStartTime) / 1000;
-                sendGameStats(bArray.score, curLevel, playTimeSeconds, playerName);            
+            // Opt-in highscore-stats upload -- off by default, see
+            // GameSettings::uploadHighscoreStatsEnabled() and the
+            // confirmation popup in mainmenu_panels.cpp that is the only way
+            // to turn it on. Classic solo campaign only (not network play,
+            // not local multiplayer, not the random-levels mode).
+            //
+            // Deliberately reads bArray.score/curLevel here and does not
+            // reset either: the render path still needs bArray.score to draw
+            // "Final Score: %d" on the game-over panel after this frame, and
+            // curLevel already means "the level just lost on" everywhere else
+            // that reads it (the ReloadGame(curLevel) retry call in
+            // bubblegame_input.cpp, in particular) -- zeroing it here would
+            // send every retry back to level 1 regardless of how far the
+            // player had actually gotten.
+            bool isDefaultClassic = !currentSettings.networkGame &&
+                                     currentSettings.playerCount == 1 &&
+                                     !currentSettings.randomLevels;
+            if (isDefaultClassic && GameSettings::Instance()->uploadHighscoreStatsEnabled()) {
+                const std::string playerName = GameSettings::Instance()->savedNickname;
+                const int playTimeSeconds = (int)((SDL_GetTicks() - gameStartTime) / 1000);
+                sendGameStats(bArray.score, curLevel, playTimeSeconds, playerName);
             }
-            bArray.score = 0;
-            curLevel = 1;
         }
     }
 }

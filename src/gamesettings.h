@@ -122,6 +122,15 @@ public:
     bool colorBlind() { return colorblindBubbles; }
     bool showFpsOverlay() { return showFps; }
 
+    // Off by default: uploads a player's classic-solo-mode result (name/nick,
+    // a per-device random id, score, level, play time) to the community
+    // leaderboard at petitain.be whenever a classic single-player run ends in
+    // a loss. Nothing is sent unless this is explicitly turned on -- see the
+    // confirmation popup in mainmenu_panels.cpp's KeysPanelRender, which is
+    // the only place that is allowed to turn it on, and sendGameStats.cpp for
+    // exactly what goes out.
+    bool uploadHighscoreStatsEnabled() { return uploadHighscoreStats; }
+
     PlayerKeys player1Keys, player2Keys, player3Keys, player4Keys, player5Keys;
     void LoadDefaultKeys();
     void SaveKeys();
@@ -260,6 +269,7 @@ private:
     bool useFullscreen = false, colorblindBubbles = false;
     bool playMusic = true, playSfx = true, classicSound = false;
     bool showFps = false;
+    bool uploadHighscoreStats = false;
 
     GameSettings(){};
     ~GameSettings();
