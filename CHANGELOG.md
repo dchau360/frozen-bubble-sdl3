@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v2.4.70
 
 - **Swipe left to quit now works on the WASM/itch.io build.** Native touch
   already supported it; WASM's in-game touch handling used a different event
