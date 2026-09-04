@@ -35,6 +35,10 @@
 #include <algorithm>
 #include "bubblegame_internal.h"
 
+// Déclaration de la fonction pour l'informer qu'elle existe ailleurs
+void sendGameStats(int score, int level, const std::string& name);
+void sendGameStats(int score, int level, int playTimeSeconds, const std::string& name);
+
 std::vector<int> BubbleGame::LivingOpponentsOf(const BubbleArray &attacker) const {
     // Who this board's attacks can land on: everyone still alive except the
     // attacker itself and, in team mode, its own side. Written against the
@@ -764,6 +768,30 @@ void BubbleGame::CheckGameState(BubbleArray &bArray, bool countForRoot) {
             gameFinish = true;
             gameLost = true;
             roundWinnerIdx = -1;
+            // Submit score when the player loses (original: sub submit_score() at line 2579)
+            // Only submit when not in network mode and not in local multiplayer
+            std::string playerName = GameSettings::Instance()->savedNickname;
+            if (playerName.empty()) {
+                const char* sysUser = nullptr;
+            #if defined(_WIN32) || defined(_WIN64)
+                sysUser = getenv("USERNAME");
+            #else
+                sysUser = getenv("USER");
+            #endif
+                playerName = (sysUser ? sysUser : "Anonyme");
+            }       
+            // On définit la condition pour le mode solo classique par défaut
+            bool isDefaultClassic = !currentSettings.networkGame && 
+                 currentSettings.playerCount == 1 && 
+                 !currentSettings.randomLevels &&
+                 currentSettings.startLevel == 1; // Ajustez si le nom diffère
+
+            if (isDefaultClassic) {
+                int playTimeSeconds = (SDL_GetTicks() - gameStartTime) / 1000;
+                sendGameStats(bArray.score, curLevel, playTimeSeconds, playerName);            
+            }
+            bArray.score = 0;
+            curLevel = 1;
         }
     }
 }

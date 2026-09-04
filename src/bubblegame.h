@@ -538,6 +538,8 @@ public:
     void ProcessNetworkMessages();
 
     bool playedPause = false;
+    // start time
+    Uint32 gameStartTime = 0;
     bool IsGameFinished() const { return gameFinish; }
     bool IsNetworkGame() const { return currentSettings.networkGame; }
     bool IsChatting() const { return chattingMode; }

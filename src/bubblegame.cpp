@@ -347,6 +347,8 @@ static void ApplyMiniSlotGeometry(BubbleArray& b, int slot, SDL_Renderer* rend,
 
 
 void BubbleGame::NewGame(SetupSettings setup) {
+    // time pour le temp de jeu
+    gameStartTime = SDL_GetTicks();
     // Clear any stale controller input state from previous session
     for (int i = 0; i < 5; i++) controllerInputs[i] = {};
     memset(virtualKeyState, 0, sizeof(virtualKeyState));
@@ -1291,7 +1293,7 @@ void BubbleGame::ReloadGame(int level) {
     for (int i = 0; i < currentSettings.playerCount; i++) {
         bubbleArrays[i].malusQueue.clear();
         bubbleArrays[i].chainLevel = 0;
-        bubbleArrays[i].score = 0;
+        // bubbleArrays[i].score = 0;
         bubbleArrays[i].explodeWait = EXPLODE_FRAMEWAIT;
         bubbleArrays[i].frozenWait = FROZEN_FRAMEWAIT;
         bubbleArrays[i].prelightTime = PRELIGHT_SLOW;
@@ -1303,6 +1305,9 @@ void BubbleGame::ReloadGame(int level) {
         bubbleArrays[i].rBlk = 0;
         bubbleArrays[i].malusAlerts.clear();
     }
+    // Remettre le niveau à 1 pour une nouvelle partie solo
+    curLevel = level;
+
     roundStatsFinalized = false;
     frameCount = 0;
 
