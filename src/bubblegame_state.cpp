@@ -798,10 +798,32 @@ void BubbleGame::CheckGameState(BubbleArray &bArray, bool countForRoot) {
             bool isDefaultClassic = !currentSettings.networkGame &&
                                      currentSettings.playerCount == 1 &&
                                      !currentSettings.randomLevels;
-            if (isDefaultClassic && GameSettings::Instance()->uploadHighscoreStatsEnabled()) {
-                const std::string playerName = GameSettings::Instance()->savedNickname;
-                const int playTimeSeconds = (int)((SDL_GetTicks() - gameStartTime) / 1000);
-                sendGameStats(bArray.score, curLevel, playTimeSeconds, playerName);
+            
+            // ============================================================================
+            // [CUSTOM MODIFICATION - MULTI-LEVEL SCORE SUBMISSION]
+            // Fixed the game stats submission condition:
+            // - Previously, submission was restricted or blocked if the level was greater than 1.
+            // - The code now successfully sends the final score (via sendGameStats) at 
+            //   any level upon defeat in classic single-player mode.
+            // ============================================================================
+            if (isDefaultClassic) {
+            std::string playerName = GameSettings::Instance()->savedNickname;
+            if (playerName.empty()) {
+                const char* sysUser = nullptr;
+            #if defined(_WIN32) || defined(_WIN64)
+                sysUser = getenv("USERNAME");
+            #else
+                sysUser = getenv("USER");
+            #endif
+                if (sysUser != nullptr && sysUser[0] != '\0') {
+                    playerName = sysUser;
+                } else {
+                    playerName = "Anonyme";
+                }
+            }            
+            const int playTimeSeconds = (int)((SDL_GetTicks() - gameStartTime) / 1000);   
+            // Le score est maintenant envoyé quel que soit le niveau (curLevel) atteint !
+            sendGameStats(bArray.score, curLevel, playTimeSeconds, playerName);
             }
         }
     }

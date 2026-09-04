@@ -1294,7 +1294,16 @@ void BubbleGame::ReloadGame(int level) {
     for (int i = 0; i < currentSettings.playerCount; i++) {
         bubbleArrays[i].malusQueue.clear();
         bubbleArrays[i].chainLevel = 0;
-        bubbleArrays[i].score = 0;
+        
+        // ============================================================================
+        // [ARCADE MODIFICATION - SCORE RETENTION]
+        // Line bubbleArrays[i].score = 0; intentionally commented out for the Hardcore Arcade mode:
+        // - Originally, this instruction reset the score to 0 during specific events 
+        //   or level transitions.
+        // - By disabling it, we ensure that the accumulated run score is preserved 
+        //   until the final Game Over, at which point it is transmitted to the remote server.
+        // ============================================================================
+        //bubbleArrays[i].score = 0;
         bubbleArrays[i].explodeWait = EXPLODE_FRAMEWAIT;
         bubbleArrays[i].frozenWait = FROZEN_FRAMEWAIT;
         bubbleArrays[i].prelightTime = PRELIGHT_SLOW;

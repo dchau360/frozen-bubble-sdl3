@@ -423,7 +423,23 @@ void BubbleGame::HandleInput(SDL_Event *e) {
                                 ReloadGame(curLevel);
                             }
                         } else if (gameLost) {
-                            ReloadGame(curLevel);
+                            
+                            // ============================================================================
+                            // [CUSTOM MODIFICATION - STRICT ARCADE MODE]
+                            // This file handles user input, specifically end-of-game actions.
+                            // Modification made to the 'gameLost' handler (inside HandleInput):
+                            // - Originally, defeat allowed retrying the current level.
+                            // - This modification forces a full arcade-style reset:
+                            //   1. Resets the level back to 1 (curLevel = 1).
+                            //   2. Resets all players' scores to 0.
+                            //   3. Explicitly calls ReloadGame(1) to force restarting from the beginning.
+                            // ============================================================================
+
+                            curLevel = 1;
+                            for (int i = 0; i < currentSettings.playerCount; i++) {
+                                bubbleArrays[i].score = 0;
+                            }
+                            ReloadGame(1);
                         }
                     }
                     break;
