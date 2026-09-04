@@ -52,11 +52,18 @@ struct HighscoreData {
         layoutText.UpdateColor({255, 255, 255, 255},  {0, 0, 0, 255});
         layoutText.UpdateAlignment(TTF_HORIZONTAL_ALIGN_CENTER);
         if (newHighscore) layoutText.UpdateStyle(TTF_STYLE_BOLD);
-        std::string data = (name.size() > 12 ? name.substr(0, 9) + "..." : name) + "\n" + (level > 100 ? "won!" : "level " + std::to_string(level)) + "\n" + formatTime(); 
+        std::string data = (name.size() > 12 ? name.substr(0, 9) + "..." : name) + "\n" + (level > 100 ? "won!" : "level " + std::to_string(level)) + "\n" + formatTime();
         layoutText.UpdateText(rend, data.c_str(), 0);
     }
 };
-std::vector<HighscoreData> levelsetScores;
+
+// Two independent top-10 tables, indexed by HighscoreManager::InputMethod:
+// [0] keyboard/gamepad, [1] mouse/touch. Kept as two vectors rather than one
+// vector with a method field on each entry so every existing index-based
+// access (CreateLevelImages' layout math, the fixed on-screen slot grid in
+// RenderScoreScreen) stays exactly the same per table -- only which vector
+// they iterate changes.
+std::vector<HighscoreData> levelsetScores[2];
 
 HighscoreManager *HighscoreManager::ptrInstance = NULL;
 
@@ -67,16 +74,16 @@ HighscoreManager *HighscoreManager::Instance(SDL_Renderer *rend)
     return ptrInstance;
 }
 
-void HighscoreManager::LoadLevelsetHighscores(const char *path) {
+void HighscoreManager::LoadLevelsetHighscores(const char *path, int track) {
     std::ifstream scoreSet(path);
     std::string curLine;
-    
+
     if(scoreSet.is_open())
     {
         std::string curChar;
         while(std::getline(scoreSet, curLine))
         {
-            
+
             int task = 0;
             if (!curLine.empty())
             {
@@ -97,7 +104,7 @@ void HighscoreManager::LoadLevelsetHighscores(const char *path) {
                         else if (task == 2) hs.time = stof(curChar);
                         else if (task == 3) {
                             hs.picId = stoi(curChar);
-                            levelsetScores.push_back(std::move(hs));
+                            levelsetScores[track].push_back(std::move(hs));
                         }
                         task++;
                     }
@@ -111,8 +118,14 @@ void HighscoreManager::LoadLevelsetHighscores(const char *path) {
             }
         }
     }
-    else {
+    else if (track == 0) {
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Could not load highscore levels (%s).", path);
+    } else {
+        // Not logged as an error: the mouse/touch table (highscores_mouse)
+        // is a new file that will not exist yet on any device upgrading from
+        // before this feature, and that is the expected, ordinary case for
+        // it, not a fault.
+        SDL_Log("No highscore levelset file at %s yet.", path);
     }
 }
 
@@ -181,10 +194,13 @@ void HighscoreManager::AppendToLevels(std::array<std::vector<int>, 10> lvl, int 
     SaveNewHighscores();
 }
 
-bool HighscoreManager::CheckAndAddScore(int level, float time) {
+bool HighscoreManager::CheckAndAddScore(int level, float time, InputMethod method) {
+    const int track = (int)method;
+    std::vector<HighscoreData>& scores = levelsetScores[track];
+
     // Determine if this score qualifies for top 10 (higher level = better; same level, lower time = better)
-    bool qualifies = ((int)levelsetScores.size() < 10);
-    for (const auto& s : levelsetScores) {
+    bool qualifies = ((int)scores.size() < 10);
+    for (const auto& s : scores) {
         if (level > s.level || (level == s.level && time < s.time)) {
             qualifies = true;
             break;
@@ -198,14 +214,17 @@ bool HighscoreManager::CheckAndAddScore(int level, float time) {
     newEntry.picId = rand() % 5 + 1;
     newEntry.newHighscore = true;
     newEntry.RefreshTextStatus(rend, highscoreFont);
-    levelsetScores.push_back(std::move(newEntry));
+    scores.push_back(std::move(newEntry));
 
     // Sort: higher level first, then faster time
-    std::sort(levelsetScores.begin(), levelsetScores.end(), [](const HighscoreData& a, const HighscoreData& b) {
+    std::sort(scores.begin(), scores.end(), [](const HighscoreData& a, const HighscoreData& b) {
         if (a.level != b.level) return a.level > b.level;
         return a.time < b.time;
     });
-    if (levelsetScores.size() > 10) levelsetScores.resize(10);
+    if (scores.size() > 10) scores.resize(10);
+
+    pendingHighscoreTrack = track;
+    viewTrack = track;  // so the score screen opens showing the table that was just earned
 
     SaveNewHighscores();
 
@@ -244,8 +263,10 @@ HighscoreManager::HighscoreManager(SDL_Renderer *renderer)
 
     panelText.LoadFont(ASSET("/gfx/DroidSans.ttf").c_str(), 15);
     nameInput.LoadFont(ASSET("/gfx/DroidSans.ttf").c_str(), 15);
+    trackLabelText.LoadFont(ASSET("/gfx/DroidSans.ttf").c_str(), 15);
     panelText.UpdateAlignment(TTF_HORIZONTAL_ALIGN_CENTER);
     nameInput.UpdateAlignment(TTF_HORIZONTAL_ALIGN_CENTER);
+    trackLabelText.UpdateAlignment(TTF_HORIZONTAL_ALIGN_CENTER);
     panelText.UpdateColor({255, 255, 255, 255}, {0, 0, 0, 255});
     nameInput.UpdateColor({255, 255, 255, 255}, {0, 0, 0, 255});
 
@@ -255,14 +276,17 @@ HighscoreManager::HighscoreManager(SDL_Renderer *renderer)
 
     std::string historypath = gameSettings->prefPath + std::string("highlevelshistory");
     std::string levelsetpath = gameSettings->prefPath + std::string("highscores");
+    std::string levelsetMousePath = gameSettings->prefPath + std::string("highscores_mouse");
     LoadHighscoreLevels(historypath.c_str());
-    LoadLevelsetHighscores(levelsetpath.c_str());
+    LoadLevelsetHighscores(levelsetpath.c_str(), (int)InputMethod::Keyboard);
+    LoadLevelsetHighscores(levelsetMousePath.c_str(), (int)InputMethod::Mouse);
 
     CreateLevelImages();
 }
 
 HighscoreManager::~HighscoreManager(){
-    levelsetScores.clear();
+    levelsetScores[0].clear();
+    levelsetScores[1].clear();
     TTF_CloseFont(highscoreFont);
 
     // Everything the constructor loaded, plus the per-level thumbnails built by
@@ -329,7 +353,13 @@ static bool writeFileAtomically(const std::string &path, const std::string &cont
 
 void HighscoreManager::SaveNewHighscores() {
     const std::string historypath = gameSettings->prefPath + std::string("highlevelshistory");
-    const std::string levelsetpath = gameSettings->prefPath + std::string("highscores");
+    // Track 0 (keyboard/gamepad) keeps the original filename, so an existing
+    // install's table survives this change untouched; track 1 (mouse/touch)
+    // is a new file that starts empty until the first mouse/touch highscore.
+    const std::string levelsetpath[2] = {
+        gameSettings->prefPath + std::string("highscores"),
+        gameSettings->prefPath + std::string("highscores_mouse"),
+    };
 
     // Iterate the map rather than indexing it: highscoreLevels is keyed by level
     // id, so operator[](i) over 0..size-1 default-inserted an empty grid for
@@ -344,37 +374,43 @@ void HighscoreManager::SaveNewHighscores() {
         historyContents += levelToData(lvl);
     }
 
-    std::ostringstream levelsetStream;
-    for (size_t i = 0; i < levelsetScores.size(); i++) {
-        HighscoreData &a = levelsetScores[i];
-        levelsetStream << a.level << "," << a.name << "," << a.time << "," << a.picId << "\n";
+    std::string levelsetContents[2];
+    for (int track = 0; track < 2; track++) {
+        std::ostringstream levelsetStream;
+        for (const HighscoreData& a : levelsetScores[track]) {
+            levelsetStream << a.level << "," << a.name << "," << a.time << "," << a.picId << "\n";
+        }
+        levelsetContents[track] = levelsetStream.str();
     }
-    const std::string levelsetContents = levelsetStream.str();
 
     // Saving eagerly means this runs on every mutation, but a given mutation
-    // only ever touches one of the two tables -- finishing a level appends to
-    // the history, beating a score appends to the scores. Comparing against
-    // what was last written keeps each save to the file that actually changed
-    // instead of rewriting both, and makes the save at shutdown a no-op when
-    // nothing happened since. Each mutation still persists on its own, so no
-    // caller has to save on another's behalf.
+    // only ever touches one table -- finishing a level appends to the
+    // history, beating a score appends to exactly one of the two score
+    // tables. Comparing against what was last written keeps each save to the
+    // file that actually changed instead of rewriting all three, and makes
+    // the save at shutdown a no-op when nothing happened since. Each
+    // mutation still persists on its own, so no caller has to save on
+    // another's behalf.
     bool wrote = false;
     if (historyContents != lastSavedHistory &&
         writeFileAtomically(historypath, historyContents)) {
         lastSavedHistory = historyContents;
         wrote = true;
     }
-    if (levelsetContents != lastSavedLevelset &&
-        writeFileAtomically(levelsetpath, levelsetContents)) {
-        lastSavedLevelset = levelsetContents;
-        wrote = true;
+    for (int track = 0; track < 2; track++) {
+        if (levelsetContents[track] != lastSavedLevelset[track] &&
+            writeFileAtomically(levelsetpath[track], levelsetContents[track])) {
+            lastSavedLevelset[track] = levelsetContents[track];
+            wrote = true;
+        }
     }
 
     if (wrote) RequestPersistentStorageFlush();
 }
 
 void HighscoreManager::CreateLevelImages() {
-    SDL_Log("CreateLevelImages: start, highscoreLevels.size=%zu, levelsetScores.size=%zu", highscoreLevels.size(), levelsetScores.size());
+    SDL_Log("CreateLevelImages: start, highscoreLevels.size=%zu, levelsetScores[0].size=%zu levelsetScores[1].size=%zu",
+            highscoreLevels.size(), levelsetScores[0].size(), levelsetScores[1].size());
     SDL_Rect highRect = {(640/2)-128, 51, ((640/2)+128)-((640/2)-128), 340};
 
     int slot = 0;
@@ -408,13 +444,14 @@ void HighscoreManager::CreateLevelImages() {
         slot++;
     }
 
-    SDL_Log("CreateLevelImages: refreshing %zu score texts", levelsetScores.size());
-    for (size_t i = 0; i < levelsetScores.size(); i++) {
-        SDL_Log("CreateLevelImages: refreshing score %zu", i);
-        levelsetScores[i].RefreshTextStatus(rend, highscoreFont);
-        SDL_Log("CreateLevelImages: score %zu text refreshed", i);
-        SDL_Rect *c = levelsetScores[i].layoutText.Coords();
-        if (c) levelsetScores[i].layoutText.UpdatePosition({108 * ((int)i + 1) - c->w/2, (115 * (((int)i + 1) % 6 == 0 ? 2 : 1)) + (70 * (((int)i + 1) % 6 == 0 ? 2 : 1))});
+    for (int track = 0; track < 2; track++) {
+        std::vector<HighscoreData>& scores = levelsetScores[track];
+        SDL_Log("CreateLevelImages: refreshing %zu score texts for track %d", scores.size(), track);
+        for (size_t i = 0; i < scores.size(); i++) {
+            scores[i].RefreshTextStatus(rend, highscoreFont);
+            SDL_Rect *c = scores[i].layoutText.Coords();
+            if (c) scores[i].layoutText.UpdatePosition({108 * ((int)i + 1) - c->w/2, (115 * (((int)i + 1) % 6 == 0 ? 2 : 1)) + (70 * (((int)i + 1) % 6 == 0 ? 2 : 1))});
+        }
     }
     SDL_Log("CreateLevelImages: done");
 }
@@ -428,14 +465,34 @@ void HighscoreManager::RenderScoreScreen() {
     SDL_RenderTexture(rend, highscoresBG, nullptr, nullptr);
 
     if (curMode == 0) { // 0 = Levelset
-        for (size_t i = 0; i < levelsetScores.size(); i++) {
+        std::vector<HighscoreData>& scores = levelsetScores[viewTrack];
+        for (size_t i = 0; i < scores.size(); i++) {
             int sx = 64, sy = 85;
             if (smallBG[i]) { float fw, fh; SDL_GetTextureSize(smallBG[i], &fw, &fh); sx = (int)fw; sy = (int)fh; }
             SDL_Rect bgPos = {85 * (int)(i > 5 ? (i - 5) + 1 : i + 1) + (20 * ((int)i % 6)), (80 * (((int)i + 1) >= 6 ? 1 : 0)) + (80 * (((int)i + 1) >= 6 ? 2 : 1)), sx, sy};
             SDL_Rect framePos = {bgPos.x - 7, bgPos.y - 7, 81, 100};
             { SDL_FRect fr = ToFRect(framePos); SDL_RenderTexture(rend, highscoreFrame, nullptr, &fr); }
             if (smallBG[i]) { SDL_FRect fr = ToFRect(bgPos); SDL_RenderTexture(rend, smallBG[i], nullptr, &fr); }
-            { SDL_FRect fr = ToFRect(*levelsetScores[i].layoutText.Coords()); SDL_RenderTexture(rend, levelsetScores[i].layoutText.Texture(), nullptr, &fr); }
+            { SDL_FRect fr = ToFRect(*scores[i].layoutText.Coords()); SDL_RenderTexture(rend, scores[i].layoutText.Texture(), nullptr, &fr); }
+        }
+
+        // Which of the two tables this is, plus the switch hint -- LEFT/RIGHT
+        // is otherwise unused on this screen, so it's free for this. Its own
+        // TTFText, not panelText: panelText's style/color is shared mutable
+        // state that ShowNewScorePanel()/RenderPanel() need left alone.
+        trackLabelText.UpdateStyle(15, TTF_STYLE_BOLD);
+        trackLabelText.UpdateColor({255, 218, 92, 255}, {20, 12, 32, 255});
+        const char* trackLabel = (viewTrack == (int)InputMethod::Mouse) ? "MOUSE / TOUCH" : "KEYBOARD / GAMEPAD";
+        trackLabelText.UpdateText(rend, trackLabel, 0);
+        trackLabelText.UpdatePosition({640/2 - trackLabelText.Coords()->w/2, 18});
+        { SDL_FRect fr = ToFRect(*trackLabelText.Coords()); SDL_RenderTexture(rend, trackLabelText.Texture(), nullptr, &fr); }
+
+        if (!awaitKeyType) {
+            trackLabelText.UpdateStyle(13, TTF_STYLE_NORMAL);
+            trackLabelText.UpdateColor({174, 211, 202, 255}, {20, 12, 32, 255});
+            trackLabelText.UpdateText(rend, "LEFT/RIGHT: switch table", 0);
+            trackLabelText.UpdatePosition({640/2 - trackLabelText.Coords()->w/2, 460});
+            { SDL_FRect fr = ToFRect(*trackLabelText.Coords()); SDL_RenderTexture(rend, trackLabelText.Texture(), nullptr, &fr); }
         }
     }
 
@@ -494,13 +551,17 @@ void HighscoreManager::HandleInput(SDL_Event *e){
                 case SDLK_RETURN:
                     if (awaitKeyType) {
                         // Save entered name to most recent new high score entry
-                        for (int i = (int)levelsetScores.size() - 1; i >= 0; i--) {
-                            if (levelsetScores[i].newHighscore) {
+                        // -- in whichever table CheckAndAddScore() actually
+                        // added it to, not necessarily whichever is on screen
+                        // if the player switched tables while this was up.
+                        std::vector<HighscoreData>& scores = levelsetScores[pendingHighscoreTrack];
+                        for (int i = (int)scores.size() - 1; i >= 0; i--) {
+                            if (scores[i].newHighscore) {
                                 if (!newName.empty()) {
-                                    levelsetScores[i].name = newName;
-                                    levelsetScores[i].RefreshTextStatus(rend, highscoreFont);
+                                    scores[i].name = newName;
+                                    scores[i].RefreshTextStatus(rend, highscoreFont);
                                 }
-                                levelsetScores[i].newHighscore = false;
+                                scores[i].newHighscore = false;
                                 break;
                             }
                         }
@@ -519,6 +580,17 @@ void HighscoreManager::HandleInput(SDL_Event *e){
                             newName.pop_back();
                             AudioMixer::Instance()->PlaySFX("typewriter");
                         }
+                    }
+                    break;
+                case SDLK_LEFT:
+                case SDLK_RIGHT:
+                    // Switch between the keyboard/gamepad and mouse/touch
+                    // tables. Only while browsing (not while naming a new
+                    // entry -- awaitKeyType's own panel has no use for L/R,
+                    // and pendingHighscoreTrack already picks the right one).
+                    if (!awaitKeyType && curMode == 0) {
+                        viewTrack = 1 - viewTrack;
+                        AudioMixer::Instance()->PlaySFX("menu_change");
                     }
                     break;
                 default:

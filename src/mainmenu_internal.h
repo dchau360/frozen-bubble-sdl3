@@ -47,24 +47,29 @@ enum KeyConfigRow {
     kKeyRowSpeed     = 5,
     kKeyRowSound     = 6,
     kKeyRowMouse     = 7,
+    // Off by default; turning it on pops a confirmation naming exactly what
+    // gets sent (see KeysPanelKey/KeysPanelRender). Exists on every platform
+    // that reaches this panel -- unlike Fullscreen/ads below, it has no
+    // platform-specific reason to be hidden anywhere.
+    kKeyRowUploadStats = 8,
 #ifndef __WASM_PORT__
     // The browser build has no fullscreen row: an SDL fullscreen flag blacks out
     // the canvas there, so the CSS shell does the scaling instead.
-    kKeyRowFullscreen = 8,
+    kKeyRowFullscreen = 9,
 # ifdef __ANDROID__
     // Ads and in-app purchases are Android-only, so these three rows exist
     // nowhere else. They replaced an [R]-to-buy hint that was unreachable in
     // practice: nothing maps a controller or a touch to R, so no phone,
     // tablet, or TV box could ever trigger it.
-    kKeyRowRemoveAdsMonth   = 9,
-    kKeyRowRemoveAdsYear    = 10,
-    kKeyRowRemoveAdsForever = 11,
-    kKeyRowResetAll   = 12,
+    kKeyRowRemoveAdsMonth   = 10,
+    kKeyRowRemoveAdsYear    = 11,
+    kKeyRowRemoveAdsForever = 12,
+    kKeyRowResetAll   = 13,
 # else
-    kKeyRowResetAll   = 9,
+    kKeyRowResetAll   = 10,
 # endif
 #else
-    kKeyRowResetAll   = 8,
+    kKeyRowResetAll   = 9,
 #endif
     kKeyRowLast = kKeyRowResetAll
 };

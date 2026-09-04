@@ -397,6 +397,9 @@ void BubbleGame::NewGame(SetupSettings setup) {
     pendingHighscore = false;
     curLevel = setup.startLevel;
     connectedPlayerCount = setup.playerCount;  // Reset connected count for new game
+    gameStartTime = SDL_GetTicks();
+    scoringInputMethod = ScoringInputMethod::Unset;
+    scoringDisqualified = false;
 
     // Reset multiplayer training state
     mpTrainScore = 0;
@@ -1305,6 +1308,9 @@ void BubbleGame::ReloadGame(int level) {
     }
     roundStatsFinalized = false;
     frameCount = 0;
+    gameStartTime = SDL_GetTicks();
+    scoringInputMethod = ScoringInputMethod::Unset;
+    scoringDisqualified = false;
 
     if (!currentSettings.randomLevels) {
         LoadLevel(level);

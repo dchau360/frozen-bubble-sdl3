@@ -289,6 +289,11 @@ private:
     // so a single stray Enter must not be able to wipe the lot. Cleared whenever
     // the selection moves or the panel closes.
     bool resetAllArmed = false;
+    // Shown instead of immediately flipping the row when the player tries to
+    // turn ON highscore-stat uploading: a bare "OFF -> ON" toggle can't say
+    // what that starts sending, so a popup does. Turning it back OFF needs no
+    // confirmation and skips this entirely. See KeysPanelKey/KeysPanelRender.
+    bool showingStatsUploadConfirm = false;
     void KeysPanelRender();
 
     // LAN server discovery

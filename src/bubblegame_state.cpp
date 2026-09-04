@@ -24,6 +24,14 @@
 #include "transitionmanager.h"
 #include "gamesettings.h"
 #include "platform.h"
+#ifdef HIGHSCORE_STATS_UPLOAD_ENABLED
+// Real implementation (sendGameStats.cpp) links only into the main desktop
+// target -- see CMakeLists.txt. Every other target that compiles this file
+// (Android, iOS, WASM, and every ctest binary, all of which share
+// FROZEN_BUBBLE_CORE_SOURCES) does not define this macro, so the call below
+// compiles out entirely there rather than leaving an unresolved symbol.
+#include "sendGameStats.h"
+#endif
 
 #include <fstream>
 #include <sstream>
@@ -430,8 +438,23 @@ void BubbleGame::SubmitScore(BubbleArray &bArray) {
     hm->AppendToLevels(savedLevelGrid, curLevel);
     SDL_Log("SubmitScore: AppendToLevels done");
 
-    // Check if this qualifies as a top-10 score and save it
-    if (hm->CheckAndAddScore(curLevel, elapsedSeconds)) {
+    // Mixed keyboard/gamepad and mouse/touch input this run -- neither table
+    // gets a fair result, so it counts toward neither (see
+    // ScoringInputMethod's own comment in bubblegame.h).
+    if (scoringDisqualified) {
+        SDL_Log("SubmitScore: mixed input methods this run -- not eligible for either highscore table");
+        return;
+    }
+
+    // Check if this qualifies as a top-10 score and save it, in whichever
+    // table this run locked to. Unset (no shot fired at all -- e.g. clearing
+    // a level with bubbles already in flight from the previous one) falls
+    // back to the keyboard/gamepad table rather than silently dropping the
+    // result.
+    HighscoreManager::InputMethod method =
+        (scoringInputMethod == ScoringInputMethod::Mouse) ? HighscoreManager::InputMethod::Mouse
+                                                            : HighscoreManager::InputMethod::Keyboard;
+    if (hm->CheckAndAddScore(curLevel, elapsedSeconds, method)) {
         pendingHighscore = true;
         SDL_Log("New high score! Level %d in %.1fs", curLevel, elapsedSeconds);
     }
@@ -764,6 +787,31 @@ void BubbleGame::CheckGameState(BubbleArray &bArray, bool countForRoot) {
             gameFinish = true;
             gameLost = true;
             roundWinnerIdx = -1;
+
+            // Opt-in highscore-stats upload -- off by default, see
+            // GameSettings::uploadHighscoreStatsEnabled() and the
+            // confirmation popup in mainmenu_panels.cpp that is the only way
+            // to turn it on. Classic solo campaign only (not network play,
+            // not local multiplayer, not the random-levels mode).
+            //
+            // Deliberately reads bArray.score/curLevel here and does not
+            // reset either: the render path still needs bArray.score to draw
+            // "Final Score: %d" on the game-over panel after this frame, and
+            // curLevel already means "the level just lost on" everywhere else
+            // that reads it (the ReloadGame(curLevel) retry call in
+            // bubblegame_input.cpp, in particular) -- zeroing it here would
+            // send every retry back to level 1 regardless of how far the
+            // player had actually gotten.
+#ifdef HIGHSCORE_STATS_UPLOAD_ENABLED
+            bool isDefaultClassic = !currentSettings.networkGame &&
+                                     currentSettings.playerCount == 1 &&
+                                     !currentSettings.randomLevels;
+            if (isDefaultClassic && GameSettings::Instance()->uploadHighscoreStatsEnabled()) {
+                const std::string playerName = GameSettings::Instance()->savedNickname;
+                const int playTimeSeconds = (int)((SDL_GetTicks() - gameStartTime) / 1000);
+                sendGameStats(bArray.score, curLevel, playTimeSeconds, playerName);
+            }
+#endif
         }
     }
 }

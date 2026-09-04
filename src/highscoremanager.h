@@ -36,6 +36,12 @@
 class HighscoreManager final
 {
 public:
+    // A run is locked to whichever input fired its first shot (see
+    // BubbleGame::ScoringInputMethod, which this mirrors) and counts toward
+    // that table only -- keyboard/gamepad and mouse/touch scores are not
+    // comparable to each other, so they are never merged into one list.
+    enum class InputMethod { Keyboard = 0, Mouse = 1 };
+
     void ShowScoreScreen(int ls);
     void ShowNewScorePanel(int mode);
     void RenderPanel(void);
@@ -44,7 +50,8 @@ public:
     int lastState;
 
     void AppendToLevels(std::array<std::vector<int>, 10> lvl, int id);
-    bool CheckAndAddScore(int level, float time);  // Returns true if this is a new high score
+    // Returns true if this is a new high score in `method`'s own table.
+    bool CheckAndAddScore(int level, float time, InputMethod method);
 
     HighscoreManager(const HighscoreManager& obj) = delete;
     void Dispose();
@@ -57,13 +64,24 @@ private:
 
     std::map<int, std::array<std::vector<int>,10>> highscoreLevels;
 
+    // Which of the two tables the score screen is currently showing (see
+    // RenderScoreScreen/HandleInput's LEFT/RIGHT switch), and which table the
+    // most recent CheckAndAddScore() call added a pending (unnamed) entry to
+    // -- ShowNewScorePanel()/HandleInput's name-entry flow need to know that
+    // to find and label the right entry, regardless of which table is being
+    // browsed at the time.
+    int viewTrack = 0;
+    int pendingHighscoreTrack = 0;
+
     // What SaveNewHighscores() last put on disk, so a save can skip the table
     // that has not changed. Empty until the first save, which therefore always
-    // writes both files.
-    std::string lastSavedHistory, lastSavedLevelset;
+    // writes both files. Indexed the same way as the two score vectors below
+    // (0 = keyboard/gamepad, 1 = mouse/touch).
+    std::string lastSavedHistory;
+    std::string lastSavedLevelset[2];
 
     void SaveNewHighscores();
-    void LoadLevelsetHighscores(const char *path);
+    void LoadLevelsetHighscores(const char *path, int track);
     void LoadHighscoreLevels(const char *path);
     void CreateLevelImages();
 
@@ -72,6 +90,11 @@ private:
 
     TTF_Font *highscoreFont;
     TTFText panelText, nameInput;
+    // Separate from panelText: the score screen's own "KEYBOARD/GAMEPAD" vs
+    // "MOUSE/TOUCH" track label and switch hint need their own style/color,
+    // and panelText's is shared mutable state that ShowNewScorePanel()/
+    // RenderPanel() also rely on staying whatever they last set it to.
+    TTFText trackLabelText;
 
     SDL_Rect voidPanelRct = {(640/2) - (341/2), (480/2) - (280/2), 341, 280};
     SDL_Texture *voidPanelBG;
