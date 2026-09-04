@@ -119,6 +119,9 @@ void GameSettings::CreateDefaultSettings()
         EvalIniResult(rval, dict, "GFX:ColorblindBubbles", "false");
         EvalIniResult(rval, dict, "GFX:ShowFPS", "false");
 
+        EvalIniResult(rval, dict, "Stats", NULL);
+        EvalIniResult(rval, dict, "Stats:UploadHighscore", "false");
+
         EvalIniResult(rval, dict, "Menu", NULL);
         EvalIniResult(rval, dict, "Menu:Theme", "2"); // MENU_THEME_SLATE
 
@@ -260,6 +263,7 @@ void GameSettings::ReadSettings()
     windowHeight = iniparser_getint(optDict, "GFX:WindowHeight", 480);
     colorblindBubbles = iniparser_getboolean(optDict, "GFX:ColorblindBubbles", false);
     showFps = iniparser_getboolean(optDict, "GFX:ShowFPS", false);
+    uploadHighscoreStats = iniparser_getboolean(optDict, "Stats:UploadHighscore", false);
     if (gfxQuality > 3 || gfxQuality < 1) gfxQuality = 3;
     if (windowWidth < 640 || windowWidth > 9999) windowWidth = 640;
     if (windowHeight < 480 || windowHeight > 9999) windowHeight = 480;
@@ -684,6 +688,16 @@ void GameSettings::SetValue(const char* option, const char* value)
     else if (strcmp(option, "GFX:ColorblindBubbles") == 0) {
         colorblindBubbles = (strcmp(value, "true") == 0);
         iniparser_set(optDict, option, value);
+        SaveSettings();
+        return;
+    }
+    else if (strcmp(option, "Stats:UploadHighscore") == 0) {
+        // Turning this ON is gated behind a confirmation popup (see
+        // KeysPanelKey in mainmenu_input.cpp) that names exactly what starts
+        // being sent -- this setter itself just flips and persists the flag,
+        // the same as every other toggle row here.
+        uploadHighscoreStats = !uploadHighscoreStats;
+        iniparser_set(optDict, option, uploadHighscoreStats ? "true" : "false");
         SaveSettings();
         return;
     }

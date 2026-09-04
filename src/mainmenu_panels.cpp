@@ -559,6 +559,8 @@ void MainMenu::KeysPanelRender() {
     list.Row(kKeyRowSpeed, "Game speed", speedVal, true, true);
     list.Row(kKeyRowSound, "Sound", gs->soundEnabled() ? "ON" : "OFF", gs->soundEnabled());
     list.Row(kKeyRowMouse, "Mouse / touch aim", gs->mouseEnabled ? "ON" : "OFF", gs->mouseEnabled);
+    list.Row(kKeyRowUploadStats, "Upload highscore stats",
+             gs->uploadHighscoreStatsEnabled() ? "ON" : "OFF", gs->uploadHighscoreStatsEnabled());
 #ifndef __WASM_PORT__
     list.Row(kKeyRowFullscreen, "Fullscreen", gs->fullscreenMode() ? "ON" : "OFF", gs->fullscreenMode());
 #endif
@@ -657,8 +659,52 @@ void MainMenu::KeysPanelRender() {
     { SDL_FRect fr = ToFRect(*panelText.Coords()); SDL_RenderTexture(rend, panelText.Texture(), nullptr, &fr); }
 
     menulist::DrawFooterHint(rend, panelText,
-        awaitKp ? "Press a button or key..."
-                : "UP/DOWN select    ENTER change    1-4 switch player    ESC done");
+        showingStatsUploadConfirm ? "ENTER confirm    ESC cancel"
+        : awaitKp ? "Press a button or key..."
+                  : "UP/DOWN select    ENTER change    1-4 switch player    ESC done");
+
+    // Modal warning drawn on top of everything above: appears only when the
+    // player has just pressed ENTER on "Upload highscore stats" while it was
+    // OFF (see KeysPanelKey), and blocks every other key until answered.
+    // Spells out precisely what turning this on starts sending, since the
+    // row's own "OFF -> ON" can't.
+    if (showingStatsUploadConfirm) {
+        SDL_Rect box = {(640/2) - 155, (480/2) - 95, 310, 190};
+        SDL_SetRenderDrawBlendMode(rend, SDL_BLENDMODE_BLEND);
+        SDL_SetRenderDrawColor(rend, menulist::kHeaderFill.r, menulist::kHeaderFill.g,
+                                menulist::kHeaderFill.b, 245);
+        { SDL_FRect fr = ToFRect(box); SDL_RenderFillRect(rend, &fr); }
+        SDL_SetRenderDrawColor(rend, menulist::kEdge.r, menulist::kEdge.g,
+                                menulist::kEdge.b, menulist::kEdge.a);
+        { SDL_FRect fr = ToFRect(box); SDL_RenderRect(rend, &fr); }
+
+        panelText.UpdateStyle(15, TTF_STYLE_BOLD);
+        panelText.UpdateColor(menulist::kGold, menulist::kTextShadow);
+        panelText.UpdateAlignment(TTF_HORIZONTAL_ALIGN_CENTER);
+        panelText.UpdateText(rend, "Upload highscore stats?", 290);
+        panelText.UpdatePosition({box.x + box.w/2 - panelText.Coords()->w/2, box.y + 12});
+        { SDL_FRect fr = ToFRect(*panelText.Coords()); SDL_RenderTexture(rend, panelText.Texture(), nullptr, &fr); }
+
+        // Exactly what sendGameStats() puts in the request body -- see that
+        // file's own header comment for the wire format. Kept in sync by
+        // hand; if the payload changes, this text has to change with it.
+        char body[256];
+        snprintf(body, sizeof(body),
+            "Each time a classic solo game ends\n"
+            "in a loss, this sends to petitain.be:\n\n"
+            "- your nickname (or \"Anonymous\")\n"
+            "- a random per-device id\n"
+            "- your score, level, and play time\n\n"
+            "Sent once, best-effort, over HTTPS.\n"
+            "Turn it off again any time.");
+        panelText.UpdateStyle(13, TTF_STYLE_NORMAL);
+        panelText.UpdateColor(menulist::kText, menulist::kTextShadow);
+        panelText.UpdateAlignment(TTF_HORIZONTAL_ALIGN_LEFT);
+        panelText.UpdateText(rend, body, 290);
+        panelText.UpdatePosition({box.x + 12, box.y + 40});
+        { SDL_FRect fr = ToFRect(*panelText.Coords()); SDL_RenderTexture(rend, panelText.Texture(), nullptr, &fr); }
+        panelText.UpdateAlignment(TTF_HORIZONTAL_ALIGN_CENTER);  // restore default for the rest of this panel
+    }
 }
 
 

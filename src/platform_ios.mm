@@ -84,3 +84,33 @@ std::string IosFetchUrl(const char* url, int timeoutSeconds) {
         return body;
     }
 }
+
+// Fire-and-forget POST for sendGameStats.cpp. Deliberately NOT the
+// semaphore-blocking shape IosFetchUrl uses above: nothing reads the
+// response, so there is nothing worth blocking the calling thread for --
+// [task resume] hands the request to NSURLSession's own background queue and
+// this returns immediately, same as the WASM path's fetch() and same effect
+// as the desktop path's detached std::thread.
+void IosPostJson(const std::string& url, const std::string& jsonBody) {
+    if (url.empty()) return;
+
+    @autoreleasepool {
+        NSURL* nsurl = [NSURL URLWithString:[NSString stringWithUTF8String:url.c_str()]];
+        if (!nsurl) return;
+
+        NSMutableURLRequest* request =
+            [NSMutableURLRequest requestWithURL:nsurl
+                                    cachePolicy:NSURLRequestReloadIgnoringLocalCacheData
+                                timeoutInterval:3.0];
+        [request setHTTPMethod:@"POST"];
+        [request setValue:@"application/json" forHTTPHeaderField:@"Content-Type"];
+        [request setHTTPBody:[NSData dataWithBytes:jsonBody.data() length:jsonBody.size()]];
+
+        NSURLSessionDataTask* task = [[NSURLSession sharedSession]
+            dataTaskWithRequest:request
+              completionHandler:^(NSData*, NSURLResponse*, NSError*) {
+                  // Best-effort telemetry: nothing observes whether it landed.
+              }];
+        [task resume];
+    }
+}

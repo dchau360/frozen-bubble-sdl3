@@ -656,9 +656,19 @@ void BubbleGame::Render() {
             mpTrainDone = true;
             gameFinish = true;
             gameWon = true;
-            // Store training score as level=101 (sentinel for mp_train) with time=score
-            if (HighscoreManager::Instance()->CheckAndAddScore(mpTrainScore, 0.0f))
-                pendingHighscore = true;
+            // Store training score as level=101 (sentinel for mp_train) with time=score.
+            // Same keyboard/gamepad-vs-mouse/touch split and mixed-input
+            // disqualification as the classic solo path -- see
+            // BubbleGame::ScoringInputMethod and its lock/disqualify site in
+            // bubblegame_shooter.cpp, which applies here too since mp_train
+            // is single-player and not a network game.
+            if (!scoringDisqualified) {
+                HighscoreManager::InputMethod method =
+                    (scoringInputMethod == ScoringInputMethod::Mouse) ? HighscoreManager::InputMethod::Mouse
+                                                                        : HighscoreManager::InputMethod::Keyboard;
+                if (HighscoreManager::Instance()->CheckAndAddScore(mpTrainScore, 0.0f, method))
+                    pendingHighscore = true;
+            }
         } else if (!mpTrainDone) {
             // Randomly inject malus rows (original: rand($mptrainingdiff*(1000/$TARGET_ANIM_SPEED)) == 0)
             // mptrainingdiff default = 30 seconds between attacks; at 60fps: 30*60=1800 frames avg

@@ -269,7 +269,11 @@ void BubbleGame::UpdatePenguin(BubbleArray &bArray) {
         if (angle < 0.1f) angle = 0.1f;
         if (angle > (float)PI - 0.1f) angle = (float)PI - 0.1f;
     }
-    // Mouse/touch fire: inject as shooterAction before the fire check
+    // Mouse/touch fire: inject as shooterAction before the fire check.
+    // Captured before mouseFirePending is cleared, so the actual-fire block
+    // below can tell a mouse/touch shot from a keyboard/gamepad one for the
+    // dual-track local highscore lock (see BubbleGame::ScoringInputMethod).
+    bool firedByMouse = bArray.mouseFirePending;
     if (bArray.mouseFirePending) {
         bArray.shooterAction = true;
         bArray.mouseFirePending = false;
@@ -296,6 +300,24 @@ void BubbleGame::UpdatePenguin(BubbleArray &bArray) {
         if (bArray.mpFirePending) {
             angle = bArray.pendingAngle;
             SDL_Log("Launching remote player %d bubble with angle %.3f from network", bArray.playerAssigned, angle);
+        }
+
+        // Lock (or disqualify) which local highscore table this classic solo
+        // run counts toward -- only meaningful there, so skip it entirely for
+        // network play and local multiplayer. mp_fire shots are always a
+        // remote player's, never player 0's own input, so they don't count.
+        if (!currentSettings.networkGame && currentSettings.playerCount == 1 && !bArray.mpFirePending) {
+            ScoringInputMethod thisShot = firedByMouse ? ScoringInputMethod::Mouse
+                                                        : ScoringInputMethod::Keyboard;
+            if (scoringInputMethod == ScoringInputMethod::Unset) {
+                scoringInputMethod = thisShot;
+            } else if (scoringInputMethod != thisShot) {
+                // Switched input methods mid-run -- neither table gets a
+                // fair comparison against runs that stuck to one. See
+                // SubmitScore(), which checks this flag before recording
+                // anything.
+                scoringDisqualified = true;
+            }
         }
 
         LaunchBubble(bArray);

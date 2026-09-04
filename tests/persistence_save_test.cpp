@@ -223,7 +223,7 @@ int main() {
     // alongside it -- each one a line of spaces.
     CHECK(!hasBlankPaddedLine(historyPath));
 
-    CHECK(manager->CheckAndAddScore(17, 12.5f));
+    CHECK(manager->CheckAndAddScore(17, 12.5f, HighscoreManager::InputMethod::Keyboard));
     CHECK(csvHasLevelAndTime(scorePath, 17, 12.5f));
 
     // Each save now stages a .tmp file beside the real one. Leaving those
@@ -235,7 +235,7 @@ int main() {
 
     // A save replaces the table rather than appending to it, so a second score
     // must not leave the first one duplicated.
-    CHECK(manager->CheckAndAddScore(18, 9.0f));
+    CHECK(manager->CheckAndAddScore(18, 9.0f, HighscoreManager::InputMethod::Keyboard));
     CHECK(csvHasLevelAndTime(scorePath, 18, 9.0f));
     CHECK(countCsvRows(scorePath) == 2);
 
@@ -259,7 +259,7 @@ int main() {
     // the history file makes that observable: adding a score touches the score
     // table alone, so a save that still rewrites both would erase the sentinel.
     { std::ofstream(historyPath) << "SENTINEL-HISTORY-UNTOUCHED\n"; }
-    CHECK(manager->CheckAndAddScore(19, 7.5f));
+    CHECK(manager->CheckAndAddScore(19, 7.5f, HighscoreManager::InputMethod::Keyboard));
     CHECK(csvHasLevelAndTime(scorePath, 19, 7.5f));
     CHECK(fileContains(historyPath, "SENTINEL-HISTORY-UNTOUCHED"));
 
