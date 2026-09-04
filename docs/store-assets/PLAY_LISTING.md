@@ -10,6 +10,13 @@ This is the drafted content so you're not starting from a blank form.
 
 **App name:** Frozen Bubble
 
+**Promo text** (Play's separate promotional-text field, 80 chars max — this
+one is 76):
+
+```
+Aim, fire, pop! Classic bubble-shooting fun -- solo, local co-op, or online.
+```
+
 **Short description** (max 80 chars — this one is 79):
 
 ```
