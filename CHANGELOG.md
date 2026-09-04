@@ -1,5 +1,23 @@
 # Changelog
 
+## v2.4.71
+
+- **Opt-in highscore stats upload, and separate keyboard/mouse local
+  highscores.** Classic solo play can now optionally report a run's score,
+  level, and play time to a community leaderboard when it ends in a loss --
+  off by default, with a settings row and a confirmation popup that names
+  exactly what gets sent (a nickname or "Anonymous", a random per-device id,
+  score, level, play time) before it's ever turned on. No OS username is
+  ever sent, the upload runs over HTTPS on a background thread so a slow or
+  unreachable host can't stall the game, and it now posts from every
+  platform (desktop via `curl`, Android via a JNI call, iOS via
+  `NSURLSession`, WASM via `fetch()`) instead of desktop only. Separately,
+  local classic-solo highscores are now two independent tables -- keyboard/
+  gamepad and mouse/touch -- rather than one shared table, with the input
+  method locked at game start (switching mid-run disqualifies that attempt
+  from both) and two tappable tabs on the score screen to switch between
+  them.
+
 ## v2.4.70
 
 - **Swipe left to quit now works on the WASM/itch.io build.** Native touch
