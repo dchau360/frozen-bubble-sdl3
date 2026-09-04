@@ -96,35 +96,16 @@ else()
     set(PLATFORM_EXTRA_SRC "")
 endif()
 
-# Opt-in highscore-stats upload (src/sendGameStats.cpp): deliberately kept out
-# of FROZEN_BUBBLE_CORE_SOURCES, unlike NETWORK_CLIENT_SRC/PLATFORM_EXTRA_SRC
-# above -- that list is shared with android/app/CMakeLists.txt and every
-# ctest binary below, and this feature shells out to the desktop `curl`
-# binary via popen() (see that file's own header comment), which is neither
-# available nor meaningful on Android, iOS, or WASM. Added only to this one
-# target, so only it defines HIGHSCORE_STATS_UPLOAD_ENABLED and only it needs
-# to actually link the file; bubblegame_state.cpp's call site compiles out
-# everywhere else.
-if(NOT EMSCRIPTEN AND NOT IOS)
-    set(STATS_UPLOAD_SRC src/sendGameStats.cpp)
-else()
-    set(STATS_UPLOAD_SRC "")
-endif()
-
 include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/CoreSources.cmake)
 
 add_executable(frozen-bubble-sdl3
     src/main.cpp
     ${FROZEN_BUBBLE_CORE_SOURCES}
-    ${STATS_UPLOAD_SRC}
     ${RES_FILES}
 )
 
 set_property(TARGET frozen-bubble-sdl3 PROPERTY CXX_STANDARD 17)
 set_property(TARGET frozen-bubble-sdl3 PROPERTY CXX_EXTENSIONS OFF)
-if(NOT EMSCRIPTEN AND NOT IOS)
-    target_compile_definitions(frozen-bubble-sdl3 PRIVATE HIGHSCORE_STATS_UPLOAD_ENABLED)
-endif()
 
 if(EMSCRIPTEN)
     set_target_properties(frozen-bubble-sdl3 PROPERTIES SUFFIX ".html")

@@ -135,6 +135,12 @@ void IosRegisterForPush();
 // ships no curl binary, so the desktop popen("curl ...") path returns nothing
 // there; this is the iOS counterpart of Android's JNI fetchUrl().
 std::string IosFetchUrl(const char* url, int timeoutSeconds);
+
+// Fire-and-forget HTTP POST of a JSON body -- returns immediately, the
+// request itself runs on NSURLSession's own background queue. Used by
+// sendGameStats.cpp; see that file's header comment for the wire format.
+// Defined in platform_ios.mm.
+void IosPostJson(const std::string& url, const std::string& jsonBody);
 #endif
 
 // ── In-app purchases (Android only) ───────────────────────────────────────────

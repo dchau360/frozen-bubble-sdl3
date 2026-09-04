@@ -37,23 +37,42 @@
 // GetOrCreateMachineId()'s comment for why an unset nickname falls back to
 // "Anonymous" rather than $USER/%USERNAME%.
 //
-// Desktop native only (Linux/macOS/Windows): shells out to the `curl` binary
-// exactly the way DetectGeoLocation()/DiscoverServers() already do in
-// networkclient.cpp, rather than linking libcurl. That keeps this feature
-// from adding a new build dependency to any platform or test target --
-// see CMakeLists.txt/cmake/CoreSources.cmake, where this file is compiled
-// only into the main desktop target. Android/iOS/WASM already have their own
-// per-platform HTTP path (androidFetchUrl()/IosFetchUrl(), see platform.h),
-// but it's GET-only today and none of those three is where this feature was
-// asked for, so sendGameStats() simply isn't compiled into those builds.
+// Every platform posts through its own transport, the same split the rest
+// of the codebase already uses for "make an HTTP request" (see
+// networkclient.cpp's curlFetch()/DetectGeoLocation() and platform_ios.mm):
+//   - Desktop (Linux/macOS/Windows): shells out to the `curl` binary via
+//     popen(), same as curlFetch()/DetectGeoLocation() already do, run on a
+//     detached std::thread so the blocking popen() never stalls the game
+//     loop that calls this.
+//   - Android: JNI call to FrozenBubbleActivity.postJson(), the POST
+//     counterpart of the existing fetchUrl() -- also detached, since that
+//     call blocks the calling thread the same way fetchUrl() does.
+//   - iOS: NSURLSession POST (IosPostJson(), platform_ios.mm) -- already
+//     asynchronous on the session's own queue, so no extra thread needed.
+//   - WASM: browser fetch() via EM_JS -- already asynchronous in the JS
+//     event loop, so no extra thread needed (and none is available: this
+//     build has no pthread support).
+// All four are fire-and-forget: none of them reports success or failure
+// back to the caller.
 
 #include "sendGameStats.h"
 #include "gamesettings.h"
 
-#include <cstdio>
 #include <fstream>
 #include <random>
+
+#if defined(__ANDROID__)
+#include <SDL3/SDL.h>
+#include <jni.h>
 #include <thread>
+#elif defined(__WASM_PORT__)
+#include <emscripten.h>
+#elif defined(__IOS_PORT__)
+#include "platform.h"
+#else
+#include <cstdio>
+#include <thread>
+#endif
 
 namespace {
 
@@ -83,6 +102,49 @@ std::string GetOrCreateMachineId(const std::string &prefPath) {
     return machineId;
 }
 
+#if defined(__ANDROID__)
+// Mirrors networkclient.cpp's androidFetchUrl() exactly (same JNI-context
+// lookup, same reason: FindClass()-by-name resolves against the wrong
+// classloader from a thread the JVM did not create, which this detached
+// std::thread is; going through the already-valid Activity jobject instead
+// does not have that problem). Blocking -- must not run on the caller's own
+// thread, see sendGameStats() below.
+void AndroidPostJson(const std::string &url, const std::string &json) {
+    JNIEnv *env = (JNIEnv *)SDL_GetAndroidJNIEnv();
+    jobject activity = (jobject)SDL_GetAndroidActivity();
+    if (!env || !activity) return;
+
+    jclass cls = env->GetObjectClass(activity);
+    jmethodID mid = env->GetStaticMethodID(cls, "postJson",
+                                            "(Ljava/lang/String;Ljava/lang/String;)V");
+    if (!mid) {
+        SDL_Log("AndroidPostJson: postJson method not found");
+        env->DeleteLocalRef(cls);
+        env->DeleteLocalRef(activity);
+        return;
+    }
+
+    jstring jurl = env->NewStringUTF(url.c_str());
+    jstring jjson = env->NewStringUTF(json.c_str());
+    env->CallStaticVoidMethod(cls, mid, jurl, jjson);
+    env->DeleteLocalRef(jurl);
+    env->DeleteLocalRef(jjson);
+    env->DeleteLocalRef(cls);
+    env->DeleteLocalRef(activity);
+}
+#elif defined(__WASM_PORT__)
+// fetch() is already asynchronous in the browser's own event loop -- this
+// returns to C++ immediately, no thread of any kind involved or needed.
+EM_JS(void, WasmPostJson, (const char *url, const char *json), {
+    try {
+        fetch(UTF8ToString(url), {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: UTF8ToString(json),
+        }).catch(function(e) {});
+    } catch (e) {}
+});
+#elif !defined(__IOS_PORT__)
 // Shells out to curl the same way networkclient.cpp's DetectGeoLocation()/
 // DiscoverServers() do. The JSON body travels over curl's stdin (`-d @-`)
 // rather than being interpolated into the shell command string: the payload
@@ -90,7 +152,7 @@ std::string GetOrCreateMachineId(const std::string &prefPath) {
 // fill with shell metacharacters ('; $(...); backticks), and popen() runs
 // its argument through /bin/sh. Only the hardcoded URL constant below is
 // ever part of the command line itself.
-void PostJson(const std::string &url, const std::string &jsonPayload) {
+void DesktopPostJson(const std::string &url, const std::string &jsonPayload) {
     char cmd[256];
     snprintf(cmd, sizeof(cmd),
              "curl -s -X POST -H 'Content-Type: application/json' "
@@ -101,6 +163,7 @@ void PostJson(const std::string &url, const std::string &jsonPayload) {
     fwrite(jsonPayload.data(), 1, jsonPayload.size(), fp);
     pclose(fp);
 }
+#endif
 
 } // namespace
 
@@ -122,9 +185,19 @@ void sendGameStats(int score, int level, int playTimeSeconds, const std::string 
     jsonPayload += "  \"play_time\": " + std::to_string(playTimeSeconds) + "\n";
     jsonPayload += "}";
 
-    // Detached, best-effort: the caller (CheckGameState(), once per frame in
-    // the worst case, right at the moment of game over) must never block on
-    // the network, so the actual POST -- including curl's own timeouts --
-    // runs off the game loop entirely. Nothing observes whether it lands.
-    std::thread(PostJson, "https://petitain.be/scoredb.php", jsonPayload).detach();
+    const std::string url = "https://petitain.be/scoredb.php";
+
+    // Best-effort, fire-and-forget: the caller (CheckGameState(), once per
+    // frame in the worst case, right at the moment of game over) must never
+    // block on the network. See this file's own header comment for why each
+    // platform branch below either detaches its own thread or needs none.
+#if defined(__ANDROID__)
+    std::thread([url, jsonPayload]() { AndroidPostJson(url, jsonPayload); }).detach();
+#elif defined(__WASM_PORT__)
+    WasmPostJson(url.c_str(), jsonPayload.c_str());
+#elif defined(__IOS_PORT__)
+    IosPostJson(url, jsonPayload);
+#else
+    std::thread(DesktopPostJson, url, jsonPayload).detach();
+#endif
 }

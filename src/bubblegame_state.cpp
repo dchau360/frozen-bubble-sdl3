@@ -24,14 +24,7 @@
 #include "transitionmanager.h"
 #include "gamesettings.h"
 #include "platform.h"
-#ifdef HIGHSCORE_STATS_UPLOAD_ENABLED
-// Real implementation (sendGameStats.cpp) links only into the main desktop
-// target -- see CMakeLists.txt. Every other target that compiles this file
-// (Android, iOS, WASM, and every ctest binary, all of which share
-// FROZEN_BUBBLE_CORE_SOURCES) does not define this macro, so the call below
-// compiles out entirely there rather than leaving an unresolved symbol.
 #include "sendGameStats.h"
-#endif
 
 #include <fstream>
 #include <sstream>
@@ -802,7 +795,6 @@ void BubbleGame::CheckGameState(BubbleArray &bArray, bool countForRoot) {
             // bubblegame_input.cpp, in particular) -- zeroing it here would
             // send every retry back to level 1 regardless of how far the
             // player had actually gotten.
-#ifdef HIGHSCORE_STATS_UPLOAD_ENABLED
             bool isDefaultClassic = !currentSettings.networkGame &&
                                      currentSettings.playerCount == 1 &&
                                      !currentSettings.randomLevels;
@@ -811,7 +803,6 @@ void BubbleGame::CheckGameState(BubbleArray &bArray, bool countForRoot) {
                 const int playTimeSeconds = (int)((SDL_GetTicks() - gameStartTime) / 1000);
                 sendGameStats(bArray.score, curLevel, playTimeSeconds, playerName);
             }
-#endif
         }
     }
 }

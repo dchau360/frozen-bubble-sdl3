@@ -65,6 +65,18 @@ struct HighscoreData {
 // they iterate changes.
 std::vector<HighscoreData> levelsetScores[2];
 
+// The score screen's two tab boxes, KEYBOARD/GAMEPAD and MOUSE/TOUCH -- one
+// fixed layout shared by RenderScoreScreen (drawing) and HandleInput
+// (hit-testing a click/tap), so the two can never drift out of sync with
+// each other. Logical (640x480) canvas coordinates.
+static SDL_Rect ScoreTrackTabRect(int track) {
+    constexpr int w = 160, h = 26, gap = 10;
+    constexpr int totalW = w * 2 + gap;
+    constexpr int x0 = 640 / 2 - totalW / 2;
+    constexpr int y = 8;
+    return { x0 + track * (w + gap), y, w, h };
+}
+
 HighscoreManager *HighscoreManager::ptrInstance = NULL;
 
 HighscoreManager *HighscoreManager::Instance(SDL_Renderer *rend)
@@ -476,22 +488,30 @@ void HighscoreManager::RenderScoreScreen() {
             { SDL_FRect fr = ToFRect(*scores[i].layoutText.Coords()); SDL_RenderTexture(rend, scores[i].layoutText.Texture(), nullptr, &fr); }
         }
 
-        // Which of the two tables this is, plus the switch hint -- LEFT/RIGHT
-        // is otherwise unused on this screen, so it's free for this. Its own
-        // TTFText, not panelText: panelText's style/color is shared mutable
-        // state that ShowNewScorePanel()/RenderPanel() need left alone.
-        trackLabelText.UpdateStyle(15, TTF_STYLE_BOLD);
-        trackLabelText.UpdateColor({255, 218, 92, 255}, {20, 12, 32, 255});
-        const char* trackLabel = (viewTrack == (int)InputMethod::Mouse) ? "MOUSE / TOUCH" : "KEYBOARD / GAMEPAD";
-        trackLabelText.UpdateText(rend, trackLabel, 0);
-        trackLabelText.UpdatePosition({640/2 - trackLabelText.Coords()->w/2, 18});
-        { SDL_FRect fr = ToFRect(*trackLabelText.Coords()); SDL_RenderTexture(rend, trackLabelText.Texture(), nullptr, &fr); }
+        // Two tab boxes -- click/tap either one to switch tables (see
+        // HandleInput's MOUSE_BUTTON_DOWN/FINGER_DOWN cases), or LEFT/RIGHT
+        // from a keyboard/gamepad. Own TTFText, not panelText: panelText's
+        // style/color is shared mutable state that ShowNewScorePanel()/
+        // RenderPanel() need left alone.
+        for (int track = 0; track < 2; track++) {
+            SDL_Rect box = ScoreTrackTabRect(track);
+            bool active = (track == viewTrack);
 
-        if (!awaitKeyType) {
-            trackLabelText.UpdateStyle(13, TTF_STYLE_NORMAL);
-            trackLabelText.UpdateColor({174, 211, 202, 255}, {20, 12, 32, 255});
-            trackLabelText.UpdateText(rend, "LEFT/RIGHT: switch table", 0);
-            trackLabelText.UpdatePosition({640/2 - trackLabelText.Coords()->w/2, 460});
+            SDL_SetRenderDrawBlendMode(rend, SDL_BLENDMODE_BLEND);
+            if (active) SDL_SetRenderDrawColor(rend, 255, 196, 64, 90);
+            else        SDL_SetRenderDrawColor(rend, 20, 12, 32, 150);
+            { SDL_FRect fr = ToFRect(box); SDL_RenderFillRect(rend, &fr); }
+
+            if (active) SDL_SetRenderDrawColor(rend, 255, 218, 92, 240);
+            else        SDL_SetRenderDrawColor(rend, 174, 211, 202, 140);
+            { SDL_FRect fr = ToFRect(box); SDL_RenderRect(rend, &fr); }
+
+            trackLabelText.UpdateStyle(13, active ? TTF_STYLE_BOLD : TTF_STYLE_NORMAL);
+            trackLabelText.UpdateColor(active ? SDL_Color{255, 218, 92, 255} : SDL_Color{174, 211, 202, 255},
+                                        {20, 12, 32, 255});
+            trackLabelText.UpdateText(rend, track == (int)InputMethod::Mouse ? "MOUSE/TOUCH" : "KEYBOARD", 0);
+            trackLabelText.UpdatePosition({box.x + box.w/2 - trackLabelText.Coords()->w/2,
+                                           box.y + box.h/2 - trackLabelText.Coords()->h/2});
             { SDL_FRect fr = ToFRect(*trackLabelText.Coords()); SDL_RenderTexture(rend, trackLabelText.Texture(), nullptr, &fr); }
         }
     }
@@ -612,6 +632,45 @@ void HighscoreManager::HandleInput(SDL_Event *e){
             else {
                 AudioMixer::Instance()->PlaySFX("stick");
             }
-            break;       
+            break;
+        case SDL_EVENT_MOUSE_BUTTON_DOWN:
+            if (e->button.button == SDL_BUTTON_LEFT && !awaitKeyType && curMode == 0) {
+                float lx = 0.f, ly = 0.f;
+                SDL_RenderCoordinatesFromWindow(rend, e->button.x, e->button.y, &lx, &ly);
+                TapScoreTrackTab(lx, ly);
+            }
+            break;
+        case SDL_EVENT_FINGER_DOWN:
+            if (!awaitKeyType && curMode == 0) {
+                // tfinger is normalized against the window -- scale back up,
+                // then let the renderer undo the letterbox, mirroring
+                // FrozenBubble::TouchToLogical (frozenbubble.cpp) exactly.
+                float lx = 0.f, ly = 0.f;
+                SDL_Window *win = SDL_GetRenderWindow(rend);
+                int ww = 0, wh = 0;
+                if (win) SDL_GetWindowSize(win, &ww, &wh);
+                if (ww > 0 && wh > 0) {
+                    SDL_RenderCoordinatesFromWindow(rend, e->tfinger.x * (float)ww,
+                                                     e->tfinger.y * (float)wh, &lx, &ly);
+                } else {
+                    lx = e->tfinger.x * 640.f;
+                    ly = e->tfinger.y * 480.f;
+                }
+                TapScoreTrackTab(lx, ly);
+            }
+            break;
+    }
+}
+
+void HighscoreManager::TapScoreTrackTab(float lx, float ly) {
+    for (int track = 0; track < 2; track++) {
+        SDL_Rect box = ScoreTrackTabRect(track);
+        if (lx >= box.x && lx < box.x + box.w && ly >= box.y && ly < box.y + box.h) {
+            if (track != viewTrack) {
+                viewTrack = track;
+                AudioMixer::Instance()->PlaySFX("menu_change");
+            }
+            break;
+        }
     }
 }
