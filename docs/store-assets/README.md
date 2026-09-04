@@ -33,7 +33,9 @@
   title screen, captured straight off the canvas (`canvas.toDataURL()`) of a
   locally served WASM build (`tools/serve-wasm.py`) rather than a device
   screenshot, since there's no letterboxing or OS chrome to crop out that
-  way.
+  way. Recaptured 2026-09-03 after the MENU STYLE row (`260dc1db`) and the
+  runtime-rendered SETTINGS label fix (`028e4e9c`) — the previous capture
+  predated both and still showed the old wood-popup panel look.
 
 - **`icon-512.png`** (512×512, 24-bit RGB) — Play's high-res store icon. A
   resize of `share/icons/frozen-bubble-icon-1024x1024.png`, the single
