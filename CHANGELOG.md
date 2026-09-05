@@ -1,5 +1,16 @@
 # Changelog
 
+## v2.4.77
+
+- **Completed the text-rendering cache from v2.4.76 for busy multiplayer
+  screens.** The previous release's cache still gave away its benefit
+  wherever one texture object was reused to render several different lines
+  in the same frame -- per-player scores, targeting indicators, chat lines,
+  and every cell of the post-round stats table and royale HUD. Each of those
+  now keeps its own cached texture per player, line, or cell, so unchanged
+  text stays cached on those screens instead of being rebuilt every frame
+  regardless of whether it actually changed.
+
 ## v2.4.76
 
 - **Reduced repeated rendering work for dynamic text.** Textures are now reused
