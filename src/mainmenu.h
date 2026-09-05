@@ -273,6 +273,20 @@ private:
     SDL_Keycode lastOptInput = SDLK_UNKNOWN;
     SDL_Texture *voidPanelBG;
     void OptPanelRender();
+    // On-screen Yes/No buttons for this "Enable chain reaction?" prompt (and
+    // NetSetupPanelRender's identical one -- the two are mutually exclusive,
+    // so one pair of rects covers both). Previously keyboard/gamepad only:
+    // any key but ESC answered, with no touch equivalent at all -- see the
+    // awaitKp check in MainMenu::HandleInput this mirrors. Recomputed each
+    // frame while still awaiting an answer; zeroed once answered so the
+    // "Enjoy the game!"/"Connecting..." delay screen underneath isn't still
+    // tappable as Yes/No.
+    SDL_Rect optYesRect{}, optNoRect{};
+    // Shared visual for both: a plain filled/outlined box with a centered
+    // label, same treatment as KeysPanelRender's stats-upload confirm
+    // buttons. Factored out since OptPanelRender and NetSetupPanelRender are
+    // otherwise byte-for-byte duplicates of this one popup.
+    void DrawYesNoButtons(SDL_Renderer* rend, const SDL_Rect& yes, const SDL_Rect& no);
 
     // Pick start level panel
     bool showingLevelPanel = false;

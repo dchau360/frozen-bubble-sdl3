@@ -450,11 +450,32 @@ void MainMenu::LocalMPPanelRender() {
 }
 
 
+void MainMenu::DrawYesNoButtons(SDL_Renderer* rend, const SDL_Rect& yes, const SDL_Rect& no) {
+    auto drawButton = [&](const SDL_Rect& r, const char* label, bool gold) {
+        SDL_SetRenderDrawBlendMode(rend, SDL_BLENDMODE_BLEND);
+        SDL_SetRenderDrawColor(rend, 10, 38, 48, 210);
+        { SDL_FRect fr = ToFRect(r); SDL_RenderFillRect(rend, &fr); }
+        SDL_Color edge = gold ? menulist::kGold : menulist::kMuted;
+        SDL_SetRenderDrawColor(rend, edge.r, edge.g, edge.b, 255);
+        { SDL_FRect fr = ToFRect(r); SDL_RenderRect(rend, &fr); }
+        panelText.UpdateStyle(14, TTF_STYLE_BOLD);
+        panelText.UpdateColor(gold ? menulist::kGold : menulist::kText, menulist::kTextShadow);
+        panelText.UpdateText(rend, label, 0);
+        panelText.UpdatePosition({r.x + r.w/2 - panelText.Coords()->w/2,
+                                   r.y + r.h/2 - panelText.Coords()->h/2});
+        { SDL_FRect fr = ToFRect(*panelText.Coords()); SDL_RenderTexture(rend, panelText.Texture(), nullptr, &fr); }
+    };
+    drawButton(yes, "Yes", true);
+    drawButton(no, "No", false);
+}
+
+
 void MainMenu::OptPanelRender() {
     if (!showingOptPanel) return;
 
     if(awaitKp == false && lastOptInput != SDLK_UNKNOWN && !runDelay) { // we got our response
         chainReaction = (lastOptInput == SDLK_Y);
+        optYesRect = optNoRect = SDL_Rect{};  // answered -- not tappable anymore
 
         char pnltxt[256];
         snprintf(pnltxt, sizeof(pnltxt), "Random level\n\n\nEnable chain reaction?\n\n\nY or N?:        %s\n\n\n\n\nEnjoy the game!", SDL_GetKeyName(lastOptInput));
@@ -472,6 +493,20 @@ void MainMenu::OptPanelRender() {
 
     { SDL_FRect fr = ToFRect(voidPanelRct); SDL_RenderTexture(const_cast<SDL_Renderer*>(renderer), voidPanelBG, nullptr, &fr); };
     { SDL_FRect fr = ToFRect(*panelText.Coords()); SDL_RenderTexture(const_cast<SDL_Renderer*>(renderer), panelText.Texture(), nullptr, &fr); };
+
+    // Tappable Yes/No while the question is still open -- any key but ESC
+    // already answered this from a keyboard/gamepad, but the prompt had no
+    // touch equivalent at all (see HandlePanelTap's own showingOptPanel
+    // branch, which reads the rects stored here rather than routing through
+    // the ordinary row list -- this popup registers no rows of its own).
+    if (awaitKp) {
+        SDL_Renderer* rend = const_cast<SDL_Renderer*>(renderer);
+        optYesRect = {voidPanelRct.x + 30, voidPanelRct.y + voidPanelRct.h - 46, 120, 30};
+        optNoRect  = {voidPanelRct.x + voidPanelRct.w - 30 - 120, voidPanelRct.y + voidPanelRct.h - 46, 120, 30};
+        DrawYesNoButtons(rend, optYesRect, optNoRect);
+    } else {
+        optYesRect = optNoRect = SDL_Rect{};
+    }
 }
 
 
@@ -738,6 +773,7 @@ void MainMenu::NetSetupPanelRender() {
 
     if(awaitKp == false && lastOptInput != SDLK_UNKNOWN && !runDelay) { // we got our response
         chainReaction = (lastOptInput == SDLK_Y);
+        optYesRect = optNoRect = SDL_Rect{};  // answered -- not tappable anymore
 
         char pnltxt[256];
         snprintf(pnltxt, sizeof(pnltxt), "Network game\n\n\nEnable chain reaction?\n\n\nY or N?:        %s\n\n\n\n\nConnecting...", SDL_GetKeyName(lastOptInput));
@@ -764,4 +800,16 @@ void MainMenu::NetSetupPanelRender() {
 
     { SDL_FRect fr = ToFRect(voidPanelRct); SDL_RenderTexture(const_cast<SDL_Renderer*>(renderer), voidPanelBG, nullptr, &fr); };
     { SDL_FRect fr = ToFRect(*panelText.Coords()); SDL_RenderTexture(const_cast<SDL_Renderer*>(renderer), panelText.Texture(), nullptr, &fr); };
+
+    // Tappable Yes/No while the question is still open -- see OptPanelRender's
+    // identical comment; this is the same popup for the "start a network
+    // game" flow instead of "random level"/"multiplayer training".
+    if (awaitKp) {
+        SDL_Renderer* rend = const_cast<SDL_Renderer*>(renderer);
+        optYesRect = {voidPanelRct.x + 30, voidPanelRct.y + voidPanelRct.h - 46, 120, 30};
+        optNoRect  = {voidPanelRct.x + voidPanelRct.w - 30 - 120, voidPanelRct.y + voidPanelRct.h - 46, 120, 30};
+        DrawYesNoButtons(rend, optYesRect, optNoRect);
+    } else {
+        optYesRect = optNoRect = SDL_Rect{};
+    }
 }
