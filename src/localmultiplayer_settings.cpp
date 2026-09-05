@@ -51,6 +51,33 @@ int ClampLocalBotCount(int botCount, int playerCount) {
     return std::clamp(botCount, 0, players - 1);
 }
 
+void AdjustLocalBotCount(
+    LocalMultiplayerMenuCommand command,
+    int& botCount,
+    int& playerCount) {
+    const int maxBots = ClampLocalBotCount(99, playerCount);  // playerCount - 1
+    if (command == LocalMultiplayerMenuCommand::Left) {
+        if (botCount <= 0) {
+            botCount = maxBots;  // wrap up to the current cap, same as before
+        } else if (botCount == playerCount - 1 && playerCount > kMinLocalPlayers) {
+            --playerCount;
+            --botCount;
+        } else {
+            --botCount;
+        }
+    } else {  // Right or Enter -- both add a bot, matching every other row's
+              // Enter-cycles-forward convention
+        if (botCount < maxBots) {
+            ++botCount;
+        } else if (playerCount < kMaxLocalPlayers) {
+            ++playerCount;
+            ++botCount;
+        } else {
+            botCount = 0;  // true ceiling (5 players, 4 bots): wrap around
+        }
+    }
+}
+
 LocalMultiplayerOptions BuildLocalMultiplayerOptions(
     int playerCount,
     bool chainReaction,

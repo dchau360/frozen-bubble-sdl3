@@ -1057,14 +1057,11 @@ bool MainMenu::LocalMPPanelKey(SDL_Event *e) {
                         localMPTeamMode = !localMPTeamMode;
                         AudioMixer::Instance()->PlaySFX("menu_change");
                     } else if (localMPMenuIndex == kLocalMPRowBots) {
-                        const int maxBots = ClampLocalBotCount(99, localMPPlayerCount);
-                        if (e->key.key == SDLK_LEFT) {
-                            localMPBotCount = localMPBotCount <= 0 ? maxBots
-                                                                  : localMPBotCount - 1;
-                        } else {
-                            localMPBotCount =
-                                localMPBotCount >= maxBots ? 0 : localMPBotCount + 1;
-                        }
+                        AdjustLocalBotCount(
+                            e->key.key == SDLK_LEFT
+                                ? LocalMultiplayerMenuCommand::Left
+                                : LocalMultiplayerMenuCommand::Right,
+                            localMPBotCount, localMPPlayerCount);
                         AudioMixer::Instance()->PlaySFX("menu_change");
                     } else if (localMPMenuIndex == kLocalMPRowBotSkill) {
                         if (e->key.key == SDLK_LEFT) {
@@ -1134,9 +1131,8 @@ bool MainMenu::LocalMPPanelKey(SDL_Event *e) {
                         localMPTeamMode = !localMPTeamMode;
                         AudioMixer::Instance()->PlaySFX("menu_change");
                     } else if (localMPMenuIndex == kLocalMPRowBots) {
-                        const int maxBots = ClampLocalBotCount(99, localMPPlayerCount);
-                        localMPBotCount =
-                            localMPBotCount >= maxBots ? 0 : localMPBotCount + 1;
+                        AdjustLocalBotCount(LocalMultiplayerMenuCommand::Enter,
+                                            localMPBotCount, localMPPlayerCount);
                         AudioMixer::Instance()->PlaySFX("menu_change");
                     } else if (localMPMenuIndex == kLocalMPRowBotSkill) {
                         localMPBotSkill = localMPBotSkill >= 2 ? 0 : localMPBotSkill + 1;

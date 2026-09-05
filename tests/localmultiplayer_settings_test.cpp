@@ -607,6 +607,60 @@ int main() {
         CHECK(BuildLocalMultiplayerSettings(options).botSkill == 0);
     }
 
+    // --- AdjustLocalBotCount ------------------------------------------------
+    // Stepping Bots past the current cap grows Players to fit instead of
+    // refusing (or wrapping) -- previously the only way to get a 2nd bot was
+    // to raise Players to 3 by hand first, a 3rd to raise it to 4, and so on.
+    {
+        // Growing from the minimum, one bot at a time, each one past the
+        // previous cap: every step raises playerCount right along with it.
+        int bots = 0, players = kMinLocalPlayers;
+        AdjustLocalBotCount(LocalMultiplayerMenuCommand::Right, bots, players);
+        CHECK(bots == 1); CHECK(players == 2);   // room already existed
+        AdjustLocalBotCount(LocalMultiplayerMenuCommand::Right, bots, players);
+        CHECK(bots == 2); CHECK(players == 3);   // grew to fit
+        AdjustLocalBotCount(LocalMultiplayerMenuCommand::Right, bots, players);
+        CHECK(bots == 3); CHECK(players == 4);
+        AdjustLocalBotCount(LocalMultiplayerMenuCommand::Right, bots, players);
+        CHECK(bots == 4); CHECK(players == kMaxLocalPlayers);
+        // Enter behaves exactly like Right (matches every other row's
+        // Enter-cycles-forward convention). At the true ceiling -- five
+        // players, four bots -- it wraps back to zero bots without touching
+        // Players, same as it always has.
+        AdjustLocalBotCount(LocalMultiplayerMenuCommand::Enter, bots, players);
+        CHECK(bots == 0); CHECK(players == kMaxLocalPlayers);
+
+        // Shrinking back down, one at a time: since every one of those seats
+        // existed only to fit a bot, each step also lowers Players, landing
+        // back at the minimum with zero bots -- "0 bots still shows 2
+        // players" holds no matter how you got there.
+        bots = 4; players = kMaxLocalPlayers;
+        AdjustLocalBotCount(LocalMultiplayerMenuCommand::Left, bots, players);
+        CHECK(bots == 3); CHECK(players == 4);
+        AdjustLocalBotCount(LocalMultiplayerMenuCommand::Left, bots, players);
+        CHECK(bots == 2); CHECK(players == 3);
+        AdjustLocalBotCount(LocalMultiplayerMenuCommand::Left, bots, players);
+        CHECK(bots == 1); CHECK(players == 2);
+        AdjustLocalBotCount(LocalMultiplayerMenuCommand::Left, bots, players);
+        CHECK(bots == 0); CHECK(players == kMinLocalPlayers);   // floor, not below
+        // From zero, Left wraps up to the current cap without touching
+        // Players -- unchanged from before this feature existed.
+        AdjustLocalBotCount(LocalMultiplayerMenuCommand::Left, bots, players);
+        CHECK(bots == 1); CHECK(players == kMinLocalPlayers);
+
+        // A spare human seat (Players raised on its own, beyond what the
+        // bots need) is not swallowed by shrinking bots back down: Right
+        // only grows Players when there is no room left, so adding a bot
+        // where a human-only seat already exists just fills that seat.
+        bots = 0; players = 4;
+        AdjustLocalBotCount(LocalMultiplayerMenuCommand::Right, bots, players);
+        CHECK(bots == 1); CHECK(players == 4);   // fit in the spare seat
+        // Removing it again leaves that deliberate player count alone too,
+        // since bots never occupied every non-P1 seat.
+        AdjustLocalBotCount(LocalMultiplayerMenuCommand::Left, bots, players);
+        CHECK(bots == 0); CHECK(players == 4);
+    }
+
     // --- Five seats -------------------------------------------------------
     // Five is the largest local game, and the layout it lands on (NewGame's
     // case 5) is the same one a five-player network room uses.
