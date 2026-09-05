@@ -1,5 +1,21 @@
 # Changelog
 
+## v2.4.72
+
+- **Classic solo score now accumulates across levels within a life.**
+  Previously `ReloadGame()` reset score to 0 on every level transition,
+  matching the original Perl's per-round reset -- but that meant clearing
+  levels no longer built toward a running total. Score now carries forward
+  across level clears (and retries after a loss) for the default classic
+  single-player campaign specifically; local multiplayer, network games,
+  `mp_train`, and random-levels mode are unchanged and still reset score
+  per round.
+- **Fixed a highscore-screen grid alignment bug.** Whenever the local
+  highscore table held 6 or more entries, the 6th entry (index 5) rendered
+  far off to the right of the screen instead of in row 2's leftmost column
+  -- a pre-existing bug in the tile-position formula, which split rows
+  inconsistently between its horizontal and vertical halves.
+
 ## v2.4.71
 
 - **Opt-in highscore stats upload, and separate keyboard/mouse local
