@@ -659,7 +659,16 @@ void HighscoreManager::HandleInput(SDL_Event *e){
             if (e->button.button == SDL_BUTTON_LEFT && !awaitKeyType && curMode == 0) {
                 float lx = 0.f, ly = 0.f;
                 SDL_RenderCoordinatesFromWindow(rend, e->button.x, e->button.y, &lx, &ly);
-                TapScoreTrackTab(lx, ly);
+                // A tap that misses both tabs has nothing else to do on this
+                // screen, so it goes back -- matching the keyboard's own
+                // "any other key" case above. Without this there was no way
+                // to leave this screen on a touch-only device at all: this
+                // screen never got the swipe-back gesture other panels have
+                // (FrozenBubble::HandleInput returns right after forwarding
+                // to HandleInput for the Highscores state), and there is no
+                // on-screen back button either.
+                if (!TapScoreTrackTab(lx, ly))
+                    FrozenBubble::Instance()->currentState = TitleScreen;
             }
             break;
         case SDL_EVENT_FINGER_DOWN:
@@ -678,13 +687,14 @@ void HighscoreManager::HandleInput(SDL_Event *e){
                     lx = e->tfinger.x * 640.f;
                     ly = e->tfinger.y * 480.f;
                 }
-                TapScoreTrackTab(lx, ly);
+                if (!TapScoreTrackTab(lx, ly))
+                    FrozenBubble::Instance()->currentState = TitleScreen;
             }
             break;
     }
 }
 
-void HighscoreManager::TapScoreTrackTab(float lx, float ly) {
+bool HighscoreManager::TapScoreTrackTab(float lx, float ly) {
     for (int track = 0; track < 2; track++) {
         SDL_Rect box = ScoreTrackTabRect(track);
         if (lx >= box.x && lx < box.x + box.w && ly >= box.y && ly < box.y + box.h) {
@@ -692,7 +702,8 @@ void HighscoreManager::TapScoreTrackTab(float lx, float ly) {
                 viewTrack = track;
                 AudioMixer::Instance()->PlaySFX("menu_change");
             }
-            break;
+            return true;
         }
     }
+    return false;
 }
