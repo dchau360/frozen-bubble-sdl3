@@ -21,6 +21,7 @@
 #include "bubblegame_internal.h"
 
 #include <array>
+#include <map>
 #include <queue>
 #include <set>
 #include <utility>
@@ -295,6 +296,17 @@ Shot ChooseShot(BubbleArray &board, int colour, bool isMini, Skill skill,
     const int lookaheadWeight =
         skill == Skill::Hard ? 6 : skill == Skill::Normal ? 2 : 0;
 
+    // Several neighbouring candidate angles usually funnel into the same
+    // landing cell (the `distinct` collapse below relies on exactly that), so
+    // without this cache the same (row, col) got rescored from scratch --
+    // a fresh grid copy, flood fill, and on Normal/Hard a full-board lookahead
+    // scan -- once per angle that reaches it, rather than once per distinct
+    // outcome. PredictLanding only reads the board, so it never changes
+    // across this loop and a landing cell's score is the same every time it
+    // recurs within this one decision. Keyed only by (row, col): colour and
+    // board.nextBubble are this call's fixed parameters, not per-candidate.
+    std::map<std::pair<int, int>, int> scoreCache;
+
     std::vector<Shot> ranked;
     for (int i = 0; i < kCandidates; ++i) {
         const float angle = kMinAngle +
@@ -303,13 +315,20 @@ Shot ChooseShot(BubbleArray &board, int colour, bool isMini, Skill skill,
         int row = -1, colIdx = -1;
         if (!PredictLanding(board, angle, colour, isMini, &row, &colIdx)) continue;
 
-        Grid grid = ColourGrid(board);
-        int score = LandingScore(grid, row, colIdx, colour);
-        // Look one shot further using the bubble already queued behind this
-        // one -- the same preview a person reads off the launcher, not
-        // information the bot has that a player does not.
-        if (lookaheadWeight > 0) {
-            score += BestFollowUpScore(grid, board.nextBubble) * lookaheadWeight;
+        int score;
+        auto [cached, inserted] = scoreCache.try_emplace({row, colIdx}, 0);
+        if (inserted) {
+            Grid grid = ColourGrid(board);
+            score = LandingScore(grid, row, colIdx, colour);
+            // Look one shot further using the bubble already queued behind
+            // this one -- the same preview a person reads off the launcher,
+            // not information the bot has that a player does not.
+            if (lookaheadWeight > 0) {
+                score += BestFollowUpScore(grid, board.nextBubble) * lookaheadWeight;
+            }
+            cached->second = score;
+        } else {
+            score = cached->second;
         }
         ranked.push_back({angle, score, row, colIdx, true});
     }
