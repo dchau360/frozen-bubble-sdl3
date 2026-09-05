@@ -630,6 +630,41 @@ bool MainMenu::HandlePanelTap(float lx, float ly, float verticalDrift) {
             return true;
         }
 
+        // The >5-cap compact roster's per-player rows (AddPanelTapRow call in
+        // NetPanelLobbyActionsRender): the [A] hotkey enters per-player
+        // team-assignment mode by setting netRosterEditMode/netRosterCursor
+        // directly rather than through a menu action, and which row to land
+        // on has to travel with the tap itself -- an injected keycode has
+        // nowhere to carry that, so this is handled here instead of via the
+        // generic push below.
+        if (row.index >= kRoomRosterTapBase && row.index < kRoomRosterTapBase + kRoomRosterTapSlots) {
+            int pi = row.index - kRoomRosterTapBase;
+            if (!netRosterEditMode) {
+                netRosterEditMode = true;
+                netRosterCursor = pi;
+                AudioMixer::Instance()->PlaySFX("menu_change");
+            } else {
+                NetworkClient* netClient = NetworkClient::Instance();
+                GameRoom* currentGame = netClient->GetCurrentGame();
+                bool isHost = currentGame && currentGame->creator == netClient->GetPlayerNick();
+                if (isHost && netRosterCursor != pi) {
+                    // Jump the host's free-moving cursor straight to the
+                    // tapped row instead of walking it there with Up/Down.
+                    netRosterCursor = pi;
+                    AudioMixer::Instance()->PlaySFX("menu_change");
+                } else {
+                    // Already-selected row (or a joiner, whose cursor is
+                    // always locked to their own, only-ever-registered row):
+                    // cycle its team forward, same as pressing Right.
+                    SDL_Event ev = {};
+                    ev.type = SDL_EVENT_KEY_DOWN;
+                    ev.key.key = SDLK_RIGHT;
+                    SDL_PushEvent(&ev);
+                }
+            }
+            return true;
+        }
+
         // Second tap on the already-highlighted row activates it. Pushed as a
         // key event rather than duplicating each panel's activation logic, so
         // every row keeps behaving exactly as it does from a keyboard.

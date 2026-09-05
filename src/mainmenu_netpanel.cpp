@@ -988,6 +988,17 @@ void MainMenu::NetPanelLobbyActionsRender() {
                         const NetworkPlayer& pl = currentGame->players[pi];
                         bool host = (pl.nick == currentGame->creator);
                         bool self = (pl.nick == netClient->GetPlayerNick());
+                        // Touch equivalent of the [A] hotkey: tapping a row
+                        // opens (or, once open, drives) per-player team
+                        // assignment for that seat. Only registered for rows
+                        // a tap is actually allowed to act on -- the host's
+                        // free-moving cursor can land on anyone, a joiner's
+                        // is locked to their own row -- see HandlePanelTap's
+                        // kRoomRosterTapBase branch for what a tap here does.
+                        bool rosterIsHost = currentGame->creator == netClient->GetPlayerNick();
+                        if (netTeamMode && (rosterIsHost || self)) {
+                            AddPanelTapRow(kRoomRosterTapBase + pi, rowBox);
+                        }
                         int ov = netTeamOverrides.count(pl.nick) ? netTeamOverrides[pl.nick] : 0;
                         int team = EffectiveTeam(pi, netTeamCount, ov);
                         if (netTeamMode && team >= 1 && team <= 5) {

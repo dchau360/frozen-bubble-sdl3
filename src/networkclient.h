@@ -333,6 +333,12 @@ private:
     std::string pendingJoinNick;
     [[maybe_unused]] int pendingJoinSuffix = 2; // referenced only in networkclient_wasm.cpp
 
+    // Test-only access to otherwise-private connection state, so a headless
+    // test can stand up a fake "already in a game room" NetworkClient
+    // without a real socket -- see NetworkClientTestAccess in
+    // tests/menu_touch_gesture_test.cpp.
+    friend struct NetworkClientTestAccess;
+
     static NetworkClient* ptrInstance;
 };
 

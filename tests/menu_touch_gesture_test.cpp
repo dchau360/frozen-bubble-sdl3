@@ -78,6 +78,7 @@
 #include <cstdio>
 #include <memory>
 #include <string>
+#include <utility>
 #include <vector>
 
 static int failures = 0;
@@ -150,6 +151,12 @@ struct MainMenuTestAccess {
         }
         return 0;
     }
+    // The >5-cap compact roster's per-player team-assignment state (see
+    // kRoomRosterTapBase in mainmenu_internal.h): previously reachable only
+    // via the [A] hotkey, with no touch path at all.
+    static bool RosterEditMode(const MainMenu& menu) { return menu.netRosterEditMode; }
+    static int RosterCursor(const MainMenu& menu) { return menu.netRosterCursor; }
+    static void SetTeamMode(MainMenu& menu, bool on) { menu.netTeamMode = on; }
     // Renders the real LAN/Net server list panel with a caller-chosen public
     // server list, so the "Set name" section's position under test is
     // whatever ServerListPanelRender really lays out for that server count,
@@ -160,10 +167,25 @@ struct MainMenuTestAccess {
     static void RenderServerList(MainMenu& menu, bool isLAN) {
         menu.ServerListPanelRender(isLAN);
     }
-    // Renders the real lobby action list -- "Create Game Room" among them --
-    // with no current game, matching a freshly-connected client.
+    // Renders the real lobby/game-room action list -- "Create Game Room"
+    // when NetworkClient has no current game, or the >5-cap compact roster
+    // and friends when it does (see NetworkClientTestAccess below).
     static void RenderLobbyActions(MainMenu& menu) {
         menu.NetPanelLobbyActionsRender();
+    }
+};
+
+// NetworkClient is a true singleton (NetworkClient::Instance()), and the
+// room-roster test below needs to stand one up as "already in a >5-cap Team
+// Mode game room" without a real socket. currentGame/playerNick are private
+// for every ordinary caller, which only ever reaches them through a real
+// server round-trip -- this friend (networkclient.h) is the test-only way in.
+struct NetworkClientTestAccess {
+    static void SetPlayerNick(NetworkClient& nc, const std::string& nick) {
+        nc.playerNick = nick;
+    }
+    static void SetCurrentGame(NetworkClient& nc, GameRoom* game) {
+        nc.currentGame = game;
     }
 };
 
@@ -612,6 +634,85 @@ int main() {
         guard.OnFingerUpDispatched();
         CHECK(guard.ShouldSwallowMouseDown());
         CHECK(!guard.ShouldSwallowMouseDown());
+    }
+
+    // --- >5-cap Team Mode roster: touch reaching per-player team assignment
+    //
+    // Entering per-player team-assignment mode (host: any player; joiner:
+    // self only) was reachable only through the [A] hotkey -- see the
+    // comment on that check in MainMenu::HandleInput. A touch-only player in
+    // a >5-cap Team Mode room had no way to reach it at all: the compact
+    // roster's rows registered no PanelTapRow, so a tap there just fell
+    // through as a miss. This pins the fix (kRoomRosterTapBase's branch in
+    // HandlePanelTap): tapping a row enters/drives team assignment for that
+    // seat the same way the hotkey does, landing the host's free cursor on
+    // whichever row was actually tapped rather than always row 0.
+    {
+        std::unique_ptr<MainMenu> menu = MainMenuTestAccess::Create(renderer);
+
+        NetworkClient* nc = NetworkClient::Instance();
+        NetworkClientTestAccess::SetPlayerNick(*nc, "host");
+        GameRoom room;
+        room.creator = "host";
+        room.maxPlayers = 20;  // >5-cap -- the only cap that uses the compact roster
+        room.players.push_back({"host", "", false});
+        room.players.push_back({"joiner", "", false});
+        NetworkClientTestAccess::SetCurrentGame(*nc, &room);
+        MainMenuTestAccess::SetTeamMode(*menu, true);
+
+        // currentGame is set, so this renders the game room, not the plain
+        // lobby -- same function, see RenderLobbyActions's own comment.
+        MainMenuTestAccess::RenderLobbyActions(*menu);
+
+        const std::vector<SDL_Rect> hostRects =
+            MainMenuTestAccess::RectsForIndex(*menu, kRoomRosterTapBase + 0);
+        const std::vector<SDL_Rect> joinerRects =
+            MainMenuTestAccess::RectsForIndex(*menu, kRoomRosterTapBase + 1);
+        CHECK(hostRects.size() == 1);
+        CHECK(joinerRects.size() == 1);
+        if (!hostRects.empty() && !joinerRects.empty()) {
+            auto center = [](const SDL_Rect& r) {
+                return std::pair<float, float>(r.x + r.w * 0.5f, r.y + r.h * 0.5f);
+            };
+            const auto [hx, hy] = center(hostRects[0]);
+            const auto [jx, jy] = center(joinerRects[0]);
+
+            CHECK(!MainMenuTestAccess::RosterEditMode(*menu));
+
+            // Select, then confirm -- the same two-tap dance every other row
+            // in this app uses, so a player never enters team-assignment
+            // mode by accident.
+            CHECK(menu->HandlePanelTap(jx, jy));
+            CHECK(!MainMenuTestAccess::RosterEditMode(*menu));  // still just highlighted
+            CHECK(menu->HandlePanelTap(jx, jy));
+            CHECK(MainMenuTestAccess::RosterEditMode(*menu));
+            // Landed on the row that was actually tapped (index 1), not
+            // always row 0 the way a bare [A] keypress would.
+            CHECK(MainMenuTestAccess::RosterCursor(*menu) == 1);
+
+            // Tapping the already-selected, already-editing row again cycles
+            // its team forward, same as pressing Right.
+            SDL_PumpEvents();
+            for (SDL_Event drain; SDL_PollEvent(&drain); ) {}
+            CHECK(menu->HandlePanelTap(jx, jy));
+            SDL_Event ev;
+            CHECK(SDL_PollEvent(&ev) && ev.type == SDL_EVENT_KEY_DOWN);
+            CHECK(ev.key.key == SDLK_RIGHT);
+
+            // The host's free-moving cursor can also jump to a different
+            // row -- again select, then confirm -- without cycling that
+            // row's team on the same tap that moved the cursor to it.
+            CHECK(menu->HandlePanelTap(hx, hy));
+            CHECK(MainMenuTestAccess::RosterCursor(*menu) == 1);  // unmoved yet
+            SDL_PumpEvents();
+            for (SDL_Event drain; SDL_PollEvent(&drain); ) {}
+            CHECK(menu->HandlePanelTap(hx, hy));
+            CHECK(MainMenuTestAccess::RosterCursor(*menu) == 0);
+            CHECK(!SDL_PollEvent(&ev));  // moved, not cycled
+        }
+
+        // Don't leak this fake room into any test that runs after this one.
+        NetworkClientTestAccess::SetCurrentGame(*nc, nullptr);
     }
 
     if (failures == 0) {
