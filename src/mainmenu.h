@@ -294,6 +294,13 @@ private:
     // what that starts sending, so a popup does. Turning it back OFF needs no
     // confirmation and skips this entirely. See KeysPanelKey/KeysPanelRender.
     bool showingStatsUploadConfirm = false;
+    // On-screen bands for this popup's two buttons, recomputed each frame by
+    // KeysPanelRender and hit-tested by HandlePanelTap. A dedicated pair
+    // rather than folding these into panelTapRows: that list is shared with
+    // (and sits underneath) the settings rows the popup is drawn over, so a
+    // tap on either button would otherwise be caught by whichever hidden row
+    // happens to occupy the same screen position first.
+    SDL_Rect statsConfirmYesRect{}, statsConfirmNoRect{};
     void KeysPanelRender();
 
     // LAN server discovery
