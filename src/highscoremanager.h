@@ -86,7 +86,7 @@ private:
     // Hit-tests a click/tap (already converted to logical 640x480 canvas
     // coordinates) against the two score-screen tab boxes and switches
     // viewTrack if it landed on one. See ScoreTrackTabRect() in the .cpp.
-    void TapScoreTrackTab(float lx, float ly);
+    bool TapScoreTrackTab(float lx, float ly);
     void CreateLevelImages();
 
     SDL_Surface *backgroundSfc, *useBubbles[8];
