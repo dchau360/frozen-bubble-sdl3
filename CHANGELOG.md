@@ -1,5 +1,21 @@
 # Changelog
 
+## v2.4.75
+
+- **Teams are now a per-player setting in every game mode.** The separate
+  "Teams" game mode is gone -- the mode row now just toggles Classic and
+  Clear -- and any player in any room can join a team (1-5) or stay on no
+  team at all. A player on no team is always their own faction, so rooms
+  where nobody picks a team play exactly like the old free-for-all.
+- **The Set Teams page gains auto-balance and click-to-cycle.** Hosts get
+  Auto 2/3/4/5 buttons that round-robin every seat across that many teams,
+  and tapping a player's name (not just the colour swatches) cycles their
+  team, including back to no team.
+- **Keyboard navigation now reaches the Set Teams button.** Up/Down wrap
+  through the header's "Set Teams" button and Enter opens the picker, for
+  host and joiner alike -- previously it was reachable only via the [A]
+  hotkey or touch.
+
 ## v2.4.74
 
 - **Fixed a crooked row 2 in the highscore thumbnail grid.** The previous
