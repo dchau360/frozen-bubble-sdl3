@@ -109,6 +109,32 @@ bool ApplyLocalMultiplayerVictoriesInput(
     LocalMultiplayerMenuCommand command,
     int& victoriesIndex);
 
+// Steps the Bots row, growing or shrinking the total player count to fit
+// instead of capping bots at whatever player count happened to be set
+// already -- previously the only way to get a 2nd bot was to first raise
+// Players to 3 by hand, a 3rd to raise it to 4, and so on.
+//
+// Right/Enter: while there is already room (botCount below the current
+// cap of playerCount - 1), just add a bot. At the cap, grow playerCount
+// by one first (up to kMaxLocalPlayers) so the new bot has a seat; only
+// once playerCount is already at its ceiling does this wrap back to 0,
+// same as before.
+//
+// Left: while a spare human-only seat exists (botCount below the current
+// cap), just remove a bot, leaving playerCount alone -- a deliberate
+// human seat someone added on top of their bots should not vanish just
+// because they later turned a bot back off. Only when bots occupy every
+// non-P1 seat (botCount == playerCount - 1, i.e. this playerCount exists
+// purely to fit that many bots) does removing one also shrink the game,
+// so repeatedly pressing Left lands back at kMinLocalPlayers with zero
+// bots -- matching how a player who only ever touches this row got here.
+// From 0 this still wraps up to the current cap without touching
+// playerCount, same as before.
+void AdjustLocalBotCount(
+    LocalMultiplayerMenuCommand command,
+    int& botCount,
+    int& playerCount);
+
 LocalMultiplayerOptions BuildLocalMultiplayerOptions(
     int playerCount,
     bool chainReaction,
