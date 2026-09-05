@@ -966,6 +966,46 @@ void MainMenu::NetPanelLobbyActionsRender() {
                 snprintf(hdr, sizeof(hdr), "Players  %d", (int)currentGame->players.size());
             drawLabel(hdr, panelX + 10, panelY + 8, textGold);
 
+            // "Set Teams" button, right-aligned on the same header line, for
+            // both room sizes. The picker (mainmenu_teampanel.cpp) was
+            // otherwise something a player had to already know about: the [A]
+            // hotkey is only named in the roster legend below, and tapping a
+            // roster row looks like nothing at all until you try it. This is
+            // the only on-screen thing that says the page exists.
+            //
+            // Only in Team Mode -- there is nothing to set otherwise -- and
+            // registered before the roster rows below so it wins the hit test
+            // if it ever overlaps one (first match wins, see PanelTapRow).
+            if (netTeamMode) {
+                static const char kSetTeamsLabel[] = "Set Teams";
+                // Measured, not guessed: the box is built around whatever this
+                // string actually renders to at the current style, then the
+                // text is centred back inside it. A hardcoded width was wrong
+                // the moment the label was longer than it -- found live, with
+                // the final "s" sitting on top of the right border.
+                panelText.UpdateText(roomRenderer, kSetTeamsLabel, 0);
+                const int stTextW = panelText.Coords()->w;
+                const int stTextH = panelText.Coords()->h;
+                const int stW = stTextW + 14;   // 7px of air each side
+                const int stH = stTextH + 6;
+                const int stX = panelX + panelW - 8 - stW;
+                const int stY = panelY + 4;
+                SDL_Rect stRect = {stX, stY, stW, stH};
+                const bool stSel = (selectedActionIndex == kRoomSetTeamsTapIndex);
+                SDL_SetRenderDrawBlendMode(roomRenderer, SDL_BLENDMODE_BLEND);
+                SDL_SetRenderDrawColor(roomRenderer, 255, 196, 64, stSel ? 90 : 40);
+                { SDL_FRect fr = ToFRect(stRect); SDL_RenderFillRect(roomRenderer, &fr); }
+                SDL_SetRenderDrawColor(roomRenderer, menulist::kSelEdge.r, menulist::kSelEdge.g,
+                                       menulist::kSelEdge.b, stSel ? 240 : 150);
+                { SDL_FRect fr = ToFRect(stRect); SDL_RenderRect(roomRenderer, &fr); }
+                // Activation goes through the [A] hotkey rather than a bespoke
+                // branch in HandlePanelTap: the key already opens the picker
+                // from anywhere in the room, so both paths stay one thing.
+                AddPanelTapRow(kRoomSetTeamsTapIndex, stRect, -1, false, SDLK_A);
+                drawLabel(kSetTeamsLabel, stX + (stW - stTextW) / 2,
+                          stY + (stH - stTextH) / 2, stSel ? textGold : textMain);
+            }
+
             if (bigRoom) {
                 // Two columns of slim rows; slots split evenly (cap 20 -> 10+10,
                 // cap 10 -> 5+5). No team chips: Team Mode is capped at 5 players.
