@@ -1,5 +1,17 @@
 # Changelog
 
+## v2.4.74
+
+- **Fixed a crooked row 2 in the highscore thumbnail grid.** The previous
+  release's fix still carried a `-20px` left-shift for row 2's thumbnails,
+  inherited from the older buggy layout formula it replaced. That made row 2
+  sit visibly left of row 1's columns, and since the score-text position
+  formula had no matching shift, row 2's text also drifted further right of
+  its own thumbnail the further right the column (up to 23px by the last
+  column). Removed the shift entirely so both rows share the same per-column
+  x -- the grid now lines up cleanly, with each entry's text sitting
+  correctly under its own thumbnail.
+
 ## v2.4.73
 
 - **Fixed highscore score-text position for entries 6-10.** The previous
