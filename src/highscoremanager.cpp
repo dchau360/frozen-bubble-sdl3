@@ -494,16 +494,16 @@ void HighscoreManager::RenderScoreScreen() {
             int sx = 64, sy = 85;
             if (smallBG[i]) { float fw, fh; SDL_GetTextureSize(smallBG[i], &fw, &fh); sx = (int)fw; sy = (int)fh; }
             // 5 columns per row, 2 rows of 5 (this table holds at most 10
-            // entries -- see CheckAndAddScore()'s resize(10)). Row 2 sits
-            // 20px further left than row 1, matching the original layout's
-            // offset. The previous formula split "row" at (i+1)>=6 (i.e.
-            // i>=5) for y but at i>5 for x -- disagreeing on entry index 5,
-            // which the y half puts in row 2 while the x half still used
-            // row 1's formula, landing it at x=610 instead of row 2's
-            // leftmost column (x=65): the 6th highscore visibly jumped out
-            // to the far right whenever the table held 6+ entries.
+            // entries -- see CheckAndAddScore()'s resize(10)). Both rows use
+            // the same per-column x so the grid lines up cleanly; an earlier
+            // version of this fix carried over a "-20 * row" left-shift for
+            // row 2 from the previous (buggy) formula, which not only left
+            // row 2 looking crooked against row 1 but also drifted away from
+            // CreateLevelImages' row-independent score-text positions (up to
+            // ~23px by the rightmost column, since that formula was never
+            // shifted to match).
             int col = (int)i % 5, row = (int)i / 5;
-            SDL_Rect bgPos = {105 * col + 85 - 20 * row, 80 + 160 * row, sx, sy};
+            SDL_Rect bgPos = {105 * col + 85, 80 + 160 * row, sx, sy};
             SDL_Rect framePos = {bgPos.x - 7, bgPos.y - 7, 81, 100};
             { SDL_FRect fr = ToFRect(framePos); SDL_RenderTexture(rend, highscoreFrame, nullptr, &fr); }
             if (smallBG[i]) { SDL_FRect fr = ToFRect(bgPos); SDL_RenderTexture(rend, smallBG[i], nullptr, &fr); }
