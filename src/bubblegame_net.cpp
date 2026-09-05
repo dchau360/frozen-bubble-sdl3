@@ -94,7 +94,8 @@ void BubbleGame::SendNetworkBubbleShot(BubbleArray &bArray) {
             snprintf(shotData, sizeof(shotData), "f%.3f:%d",
                 sBubble.direction,
                 bArray.nextBubble);  // Send the NEW next bubble color, not the launched bubble's color
-            SDL_Log("Sending shot: angle=%.3f, nextBubble=%d (launched=%d)",
+            SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION,
+                         "Sending shot: angle=%.3f, nextBubble=%d (launched=%d)",
                     sBubble.direction, bArray.nextBubble, sBubble.bubbleId);
             SendGameDataFor(bArray, shotData);
             break;
@@ -208,7 +209,8 @@ void BubbleGame::PumpBotConnections() {
             char destNick[64];
             int malusCount;
             if (sscanf(payload.c_str() + 1, "%63[^:]:%d", destNick, &malusCount) != 2) continue;
-            SDL_Log("PumpBotConnections: 'g' from local player on bot socket %d: dest='%s' count=%d botNick='%s'",
+            SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION,
+                         "PumpBotConnections: 'g' from local player on bot socket %d: dest='%s' count=%d botNick='%s'",
                     botIdx, destNick, malusCount, bubbleArrays[botIdx].playerNickname.c_str());
             if (bubbleArrays[botIdx].playerNickname != destNick) continue;
             for (int i = 0; i < malusCount; i++) {
@@ -217,7 +219,8 @@ void BubbleGame::PumpBotConnections() {
             bubbleArrays[botIdx].rRecv += malusCount;
             bubbleArrays[botIdx].lastAttackerIdx = 0;  // only the local player's own connection reaches here
             AddMalusAlert(bubbleArrays[botIdx], netClient->GetPlayerNick(), malusCount);
-            SDL_Log("PumpBotConnections: credited %d malus to bot array %d, queue size now %zu",
+            SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION,
+                         "PumpBotConnections: credited %d malus to bot array %d, queue size now %zu",
                     malusCount, botIdx, bubbleArrays[botIdx].malusQueue.size());
         }
     }
@@ -246,7 +249,8 @@ void BubbleGame::ProcessNetworkMessages() {
             int senderId;
             char gameData[512];
             if (sscanf(msg.c_str(), "GAMEMSG:%d:%511[^\n]", &senderId, gameData) == 2) {
-                SDL_Log("Processing game message from player %d: %s", senderId, gameData);
+                SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION,
+                             "Processing game message from player %d: %s", senderId, gameData);
 
                 // Parse game data - original protocol (first character is message type)
                 char msgType = gameData[0];
@@ -265,7 +269,8 @@ void BubbleGame::ProcessNetworkMessages() {
                 // the relay) must reach the handler below or every attack a
                 // bot lands is silently dropped.
                 if (msgType != 'g' && !IsConnectionLevelOpcode(msgType) && OwnsSenderId(senderId)) {
-                    SDL_Log("Ignoring a message from a seat we own (ID=%d)", senderId);
+                    SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION,
+                                 "Ignoring a message from a seat we own (ID=%d)", senderId);
                     continue;
                 }
                 switch (msgType) {
@@ -295,7 +300,8 @@ void BubbleGame::ProcessNetworkMessages() {
                                         bubbleArrays[i].lobbyPlayerId = senderId;
                                         bubbleArrays[i].playerNickname = netClient->GetPlayerNickname(senderId);
                                         opponentIdx = i;
-                                        SDL_Log("'f' message: Assigned lobbyId %d (nick='%s') to player array %d",
+                                        SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION,
+                                                "'f' message: assigned lobbyId %d (nick='%s') to player array %d",
                                                 senderId, bubbleArrays[i].playerNickname.c_str(), i);
                                         break;
                                     }
@@ -316,10 +322,12 @@ void BubbleGame::ProcessNetworkMessages() {
                             opponentArray.shooterSprite.angle = angle;  // Update shooter angle for visual display
                             opponentArray.nextBubble = opponentNewNextColor;  // Update their next bubble color
 
-                            SDL_Log("Received fire command from player %d (array %d): angle=%.3f, nextColor=%d - will fire in game loop",
+                            SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION,
+                                    "Received fire command from player %d (array %d): angle=%.3f, nextColor=%d",
                                     senderId, opponentIdx, angle, opponentNewNextColor);
                         } else {
-                            SDL_Log("ERROR: Failed to parse fire message: %s", gameData);
+                            SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
+                                        "Failed to parse fire message: %s", gameData);
                         }
                         break;
                     }
@@ -366,7 +374,9 @@ void BubbleGame::ProcessNetworkMessages() {
                                 } else break;
                             }
                             int nextBubble = recvNextColors.empty() ? 0 : recvNextColors[0];
-                            SDL_Log("Received stick: col=%d row=%d color=%d nextColors[%zu] from lobbyId=%d", cx, cy, bubbleColor, recvNextColors.size(), senderId);
+                            SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION,
+                                    "Received stick: col=%d row=%d color=%d nextColors[%zu] from lobbyId=%d",
+                                    cx, cy, bubbleColor, recvNextColors.size(), senderId);
 
                             // Find or assign this remote player's array
                             int opponentIdx = -1;
@@ -386,7 +396,8 @@ void BubbleGame::ProcessNetworkMessages() {
                                         bubbleArrays[i].lobbyPlayerId = senderId;
                                         bubbleArrays[i].playerNickname = netClient->GetPlayerNickname(senderId);
                                         opponentIdx = i;
-                                        SDL_Log("'s' message: Assigned lobbyId %d (nick='%s') to player array %d",
+                                        SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION,
+                                                "'s' message: assigned lobbyId %d (nick='%s') to player array %d",
                                                 senderId, bubbleArrays[i].playerNickname.c_str(), i);
                                         break;
                                     }
@@ -412,10 +423,12 @@ void BubbleGame::ProcessNetworkMessages() {
                                 opponentArray.nextColors = recvNextColors;
                             }
 
-                            SDL_Log("Set mp_stick flag for player %d (array %d): cx=%d cy=%d col=%d nextBubble=%d nextColors[%zu]",
+                            SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION,
+                                    "Set mp_stick for player %d (array %d): cx=%d cy=%d col=%d nextBubble=%d nextColors[%zu]",
                                     senderId, opponentIdx, cx, cy, bubbleColor, nextBubble, recvNextColors.size());
                         } else {
-                            SDL_Log("ERROR: Failed to parse stick message: %s", gameData);
+                            SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
+                                        "Failed to parse stick message: %s", gameData);
                         }
                         break;
                     }
@@ -427,7 +440,8 @@ void BubbleGame::ProcessNetworkMessages() {
                         int malusCount;
                         if (sscanf(gameData + 1, "%63[^:]:%d", destNick, &malusCount) == 2) {
                             NetworkClient* netClient = NetworkClient::Instance();
-                            SDL_Log("'g' message: dest='%s' count=%d senderId=%d myId=%d",
+                            SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION,
+                                    "'g' message: dest='%s' count=%d senderId=%d myId=%d",
                                     destNick, malusCount, senderId,
                                     netClient ? netClient->GetMyPlayerId() : -1);
 
@@ -451,7 +465,8 @@ void BubbleGame::ProcessNetworkMessages() {
                             }
 
                             if (targetIdx >= 0) {
-                                SDL_Log("  -> Malus is for array %d ('%s'), adding to its queue",
+                                SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION,
+                                        "Malus is for array %d ('%s'); adding to its queue",
                                         targetIdx, destNick);
                                 for (int i = 0; i < malusCount; i++) {
                                     bubbleArrays[targetIdx].malusQueue.push_back(frameCount);
@@ -463,10 +478,12 @@ void BubbleGame::ProcessNetworkMessages() {
                                                    netClient->GetPlayerNickname(senderId), malusCount);
                                 }
                             } else {
-                                SDL_Log("  -> NO board we own is '%s', IGNORING", destNick);
+                                SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION,
+                                             "No owned board matches malus destination '%s'", destNick);
                             }
                         } else {
-                            SDL_Log("ERROR: Failed to parse malus message: %s", gameData);
+                            SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
+                                        "Failed to parse malus message: %s", gameData);
                         }
                         break;
                     }
@@ -478,13 +495,15 @@ void BubbleGame::ProcessNetworkMessages() {
                         {
                             NetworkClient* netClientM = NetworkClient::Instance();
                             if (netClientM && (int)netClientM->GetMyPlayerId() == senderId) {
-                                SDL_Log("Ignoring own 'm' echo from server");
+                                SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION,
+                                             "Ignoring own 'm' echo from server");
                                 break;
                             }
                         }
                         int bubbleId, cx, cy, stickY;
                         if (sscanf(gameData + 1, "%d:%d:%d:%d", &bubbleId, &cx, &cy, &stickY) == 4) {
-                            SDL_Log("Received opponent's malus bubble from senderId=%d: color=%d cx=%d cy=%d stickY=%d",
+                            SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION,
+                                    "Received opponent malus from senderId=%d: color=%d cx=%d cy=%d stickY=%d",
                                     senderId, bubbleId, cx, cy, stickY);
 
                             // Find which array this opponent belongs to
@@ -528,7 +547,8 @@ void BubbleGame::ProcessNetworkMessages() {
 
                             malusBubbles.push_back(malus);
                         } else {
-                            SDL_Log("ERROR: Failed to parse malus bubble message: %s", gameData);
+                            SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
+                                        "Failed to parse malus bubble message: %s", gameData);
                         }
                         break;
                     }
@@ -538,7 +558,8 @@ void BubbleGame::ProcessNetworkMessages() {
                         // Original at line 1453-1466
                         int cx, stickY;
                         if (sscanf(gameData + 1, "%d:%d", &cx, &stickY) == 2) {
-                            SDL_Log("Opponent's malus bubble stuck from senderId=%d: cx=%d stickY=%d",
+                            SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION,
+                                    "Opponent malus stuck from senderId=%d: cx=%d stickY=%d",
                                     senderId, cx, stickY);
 
                             // Find which array this opponent belongs to
@@ -563,7 +584,8 @@ void BubbleGame::ProcessNetworkMessages() {
                             // Find and stick the corresponding malus bubble on opponent's board
                             for (auto &malus : malusBubbles) {
                                 if (malus.assignedArray == opponentIdx && malus.cx == cx && malus.stickY == stickY && !malus.shouldClear) {
-                                    SDL_Log("Found opponent's malus bubble to stick on array %d", opponentIdx);
+                                    SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION,
+                                                 "Sticking opponent malus on array %d", opponentIdx);
                                     BubbleArray &opponentArray = bubbleArrays[opponentIdx];
                                     opponentArray.PlacePlayerBubble(malus.bubbleId, stickY, cx);
                                     opponentArray.newShoot = true;
@@ -574,7 +596,8 @@ void BubbleGame::ProcessNetworkMessages() {
                                 }
                             }
                         } else {
-                            SDL_Log("ERROR: Failed to parse malus stick message: %s", gameData);
+                            SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
+                                        "Failed to parse malus stick message: %s", gameData);
                         }
                         break;
                     }
@@ -615,7 +638,8 @@ void BubbleGame::ProcessNetworkMessages() {
                                 ResolveRoundOutcome(winnerPlayer, cause, false);
                             }
                         } else {
-                            SDL_Log("ERROR: Could not identify winner from F message: '%s'", winnerNick.c_str());
+                            SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
+                                         "Could not identify winner from F message: '%s'", winnerNick.c_str());
                         }
                         break;
                     }
@@ -638,10 +662,12 @@ void BubbleGame::ProcessNetworkMessages() {
                                 BubbleArray &pa = bubbleArrays[idx];
                                 pa.rFired = rf; pa.rPopped = rp; pa.rSent = rs; pa.rRecv = rr; pa.rKills = rk; pa.rBlk = rb;
                                 pa.mFired += rf; pa.mPopped += rp; pa.mSent += rs; pa.mRecv += rr; pa.mKills += rk; pa.mBlk += rb;
-                                SDL_Log("Round stats from player %d (array %d): F%d P%d Sent%d Rcv%d K%d Blk%d",
+                                SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION,
+                                        "Round stats from player %d (array %d): F%d P%d Sent%d Rcv%d K%d Blk%d",
                                         senderId, idx, rf, rp, rs, rr, rk, rb);
                             } else {
-                                SDL_Log("'S' stats from unknown senderId %d, ignoring", senderId);
+                                SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION,
+                                             "Ignoring 'S' stats from unknown senderId %d", senderId);
                             }
                         }
                         break;
@@ -731,7 +757,8 @@ void BubbleGame::ProcessNetworkMessages() {
                             }
                             playerTargeting[senderIdx] = targetIdx;
                         }
-                        SDL_Log("'A' message: sender=%d targetNick='%s' myNick='%s' attackingMe.size=%zu",
+                        SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION,
+                                "'A' message: sender=%d targetNick='%s' myNick='%s' attackingMe.size=%zu",
                                 senderIdx, targetNick, myNick.c_str(), attackingMe.size());
                         ReRankNetView();  // attacker set/cleared: auto view re-ranks
                         break;
@@ -742,7 +769,8 @@ void BubbleGame::ProcessNetworkMessages() {
                         // Bubble sync messages from leader (SyncNetworkLevel).
                         // Route to syncQueue so WaitForBubble/WaitForNextBubble/WaitForTobeBubble
                         // can pick them up even if they arrived before ReloadGame was called.
-                        SDL_Log("Routing bubble-sync message '%c' to syncQueue", msgType);
+                        SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION,
+                                     "Routing bubble-sync message '%c' to syncQueue", msgType);
                         netClient->PushSyncMessage(msg);
                         break;
                     default:

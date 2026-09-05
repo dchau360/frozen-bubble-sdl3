@@ -187,7 +187,8 @@ void BubbleGame::AssignChainReactions(BubbleArray &bArray) {
     // Original: frozen-bubble line 814-865 in stick_bubble function
     // This creates the cascading chain reaction effect when chain bubbles land and trigger more groups
 
-    SDL_Log("AssignChainReactions: Checking %zu falling bubbles for chain targets", singleBubbles.size());
+    SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION,
+                 "AssignChainReactions: Checking %zu falling bubbles for chain targets", singleBubbles.size());
     const int oddswap = bArray.bubbleMap[0].size() == 8 ? 0 : 1;
 
     // Track positions already reserved by chain reactions to prevent conflicts
@@ -300,7 +301,8 @@ void BubbleGame::AssignChainReactions(BubbleArray &bArray) {
                   return a.distance < b.distance;
               });
 
-    SDL_Log("AssignChainReactions: Found %zu potential targets, sorted by distance", potentialTargets.size());
+    SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION,
+                 "AssignChainReactions: Found %zu potential targets, sorted by distance", potentialTargets.size());
 
     // Process potential targets in distance order (Original line 828: sort by distance_to_root)
     // This ensures groups closer to the root get priority for chain reactions
@@ -315,7 +317,8 @@ void BubbleGame::AssignChainReactions(BubbleArray &bArray) {
             continue;
         }
 
-        SDL_Log("  Examining target at [%d][%d] color=%d distance=%d", row, col, bubbleId, target.distance);
+        SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION,
+                     "Examining target at [%d][%d] color=%d distance=%d", row, col, bubbleId, target.distance);
 
         // Find free adjacent positions for this target
         // Original line 830: next_positions($pos, $player)
@@ -355,7 +358,8 @@ void BubbleGame::AssignChainReactions(BubbleArray &bArray) {
 
             // Found a match! Assign chain reaction target
             // Original line 839-842: assigns chaindestx, chaindesty
-            SDL_Log("    Chain target found! Bubble color=%d will rise to [%d][%d]",
+            SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION,
+                    "Chain target found: bubble color=%d will rise to [%d][%d]",
                     sBubble.bubbleId, freeRow, freeCol);
 
             sBubble.chainExists = true;
@@ -383,7 +387,8 @@ void BubbleGame::AssignChainReactions(BubbleArray &bArray) {
                 bArray, freeRow, freeCol, sBubble.bubbleId, oddswap);
             chainedGroupBubbles.insert(group.begin(), group.end());
 
-            SDL_Log("    Marked %zu bubbles in chain target group as unavailable", chainedGroupBubbles.size());
+            SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION,
+                         "Marked %zu bubbles in chain target group as unavailable", chainedGroupBubbles.size());
 
             // Found a chain target, move to next target position
             // Original line 859: last; (exits inner foreach loop)
@@ -405,7 +410,8 @@ void BubbleGame::CheckPossibleDestroy(BubbleArray &bArray){
                 bubbleCount.push_back(&bArray.bubbleMap[i][j]);
                 GetGroupedCount(bArray, &bubbleCount, i, j, &groupedCount);
                 if (groupedCount >= 2) {
-                    SDL_Log("Match found: %d bubbles (chainReaction=%d)", groupedCount + 1, currentSettings.chainReaction);
+                    SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION,
+                                 "Match found: %d bubbles (chainReaction=%d)", groupedCount + 1, currentSettings.chainReaction);
                     PlaySFX("destroy_group");
 
                     // Calculate score: 10 points per bubble (groupedCount+1 = total including activator), with chain multiplier
@@ -517,7 +523,7 @@ void BubbleGame::CheckPossibleDestroy(BubbleArray &bArray){
             // the 'S' handler in bubblegame_net.cpp, which overwrites it outright.
             bArray.rBlk += cancelled;
             AddMalusAlert(bArray, "", cancelled, /*blocked=*/true);
-            SDL_Log("Malus canceling: blocked %d incoming, %d left to send",
+            SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION, "Malus canceling: blocked %d incoming, %d left to send",
                     cancelled, malusValue);
         }
     }
@@ -528,7 +534,7 @@ void BubbleGame::CheckPossibleDestroy(BubbleArray &bArray){
             mpTrainScore += malusValue;
         } else if (currentSettings.networkGame && OwnsArray(bArray)) {
             // Every board we simulate attacks on its own behalf.
-            SDL_Log("Awarding %d malus to opponent (%d destroyed + %d falling - 2)",
+            SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION, "Awarding %d malus to opponent (%d destroyed + %d falling - 2)",
                     malusValue, totalDestroyed, fallingCount);
             SendMalusToOpponent(malusValue, bArray);
         } else if (!currentSettings.networkGame && currentSettings.playerCount >= 2) {
@@ -551,7 +557,7 @@ void BubbleGame::CheckPossibleDestroy(BubbleArray &bArray){
                                       ? ("Player " + std::to_string(attackerIdx + 1))
                                       : bArray.playerNickname,
                                   malusValue);
-                    SDL_Log("Local malus: %d bubbles queued for player %d", malusValue, i);
+                    SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION, "Local malus: %d bubbles queued for player %d", malusValue, i);
                 }
             }
         }
@@ -560,7 +566,7 @@ void BubbleGame::CheckPossibleDestroy(BubbleArray &bArray){
 
 void DoFalling(std::vector<SDL_Point> &map, std::vector<SingleBubble> &bubbles, bool &lowGfx) {
     if (map.size() < 1 || bubbles.size() < 1) return;
-    SDL_Log("DoFalling called: %d bubbles to fall, lowGfx=%d", (int)bubbles.size(), lowGfx);
+    SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION, "DoFalling called: %d bubbles to fall, lowGfx=%d", (int)bubbles.size(), lowGfx);
     int maxy = map[map.size() - 1].y;
     int shiftSameLine = 0, line = maxy;
     for (size_t i = map.size(); i > 0; i--) { //original FB does backwards sorting for the formula
@@ -633,7 +639,8 @@ int BubbleGame::CheckAirBubbles(BubbleArray &bArray) {
             // If not in connected set, it should fall
             if (connected.count({i, j}) == 0) {
                 if (bArray.bubbleMap[i][j].playerBubble)
-                    SDL_Log("AIR_BUBBLE: Newly placed playerBubble at row=%zu col=%zu removed (not connected to ceiling)", i, j);
+                    SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION,
+                                 "New bubble at row=%zu col=%zu is detached from ceiling", i, j);
                 float startX = (float)bArray.bubbleMap[i][j].pos.x;
                 float startY = (float)bArray.bubbleMap[i][j].pos.y;
                 SingleBubble bubbly = {bArray.playerAssigned, bArray.curLaunch, startX, startY, startX, startY,
@@ -657,7 +664,8 @@ int BubbleGame::CheckAirBubbles(BubbleArray &bArray) {
     }
 
     if (singlesFalling.size() > 0) {
-        SDL_Log("DoFalling: %d bubbles falling after match clear (chainReaction=%d)",
+        SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION,
+                     "DoFalling: %d bubbles falling after match clear (chainReaction=%d)",
                 (int)singlesFalling.size(), currentSettings.chainReaction);
     }
     DoFalling(fallingLocs, singlesFalling, lowGfx);

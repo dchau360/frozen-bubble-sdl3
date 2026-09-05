@@ -73,6 +73,9 @@ TTFText::~TTFText(){
 
 TTFText::TTFText(TTFText&& other) noexcept
     : curText(std::move(other.curText)),
+      curWrapLength(other.curWrapLength),
+      textureRenderer(other.textureRenderer),
+      textureDirty(other.textureDirty),
       coords(other.coords),
       forecolor(other.forecolor),
       backcolor(other.backcolor),
@@ -83,6 +86,8 @@ TTFText::TTFText(TTFText&& other) noexcept
     other.textFont = nullptr;
     other.ownsFont = false;
     other.outTexture = nullptr;
+    other.textureRenderer = nullptr;
+    other.textureDirty = true;
 }
 
 TTFText& TTFText::operator=(TTFText&& other) noexcept {
@@ -95,6 +100,9 @@ TTFText& TTFText::operator=(TTFText&& other) noexcept {
     coords = other.coords;
     forecolor = other.forecolor;
     backcolor = other.backcolor;
+    curWrapLength = other.curWrapLength;
+    textureRenderer = other.textureRenderer;
+    textureDirty = other.textureDirty;
     textFont = other.textFont;
     ownsFont = other.ownsFont;
     outTexture = other.outTexture;
@@ -102,7 +110,14 @@ TTFText& TTFText::operator=(TTFText&& other) noexcept {
     other.textFont = nullptr;
     other.ownsFont = false;
     other.outTexture = nullptr;
+    other.textureRenderer = nullptr;
+    other.textureDirty = true;
     return *this;
+}
+
+void TTFText::InvalidateTexture() {
+    textureDirty = true;
+    textureRenderer = nullptr;
 }
 
 void TTFText::LoadFont(const char *path, int size) {
@@ -111,6 +126,7 @@ void TTFText::LoadFont(const char *path, int size) {
     }
     textFont = TTF_OpenFont(path, (float)size);
     ownsFont = true;
+    InvalidateTexture();
 }
 void TTFText::LoadFont(TTF_Font *fnt) {
     if (ownsFont && textFont) {
@@ -118,12 +134,24 @@ void TTFText::LoadFont(TTF_Font *fnt) {
     }
     textFont = fnt;
     ownsFont = false;  // External font — caller owns its lifetime
+    InvalidateTexture();
 }
 
 void TTFText::UpdateText(const SDL_Renderer *rend, const char *txt, int wrapLength) {
+    if (!textFont || !txt) {
+        if (outTexture != nullptr) { SDL_DestroyTexture(outTexture); outTexture = nullptr; }
+        curText.clear();
+        InvalidateTexture();
+        return;
+    }
+    if (!textureDirty && outTexture != nullptr && textureRenderer == rend &&
+        curWrapLength == wrapLength && curText == txt) {
+        return;
+    }
     if (outTexture != nullptr) { SDL_DestroyTexture(outTexture); outTexture = nullptr; }
-    if (!textFont || !txt) return;
     curText = txt;
+    curWrapLength = wrapLength;
+    textureDirty = true;
     SDL_Surface *front = TTF_RenderText_Blended_Wrapped(textFont, txt, 0, forecolor, wrapLength);
     if (!front) return;
     SDL_Surface *back = TTF_RenderText_Blended_Wrapped(textFont, txt, 0, backcolor, wrapLength);
@@ -133,25 +161,44 @@ void TTFText::UpdateText(const SDL_Renderer *rend, const char *txt, int wrapLeng
     outTexture = SDL_CreateTextureFromSurface(const_cast<SDL_Renderer *>(rend), back);
     coords.w = back->w;
     coords.h = back->h;
+    if (outTexture != nullptr) {
+        textureRenderer = rend;
+        textureDirty = false;
+    }
     SDL_DestroySurface(front);
     SDL_DestroySurface(back);
 }
 
 void TTFText::UpdateAlignment(int align) {
-    if (textFont) TTF_SetFontWrapAlignment(textFont, (TTF_HorizontalAlignment)align);
+    if (textFont && TTF_GetFontWrapAlignment(textFont) != (TTF_HorizontalAlignment)align) {
+        TTF_SetFontWrapAlignment(textFont, (TTF_HorizontalAlignment)align);
+        InvalidateTexture();
+    }
 }
 
 void TTFText::UpdateColor(SDL_Color fg, SDL_Color bg) {
+    if (forecolor.r != fg.r || forecolor.g != fg.g || forecolor.b != fg.b || forecolor.a != fg.a ||
+        backcolor.r != bg.r || backcolor.g != bg.g || backcolor.b != bg.b || backcolor.a != bg.a) {
+        InvalidateTexture();
+    }
     forecolor = fg;
     backcolor = bg;
 }
 
 void TTFText::UpdateStyle(int size, int style) {
-    if (textFont) { TTF_SetFontSize(textFont, (float)size); TTF_SetFontStyle(textFont, style); }
+    if (textFont && (TTF_GetFontSize(textFont) != (float)size ||
+                     TTF_GetFontStyle(textFont) != static_cast<TTF_FontStyleFlags>(style))) {
+        TTF_SetFontSize(textFont, (float)size);
+        TTF_SetFontStyle(textFont, style);
+        InvalidateTexture();
+    }
 }
 
 void TTFText::UpdateStyle(int style) {
-    if (textFont) TTF_SetFontStyle(textFont, style);
+    if (textFont && TTF_GetFontStyle(textFont) != static_cast<TTF_FontStyleFlags>(style)) {
+        TTF_SetFontStyle(textFont, style);
+        InvalidateTexture();
+    }
 }
 
 void TTFText::UpdatePosition(SDL_Point xy) {

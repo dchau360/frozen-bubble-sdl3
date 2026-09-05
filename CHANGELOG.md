@@ -1,5 +1,16 @@
 # Changelog
 
+## v2.4.76
+
+- **Reduced repeated rendering work for dynamic text.** Textures are now reused
+  until the text, font, style, color, wrapping, or renderer changes, avoiding
+  continuous font rasterization and GPU texture uploads for unchanged scores,
+  player names, chat lines, and statistics.
+- **Reduced logging overhead during gameplay.** Routine protocol and board
+  traces now use debug priority, normal log writes are buffered, and warnings
+  and errors still flush immediately. Set `FROZEN_BUBBLE_DEBUG=1` to restore
+  detailed traces when diagnosing a problem.
+
 ## v2.4.75
 
 - **Teams are now a per-player setting in every game mode.** The separate

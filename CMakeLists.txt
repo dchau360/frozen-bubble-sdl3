@@ -20,7 +20,7 @@ set(FB_LANGUAGES CXX C)
 if(CMAKE_SYSTEM_NAME STREQUAL "iOS")
     list(APPEND FB_LANGUAGES OBJCXX)
 endif()
-project(frozen-bubble-sdl3 VERSION 2.4.75 LANGUAGES ${FB_LANGUAGES})
+project(frozen-bubble-sdl3 VERSION 2.4.76 LANGUAGES ${FB_LANGUAGES})
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/cmake")
 
@@ -436,6 +436,35 @@ if(BUILD_TESTING AND NOT EMSCRIPTEN AND NOT ANDROID AND NOT IOS)
         target_link_libraries(sp-panel-labels-test PRIVATE ws2_32)
     endif()
     add_test(NAME sp-panel-labels-test COMMAND sp-panel-labels-test)
+
+    add_executable(ttftext-cache-test
+        tests/ttftext_cache_test.cpp
+        src/ttftext.cpp
+        src/platform.cpp
+    )
+    set_property(TARGET ttftext-cache-test PROPERTY CXX_STANDARD 17)
+    set_property(TARGET ttftext-cache-test PROPERTY CXX_EXTENSIONS OFF)
+    target_include_directories(ttftext-cache-test PRIVATE src)
+    target_compile_definitions(ttftext-cache-test PRIVATE
+        DATA_DIR="${ASSET_PATH}"
+        APP_VERSION="v${PROJECT_VERSION}"
+    )
+    target_link_libraries(ttftext-cache-test PRIVATE
+        SDL3::SDL3
+        SDL3_image::SDL3_image
+        SDL3_ttf::SDL3_ttf
+    )
+    add_test(NAME ttftext-cache-test COMMAND ttftext-cache-test)
+
+    add_executable(logger-priority-test
+        tests/logger_priority_test.cpp
+        src/logger.cpp
+    )
+    set_property(TARGET logger-priority-test PROPERTY CXX_STANDARD 17)
+    set_property(TARGET logger-priority-test PROPERTY CXX_EXTENSIONS OFF)
+    target_include_directories(logger-priority-test PRIVATE src)
+    target_link_libraries(logger-priority-test PRIVATE SDL3::SDL3)
+    add_test(NAME logger-priority-test COMMAND logger-priority-test)
 
     add_executable(localmultiplayer-header-compile-test
         tests/localmultiplayer_header_compile_test.cpp

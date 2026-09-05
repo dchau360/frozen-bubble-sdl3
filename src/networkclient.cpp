@@ -271,7 +271,7 @@ bool NetworkClient::SendCommand(const char* command) {
         return false;
     }
 
-    SDL_Log("Sent: %s", command);
+    SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION, "Sent: %s", command);
 
     // Wait a moment and read any immediate response to keep socket clean
     fd_set readfds;
@@ -690,7 +690,7 @@ bool NetworkClient::SendOptions(bool chainReaction, bool continueWhenLeave, bool
              attackMode == AttackMode::Off ? 1 : 0,
              attackMode == AttackMode::Canceling ? 1 : 0,
              teamCount, playerTeams[0], playerTeams[1], playerTeams[2], playerTeams[3], playerTeams[4]);
-    SDL_Log("Sending game options: %s", cmd);
+    SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION, "Sending game options: %s", cmd);
     return SendCommand(cmd);
 }
 
@@ -726,7 +726,7 @@ bool NetworkClient::SendGameData(const char* data) {
 
     // Log the exact bytes being sent for debugging
     if (!isPing) {
-        SDL_Log(">>> Sending game data: [ID=%d] %s (total %zu bytes: 1 byte ID + %d bytes msg)",
+        SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION, ">>> Sending game data: [ID=%d] %s (total %zu bytes: 1 byte ID + %d bytes msg)",
                 (int)myPlayerId, data, len, msgLen);
     }
 
@@ -742,7 +742,7 @@ bool NetworkClient::SendGameData(const char* data) {
     }
 
     if (!isPing) {
-        SDL_Log(">>> Successfully sent game data: [ID=%d] %s", (int)myPlayerId, data);
+        SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION, ">>> Successfully sent game data: [ID=%d] %s", (int)myPlayerId, data);
     }
     return true;
 }
@@ -755,11 +755,11 @@ bool NetworkClient::RequestList() {
 bool NetworkClient::IsLeader() {
     // We're the leader if we created the game (we are the creator)
     if (!currentGame) {
-        SDL_Log("IsLeader: No current game");
+        SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION, "IsLeader: No current game");
         return false;
     }
     bool isLeader = (currentGame->creator == playerNick);
-    SDL_Log("IsLeader: creator='%s', playerNick='%s', result=%s",
+    SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION, "IsLeader: creator='%s', playerNick='%s', result=%s",
             currentGame->creator.c_str(), playerNick.c_str(), isLeader ? "true" : "false");
     return isLeader;
 }
@@ -805,7 +805,7 @@ bool NetworkClient::WaitForBubble(int& cx, int& cy, int& bubbleId) {
         if (sscanf(data, "%d|%15s", &cx, cyBubble) == 2 && strlen(cyBubble) >= 2) {
             cy = cyBubble[0] - '0';
             bubbleId = atoi(cyBubble + 1);
-            SDL_Log("WaitForBubble: Received bubble: cx=%d cy=%d id=%d", cx, cy, bubbleId);
+            SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION, "WaitForBubble: Received bubble: cx=%d cy=%d id=%d", cx, cy, bubbleId);
             return true;
         }
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "WaitForBubble: Failed to parse bubble data: %s", data);
@@ -818,7 +818,7 @@ bool NetworkClient::WaitForBubble(int& cx, int& cy, int& bubbleId) {
         // Drain syncQueue first (messages pre-buffered by ProcessNetworkMessages)
         while (HasSyncMessage()) {
             std::string msg = GetNextSyncMessage();
-            SDL_Log("WaitForBubble: Got sync-queued message: %s", msg.c_str());
+            SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION, "WaitForBubble: Got sync-queued message: %s", msg.c_str());
             if (tryParse(msg)) {
                 for (auto it = deferredMessages.rbegin(); it != deferredMessages.rend(); ++it)
                     PutBackMessage(*it);
@@ -829,7 +829,7 @@ bool NetworkClient::WaitForBubble(int& cx, int& cy, int& bubbleId) {
         // Also drain main message queue
         while (HasMessage()) {
             std::string msg = GetNextMessage();
-            SDL_Log("WaitForBubble: Got message: %s", msg.c_str());
+            SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION, "WaitForBubble: Got message: %s", msg.c_str());
             if (tryParse(msg)) {
                 for (auto it = deferredMessages.rbegin(); it != deferredMessages.rend(); ++it)
                     PutBackMessage(*it);
@@ -860,7 +860,7 @@ bool NetworkClient::WaitForNextBubble(int& bubbleId) {
         if (sscanf(msg.c_str(), "GAMEMSG:%d:%511[^\n]", &senderId, gameData) != 2) return false;
         if (gameData[0] != 'N') { deferredMessages.push_back(msg); return false; }
         if (sscanf(gameData + 1, "%d", &bubbleId) == 1) {
-            SDL_Log("WaitForNextBubble: Received next bubble: id=%d", bubbleId);
+            SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION, "WaitForNextBubble: Received next bubble: id=%d", bubbleId);
             return true;
         }
         return false;
@@ -906,7 +906,7 @@ bool NetworkClient::WaitForTobeBubble(int& bubbleId) {
         if (sscanf(msg.c_str(), "GAMEMSG:%d:%511[^\n]", &senderId, gameData) != 2) return false;
         if (gameData[0] != 'T') { deferredMessages.push_back(msg); return false; }
         if (sscanf(gameData + 1, "%d", &bubbleId) == 1) {
-            SDL_Log("WaitForTobeBubble: Received tobe bubble: id=%d", bubbleId);
+            SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION, "WaitForTobeBubble: Received tobe bubble: id=%d", bubbleId);
             return true;
         }
         return false;
@@ -968,7 +968,8 @@ void NetworkClient::Update() {
         readsThisFrame++;
     }
     if (readsThisFrame > 10) {
-        SDL_Log("Warning: Read %d packets in one frame - network buffer was filling up", readsThisFrame);
+        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
+                    "Read %d packets in one frame; network buffer was filling up", readsThisFrame);
     }
 }
 
@@ -1049,7 +1050,8 @@ bool NetworkClient::ProcessIncomingData() {
                         memcpy(gameMsg, recvBuffer + msgStart, msgLen);
                         gameMsg[msgLen] = '\0';
 
-                        SDL_Log("Game message from player %d: %s", (int)senderId, gameMsg);
+                        SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION,
+                                     "Game message from player %d: %s", (int)senderId, gameMsg);
 
                         // Add to message queue for game to process
                         char fullMsg[BUFFER_SIZE];
@@ -1100,7 +1102,7 @@ bool NetworkClient::ProcessIncomingData() {
 void NetworkClient::ParseMessage(const char* message) {
     if (strlen(message) == 0) return;
 
-    SDL_Log("Received: %s", message);
+    SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION, "Received: %s", message);
     // Don't add server protocol messages to queue - they're handled immediately
     // Only GAMEMSG messages from ProcessIncomingData() should be queued
     HandleServerResponse(std::string(message));
@@ -1190,7 +1192,7 @@ void NetworkClient::HandleServerResponse(const std::string& response) {
             pendingNotifyProbe = false;
         }
     } else if (response.find("PONG") != std::string::npos) {
-        SDL_Log("Ping response");
+        SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION, "Ping response");
     } else if (response.find("NICK_IN_USE") != std::string::npos) {
         SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "NICK_IN_USE error received");
         lastErrorResponse = "NICK_IN_USE";
@@ -1259,7 +1261,7 @@ void NetworkClient::HandleServerResponse(const std::string& response) {
 }
 
 void NetworkClient::HandlePushMessage(const std::string& pushMsg) {
-    SDL_Log("PUSH message: %s", pushMsg.c_str());
+    SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION, "PUSH message: %s", pushMsg.c_str());
 
     if (pushMsg.find("SERVER_READY") == 0) {
         // Server ready, extract server name
@@ -1367,7 +1369,7 @@ void NetworkClient::HandlePushMessage(const std::string& pushMsg) {
     } else if (pushMsg.find("OPTIONS: ") == 0) {
         // Host broadcast updated game settings (server relays as "OPTIONS: ...")
         std::string opts = pushMsg.substr(9); // Skip "OPTIONS: "
-        SDL_Log("Received SETOPTIONS: %s", opts.c_str());
+        SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION, "Received SETOPTIONS: %s", opts.c_str());
         // Parse key:value pairs separated by commas
         auto parseVal = [&](const char* key, int def) -> int {
             std::string search = std::string(key) + ":";
@@ -1453,13 +1455,13 @@ void NetworkClient::HandlePushMessage(const std::string& pushMsg) {
             }
             i++; // Skip comma
 
-            SDL_Log("Player mapping: ID=%d nick=%s", (int)playerId, nick.c_str());
+            SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION, "Player mapping: ID=%d nick=%s", (int)playerId, nick.c_str());
 
             // Store mapping for later use
             playerIdToNick[(int)playerId] = nick;
 
             // Check if this is us
-            SDL_Log("Comparing nick='%s' with myNickname='%s'", nick.c_str(), myNickname.c_str());
+            SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION, "Comparing nick='%s' with myNickname='%s'", nick.c_str(), myNickname.c_str());
             if (nick == myNickname) {
                 myPlayerId = playerId;
                 SDL_Log("Found our player ID: %d (matched nickname '%s')", (int)myPlayerId, nick.c_str());
@@ -1545,8 +1547,8 @@ void NetworkClient::ParseListResponse(const char* listData) {
     gameList.clear();
     openPlayers.clear();
 
-    SDL_Log("=== Parsing LIST response ===");
-    SDL_Log("Raw data: %s", listData);
+    SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION, "Parsing LIST response");
+    SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION, "Raw data: %s", listData);
 
     // Format: <open-players>,<space>[<game1>][<game2>]...<space>free:<count> games:<count> playing:<count> at:<geolocs>
 
@@ -1576,7 +1578,7 @@ void NetworkClient::ParseListResponse(const char* listData) {
                 }
                 player.ready = false;
                 openPlayers.push_back(player);
-                SDL_Log("Open player: %s%s%s", player.nick.c_str(),
+                SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION, "Open player: %s%s%s", player.nick.c_str(),
                        player.geoloc.empty() ? "" : " (",
                        player.geoloc.empty() ? "" : (player.geoloc + ")").c_str());
             }
@@ -1663,7 +1665,7 @@ void NetworkClient::ParseListResponse(const char* listData) {
 
         if (!game.players.empty()) {
             gameList.push_back(game);
-            SDL_Log("Game: %s (%d/%d players)", game.creator.c_str(),
+            SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION, "Game: %s (%d/%d players)", game.creator.c_str(),
                     (int)game.players.size(), game.maxPlayers);
         }
 

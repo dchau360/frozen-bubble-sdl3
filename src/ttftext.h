@@ -63,7 +63,12 @@ public:
     TTFText(TTFText&& other) noexcept;
     TTFText& operator=(TTFText&& other) noexcept;
 private:
+    void InvalidateTexture();
+
     std::string curText;
+    int curWrapLength = 0;
+    const SDL_Renderer *textureRenderer = nullptr;
+    bool textureDirty = true;
 
     SDL_Rect coords{};
     SDL_Color forecolor{}, backcolor{};

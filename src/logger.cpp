@@ -70,8 +70,10 @@ void Logger::LogOutputCallback(void* /* userdata */, int category, SDL_LogPriori
             GetPriorityName(priority),
             message);
 
-    // Flush immediately to ensure logs are written even if program crashes
-    fflush(logFile);
+    // Keep routine information buffered. Warnings and errors are flushed so
+    // useful diagnostics survive an abnormal exit without forcing disk I/O
+    // for every normal gameplay message.
+    if (priority >= SDL_LOG_PRIORITY_WARN) fflush(logFile);
 
     // Also output to console (stderr for SDL_Log)
     fprintf(stderr, "[%s] [%s] %s\n", GetCategoryName(category), GetPriorityName(priority), message);
@@ -112,8 +114,13 @@ bool Logger::Initialize(const char* logFilePath) {
     // Set SDL log output function to use our callback
     SDL_SetLogOutputFunction(LogOutputCallback, nullptr);
 
-    // Set log priority to show all messages
-    SDL_SetLogPriorities(SDL_LOG_PRIORITY_VERBOSE);
+    // Detailed packet and gameplay traces use DEBUG and remain available to
+    // developers without burdening normal runs.
+    const char* debug = SDL_GetEnvironmentVariable(
+        SDL_GetEnvironment(), "FROZEN_BUBBLE_DEBUG");
+    SDL_SetLogPriorities(debug && strcmp(debug, "1") == 0
+                             ? SDL_LOG_PRIORITY_DEBUG
+                             : SDL_LOG_PRIORITY_INFO);
 
     initialized = true;
     SDL_Log("Logger initialized successfully. Logging to: %s", path);
