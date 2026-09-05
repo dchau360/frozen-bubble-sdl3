@@ -87,6 +87,12 @@ void MainMenu::Render(void) {
     KeysPanelRender();
     NetSetupPanelRender();
     NetPanelRender();
+    // After the room, before the guide: the team picker overlays the room it
+    // was opened from, and hit-tests its own rects rather than tap rows (see
+    // mainmenu_teampanel.cpp), so it does not disturb what the room
+    // published -- but the guide can be opened over it, and must still be
+    // the last word on both.
+    TeamsPanelRender();
     // Last: the guide overlays the room it was opened from, and its own
     // BeginPanelTapRows must be the one that survives the frame so a tap
     // cannot reach the room list underneath.

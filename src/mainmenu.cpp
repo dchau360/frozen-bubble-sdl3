@@ -649,7 +649,7 @@ void MainMenu::SetupNewGame(int mode) {
                 }
                 // Apply per-session mouse setting (off by default in multiplayer)
                 GameSettings::Instance()->mouseEnabled = netRoomMouseEnabled;
-                netRosterEditMode = false;
+                showingTeamsPanel = false;
                 // The game takes the bots over from here: it simulates their
                 // boards and sends for them. Which board each one lands on is
                 // decided inside NewGame, once the room's players are seated.
@@ -702,7 +702,7 @@ void MainMenu::ReturnToMenu() {
     showingLevelPanel = false;
     showingNetPanel = false;
     networkInLobby = false;
-    netRosterEditMode = false;
+    showingTeamsPanel = false;
     awaitKp = false;
     selectedMode = 0;
     runDelay = false;
@@ -726,7 +726,7 @@ void MainMenu::ReturnToNetLobby() {
 
     NetworkClient* netClient = NetworkClient::Instance();
     if (netClient) {
-        netRosterEditMode = false;
+        showingTeamsPanel = false;
         GameRoom* currentGame = netClient->GetCurrentGame();
         if (currentGame) {
             currentGame->players.clear();

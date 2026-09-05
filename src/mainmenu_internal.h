@@ -142,6 +142,15 @@ static const int kLocalMPHelpTapIndex = 951;
 // after it, and the list is built differently for a host and a joiner.
 static const int kRoomHelpTapIndex = 950;
 
+// Fake row index for the game room roster's "Set Teams" button, which sits on
+// the "Players n/m" header line and opens the team picker
+// (mainmenu_teampanel.cpp). Same reasoning as kRoomHelpTapIndex, which it sits
+// beside in every respect: a button drawn on a header, not a row in the action
+// list. It exists because the picker was otherwise something a player had to
+// already know about -- reachable by the [A] hotkey or by tapping a roster row,
+// neither of which is visible on screen. A labelled box is.
+static const int kRoomSetTeamsTapIndex = 952;
+
 // The plain lobby's "Follow this server" toggle (0 = chat, 1 = create,
 // 2 = follow, 3+ = one per room). Rendered in the header bar rather than as
 // a list row -- the same treatment kRoomStart gets for "Start game!" -- but
