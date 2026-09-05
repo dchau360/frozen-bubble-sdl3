@@ -280,76 +280,57 @@ include(CTest)
 if(BUILD_TESTING AND NOT EMSCRIPTEN AND NOT ANDROID AND NOT IOS)
     find_package(Python3 COMPONENTS Interpreter REQUIRED)
 
-    add_executable(bubblegame-rules-test
-        tests/bubblegame_rules_test.cpp
+    # Every test below that exercises real gameplay/menu code needs the full
+    # game source list (FROZEN_BUBBLE_CORE_SOURCES, ~35 files) compiled with
+    # FROZEN_BUBBLE_TEST_ACCESS. Each of the 8 such test executables used to
+    # list that source list directly in its own add_executable() and repeat
+    # the same compile definitions and link libraries, so a full rebuild
+    # compiled the same ~35 files 8 separate times over -- once per test
+    # binary. This one static library compiles them once; every test target
+    # below links it instead.
+    #
+    # The production frozen-bubble-sdl3 target above stays a separate,
+    # distinct compilation of the same source list: it must not carry
+    # FROZEN_BUBBLE_TEST_ACCESS (which opens BubbleGame's private members to
+    # test-only friend structs), so it cannot share this library.
+    add_library(frozen-bubble-core-test STATIC
         ${FROZEN_BUBBLE_CORE_SOURCES}
     )
+    set_property(TARGET frozen-bubble-core-test PROPERTY CXX_STANDARD 17)
+    set_property(TARGET frozen-bubble-core-test PROPERTY CXX_EXTENSIONS OFF)
+    target_include_directories(frozen-bubble-core-test PUBLIC src)
+    target_compile_definitions(frozen-bubble-core-test PUBLIC
+        FROZEN_BUBBLE_TEST_ACCESS
+        DATA_DIR="${ASSET_PATH}"
+        APP_VERSION="v${PROJECT_VERSION}"
+    )
+    target_link_libraries(frozen-bubble-core-test PUBLIC
+        SDL3::SDL3
+        SDL3_image::SDL3_image
+        SDL3_mixer::SDL3_mixer
+        SDL3_ttf::SDL3_ttf
+        iniparser-static
+    )
+    if(WIN32 OR MINGW)
+        target_link_libraries(frozen-bubble-core-test PUBLIC ws2_32)
+    endif()
+
+    add_executable(bubblegame-rules-test tests/bubblegame_rules_test.cpp)
     set_property(TARGET bubblegame-rules-test PROPERTY CXX_STANDARD 17)
     set_property(TARGET bubblegame-rules-test PROPERTY CXX_EXTENSIONS OFF)
-    target_include_directories(bubblegame-rules-test PRIVATE src)
-    target_compile_definitions(bubblegame-rules-test PRIVATE
-        FROZEN_BUBBLE_TEST_ACCESS
-        DATA_DIR="${ASSET_PATH}"
-        APP_VERSION="v${PROJECT_VERSION}"
-    )
-    target_link_libraries(bubblegame-rules-test PRIVATE
-        SDL3::SDL3
-        SDL3_image::SDL3_image
-        SDL3_mixer::SDL3_mixer
-        SDL3_ttf::SDL3_ttf
-        iniparser-static
-    )
-    if(WIN32 OR MINGW)
-        target_link_libraries(bubblegame-rules-test PRIVATE ws2_32)
-    endif()
+    target_link_libraries(bubblegame-rules-test PRIVATE frozen-bubble-core-test)
     add_test(NAME bubblegame-rules-test COMMAND bubblegame-rules-test)
 
-    add_executable(bubbleai-test
-        tests/bubbleai_test.cpp
-        ${FROZEN_BUBBLE_CORE_SOURCES}
-    )
+    add_executable(bubbleai-test tests/bubbleai_test.cpp)
     set_property(TARGET bubbleai-test PROPERTY CXX_STANDARD 17)
     set_property(TARGET bubbleai-test PROPERTY CXX_EXTENSIONS OFF)
-    target_include_directories(bubbleai-test PRIVATE src)
-    target_compile_definitions(bubbleai-test PRIVATE
-        FROZEN_BUBBLE_TEST_ACCESS
-        DATA_DIR="${ASSET_PATH}"
-        APP_VERSION="v${PROJECT_VERSION}"
-    )
-    target_link_libraries(bubbleai-test PRIVATE
-        SDL3::SDL3
-        SDL3_image::SDL3_image
-        SDL3_mixer::SDL3_mixer
-        SDL3_ttf::SDL3_ttf
-        iniparser-static
-    )
-    if(WIN32 OR MINGW)
-        target_link_libraries(bubbleai-test PRIVATE ws2_32)
-    endif()
+    target_link_libraries(bubbleai-test PRIVATE frozen-bubble-core-test)
     add_test(NAME bubbleai-test COMMAND bubbleai-test)
 
-    add_executable(bot-play-test
-        tests/bot_play_test.cpp
-        ${FROZEN_BUBBLE_CORE_SOURCES}
-    )
+    add_executable(bot-play-test tests/bot_play_test.cpp)
     set_property(TARGET bot-play-test PROPERTY CXX_STANDARD 17)
     set_property(TARGET bot-play-test PROPERTY CXX_EXTENSIONS OFF)
-    target_include_directories(bot-play-test PRIVATE src)
-    target_compile_definitions(bot-play-test PRIVATE
-        FROZEN_BUBBLE_TEST_ACCESS
-        DATA_DIR="${ASSET_PATH}"
-        APP_VERSION="v${PROJECT_VERSION}"
-    )
-    target_link_libraries(bot-play-test PRIVATE
-        SDL3::SDL3
-        SDL3_image::SDL3_image
-        SDL3_mixer::SDL3_mixer
-        SDL3_ttf::SDL3_ttf
-        iniparser-static
-    )
-    if(WIN32 OR MINGW)
-        target_link_libraries(bot-play-test PRIVATE ws2_32)
-    endif()
+    target_link_libraries(bot-play-test PRIVATE frozen-bubble-core-test)
     add_test(NAME bot-play-test COMMAND bot-play-test)
 
     add_executable(netbot-test
@@ -365,76 +346,22 @@ if(BUILD_TESTING AND NOT EMSCRIPTEN AND NOT ANDROID AND NOT IOS)
     endif()
     add_test(NAME netbot-test COMMAND netbot-test)
 
-    add_executable(persistence-save-test
-        tests/persistence_save_test.cpp
-        ${FROZEN_BUBBLE_CORE_SOURCES}
-    )
+    add_executable(persistence-save-test tests/persistence_save_test.cpp)
     set_property(TARGET persistence-save-test PROPERTY CXX_STANDARD 17)
     set_property(TARGET persistence-save-test PROPERTY CXX_EXTENSIONS OFF)
-    target_include_directories(persistence-save-test PRIVATE src)
-    target_compile_definitions(persistence-save-test PRIVATE
-        FROZEN_BUBBLE_TEST_ACCESS
-        DATA_DIR="${ASSET_PATH}"
-        APP_VERSION="v${PROJECT_VERSION}"
-    )
-    target_link_libraries(persistence-save-test PRIVATE
-        SDL3::SDL3
-        SDL3_image::SDL3_image
-        SDL3_mixer::SDL3_mixer
-        SDL3_ttf::SDL3_ttf
-        iniparser-static
-    )
-    if(WIN32 OR MINGW)
-        target_link_libraries(persistence-save-test PRIVATE ws2_32)
-    endif()
+    target_link_libraries(persistence-save-test PRIVATE frozen-bubble-core-test)
     add_test(NAME persistence-save-test COMMAND persistence-save-test)
 
-    add_executable(localmultiplayer-settings-test
-        tests/localmultiplayer_settings_test.cpp
-        ${FROZEN_BUBBLE_CORE_SOURCES}
-    )
+    add_executable(localmultiplayer-settings-test tests/localmultiplayer_settings_test.cpp)
     set_property(TARGET localmultiplayer-settings-test PROPERTY CXX_STANDARD 17)
     set_property(TARGET localmultiplayer-settings-test PROPERTY CXX_EXTENSIONS OFF)
-    target_include_directories(localmultiplayer-settings-test PRIVATE src)
-    target_compile_definitions(localmultiplayer-settings-test PRIVATE
-        FROZEN_BUBBLE_TEST_ACCESS
-        DATA_DIR="${ASSET_PATH}"
-        APP_VERSION="v${PROJECT_VERSION}"
-    )
-    target_link_libraries(localmultiplayer-settings-test PRIVATE
-        SDL3::SDL3
-        SDL3_image::SDL3_image
-        SDL3_mixer::SDL3_mixer
-        SDL3_ttf::SDL3_ttf
-        iniparser-static
-    )
-    if(WIN32 OR MINGW)
-        target_link_libraries(localmultiplayer-settings-test PRIVATE ws2_32)
-    endif()
+    target_link_libraries(localmultiplayer-settings-test PRIVATE frozen-bubble-core-test)
     add_test(NAME localmultiplayer-settings-test COMMAND localmultiplayer-settings-test)
 
-    add_executable(sp-panel-labels-test
-        tests/sp_panel_labels_test.cpp
-        ${FROZEN_BUBBLE_CORE_SOURCES}
-    )
+    add_executable(sp-panel-labels-test tests/sp_panel_labels_test.cpp)
     set_property(TARGET sp-panel-labels-test PROPERTY CXX_STANDARD 17)
     set_property(TARGET sp-panel-labels-test PROPERTY CXX_EXTENSIONS OFF)
-    target_include_directories(sp-panel-labels-test PRIVATE src)
-    target_compile_definitions(sp-panel-labels-test PRIVATE
-        FROZEN_BUBBLE_TEST_ACCESS
-        DATA_DIR="${ASSET_PATH}"
-        APP_VERSION="v${PROJECT_VERSION}"
-    )
-    target_link_libraries(sp-panel-labels-test PRIVATE
-        SDL3::SDL3
-        SDL3_image::SDL3_image
-        SDL3_mixer::SDL3_mixer
-        SDL3_ttf::SDL3_ttf
-        iniparser-static
-    )
-    if(WIN32 OR MINGW)
-        target_link_libraries(sp-panel-labels-test PRIVATE ws2_32)
-    endif()
+    target_link_libraries(sp-panel-labels-test PRIVATE frozen-bubble-core-test)
     add_test(NAME sp-panel-labels-test COMMAND sp-panel-labels-test)
 
     add_executable(ttftext-cache-test
@@ -466,28 +393,10 @@ if(BUILD_TESTING AND NOT EMSCRIPTEN AND NOT ANDROID AND NOT IOS)
     target_link_libraries(logger-priority-test PRIVATE SDL3::SDL3)
     add_test(NAME logger-priority-test COMMAND logger-priority-test)
 
-    add_executable(statspanelcell-cache-test
-        tests/statspanelcell_cache_test.cpp
-        ${FROZEN_BUBBLE_CORE_SOURCES}
-    )
+    add_executable(statspanelcell-cache-test tests/statspanelcell_cache_test.cpp)
     set_property(TARGET statspanelcell-cache-test PROPERTY CXX_STANDARD 17)
     set_property(TARGET statspanelcell-cache-test PROPERTY CXX_EXTENSIONS OFF)
-    target_include_directories(statspanelcell-cache-test PRIVATE src)
-    target_compile_definitions(statspanelcell-cache-test PRIVATE
-        FROZEN_BUBBLE_TEST_ACCESS
-        DATA_DIR="${ASSET_PATH}"
-        APP_VERSION="v${PROJECT_VERSION}"
-    )
-    target_link_libraries(statspanelcell-cache-test PRIVATE
-        SDL3::SDL3
-        SDL3_image::SDL3_image
-        SDL3_mixer::SDL3_mixer
-        SDL3_ttf::SDL3_ttf
-        iniparser-static
-    )
-    if(WIN32 OR MINGW)
-        target_link_libraries(statspanelcell-cache-test PRIVATE ws2_32)
-    endif()
+    target_link_libraries(statspanelcell-cache-test PRIVATE frozen-bubble-core-test)
     add_test(NAME statspanelcell-cache-test COMMAND statspanelcell-cache-test)
 
     add_executable(localmultiplayer-header-compile-test
@@ -518,28 +427,10 @@ if(BUILD_TESTING AND NOT EMSCRIPTEN AND NOT ANDROID AND NOT IOS)
     # rather than passing without having checked anything.
     set_tests_properties(touch-letterbox-test PROPERTIES SKIP_RETURN_CODE 77)
 
-    add_executable(menu-touch-gesture-test
-        tests/menu_touch_gesture_test.cpp
-        ${FROZEN_BUBBLE_CORE_SOURCES}
-    )
+    add_executable(menu-touch-gesture-test tests/menu_touch_gesture_test.cpp)
     set_property(TARGET menu-touch-gesture-test PROPERTY CXX_STANDARD 17)
     set_property(TARGET menu-touch-gesture-test PROPERTY CXX_EXTENSIONS OFF)
-    target_include_directories(menu-touch-gesture-test PRIVATE src)
-    target_compile_definitions(menu-touch-gesture-test PRIVATE
-        FROZEN_BUBBLE_TEST_ACCESS
-        DATA_DIR="${ASSET_PATH}"
-        APP_VERSION="v${PROJECT_VERSION}"
-    )
-    target_link_libraries(menu-touch-gesture-test PRIVATE
-        SDL3::SDL3
-        SDL3_image::SDL3_image
-        SDL3_mixer::SDL3_mixer
-        SDL3_ttf::SDL3_ttf
-        iniparser-static
-    )
-    if(WIN32 OR MINGW)
-        target_link_libraries(menu-touch-gesture-test PRIVATE ws2_32)
-    endif()
+    target_link_libraries(menu-touch-gesture-test PRIVATE frozen-bubble-core-test)
     add_test(NAME menu-touch-gesture-test COMMAND menu-touch-gesture-test)
 
     add_executable(netview-test
