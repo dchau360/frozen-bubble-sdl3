@@ -18,8 +18,6 @@
  */
 
 #include "frozenbubble.h"
-
-#include "frozenbubble.h"
 #include "bubblegame.h"
 #include "audiomixer.h"
 #include "highscoremanager.h"
@@ -39,6 +37,37 @@
 #include "bubblegame_internal.h"
 #include "localmultiplayer_settings.h"
 #include "roundstats_color.h"
+
+// Positions are centered above/below each player's grid. One 5-slot table
+// covers 3/4/5-player fixed layouts and >5-player royale alike: slot 0 is
+// the fixed center board; slots 1-4 are the four mini-board corners, in the
+// same order the original per-count switch spelled out separately (top-left,
+// top-right, bottom-left, bottom-right) -- each count only ever used a
+// prefix of these five slots, in this same order.
+SDL_Point PlayerSlotPosition(int playerCount, int playerIdx, int parkedSlot) {
+    static const SDL_Point kPlayerSlotPos[5] = {
+        {320, 12}, {83, 2}, {553, 2}, {83, 465}, {553, 465},
+    };
+
+    int slotIdx;
+    if (playerCount >= 3 && playerCount <= 5) {
+        // 3/4/5-player fixed layouts: array order is display order.
+        slotIdx = playerIdx;
+    } else {
+        // >5-player royale (and the original switch's default for any other
+        // count): player 0 is the fixed center board; everyone else keys off
+        // their parked slot (0-3), not raw array index, since royale
+        // reassigns slots as players die/leave. An out-of-range parked slot
+        // (defensive) falls back to slot 1, matching the original local
+        // fallback exactly.
+        if (playerIdx == 0) {
+            slotIdx = 0;
+        } else {
+            slotIdx = (parkedSlot >= 0 && parkedSlot < 4) ? parkedSlot + 1 : 1;
+        }
+    }
+    return kPlayerSlotPos[slotIdx];
+}
 
 void BubbleGame::Update2PText() {
     char plyp[16];
@@ -91,64 +120,9 @@ void BubbleGame::UpdatePlayerNameWinText() {
         }
 
         // Use fixed positions based on player layout (matching original FB2)
-        // Positions are centered above/below each player's grid
-        int textX, textY;
+        const SDL_Point slotPos = PlayerSlotPosition(currentSettings.playerCount, i, bArray.parkedSlot);
 
-        switch (currentSettings.playerCount) {
-            case 3:
-                // 3 players: center (p1), top-left (rp1), top-right (rp2)
-                if (i == 0) {
-                    textX = 320; textY = 12;  // Center player at top
-                } else if (i == 1) {
-                    textX = 83; textY = 2;  // Top-left mini
-                } else {
-                    textX = 553; textY = 2;  // Top-right mini
-                }
-                break;
-            case 4:
-                // 4 players: center (p1), top-left (rp1), top-right (rp2), bottom-left (rp3)
-                if (i == 0) {
-                    textX = 320; textY = 12;
-                } else if (i == 1) {
-                    textX = 83; textY = 2;
-                } else if (i == 2) {
-                    textX = 553; textY = 2;
-                } else {
-                    textX = 83; textY = 465;  // Bottom-left mini
-                }
-                break;
-            case 5:
-                // 5 players: center (p1), all 4 corners
-                if (i == 0) {
-                    textX = 320; textY = 12;
-                } else if (i == 1) {
-                    textX = 83; textY = 2;
-                } else if (i == 2) {
-                    textX = 553; textY = 2;
-                } else if (i == 3) {
-                    textX = 83; textY = 465;
-                } else {
-                    textX = 553; textY = 465;  // Bottom-right mini
-                }
-                break;
-            default:  // >5 royale: key off the parked slot, not the array index
-                if (i == 0) { textX = 320; textY = 12; }
-                else {
-                    static const SDL_Point kSlotText[4] = {{83,2},{553,2},{83,465},{553,465}};
-                    int parkedSlot = bubbleArrays[i].parkedSlot;
-                    if (parkedSlot >= 0 && parkedSlot < 4) {
-                        textX = kSlotText[parkedSlot].x;
-                        textY = kSlotText[parkedSlot].y;
-                    } else {
-                        // Defensive fallback for an unexpected parkedSlot value
-                        textX = kSlotText[0].x;
-                        textY = kSlotText[0].y;
-                    }
-                }
-                break;
-        }
-
-        playerNameWinText[i].UpdatePosition({textX - (playerNameWinText[i].Coords()->w / 2), textY});
+        playerNameWinText[i].UpdatePosition({slotPos.x - (playerNameWinText[i].Coords()->w / 2), slotPos.y});
     }
 }
 

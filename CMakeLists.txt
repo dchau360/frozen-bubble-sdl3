@@ -333,6 +333,12 @@ if(BUILD_TESTING AND NOT EMSCRIPTEN AND NOT ANDROID AND NOT IOS)
     target_link_libraries(bot-play-test PRIVATE frozen-bubble-core-test)
     add_test(NAME bot-play-test COMMAND bot-play-test)
 
+    add_executable(player-slot-position-test tests/player_slot_position_test.cpp)
+    set_property(TARGET player-slot-position-test PROPERTY CXX_STANDARD 17)
+    set_property(TARGET player-slot-position-test PROPERTY CXX_EXTENSIONS OFF)
+    target_link_libraries(player-slot-position-test PRIVATE frozen-bubble-core-test)
+    add_test(NAME player-slot-position-test COMMAND player-slot-position-test)
+
     add_executable(netbot-test
         tests/netbot_test.cpp
         src/netbot.cpp

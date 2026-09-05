@@ -318,6 +318,11 @@ inline std::vector<std::pair<int,int>> GridNeighborOffsets(int row, int oddswap 
 // Display name for player `idx` in stats/summary output (bubblegame_render.cpp).
 std::string StatsPlayerName(const BubbleArray &arr, int idx, bool networkGame);
 
+// Screen position for player `playerIdx`'s name/win-count label
+// (bubblegame_render.cpp). `parkedSlot` is that player's BubbleArray field,
+// only consulted for playerCount outside 3-5 (royale).
+SDL_Point PlayerSlotPosition(int playerCount, int playerIdx, int parkedSlot);
+
 // Clears all shining/prelight flags on a board (bubblegame_board.cpp).
 void ResetPrelight(BubbleArray &bArray);
 
