@@ -232,7 +232,8 @@ int main() {
     CHECK(settings.disableCompression[3]);
     CHECK(!settings.clearMode);
     CHECK(settings.attackMode == AttackMode::Off);
-    CHECK(!settings.teamMode);
+    for (int i = 0; i < settings.playerCount; ++i)
+        CHECK(settings.playerTeams[i] == kNoTeam);
     CHECK(settings.victoriesLimit == 30);
     CHECK(settings.playerColors[2] == 7);
     CHECK(settings.aimGuide[4]);
@@ -544,7 +545,8 @@ int main() {
         CHECK(started.disableCompression[4] == noCompression);
         CHECK(started.clearMode == clearMode);
         CHECK(started.attackMode == attackMode);
-        CHECK(started.teamMode == teamMode);
+        for (int i = 0; i < started.playerCount; ++i)
+            CHECK(started.playerTeams[i] == (teamMode ? LocalMPTeamOf(i) : kNoTeam));
         CHECK(started.victoriesLimit == 30);
         CHECK(started.playerColors[0] == 4);
         CHECK(started.playerColors[1] == 5);

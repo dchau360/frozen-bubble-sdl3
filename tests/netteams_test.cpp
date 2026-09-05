@@ -4,6 +4,24 @@
 #include <cstdio>
 
 int main() {
+    // Free agents are opponents even though both use the same sentinel. A
+    // missing non-zero guard in AreTeammates would merge every unaffiliated
+    // player into one accidental team.
+    assert(!AreTeammates(kNoTeam, kNoTeam));
+    assert(!AreTeammates(kNoTeam, 1));
+    assert(!AreTeammates(1, kNoTeam));
+    assert(AreTeammates(3, 3));
+    assert(!AreTeammates(3, 4));
+
+    // Each free agent is a faction of their own, while repeated real team
+    // numbers collapse to one faction.
+    const int freeForAll[] = {kNoTeam, kNoTeam, kNoTeam, kNoTeam};
+    assert(CountFactions(freeForAll, 4) == 4);
+    const int mixed[] = {1, 1, 2, kNoTeam, kNoTeam};
+    assert(CountFactions(mixed, 5) == 4);
+    assert(CountFactions(nullptr, 5) == 0);
+    assert(CountFactions(mixed, 0) == 0);
+
     // Auto-balance round-robins across teams by slot.
     assert(AutoBalanceTeam(0, 4) == 1);
     assert(AutoBalanceTeam(1, 4) == 2);
@@ -17,18 +35,14 @@ int main() {
     assert(AutoBalanceTeam(5, 0) == 1);
     assert(AutoBalanceTeam(5, 1) == 1);
 
-    // No override (0) -> auto-balance default.
-    assert(EffectiveTeam(1, 4, 0) == 2);
-    assert(EffectiveTeam(5, 3, 0) == AutoBalanceTeam(5, 3));
-
-    // Override (>0) wins over the default...
-    assert(EffectiveTeam(0, 4, 3) == 3);
-    // ...but is clamped into [1, teamCount] so a stale high override can't
-    // strand a player on a nonexistent team.
-    assert(EffectiveTeam(0, 3, 5) == 3);   // 5 clamped down to 3
-    assert(EffectiveTeam(0, 4, 99) == 4);
-    // A negative/zero override means "no override" -> default.
-    assert(EffectiveTeam(2, 4, 0) == 3);
+    // Every team-changing input cycles across all actual choices. In
+    // particular, either direction can restore the default no-team state.
+    assert(StepTeamChoice(kNoTeam, 5, 1) == 1);
+    assert(StepTeamChoice(1, 5, 1) == 2);
+    assert(StepTeamChoice(5, 5, 1) == kNoTeam);
+    assert(StepTeamChoice(kNoTeam, 5, -1) == 5);
+    assert(StepTeamChoice(1, 5, -1) == kNoTeam);
+    assert(StepTeamChoice(4, 4, 1) == kNoTeam);
 
     std::printf("netteams tests passed\n");
     return 0;

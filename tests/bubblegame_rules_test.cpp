@@ -408,7 +408,6 @@ int main() {
 
         BubbleGameTestAccess::reset(game, 4, false, false);
         SetupSettings& teamSettings = BubbleGameTestAccess::settings(game);
-        teamSettings.teamMode = true;
         teamSettings.playerTeams[0] = teamSettings.playerTeams[2] = 1;
         teamSettings.playerTeams[1] = teamSettings.playerTeams[3] = 2;
         BubbleGameTestAccess::announce(game, 0, false);
@@ -436,7 +435,6 @@ int main() {
         BubbleGameTestAccess::reset(game, 4, true, false);
         SetupSettings& departureTeamSettings = BubbleGameTestAccess::settings(game);
         departureTeamSettings.continueWhenPlayersLeave = true;
-        departureTeamSettings.teamMode = true;
         departureTeamSettings.playerTeams[0] = departureTeamSettings.playerTeams[2] = 1;
         departureTeamSettings.playerTeams[1] = departureTeamSettings.playerTeams[3] = 2;
         BubbleGameTestAccess::depart(game, 1);
@@ -519,7 +517,6 @@ int main() {
         BubbleGameTestAccess::reset(game, 4, true, false);
         SetupSettings& lateTeamSettings = BubbleGameTestAccess::settings(game);
         lateTeamSettings.continueWhenPlayersLeave = true;
-        lateTeamSettings.teamMode = true;
         lateTeamSettings.playerTeams[0] = lateTeamSettings.playerTeams[2] = 1;
         lateTeamSettings.playerTeams[1] = lateTeamSettings.playerTeams[3] = 2;
         BubbleGameTestAccess::announce(game, 0, false);
@@ -893,7 +890,6 @@ int main() {
         BubbleGame game(renderer);
         BubbleGameTestAccess::reset(game, 4, true, false);
         SetupSettings& settings = BubbleGameTestAccess::settings(game);
-        settings.teamMode = true;
         settings.playerTeams[0] = 1;
         settings.playerTeams[1] = 2;
         settings.playerTeams[2] = 1;

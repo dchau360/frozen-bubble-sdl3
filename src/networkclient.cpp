@@ -18,6 +18,7 @@
  */
 
 #include "networkclient.h"
+#include "netteams.h"   // kNoTeam
 #include "platform.h"
 #include <algorithm>
 #include <cstring>
@@ -653,7 +654,7 @@ void NetworkClient::ProbeNotifySupportIfNeeded() {
     SendCommand("NOTIFYUNREG fb-follow-capability-probe");
 }
 
-bool NetworkClient::SendOptions(bool chainReaction, bool continueWhenLeave, bool singleTarget, int victoriesLimit, const int playerColors[5], const bool noCompress[5], const bool aimGuide[5], bool mouseEnabled, bool clearMode, AttackMode attackMode, bool teamMode, const int playerTeams[5], int teamCount) {
+bool NetworkClient::SendOptions(bool chainReaction, bool continueWhenLeave, bool singleTarget, int victoriesLimit, const int playerColors[5], const bool noCompress[5], const bool aimGuide[5], bool mouseEnabled, bool clearMode, AttackMode attackMode, const int playerTeams[5], int teamCount) {
     // Send game options using SETOPTIONS command (original line 4468-4474)
     // Format: SETOPTIONS CHAINREACTION:0/1,...,NUMCOLORS_P1:N,...,NUMCOLORS_P5:N
     char cmd[768];
@@ -668,8 +669,16 @@ bool NetworkClient::SendOptions(bool chainReaction, bool continueWhenLeave, bool
              // client's parser, which falls back to its default of 0. The
              // degradation is that such a client attacks without cancelling
              // -- a rule difference, not a desync.
+             // TEAMMODE no longer goes out: teams are a per-player setting in
+             // every mode now (mainmenu_teampanel.cpp), not a whole-room flag,
+             // so there is nothing left for it to carry. Only this client's
+             // own code ever read it (the server relays SETOPTIONS as opaque
+             // text), so dropping it is not a wire break -- an older build
+             // reading this room's OPTIONS simply finds no TEAMMODE key and
+             // falls back to its own default of "off", the same as it does
+             // today for any key it predates.
              ",MOUSEENABLED:%d,CLEARMODE:%d,DISABLEMALUS:%d,MALUSCANCEL:%d"
-             ",TEAMMODE:%d,TEAMCOUNT:%d,PLAYERTEAM_P1:%d,PLAYERTEAM_P2:%d,PLAYERTEAM_P3:%d,PLAYERTEAM_P4:%d,PLAYERTEAM_P5:%d",
+             ",TEAMCOUNT:%d,PLAYERTEAM_P1:%d,PLAYERTEAM_P2:%d,PLAYERTEAM_P3:%d,PLAYERTEAM_P4:%d,PLAYERTEAM_P5:%d",
              chainReaction ? 1 : 0,
              continueWhenLeave ? 1 : 0,
              singleTarget ? 1 : 0,
@@ -680,7 +689,7 @@ bool NetworkClient::SendOptions(bool chainReaction, bool continueWhenLeave, bool
              mouseEnabled ? 1 : 0, clearMode ? 1 : 0,
              attackMode == AttackMode::Off ? 1 : 0,
              attackMode == AttackMode::Canceling ? 1 : 0,
-             teamMode ? 1 : 0, teamCount, playerTeams[0], playerTeams[1], playerTeams[2], playerTeams[3], playerTeams[4]);
+             teamCount, playerTeams[0], playerTeams[1], playerTeams[2], playerTeams[3], playerTeams[4]);
     SDL_Log("Sending game options: %s", cmd);
     return SendCommand(cmd);
 }
@@ -1401,7 +1410,6 @@ void NetworkClient::HandlePushMessage(const std::string& pushMsg) {
         rcvAttackMode = parseVal("DISABLEMALUS", 0) != 0 ? AttackMode::Off
                       : parseVal("MALUSCANCEL", 0) != 0 ? AttackMode::Canceling
                       : AttackMode::On;
-        rcvTeamMode = parseVal("TEAMMODE", 0) != 0;
         rcvTeamCount = (int)parseVal("TEAMCOUNT", 2);
         if (rcvTeamCount < 2) rcvTeamCount = 2;
         if (rcvTeamCount > 5) rcvTeamCount = 5;
@@ -1409,10 +1417,13 @@ void NetworkClient::HandlePushMessage(const std::string& pushMsg) {
             char key[32];
             snprintf(key, sizeof(key), "PLAYERTEAM_P%d", i + 1);
             // Clamp here, at the trust boundary: this value comes from another
-            // client's OPTIONS push and is used one-based to index kTeamColors,
-            // which has kMaxTeams entries. Unclamped, PLAYERTEAM_Pn=0 reads
-            // kTeamColors[-1] and a large value reads off the end.
-            rcvPlayerTeams[i] = ClampTeamNumber((int)parseVal(key, i + 1));
+            // client's OPTIONS push and, when it names a real team, is used
+            // one-based to index kTeamColors. ClampTeamOrNone rather than
+            // ClampTeamNumber because 0 is now a real answer ("no team") that
+            // has to survive the trip -- callers check it against kNoTeam
+            // before indexing. A missing key defaults to no team, which is
+            // also what an older peer that never sends one should read as.
+            rcvPlayerTeams[i] = ClampTeamOrNone((int)parseVal(key, kNoTeam));
         }
         pendingOptions = true;
     } else if (pushMsg.find("GAME_CAN_START:") == 0) {

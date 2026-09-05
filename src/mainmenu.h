@@ -370,7 +370,6 @@ private:
     bool netRoomMouseEnabled = false;  // Per-session mouse/touch for network games (defaults OFF)
     bool netClearMode = false;         // Clear Mode for network game
     AttackMode netAttackMode = AttackMode::On;  // Attack bubbles for network game (ON/OFF/Cancel)
-    bool netTeamMode = false;          // Team Mode for network game
     // Bots the host has added to the current game room. They are real room
     // members with their own connections; only this client simulates them.
     int netRoomBotCount = 0;
@@ -399,11 +398,11 @@ private:
     void DropLobbyBots();
 
     int netRoomSizeChoice = 2;         // Index into kRoomSizes for "Create Game Room" (0=5,1=10,2=20); default 20 (royale headline mode)
-    int netPlayerTeams[MAX_NET_PLAYERS] = {1,2,3,4,5,1,2,3,4,5,1,2,3,4,5,1,2,3,4,5}; // Per-player team (<=5-cap grid path)
+    int netPlayerTeams[MAX_NET_PLAYERS] = {}; // Per-player team (<=5-cap grid path); 0 = no team
     size_t lastProcessedChatCount = 0; // Host: how many chat msgs we've scanned for !team: commands (<=5 path)
-    // >5-cap Team Mode state:
-    int netTeamCount = 5;              // fixed team count for >5-cap rooms (matches kTeamColors' 5 entries)
-    std::map<std::string,int> netTeamOverrides;   // nick -> chosen team (absent = auto-balance default)
+    // >5-cap team state:
+    int netTeamCount = 5;              // compatibility value sent in OPTIONS; picker always offers 1..5
+    std::map<std::string,int> netTeamOverrides;   // nick -> chosen team; absent = no team
     size_t teamOverrideChatCount = 0;  // all clients: chat msgs scanned for !team: -> override map (>5 path)
     // Snapshot of playerNoCompress/netAttackMode taken the moment Clear Mode is
     // switched on, restored when switching away from it (Clear Mode forces both
@@ -483,7 +482,7 @@ private:
     int helpMenuIndex = 0;
     void HelpPanelRender();
 
-    // Full-screen team picker for a Team Mode room (mainmenu_teampanel.cpp).
+    // Full-screen team picker for any network room (mainmenu_teampanel.cpp).
     // The room's own team controls are cramped by design -- the <=5-cap grid
     // gives a player one 18-unit cell, and the >5-cap roster hides the whole
     // thing behind a per-row cycle -- so neither can show which teams exist
@@ -518,6 +517,10 @@ private:
     // whose rows are still registered underneath it.
     struct TeamSwatchTap { SDL_Rect rect; int slot; int team; };
     std::vector<TeamSwatchTap> teamSwatchTaps;
+    struct TeamPlayerNameTap { SDL_Rect rect; int slot; };
+    std::vector<TeamPlayerNameTap> teamPlayerNameTaps;
+    struct TeamAutoBalanceTap { SDL_Rect rect; int teamCount; };
+    std::vector<TeamAutoBalanceTap> teamAutoBalanceTaps;
     SDL_Rect teamsDoneRect{};
 };
 

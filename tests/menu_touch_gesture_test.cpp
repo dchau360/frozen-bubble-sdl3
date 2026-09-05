@@ -157,7 +157,6 @@ struct MainMenuTestAccess {
     // with no touch path at all.
     static bool TeamsPanelOpen(const MainMenu& menu) { return menu.showingTeamsPanel; }
     static int TeamsCursor(const MainMenu& menu) { return menu.teamsCursorPlayer; }
-    static void SetTeamMode(MainMenu& menu, bool on) { menu.netTeamMode = on; }
     static void RenderTeamsPanel(MainMenu& menu) { menu.TeamsPanelRender(); }
     static int TeamOfSlot(const MainMenu& menu, int slot) { return menu.TeamOfSlot(slot); }
     // Centre of the swatch that sets `team` on `slot`, as actually published
@@ -168,6 +167,24 @@ struct MainMenuTestAccess {
             if (swatch.slot != slot || swatch.team != team) continue;
             *x = swatch.rect.x + swatch.rect.w * 0.5f;
             *y = swatch.rect.y + swatch.rect.h * 0.5f;
+            return true;
+        }
+        return false;
+    }
+    static bool PlayerNameCenter(const MainMenu& menu, int slot, float* x, float* y) {
+        for (const auto& name : menu.teamPlayerNameTaps) {
+            if (name.slot != slot) continue;
+            *x = name.rect.x + name.rect.w * 0.5f;
+            *y = name.rect.y + name.rect.h * 0.5f;
+            return true;
+        }
+        return false;
+    }
+    static bool AutoBalanceCenter(const MainMenu& menu, int teamCount, float* x, float* y) {
+        for (const auto& button : menu.teamAutoBalanceTaps) {
+            if (button.teamCount != teamCount) continue;
+            *x = button.rect.x + button.rect.w * 0.5f;
+            *y = button.rect.y + button.rect.h * 0.5f;
             return true;
         }
         return false;
@@ -194,6 +211,25 @@ struct MainMenuTestAccess {
     static void RenderLobbyActions(MainMenu& menu) {
         menu.NetPanelLobbyActionsRender();
     }
+    // Keyboard navigation in the game room goes through MenuUpKey/
+    // MenuDownKey/MenuReturnKey, which are private. Stand the menu up as
+    // "already in a room" (the roster test does the same) and drive the real
+    // Up/Down cycle directly.
+    static void EnterNetRoom(MainMenu& menu) {
+        menu.showingNetPanel = true;
+        menu.networkInLobby = true;
+        menu.networkInputMode = 0;
+        menu.selectedActionIndex = 0;
+    }
+    static int SelectedActionIndex(const MainMenu& menu) {
+        return menu.selectedActionIndex;
+    }
+    static void SetSelectedActionIndex(MainMenu& menu, int index) {
+        menu.selectedActionIndex = index;
+    }
+    static void PressUp(MainMenu& menu) { menu.MenuUpKey(); }
+    static void PressDown(MainMenu& menu) { menu.MenuDownKey(); }
+    static void PressReturn(MainMenu& menu) { menu.MenuReturnKey(); }
 };
 
 // NetworkClient is a true singleton (NetworkClient::Instance()), and the
@@ -207,6 +243,9 @@ struct NetworkClientTestAccess {
     }
     static void SetCurrentGame(NetworkClient& nc, GameRoom* game) {
         nc.currentGame = game;
+    }
+    static void SetState(NetworkClient& nc, ConnectionState state) {
+        nc.state = state;
     }
 };
 
@@ -657,11 +696,11 @@ int main() {
         CHECK(!guard.ShouldSwallowMouseDown());
     }
 
-    // --- >5-cap Team Mode roster: touch reaching per-player team assignment
+    // --- >5-cap roster: touch reaching per-player team assignment
     //
     // Team assignment was reachable only through the [A] hotkey -- see the
     // comment on that check in MainMenu::HandleInput. A touch-only player in
-    // a >5-cap Team Mode room had no way to reach it at all: the compact
+    // a >5-cap room had no way to reach it at all: the compact
     // roster's rows registered no PanelTapRow, so a tap there just fell
     // through as a miss. This pins both halves of the fix: a roster row tap
     // (kRoomRosterTapBase's branch in HandlePanelTap) opens the full-screen
@@ -677,8 +716,11 @@ int main() {
         room.maxPlayers = 20;  // >5-cap -- the only cap that uses the compact roster
         room.players.push_back({"host", "", false});
         room.players.push_back({"joiner", "", false});
+        room.players.push_back({"p3", "", false});
+        room.players.push_back({"p4", "", false});
+        room.players.push_back({"p5", "", false});
+        room.players.push_back({"p6", "", false});
         NetworkClientTestAccess::SetCurrentGame(*nc, &room);
-        MainMenuTestAccess::SetTeamMode(*menu, true);
 
         // currentGame is set, so this renders the game room, not the plain
         // lobby -- same function, see RenderLobbyActions's own comment.
@@ -716,8 +758,12 @@ int main() {
 
             // One render to publish the swatch rects a real tap would hit.
             MainMenuTestAccess::RenderTeamsPanel(*menu);
-            // Host, so every seat's full set of teams is tappable.
-            CHECK(MainMenuTestAccess::SwatchCount(*menu) == 2 * kMaxTeams);
+            // Host, so every seat's no-team choice plus all five team choices
+            // are tappable. All players begin unaffiliated.
+            CHECK(MainMenuTestAccess::SwatchCount(*menu) ==
+                  room.players.size() * (kMaxTeams + 1));
+            CHECK(MainMenuTestAccess::TeamOfSlot(*menu, 0) == kNoTeam);
+            CHECK(MainMenuTestAccess::TeamOfSlot(*menu, 1) == kNoTeam);
 
             // A single tap sets that exact team -- no cycling, no second tap.
             // Team 4 specifically: it is neither seat's round-robin default
@@ -729,6 +775,33 @@ int main() {
             CHECK(menu->HandlePanelTap(sx, sy));
             CHECK(MainMenuTestAccess::TeamOfSlot(*menu, 1) == 4);
             CHECK(MainMenuTestAccess::TeamOfSlot(*menu, 0) != 4);  // only the tapped row moved
+
+            // The no-team swatch restores free-agent play directly.
+            CHECK(MainMenuTestAccess::SwatchCenter(*menu, 1, kNoTeam, &sx, &sy));
+            CHECK(menu->HandlePanelTap(sx, sy));
+            CHECK(MainMenuTestAccess::TeamOfSlot(*menu, 1) == kNoTeam);
+
+            // The player's name is a second, larger cycling target. It walks
+            // through the same choice order as keyboard navigation, including
+            // no-team at the wrap boundary.
+            CHECK(MainMenuTestAccess::PlayerNameCenter(*menu, 1, &sx, &sy));
+            CHECK(menu->HandlePanelTap(sx, sy));
+            CHECK(MainMenuTestAccess::TeamOfSlot(*menu, 1) == 1);
+            CHECK(MainMenuTestAccess::SwatchCenter(*menu, 1, 5, &sx, &sy));
+            CHECK(menu->HandlePanelTap(sx, sy));
+            CHECK(MainMenuTestAccess::PlayerNameCenter(*menu, 1, &sx, &sy));
+            CHECK(menu->HandlePanelTap(sx, sy));
+            CHECK(MainMenuTestAccess::TeamOfSlot(*menu, 1) == kNoTeam);
+
+            // Auto 3 round-robins every occupied seat and leaves the manual
+            // Team 4/5 choices available afterward.
+            CHECK(MainMenuTestAccess::AutoBalanceCenter(*menu, 3, &sx, &sy));
+            CHECK(menu->HandlePanelTap(sx, sy));
+            const int autoThree[] = {1, 2, 3, 1, 2, 3};
+            for (int slot = 0; slot < 6; ++slot)
+                CHECK(MainMenuTestAccess::TeamOfSlot(*menu, slot) == autoThree[slot]);
+            MainMenuTestAccess::RenderTeamsPanel(*menu);
+            CHECK(MainMenuTestAccess::SwatchCenter(*menu, 0, 5, &sx, &sy));
 
             // Nothing was injected as a keypress on the way -- the picker
             // acts directly, so a stale key can't reach the room on close.
@@ -766,6 +839,59 @@ int main() {
             CHECK(menu->HandlePanelTap(done.x + done.w * 0.5f, done.y + done.h * 0.5f));
             CHECK(!MainMenuTestAccess::TeamsPanelOpen(*menu));
         }
+
+        // Don't leak this fake room into any test that runs after this one.
+        NetworkClientTestAccess::SetCurrentGame(*nc, nullptr);
+    }
+
+    // --- Keyboard navigation to the header's "Set Teams" button ----------
+    //
+    // The button (kRoomSetTeamsTapIndex) sits in the players-sidebar header,
+    // deliberately outside the GameRoomRow range so it doesn't renumber the
+    // rows built positionally below it. That used to mean a keyboard/gamepad
+    // player could only reach it via the [A] hotkey, never by navigating to
+    // it with Up/Down and pressing Enter -- it is now a stop in the same wrap
+    // cycle as the real rows.
+    {
+        std::unique_ptr<MainMenu> menu = MainMenuTestAccess::Create(renderer);
+
+        NetworkClient* nc = NetworkClient::Instance();
+        NetworkClientTestAccess::SetPlayerNick(*nc, "host");
+        NetworkClientTestAccess::SetState(*nc, IN_LOBBY);
+        GameRoom room;
+        room.creator = "host";
+        room.maxPlayers = 5;
+        room.players.push_back({"host", "", false});
+        room.players.push_back({"joiner", "", false});
+        NetworkClientTestAccess::SetCurrentGame(*nc, &room);
+
+        MainMenuTestAccess::EnterNetRoom(*menu);
+        MainMenuTestAccess::RenderLobbyActions(*menu);
+
+        // The button must really be registered, or there is nothing to land on.
+        CHECK(!MainMenuTestAccess::RectsForIndex(*menu, kRoomSetTeamsTapIndex).empty());
+
+        // Up from Chat wraps to the header button, which sits above the list.
+        MainMenuTestAccess::SetSelectedActionIndex(*menu, 0);
+        MainMenuTestAccess::PressUp(*menu);
+        CHECK(MainMenuTestAccess::SelectedActionIndex(*menu) == kRoomSetTeamsTapIndex);
+
+        // Down from the button wraps back to Chat.
+        MainMenuTestAccess::PressDown(*menu);
+        CHECK(MainMenuTestAccess::SelectedActionIndex(*menu) == 0);
+
+        // Down from the host's last real row (Start, index 13 in a 2-player
+        // room) reaches the button too -- the same wrap that used to go to
+        // Chat, now including the header stop.
+        MainMenuTestAccess::SetSelectedActionIndex(*menu, kRoomStart);
+        MainMenuTestAccess::PressDown(*menu);
+        CHECK(MainMenuTestAccess::SelectedActionIndex(*menu) == kRoomSetTeamsTapIndex);
+
+        // Enter on the highlighted button opens the picker for host and joiner
+        // alike -- the one activation the button's [A]/tap paths already had.
+        CHECK(!MainMenuTestAccess::TeamsPanelOpen(*menu));
+        MainMenuTestAccess::PressReturn(*menu);
+        CHECK(MainMenuTestAccess::TeamsPanelOpen(*menu));
 
         // Don't leak this fake room into any test that runs after this one.
         NetworkClientTestAccess::SetCurrentGame(*nc, nullptr);

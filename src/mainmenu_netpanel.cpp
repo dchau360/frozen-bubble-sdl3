@@ -266,10 +266,23 @@ void MainMenu::NetPanelRender() {
         PumpLobbyBots();
         netClient->Update();
 
+        // Room-scoped team choices must not leak into the next room when the
+        // same nickname appears again. While we are in the plain lobby there
+        // is no assignment to preserve, and advancing the chat cursors here
+        // also prevents old hidden !team control messages from being replayed
+        // after the next JOIN/CREATE.
+        if (!netClient->GetCurrentGame()) {
+            std::fill_n(netPlayerTeams, MAX_NET_PLAYERS, kNoTeam);
+            netTeamOverrides.clear();
+            const size_t chatCount = netClient->GetChatMessages().size();
+            lastProcessedChatCount = chatCount;
+            teamOverrideChatCount = chatCount;
+        }
+
         // Apply any options broadcast by the host (joiners receive SETOPTIONS push)
         {
-            bool cr, cl, st; int vl; int pc[5]; bool nc[5]; bool ag[5]; bool me; bool cm; AttackMode dm; bool tm; int pt[5]; int rcvTc;
-            if (netClient->GetAndClearPendingOptions(cr, cl, st, vl, pc, nc, ag, me, cm, dm, tm, pt, rcvTc)) {
+            bool cr, cl, st; int vl; int pc[5]; bool nc[5]; bool ag[5]; bool me; bool cm; AttackMode dm; int pt[5]; int rcvTc;
+            if (netClient->GetAndClearPendingOptions(cr, cl, st, vl, pc, nc, ag, me, cm, dm, pt, rcvTc)) {
                 chainReactionEnabled = cr;
                 (void)cl;  // "continue when players leave" is always on now
                 singlePlayerTargetting = st;
@@ -281,11 +294,10 @@ void MainMenu::NetPanelRender() {
                 netRoomMouseEnabled = me;
                 netClearMode = cm;
                 netAttackMode = dm;
-                netTeamMode = tm;
                 if (rcvTc >= 2 && rcvTc <= 5) netTeamCount = rcvTc;
                 for (int i = 0; i < 5; i++) netPlayerTeams[i] = pt[i];
-                SDL_Log("Applied host options: cr=%d cl=%d st=%d vl=%d colors=%d,%d,%d,%d,%d mouse=%d cm=%d dm=%d tm=%d",
-                    cr,cl,st,vl,pc[0],pc[1],pc[2],pc[3],pc[4],me,cm,(int)dm,tm);
+                SDL_Log("Applied host options: cr=%d cl=%d st=%d vl=%d colors=%d,%d,%d,%d,%d mouse=%d cm=%d dm=%d",
+                    cr,cl,st,vl,pc[0],pc[1],pc[2],pc[3],pc[4],me,cm,(int)dm);
             }
         }
 
@@ -538,7 +550,7 @@ void MainMenu::NetPanelLobbyActionsRender() {
             // Mode and Malus (indices 1-2) — surfaced first since they define the
             // match type; newly created rooms default focus to "Game mode".
             char modeText[64], malusText[64];
-            const char* mode = netTeamMode ? "Teams" : (netClearMode ? "Clear" : "Classic");
+            const char* mode = netClearMode ? "Clear" : "Classic";
             snprintf(modeText, sizeof(modeText), "Game mode: %s", mode);
             snprintf(malusText, sizeof(malusText), "Attack bubbles: %s", AttackModeName(netAttackMode));
             actions.push_back(modeText);  // index 1
@@ -747,7 +759,7 @@ void MainMenu::NetPanelLobbyActionsRender() {
             menulist::List roomList(roomListRect, selectedActionIndex, 28,
                                      menulist::kMapFillAlpha);
             roomList.Header("Match rules");
-            const char* mode = netTeamMode ? "Teams" : (netClearMode ? "Clear" : "Classic");
+            const char* mode = netClearMode ? "Clear" : "Classic";
             roomList.Row(kRoomMode, "Game mode", mode);
             roomList.Row(kRoomMalus, "Attack bubbles", AttackModeName(netAttackMode),
                          netAttackMode != AttackMode::Off, true);
@@ -783,8 +795,8 @@ void MainMenu::NetPanelLobbyActionsRender() {
             const int labelW = 110;  // Width of row label ("Max colors:", "Row collapse:", "Aim guide:", "Team:")
             const int colW   = 36;   // Width of each player column
             auto drawTeamSwatch = [&](int colLeft, int rowTop, int teamVal) {
-                int t = teamVal;
-                if (t < 1 || t > 5) t = 1;
+                if (teamVal == kNoTeam) return;
+                int t = ClampTeamNumber(teamVal);
                 SDL_Color c = teamColors[t - 1];
                 SDL_SetRenderDrawColor(const_cast<SDL_Renderer*>(renderer), c.r, c.g, c.b, 140);
                 SDL_Rect swatch = {colLeft + 3, rowTop - 1, colW - 6, lineHeight};
@@ -903,7 +915,10 @@ void MainMenu::NetPanelLobbyActionsRender() {
                         for (int i = 1; i < numPlayers; i++) if (netPlayerTeams[i] != netPlayerTeams[0]) { same = false; break; }
                         if (same) {
                             drawTeamSwatch(actionStartX + labelW, rowY, netPlayerTeams[0]);
-                            snprintf(cellText, sizeof(cellText), "%d", netPlayerTeams[0]);
+                            if (netPlayerTeams[0] == kNoTeam)
+                                snprintf(cellText, sizeof(cellText), "-");
+                            else
+                                snprintf(cellText, sizeof(cellText), "%d", netPlayerTeams[0]);
                         } else {
                             snprintf(cellText, sizeof(cellText), "-");
                         }
@@ -934,7 +949,10 @@ void MainMenu::NetPanelLobbyActionsRender() {
                         snprintf(cellText, sizeof(cellText), "%s", playerAimGuide[pi] ? "on" : "off");
                     } else {
                         drawTeamSwatch(cellX, rowY, netPlayerTeams[pi]);
-                        snprintf(cellText, sizeof(cellText), "%d", netPlayerTeams[pi]);
+                        if (netPlayerTeams[pi] == kNoTeam)
+                            snprintf(cellText, sizeof(cellText), "-");
+                        else
+                            snprintf(cellText, sizeof(cellText), "%d", netPlayerTeams[pi]);
                     }
                     renderCentered(cellText, cellX, rowY);
                 }
@@ -973,10 +991,9 @@ void MainMenu::NetPanelLobbyActionsRender() {
             // roster row looks like nothing at all until you try it. This is
             // the only on-screen thing that says the page exists.
             //
-            // Only in Team Mode -- there is nothing to set otherwise -- and
-            // registered before the roster rows below so it wins the hit test
+            // Registered before the roster rows below so it wins the hit test
             // if it ever overlaps one (first match wins, see PanelTapRow).
-            if (netTeamMode) {
+            {
                 static const char kSetTeamsLabel[] = "Set Teams";
                 // Measured, not guessed: the box is built around whatever this
                 // string actually renders to at the current style, then the
@@ -1036,12 +1053,13 @@ void MainMenu::NetPanelLobbyActionsRender() {
                         // is locked to their own row -- see HandlePanelTap's
                         // kRoomRosterTapBase branch for what a tap here does.
                         bool rosterIsHost = currentGame->creator == netClient->GetPlayerNick();
-                        if (netTeamMode && (rosterIsHost || self)) {
+                        if (rosterIsHost || self) {
                             AddPanelTapRow(kRoomRosterTapBase + pi, rowBox);
                         }
-                        int ov = netTeamOverrides.count(pl.nick) ? netTeamOverrides[pl.nick] : 0;
-                        int team = EffectiveTeam(pi, netTeamCount, ov);
-                        if (netTeamMode && team >= 1 && team <= 5) {
+                        auto teamIt = netTeamOverrides.find(pl.nick);
+                        int team = teamIt == netTeamOverrides.end()
+                            ? kNoTeam : ClampTeamOrNone(teamIt->second);
+                        if (team != kNoTeam) {
                             SDL_Color chip = kTeamColors[team - 1];
                             SDL_SetRenderDrawColor(roomRenderer, chip.r, chip.g, chip.b, chip.a);
                             SDL_FRect chipRect = {(float)(rowX + 2), (float)(rowY + 3), 8.0f, 8.0f};
@@ -1050,7 +1068,8 @@ void MainMenu::NetPanelLobbyActionsRender() {
                         char rowTxt[64];
                         snprintf(rowTxt, sizeof(rowTxt), "%2d %.9s%s%s", pi + 1,
                                  pl.nick.c_str(), host ? " H" : "", self ? " *" : "");
-                        drawLabel(rowTxt, rowX + (netTeamMode ? 14 : 4), rowY + 2, self ? textGold : textMain);
+                        drawLabel(rowTxt, rowX + (team != kNoTeam ? 14 : 4), rowY + 2,
+                                  self ? textGold : textMain);
                     } else {
                         char rowTxt[24];
                         snprintf(rowTxt, sizeof(rowTxt), "%2d -", pi + 1);
@@ -1064,7 +1083,7 @@ void MainMenu::NetPanelLobbyActionsRender() {
                 // which a tap on any row above also opens, so the hint names
                 // only the key a keyboard/gamepad player would not otherwise
                 // find.
-                drawLabel(netTeamMode ? "H host   * you   [A] set teams" : "H host   * you",
+                drawLabel("H host   * you   [A] set teams",
                           panelX + 12, panelY + 224, textMuted);
             } else {
                 const int rowH = 38;
@@ -1081,20 +1100,24 @@ void MainMenu::NetPanelLobbyActionsRender() {
                         const NetworkPlayer& pl = currentGame->players[pi];
                         bool host = (pl.nick == currentGame->creator);
                         bool self = (pl.nick == netClient->GetPlayerNick());
-                        int team = netPlayerTeams[pi];
-                        if (team < 1 || team > 5) team = 1;
-                        SDL_Color chip = teamColors[team - 1];
-                        SDL_SetRenderDrawColor(roomRenderer, chip.r, chip.g, chip.b, chip.a);
-                        SDL_FRect chipRect = {(float)(panelX + 40), (float)(rowY + 8), 12.0f, 12.0f};
-                        SDL_RenderFillRect(roomRenderer, &chipRect);
+                        int team = ClampTeamOrNone(netPlayerTeams[pi]);
+                        if (team != kNoTeam) {
+                            SDL_Color chip = teamColors[team - 1];
+                            SDL_SetRenderDrawColor(roomRenderer, chip.r, chip.g, chip.b, chip.a);
+                            SDL_FRect chipRect = {(float)(panelX + 40), (float)(rowY + 8), 12.0f, 12.0f};
+                            SDL_RenderFillRect(roomRenderer, &chipRect);
+                        }
 
                         char row[96];
                         snprintf(row, sizeof(row), "%.12s%s%s", pl.nick.c_str(),
                                  host ? "  HOST" : "", self ? "  YOU" : "");
-                        drawLabel(row, panelX + 58, rowY + 6, self ? textGold : textMain);
-                        char teamText[24];
-                        snprintf(teamText, sizeof(teamText), "Team %d", team);
-                        drawLabel(teamText, panelX + 58, rowY + 20, textMuted);
+                        drawLabel(row, panelX + (team != kNoTeam ? 58 : 40), rowY + 6,
+                                  self ? textGold : textMain);
+                        if (team != kNoTeam) {
+                            char teamText[24];
+                            snprintf(teamText, sizeof(teamText), "Team %d", team);
+                            drawLabel(teamText, panelX + 58, rowY + 20, textMuted);
+                        }
                     } else {
                         drawLabel("Waiting for player...", panelX + 40, rowY + 8, textMuted);
                     }
@@ -1275,8 +1298,8 @@ void MainMenu::NetPanelChatDockRender(bool expanded) {
                 if (sep == std::string::npos) continue;
                 std::string senderNick = msg.substr(6, sep - 6);
                 int newTeam = std::atoi(msg.c_str() + sep + 1);
-                if (!senderNick.empty() && newTeam >= 1 && newTeam <= 5)
-                    netTeamOverrides[senderNick] = newTeam;
+                if (!senderNick.empty() && newTeam >= kNoTeam && newTeam <= kMaxTeams)
+                    netTeamOverrides[senderNick] = ClampTeamOrNone(newTeam);
             }
         }
         teamOverrideChatCount = allMsgs.size();
@@ -1294,10 +1317,10 @@ void MainMenu::NetPanelChatDockRender(bool expanded) {
                 if (sep == std::string::npos) continue;
                 std::string senderNick = msg.substr(6, sep - 6);
                 int newTeam = std::atoi(msg.c_str() + sep + 1);
-                if (newTeam >= 1 && newTeam <= 5 && !senderNick.empty()) {
+                if (newTeam >= kNoTeam && newTeam <= kMaxTeams && !senderNick.empty()) {
                     for (int i = 0; i < (int)currentGame->players.size(); i++) {
                         if (currentGame->players[i].nick == senderNick) {
-                            netPlayerTeams[i] = newTeam;
+                            netPlayerTeams[i] = ClampTeamOrNone(newTeam);
                             SyncRoomOptions();
                             break;
                         }

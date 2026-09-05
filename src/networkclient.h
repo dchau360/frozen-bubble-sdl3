@@ -73,6 +73,22 @@ inline constexpr int ClampTeamNumber(int team) {
     return team;
 }
 
+// Same trust-boundary fold, for the places where "on no team at all" is a
+// legal answer rather than a value to be corrected: a team number is now
+// optional (see kNoTeam in netteams.h), and a player who has not joined one
+// must survive the trip through OPTIONS as 0 rather than being rounded up
+// into team 1.
+//
+// Deliberately not merged into ClampTeamNumber. That one exists so a team
+// number is always safe to use as a kTeamColors index, and every caller of it
+// relies on getting back something in [1, kMaxTeams]; this one hands back a
+// value that must be checked against kNoTeam before it indexes anything.
+inline constexpr int ClampTeamOrNone(int team) {
+    if (team <= 0) return 0;              // kNoTeam
+    if (team > kMaxTeams) return kMaxTeams;
+    return team;
+}
+
 enum ConnectionState {
     DISCONNECTED,
     CONNECTING,
@@ -231,7 +247,7 @@ public:
     bool IsPendingJoin() const { return pendingJoin; }
 
     // Send game options to other players (host only)
-    bool SendOptions(bool chainReaction, bool continueWhenLeave, bool singleTarget, int victoriesLimit, const int playerColors[5], const bool noCompress[5], const bool aimGuide[5], bool mouseEnabled, bool clearMode, AttackMode attackMode, bool teamMode, const int playerTeams[5], int teamCount);
+    bool SendOptions(bool chainReaction, bool continueWhenLeave, bool singleTarget, int victoriesLimit, const int playerColors[5], const bool noCompress[5], const bool aimGuide[5], bool mouseEnabled, bool clearMode, AttackMode attackMode, const int playerTeams[5], int teamCount);
 
     // Received options from host (updated when SETOPTIONS push arrives)
     bool pendingOptions = false;
@@ -245,18 +261,19 @@ public:
     bool rcvMouseEnabled = false;
     bool rcvClearMode = false;
     AttackMode rcvAttackMode = AttackMode::On;
-    bool rcvTeamMode = false;
-    int rcvPlayerTeams[5] = {1, 2, 3, 4, 5};
+    // No team until an OPTIONS push says otherwise -- the same default a
+    // room starts every player on now.
+    int rcvPlayerTeams[5] = {0, 0, 0, 0, 0};
     int rcvTeamCount = 2;
     // Returns true (and clears flag) if new options arrived since last call
-    bool GetAndClearPendingOptions(bool& cr, bool& cl, bool& st, int& vl, int pc[5], bool nc[5], bool ag[5], bool& me, bool& cm, AttackMode& dm, bool& tm, int pt[5], int& tc) {
+    bool GetAndClearPendingOptions(bool& cr, bool& cl, bool& st, int& vl, int pc[5], bool nc[5], bool ag[5], bool& me, bool& cm, AttackMode& dm, int pt[5], int& tc) {
         if (!pendingOptions) return false;
         pendingOptions = false;
         cr = rcvChainReaction; cl = rcvContinueLeave; st = rcvSingleTarget; vl = rcvVictoriesLimit;
         for (int i = 0; i < 5; i++) { pc[i] = rcvPlayerColors[i]; nc[i] = rcvNoCompress[i]; ag[i] = rcvAimGuide[i]; }
         me = rcvMouseEnabled;
         cm = rcvClearMode; dm = rcvAttackMode;
-        tm = rcvTeamMode; for (int i = 0; i < 5; i++) pt[i] = rcvPlayerTeams[i];
+        for (int i = 0; i < 5; i++) pt[i] = rcvPlayerTeams[i];
         tc = rcvTeamCount;
         return true;
     }

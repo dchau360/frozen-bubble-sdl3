@@ -299,7 +299,11 @@ void GameSettings::ReadSettings()
     hostClearMode = iniparser_getboolean(optDict, "Host:ClearMode", false);
     hostAttackMode = iniparser_getint(optDict, "Host:AttackMode", 0);
     if (hostAttackMode < 0 || hostAttackMode > 2) hostAttackMode = 0;
-    hostTeamMode = iniparser_getboolean(optDict, "Host:TeamMode", false);
+    // Host:TeamMode is no longer read: teams became a per-player setting
+    // available in every game mode rather than a whole-room one, so there is
+    // nothing left for that key to gate. An old ini file may still carry it;
+    // it is simply ignored rather than migrated, since the per-player teams
+    // it used to imply were never persisted here to migrate it onto.
     hostTeamCount = iniparser_getint(optDict, "Host:TeamCount", 5);
     if (hostTeamCount < 2 || hostTeamCount > 5) hostTeamCount = 5;
     hostBotSkill = iniparser_getint(optDict, "Host:BotSkill", 1);
@@ -623,7 +627,7 @@ void GameSettings::setSoundEnabled(bool on) {
 
 void GameSettings::SaveHostSettings(bool chainReactions, bool singlePlayerTargetting,
                                     int victoriesLimitIndex, bool clearMode, int attackMode,
-                                    bool teamMode, int teamCount, int botSkill,
+                                    int teamCount, int botSkill,
                                     int roomSizeChoice)
 {
     hostChainReactions = chainReactions;
@@ -631,7 +635,6 @@ void GameSettings::SaveHostSettings(bool chainReactions, bool singlePlayerTarget
     hostVictoriesLimitIndex = victoriesLimitIndex;
     hostClearMode = clearMode;
     hostAttackMode = attackMode;
-    hostTeamMode = teamMode;
     hostTeamCount = teamCount;
     hostBotSkill = botSkill;
     hostRoomSizeChoice = roomSizeChoice;
@@ -645,7 +648,6 @@ void GameSettings::SaveHostSettings(bool chainReactions, bool singlePlayerTarget
                   std::to_string(victoriesLimitIndex).c_str());
     iniparser_set(optDict, "Host:ClearMode", clearMode ? "true" : "false");
     iniparser_set(optDict, "Host:AttackMode", std::to_string(attackMode).c_str());
-    iniparser_set(optDict, "Host:TeamMode", teamMode ? "true" : "false");
     iniparser_set(optDict, "Host:TeamCount", std::to_string(teamCount).c_str());
     iniparser_set(optDict, "Host:BotSkill", std::to_string(botSkill).c_str());
     iniparser_set(optDict, "Host:RoomSizeChoice", std::to_string(roomSizeChoice).c_str());

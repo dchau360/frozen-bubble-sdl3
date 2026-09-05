@@ -173,13 +173,15 @@ public:
     int hostVictoriesLimitIndex = 5;
     bool hostClearMode = false;
     int hostAttackMode = 0;
-    bool hostTeamMode = false;
+    // Retained on the wire and in old settings files for compatibility. The
+    // picker now offers all five teams and its Auto 2..5 actions choose how
+    // many of those teams to use for one assignment.
     int hostTeamCount = 5;
     int hostBotSkill = 1;
     int hostRoomSizeChoice = 2;
     void SaveHostSettings(bool chainReactions, bool singlePlayerTargetting,
                           int victoriesLimitIndex, bool clearMode, int attackMode,
-                          bool teamMode, int teamCount, int botSkill, int roomSizeChoice);
+                          int teamCount, int botSkill, int roomSizeChoice);
 
     // Servers the player follows for join notifications. Bounded rather than
     // unbounded because the ini format here stores fixed numbered slots (the

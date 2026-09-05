@@ -47,7 +47,10 @@ std::vector<int> BubbleGame::LivingOpponentsOf(const BubbleArray &attacker) cons
     for (int i = 0; i < currentSettings.playerCount; i++) {
         if (i == attackerIdx) continue;
         if (bubbleArrays[i].playerState != BubbleArray::PlayerState::ALIVE) continue;
-        if (currentSettings.teamMode && currentSettings.playerTeams[i] == attackerTeam) continue;
+        // Teammates are spared; everyone else is fair game. Two players who
+        // are both on no team are not teammates (AreTeammates), so free
+        // agents still attack each other.
+        if (AreTeammates(currentSettings.playerTeams[i], attackerTeam)) continue;
         opponents.push_back(i);
     }
     return opponents;
@@ -166,8 +169,15 @@ void BubbleGame::SendMalusToOpponent(int malusCount, const BubbleArray &attacker
     // Single player targeting mode: send all malus to ONE opponent only when the player has
     // actively selected a target (original lines 1217-1227). With no target selected
     // (sendMalusToOne == -1), fall through to splitting among all living opponents — matching
-    // the original (line 1204: "if (!sendmalustoone) { split }"). In team mode we always split.
-    if (currentSettings.singlePlayerTargetting && !currentSettings.teamMode &&
+    // the original (line 1204: "if (!sendmalustoone) { split }").
+    //
+    // An attacker who is on a team always splits, as team mode always did:
+    // their malus is the team's, not theirs to aim. An attacker on no team is
+    // playing for themselves and may aim it, which is what this used to mean
+    // by "not in team mode" back when that was a property of the whole game
+    // rather than of each player.
+    if (currentSettings.singlePlayerTargetting &&
+        currentSettings.playerTeams[attackerIdx] == kNoTeam &&
         attackerIdx == 0 && sendMalusToOne != -1) {
         if (sendMalusToOne < currentSettings.playerCount &&
             bubbleArrays[sendMalusToOne].playerState == BubbleArray::PlayerState::ALIVE) {
@@ -472,12 +482,17 @@ int BubbleGame::CountLivingPlayers() {
 }
 
 int BubbleGame::CountLivingTeams() {
-    std::set<int> aliveTeams;
+    // Sides still standing, not distinct team numbers: two survivors who are
+    // both on no team are two sides, not one. Inserting their shared kNoTeam
+    // into a set would have collapsed them into a single "team" and ended the
+    // round with both declared winners -- see CountFactions (netteams.h).
+    int aliveTeams[MAX_NET_PLAYERS];
+    int n = 0;
     for (int i = 0; i < currentSettings.playerCount; i++) {
         if (bubbleArrays[i].playerState == BubbleArray::PlayerState::ALIVE)
-            aliveTeams.insert(currentSettings.playerTeams[i]);
+            aliveTeams[n++] = currentSettings.playerTeams[i];
     }
-    return (int)aliveTeams.size();
+    return CountFactions(aliveTeams, n);
 }
 
 bool BubbleGame::HasDepartedPlayers() const {
@@ -498,20 +513,23 @@ int BubbleGame::CountConnectedPlayers() const {
 }
 
 int BubbleGame::CountConnectedTeams() const {
-    std::set<int> connectedTeams;
+    // Same faction rule as CountLivingTeams, over who is still connected.
+    int connectedTeams[MAX_NET_PLAYERS];
+    int n = 0;
     for (int i = 0; i < currentSettings.playerCount; ++i) {
         if (bubbleArrays[i].playerState != BubbleArray::PlayerState::LEFT)
-            connectedTeams.insert(currentSettings.playerTeams[i]);
+            connectedTeams[n++] = currentSettings.playerTeams[i];
     }
-    return static_cast<int>(connectedTeams.size());
+    return CountFactions(connectedTeams, n);
 }
 
 void BubbleGame::UpdateDepartureMatchTermination() {
     const bool abandonedRound =
         !currentSettings.continueWhenPlayersLeave && HasDepartedPlayers();
-    const bool insufficientOpponents = currentSettings.teamMode
-        ? CountConnectedTeams() < 2
-        : CountConnectedPlayers() < 2;
+    // One rule for both cases now: a match needs two sides. With nobody on a
+    // team every player is their own side, so this is the old
+    // CountConnectedPlayers() < 2 exactly -- see CountFactions.
+    const bool insufficientOpponents = CountConnectedTeams() < 2;
     if (abandonedRound || insufficientOpponents) {
         gameMatchOver = true;
         waitingForOpponentNewGame = false;
@@ -610,7 +628,10 @@ void BubbleGame::ResolveRoundOutcome(int assertedWinnerIdx,
     }
 
     const bool onePlayer = living == 1;
-    const bool oneTeam = currentSettings.teamMode && CountLivingTeams() == 1;
+    // Unconditional: one surviving side ends the round. Where nobody is on a
+    // team this can only be true when one player is left, so it says the same
+    // thing the teamMode gate used to.
+    const bool oneTeam = CountLivingTeams() == 1;
     if (!onePlayer && !oneTeam) return;
 
     for (int i = 0; i < currentSettings.playerCount; ++i) {
@@ -640,17 +661,19 @@ void BubbleGame::CommitRoundWin(int winnerIdx,
         PlaySFX("applause");
     }
 
+    // The winner always wins; their surviving teammates win with them. A
+    // winner on no team has none, so this is a solo win -- the case the old
+    // !teamMode branch handled separately. AreTeammates is what keeps two
+    // unaffiliated survivors from being read as a winning pair.
     std::vector<int> winners;
-    if (currentSettings.teamMode) {
-        const int winningTeam = currentSettings.playerTeams[winnerIdx];
-        for (int i = 0; i < currentSettings.playerCount; ++i) {
-            if (bubbleArrays[i].playerState == BubbleArray::PlayerState::ALIVE &&
-                currentSettings.playerTeams[i] == winningTeam) {
-                winners.push_back(i);
-            }
+    winners.push_back(winnerIdx);
+    const int winningTeam = currentSettings.playerTeams[winnerIdx];
+    for (int i = 0; i < currentSettings.playerCount; ++i) {
+        if (i == winnerIdx) continue;
+        if (bubbleArrays[i].playerState == BubbleArray::PlayerState::ALIVE &&
+            AreTeammates(currentSettings.playerTeams[i], winningTeam)) {
+            winners.push_back(i);
         }
-    } else {
-        winners.push_back(winnerIdx);
     }
 
     const bool abandonedRound =

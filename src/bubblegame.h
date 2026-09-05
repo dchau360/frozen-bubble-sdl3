@@ -31,6 +31,7 @@
 #include "ttftext.h"
 #include "networkclient.h"
 #include "attackmode.h"
+#include "netteams.h"   // kNoTeam, AreTeammates, CountFactions
 
 #include <map>
 #include <memory>
@@ -285,12 +286,17 @@ struct SetupSettings {
     bool mouseEnabled = false;  // Mouse/touchscreen aim+fire for player 1
     bool clearMode = false;    // Clear Mode: win by clearing the board
     AttackMode attackMode = AttackMode::On;  // Attack bubbles: ON / OFF / with canceling
-    bool teamMode = false;
-    // Per-player team number (1..teamCount). Widened to MAX_NET_PLAYERS to
-    // match playerColors/disableCompression/aimGuide; fully resolved at game
-    // start (menu fills it), so the static initializer is just a placeholder.
-    int playerTeams[MAX_NET_PLAYERS] = {1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1};
-    int teamCount = 2;  // number of teams (2..5); meaningful when teamMode
+    // Per-player team number: kNoTeam (0) for a free agent, or 1..kMaxTeams.
+    // Widened to MAX_NET_PLAYERS to match playerColors/disableCompression/
+    // aimGuide; fully resolved at game start (menu fills it), so the static
+    // initializer is just a placeholder.
+    //
+    // There is no longer a teamMode flag beside this. Teams are a per-player
+    // setting in every game mode, and the rules that used to be gated on that
+    // flag are asked of the team numbers directly (AreTeammates / CountFactions
+    // in netteams.h) -- which, with every player on kNoTeam, reduce to exactly
+    // the free-for-all the flag used to select.
+    int playerTeams[MAX_NET_PLAYERS] = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
     bool continueWhenPlayersLeave = true;
     // Per-player: this slot is played by the AI rather than a person. Sized
     // like the other per-player arrays so network rooms can use it too.

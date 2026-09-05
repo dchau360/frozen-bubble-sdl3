@@ -540,7 +540,7 @@ void BubbleGame::CheckPossibleDestroy(BubbleArray &bArray){
             int attackerTeam = currentSettings.playerTeams[attackerIdx];
             for (int i = 0; i < currentSettings.playerCount; i++) {
                 if (i != attackerIdx && bubbleArrays[i].playerState == BubbleArray::PlayerState::ALIVE &&
-                    (!currentSettings.teamMode || currentSettings.playerTeams[i] != attackerTeam)) {
+                    !AreTeammates(currentSettings.playerTeams[i], attackerTeam)) {
                     for (int m = 0; m < malusValue; m++)
                         bubbleArrays[i].malusQueue.push_back(frameCount);
                     bubbleArrays[i].rRecv += malusValue;  // Stats: malus received

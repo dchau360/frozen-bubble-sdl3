@@ -193,8 +193,8 @@ MainMenu::MainMenu(const SDL_Renderer *renderer)
     // Restore the host's last-used room settings (see SyncRoomOptions()) so
     // the first room this device creates this session already reflects them,
     // not just rooms created after visiting the net panel once (which is all
-    // the netClearMode/netAttackMode/netTeamMode loads above cover -- those
-    // three are re-loaded every time the panel opens since a room's Clear
+    // the netClearMode/netAttackMode loads above cover -- those two are
+    // re-loaded every time the panel opens since a room's Clear
     // Mode temporarily overrides them; the rest only need setting once here).
     {
         GameSettings* gs = GameSettings::Instance();
@@ -203,7 +203,6 @@ MainMenu::MainMenu(const SDL_Renderer *renderer)
         victoriesLimitIndex = gs->hostVictoriesLimitIndex;
         netClearMode = gs->hostClearMode;
         netAttackMode = (AttackMode)gs->hostAttackMode;
-        netTeamMode = gs->hostTeamMode;
         netTeamCount = gs->hostTeamCount;
         netRoomBotSkill = gs->hostBotSkill;
         netRoomSizeChoice = gs->hostRoomSizeChoice;
@@ -212,7 +211,7 @@ MainMenu::MainMenu(const SDL_Renderer *renderer)
 
 void MainMenu::SaveHostDefaults() {
     GameSettings::Instance()->SaveHostSettings(chainReactionEnabled, singlePlayerTargetting,
-        victoriesLimitIndex, netClearMode, (int)netAttackMode, netTeamMode, netTeamCount,
+        victoriesLimitIndex, netClearMode, (int)netAttackMode, netTeamCount,
         netRoomBotSkill, netRoomSizeChoice);
 }
 
@@ -223,7 +222,7 @@ void MainMenu::SyncRoomOptions() {
     netClient->SendOptions(chainReactionEnabled, /*continueWhenLeave=*/true,
         singlePlayerTargetting, vLimits[victoriesLimitIndex], playerColorCounts,
         playerNoCompress, playerAimGuide, netRoomMouseEnabled, netClearMode,
-        netAttackMode, netTeamMode, netPlayerTeams, netTeamCount);
+        netAttackMode, netPlayerTeams, netTeamCount);
     SaveHostDefaults();
 }
 
@@ -496,8 +495,7 @@ void MainMenu::ShowPanel(int which) {
             netRoomMouseEnabled = GameSettings::Instance()->mouseEnabled; // load persisted default
             netClearMode = GameSettings::Instance()->hostClearMode;
             netAttackMode = (AttackMode)GameSettings::Instance()->hostAttackMode;
-            netTeamMode = GameSettings::Instance()->hostTeamMode;
-            for (int i = 0; i < 5; i++) netPlayerTeams[i] = i + 1;
+            for (int i = 0; i < 5; i++) netPlayerTeams[i] = kNoTeam;
             lastProcessedChatCount = 0;
             break;
         }
@@ -512,8 +510,7 @@ void MainMenu::ShowPanel(int which) {
             netRoomMouseEnabled = GameSettings::Instance()->mouseEnabled; // load persisted default
             netClearMode = GameSettings::Instance()->hostClearMode;
             netAttackMode = (AttackMode)GameSettings::Instance()->hostAttackMode;
-            netTeamMode = GameSettings::Instance()->hostTeamMode;
-            for (int i = 0; i < 5; i++) netPlayerTeams[i] = i + 1;
+            for (int i = 0; i < 5; i++) netPlayerTeams[i] = kNoTeam;
             lastProcessedChatCount = 0;
             publicServers.clear();
 #ifdef __WASM_PORT__
@@ -624,7 +621,6 @@ void MainMenu::SetupNewGame(int mode) {
                 ns.singlePlayerTargetting = singlePlayerTargetting;
                 ns.clearMode = netClearMode;
                 ns.attackMode = netAttackMode;
-                ns.teamMode = netTeamMode;
                 // Always on: the room option that used to disable it is gone.
                 ns.continueWhenPlayersLeave = true;
                 static const int vLimits[] = {0,1,2,3,4,5,6,7,8,9,10,11,12,15,20,30,50,100};
@@ -634,14 +630,14 @@ void MainMenu::SetupNewGame(int mode) {
                     ns.disableCompression[i] = playerNoCompress[i];
                     ns.aimGuide[i] = playerAimGuide[i];
                 }
-                ns.teamCount = netTeamCount;
-                if (playerCount > 5 && netTeamMode && netClient && netClient->GetCurrentGame()) {
-                    // >5-cap: resolve each slot from auto-balance + nick overrides.
+                if (playerCount > 5 && netClient && netClient->GetCurrentGame()) {
+                    // >5-cap: resolve each slot from its nick-keyed choice.
                     GameRoom* curGame = netClient->GetCurrentGame();
                     for (int i = 0; i < playerCount && i < (int)curGame->players.size(); i++) {
                         const std::string& nk = curGame->players[i].nick;
-                        int ov = netTeamOverrides.count(nk) ? netTeamOverrides[nk] : 0;
-                        ns.playerTeams[i] = EffectiveTeam(i, netTeamCount, ov);
+                        auto it = netTeamOverrides.find(nk);
+                        ns.playerTeams[i] = it == netTeamOverrides.end()
+                            ? kNoTeam : ClampTeamOrNone(it->second);
                     }
                 } else {
                     // <=5-cap: unchanged grid path.

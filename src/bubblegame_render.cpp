@@ -83,8 +83,10 @@ void BubbleGame::UpdatePlayerNameWinText() {
         playerNameWinText[i].UpdateText(renderer, nameWinStr, 0);
 
         // Recolor by team so a team reads the same color here as in the lobby's
-        // team chips (kTeamColors, shared via bubblegame.h). No-op outside Team Mode.
-        if (currentSettings.teamMode) {
+        // team chips (kTeamColors, shared via bubblegame.h). A player on no
+        // team keeps the default color -- there is no chip for them anywhere
+        // else either, and kTeamColors[kNoTeam - 1] would read off the front.
+        if (currentSettings.playerTeams[i] != kNoTeam) {
             playerNameWinText[i].UpdateColor(kTeamColors[currentSettings.playerTeams[i] - 1], {0, 0, 0, 255});
         }
 
@@ -405,14 +407,15 @@ void BubbleGame::RenderRoundStats(SDL_Renderer *rend) {
     const int hintH = currentSettings.networkGame ? rowH : 0;
 
     // Distinct teams present, in ascending team-number order (team subtotal rows below).
+    // Real teams only: a "TEAM 0" subtotal row would be a total across players
+    // who are not on a side together, which is not a team score.
     std::vector<int> teams;
-    if (currentSettings.teamMode) {
-        for (int i = 0; i < n; i++) {
-            int t = currentSettings.playerTeams[i];
-            if (std::find(teams.begin(), teams.end(), t) == teams.end()) teams.push_back(t);
-        }
-        std::sort(teams.begin(), teams.end());
+    for (int i = 0; i < n; i++) {
+        int t = currentSettings.playerTeams[i];
+        if (t == kNoTeam) continue;
+        if (std::find(teams.begin(), teams.end(), t) == teams.end()) teams.push_back(t);
     }
+    std::sort(teams.begin(), teams.end());
     const int teamRows = teams.empty() ? 0 : (int)teams.size() + 1;  // +1 separator/header row
 
     const int boxH = headH + rowH * (n + 1 + teamRows) + hintH + 6;
@@ -471,8 +474,7 @@ void BubbleGame::RenderRoundStats(SDL_Renderer *rend) {
     for (int i = 0; i < n; i++) {
         BubbleArray &p = bubbleArrays[i];
         SDL_Color c = normal;
-        switch (RoundStatsRowColorKind(currentSettings.teamMode,
-                                       currentSettings.playerTeams[i], p.mpWinner)) {
+        switch (RoundStatsRowColorKind(currentSettings.playerTeams[i], p.mpWinner)) {
         case RoundStatsColorKind::TEAM:
             c = kTeamColors[currentSettings.playerTeams[i] - 1];
             break;

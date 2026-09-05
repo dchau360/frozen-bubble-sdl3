@@ -17,7 +17,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
-// The full-screen team picker for a Team Mode room.
+// The full-screen team picker for a network room.
 //
 // The room's own team controls are cramped by construction. A <=5-cap room
 // gives each player one cell of the settings grid -- 18 logical units tall,
@@ -64,24 +64,23 @@ int MainMenu::MyRoomSlot() const {
 int MainMenu::TeamOfSlot(int slot) const {
     NetworkClient* netClient = NetworkClient::Instance();
     GameRoom* room = netClient->GetCurrentGame();
-    if (!room || slot < 0 || slot >= (int)room->players.size()) return 1;
+    if (!room || slot < 0 || slot >= (int)room->players.size()) return kNoTeam;
 
     if (room->maxPlayers > 5) {
-        // Nick-keyed overrides over a round-robin default -- SETOPTIONS has
-        // no room to carry teams for P6-20, so a big room has no per-slot
-        // array to read.
+        // SETOPTIONS has no room to carry teams for P6-20, so a big room
+        // keeps explicit nick-keyed choices. An absent choice means no team.
         auto it = netTeamOverrides.find(room->players[slot].nick);
-        const int override = (it != netTeamOverrides.end()) ? it->second : 0;
-        return EffectiveTeam(slot, netTeamCount, override);
+        return it == netTeamOverrides.end()
+            ? kNoTeam : ClampTeamOrNone(it->second);
     }
-    return ClampTeamNumber(netPlayerTeams[slot]);
+    return ClampTeamOrNone(netPlayerTeams[slot]);
 }
 
 void MainMenu::ApplyTeamChoice(int slot, int team) {
     NetworkClient* netClient = NetworkClient::Instance();
     GameRoom* room = netClient->GetCurrentGame();
     if (!room || slot < 0 || slot >= (int)room->players.size()) return;
-    team = ClampTeamNumber(team);
+    team = ClampTeamOrNone(team);
 
     const std::string& nick = room->players[slot].nick;
     const bool isHost = room->creator == netClient->GetPlayerNick();
@@ -133,9 +132,11 @@ void MainMenu::TeamsPanelRender() {
     GameRoom* room = netClient->GetCurrentGame();
     // The room can go away underneath this page (kicked, host left, connection
     // dropped). Close rather than draw a page about nobody.
-    if (!room || !netTeamMode) {
+    if (!room) {
         showingTeamsPanel = false;
         teamSwatchTaps.clear();
+        teamPlayerNameTaps.clear();
+        teamAutoBalanceTaps.clear();
         teamsDoneRect = SDL_Rect{};
         return;
     }
@@ -146,12 +147,14 @@ void MainMenu::TeamsPanelRender() {
     const int playerCount = (int)room->players.size();
 
     teamSwatchTaps.clear();
+    teamPlayerNameTaps.clear();
+    teamAutoBalanceTaps.clear();
     teamsCursorPlayer = std::clamp(teamsCursorPlayer, 0, std::max(0, playerCount - 1));
 
-    // How many teams this room offers. A >5-cap room fixes it at netTeamCount
-    // (see the roster's own comment on why it isn't host-adjustable); a
-    // <=5-cap room has always let any of the five be picked.
-    const int teamCount = (room->maxPlayers > 5) ? ClampTeamNumber(netTeamCount) : kMaxTeams;
+    // Manual assignment always offers all five teams. The Auto 2..5 actions
+    // below choose how many of those teams to distribute players across;
+    // they do not hide the remaining manual choices.
+    const int teamCount = kMaxTeams;
 
     // The header's right-hand action is the visible way out. Its rect comes
     // back from DrawHeaderBar rather than being computed here, so the button
@@ -186,13 +189,43 @@ void MainMenu::TeamsPanelRender() {
         { SDL_FRect fr = ToFRect(*panelText.Coords()); SDL_RenderTexture(rend, panelText.Texture(), nullptr, &fr); }
     };
 
-    // Column header over the swatch block, so the numbers are identified once
+    // Column header over the swatch block, so the choices are identified once
     // rather than repeated on every row.
     const int swatchW = 34, swatchH = 26, swatchGap = 6;
-    const int swatchBlockW = teamCount * swatchW + (teamCount - 1) * swatchGap;
+    const int choiceCount = teamCount + 1;  // no-team plus teams 1..5
+    const int swatchBlockW = choiceCount * swatchW + (choiceCount - 1) * swatchGap;
     const int swatchX0 = body.x + body.w - 16 - swatchBlockW;
     drawText("PLAYER", body.x + 16, body.y + 10, menulist::kMuted, 13, TTF_STYLE_BOLD);
-    drawText("TEAM", swatchX0, body.y + 10, menulist::kMuted, 13, TTF_STYLE_BOLD);
+    drawText("NONE   1      2      3      4      5", swatchX0, body.y + 10,
+             menulist::kMuted, 11, TTF_STYLE_BOLD);
+
+    // Auto-balance is host-only because it changes every occupied seat. The
+    // buttons stay independent of the manual team range: Auto 2 distributes
+    // across teams 1 and 2, but Team 3..5 remain available for later edits.
+    if (isHost) {
+        drawText("AUTO", body.x + 128, body.y + 10, menulist::kMuted, 11, TTF_STYLE_BOLD);
+        const int autoW = 24, autoH = 22, autoGap = 4;
+        const int autoX0 = body.x + 168;
+        for (int count = 2; count <= kMaxTeams; ++count) {
+            SDL_Rect box = {autoX0 + (count - 2) * (autoW + autoGap), body.y + 4,
+                            autoW, autoH};
+            SDL_SetRenderDrawColor(rend, menulist::kSelFill.r, menulist::kSelFill.g,
+                                   menulist::kSelFill.b, 80);
+            { SDL_FRect fr = ToFRect(box); SDL_RenderFillRect(rend, &fr); }
+            SDL_SetRenderDrawColor(rend, menulist::kSelEdge.r, menulist::kSelEdge.g,
+                                   menulist::kSelEdge.b, 190);
+            { SDL_FRect fr = ToFRect(box); SDL_RenderRect(rend, &fr); }
+            char countText[4];
+            snprintf(countText, sizeof(countText), "%d", count);
+            panelText.UpdateStyle(13, TTF_STYLE_BOLD);
+            panelText.UpdateColor(menulist::kText, menulist::kTextShadow);
+            panelText.UpdateText(rend, countText, 0);
+            panelText.UpdatePosition({box.x + box.w/2 - panelText.Coords()->w/2,
+                                      box.y + box.h/2 - panelText.Coords()->h/2});
+            { SDL_FRect fr = ToFRect(*panelText.Coords()); SDL_RenderTexture(rend, panelText.Texture(), nullptr, &fr); }
+            teamAutoBalanceTaps.push_back({box, count});
+        }
+    }
     SDL_SetRenderDrawColor(rend, menulist::kEdge.r, menulist::kEdge.g, menulist::kEdge.b, 110);
     SDL_RenderLine(rend, (float)(body.x + 12), (float)(body.y + 28),
                    (float)(body.x + body.w - 12), (float)(body.y + 28));
@@ -237,12 +270,18 @@ void MainMenu::TeamsPanelRender() {
         drawText(label, body.x + 16, rowY + 4,
                  self ? menulist::kGold : menulist::kText, 15,
                  self ? TTF_STYLE_BOLD : TTF_STYLE_NORMAL);
+        if (editable) {
+            SDL_Rect nameRect = {body.x + 12, rowY - 3,
+                                 swatchX0 - body.x - 20, rowH - 4};
+            teamPlayerNameTaps.push_back({nameRect, slot});
+        }
 
         const int current = TeamOfSlot(slot);
-        for (int team = 1; team <= teamCount; team++) {
-            SDL_Rect box = {swatchX0 + (team - 1) * (swatchW + swatchGap), rowY - 1,
+        for (int team = kNoTeam; team <= teamCount; team++) {
+            SDL_Rect box = {swatchX0 + team * (swatchW + swatchGap), rowY - 1,
                             swatchW, swatchH};
-            const SDL_Color chip = kTeamColors[team - 1];
+            const SDL_Color chip = team == kNoTeam
+                ? SDL_Color{110, 128, 132, 255} : kTeamColors[team - 1];
             const bool on = (team == current);
 
             // The team's own colour, full strength for the team this player
@@ -260,7 +299,8 @@ void MainMenu::TeamsPanelRender() {
             { SDL_FRect fr = ToFRect(box); SDL_RenderRect(rend, &fr); }
 
             char num[4];
-            snprintf(num, sizeof(num), "%d", team);
+            if (team == kNoTeam) snprintf(num, sizeof(num), "-");
+            else snprintf(num, sizeof(num), "%d", team);
             panelText.UpdateStyle(14, on ? TTF_STYLE_BOLD : TTF_STYLE_NORMAL);
             panelText.UpdateColor(on ? menulist::kTextShadow
                                      : (editable ? menulist::kText : menulist::kMuted),
@@ -290,8 +330,8 @@ void MainMenu::TeamsPanelRender() {
     // TeamsPanelKey), a right-click, or a back-swipe -- the last two both
     // arrive here as ESC.
     menulist::DrawFooterHint(rend, panelText,
-        isHost ? "Tap a team    UP/DOWN player    LEFT/RIGHT team    ESC/Done to close"
-               : "Tap your team    LEFT/RIGHT team    ESC/Done to close");
+        isHost ? "Tap name to cycle    Auto 2-5    arrows move/change    ESC/Done closes"
+               : "Tap your name or a choice    LEFT/RIGHT changes    ESC/Done closes");
 }
 
 bool MainMenu::TeamsPanelKey(SDL_Event *e) {
@@ -304,7 +344,7 @@ bool MainMenu::TeamsPanelKey(SDL_Event *e) {
     const bool isHost = room->creator == netClient->GetPlayerNick();
     const int mySlot = MyRoomSlot();
     const int playerCount = (int)room->players.size();
-    const int teamCount = (room->maxPlayers > 5) ? ClampTeamNumber(netTeamCount) : kMaxTeams;
+    const int teamCount = kMaxTeams;
 
     switch (e->key.key) {
         case SDLK_ESCAPE:
@@ -331,9 +371,8 @@ bool MainMenu::TeamsPanelKey(SDL_Event *e) {
         case SDLK_RIGHT: {
             const int slot = isHost ? teamsCursorPlayer : mySlot;
             if (slot < 0 || slot >= playerCount) return true;
-            int team = TeamOfSlot(slot);
-            if (e->key.key == SDLK_LEFT) { team--; if (team < 1) team = teamCount; }
-            else                         { team++; if (team > teamCount) team = 1; }
+            const int direction = e->key.key == SDLK_LEFT ? -1 : 1;
+            const int team = StepTeamChoice(TeamOfSlot(slot), teamCount, direction);
             ApplyTeamChoice(slot, team);
             return true;
         }
@@ -357,6 +396,17 @@ bool MainMenu::HandleTeamsPanelTap(float lx, float ly) {
         return true;
     }
 
+    for (const TeamAutoBalanceTap& button : teamAutoBalanceTaps) {
+        if (!hit(button.rect)) continue;
+        NetworkClient* netClient = NetworkClient::Instance();
+        GameRoom* room = netClient->GetCurrentGame();
+        if (room && room->creator == netClient->GetPlayerNick()) {
+            for (int slot = 0; slot < (int)room->players.size(); ++slot)
+                ApplyTeamChoice(slot, AutoBalanceTeam(slot, button.teamCount));
+        }
+        return true;
+    }
+
     // One tap sets the team, rather than the select-then-activate dance the
     // room's own cramped rows need -- see this file's header comment. Only
     // swatches this client may change were published, so a hit here is
@@ -366,6 +416,14 @@ bool MainMenu::HandleTeamsPanelTap(float lx, float ly) {
         if (TeamOfSlot(swatch.slot) != swatch.team)
             ApplyTeamChoice(swatch.slot, swatch.team);
         teamsCursorPlayer = swatch.slot;
+        return true;
+    }
+
+    for (const TeamPlayerNameTap& name : teamPlayerNameTaps) {
+        if (!hit(name.rect)) continue;
+        ApplyTeamChoice(name.slot,
+                        StepTeamChoice(TeamOfSlot(name.slot), kMaxTeams, 1));
+        teamsCursorPlayer = name.slot;
         return true;
     }
 

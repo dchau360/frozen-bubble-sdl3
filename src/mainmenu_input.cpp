@@ -58,7 +58,7 @@ void MainMenu::HandleInput(SDL_Event *e){
             break;
         case SDL_EVENT_KEY_DOWN:
             // [A] opens the full-screen team picker (mainmenu_teampanel.cpp)
-            // from anywhere in a Team Mode room. It used to enter a
+            // from anywhere in a network room. It used to enter a
             // cycle-in-place mode over the >5-cap roster instead, which could
             // only step one team at a time through a row a couple of
             // millimetres tall and never showed what the teams were; the page
@@ -73,7 +73,7 @@ void MainMenu::HandleInput(SDL_Event *e){
                 selectedActionIndex != 0 && e->key.key == SDLK_A) {
                 NetworkClient* netClientT = NetworkClient::Instance();
                 GameRoom* curGameT = netClientT->GetCurrentGame();
-                if (curGameT && netTeamMode) {
+                if (curGameT) {
                     OpenTeamsPanel();
                     return;
                 }
@@ -1203,14 +1203,36 @@ void MainMenu::MenuUpKey() {
                                 std::vector<GameRoom> games = netClient->GetGameList();
                                 maxActions = (kLobbyFollow + 1) + games.size(); // Chat + Create + Follow + Join games
                             }
-                            // The HELP box parks selectedActionIndex on
-                            // kRoomHelpTapIndex, which is deliberately outside
-                            // this list. Fold it back to the last real row
-                            // first, or stepping from it would walk off the
-                            // end and leave nothing highlighted.
-                            if (selectedActionIndex >= maxActions) selectedActionIndex = maxActions - 1;
-                            selectedActionIndex--;
-                            if (selectedActionIndex < 0) selectedActionIndex = maxActions - 1;
+                            // The HELP box (kRoomHelpTapIndex) and the >5-cap
+                            // roster's tap rows park selectedActionIndex on fake
+                            // indices deliberately outside this list. Fold those
+                            // back to the last real row first, or stepping from
+                            // one would walk off the end and leave nothing
+                            // highlighted. The header's "Set Teams" button
+                            // (kRoomSetTeamsTapIndex) is the exception -- and
+                            // only while a room actually exists to show it; a
+                            // stale 952 after leaving the room folds like the
+                            // rest, or it would strand the lobby cursor.
+                            if (selectedActionIndex >= maxActions &&
+                                !(currentGame &&
+                                  selectedActionIndex == kRoomSetTeamsTapIndex))
+                                selectedActionIndex = maxActions - 1;
+
+                            if (currentGame) {
+                                if (selectedActionIndex == kRoomSetTeamsTapIndex) {
+                                    // "Set Teams" is the header button, so it sits
+                                    // above Chat in the cycle: Up from it wraps to
+                                    // the last real row.
+                                    selectedActionIndex = maxActions - 1;
+                                } else {
+                                    selectedActionIndex--;
+                                    if (selectedActionIndex < 0)
+                                        selectedActionIndex = kRoomSetTeamsTapIndex;
+                                }
+                            } else {
+                                selectedActionIndex--;
+                                if (selectedActionIndex < 0) selectedActionIndex = maxActions - 1;
+                            }
                             AudioMixer::Instance()->PlaySFX("menu_change");
 
                             // Joiner on Teams row: auto-focus their own column
@@ -1267,8 +1289,23 @@ void MainMenu::MenuDownKey() {
                                 std::vector<GameRoom> games = netClient->GetGameList();
                                 maxActions = (kLobbyFollow + 1) + games.size(); // Chat + Create + Follow + Join games
                             }
-                            selectedActionIndex++;
-                            if (selectedActionIndex >= maxActions) selectedActionIndex = 0;
+                            if (currentGame) {
+                                if (selectedActionIndex == kRoomSetTeamsTapIndex) {
+                                    // Down from the header button wraps to Chat.
+                                    selectedActionIndex = 0;
+                                } else if (selectedActionIndex >= maxActions) {
+                                    // Parked on HELP or a roster row: wrap to the
+                                    // top as before.
+                                    selectedActionIndex = 0;
+                                } else {
+                                    selectedActionIndex++;
+                                    if (selectedActionIndex >= maxActions)
+                                        selectedActionIndex = kRoomSetTeamsTapIndex;
+                                }
+                            } else {
+                                selectedActionIndex++;
+                                if (selectedActionIndex >= maxActions) selectedActionIndex = 0;
+                            }
                             AudioMixer::Instance()->PlaySFX("menu_change");
 
                             // Joiner on Teams row: auto-focus their own column
@@ -1298,13 +1335,9 @@ void MainMenu::MenuLeftRightKey(SDL_Event *e) {
                                 if (currentGame->players[i].nick == myNick) { mySlot = i; break; }
                             }
                             if (mySlot >= 0) {
-                                if (e->key.key == SDLK_LEFT) {
-                                    netPlayerTeams[mySlot]--;
-                                    if (netPlayerTeams[mySlot] < 1) netPlayerTeams[mySlot] = 5;
-                                } else {
-                                    netPlayerTeams[mySlot]++;
-                                    if (netPlayerTeams[mySlot] > 5) netPlayerTeams[mySlot] = 1;
-                                }
+                                netPlayerTeams[mySlot] = StepTeamChoice(
+                                    netPlayerTeams[mySlot], kMaxTeams,
+                                    e->key.key == SDLK_LEFT ? -1 : 1);
                                 AudioMixer::Instance()->PlaySFX("menu_change");
                                 char talkMsg[32];
                                 snprintf(talkMsg, sizeof(talkMsg), "!team:%s:%d", myNick.c_str(), netPlayerTeams[mySlot]);
@@ -1314,13 +1347,11 @@ void MainMenu::MenuLeftRightKey(SDL_Event *e) {
                             // Only host can change settings
                             bool settingChanged = false;
                             if (selectedActionIndex == kRoomMode) {
-                                int mode = netTeamMode ? 2 : (netClearMode ? 1 : 0);
+                                // Two states now (Classic <-> Clear), so
+                                // Left and Right agree -- see GameRoomHostReturn's
+                                // own comment on why Teams left this cycle.
                                 bool wasClear = netClearMode;
-                                mode += (e->key.key == SDLK_LEFT) ? -1 : 1;
-                                if (mode < 0) mode = 2;
-                                if (mode > 2) mode = 0;
-                                netClearMode = mode == 1;
-                                netTeamMode = mode == 2;
+                                netClearMode = !wasClear;
                                 if (netClearMode && !wasClear) {
                                     // Entering Clear Mode: remember current settings so leaving it can restore them.
                                     for (int i = 0; i < 5; i++) netPreClearNoCompress[i] = playerNoCompress[i];
@@ -1402,13 +1433,9 @@ void MainMenu::MenuLeftRightKey(SDL_Event *e) {
                                 int lo = (currentPlayerCol == 0) ? 0 : currentPlayerCol - 1;
                                 int hi = (currentPlayerCol == 0) ? numPlayers : currentPlayerCol;
                                 for (int i = lo; i < hi; i++) {
-                                    if (e->key.key == SDLK_LEFT) {
-                                        netPlayerTeams[i]--;
-                                        if (netPlayerTeams[i] < 1) netPlayerTeams[i] = 5;
-                                    } else {
-                                        netPlayerTeams[i]++;
-                                        if (netPlayerTeams[i] > 5) netPlayerTeams[i] = 1;
-                                    }
+                                    netPlayerTeams[i] = StepTeamChoice(
+                                        netPlayerTeams[i], kMaxTeams,
+                                        e->key.key == SDLK_LEFT ? -1 : 1);
                                 }
                                 AudioMixer::Instance()->PlaySFX("menu_change");
                                 settingChanged = true;
@@ -1641,15 +1668,17 @@ void MainMenu::GameRoomHostReturn(NetworkClient *netClient, GameRoom *currentGam
     if (numPlayers > 5) numPlayers = 5;
     bool settingChanged = false;
     if (selectedActionIndex == kRoomMode) {
-        // Cycle game mode: Classic -> Clear -> Teams -> Classic
-        int mode = netTeamMode ? 2 : (netClearMode ? 1 : 0);
-        int nextMode = (mode + 1) % 3;
+        // Cycle game mode: Classic <-> Clear.
+        //
+        // "Teams" used to be the third stop here, which made team play a
+        // property of the whole match: you could either have teams or Clear
+        // Mode, never both, and Classic could never have them at all. Teams
+        // are a per-player setting now (the Set Teams page), available in
+        // either mode, so the mode row is back to naming just the ruleset.
         bool wasClear = netClearMode;
         {
             AudioMixer::Instance()->PlaySFX("menu_change");
-            mode = nextMode;
-            netClearMode = mode == 1;
-            netTeamMode = mode == 2;
+            netClearMode = !wasClear;
             if (netClearMode && !wasClear) {
                 // Entering Clear Mode: remember current settings so leaving it can restore them.
                 for (int i = 0; i < 5; i++) netPreClearNoCompress[i] = playerNoCompress[i];
@@ -1795,6 +1824,13 @@ void MainMenu::MenuReturnKey() {
 
                                 if (selectedActionIndex == 0) {
                                     SubmitLobbyChatInput(netClient);
+                                } else if (selectedActionIndex == kRoomSetTeamsTapIndex) {
+                                    // ENTER on the header's "Set Teams" button
+                                    // opens the picker for host and joiner alike,
+                                    // matching the [A] hotkey and the tap path.
+                                    // OpenTeamsPanel parks either player on the row
+                                    // they may actually change.
+                                    OpenTeamsPanel();
                                 } else if (isHost) {
                                     GameRoomHostReturn(netClient, currentGame);
                                 } else if (!isHost && selectedActionIndex == kRoomTeam) {

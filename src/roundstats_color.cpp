@@ -1,8 +1,9 @@
 #include "roundstats_color.h"
 
-RoundStatsColorKind RoundStatsRowColorKind(bool teamMode, int team, bool winner) {
-    (void)team;
-    if (teamMode) return RoundStatsColorKind::TEAM;
+#include "netteams.h"   // kNoTeam
+
+RoundStatsColorKind RoundStatsRowColorKind(int team, bool winner) {
+    if (team != kNoTeam) return RoundStatsColorKind::TEAM;
     if (winner) return RoundStatsColorKind::WINNER;
     return RoundStatsColorKind::NORMAL;
 }

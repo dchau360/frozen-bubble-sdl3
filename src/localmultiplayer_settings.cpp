@@ -117,8 +117,6 @@ SetupSettings BuildLocalMultiplayerSettings(
     settings.localMultiplayer = true;
     settings.clearMode = options.clearMode;
     settings.attackMode = options.attackMode;
-    settings.teamMode = options.teamMode;
-    settings.teamCount = 2;
 
     const int victoriesIndex = std::clamp(
         options.victoriesIndex, 0,
@@ -126,7 +124,13 @@ SetupSettings BuildLocalMultiplayerSettings(
     settings.victoriesLimit = kVictoriesLimits[victoriesIndex];
 
     for (int i = 0; i < 5; ++i) {
-        settings.playerTeams[i] = options.teamMode ? (i % 2) + 1 : i + 1;
+        // Local multiplayer's own Team mode splits the couch into two sides;
+        // with it off nobody is on a team. That used to be spelled "team i+1",
+        // giving every player a private team number that the (now removed)
+        // teamMode flag then told the game to ignore -- kNoTeam says the same
+        // thing without needing the flag, and AreTeammates keeps two of them
+        // from reading as allies.
+        settings.playerTeams[i] = options.teamMode ? (i % 2) + 1 : kNoTeam;
         settings.playerColors[i] = options.colors[i];
         settings.disableCompression[i] = options.noCompression;
         settings.aimGuide[i] = options.aimGuide[i];
