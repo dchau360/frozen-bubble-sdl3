@@ -659,7 +659,7 @@ void MainMenu::KeysPanelRender() {
     { SDL_FRect fr = ToFRect(*panelText.Coords()); SDL_RenderTexture(rend, panelText.Texture(), nullptr, &fr); }
 
     menulist::DrawFooterHint(rend, panelText,
-        showingStatsUploadConfirm ? "ENTER confirm    ESC cancel"
+        showingStatsUploadConfirm ? "ENTER confirm    ESC cancel    or tap a button"
         : awaitKp ? "Press a button or key..."
                   : "UP/DOWN select    ENTER change    1-4 switch player    ESC done");
 
@@ -669,7 +669,7 @@ void MainMenu::KeysPanelRender() {
     // Spells out precisely what turning this on starts sending, since the
     // row's own "OFF -> ON" can't.
     if (showingStatsUploadConfirm) {
-        SDL_Rect box = {(640/2) - 155, (480/2) - 95, 310, 190};
+        SDL_Rect box = {(640/2) - 155, (480/2) - 112, 310, 224};
         SDL_SetRenderDrawBlendMode(rend, SDL_BLENDMODE_BLEND);
         SDL_SetRenderDrawColor(rend, menulist::kHeaderFill.r, menulist::kHeaderFill.g,
                                 menulist::kHeaderFill.b, 245);
@@ -703,6 +703,31 @@ void MainMenu::KeysPanelRender() {
         panelText.UpdateText(rend, body, 290);
         panelText.UpdatePosition({box.x + 12, box.y + 40});
         { SDL_FRect fr = ToFRect(*panelText.Coords()); SDL_RenderTexture(rend, panelText.Texture(), nullptr, &fr); }
+
+        // Two tappable buttons -- ENTER/ESC already worked from a keyboard,
+        // but this popup had no touch equivalent at all: HandlePanelTap's
+        // generic row hit-testing sits underneath it and belongs to whatever
+        // row was selected before the popup opened, not to this modal (see
+        // HandlePanelTap's own showingStatsUploadConfirm branch, which reads
+        // the rects stored below rather than routing through that row list).
+        statsConfirmYesRect = {box.x + 12, box.y + box.h - 34, 135, 26};
+        statsConfirmNoRect  = {box.x + box.w - 12 - 135, box.y + box.h - 34, 135, 26};
+        auto drawConfirmButton = [&](const SDL_Rect& r, const char* label, bool gold) {
+            SDL_SetRenderDrawColor(rend, 10, 38, 48, 210);
+            { SDL_FRect fr = ToFRect(r); SDL_RenderFillRect(rend, &fr); }
+            SDL_Color edge = gold ? menulist::kGold : menulist::kMuted;
+            SDL_SetRenderDrawColor(rend, edge.r, edge.g, edge.b, 255);
+            { SDL_FRect fr = ToFRect(r); SDL_RenderRect(rend, &fr); }
+            panelText.UpdateStyle(14, TTF_STYLE_BOLD);
+            panelText.UpdateColor(gold ? menulist::kGold : menulist::kText, menulist::kTextShadow);
+            panelText.UpdateText(rend, label, 0);
+            panelText.UpdatePosition({r.x + r.w/2 - panelText.Coords()->w/2,
+                                       r.y + r.h/2 - panelText.Coords()->h/2});
+            { SDL_FRect fr = ToFRect(*panelText.Coords()); SDL_RenderTexture(rend, panelText.Texture(), nullptr, &fr); }
+        };
+        drawConfirmButton(statsConfirmYesRect, "Turn On", true);
+        drawConfirmButton(statsConfirmNoRect, "Cancel", false);
+
         panelText.UpdateAlignment(TTF_HORIZONTAL_ALIGN_CENTER);  // restore default for the rest of this panel
     }
 }

@@ -562,6 +562,29 @@ void MainMenu::AddPanelTapRow(int index, const SDL_Rect& rect, int subIndex,
 }
 
 bool MainMenu::HandlePanelTap(float lx, float ly, float verticalDrift) {
+    // The "upload highscore stats?" popup is modal and sits on top of the
+    // settings row list, but panelTapRows still holds that list's rows
+    // underneath it -- checked here, first, so a tap never falls through to
+    // whichever hidden row happens to occupy this screen position. Every tap
+    // is consumed while this is showing, hit or miss, since letting a miss
+    // fall through would let it silently move the row selection underneath
+    // (previously the only way to react to this popup at all was a physical
+    // ENTER/ESC keypress -- there was no touch equivalent).
+    if (showingKeysPanel && showingStatsUploadConfirm) {
+        auto hit = [&](const SDL_Rect& r) {
+            return lx >= r.x && lx < r.x + r.w && ly >= r.y && ly < r.y + r.h;
+        };
+        SDL_Keycode key = SDLK_UNKNOWN;
+        if (hit(statsConfirmYesRect)) key = SDLK_RETURN;
+        else if (hit(statsConfirmNoRect)) key = SDLK_ESCAPE;
+        if (key != SDLK_UNKNOWN) {
+            SDL_Event ev = {};
+            ev.type = SDL_EVENT_KEY_DOWN;
+            ev.key.key = key;
+            SDL_PushEvent(&ev);
+        }
+        return true;
+    }
     // While the key panel is waiting for a key to bind, or a text field is being
     // edited, a tap is not a row press. Consuming it here would swallow the
     // gesture that gets the player back out of that state.
