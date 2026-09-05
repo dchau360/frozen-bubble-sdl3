@@ -585,6 +585,28 @@ bool MainMenu::HandlePanelTap(float lx, float ly, float verticalDrift) {
         }
         return true;
     }
+    // The "Enable chain reaction? Y or N?" prompt (OptPanelRender /
+    // NetSetupPanelRender -- random level, multiplayer training, and network
+    // game all share it) is modal the same way, and registers no rows of its
+    // own -- checked here for the same reason as showingStatsUploadConfirm
+    // above, so a tap never falls through to whatever row list is stale
+    // underneath. Previously any key but ESC answered this from a
+    // keyboard/gamepad; there was no touch equivalent at all.
+    if ((showingOptPanel || showingNetSetupPanel) && awaitKp) {
+        auto hit = [&](const SDL_Rect& r) {
+            return lx >= r.x && lx < r.x + r.w && ly >= r.y && ly < r.y + r.h;
+        };
+        if (hit(optYesRect)) {
+            AudioMixer::Instance()->PlaySFX("typewriter");
+            lastOptInput = SDLK_Y;
+            awaitKp = false;
+        } else if (hit(optNoRect)) {
+            AudioMixer::Instance()->PlaySFX("typewriter");
+            lastOptInput = SDLK_N;
+            awaitKp = false;
+        }
+        return true;
+    }
     // While the key panel is waiting for a key to bind, or a text field is being
     // edited, a tap is not a row press. Consuming it here would swallow the
     // gesture that gets the player back out of that state.
