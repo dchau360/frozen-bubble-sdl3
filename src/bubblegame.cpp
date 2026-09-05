@@ -1291,10 +1291,21 @@ void BubbleGame::ReloadGame(int level) {
     // Clear mid-round state that doesn't persist between rounds
     singleBubbles.clear();
     malusBubbles.clear();
+    // Classic solo campaign keeps score accumulating across levels within a
+    // life now, instead of restarting each level from 0 -- every other mode
+    // (local multiplayer, network, mp_train, random levels) still gets a
+    // fresh per-round score below, since each of those rounds is its own
+    // independent tally (mp_train in particular: the original Perl always
+    // resets its score to 0 every round, being a short training drill
+    // rather than campaign progress -- see new_game()'s mp_train branch).
+    bool isDefaultClassic = !currentSettings.networkGame &&
+                             currentSettings.playerCount == 1 &&
+                             !currentSettings.randomLevels &&
+                             !currentSettings.mpTraining;
     for (int i = 0; i < currentSettings.playerCount; i++) {
         bubbleArrays[i].malusQueue.clear();
         bubbleArrays[i].chainLevel = 0;
-        bubbleArrays[i].score = 0;
+        if (!isDefaultClassic) bubbleArrays[i].score = 0;
         bubbleArrays[i].explodeWait = EXPLODE_FRAMEWAIT;
         bubbleArrays[i].frozenWait = FROZEN_FRAMEWAIT;
         bubbleArrays[i].prelightTime = PRELIGHT_SLOW;
