@@ -1,5 +1,18 @@
 # Changelog
 
+## v2.4.73
+
+- **Fixed highscore score-text position for entries 6-10.** The previous
+  release's highscore grid-alignment fix only corrected the mini-screenshot
+  thumbnail positions. The score *text* (level and time) for each entry is
+  positioned by a separate formula in `CreateLevelImages()` that had the same
+  class of bug -- it split rows at the wrong boundary and never wrapped the
+  column back to 0 for row 2, so with 6+ local highscore entries the 6th
+  entry's text rendered clipped against the screen edge and the 7th-10th
+  entries' text rendered entirely off-canvas. All 10 mini-screenshots showed
+  correctly, but only the first 5 entries had visible score text. Now uses
+  the same row/column layout as the thumbnail positions.
+
 ## v2.4.72
 
 - **Classic solo score now accumulates across levels within a life.**

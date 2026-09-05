@@ -19,7 +19,7 @@
 }:
 clangStdenv.mkDerivation {
   pname = "frozen-bubble-sdl3";
-  version = "2.4.72";  # keep in step with project(... VERSION ...) in CMakeLists.txt (REL-004)
+  version = "2.4.73";  # keep in step with project(... VERSION ...) in CMakeLists.txt (REL-004)
 
   src = lib.cleanSource ./.;
 

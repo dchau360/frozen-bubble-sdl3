@@ -246,7 +246,7 @@ jobs:
         id: package_version
         run: |
           version="${GITHUB_REF_NAME#v}"
-          if [[ "$GITHUB_REF" != refs/tags/v* ]]; then version="2.4.72"; fi
+          if [[ "$GITHUB_REF" != refs/tags/v* ]]; then version="2.4.73"; fi
           echo "value=$version" >> "$GITHUB_OUTPUT"
 
       - name: Install dependencies
@@ -389,7 +389,7 @@ jobs:
         id: package_version
         run: |
           version="${GITHUB_REF_NAME#v}"
-          if [[ "$GITHUB_REF" != refs/tags/v* ]]; then version="2.4.72"; fi
+          if [[ "$GITHUB_REF" != refs/tags/v* ]]; then version="2.4.73"; fi
           echo "value=$version" >> "$GITHUB_OUTPUT"
 
       - name: Download SDL3 prebuilt MinGW libs
