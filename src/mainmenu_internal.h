@@ -151,6 +151,18 @@ static const int kRoomHelpTapIndex = 950;
 // all of those funnel through this one lobby screen once connected.
 static const int kLobbyFollow = 2;
 
+// Fake row indices for the >5-cap compact roster's per-player rows (game
+// room, NetPanelLobbyActionsRender in mainmenu_netpanel.cpp). Entering
+// per-player team-assignment mode used to be reachable only through the [A]
+// hotkey (see the comment on that check in MainMenu::HandleInput) -- a
+// touch-only player had no way to reach it at all. One slot per possible
+// seat, sized to the largest room (kRoomSizes' cap of 20), and kept well
+// clear of kRoomHelpTapIndex/kLocalMPHelpTapIndex for the same reason those
+// sit outside the GameRoomRow range: taking a real slot would renumber every
+// row after it.
+static const int kRoomRosterTapBase = 960;   // 960..979
+static const int kRoomRosterTapSlots = 20;
+
 // Texture dimensions helper (mainmenu.cpp).
 SDL_Point GetSize(SDL_Texture *texture);
 
