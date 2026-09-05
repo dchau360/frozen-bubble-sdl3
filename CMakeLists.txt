@@ -466,6 +466,30 @@ if(BUILD_TESTING AND NOT EMSCRIPTEN AND NOT ANDROID AND NOT IOS)
     target_link_libraries(logger-priority-test PRIVATE SDL3::SDL3)
     add_test(NAME logger-priority-test COMMAND logger-priority-test)
 
+    add_executable(statspanelcell-cache-test
+        tests/statspanelcell_cache_test.cpp
+        ${FROZEN_BUBBLE_CORE_SOURCES}
+    )
+    set_property(TARGET statspanelcell-cache-test PROPERTY CXX_STANDARD 17)
+    set_property(TARGET statspanelcell-cache-test PROPERTY CXX_EXTENSIONS OFF)
+    target_include_directories(statspanelcell-cache-test PRIVATE src)
+    target_compile_definitions(statspanelcell-cache-test PRIVATE
+        FROZEN_BUBBLE_TEST_ACCESS
+        DATA_DIR="${ASSET_PATH}"
+        APP_VERSION="v${PROJECT_VERSION}"
+    )
+    target_link_libraries(statspanelcell-cache-test PRIVATE
+        SDL3::SDL3
+        SDL3_image::SDL3_image
+        SDL3_mixer::SDL3_mixer
+        SDL3_ttf::SDL3_ttf
+        iniparser-static
+    )
+    if(WIN32 OR MINGW)
+        target_link_libraries(statspanelcell-cache-test PRIVATE ws2_32)
+    endif()
+    add_test(NAME statspanelcell-cache-test COMMAND statspanelcell-cache-test)
+
     add_executable(localmultiplayer-header-compile-test
         tests/localmultiplayer_header_compile_test.cpp
         src/localmultiplayer_settings.cpp

@@ -153,7 +153,7 @@ void BubbleGame::UpdatePlayerNameWinText() {
 }
 
 
-void BubbleGame::UpdateScoreText(BubbleArray &bArray) {
+void BubbleGame::UpdateScoreText(BubbleArray &bArray, int slot) {
     char scoreStr[64];
     // For 2-player network games, show only player nickname (no score) in wooden banners
     // For 3+ player games, show "Nickname: Score"
@@ -170,14 +170,16 @@ void BubbleGame::UpdateScoreText(BubbleArray &bArray) {
         snprintf(scoreStr, sizeof(scoreStr), "Score: %d", bArray.score);
     }
 
-    // Use shared scoreText object but update and render for each player
+    // One scoreText slot per player (single-player uses slot 0; the 2P branch
+    // passes each player's own index) so each player's line keeps its own
+    // cache instead of alternating a shared object between different strings.
     // In multiplayer, this gets called once per player in the render loop
-    // Each call updates the text and renders immediately at the player's score position
-    scoreText.UpdateText(renderer, scoreStr, 0);
-    scoreText.UpdatePosition(bArray.scorePos);
+    // and rendered immediately at that player's score position.
+    scoreText[slot].UpdateText(renderer, scoreStr, 0);
+    scoreText[slot].UpdatePosition(bArray.scorePos);
 
     // Render immediately (original: print_scores renders each player's score in the loop)
-    { SDL_FRect fr = ToFRect(*scoreText.Coords()); SDL_RenderTexture(const_cast<SDL_Renderer*>(renderer), scoreText.Texture(), nullptr, &fr); }
+    { SDL_FRect fr = ToFRect(*scoreText[slot].Coords()); SDL_RenderTexture(const_cast<SDL_Renderer*>(renderer), scoreText[slot].Texture(), nullptr, &fr); }
 }
 
 
@@ -289,7 +291,33 @@ static void DrawAimGuide(SDL_Renderer* rend, const BubbleArray& bArray, bool isM
 }
 
 
+// Returns the pool's cell at `idx`, growing the pool and loading each newly
+// added slot's font on first use. Backs the post-round stats table, royale
+// HUD, and malus-alert toasts: each renders a per-frame count of text cells
+// that varies with player count/teams/stacked alerts, and giving every cell
+// its own persistent slot (addressed by call order) means a cell whose text
+// hasn't changed since last frame keeps its cached texture, instead of one
+// shared TTFText invalidating on every other cell's different text.
+//
+// The returned reference is only valid until the next call that grows this
+// same pool (pool.resize() below can reallocate). Every call site fetches,
+// updates, and renders one cell within a single statement/expression and
+// never holds the reference across another cell's call, so this is safe in
+// practice -- but don't stash the result in a local that outlives a sibling
+// StatsPanelCell() call on the same pool.
+TTFText &BubbleGame::StatsPanelCell(std::vector<TTFText> &pool, size_t idx, int fontSize) {
+    if (idx >= pool.size()) {
+        size_t oldSize = pool.size();
+        pool.resize(idx + 1);
+        for (size_t j = oldSize; j <= idx; j++) {
+            pool[j].LoadFont(ASSET("/gfx/DroidSans.ttf").c_str(), fontSize);
+        }
+    }
+    return pool[idx];
+}
+
 void BubbleGame::RenderMalusAlerts(SDL_Renderer *rend) {
+    size_t alertIdx = 0;
     for (int i = 0; i < currentSettings.playerCount; i++) {
         BubbleArray &p = bubbleArrays[i];
         if (p.malusAlerts.empty()) continue;
@@ -310,19 +338,21 @@ void BubbleGame::RenderMalusAlerts(SDL_Renderer *rend) {
                 snprintf(buf, sizeof(buf), "Blocked  -%d", a.count);
             else
                 snprintf(buf, sizeof(buf), "%s  +%d", a.fromNick.c_str(), a.count);
-            malusAlertText.UpdateText(rend, buf, 0);
-            int tw = malusAlertText.Coords()->w;
+            TTFText &alertText = StatsPanelCell(malusAlertPool, alertIdx++, 16);
+            alertText.UpdateColor({255, 140, 40, 255}, {0, 0, 0, 0});  // Orange "incoming malus" toast
+            alertText.UpdateText(rend, buf, 0);
+            int tw = alertText.Coords()->w;
             int x = ax;
             if (x + tw > 636) x = 636 - tw;  // keep on-screen
             if (x < 4) x = 4;
             int y = ay - line * lineH;
             if (y < 2) y = 2;
-            malusAlertText.UpdatePosition({x, y});
-            SDL_Texture *tex = malusAlertText.Texture();
+            alertText.UpdatePosition({x, y});
+            SDL_Texture *tex = alertText.Texture();
             if (tex) {
                 Uint8 alpha = a.framesLeft >= 40 ? 255 : (Uint8)(a.framesLeft * 255 / 40);  // fade out
                 SDL_SetTextureAlphaMod(tex, alpha);
-                SDL_FRect fr = ToFRect(*malusAlertText.Coords());
+                SDL_FRect fr = ToFRect(*alertText.Coords());
                 SDL_RenderTexture(rend, tex, nullptr, &fr);
                 SDL_SetTextureAlphaMod(tex, 255);
             }
@@ -350,13 +380,15 @@ void BubbleGame::RenderRoyaleHud(SDL_Renderer *rend) {
     int pageStart = netViewPage * 4 + 1;
     int pageEnd = std::min(pageStart + 3, n - 1);
 
+    size_t cellIdx = 0;
     auto cell = [&](const char *txt, int x, int y, SDL_Color c) {
-        statsText.UpdateColor(c, {0, 0, 0, 0});
-        statsText.UpdateText(rend, txt, 0);
-        statsText.UpdatePosition({x, y});
-        if (statsText.Texture()) {
-            SDL_FRect fr = ToFRect(*statsText.Coords());
-            SDL_RenderTexture(rend, statsText.Texture(), nullptr, &fr);
+        TTFText &t = StatsPanelCell(royaleHudCellPool, cellIdx++);
+        t.UpdateColor(c, {0, 0, 0, 0});
+        t.UpdateText(rend, txt, 0);
+        t.UpdatePosition({x, y});
+        if (t.Texture()) {
+            SDL_FRect fr = ToFRect(*t.Coords());
+            SDL_RenderTexture(rend, t.Texture(), nullptr, &fr);
         }
     };
 
@@ -439,13 +471,15 @@ void BubbleGame::RenderRoundStats(SDL_Renderer *rend) {
     const int colBlk = boxX + 424;
     const int colKills = boxX + 476;
 
+    size_t cellIdx = 0;
     auto cell = [&](const char *txt, int x, int y, SDL_Color c) {
-        statsText.UpdateColor(c, {0, 0, 0, 0});
-        statsText.UpdateText(rend, txt, 0);
-        statsText.UpdatePosition({x, y});
-        if (statsText.Texture()) {
-            SDL_FRect fr = ToFRect(*statsText.Coords());
-            SDL_RenderTexture(rend, statsText.Texture(), nullptr, &fr);
+        TTFText &t = StatsPanelCell(statsCellPool, cellIdx++);
+        t.UpdateColor(c, {0, 0, 0, 0});
+        t.UpdateText(rend, txt, 0);
+        t.UpdatePosition({x, y});
+        if (t.Texture()) {
+            SDL_FRect fr = ToFRect(*t.Coords());
+            SDL_RenderTexture(rend, t.Texture(), nullptr, &fr);
         }
     };
 
@@ -806,7 +840,7 @@ void BubbleGame::Render() {
         { SDL_FRect fr = ToFRect(*inGameText.Coords()); SDL_RenderTexture(rend, inGameText.Texture(), nullptr, &fr); }
 
         // Display score (UpdateScoreText now renders immediately)
-        UpdateScoreText(curArray);
+        UpdateScoreText(curArray, 0);
 
         // Multiplayer training: show countdown timer and training score
         if (currentSettings.mpTraining && mpTrainStartTime > 0) {
@@ -924,7 +958,7 @@ void BubbleGame::Render() {
             // In 3+ player games, skip score text — win counts are shown via UpdatePlayerNameWinText
             // at the same screen positions, so rendering both would cause overlapping text.
             if (curArray.boardVisible && currentSettings.playerCount < 3) {
-                UpdateScoreText(curArray);
+                UpdateScoreText(curArray, i);
             }
 
             // Display "left" overlay for players who actually disconnected (original line 1951-1955)
@@ -1030,7 +1064,7 @@ void BubbleGame::Render() {
                 if (!targetNick.empty()) {
                     char tgtBuf[64];
                     snprintf(tgtBuf, sizeof(tgtBuf), "> %s", targetNick.c_str());
-                    targetingText.UpdateText(rend, tgtBuf, 0);
+                    targetingText[i].UpdateText(rend, tgtBuf, 0);
                     // Position: near each player's shooter area
                     int tx, ty;
                     if (curArray.playerAssigned == 0) {
@@ -1040,8 +1074,8 @@ void BubbleGame::Render() {
                         tx = curArray.shooterSprite.rect.x;
                         ty = curArray.shooterSprite.rect.y + curArray.shooterSprite.rect.h;
                     }
-                    targetingText.UpdatePosition({tx, ty});
-                    { SDL_FRect fr = ToFRect(*targetingText.Coords()); SDL_RenderTexture(rend, targetingText.Texture(), nullptr, &fr); }
+                    targetingText[i].UpdatePosition({tx, ty});
+                    { SDL_FRect fr = ToFRect(*targetingText[i].Coords()); SDL_RenderTexture(rend, targetingText[i].Texture(), nullptr, &fr); }
                 }
             }
         }
@@ -1167,7 +1201,7 @@ void BubbleGame::Render() {
     if (currentSettings.networkGame) {
         if (!inGameChatMessages.empty() || chattingMode) {
             const int lineH   = 18;
-            const int maxShow = 3;
+            const int maxShow = kMaxChatLines;
             const int chatX   = 5;
             // Base Y: bottom of screen with room for maxShow lines
             const int baseY   = 480 - maxShow * lineH - 2;
@@ -1200,10 +1234,14 @@ void BubbleGame::Render() {
                 snprintf(lineBuf, sizeof(lineBuf), "%s: %s",
                          inGameChatMessages[i].nick.c_str(),
                          inGameChatMessages[i].text.c_str());
-                chatLineText.UpdateText(rend, lineBuf, 630);
-                chatLineText.UpdatePosition({chatX, baseY + (i - start) * lineH});
-                if (chatLineText.Texture())
-                    { SDL_FRect fr = ToFRect(*chatLineText.Coords()); SDL_RenderTexture(rend, chatLineText.Texture(), nullptr, &fr); }
+                // One slot per displayed line (bounded by maxShow, i.e. kMaxChatLines) so
+                // a line whose text is unchanged from last frame keeps its texture,
+                // instead of one shared object invalidating on every other line's text.
+                int slot = i - start;
+                chatLineText[slot].UpdateText(rend, lineBuf, 630);
+                chatLineText[slot].UpdatePosition({chatX, baseY + slot * lineH});
+                if (chatLineText[slot].Texture())
+                    { SDL_FRect fr = ToFRect(*chatLineText[slot].Coords()); SDL_RenderTexture(rend, chatLineText[slot].Texture(), nullptr, &fr); }
             }
         }
 

@@ -124,8 +124,10 @@ BubbleGame::BubbleGame(const SDL_Renderer *renderer)
     // texture through an indeterminate rect and never appeared at all
     // (audit finding BUG-043). Smaller than inGameText: it sits just above or
     // below a player's shooter and has to fit beside the mini boards.
-    targetingText.LoadFont(ASSET("/gfx/DroidSans.ttf").c_str(), 12);
-    targetingText.UpdateColor({255, 255, 255, 255}, {0, 0, 0, 255});
+    for (int i = 0; i < MAX_NET_PLAYERS; i++) {
+        targetingText[i].LoadFont(ASSET("/gfx/DroidSans.ttf").c_str(), 12);
+        targetingText[i].UpdateColor({255, 255, 255, 255}, {0, 0, 0, 255});
+    }
 
     winsP1Text.LoadFont(ASSET("/gfx/DroidSans.ttf").c_str(), 20);
     winsP1Text.UpdateAlignment(TTF_HORIZONTAL_ALIGN_CENTER);
@@ -135,9 +137,11 @@ BubbleGame::BubbleGame(const SDL_Renderer *renderer)
     winsP2Text.UpdateAlignment(TTF_HORIZONTAL_ALIGN_CENTER);
     winsP2Text.UpdateColor({255, 255, 255, 255}, {0, 0, 0, 255});
 
-    scoreText.LoadFont(ASSET("/gfx/DroidSans.ttf").c_str(), 24);
-    scoreText.UpdateAlignment(TTF_HORIZONTAL_ALIGN_LEFT);
-    scoreText.UpdateColor({255, 255, 255, 255}, {0, 0, 0, 255});
+    for (int i = 0; i < 2; i++) {
+        scoreText[i].LoadFont(ASSET("/gfx/DroidSans.ttf").c_str(), 24);
+        scoreText[i].UpdateAlignment(TTF_HORIZONTAL_ALIGN_LEFT);
+        scoreText[i].UpdateColor({255, 255, 255, 255}, {0, 0, 0, 255});
+    }
 
     comboText.LoadFont(ASSET("/gfx/DroidSans.ttf").c_str(), 32);
     comboText.UpdateAlignment(TTF_HORIZONTAL_ALIGN_CENTER);
@@ -164,16 +168,16 @@ BubbleGame::BubbleGame(const SDL_Renderer *renderer)
     }
 
     // In-game chat text (white on transparent — overlay drawn separately)
-    chatLineText.LoadFont(ASSET("/gfx/DroidSans.ttf").c_str(), 14);
-    chatLineText.UpdateColor({255, 255, 255, 255}, {0, 0, 0, 0});
+    for (int i = 0; i < kMaxChatLines; i++) {
+        chatLineText[i].LoadFont(ASSET("/gfx/DroidSans.ttf").c_str(), 14);
+        chatLineText[i].UpdateColor({255, 255, 255, 255}, {0, 0, 0, 0});
+    }
     chatInputText.LoadFont(ASSET("/gfx/DroidSans.ttf").c_str(), 14);
     chatInputText.UpdateColor({255, 255, 100, 255}, {0, 0, 0, 0});  // Yellow for input
 
-    statsText.LoadFont(ASSET("/gfx/DroidSans.ttf").c_str(), 14);
-    statsText.UpdateColor({255, 255, 255, 255}, {0, 0, 0, 0});
-
-    malusAlertText.LoadFont(ASSET("/gfx/DroidSans.ttf").c_str(), 16);
-    malusAlertText.UpdateColor({255, 140, 40, 255}, {0, 0, 0, 0});  // Orange "incoming malus" toast
+    // statsCellPool, royaleHudCellPool, and malusAlertPool grow lazily via
+    // StatsPanelCell() the first time each pool needs another cell slot, since
+    // their cell counts vary with player count/teams and aren't known here.
 }
 
 

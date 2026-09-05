@@ -674,19 +674,32 @@ private:
         if (audMixer != nullptr) audMixer->PlaySFX(id);
     }
 
-    TTFText inGameText, winsP1Text, winsP2Text, scoreText, comboText, finalScoreText, mpTrainText;
+    TTFText inGameText, winsP1Text, winsP2Text, comboText, finalScoreText, mpTrainText;
     TTFText clearWinText;    // "Board Cleared — <Name> Wins!" banner, shown when wonByClearing
+    // One slot per player rather than one shared object: a shared TTFText's cache
+    // only remembers its last string, so reusing it across a per-player loop where
+    // each player's text differs would invalidate and re-render every single call
+    // even when nothing about that player's own line changed frame to frame.
+    TTFText scoreText[2];     // "Score: N" / "Nickname[: N]", indexed by player slot (single-player and 2P only)
     TTFText playerNameWinText[MAX_NET_PLAYERS];  // "PlayerName: WinCount" for each player (3-5 player mode)
-    TTFText targetingText;   // Reused to render targeting indicators in MP mode
-    TTFText statsText;       // Reused per cell to render the post-round stats table
-    TTFText malusAlertText;  // Reused to render "incoming malus" toasts
+    TTFText targetingText[MAX_NET_PLAYERS];      // Targeting indicator, indexed by player
+    // Post-round stats table and royale HUD render a variable number of text
+    // cells per frame (up to MAX_NET_PLAYERS rows x 8 columns for stats). Each
+    // panel gets its own growable pool, addressed by call order via
+    // StatsPanelCell(), so a cell whose text is unchanged from last frame keeps
+    // its cached texture instead of fighting every other cell for one shared slot.
+    std::vector<TTFText> statsCellPool;
+    std::vector<TTFText> royaleHudCellPool;
+    std::vector<TTFText> malusAlertPool;
+    TTFText &StatsPanelCell(std::vector<TTFText> &pool, size_t idx, int fontSize = 14);
 
     // In-game chat (network games only)
     struct InGameChatMsg { std::string nick; std::string text; int framesLeft; };
     std::vector<InGameChatMsg> inGameChatMessages;
     bool chattingMode = false;
     char chatInputBuf[256] = {};
-    TTFText chatLineText;       // Reused per message line
+    static constexpr int kMaxChatLines = 3;   // Render()'s maxShow is defined as this, to keep them in lockstep
+    TTFText chatLineText[kMaxChatLines];      // Indexed by displayed line slot
     TTFText chatInputText;      // Input line ("Say: {text}_")
     SDL_Rect statsChatBtn = {0, 0, 0, 0}; // Tappable CHAT button on the round-end stats panel
 
@@ -702,7 +715,7 @@ private:
     void ExpandNewLane(BubbleArray &bArray);
     void Update2PText();
     void UpdatePlayerNameWinText();  // Update "PlayerName: WinCount" for 3-5 player mode
-    void UpdateScoreText(BubbleArray &bArray);
+    void UpdateScoreText(BubbleArray &bArray, int slot);
     SDL_Texture** GetBubbleTextures(bool mini = false); // Returns appropriate bubble textures based on colorblind mode and size
 
     void CheckPossibleDestroy(BubbleArray &bArray);
