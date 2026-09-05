@@ -764,8 +764,17 @@ void BubbleGame::Render() {
             }
         }
 
-        if(singleBubbles.size() > 0) {
-            UpdateSingleBubbles(0);
+        // Unconditional, matching the >=2-player branch below (see its own
+        // comment on this same call): UpdateSingleBubbles also drives
+        // malusBubbles toward their stick position (bubblegame_shooter.cpp,
+        // UpdateSingleBubblesAtScale), and mp_train can have malus on screen
+        // with singleBubbles empty -- between shots, nothing is currently
+        // launching. Gating this call on singleBubbles.size() > 0 stalled
+        // that malus animation dead in place until the next shot fired a
+        // new SingleBubble and this ran again, which is what "malus pauses
+        // and only continues once I shoot" was live.
+        UpdateSingleBubbles(0);
+        if (singleBubbles.size() > 0) {
             for (SingleBubble &bubble : singleBubbles) bubble.Render(rend, useBubbles);
         }
 
