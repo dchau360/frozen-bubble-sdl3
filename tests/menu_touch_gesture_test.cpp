@@ -151,12 +151,33 @@ struct MainMenuTestAccess {
         }
         return 0;
     }
-    // The >5-cap compact roster's per-player team-assignment state (see
-    // kRoomRosterTapBase in mainmenu_internal.h): previously reachable only
-    // via the [A] hotkey, with no touch path at all.
-    static bool RosterEditMode(const MainMenu& menu) { return menu.netRosterEditMode; }
-    static int RosterCursor(const MainMenu& menu) { return menu.netRosterCursor; }
+    // The full-screen team picker (mainmenu_teampanel.cpp), which the >5-cap
+    // compact roster's per-player rows open (see kRoomRosterTapBase in
+    // mainmenu_internal.h): previously reachable only via the [A] hotkey,
+    // with no touch path at all.
+    static bool TeamsPanelOpen(const MainMenu& menu) { return menu.showingTeamsPanel; }
+    static int TeamsCursor(const MainMenu& menu) { return menu.teamsCursorPlayer; }
     static void SetTeamMode(MainMenu& menu, bool on) { menu.netTeamMode = on; }
+    static void RenderTeamsPanel(MainMenu& menu) { menu.TeamsPanelRender(); }
+    static int TeamOfSlot(const MainMenu& menu, int slot) { return menu.TeamOfSlot(slot); }
+    // Centre of the swatch that sets `team` on `slot`, as actually published
+    // by the last TeamsPanelRender -- so the tap under test lands on the real
+    // layout rather than a coordinate guessed from the drawing code.
+    static bool SwatchCenter(const MainMenu& menu, int slot, int team, float* x, float* y) {
+        for (const auto& swatch : menu.teamSwatchTaps) {
+            if (swatch.slot != slot || swatch.team != team) continue;
+            *x = swatch.rect.x + swatch.rect.w * 0.5f;
+            *y = swatch.rect.y + swatch.rect.h * 0.5f;
+            return true;
+        }
+        return false;
+    }
+    static size_t SwatchCount(const MainMenu& menu) { return menu.teamSwatchTaps.size(); }
+    static SDL_Rect DoneRect(const MainMenu& menu) { return menu.teamsDoneRect; }
+    // Reopens the page for the second half of the close test without going
+    // back through the roster's two-tap dance, which this block already
+    // covered above.
+    static void SetTeamsPanelOpen(MainMenu& menu, bool on) { menu.showingTeamsPanel = on; }
     // Renders the real LAN/Net server list panel with a caller-chosen public
     // server list, so the "Set name" section's position under test is
     // whatever ServerListPanelRender really lays out for that server count,
@@ -638,15 +659,14 @@ int main() {
 
     // --- >5-cap Team Mode roster: touch reaching per-player team assignment
     //
-    // Entering per-player team-assignment mode (host: any player; joiner:
-    // self only) was reachable only through the [A] hotkey -- see the
+    // Team assignment was reachable only through the [A] hotkey -- see the
     // comment on that check in MainMenu::HandleInput. A touch-only player in
     // a >5-cap Team Mode room had no way to reach it at all: the compact
     // roster's rows registered no PanelTapRow, so a tap there just fell
-    // through as a miss. This pins the fix (kRoomRosterTapBase's branch in
-    // HandlePanelTap): tapping a row enters/drives team assignment for that
-    // seat the same way the hotkey does, landing the host's free cursor on
-    // whichever row was actually tapped rather than always row 0.
+    // through as a miss. This pins both halves of the fix: a roster row tap
+    // (kRoomRosterTapBase's branch in HandlePanelTap) opens the full-screen
+    // team picker on the row that was actually tapped rather than always row
+    // 0, and one tap on a swatch there sets that team -- no blind cycling.
     {
         std::unique_ptr<MainMenu> menu = MainMenuTestAccess::Create(renderer);
 
@@ -674,41 +694,77 @@ int main() {
             auto center = [](const SDL_Rect& r) {
                 return std::pair<float, float>(r.x + r.w * 0.5f, r.y + r.h * 0.5f);
             };
-            const auto [hx, hy] = center(hostRects[0]);
             const auto [jx, jy] = center(joinerRects[0]);
 
-            CHECK(!MainMenuTestAccess::RosterEditMode(*menu));
+            CHECK(!MainMenuTestAccess::TeamsPanelOpen(*menu));
 
             // Select, then confirm -- the same two-tap dance every other row
-            // in this app uses, so a player never enters team-assignment
-            // mode by accident.
+            // in this cramped roster uses, so the picker never opens from a
+            // stray touch aimed somewhere else.
             CHECK(menu->HandlePanelTap(jx, jy));
-            CHECK(!MainMenuTestAccess::RosterEditMode(*menu));  // still just highlighted
+            CHECK(!MainMenuTestAccess::TeamsPanelOpen(*menu));  // still just highlighted
             CHECK(menu->HandlePanelTap(jx, jy));
-            CHECK(MainMenuTestAccess::RosterEditMode(*menu));
-            // Landed on the row that was actually tapped (index 1), not
+            CHECK(MainMenuTestAccess::TeamsPanelOpen(*menu));
+            // Opened on the row that was actually tapped (index 1), not
             // always row 0 the way a bare [A] keypress would.
-            CHECK(MainMenuTestAccess::RosterCursor(*menu) == 1);
+            CHECK(MainMenuTestAccess::TeamsCursor(*menu) == 1);
 
-            // Tapping the already-selected, already-editing row again cycles
-            // its team forward, same as pressing Right.
+            // The picker is modal: every tap is now its own, and none reach
+            // the roster still registered underneath it.
             SDL_PumpEvents();
             for (SDL_Event drain; SDL_PollEvent(&drain); ) {}
-            CHECK(menu->HandlePanelTap(jx, jy));
-            SDL_Event ev;
-            CHECK(SDL_PollEvent(&ev) && ev.type == SDL_EVENT_KEY_DOWN);
-            CHECK(ev.key.key == SDLK_RIGHT);
 
-            // The host's free-moving cursor can also jump to a different
-            // row -- again select, then confirm -- without cycling that
-            // row's team on the same tap that moved the cursor to it.
-            CHECK(menu->HandlePanelTap(hx, hy));
-            CHECK(MainMenuTestAccess::RosterCursor(*menu) == 1);  // unmoved yet
-            SDL_PumpEvents();
-            for (SDL_Event drain; SDL_PollEvent(&drain); ) {}
-            CHECK(menu->HandlePanelTap(hx, hy));
-            CHECK(MainMenuTestAccess::RosterCursor(*menu) == 0);
-            CHECK(!SDL_PollEvent(&ev));  // moved, not cycled
+            // One render to publish the swatch rects a real tap would hit.
+            MainMenuTestAccess::RenderTeamsPanel(*menu);
+            // Host, so every seat's full set of teams is tappable.
+            CHECK(MainMenuTestAccess::SwatchCount(*menu) == 2 * kMaxTeams);
+
+            // A single tap sets that exact team -- no cycling, no second tap.
+            // Team 4 specifically: it is neither seat's round-robin default
+            // (slot 0 -> 1, slot 1 -> 2), so landing on it can only be this
+            // tap's doing.
+            CHECK(MainMenuTestAccess::TeamOfSlot(*menu, 1) != 4);
+            float sx = 0, sy = 0;
+            CHECK(MainMenuTestAccess::SwatchCenter(*menu, 1, 4, &sx, &sy));
+            CHECK(menu->HandlePanelTap(sx, sy));
+            CHECK(MainMenuTestAccess::TeamOfSlot(*menu, 1) == 4);
+            CHECK(MainMenuTestAccess::TeamOfSlot(*menu, 0) != 4);  // only the tapped row moved
+
+            // Nothing was injected as a keypress on the way -- the picker
+            // acts directly, so a stale key can't reach the room on close.
+            // Only key events are asserted on: rendering pumps the queue and
+            // SDL puts its own window/display events there.
+            for (SDL_Event ev; SDL_PollEvent(&ev); )
+                CHECK(ev.type != SDL_EVENT_KEY_DOWN);
+
+            // Tapping the host's own row from the picker moves the cursor
+            // there and sets its team in the same tap, both rows being the
+            // host's to change.
+            CHECK(MainMenuTestAccess::SwatchCenter(*menu, 0, 4, &sx, &sy));
+            CHECK(menu->HandlePanelTap(sx, sy));
+            CHECK(MainMenuTestAccess::TeamsCursor(*menu) == 0);
+            CHECK(MainMenuTestAccess::TeamOfSlot(*menu, 0) == 4);
+
+            // ESC closes the page -- the route a keyboard, a gamepad's B
+            // (SDLK_AC_BACK), a right-click and a back-swipe all arrive by.
+            SDL_Event esc = {};
+            esc.type = SDL_EVENT_KEY_DOWN;
+            esc.key.key = SDLK_ESCAPE;
+            menu->HandleInput(&esc);
+            CHECK(!MainMenuTestAccess::TeamsPanelOpen(*menu));
+
+            // And the visible "Done" button does the same, for a player with
+            // no keyboard at all. Its rect must be a real drawn one: it comes
+            // back from DrawHeaderBar, which does not draw the action (and so
+            // publishes no rect) unless it is asked for a real action index --
+            // an empty rect here means the button is invisible on screen, and
+            // a touch-only player would be stuck on a full-screen page.
+            MainMenuTestAccess::SetTeamsPanelOpen(*menu, true);
+            MainMenuTestAccess::RenderTeamsPanel(*menu);
+            const SDL_Rect done = MainMenuTestAccess::DoneRect(*menu);
+            CHECK(done.w > 0 && done.h > 0);
+            CHECK(menu->HandlePanelTap(done.x + done.w * 0.5f, done.y + done.h * 0.5f));
+            CHECK(!MainMenuTestAccess::TeamsPanelOpen(*menu));
         }
 
         // Don't leak this fake room into any test that runs after this one.

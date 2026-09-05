@@ -57,78 +57,25 @@ void MainMenu::HandleInput(SDL_Event *e){
             MenuTextInputEvent(e);
             break;
         case SDL_EVENT_KEY_DOWN:
-            // [A] enters per-player team-assignment mode directly from the
-            // player-columns roster, for >5-cap Team Mode rooms: host gets a
-            // free-moving cursor over every joined player, a joiner's cursor
-            // is locked to their own row. Replaces the old separate "Set
-            // player teams" row + "My team:N" row, which didn't fit above
-            // the persistent chat dock (y=334) once >1 extra row was needed.
+            // [A] opens the full-screen team picker (mainmenu_teampanel.cpp)
+            // from anywhere in a Team Mode room. It used to enter a
+            // cycle-in-place mode over the >5-cap roster instead, which could
+            // only step one team at a time through a row a couple of
+            // millimetres tall and never showed what the teams were; the page
+            // draws every team as its own button on every player's row.
+            // Offered for both room sizes now -- the <=5-cap grid's own Team
+            // cells are no easier to hit, and this key did nothing there
+            // before.
             // NOTE: 'T' was tried first but collides with the existing
             // chat-open hotkey (case SDLK_T below) -- C/R/J/T/U/S/P/N/M are
             // all already claimed single-letter hotkeys on this screen.
-            if (!netRosterEditMode && showingNetPanel && networkInLobby && networkInputMode == 0 &&
+            if (!showingTeamsPanel && showingNetPanel && networkInLobby && networkInputMode == 0 &&
                 selectedActionIndex != 0 && e->key.key == SDLK_A) {
                 NetworkClient* netClientT = NetworkClient::Instance();
                 GameRoom* curGameT = netClientT->GetCurrentGame();
-                if (curGameT && curGameT->maxPlayers > 5 && netTeamMode) {
-                    bool isHostT = curGameT->creator == netClientT->GetPlayerNick();
-                    netRosterEditMode = true;
-                    if (isHostT) {
-                        netRosterCursor = 0;
-                    } else {
-                        std::string myNickT = netClientT->GetPlayerNick();
-                        netRosterCursor = 0;
-                        for (int i = 0; i < (int)curGameT->players.size(); i++)
-                            if (curGameT->players[i].nick == myNickT) { netRosterCursor = i; break; }
-                    }
-                    AudioMixer::Instance()->PlaySFX("menu_change");
+                if (curGameT && netTeamMode) {
+                    OpenTeamsPanel();
                     return;
-                }
-            }
-
-            if (netRosterEditMode && showingNetPanel && networkInLobby && networkInputMode == 0) {
-                NetworkClient* netClient = NetworkClient::Instance();
-                GameRoom* currentGame = netClient->GetCurrentGame();
-                if (currentGame) {
-                    bool isHost = currentGame->creator == netClient->GetPlayerNick();
-                    int n = (int)currentGame->players.size();
-                    if (e->key.key == SDLK_ESCAPE || e->key.key == SDLK_RETURN) {
-                        netRosterEditMode = false;
-                        AudioMixer::Instance()->PlaySFX("menu_change");
-                        return;
-                    }
-                    // Host: cursor is a linear index into the joined-players
-                    // list (0-based join order), which the 2-column roster
-                    // renders column-major (first rowsPerCol players in
-                    // column 0, the rest in column 1) -- so Up/Down alone
-                    // already reaches every player, walking down column 0
-                    // then continuing into column 1. Joiner: cursor stays
-                    // locked to their own row (set on [A] entry) -- no nav.
-                    if (isHost) {
-                        if (e->key.key == SDLK_UP)    { if (netRosterCursor > 0) netRosterCursor--; }
-                        else if (e->key.key == SDLK_DOWN) { if (netRosterCursor < n - 1) netRosterCursor++; }
-                    }
-                    if (e->key.key == SDLK_LEFT || e->key.key == SDLK_RIGHT) {
-                        // Cycle the selected player's team. A joiner may only
-                        // ever have their own row selected (no nav above).
-                        bool ownRow = netRosterCursor >= 0 && netRosterCursor < n &&
-                                      currentGame->players[netRosterCursor].nick == netClient->GetPlayerNick();
-                        if (netRosterCursor >= 0 && netRosterCursor < n && (isHost || ownRow)) {
-                            const std::string& nk = currentGame->players[netRosterCursor].nick;
-                            int ov = netTeamOverrides.count(nk) ? netTeamOverrides[nk] : 0;
-                            int cur = EffectiveTeam(netRosterCursor, netTeamCount, ov);
-                            if (e->key.key == SDLK_LEFT) { cur--; if (cur < 1) cur = netTeamCount; }
-                            else                          { cur++; if (cur > netTeamCount) cur = 1; }
-                            netTeamOverrides[nk] = cur;   // optimistic local apply
-                            char talkMsg[48];
-                            snprintf(talkMsg, sizeof(talkMsg), "!team:%s:%d", nk.c_str(), cur);
-                            netClient->SendTalk(talkMsg);
-                        }
-                    }
-                    AudioMixer::Instance()->PlaySFX("menu_change");
-                    return;  // consume all keys while editing
-                } else {
-                    netRosterEditMode = false;  // stale/invalid state (e.g. room gone) -- don't stay stuck
                 }
             }
 
@@ -136,6 +83,13 @@ void MainMenu::HandleInput(SDL_Event *e){
             // keys before every other panel -- otherwise Up/Down would scroll
             // the page and move the room's selection underneath it at once.
             if (HelpPanelKey(e)) break;
+
+            // The team picker is modal over the room in the same way, and for
+            // the same reason: its own Up/Down walks players and its
+            // Left/Right changes a team, both of which the room underneath
+            // would otherwise also act on. Checked after the guide so the
+            // guide still wins if it is open over this page.
+            if (TeamsPanelKey(e)) break;
 
             // F1 opens the guide from either screen that has a HELP box, and
             // is also the key those boxes' tap targets send (see
@@ -297,7 +251,7 @@ void MainMenu::HandleInput(SDL_Event *e){
                     if (showingNetPanel && networkInLobby) {
                         NetworkClient* netClient = NetworkClient::Instance();
                         if (netClient->GetState() == IN_LOBBY) {
-                            netRosterEditMode = false;
+                            showingTeamsPanel = false;
                             netStartRequested = false;  // don't carry a pending Start into the next room
                             DropLobbyBots();  // our bots leave with us
                             netClient->PartGame();
@@ -562,6 +516,10 @@ void MainMenu::AddPanelTapRow(int index, const SDL_Rect& rect, int subIndex,
 }
 
 bool MainMenu::HandlePanelTap(float lx, float ly, float verticalDrift) {
+    // The team picker is drawn over the room whose rows are still registered
+    // underneath it, and hit-tests its own swatch rects instead -- first, and
+    // consuming every tap, for the same reason as the popups below.
+    if (showingTeamsPanel) return HandleTeamsPanelTap(lx, ly);
     // The "upload highscore stats?" popup is modal and sits on top of the
     // settings row list, but panelTapRows still holds that list's rows
     // underneath it -- checked here, first, so a tap never falls through to
@@ -653,37 +611,13 @@ bool MainMenu::HandlePanelTap(float lx, float ly, float verticalDrift) {
         }
 
         // The >5-cap compact roster's per-player rows (AddPanelTapRow call in
-        // NetPanelLobbyActionsRender): the [A] hotkey enters per-player
-        // team-assignment mode by setting netRosterEditMode/netRosterCursor
-        // directly rather than through a menu action, and which row to land
-        // on has to travel with the tap itself -- an injected keycode has
-        // nowhere to carry that, so this is handled here instead of via the
-        // generic push below.
+        // NetPanelLobbyActionsRender). Opens the full-screen team picker on
+        // the tapped player's row, which is the one place teams are set from
+        // now -- handled here rather than through the generic key push below
+        // because which row was tapped has to travel with the tap, and an
+        // injected keycode has nowhere to carry it.
         if (row.index >= kRoomRosterTapBase && row.index < kRoomRosterTapBase + kRoomRosterTapSlots) {
-            int pi = row.index - kRoomRosterTapBase;
-            if (!netRosterEditMode) {
-                netRosterEditMode = true;
-                netRosterCursor = pi;
-                AudioMixer::Instance()->PlaySFX("menu_change");
-            } else {
-                NetworkClient* netClient = NetworkClient::Instance();
-                GameRoom* currentGame = netClient->GetCurrentGame();
-                bool isHost = currentGame && currentGame->creator == netClient->GetPlayerNick();
-                if (isHost && netRosterCursor != pi) {
-                    // Jump the host's free-moving cursor straight to the
-                    // tapped row instead of walking it there with Up/Down.
-                    netRosterCursor = pi;
-                    AudioMixer::Instance()->PlaySFX("menu_change");
-                } else {
-                    // Already-selected row (or a joiner, whose cursor is
-                    // always locked to their own, only-ever-registered row):
-                    // cycle its team forward, same as pressing Right.
-                    SDL_Event ev = {};
-                    ev.type = SDL_EVENT_KEY_DOWN;
-                    ev.key.key = SDLK_RIGHT;
-                    SDL_PushEvent(&ev);
-                }
-            }
+            OpenTeamsPanel(row.index - kRoomRosterTapBase);
             return true;
         }
 
@@ -1695,9 +1629,10 @@ void MainMenu::SubmitLobbyChatInput(NetworkClient *netClient) {
 }
 
 void MainMenu::GameRoomHostReturn(NetworkClient *netClient, GameRoom *currentGame) {
-    // Entering per-player team-assignment mode (>5-cap, Team Mode) now happens
-    // via the [A] hotkey in HandleInput, not a dedicated action row -- see the
-    // comment above the A-key check there for why.
+    // Teams are set on their own full-screen page (mainmenu_teampanel.cpp),
+    // opened by the [A] hotkey in HandleInput or by activating the Team row
+    // below -- not from a dedicated action row of its own, which never fit
+    // above the persistent chat dock.
     // Row indices are the GameRoomRow enum in mainmenu_internal.h -- the list
     // is built positionally in mainmenu_netpanel.cpp and acted on by index
     // here, so the two have to agree.
@@ -1786,17 +1721,15 @@ void MainMenu::GameRoomHostReturn(NetworkClient *netClient, GameRoom *currentGam
         AudioMixer::Instance()->PlaySFX("menu_change");
         settingChanged = true;
     } else if (selectedActionIndex == kRoomTeam) {
-        // ENTER: advance team number for focused column (same as RIGHT)
-        int np = (int)currentGame->players.size();
-        if (np < 1) np = 1; if (np > 5) np = 5;
-        int lo = (currentPlayerCol == 0) ? 0 : currentPlayerCol - 1;
-        int hi = (currentPlayerCol == 0) ? np : currentPlayerCol;
-        for (int i = lo; i < hi; i++) {
-            netPlayerTeams[i]++;
-            if (netPlayerTeams[i] > 5) netPlayerTeams[i] = 1;
-        }
-        AudioMixer::Instance()->PlaySFX("menu_change");
-        settingChanged = true;
+        // ENTER opens the full-screen team picker on the focused column's
+        // player (mainmenu_teampanel.cpp), rather than advancing that cell's
+        // team by one the way it used to. LEFT/RIGHT still cycle in place for
+        // anyone who prefers it; what ENTER gains is the ability to pick a
+        // team outright, and -- since a second tap on a grid cell is what
+        // pushes RETURN here -- a touch path to the page at all. These cells
+        // are 18 logical units tall, so cycling to team 4 by touch meant
+        // hitting the same near-invisible target three times.
+        OpenTeamsPanel(currentPlayerCol > 0 ? currentPlayerCol - 1 : -1);
     } else if (selectedActionIndex == kRoomBots && currentGame) {
         // ENTER: add one more bot, wrapping at the room's ceiling (same as RIGHT)
         const int maxBots = MaxRoomBots((int)currentGame->players.size(),
@@ -1865,20 +1798,14 @@ void MainMenu::MenuReturnKey() {
                                 } else if (isHost) {
                                     GameRoomHostReturn(netClient, currentGame);
                                 } else if (!isHost && selectedActionIndex == kRoomTeam) {
-                                    // Joiner ENTER on Teams row: advance own team assignment
-                                    std::string myNick = netClient->GetPlayerNick();
-                                    int mySlot = -1;
-                                    for (int i = 0; i < (int)currentGame->players.size(); i++) {
-                                        if (currentGame->players[i].nick == myNick) { mySlot = i; break; }
-                                    }
-                                    if (mySlot >= 0) {
-                                        netPlayerTeams[mySlot]++;
-                                        if (netPlayerTeams[mySlot] > 5) netPlayerTeams[mySlot] = 1;
-                                        AudioMixer::Instance()->PlaySFX("menu_change");
-                                        char talkMsg[32];
-                                        snprintf(talkMsg, sizeof(talkMsg), "!team:%s:%d", myNick.c_str(), netPlayerTeams[mySlot]);
-                                        netClient->SendTalk(talkMsg);
-                                    }
+                                    // Joiner ENTER on the Teams row opens the
+                                    // team picker, same as the host's ENTER
+                                    // above -- OpenTeamsPanel parks a joiner's
+                                    // cursor on their own row whatever column
+                                    // was focused, since their own is the only
+                                    // one they may change. LEFT/RIGHT here
+                                    // still advance it in place as before.
+                                    OpenTeamsPanel();
                                 }
                                 // Non-host has no other actions besides Chat/Teams (use ESC to leave)
                             } else {
@@ -2225,7 +2152,7 @@ void MainMenu::MenuEscapeKey() {
                             GameRoom* currentGame = netClient->GetCurrentGame();
                             if (currentGame) {
                                 // Leave the game (like original)
-                                netRosterEditMode = false;
+                                showingTeamsPanel = false;
                                 netStartRequested = false;  // don't carry a pending Start into the next room
                                 DropLobbyBots();  // our bots leave with us
                                 netClient->PartGame();

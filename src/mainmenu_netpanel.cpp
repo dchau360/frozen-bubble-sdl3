@@ -1016,30 +1016,16 @@ void MainMenu::NetPanelLobbyActionsRender() {
                         snprintf(rowTxt, sizeof(rowTxt), "%2d -", pi + 1);
                         drawLabel(rowTxt, rowX + 4, rowY + 2, textMuted);
                     }
-
-                    if (netRosterEditMode && pi == netRosterCursor) {
-                        SDL_SetRenderDrawColor(roomRenderer, 255, 255, 120, 255);
-                        SDL_FRect hl = {(float)rowX, (float)rowY, (float)(colW2 - 3), (float)(rowH2 - 3)};
-                        SDL_RenderRect(roomRenderer, &hl);
-                    }
                 }
                 // Legend for the compact markers ("H" host, "*" you). The
-                // [A] hint is appended here rather than on its own line --
+                // team hint is appended here rather than on its own line --
                 // there's no vertical room left above the chat dock (y=334).
-                // While actually in roster-edit mode, swap the legend for the
-                // in-mode key hint -- otherwise the Left/Right cycle keys and
-                // the exit key are never shown anywhere on screen (found
-                // live: user could enter the mode via [A] but had no way to
-                // discover what to press next).
-                if (netRosterEditMode) {
-                    bool selfHost = currentGame->creator == netClient->GetPlayerNick();
-                    drawLabel(selfHost ? "Up/Down move   Left/Right team   Enter/Esc done"
-                                       : "Left/Right change your team   Enter/Esc done",
-                              panelX + 12, panelY + 224, textMuted);
-                } else {
-                    drawLabel(netTeamMode ? "H host   * you   [A] assign teams" : "H host   * you",
-                              panelX + 12, panelY + 224, textMuted);
-                }
+                // Teams are set on their own page now (mainmenu_teampanel.cpp),
+                // which a tap on any row above also opens, so the hint names
+                // only the key a keyboard/gamepad player would not otherwise
+                // find.
+                drawLabel(netTeamMode ? "H host   * you   [A] set teams" : "H host   * you",
+                          panelX + 12, panelY + 224, textMuted);
             } else {
                 const int rowH = 38;
                 for (int pi = 0; pi < 5; pi++) {

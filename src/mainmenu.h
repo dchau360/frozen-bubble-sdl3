@@ -89,7 +89,7 @@ public:
     bool HasAnyPanelOpen() const {
         return showingKeysPanel || showingSPPanel || showingOptPanel
             || showingNetPanel || showingLevelPanel || showingLocalMPPanel
-            || showingNetSetupPanel || showingHelpPanel;
+            || showingNetSetupPanel || showingHelpPanel || showingTeamsPanel;
     }
     void SetupNewGame(int mode);
     void ShowPanel(int which);
@@ -405,8 +405,6 @@ private:
     int netTeamCount = 5;              // fixed team count for >5-cap rooms (matches kTeamColors' 5 entries)
     std::map<std::string,int> netTeamOverrides;   // nick -> chosen team (absent = auto-balance default)
     size_t teamOverrideChatCount = 0;  // all clients: chat msgs scanned for !team: -> override map (>5 path)
-    int netRosterCursor = 0;           // host override: selected roster row (0-based)
-    bool netRosterEditMode = false;    // host override: true while navigating the roster to reassign teams
     // Snapshot of playerNoCompress/netAttackMode taken the moment Clear Mode is
     // switched on, restored when switching away from it (Clear Mode forces both
     // on; without this, leaving Clear Mode left them stuck on forever).
@@ -484,6 +482,43 @@ private:
     // this header, so it cannot be named here.
     int helpMenuIndex = 0;
     void HelpPanelRender();
+
+    // Full-screen team picker for a Team Mode room (mainmenu_teampanel.cpp).
+    // The room's own team controls are cramped by design -- the <=5-cap grid
+    // gives a player one 18-unit cell, and the >5-cap roster hides the whole
+    // thing behind a per-row cycle -- so neither can show which teams exist
+    // or let a player pick one directly. This page has room to draw every
+    // team as its own button on every player's row, which is also what makes
+    // it a single tap rather than the select-then-activate dance the cramped
+    // rows need. Works for both room sizes; which store a change is written
+    // to is ApplyTeamChoice's business, not this panel's.
+    bool showingTeamsPanel = false;
+    int teamsCursorPlayer = 0;   // row (player slot) the keyboard cursor is on
+    // Opens the page with the cursor on `slot`, or -- for slot < 0, which is
+    // what the [A] hotkey passes, having no row in mind -- on this player's
+    // own row, since that is the one row everybody can always change.
+    void OpenTeamsPanel(int slot = -1);
+    void TeamsPanelRender();
+    bool TeamsPanelKey(SDL_Event *e);  // true when consumed; modal like the guide
+    // Modal too: every tap is consumed while this page is up, hit or miss,
+    // so none can reach the room list still registered underneath it.
+    bool HandleTeamsPanelTap(float lx, float ly);
+    // A player's slot in the current room, or -1 when we aren't in one.
+    int MyRoomSlot() const;
+    // What `slot` is on now, reading whichever of the two stores this room
+    // size uses.
+    int TeamOfSlot(int slot) const;
+    // Move `slot` onto `team`, applying it locally and telling everyone else,
+    // by whichever route this room size syncs through. Callers must have
+    // already decided the change is allowed (host, or the player's own row).
+    void ApplyTeamChoice(int slot, int team);
+    // Per-team buttons published by TeamsPanelRender for the tap path, one
+    // entry per drawn swatch. Kept out of panelTapRows for the same reason
+    // the stats-upload popup's buttons are: this page is drawn over the room
+    // whose rows are still registered underneath it.
+    struct TeamSwatchTap { SDL_Rect rect; int slot; int team; };
+    std::vector<TeamSwatchTap> teamSwatchTaps;
+    SDL_Rect teamsDoneRect{};
 };
 
 #endif // MAINMENU_H
