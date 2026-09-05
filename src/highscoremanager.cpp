@@ -462,7 +462,19 @@ void HighscoreManager::CreateLevelImages() {
         for (size_t i = 0; i < scores.size(); i++) {
             scores[i].RefreshTextStatus(rend, highscoreFont);
             SDL_Rect *c = scores[i].layoutText.Coords();
-            if (c) scores[i].layoutText.UpdatePosition({108 * ((int)i + 1) - c->w/2, (115 * (((int)i + 1) % 6 == 0 ? 2 : 1)) + (70 * (((int)i + 1) % 6 == 0 ? 2 : 1))});
+            // Same 5-columns-per-row, 2-row split as RenderScoreScreen's bgPos
+            // (col = i%5, row = i/5) -- this formula used to split rows at
+            // "(i+1) % 6 == 0" instead of the correct row boundary of 5, and
+            // never wrapped the column back to 0 for row 2 either. That put
+            // index 5's text at column 6 (x ~= 618, clipped against the
+            // 640-wide canvas) and indices 6-9 further out still (x = 756..
+            // 1080), entirely off-canvas -- only the first 5 score entries'
+            // text was ever visible, even though CreateLevelImages' own
+            // thumbnail loop above already renders all 10 mini-screenshots.
+            if (c) {
+                int col = (int)i % 5, row = (int)i / 5;
+                scores[i].layoutText.UpdatePosition({108 * (col + 1) - c->w/2, 185 * (row + 1)});
+            }
         }
     }
     SDL_Log("CreateLevelImages: done");
