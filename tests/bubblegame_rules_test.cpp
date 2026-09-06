@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <cstdio>
 #include <limits>
+#include <map>
 #include <set>
 #include <string>
 #include <utility>
@@ -137,6 +138,21 @@ struct BubbleGameTestAccess {
             for (int row = 0; row < 13; ++row)
                 p.bubbleMap[row].assign((row % 2 == 0) ? 8 : 7, Bubble{});
         }
+    }
+};
+
+// Minimal hooks onto the real NetworkClient singleton, only what the
+// NewGame() seat-remap test below needs to fake a connected room without a
+// real socket: every actual send (SendCommand/SendGameData) already no-ops
+// safely once sockfd is unset, regardless of `state`, so setting these few
+// fields is enough to drive NewGame's network branch headlessly.
+struct NetworkClientTestAccess {
+    static void SetPlayerNick(NetworkClient& nc, const std::string& nick) { nc.playerNick = nick; }
+    static void SetCurrentGame(NetworkClient& nc, GameRoom* game) { nc.currentGame = game; }
+    static void SetState(NetworkClient& nc, ConnectionState state) { nc.state = state; }
+    static void SetMyPlayerId(NetworkClient& nc, int id) { nc.myPlayerId = (unsigned char)id; }
+    static void SetPlayerIdToNick(NetworkClient& nc, const std::map<int, std::string>& m) {
+        nc.playerIdToNick = m;
     }
 };
 
@@ -926,6 +942,75 @@ int main() {
         CHECK(std::find(fromPlayer.begin(), fromPlayer.end(), 1) != fromPlayer.end());
         CHECK(std::find(fromPlayer.begin(), fromPlayer.end(), 3) != fromPlayer.end());
         CHECK(std::find(fromPlayer.begin(), fromPlayer.end(), 2) == fromPlayer.end());
+    }
+
+    // --- NewGame() network seat remap: playerTeams must follow the same
+    // lobby-slot -> bubbleArray remap as colors/compression/aimGuide -------
+    //
+    // Reported live: "clear mode with teams set doesn't attribute win to
+    // team," reproduced with 4 bots + Auto 3. Root cause was in NewGame(),
+    // not the team-crediting logic exercised above (which was already
+    // correct) -- setup.playerTeams[] is indexed by the room's own player
+    // list order (host=slot 0, then join order), same as
+    // setup.playerColors[]/disableCompression[]/aimGuide[]. But
+    // bubbleArrays[0] is always the *local* player regardless of their room
+    // slot, and every other array is seated by AssignRemoteSeats/SeatBots in
+    // ascending player-id order, not room-list order -- the two orders agree
+    // only when they happen to coincide. NewGame already remaps colors,
+    // compression and aimGuide from slot order to array order for exactly
+    // this reason; playerTeams was the one field that remap loop never
+    // covered, so every array silently read whichever *other* player's team
+    // happened to share its array index (or kNoTeam, if none did).
+    //
+    // Deliberately built so slot order and id order disagree: room-list
+    // order is host, bot_b, bot_a (slots 0,1,2), but bot_a's id (10) sorts
+    // before bot_b's (20), so AssignRemoteSeats seats them the other way
+    // around: array 1 = bot_a, array 2 = bot_b.
+    {
+        BubbleGame game(renderer);
+        NetworkClient* nc = NetworkClient::Instance();
+        NetworkClientTestAccess::SetPlayerNick(*nc, "host");
+        NetworkClientTestAccess::SetState(*nc, IN_GAME);
+        NetworkClientTestAccess::SetMyPlayerId(*nc, 99);
+        NetworkClientTestAccess::SetPlayerIdToNick(*nc, {{10, "bot_a"}, {20, "bot_b"}, {99, "host"}});
+
+        GameRoom room;
+        room.creator = "host";
+        room.players.push_back({"host", "", false});
+        room.players.push_back({"bot_b", "", false});
+        room.players.push_back({"bot_a", "", false});
+        NetworkClientTestAccess::SetCurrentGame(*nc, &room);
+
+        SetupSettings settings;
+        settings.playerCount = 3;
+        settings.networkGame = true;
+        settings.randomLevels = true;
+        settings.clearMode = true;
+        // Indexed by room slot: host=team1, bot_b(slot1)=team2, bot_a(slot2)=team3.
+        settings.playerTeams[0] = 1;
+        settings.playerTeams[1] = 2;
+        settings.playerTeams[2] = 3;
+        for (int i = 0; i < 5; ++i) settings.playerColors[i] = 8;
+
+        game.NewGame(settings);
+
+        // Seating landed where AssignRemoteSeats' id-ascending order says it
+        // should -- confirms the mismatch this test is built around is real,
+        // not just asserted.
+        CHECK(BubbleGameTestAccess::player(game, 0).playerNickname == "host");
+        CHECK(BubbleGameTestAccess::player(game, 1).playerNickname == "bot_a");
+        CHECK(BubbleGameTestAccess::player(game, 2).playerNickname == "bot_b");
+
+        // The actual fix: each array's team follows its own player, not
+        // whichever room slot happens to share its array index.
+        SetupSettings& after = BubbleGameTestAccess::settings(game);
+        CHECK(after.playerTeams[0] == 1);  // host, slot 0 -- array index matched slot here anyway
+        CHECK(after.playerTeams[1] == 3);  // bot_a is room slot 2 (team 3), not slot 1 (team 2)
+        CHECK(after.playerTeams[2] == 2);  // bot_b is room slot 1 (team 2), not slot 2 (team 3)
+
+        // Don't leak this fake room into any test that runs after this one.
+        NetworkClientTestAccess::SetCurrentGame(*nc, nullptr);
+        NetworkClientTestAccess::SetState(*nc, DISCONNECTED);
     }
 
     // --- SmoothTowards: damps the aim guide's per-frame deltaScale jitter --

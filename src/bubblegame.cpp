@@ -935,13 +935,30 @@ void BubbleGame::NewGame(SetupSettings setup) {
 
             SeatBots();
 
-            // Remap per-player settings (aimGuide, compression, colors) from lobby slot order
-            // to bubbleArray order. setup.aimGuide[i] is indexed by the game room's player list
-            // (host=0, first joiner=1, ...), but bubbleArrays[0] is always the local player.
-            // Match by nick to apply the right setting to each array.
+            // Remap per-player settings (aimGuide, compression, colors, team) from
+            // lobby slot order to bubbleArray order. setup.aimGuide[i] (and
+            // setup.playerTeams[i]) is indexed by the game room's player list
+            // (host=0, first joiner=1, ...), but bubbleArrays[0] is always the
+            // local player, and AssignRemoteSeats/SeatBots above seat everyone
+            // else by ascending player id, not by room-list position -- the two
+            // orders agree only when they happen to coincide. Match by nick to
+            // apply the right setting to each array.
+            //
+            // playerTeams lives in currentSettings itself (every other
+            // remapped field is per-bubbleArray), so it is remapped through a
+            // scratch buffer rather than written in place: writing
+            // currentSettings.playerTeams[arr] while a later iteration still
+            // needs to read currentSettings.playerTeams[slot] as a *source*
+            // would corrupt it the moment arr and a later slot collide. Found
+            // live: teams silently read as kNoTeam for every player once a
+            // room's bot/seat order stopped matching lobby order (4 bots,
+            // Auto-balance) -- this was the one field of the four the original
+            // remap loop never covered.
             const GameRoom* room = netClient->GetCurrentGame();
             if (room) {
                 const auto& roomPlayers = room->players;
+                int remappedTeams[MAX_NET_PLAYERS];
+                for (int i = 0; i < MAX_NET_PLAYERS; i++) remappedTeams[i] = currentSettings.playerTeams[i];
                 for (int arr = 0; arr < currentSettings.playerCount; arr++) {
                     const std::string& nick = bubbleArrays[arr].playerNickname;
                     for (int slot = 0; slot < (int)roomPlayers.size() && slot < MAX_NET_PLAYERS; slot++) {
@@ -951,14 +968,18 @@ void BubbleGame::NewGame(SetupSettings setup) {
                             bubbleArrays[arr].numColors = nc;
                             bubbleArrays[arr].compressionDisabled = currentSettings.disableCompression[slot];
                             bubbleArrays[arr].aimGuideEnabled = currentSettings.aimGuide[slot];
-                            SDL_Log("Remapped slot %d ('%s') -> array %d: colors=%d compress=%d aim=%d",
+                            remappedTeams[arr] = currentSettings.playerTeams[slot];
+                            SDL_Log("Remapped slot %d ('%s') -> array %d: colors=%d compress=%d aim=%d team=%d",
                                     slot, nick.c_str(), arr, nc,
                                     currentSettings.disableCompression[slot],
-                                    currentSettings.aimGuide[slot]);
+                                    currentSettings.aimGuide[slot],
+                                    currentSettings.playerTeams[slot]);
                             break;
                         }
                     }
                 }
+                for (int i = 0; i < currentSettings.playerCount; i++)
+                    currentSettings.playerTeams[i] = remappedTeams[i];
             }
         }
     }
