@@ -1,5 +1,24 @@
 # Changelog
 
+## v2.4.83
+
+- **Fixed the "Board Cleared!" banner not crediting the team.** Reported
+  directly: winning by clearing your board in Clear Mode with teams set
+  didn't attribute the win to the team. The underlying win-crediting (win
+  counts, the round stats table's TEAM TOTALS, the lobby match summary) was
+  already correct in every mode -- the banner itself just named whichever
+  teammate happened to sit at the lowest player slot instead of the one who
+  actually cleared their board, and never said "Team" at all. It now names
+  the real winner and reads "Team N Wins!" when they're on one.
+- **Added an "Auto: NONE" button to the Set Teams page**, next to Auto
+  2-5 -- resets every occupied seat back to a free agent in one tap,
+  undoing any Auto/manual assignment.
+- **Editor-only fix**: clangd (inline diagnostics in supporting editors)
+  had no compilation database, so it misreported real SDL3 headers and
+  parts of the standard library as missing on nearly every edit. No effect
+  on the actual build; if you use such an editor, reconfigure
+  (`cmake -B build`) to pick up the fix.
+
 ## v2.4.82
 
 - **CI fix, no gameplay change.** v2.4.81's Linux (ASan/UBSan) and Linux
