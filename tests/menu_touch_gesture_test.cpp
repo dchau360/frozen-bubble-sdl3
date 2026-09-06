@@ -247,6 +247,10 @@ struct NetworkClientTestAccess {
     static void SetState(NetworkClient& nc, ConnectionState state) {
         nc.state = state;
     }
+    // TALK-message count, regardless of whether the (disconnected, in every
+    // headless test) socket actually accepted them -- see its declaration in
+    // networkclient.h for why this exists.
+    static int TalkSendCount(const NetworkClient& nc) { return nc.testTalkSendCount; }
 };
 
 int main() {
@@ -892,6 +896,60 @@ int main() {
         CHECK(!MainMenuTestAccess::TeamsPanelOpen(*menu));
         MainMenuTestAccess::PressReturn(*menu);
         CHECK(MainMenuTestAccess::TeamsPanelOpen(*menu));
+
+        // Don't leak this fake room into any test that runs after this one.
+        NetworkClientTestAccess::SetCurrentGame(*nc, nullptr);
+    }
+
+    // --- Auto-balance flood regression: cycling Auto 2..5 in a <=5-cap room
+    // full of bots must not get the host kicked.
+    //
+    // The server terminates a connection that sends 15 TALK messages inside
+    // one minute (server/game.c: amount_talk_flood). ApplyTeamChoice used to
+    // send one "!team:<nick>:<n>" TALK per player it touched, unconditionally
+    // -- including the host's own change in a <=5-cap room, where
+    // SyncRoomOptions() already broadcasts every player's team via
+    // SETOPTIONS' PLAYERTEAM_Pn fields and the TALK was pure redundant
+    // chatter. Auto-balance applies every occupied seat in one loop, so in a
+    // full 5-player room (this test's host + 4 bots) each Auto tap sent 5
+    // TALKs -- 3 taps hit the flood limit exactly (5x3=15), which is the
+    // "cycle thru Auto 2, 3, 4, 5" sequence a user actually reported getting
+    // kicked over.
+    {
+        std::unique_ptr<MainMenu> menu = MainMenuTestAccess::Create(renderer);
+
+        NetworkClient* nc = NetworkClient::Instance();
+        NetworkClientTestAccess::SetPlayerNick(*nc, "host");
+        GameRoom room;
+        room.creator = "host";
+        room.maxPlayers = 5;  // <=5-cap -- the host-intercept/SyncRoomOptions path
+        room.players.push_back({"host", "", false});
+        room.players.push_back({"bot1", "", false});
+        room.players.push_back({"bot2", "", false});
+        room.players.push_back({"bot3", "", false});
+        room.players.push_back({"bot4", "", false});
+        NetworkClientTestAccess::SetCurrentGame(*nc, &room);
+
+        MainMenuTestAccess::SetTeamsPanelOpen(*menu, true);
+        MainMenuTestAccess::RenderTeamsPanel(*menu);
+
+        const int startCount = NetworkClientTestAccess::TalkSendCount(*nc);
+        for (int teamCount = 2; teamCount <= kMaxTeams; ++teamCount) {
+            float ax = 0, ay = 0;
+            CHECK(MainMenuTestAccess::AutoBalanceCenter(*menu, teamCount, &ax, &ay));
+            CHECK(menu->HandlePanelTap(ax, ay));
+            MainMenuTestAccess::RenderTeamsPanel(*menu);  // re-publish rects for the next tap
+        }
+        // Well under the server's 15-TALK/minute flood-kick threshold --
+        // in fact exactly zero, since a <=5-cap room's host never needs TALK
+        // at all (SyncRoomOptions covers it). This is the count that used to
+        // reach 15 by the third tap and get the host disconnected.
+        CHECK(NetworkClientTestAccess::TalkSendCount(*nc) - startCount == 0);
+
+        // The actual team assignment is still correct: Auto 5 with 5
+        // occupied seats gives each player their own team, in slot order.
+        for (int slot = 0; slot < 5; ++slot)
+            CHECK(MainMenuTestAccess::TeamOfSlot(*menu, slot) == slot + 1);
 
         // Don't leak this fake room into any test that runs after this one.
         NetworkClientTestAccess::SetCurrentGame(*nc, nullptr);

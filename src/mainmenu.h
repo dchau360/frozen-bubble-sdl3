@@ -510,7 +510,13 @@ private:
     // Move `slot` onto `team`, applying it locally and telling everyone else,
     // by whichever route this room size syncs through. Callers must have
     // already decided the change is allowed (host, or the player's own row).
-    void ApplyTeamChoice(int slot, int team);
+    // `announce` is only consulted on the host's own <=5-cap-room path, where
+    // SyncRoomOptions() alone already syncs every player's team; pass false
+    // there to defer that broadcast when applying several slots in a row
+    // (see the Auto-balance tap handler) and call SyncRoomOptions() once
+    // yourself after the batch. Every other path (a >5-cap room, or a
+    // non-host's own row) has no batched alternative and ignores it.
+    void ApplyTeamChoice(int slot, int team, bool announce = true);
     // Per-team buttons published by TeamsPanelRender for the tap path, one
     // entry per drawn swatch. Kept out of panelTapRows for the same reason
     // the stats-upload popup's buttons are: this page is drawn over the room

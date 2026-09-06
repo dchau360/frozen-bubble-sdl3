@@ -76,7 +76,7 @@ int MainMenu::TeamOfSlot(int slot) const {
     return ClampTeamOrNone(netPlayerTeams[slot]);
 }
 
-void MainMenu::ApplyTeamChoice(int slot, int team) {
+void MainMenu::ApplyTeamChoice(int slot, int team, bool announce) {
     NetworkClient* netClient = NetworkClient::Instance();
     GameRoom* room = netClient->GetCurrentGame();
     if (!room || slot < 0 || slot >= (int)room->players.size()) return;
@@ -85,23 +85,36 @@ void MainMenu::ApplyTeamChoice(int slot, int team) {
     const std::string& nick = room->players[slot].nick;
     const bool isHost = room->creator == netClient->GetPlayerNick();
 
-    // Same wire message either way -- "!team:<nick>:<n>", carried as room
-    // chat. What changes is who acts on it: in a >5-cap room every client
-    // applies it to its own override map, and in a <=5-cap room the host
-    // applies it to the per-slot array and re-broadcasts SETOPTIONS. Both
-    // receivers live in NetPanelChatDockRender; this only has to send it and
-    // apply the same change locally so the page doesn't wait a round trip to
-    // redraw.
+    // A >5-cap room has no per-slot team field in SETOPTIONS, so the
+    // "!team:<nick>:<n>" chat message *is* the sync mechanism there -- every
+    // client, including this one, applies it from the message alone (see
+    // NetPanelChatDockRender). A <=5-cap room's host is different: its
+    // SyncRoomOptions() call already broadcasts every player's team via
+    // SETOPTIONS' PLAYERTEAM_Pn fields, so a "!team:" on top of that would be
+    // pure redundant chatter -- and for Auto-balance, applying every occupied
+    // seat in a loop, that redundancy used to be a real flood risk: the
+    // server kicks a connection that sends 15 TALKs inside one minute, and
+    // this one TALK-per-player design meant 3 Auto taps in a 5-player room
+    // (5 seats x 3 taps = 15) hit that limit exactly, disconnecting the host
+    // mid-cycle. A <=5-cap room's non-host has no way to broadcast
+    // SETOPTIONS themselves, so TALK stays their only channel to tell the
+    // host what they picked (the host's own intercept below applies it and
+    // re-syncs).
     if (room->maxPlayers > 5) {
         netTeamOverrides[nick] = team;
+        char talkMsg[64];
+        snprintf(talkMsg, sizeof(talkMsg), "!team:%s:%d", nick.c_str(), team);
+        netClient->SendTalk(talkMsg);
     } else {
         netPlayerTeams[slot] = team;
-        if (isHost) SyncRoomOptions();
+        if (isHost) {
+            if (announce) SyncRoomOptions();
+        } else {
+            char talkMsg[64];
+            snprintf(talkMsg, sizeof(talkMsg), "!team:%s:%d", nick.c_str(), team);
+            netClient->SendTalk(talkMsg);
+        }
     }
-
-    char talkMsg[64];
-    snprintf(talkMsg, sizeof(talkMsg), "!team:%s:%d", nick.c_str(), team);
-    netClient->SendTalk(talkMsg);
     AudioMixer::Instance()->PlaySFX("menu_change");
 }
 
@@ -401,8 +414,19 @@ bool MainMenu::HandleTeamsPanelTap(float lx, float ly) {
         NetworkClient* netClient = NetworkClient::Instance();
         GameRoom* room = netClient->GetCurrentGame();
         if (room && room->creator == netClient->GetPlayerNick()) {
-            for (int slot = 0; slot < (int)room->players.size(); ++slot)
-                ApplyTeamChoice(slot, AutoBalanceTeam(slot, button.teamCount));
+            // Apply every occupied seat without announcing per-slot (see
+            // ApplyTeamChoice's `announce`), then sync once for the whole
+            // batch -- one SETOPTIONS broadcast covers every player's new
+            // team already, same as ApplyTeamChoice's own single-slot path
+            // does per call. Skipping a seat whose team is already correct
+            // (re-tapping the same Auto count) avoids even that no-op work.
+            const int playerCount = (int)room->players.size();
+            for (int slot = 0; slot < playerCount; ++slot) {
+                const int team = AutoBalanceTeam(slot, button.teamCount);
+                if (TeamOfSlot(slot) != team)
+                    ApplyTeamChoice(slot, team, /*announce=*/false);
+            }
+            if (room->maxPlayers <= 5) SyncRoomOptions();
         }
         return true;
     }

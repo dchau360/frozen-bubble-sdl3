@@ -350,6 +350,18 @@ private:
     std::string pendingJoinNick;
     [[maybe_unused]] int pendingJoinSuffix = 2; // referenced only in networkclient_wasm.cpp
 
+#ifdef FROZEN_BUBBLE_TEST_ACCESS
+public:
+    // Counts SendTalk calls regardless of whether the socket accepted them
+    // (SendCommand no-ops when disconnected, which every headless test is).
+    // Lets a test pin how many TALK messages a user action generates against
+    // the server's own flood-kick threshold (server/game.c: 15 TALKs inside
+    // one minute terminates the connection) -- see
+    // tests/menu_touch_gesture_test.cpp's Auto-balance flood regression.
+    int testTalkSendCount = 0;
+private:
+#endif
+
     // Test-only access to otherwise-private connection state, so a headless
     // test can stand up a fake "already in a game room" NetworkClient
     // without a real socket -- see NetworkClientTestAccess in

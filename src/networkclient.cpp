@@ -575,6 +575,9 @@ bool NetworkClient::PartGame() {
 }
 
 bool NetworkClient::SendTalk(const char* message) {
+#ifdef FROZEN_BUBBLE_TEST_ACCESS
+    ++testTalkSendCount;
+#endif
     char cmd[256];
     snprintf(cmd, sizeof(cmd), "TALK %s", message);
     return SendCommand(cmd);
