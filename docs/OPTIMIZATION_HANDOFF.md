@@ -1,6 +1,6 @@
 # Code optimization progress and handoff
 
-Last updated: 2026-09-05 (session 3)
+Last updated: 2026-09-05 (session 3, after the v2.4.78 bugfix release)
 
 ## Purpose and user preferences
 
@@ -12,7 +12,11 @@ they asked to commit the handoff doc, then implement recommended-work item 1
 (render-call-site caching), followed by a version bump/push/tag to `v2.4.77`.
 In this third session they asked "anything left to optimize?" and then, on
 being shown the remaining 4-item list, said "work on them all in order" — all
-four are now done, see below.
+four are done (see below), and were pushed to `origin/main` after an explicit
+confirmation. With no optimization backlog left, the user then reported a
+real gameplay bug encountered during their own use (not part of this effort's
+scope) — see "Session 3, continued" below — which is now also fixed, released
+as `v2.4.78`, and pushed/tagged.
 
 Update this document after meaningful implementation or verification milestones
 and before handing off. Record actual results, outstanding work, and blockers.
@@ -22,22 +26,20 @@ a speedup.
 ## Current checkpoint
 
 - Repository: `/Users/dchau/gr/frozen-bubble-sdl3`
-- Branch: `main`
-- Latest commit: `459e3d7a` (`refactor: consolidate player label positions,
-  fix duplicate include`), the last of four commits stacked on top of
-  `0a00c367` (`chore: bump version to 2.4.77`, tagged `v2.4.77`):
+- Branch: `main`, clean working tree, `main` == `origin/main` (0 ahead, 0
+  behind) as of this writing.
+- Latest commit: `e92ecb6d` (`chore: bump version to 2.4.78`), tagged
+  `v2.4.78`. Full history back to the last handoff update:
   - `da37f18d` test: broaden ttftext/render-panel cache correctness coverage
   - `05b4aedd` build: compile the shared test core once instead of 8 times
   - `3d36ff80` perf: cache bot shot scores per landing cell within one decision
   - `459e3d7a` refactor: consolidate player label positions, fix duplicate include
-- Tag `v2.4.77` (on `0a00c367`) **is pushed** to `origin`, along with
-  everything through that commit. The four commits above are **not yet
-  pushed** — `main` is 4 commits ahead of `origin/main`, 0 behind. No new
-  version bump/tag was cut for this batch (these are internal
-  test/build/perf/readability changes, not a release).
-- The working tree is clean after this session's commits. This document's own
-  update is uncommitted at the time of writing — commit it too.
-- Both `build/` and `build-asan/` exist and are up to date with `459e3d7a`.
+  - `4ea617f4` docs: update optimization handoff after items 1-4
+  - `ff93a0a1` fix: stop Auto-balance from flooding the host's own connection
+  - `e92ecb6d` chore: bump version to 2.4.78
+- Both `v2.4.77` (`0a00c367`) and `v2.4.78` (`e92ecb6d`) are pushed and tagged
+  on `origin`. Everything above is pushed; nothing is sitting local-only.
+- Both `build/` and `build-asan/` exist and are up to date with `e92ecb6d`.
   No implementation commands or test processes are running.
 
 ## Completed work
@@ -223,10 +225,51 @@ fallback case.
   game, no Android/Windows/WASM/iOS build. Correctness rests on the unit
   tests + full suite + ASan passes, not on having watched a live game.
 
+### Session 3, continued: Auto-balance flood-disconnect bugfix (`v2.4.78`)
+
+Not part of the original optimization scope — the user hit this during
+ordinary use right after items 1-4 shipped ("i noticed that when i cycle thru
+the auto 2,3,4,5 teams with 4 bots ... i get kicked out of the game room").
+Recorded here anyway since it's the most recent work on this codebase and the
+next session needs accurate state regardless of which effort it belongs to.
+
+**Root cause:** the server (`server/game.c`, `amount_talk_flood`/`talk()`)
+disconnects any client that sends 15 TALK (chat) messages inside one minute.
+The full-screen team picker's "Auto 2/3/4/5" buttons
+(`src/mainmenu_teampanel.cpp`) applied every occupied seat in a loop, and
+`ApplyTeamChoice` sent one `"!team:<nick>:<n>"` TALK message per seat
+*unconditionally* — including the host's own change in a <=5-cap room, where
+`SyncRoomOptions()` already broadcasts every player's team via SETOPTIONS'
+`PLAYERTEAM_Pn` fields, making that TALK pure redundant chatter. A full
+5-player room (host + 4 bots, the reported case) sent 5 TALKs per tap; 3 taps
+(5x3=15) hit the flood limit exactly and disconnected the host mid-cycle.
+
+**Fix (commit `ff93a0a1`):** the host's own <=5-cap-room path no longer sends
+that TALK at all (SyncRoomOptions already covers it); a non-host's own row
+and any >5-cap-room change (which has no per-slot team field in SETOPTIONS)
+are unchanged. Added an `announce` parameter to `ApplyTeamChoice` so
+Auto-balance can defer the host's broadcast to one call after the whole
+batch instead of one per seat, and skips seats whose team doesn't change on
+a re-tap.
+
+**Test:** added a test-only `SendTalk` call counter to `NetworkClient`
+(guarded by `FROZEN_BUBBLE_TEST_ACCESS`) and a new block in
+`tests/menu_touch_gesture_test.cpp` that reproduces the exact report (host +
+4 bots) and asserts zero TALK sends across an Auto 2→3→4→5 cycle. Verified
+this actually catches the bug by stashing the fix and re-running it first
+(failed as expected), then restored and re-verified.
+
+**Verification:** full release build + `ctest` (24 passed, 2 skipped as
+expected); ASan/UBSan pass of `menu-touch-gesture-test` clean.
+
+**Release:** version bumped to 2.4.78 (same four files as every release, plus
+`CHANGELOG.md`), pushed to `origin/main`, tag `v2.4.78` cut and pushed.
+
 ## Remaining improvements
 
-None outstanding from the original 5-item recommended list — all are done as
-of session 3. Possible future work, not requested or scoped yet:
+None outstanding from the original 5-item optimization list, and the
+Auto-balance bug above is fixed and released. Possible future work, not
+requested or scoped yet:
 - Runtime texture-creation-count benchmarks for the session-2 render caching
   (still only verified by test, not measured — flagged as open in session 2
   and never picked up since nothing since has needed it).
@@ -234,17 +277,22 @@ of session 3. Possible future work, not requested or scoped yet:
   vector/set/queue allocations per candidate (mentioned as a session-1
   follow-on to the scoring cache, not pursued this session since the map
   cache alone already gave a measured ~3.2x in the benchmark scenario).
+- A >5-cap room's Auto-balance still sends one TALK per changed seat (the
+  wire format has no per-slot team field in SETOPTIONS for P6-20, so there
+  was no cheap way to avoid it this session) — a large room with many bots
+  could in principle still hit the same 15-TALK/minute flood limit on a
+  single Auto tap. Not reported, not reproduced; flagging since it's the
+  same underlying pattern the v2.4.78 fix addressed for <=5-cap rooms. A
+  real fix would need a new batched wire message rather than the
+  one-message-per-player-change protocol used today.
 
 ## Suggested next session
 
 1. Read repository instructions and this document; inspect git state before
-   edits (`git log`, `git status`, and whether `origin/main` has moved —
-   `main` was last left 4 commits ahead of `origin/main`, unpushed).
-2. Confirm with the user whether to push these 4 commits (and whether a new
-   version bump/tag is wanted for them, or whether they should just ride
-   along unpushed until a future release) — do not assume either way.
-3. If more optimization work is wanted, there is no committed-to backlog
-   left; ask the user what to look at next rather than assuming the "Possible
-   future work" bullets above are pre-approved.
-4. Update this document with changed files, verification, remaining
+   edits (`git log`, `git status`, and whether `origin/main` has moved — as
+   of this writing `main` == `origin/main`, nothing pending).
+2. There is no committed-to backlog left from either the optimization effort
+   or the Auto-balance bugfix; ask the user what to look at next rather than
+   assuming the "Possible future work" bullets above are pre-approved.
+3. Update this document with changed files, verification, remaining
    concerns, and any new commit/tag/push state.
