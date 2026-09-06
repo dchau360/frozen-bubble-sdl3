@@ -1,5 +1,19 @@
 # Changelog
 
+## v2.4.82
+
+- **CI fix, no gameplay change.** v2.4.81's Linux (ASan/UBSan) and Linux
+  (AppImage) builds failed their test suite -- the HELP-box navigation fix
+  in that release made the HELP box a real stop in the room's Up/Down
+  cycle, but a pre-existing test still expected the old, direct jump from
+  the last settings row straight to the header's "Set Teams" button and
+  never accounted for the new intermediate stop. Because those two Linux
+  jobs failed, the release policy that blocks shipping on a red
+  ASan/UBSan run also blocked the itch.io deploy, so v2.4.81 went out
+  missing its Linux build and its web build never updated. Fixed the
+  test to match the shipped (and on-device-verified) behavior; this
+  release is otherwise identical to v2.4.81.
+
 ## v2.4.81
 
 - **Fixed the room's HELP box being unreachable by Up/Down navigation.**
