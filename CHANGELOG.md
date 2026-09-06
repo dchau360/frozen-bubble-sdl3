@@ -1,5 +1,22 @@
 # Changelog
 
+## v2.4.84
+
+- **Fixed team assignment silently vanishing in network games.** Reported
+  directly with a screenshot: 4 bots + Auto 3 in Clear Mode showed no team
+  colors and no TEAM TOTALS row in the post-round stats at all. Root cause
+  was in NewGame() itself, not the crediting/rendering logic fixed in
+  v2.4.83 -- team choices are stored indexed by the room's own player-join
+  order, but a network game already remaps colors, compression and aim-guide
+  from that join order to each player's actual board (they don't always
+  match: your own board is always shown first regardless of which seat you
+  actually hold, and everyone else is seated by connection id, not join
+  order). Team was the one setting that remap never covered, so a board
+  could silently end up reading a completely different player's team, most
+  often landing on "no team" once a room's bot seating stopped lining up
+  with join order -- which a bot-heavy room hits often. Now remapped the
+  same way the others already were.
+
 ## v2.4.83
 
 - **Fixed the "Board Cleared!" banner not crediting the team.** Reported
