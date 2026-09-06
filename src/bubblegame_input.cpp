@@ -423,6 +423,19 @@ void BubbleGame::HandleInput(SDL_Event *e) {
                                 ReloadGame(curLevel);
                             }
                         } else if (gameLost) {
+                            // gameLost is only ever set for single-player (see
+                            // CheckGameState/DoFrozenAnimation, both gated on
+                            // playerCount < 2), so bubbleArrays[0] is the one
+                            // player here. Score accumulates across levels
+                            // within a life (see the isDefaultClassic comment
+                            // in NewGame()), but dying ends that life -- the
+                            // retry ReloadGame(curLevel) starts is a new one,
+                            // and must not inherit the score the life that
+                            // just ended built up. bArray.score was already
+                            // read for the game-over panel and (opt-in) stats
+                            // upload before gameLost was set, so it is safe to
+                            // zero now.
+                            bubbleArrays[0].score = 0;
                             ReloadGame(curLevel);
                         }
                     }

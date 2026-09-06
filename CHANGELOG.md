@@ -1,5 +1,14 @@
 # Changelog
 
+## v2.4.86
+
+- **Fixed single-player score carrying over after death instead of
+  resetting.** Classic solo campaign has always let score accumulate across
+  levels as you clear them within one life -- but dying and retrying the
+  level you just lost on kept that same accumulated score instead of
+  starting the new attempt at 0. Losing ends the life; the retry is a new
+  one, and now starts scored at 0 like it should.
+
 ## v2.4.85
 
 - **Fixed team choices still vanishing in a >5-player room where fewer than

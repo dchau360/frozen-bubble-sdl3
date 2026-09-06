@@ -97,6 +97,14 @@ struct BubbleGameTestAccess {
         game.HandleInput(&event);
     }
     static void finishAsDraw(BubbleGame& game) { game.FinishRoundAsDraw(); }
+    // Mirrors the flags a real single-player death leaves set (see the
+    // playerCount < 2 branch in CheckGameState/DoFrozenAnimation), without
+    // needing a live board to actually put the one player in the danger
+    // zone.
+    static void setGameOverState(BubbleGame& game, bool finish, bool lost) {
+        game.gameFinish = finish;
+        game.gameLost = lost;
+    }
     static void setAnimationsDone(BubbleGame& game) { game.gameMpDone = true; }
     static void useResultPanel(BubbleGame& game, int idx, SDL_Texture* texture) {
         game.multiStatePanels[idx] = texture;
@@ -1236,6 +1244,28 @@ int main() {
         CHECK(std::string(AttackModeName(AttackMode::On)) == "ON");
         CHECK(std::string(AttackModeName(AttackMode::Off)) == "OFF");
         CHECK(std::string(AttackModeName(AttackMode::Canceling)) == "Blockable");
+    }
+
+    // Single-player score must reset to 0 on death, not carry into the
+    // retry. Classic solo campaign accumulates score across levels within
+    // one life (see the isDefaultClassic comment in NewGame()), but dying
+    // ends that life -- the ReloadGame(curLevel) retry a real death's
+    // Enter/fire-key press drives (bubblegame_input.cpp's gameLost branch)
+    // starts a new one, and must not inherit the score the life that just
+    // ended built up. Reported live: score kept climbing across deaths
+    // instead of resetting.
+    {
+        BubbleGame game(renderer);
+        BubbleGameTestAccess::reset(game, 1, false, false);
+        BubbleGameTestAccess::setLevel(game, 4);
+        BubbleGameTestAccess::player(game, 0).score = 12500;
+        BubbleGameTestAccess::setGameOverState(game, true, true);
+        BubbleGameTestAccess::capturePostRoundTransition(game);
+        BubbleGameTestAccess::pressContinue(game);
+        // Retries the level just lost on, not level 1 -- curLevel already
+        // means "the level just lost on" everywhere else that reads it.
+        CHECK(BubbleGameTestAccess::reloadLevel(game) == 4);
+        CHECK(BubbleGameTestAccess::player(game, 0).score == 0);
     }
 
     SDL_DestroyRenderer(renderer);
