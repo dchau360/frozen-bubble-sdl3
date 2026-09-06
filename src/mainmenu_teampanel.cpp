@@ -277,25 +277,36 @@ void MainMenu::TeamsPanelRender() {
     if (isHost) {
         drawText("AUTO", body.x + 128, body.y + 10, menulist::kMuted, 11, TTF_STYLE_BOLD);
         const int autoW = 24, autoH = 22, autoGap = 4;
+        const int autoNoneW = 40;  // wider than a digit box: "NONE" needs the room.
         const int autoX0 = body.x + 168;
-        for (int count = 2; count <= kMaxTeams; ++count) {
-            SDL_Rect box = {autoX0 + (count - 2) * (autoW + autoGap), body.y + 4,
-                            autoW, autoH};
+
+        auto drawAutoButton = [&](SDL_Rect box, const char* label, int teamCount) {
             SDL_SetRenderDrawColor(rend, menulist::kSelFill.r, menulist::kSelFill.g,
                                    menulist::kSelFill.b, 80);
             { SDL_FRect fr = ToFRect(box); SDL_RenderFillRect(rend, &fr); }
             SDL_SetRenderDrawColor(rend, menulist::kSelEdge.r, menulist::kSelEdge.g,
                                    menulist::kSelEdge.b, 190);
             { SDL_FRect fr = ToFRect(box); SDL_RenderRect(rend, &fr); }
-            char countText[4];
-            snprintf(countText, sizeof(countText), "%d", count);
             panelText.UpdateStyle(13, TTF_STYLE_BOLD);
             panelText.UpdateColor(menulist::kText, menulist::kTextShadow);
-            panelText.UpdateText(rend, countText, 0);
+            panelText.UpdateText(rend, label, 0);
             panelText.UpdatePosition({box.x + box.w/2 - panelText.Coords()->w/2,
                                       box.y + box.h/2 - panelText.Coords()->h/2});
             { SDL_FRect fr = ToFRect(*panelText.Coords()); SDL_RenderTexture(rend, panelText.Texture(), nullptr, &fr); }
-            teamAutoBalanceTaps.push_back({box, count});
+            teamAutoBalanceTaps.push_back({box, teamCount});
+        };
+
+        // Undoes every Auto/manual assignment in one tap: every occupied seat
+        // becomes a free agent, same as a room nobody has touched yet.
+        drawAutoButton({autoX0, body.y + 4, autoNoneW, autoH}, "NONE", kNoTeam);
+
+        const int autoX1 = autoX0 + autoNoneW + autoGap;
+        for (int count = 2; count <= kMaxTeams; ++count) {
+            SDL_Rect box = {autoX1 + (count - 2) * (autoW + autoGap), body.y + 4,
+                            autoW, autoH};
+            char countText[4];
+            snprintf(countText, sizeof(countText), "%d", count);
+            drawAutoButton(box, countText, count);
         }
     }
     SDL_SetRenderDrawColor(rend, menulist::kEdge.r, menulist::kEdge.g, menulist::kEdge.b, 110);
@@ -402,7 +413,7 @@ void MainMenu::TeamsPanelRender() {
     // TeamsPanelKey), a right-click, or a back-swipe -- the last two both
     // arrive here as ESC.
     menulist::DrawFooterHint(rend, panelText,
-        isHost ? "Tap name to cycle    Auto 2-5    arrows move/change    ESC/Done closes"
+        isHost ? "Tap name to cycle    Auto None/2-5    arrows move/change    ESC/Done closes"
                : "Tap your name or a choice    LEFT/RIGHT changes    ESC/Done closes");
 }
 
@@ -481,7 +492,13 @@ bool MainMenu::HandleTeamsPanelTap(float lx, float ly) {
             std::vector<std::pair<int, int>> changes;
             changes.reserve(playerCount);
             for (int slot = 0; slot < playerCount; ++slot) {
-                const int team = AutoBalanceTeam(slot, button.teamCount);
+                // kNoTeam means the NONE button: every seat becomes a free
+                // agent instead of being distributed by AutoBalanceTeam,
+                // which would otherwise clamp teamCount<1 to 1 and put
+                // everyone on "Team 1" -- the opposite of what NONE promises.
+                const int team = button.teamCount == kNoTeam
+                                      ? kNoTeam
+                                      : AutoBalanceTeam(slot, button.teamCount);
                 if (TeamOfSlot(slot) != team) changes.push_back({slot, team});
             }
             ApplyTeamChoicesBatch(changes);

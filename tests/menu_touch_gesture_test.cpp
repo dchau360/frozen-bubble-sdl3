@@ -822,6 +822,24 @@ int main() {
             const int autoThree[] = {1, 2, 3, 1, 2, 3};
             for (int slot = 0; slot < 6; ++slot)
                 CHECK(MainMenuTestAccess::TeamOfSlot(*menu, slot) == autoThree[slot]);
+
+            // The NONE button undoes Auto 3 in the same one tap it took to
+            // apply it -- every occupied seat back to a free agent, batched
+            // into the same single "!teamset:" TALK an Auto button sends
+            // rather than one "!team:" per seat.
+            const int talkBeforeNone = NetworkClientTestAccess::TalkSendCount(*nc);
+            CHECK(MainMenuTestAccess::AutoBalanceCenter(*menu, kNoTeam, &sx, &sy));
+            CHECK(menu->HandlePanelTap(sx, sy));
+            CHECK(NetworkClientTestAccess::TalkSendCount(*nc) - talkBeforeNone == 1);
+            for (int slot = 0; slot < 6; ++slot)
+                CHECK(MainMenuTestAccess::TeamOfSlot(*menu, slot) == kNoTeam);
+
+            // Re-apply Auto 3 so the rows below still have something to work
+            // from.
+            CHECK(MainMenuTestAccess::AutoBalanceCenter(*menu, 3, &sx, &sy));
+            CHECK(menu->HandlePanelTap(sx, sy));
+            for (int slot = 0; slot < 6; ++slot)
+                CHECK(MainMenuTestAccess::TeamOfSlot(*menu, slot) == autoThree[slot]);
             MainMenuTestAccess::RenderTeamsPanel(*menu);
             CHECK(MainMenuTestAccess::SwatchCenter(*menu, 0, 5, &sx, &sy));
 

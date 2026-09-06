@@ -529,6 +529,9 @@ private:
     std::vector<TeamSwatchTap> teamSwatchTaps;
     struct TeamPlayerNameTap { SDL_Rect rect; int slot; };
     std::vector<TeamPlayerNameTap> teamPlayerNameTaps;
+    // teamCount is 2..kMaxTeams for a round-robin Auto button; kNoTeam (0)
+    // marks the "NONE" button instead, which resets every seat to a free
+    // agent rather than distributing them.
     struct TeamAutoBalanceTap { SDL_Rect rect; int teamCount; };
     std::vector<TeamAutoBalanceTap> teamAutoBalanceTaps;
     SDL_Rect teamsDoneRect{};
