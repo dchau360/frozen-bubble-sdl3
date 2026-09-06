@@ -24,6 +24,18 @@ project(frozen-bubble-sdl3 VERSION 2.4.82 LANGUAGES ${FB_LANGUAGES})
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/cmake")
 
+# Emits build/compile_commands.json, the compilation database clangd (and
+# similar tooling) needs to resolve this project's actual include paths --
+# SDL3/SDL3_image/SDL3_ttf/SDL3_mixer come from Homebrew on macOS, from a
+# source build under build/_deps in CI's Linux sanitizer job, and are found
+# differently again on Windows -- nowhere a bare per-file heuristic could
+# reliably guess. Without this, editor diagnostics fall back to a generic
+# search path and misreport real headers ("SDL3/SDL.h file not found") and
+# even parts of the standard library as missing. .clangd points at the
+# `build` directory directly, so a plain `cmake -B build` configure is all
+# an editor needs; no symlink to the repo root required.
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
 set(DEFAULT_BUILD_TYPE "Release")
 if(NOT CMAKE_CONFIGURATION_TYPES AND NOT (CMAKE_BUILD_TYPE OR DEFINED ENV{CMAKE_BUILD_TYPE}))
     message(STATUS "Setting build type to '${DEFAULT_BUILD_TYPE}' as none was specified.")
