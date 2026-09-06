@@ -158,6 +158,10 @@ struct MainMenuTestAccess {
     static bool TeamsPanelOpen(const MainMenu& menu) { return menu.showingTeamsPanel; }
     static int TeamsCursor(const MainMenu& menu) { return menu.teamsCursorPlayer; }
     static void RenderTeamsPanel(MainMenu& menu) { menu.TeamsPanelRender(); }
+    // Drives the >5-cap "every client applies !team:/!teamset: broadcasts"
+    // parsing in NetPanelChatDockRender, without the team picker or any of
+    // the rest of the room UI it also draws.
+    static void RenderChatDock(MainMenu& menu) { menu.NetPanelChatDockRender(); }
     static int TeamOfSlot(const MainMenu& menu, int slot) { return menu.TeamOfSlot(slot); }
     // Centre of the swatch that sets `team` on `slot`, as actually published
     // by the last TeamsPanelRender -- so the tap under test lands on the real
@@ -251,6 +255,12 @@ struct NetworkClientTestAccess {
     // headless test) socket actually accepted them -- see its declaration in
     // networkclient.h for why this exists.
     static int TalkSendCount(const NetworkClient& nc) { return nc.testTalkSendCount; }
+    // Injects a message as if it just arrived over the wire, so a test can
+    // drive NetPanelChatDockRender's parsing without a real server echo.
+    static void PushChatMessage(NetworkClient& nc, const std::string& nick,
+                                const std::string& message) {
+        nc.chatMessages.push_back({nick, message, 0});
+    }
 };
 
 int main() {
@@ -798,9 +808,17 @@ int main() {
             CHECK(MainMenuTestAccess::TeamOfSlot(*menu, 1) == kNoTeam);
 
             // Auto 3 round-robins every occupied seat and leaves the manual
-            // Team 4/5 choices available afterward.
+            // Team 4/5 choices available afterward. This is a >5-cap room,
+            // so every seat's change is real wire traffic (no per-slot
+            // SETOPTIONS shortcut here) -- but it must still be one combined
+            // "!teamset:" message for the whole tap, not one "!team:" per
+            // seat (6 seats changing here; ApplyTeamChoicesBatch's batching
+            // is what keeps that at 1, see the dedicated flood test below for
+            // a room sized to actually reach the server's limit unbatched).
+            const int talkBefore = NetworkClientTestAccess::TalkSendCount(*nc);
             CHECK(MainMenuTestAccess::AutoBalanceCenter(*menu, 3, &sx, &sy));
             CHECK(menu->HandlePanelTap(sx, sy));
+            CHECK(NetworkClientTestAccess::TalkSendCount(*nc) - talkBefore == 1);
             const int autoThree[] = {1, 2, 3, 1, 2, 3};
             for (int slot = 0; slot < 6; ++slot)
                 CHECK(MainMenuTestAccess::TeamOfSlot(*menu, slot) == autoThree[slot]);
@@ -950,6 +968,113 @@ int main() {
         // occupied seats gives each player their own team, in slot order.
         for (int slot = 0; slot < 5; ++slot)
             CHECK(MainMenuTestAccess::TeamOfSlot(*menu, slot) == slot + 1);
+
+        // Don't leak this fake room into any test that runs after this one.
+        NetworkClientTestAccess::SetCurrentGame(*nc, nullptr);
+    }
+
+    // --- Auto-balance flood regression, >5-cap room: a single Auto tap in a
+    // big room must not send one wire message per seat.
+    //
+    // A >5-cap room has no per-slot team field in SETOPTIONS, so a team
+    // change there really does need one "!team:<nick>:<n>" TALK per changed
+    // seat -- unlike the <=5-cap case above, this traffic is not redundant.
+    // But sending it unbatched does not scale: a 16-player room (host + 15
+    // bots) tapping Auto would send 16 separate TALKs from *one* tap, already
+    // past the server's 15-TALK/minute flood-kick limit before the user does
+    // anything else. ApplyTeamChoicesBatch combines a whole tap's worth of
+    // changes into one "!teamset:nick=team,..." message instead.
+    {
+        std::unique_ptr<MainMenu> menu = MainMenuTestAccess::Create(renderer);
+
+        NetworkClient* nc = NetworkClient::Instance();
+        NetworkClientTestAccess::SetPlayerNick(*nc, "host");
+        GameRoom room;
+        room.creator = "host";
+        room.maxPlayers = 20;  // >5-cap -- the "!teamset:" batched-TALK path
+        room.players.push_back({"host", "", false});
+        for (int i = 1; i < 16; ++i)
+            room.players.push_back({"bot" + std::to_string(i), "", false});
+        NetworkClientTestAccess::SetCurrentGame(*nc, &room);
+
+        MainMenuTestAccess::SetTeamsPanelOpen(*menu, true);
+        MainMenuTestAccess::RenderTeamsPanel(*menu);
+
+        const int startCount = NetworkClientTestAccess::TalkSendCount(*nc);
+        float ax = 0, ay = 0;
+        CHECK(MainMenuTestAccess::AutoBalanceCenter(*menu, 4, &ax, &ay));
+        CHECK(menu->HandlePanelTap(ax, ay));
+        // One combined message for all 16 seats, not 16 -- comfortably under
+        // the flood limit regardless of room size, and the actual count this
+        // used to be before batching (one per seat that changed).
+        CHECK(NetworkClientTestAccess::TalkSendCount(*nc) - startCount == 1);
+
+        // The assignment underneath is still correct: Auto 4 round-robins
+        // teams 1-4 across all 16 seats in slot order.
+        for (int slot = 0; slot < 16; ++slot)
+            CHECK(MainMenuTestAccess::TeamOfSlot(*menu, slot) == (slot % 4) + 1);
+
+        // Cycling through the rest (2, 3, 5) stays at one message per tap
+        // each, never accumulating toward the flood limit the way one
+        // message per seat would across several taps.
+        for (int teamCount : {2, 3, 5}) {
+            const int before = NetworkClientTestAccess::TalkSendCount(*nc);
+            CHECK(MainMenuTestAccess::AutoBalanceCenter(*menu, teamCount, &ax, &ay));
+            CHECK(menu->HandlePanelTap(ax, ay));
+            CHECK(NetworkClientTestAccess::TalkSendCount(*nc) - before == 1);
+            MainMenuTestAccess::RenderTeamsPanel(*menu);
+        }
+
+        // Don't leak this fake room into any test that runs after this one.
+        NetworkClientTestAccess::SetCurrentGame(*nc, nullptr);
+    }
+
+    // --- "!teamset:" receiving side: a >5-cap room's other clients must
+    // actually apply the batched message the sender above builds, not just
+    // avoid sending too many of them.
+    //
+    // Every client in a >5-cap room (not just the host) applies team changes
+    // straight from chat traffic -- there is no host-authoritative broadcast
+    // for P6-20 (see ApplyTeamChoice's comment). This drives that parsing
+    // path directly with a synthetic message, standing in for the echo a
+    // real server would have relayed back from ApplyTeamChoicesBatch.
+    {
+        std::unique_ptr<MainMenu> menu = MainMenuTestAccess::Create(renderer);
+
+        NetworkClient* nc = NetworkClient::Instance();
+        NetworkClientTestAccess::SetPlayerNick(*nc, "joiner");
+        GameRoom room;
+        room.creator = "host";
+        room.maxPlayers = 20;
+        room.players.push_back({"host", "", false});
+        room.players.push_back({"joiner", "", false});
+        room.players.push_back({"bot1", "", false});
+        room.players.push_back({"bot2", "", false});
+        room.players.push_back({"bot3", "", false});
+        NetworkClientTestAccess::SetCurrentGame(*nc, &room);
+
+        CHECK(MainMenuTestAccess::TeamOfSlot(*menu, 2) == kNoTeam);
+        CHECK(MainMenuTestAccess::TeamOfSlot(*menu, 3) == kNoTeam);
+        CHECK(MainMenuTestAccess::TeamOfSlot(*menu, 4) == kNoTeam);
+
+        NetworkClientTestAccess::PushChatMessage(*nc, "host", "!teamset:bot1=2,bot2=0,bot3=3");
+        MainMenuTestAccess::RenderChatDock(*menu);
+
+        CHECK(MainMenuTestAccess::TeamOfSlot(*menu, 2) == 2);     // bot1
+        CHECK(MainMenuTestAccess::TeamOfSlot(*menu, 3) == kNoTeam);  // bot2, explicitly no-team
+        CHECK(MainMenuTestAccess::TeamOfSlot(*menu, 4) == 3);     // bot3
+        // Unrelated seats -- host and this client's own row -- are untouched.
+        CHECK(MainMenuTestAccess::TeamOfSlot(*menu, 0) == kNoTeam);
+        CHECK(MainMenuTestAccess::TeamOfSlot(*menu, 1) == kNoTeam);
+
+        // A second batch overwrites rather than merges/leaks state from the
+        // first -- bot1 moves off team 2, and a seat the new batch doesn't
+        // mention (bot3) keeps its previous value untouched.
+        NetworkClientTestAccess::PushChatMessage(*nc, "host", "!teamset:bot1=1,bot2=1");
+        MainMenuTestAccess::RenderChatDock(*menu);
+        CHECK(MainMenuTestAccess::TeamOfSlot(*menu, 2) == 1);
+        CHECK(MainMenuTestAccess::TeamOfSlot(*menu, 3) == 1);
+        CHECK(MainMenuTestAccess::TeamOfSlot(*menu, 4) == 3);
 
         // Don't leak this fake room into any test that runs after this one.
         NetworkClientTestAccess::SetCurrentGame(*nc, nullptr);

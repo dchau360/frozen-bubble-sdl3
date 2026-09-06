@@ -57,8 +57,9 @@
 
 // Indices of the chat messages that should actually be shown, newest last.
 //
-// Two things are hidden: "!team:" control traffic, which is protocol chatter
-// the players were never meant to read, and anyone this device has blocked.
+// Two things are hidden: "!team:"/"!teamset:" control traffic, which is
+// protocol chatter the players were never meant to read, and anyone this
+// device has blocked.
 // Server notices are never suppressed -- a blocked nick must not be able to
 // hide "*** so-and-so joined" or anything else the server itself says.
 //
@@ -77,6 +78,7 @@ static std::vector<size_t> VisibleChatIndices(const std::vector<ChatMessage>& ms
     visible.reserve(msgs.size());
     for (size_t i = 0; i < msgs.size(); i++) {
         if (msgs[i].message.size() > 6 && msgs[i].message.compare(0, 6, "!team:") == 0) continue;
+        if (msgs[i].message.size() > 9 && msgs[i].message.compare(0, 9, "!teamset:") == 0) continue;
         if (msgs[i].nick != "Server" && gs->IsPlayerBlocked(msgs[i].nick)) continue;
         visible.push_back(i);
     }
@@ -1288,6 +1290,12 @@ void MainMenu::NetPanelChatDockRender(bool expanded) {
     // TALK broadcasts directly to its own nick->override map. SETOPTIONS
     // can't carry teams for P6-20, so the nick-keyed channel is the sync
     // mechanism there. (<=5-cap rooms keep the host-intercept path below.)
+    //
+    // "!teamset:nick1=t1,nick2=t2,..." is the batched form Auto-balance
+    // sends (ApplyTeamChoicesBatch) so applying several seats at once costs
+    // one wire message instead of one per seat -- sending one per seat here
+    // is what used to let a big room's Auto tap hit the server's own
+    // 15-TALK-per-minute flood-kick limit in a single tap.
     if (currentGame && currentGame->maxPlayers > 5) {
         std::vector<ChatMessage> allMsgs = netClient->GetChatMessages();
         if (allMsgs.size() < teamOverrideChatCount) teamOverrideChatCount = 0;
@@ -1300,6 +1308,25 @@ void MainMenu::NetPanelChatDockRender(bool expanded) {
                 int newTeam = std::atoi(msg.c_str() + sep + 1);
                 if (!senderNick.empty() && newTeam >= kNoTeam && newTeam <= kMaxTeams)
                     netTeamOverrides[senderNick] = ClampTeamOrNone(newTeam);
+            } else if (msg.size() > 9 && msg.substr(0, 9) == "!teamset:") {
+                // Each entry is "<nick>=<team>"; nicknames are server-validated
+                // to [A-Za-z0-9_-] (server/game.c: is_nick_ok), so neither '='
+                // nor ',' can appear inside one and splitting on them is safe.
+                size_t pos = 9;
+                while (pos < msg.size()) {
+                    size_t comma = msg.find(',', pos);
+                    const std::string entry = msg.substr(pos, comma == std::string::npos
+                                                          ? std::string::npos : comma - pos);
+                    size_t eq = entry.find('=');
+                    if (eq != std::string::npos) {
+                        const std::string entryNick = entry.substr(0, eq);
+                        int entryTeam = std::atoi(entry.c_str() + eq + 1);
+                        if (!entryNick.empty() && entryTeam >= kNoTeam && entryTeam <= kMaxTeams)
+                            netTeamOverrides[entryNick] = ClampTeamOrNone(entryTeam);
+                    }
+                    if (comma == std::string::npos) break;
+                    pos = comma + 1;
+                }
             }
         }
         teamOverrideChatCount = allMsgs.size();

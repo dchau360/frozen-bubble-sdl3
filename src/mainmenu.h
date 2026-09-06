@@ -28,6 +28,7 @@
 #include <mutex>
 #include <string>
 #include <memory>
+#include <utility>
 #ifdef FROZEN_BUBBLE_TEST_ACCESS
 #include <functional>
 #endif
@@ -510,13 +511,16 @@ private:
     // Move `slot` onto `team`, applying it locally and telling everyone else,
     // by whichever route this room size syncs through. Callers must have
     // already decided the change is allowed (host, or the player's own row).
-    // `announce` is only consulted on the host's own <=5-cap-room path, where
-    // SyncRoomOptions() alone already syncs every player's team; pass false
-    // there to defer that broadcast when applying several slots in a row
-    // (see the Auto-balance tap handler) and call SyncRoomOptions() once
-    // yourself after the batch. Every other path (a >5-cap room, or a
-    // non-host's own row) has no batched alternative and ignores it.
-    void ApplyTeamChoice(int slot, int team, bool announce = true);
+    // For several slots at once (the host applying every occupied seat, e.g.
+    // Auto-balance), use ApplyTeamChoicesBatch instead -- calling this once
+    // per slot sends one wire message per slot too, and a big room can hit
+    // the server's flood-kick limit off a single action (see its comment).
+    void ApplyTeamChoice(int slot, int team);
+    // Batched form of ApplyTeamChoice for the host applying several slots at
+    // once: one combined wire update instead of one per slot. `changes` is
+    // {slot, team} pairs -- already filtered to actual changes, since this
+    // does not re-check against the current team itself.
+    void ApplyTeamChoicesBatch(const std::vector<std::pair<int, int>>& changes);
     // Per-team buttons published by TeamsPanelRender for the tap path, one
     // entry per drawn swatch. Kept out of panelTapRows for the same reason
     // the stats-upload popup's buttons are: this page is drawn over the room

@@ -50,6 +50,8 @@
 #include <algorithm>
 #include <cstdio>
 #include <string>
+#include <utility>
+#include <vector>
 
 int MainMenu::MyRoomSlot() const {
     NetworkClient* netClient = NetworkClient::Instance();
@@ -76,7 +78,7 @@ int MainMenu::TeamOfSlot(int slot) const {
     return ClampTeamOrNone(netPlayerTeams[slot]);
 }
 
-void MainMenu::ApplyTeamChoice(int slot, int team, bool announce) {
+void MainMenu::ApplyTeamChoice(int slot, int team) {
     NetworkClient* netClient = NetworkClient::Instance();
     GameRoom* room = netClient->GetCurrentGame();
     if (!room || slot < 0 || slot >= (int)room->players.size()) return;
@@ -91,15 +93,19 @@ void MainMenu::ApplyTeamChoice(int slot, int team, bool announce) {
     // NetPanelChatDockRender). A <=5-cap room's host is different: its
     // SyncRoomOptions() call already broadcasts every player's team via
     // SETOPTIONS' PLAYERTEAM_Pn fields, so a "!team:" on top of that would be
-    // pure redundant chatter -- and for Auto-balance, applying every occupied
-    // seat in a loop, that redundancy used to be a real flood risk: the
-    // server kicks a connection that sends 15 TALKs inside one minute, and
-    // this one TALK-per-player design meant 3 Auto taps in a 5-player room
-    // (5 seats x 3 taps = 15) hit that limit exactly, disconnecting the host
-    // mid-cycle. A <=5-cap room's non-host has no way to broadcast
-    // SETOPTIONS themselves, so TALK stays their only channel to tell the
-    // host what they picked (the host's own intercept below applies it and
-    // re-syncs).
+    // pure redundant chatter. A <=5-cap room's non-host has no way to
+    // broadcast SETOPTIONS themselves, so TALK stays their only channel to
+    // tell the host what they picked (the host's own intercept below applies
+    // it and re-syncs).
+    //
+    // Applying several slots at once (the host, e.g. Auto-balance) should go
+    // through ApplyTeamChoicesBatch instead of calling this in a loop: one
+    // wire message per slot here is exactly what used to flood a room's
+    // connection off a single action -- the server kicks a connection that
+    // sends 15 TALKs inside one minute, so a <=5-cap room's redundant
+    // per-slot TALK hit that in 3 Auto taps (5 seats x 3 = 15), and a >5-cap
+    // room's real per-slot TALK could hit it in a *single* tap once the room
+    // holds 15+ players.
     if (room->maxPlayers > 5) {
         netTeamOverrides[nick] = team;
         char talkMsg[64];
@@ -108,12 +114,57 @@ void MainMenu::ApplyTeamChoice(int slot, int team, bool announce) {
     } else {
         netPlayerTeams[slot] = team;
         if (isHost) {
-            if (announce) SyncRoomOptions();
+            SyncRoomOptions();
         } else {
             char talkMsg[64];
             snprintf(talkMsg, sizeof(talkMsg), "!team:%s:%d", nick.c_str(), team);
             netClient->SendTalk(talkMsg);
         }
+    }
+    AudioMixer::Instance()->PlaySFX("menu_change");
+}
+
+void MainMenu::ApplyTeamChoicesBatch(const std::vector<std::pair<int, int>>& changes) {
+    NetworkClient* netClient = NetworkClient::Instance();
+    GameRoom* room = netClient->GetCurrentGame();
+    if (!room || changes.empty()) return;
+    const bool isHost = room->creator == netClient->GetPlayerNick();
+
+    // Nicknames are server-validated to <=10 chars of [A-Za-z0-9_-] (see
+    // is_nick_ok in server/game.c), so "nick=team," can never contain a
+    // delimiter collision, and even a full MAX_NET_PLAYERS (20) worth of
+    // entries comes to well under 300 bytes -- nowhere near the server's own
+    // 1000-byte TALK relay buffer (server/game.c: talk_msg).
+    std::string batch;
+    for (const auto& [slot, teamIn] : changes) {
+        if (slot < 0 || slot >= (int)room->players.size()) continue;
+        const int team = ClampTeamOrNone(teamIn);
+        const std::string& nick = room->players[slot].nick;
+        if (room->maxPlayers > 5) {
+            netTeamOverrides[nick] = team;
+        } else {
+            netPlayerTeams[slot] = team;
+        }
+        if (!batch.empty()) batch += ',';
+        batch += nick;
+        batch += '=';
+        batch += std::to_string(team);
+    }
+    if (batch.empty()) return;
+
+    if (room->maxPlayers > 5) {
+        // One combined TALK for the whole batch instead of one per slot --
+        // see ApplyTeamChoice's comment for why that matters. "!teamset:"
+        // (not "!team:") so VisibleChatIndices still hides it from chat and
+        // the single-change parsers below don't try to read it as one.
+        char talkMsg[900];
+        snprintf(talkMsg, sizeof(talkMsg), "!teamset:%s", batch.c_str());
+        netClient->SendTalk(talkMsg);
+    } else if (isHost) {
+        // Same as ApplyTeamChoice's <=5-cap host path: SyncRoomOptions()
+        // alone already broadcasts every player's team, once for the whole
+        // batch rather than once per slot.
+        SyncRoomOptions();
     }
     AudioMixer::Instance()->PlaySFX("menu_change");
 }
@@ -414,19 +465,18 @@ bool MainMenu::HandleTeamsPanelTap(float lx, float ly) {
         NetworkClient* netClient = NetworkClient::Instance();
         GameRoom* room = netClient->GetCurrentGame();
         if (room && room->creator == netClient->GetPlayerNick()) {
-            // Apply every occupied seat without announcing per-slot (see
-            // ApplyTeamChoice's `announce`), then sync once for the whole
-            // batch -- one SETOPTIONS broadcast covers every player's new
-            // team already, same as ApplyTeamChoice's own single-slot path
-            // does per call. Skipping a seat whose team is already correct
-            // (re-tapping the same Auto count) avoids even that no-op work.
+            // Every occupied seat, batched into one wire update instead of
+            // one per seat -- see ApplyTeamChoicesBatch's comment. Skipping a
+            // seat whose team is already correct (re-tapping the same Auto
+            // count) avoids even that no-op work.
             const int playerCount = (int)room->players.size();
+            std::vector<std::pair<int, int>> changes;
+            changes.reserve(playerCount);
             for (int slot = 0; slot < playerCount; ++slot) {
                 const int team = AutoBalanceTeam(slot, button.teamCount);
-                if (TeamOfSlot(slot) != team)
-                    ApplyTeamChoice(slot, team, /*announce=*/false);
+                if (TeamOfSlot(slot) != team) changes.push_back({slot, team});
             }
-            if (room->maxPlayers <= 5) SyncRoomOptions();
+            ApplyTeamChoicesBatch(changes);
         }
         return true;
     }
