@@ -65,6 +65,19 @@ Contains ads. Remove them for a year, or permanently, with an in-app
 purchase.
 ```
 
+**Release notes / "What's new"** (Play's per-release field, 500 chars max —
+this one is 369; covers `v2.4.75`-`v2.4.79`, the changes since this listing
+was last drafted):
+
+```
+Teams are now a per-player setting in every mode, not a separate mode of
+their own -- join a team (or stay free-for-all) from the new Set Teams
+screen, with one-tap Auto-balance for the host. Fixed a bug where
+auto-balancing teams in a busy room could get you disconnected. Faster
+rendering and lighter logging during multiplayer, plus highscore-screen
+alignment fixes.
+```
+
 **Category:** Games > Puzzle
 **Contact email:** (your email — this is shown publicly on the listing)
 **External marketing / website:** `https://github.com/dchau360/frozen-bubble-sdl3`

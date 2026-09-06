@@ -13,22 +13,39 @@
   and this is honest to how it actually looks, which is fine — Play doesn't
   require portrait screenshots, just 2–8 images between 320px and 3840px per
   side with an aspect ratio no more extreme than 2:1.
-- **`screenshot-1-follow-server.png`**, **`screenshot-2-game-room.png`**,
-  **`screenshot-4-local-2player.png`**, **`screenshot-6-net-5player.png`**
-  (800×600, 24-bit RGB) — gameplay/menu
+- **`screenshot-1-follow-server.png`**, **`screenshot-4-local-2player.png`**,
+  **`screenshot-6-net-5player.png`** (800×600, 24-bit RGB) — gameplay/menu
   captures taken on a real Android tablet with `adb screenrecord`/`screencap`,
   cropped to the game viewport (the app renders 4:3 letterboxed inside the
-  device's portrait screen, so the status and navigation bars are cropped
+  device's landscape screen, so the status and navigation bars are cropped
   away). The 5-player shot is a live network game against four headless
   `tools/net_bots.py` clients, captured after the long-nickname roster fix in
   `37e0237c` — an earlier capture of the same scene showed a phantom sixth
-  player and is not the one checked in here. The follow-server and game-room
-  shots were recaptured after the full-screen `menulist`-based menu redesign
-  (`src/menulist.h`/`.cpp`): a locally hosted `fb-server`
-  (`tools/net_bots.py --count 1` supplying the second roster slot for the
-  room shot) reached over `adb reverse tcp:1511 tcp:<port>`, same rig as the
-  promo-video steps below. Superseded the previous 640×480 WASM-canvas
-  captures of these two, which still showed the old wood-popup panels.
+  player and is not the one checked in here. The follow-server shot was
+  recaptured after the full-screen `menulist`-based menu redesign
+  (`src/menulist.h`/`.cpp`): a locally hosted `fb-server` reached over
+  `adb reverse tcp:1511 tcp:<port>`, same rig as the promo-video steps below.
+  Superseded a previous 640×480 WASM-canvas capture, which still showed the
+  old wood-popup panels.
+- **`screenshot-2-game-room.png`** (800×600, 24-bit RGB) — the game room a
+  host sees before starting a match: 5 players (host + 4 bots), the **Set
+  Teams** button in the players panel header, and the **Team** row now
+  present in the match-rules table. Recaptured 2026-09-05 on the same
+  tablet/local-server rig, after teams became a per-player setting available
+  in every mode (`db4b580c`) rather than a separate "Team Mode" — the
+  previous capture predated that and still showed the old mode-only rules
+  table with no Team row or Set Teams button.
+- **`screenshot-5-set-teams.png`** (800×600, 24-bit RGB) — new: the
+  full-screen **Set Teams** picker (per-player team assignment, plus the
+  host's Auto 2/3/4/5 round-robin buttons), captured mid-Auto-3 so the team
+  colors are visible. Same capture session as the game-room shot above. This
+  page had a real rendering bug at capture time — it never painted its own
+  backdrop before drawing its translucent panel, unlike every other
+  full-screen page (`HelpPanelRender`, etc.), so the game room it was opened
+  from showed straight through and its header text ("SET TEAMS") visibly
+  merged with the room header's ("GAME ROOM") underneath. Fixed in
+  `f41bcac3` (`TeamsPanelRender` now calls `menulist::DrawWorldMapBackdrop`
+  first, same as every sibling page) before this screenshot was taken.
 - **`screenshot-7-main-menu.png`** (640×480, 24-bit RGB, no alpha) — the
   title screen, captured straight off the canvas (`canvas.toDataURL()`) of a
   locally served WASM build (`tools/serve-wasm.py`) rather than a device
