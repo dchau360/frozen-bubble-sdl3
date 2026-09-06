@@ -1209,20 +1209,30 @@ void MainMenu::MenuUpKey() {
                             // back to the last real row first, or stepping from
                             // one would walk off the end and leave nothing
                             // highlighted. The header's "Set Teams" button
-                            // (kRoomSetTeamsTapIndex) is the exception -- and
-                            // only while a room actually exists to show it; a
-                            // stale 952 after leaving the room folds like the
-                            // rest, or it would strand the lobby cursor.
+                            // (kRoomSetTeamsTapIndex) and the HELP box are the
+                            // exceptions -- both are now real stops in the cycle
+                            // below -- and only while a room actually exists to
+                            // show them; a stale 950/952 after leaving the room
+                            // folds like the rest, or it would strand the lobby
+                            // cursor.
                             if (selectedActionIndex >= maxActions &&
                                 !(currentGame &&
-                                  selectedActionIndex == kRoomSetTeamsTapIndex))
+                                  (selectedActionIndex == kRoomSetTeamsTapIndex ||
+                                   selectedActionIndex == kRoomHelpTapIndex)))
                                 selectedActionIndex = maxActions - 1;
 
                             if (currentGame) {
                                 if (selectedActionIndex == kRoomSetTeamsTapIndex) {
                                     // "Set Teams" is the header button, so it sits
-                                    // above Chat in the cycle: Up from it wraps to
-                                    // the last real row.
+                                    // above Chat in the cycle: Up from it goes to
+                                    // HELP, then the last real row.
+                                    selectedActionIndex = kRoomHelpTapIndex;
+                                } else if (selectedActionIndex == kRoomHelpTapIndex) {
+                                    // HELP sits between the last real row and
+                                    // Set Teams -- previously unreachable by
+                                    // Up/Down at all (tap or F1 only). Drawn for
+                                    // host and joiner alike, so it is a stop for
+                                    // both.
                                     selectedActionIndex = maxActions - 1;
                                 } else {
                                     selectedActionIndex--;
@@ -1293,14 +1303,18 @@ void MainMenu::MenuDownKey() {
                                 if (selectedActionIndex == kRoomSetTeamsTapIndex) {
                                     // Down from the header button wraps to Chat.
                                     selectedActionIndex = 0;
+                                } else if (selectedActionIndex == kRoomHelpTapIndex) {
+                                    // Down from HELP continues to the header's
+                                    // Set Teams button.
+                                    selectedActionIndex = kRoomSetTeamsTapIndex;
                                 } else if (selectedActionIndex >= maxActions) {
-                                    // Parked on HELP or a roster row: wrap to the
+                                    // Parked on a >5-cap roster row: wrap to the
                                     // top as before.
                                     selectedActionIndex = 0;
                                 } else {
                                     selectedActionIndex++;
                                     if (selectedActionIndex >= maxActions)
-                                        selectedActionIndex = kRoomSetTeamsTapIndex;
+                                        selectedActionIndex = kRoomHelpTapIndex;
                                 }
                             } else {
                                 selectedActionIndex++;
@@ -1831,6 +1845,16 @@ void MainMenu::MenuReturnKey() {
                                     // OpenTeamsPanel parks either player on the row
                                     // they may actually change.
                                     OpenTeamsPanel();
+                                } else if (selectedActionIndex == kRoomHelpTapIndex) {
+                                    // ENTER on the HELP box, now that Up/Down can
+                                    // actually reach it (see MenuUpKey/
+                                    // MenuDownKey) -- host and joiner alike, same
+                                    // as the box's tap target and the F1 hotkey.
+                                    showingHelpPanel = true;
+                                    helpTopic = (int)HelpTopic::OnlineRoom;
+                                    helpScroll = 0;
+                                    helpMenuIndex = kHelpRowClose;
+                                    PlayMenuSFX("menu_selected");
                                 } else if (isHost) {
                                     GameRoomHostReturn(netClient, currentGame);
                                 } else if (!isHost && selectedActionIndex == kRoomTeam) {
