@@ -903,9 +903,15 @@ int main() {
         CHECK(MainMenuTestAccess::SelectedActionIndex(*menu) == 0);
 
         // Down from the host's last real row (Start, index 13 in a 2-player
-        // room) reaches the button too -- the same wrap that used to go to
-        // Chat, now including the header stop.
+        // room) now reaches the HELP box first -- it sits between the last
+        // row and the header button, the one stop that used to be reachable
+        // only by tap or blind F1 (see MenuDownKey/MenuUpKey).
         MainMenuTestAccess::SetSelectedActionIndex(*menu, kRoomStart);
+        MainMenuTestAccess::PressDown(*menu);
+        CHECK(MainMenuTestAccess::SelectedActionIndex(*menu) == kRoomHelpTapIndex);
+
+        // Down again continues past HELP to the header button -- the same
+        // wrap that used to go straight from Start to Chat.
         MainMenuTestAccess::PressDown(*menu);
         CHECK(MainMenuTestAccess::SelectedActionIndex(*menu) == kRoomSetTeamsTapIndex);
 
