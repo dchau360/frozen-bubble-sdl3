@@ -1,5 +1,15 @@
 # Changelog
 
+## v2.4.79
+
+- **Fixed the same team-picker disconnect bug from v2.4.78 for large network
+  rooms (6+ players).** That release fixed it for rooms of 5 or fewer by
+  removing redundant sync traffic; a bigger room's "Auto 2/3/4/5" buttons
+  still sent one sync message per player, since that traffic genuinely was
+  needed there -- meaning a single tap in a room full of bots could still
+  trip the server's spam protection. Auto-balancing teams in any room size
+  now sends one combined message instead of one per player.
+
 ## v2.4.78
 
 - **Fixed a bug where hosting a network game with bots and cycling through
