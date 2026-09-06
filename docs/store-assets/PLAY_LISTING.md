@@ -40,9 +40,10 @@ above 2 players are still experimental and less tested than the rest.
 
 ONLINE MULTIPLAYER
 Play with friends or strangers over the internet, 2-20 players per room.
-Choose Classic (last player standing), Clear Mode (first to clear their
-board wins), or Team Mode. The host controls chain reactions, attack
-bubbles, aim assist, and more — everyone sees the rules live.
+Choose Classic (last player standing) or Clear Mode (first to clear their
+board wins), and split into teams if you want -- it's a per-player option
+in either mode. The host controls chain reactions, attack bubbles, aim
+assist, and more — everyone sees the rules live.
 
 FOLLOW A SERVER
 Mark a quiet server as followed and get a notification when someone joins

@@ -32,9 +32,11 @@ None of these procedures was executed during the automated remediation work.
 - [ ] **Simultaneous local loss draw:** arrange for the final surviving local
   players to cross the danger line in the same frame. Confirm the round is
   presented as a draw and neither player receives a transient or lasting win.
-- [ ] **Team Mode survivor:** eliminate players until exactly one team remains.
-  Confirm the surviving team receives the intended winner presentation and
-  teammate credit without ending merely because one board was cleared.
+- [ ] **Teams survivor:** with players split into teams via Set Teams (teams
+  are a per-player setting, not a separate mode — try this in both Classic and
+  Clear Mode), eliminate players until exactly one team remains. Confirm the
+  surviving team receives the intended winner presentation and teammate credit
+  without ending merely because one board was cleared.
 - [ ] **Native departure continuation:** connect two native clients, exercise a
   player departure with **Continue game when players leave** both enabled and
   disabled, and confirm the remaining client continues or ends the match as
