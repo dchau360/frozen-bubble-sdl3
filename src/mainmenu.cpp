@@ -630,9 +630,23 @@ void MainMenu::SetupNewGame(int mode) {
                     ns.disableCompression[i] = playerNoCompress[i];
                     ns.aimGuide[i] = playerAimGuide[i];
                 }
-                if (playerCount > 5 && netClient && netClient->GetCurrentGame()) {
+                // Gate on the room's cap (maxPlayers), not how many players
+                // actually joined -- the Set Teams UI (TeamOfSlot/
+                // ApplyTeamChoice in mainmenu_teampanel.cpp) decides where a
+                // team choice is stored the same way, on room->maxPlayers > 5.
+                // A room created with a >5 cap but only <=5 actual joiners
+                // (e.g. a 20-player room with 1 human + 4 bots) used to store
+                // every choice in netTeamOverrides (cap > 5) while this code
+                // read from netPlayerTeams instead (playerCount, the actual
+                // join count, was not > 5) -- an array that choice never
+                // touched, so every team silently came back kNoTeam. Found
+                // live: "Create 20 player game / 4 bots / Auto 3 teams" showed
+                // no team stats at all, even after the NewGame() seat-remap
+                // fix (v2.4.84), because ns.playerTeams[] was empty before
+                // that remap ever ran.
+                GameRoom* curGame = netClient ? netClient->GetCurrentGame() : nullptr;
+                if (curGame && curGame->maxPlayers > 5) {
                     // >5-cap: resolve each slot from its nick-keyed choice.
-                    GameRoom* curGame = netClient->GetCurrentGame();
                     for (int i = 0; i < playerCount && i < (int)curGame->players.size(); i++) {
                         const std::string& nk = curGame->players[i].nick;
                         auto it = netTeamOverrides.find(nk);
@@ -646,6 +660,12 @@ void MainMenu::SetupNewGame(int mode) {
                 // Apply per-session mouse setting (off by default in multiplayer)
                 GameSettings::Instance()->mouseEnabled = netRoomMouseEnabled;
                 showingTeamsPanel = false;
+#ifdef FROZEN_BUBBLE_TEST_ACCESS
+                if (headlessTestMode) {
+                    if (testNetworkGameStart) testNetworkGameStart(ns);
+                    break;
+                }
+#endif
                 // The game takes the bots over from here: it simulates their
                 // boards and sends for them. Which board each one lands on is
                 // decided inside NewGame, once the room's players are seated.

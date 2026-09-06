@@ -234,6 +234,22 @@ struct MainMenuTestAccess {
     static void PressUp(MainMenu& menu) { menu.MenuUpKey(); }
     static void PressDown(MainMenu& menu) { menu.MenuDownKey(); }
     static void PressReturn(MainMenu& menu) { menu.MenuReturnKey(); }
+    // Drives the real network-game "Start" path (SetupNewGame(4)) and
+    // captures the SetupSettings it would have handed to NewGame(), via the
+    // same test-hook pattern StartLocalGame uses for local multiplayer.
+    // headlessTestMode short-circuits before touching FrozenBubble's real
+    // BubbleGame, so this is safe without a live game/network stack.
+    static SetupSettings StartNetworkGame(MainMenu& menu, bool& captured) {
+        SetupSettings settings;
+        captured = false;
+        menu.testNetworkGameStart = [&](const SetupSettings& started) {
+            settings = started;
+            captured = true;
+        };
+        menu.SetupNewGame(4);
+        menu.testNetworkGameStart = {};
+        return settings;
+    }
 };
 
 // NetworkClient is a true singleton (NetworkClient::Instance()), and the
@@ -881,6 +897,80 @@ int main() {
         }
 
         // Don't leak this fake room into any test that runs after this one.
+        NetworkClientTestAccess::SetCurrentGame(*nc, nullptr);
+    }
+
+    // --- >5-cap room whose actual roster is <=5: team choices must survive
+    // into the started game --------------------------------------------
+    //
+    // Reported live: "Create 20 player game / set clear mode / add 4 bots /
+    // set auto 3 teams / start game / results don't show teams after one
+    // round." A 20-player room only 1 human + 4 bots actually joined is
+    // exactly the >5-cap, <=5-actual-players case: the Set Teams UI
+    // (TeamOfSlot/ApplyTeamChoicesBatch, mainmenu_teampanel.cpp) decides
+    // where to store a choice by room->maxPlayers > 5, so with a 20-cap room
+    // it always writes to the nick-keyed netTeamOverrides map, never to the
+    // flat netPlayerTeams[] grid -- regardless of how many seats are
+    // actually filled. SetupNewGame's own case 4 used to decide which of
+    // those two maps to *read back* by playerCount > 5, where playerCount is
+    // players.size() (the actual join count, 5 here) -- not > 5, so it read
+    // the untouched netPlayerTeams[] grid instead and every team came back
+    // kNoTeam. This pins the fix: reading back must key off the same
+    // room->maxPlayers > 5 the UI used to store it.
+    {
+        std::unique_ptr<MainMenu> menu = MainMenuTestAccess::Create(renderer);
+
+        NetworkClient* nc = NetworkClient::Instance();
+        NetworkClientTestAccess::SetPlayerNick(*nc, "host");
+        GameRoom room;
+        room.creator = "host";
+        room.maxPlayers = 20;  // the room's cap, not its actual occupancy
+        room.players.push_back({"host", "", false});
+        room.players.push_back({"bot1", "", false});
+        room.players.push_back({"bot2", "", false});
+        room.players.push_back({"bot3", "", false});
+        room.players.push_back({"bot4", "", false});  // 5 actual players, <= 5
+        NetworkClientTestAccess::SetCurrentGame(*nc, &room);
+
+        MainMenuTestAccess::RenderLobbyActions(*menu);
+        // Open the picker (two-tap dance) on the host's own row and apply
+        // Auto 3, exactly as a player would from the roster.
+        const std::vector<SDL_Rect> hostRects =
+            MainMenuTestAccess::RectsForIndex(*menu, kRoomRosterTapBase + 0);
+        CHECK(hostRects.size() == 1);
+        if (!hostRects.empty()) {
+            const float hx = hostRects[0].x + hostRects[0].w * 0.5f;
+            const float hy = hostRects[0].y + hostRects[0].h * 0.5f;
+            CHECK(menu->HandlePanelTap(hx, hy));
+            CHECK(menu->HandlePanelTap(hx, hy));
+            CHECK(MainMenuTestAccess::TeamsPanelOpen(*menu));
+            SDL_PumpEvents();
+            for (SDL_Event drain; SDL_PollEvent(&drain); ) {}
+            MainMenuTestAccess::RenderTeamsPanel(*menu);
+
+            float sx = 0, sy = 0;
+            CHECK(MainMenuTestAccess::AutoBalanceCenter(*menu, 3, &sx, &sy));
+            CHECK(menu->HandlePanelTap(sx, sy));
+            const int autoThree[] = {1, 2, 3, 1, 2};
+            for (int slot = 0; slot < 5; ++slot)
+                CHECK(MainMenuTestAccess::TeamOfSlot(*menu, slot) == autoThree[slot]);
+
+            // Close the picker the same way a player would (Done), then
+            // start the game and inspect exactly what SetupNewGame(4) built.
+            MainMenuTestAccess::RenderTeamsPanel(*menu);
+            const SDL_Rect done = MainMenuTestAccess::DoneRect(*menu);
+            CHECK(menu->HandlePanelTap(done.x + done.w * 0.5f, done.y + done.h * 0.5f));
+            CHECK(!MainMenuTestAccess::TeamsPanelOpen(*menu));
+
+            bool captured = false;
+            SetupSettings started =
+                MainMenuTestAccess::StartNetworkGame(*menu, captured);
+            CHECK(captured);
+            CHECK(started.playerCount == 5);
+            for (int slot = 0; slot < 5; ++slot)
+                CHECK(started.playerTeams[slot] == autoThree[slot]);
+        }
+
         NetworkClientTestAccess::SetCurrentGame(*nc, nullptr);
     }
 

@@ -1,5 +1,22 @@
 # Changelog
 
+## v2.4.85
+
+- **Fixed team choices still vanishing in a >5-player room where fewer than
+  6 players actually joined.** Reported directly, with a precise repro after
+  v2.4.84 didn't fix it: create a 20-player room, Clear Mode, 4 bots, Auto 3
+  teams, start -- still no team stats. The room's *cap* (20) and its *actual*
+  player count (5: one human + 4 bots) disagreed about where team choices
+  live. The Set Teams page decides where to store a choice by the room's cap
+  (>5 uses a nick-keyed map so it scales past the old 5-slot grid); starting
+  the game decided which of the two to read back by the actual number of
+  players who joined instead -- the same two numbers that, in an ordinary
+  <=5-cap room, always happen to match. A 20-cap room with only 5 actual
+  players broke that assumption: every team choice landed in the nick-keyed
+  map, but the game read from the untouched 5-slot grid, so every player
+  started as no-team regardless of what Auto 3 had just set. Now both sides
+  key off the same room cap.
+
 ## v2.4.84
 
 - **Fixed team assignment silently vanishing in network games.** Reported

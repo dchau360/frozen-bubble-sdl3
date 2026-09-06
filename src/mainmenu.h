@@ -103,6 +103,7 @@ private:
     MainMenu(const SDL_Renderer *renderer, HeadlessTestTag);
     bool headlessTestMode = false;
     std::function<void(const SetupSettings&)> testLocalGameStart;
+    std::function<void(const SetupSettings&)> testNetworkGameStart;
 #endif
 
     const SDL_Renderer *renderer;
