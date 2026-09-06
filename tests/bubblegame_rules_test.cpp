@@ -416,6 +416,23 @@ int main() {
         CHECK(BubbleGameTestAccess::player(game, 1).winCount == 0);
         CHECK(BubbleGameTestAccess::player(game, 3).winCount == 0);
 
+        // Clear Mode credits the team exactly the same way elimination does --
+        // via the actual CheckGameState path this time (board already empty
+        // right after reset: default Bubble{} has bubbleId=-1, i.e. "no
+        // bubble", so allClear() is true with no further setup), not the
+        // announce() helper's synthetic ResolveRoundOutcome call.
+        BubbleGameTestAccess::reset(game, 4, false, true);
+        SetupSettings& clearTeamSettings = BubbleGameTestAccess::settings(game);
+        clearTeamSettings.playerTeams[0] = clearTeamSettings.playerTeams[2] = 1;
+        clearTeamSettings.playerTeams[1] = clearTeamSettings.playerTeams[3] = 2;
+        BubbleGameTestAccess::check(game, 0);
+        CHECK(BubbleGameTestAccess::finished(game));
+        CHECK(BubbleGameTestAccess::cleared(game));
+        CHECK(BubbleGameTestAccess::player(game, 0).winCount == 1);
+        CHECK(BubbleGameTestAccess::player(game, 2).winCount == 1);
+        CHECK(BubbleGameTestAccess::player(game, 1).winCount == 0);
+        CHECK(BubbleGameTestAccess::player(game, 3).winCount == 0);
+
         // Continue enabled: the sole survivor receives one win, but a 2P match cannot restart alone.
         BubbleGameTestAccess::reset(game, 2, true, false);
         BubbleGameTestAccess::settings(game).continueWhenPlayersLeave = true;

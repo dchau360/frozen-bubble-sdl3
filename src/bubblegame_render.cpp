@@ -1147,14 +1147,24 @@ void BubbleGame::Render() {
         // ordinary last-player-standing win. Positioned above panelRct so it
         // never overlaps the 2P win-panel image or the 3-5P name/win-count text.
         if (gameFinish && wonByClearing) {
-            int winnerIdx = -1;
-            for (int i = 0; i < currentSettings.playerCount; i++) {
-                if (bubbleArrays[i].mpWinner) { winnerIdx = i; break; }
-            }
+            // roundWinnerIdx is the player who actually cleared the board --
+            // CommitRoundWin sets it once, from the asserted winner, and never
+            // from a teammate it also credits. A scan for the first mpWinner
+            // instead (the previous approach) found whichever teammate
+            // happened to sit at the lowest array index, not necessarily the
+            // one who cleared anything, and named only that one player even
+            // when the win belonged to their whole team (found live: "clear
+            // mode with teams set doesn't attribute win to team").
+            int winnerIdx = roundWinnerIdx;
             if (winnerIdx >= 0) {
                 char banner[160];
-                snprintf(banner, sizeof(banner), "Board Cleared! %s Wins!",
-                         StatsPlayerName(bubbleArrays[winnerIdx], winnerIdx, currentSettings.networkGame).c_str());
+                const int winningTeam = currentSettings.playerTeams[winnerIdx];
+                if (winningTeam != kNoTeam) {
+                    snprintf(banner, sizeof(banner), "Board Cleared! Team %d Wins!", winningTeam);
+                } else {
+                    snprintf(banner, sizeof(banner), "Board Cleared! %s Wins!",
+                             StatsPlayerName(bubbleArrays[winnerIdx], winnerIdx, currentSettings.networkGame).c_str());
+                }
                 clearWinText.UpdateText(rend, banner, 0);
                 clearWinText.UpdatePosition({SCREEN_CENTER_X - (clearWinText.Coords()->w / 2), 165});
                 if (clearWinText.Texture()) {
