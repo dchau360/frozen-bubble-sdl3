@@ -135,6 +135,7 @@ All of these are in original `fb-server` code and are still present upstream.
 | | |
 |---|---|
 | **Local multiplayer with 3 or more players** | Experimental — less play-tested than two-player and network play. Two causes of bubbles appearing detached on the smaller side boards are fixed (a malus parking in an emptied column, and a chain-reaction arc using the centre board's threshold — see the Unreleased section of [CHANGELOG.md](../CHANGELOG.md)), but the mode has not had a full pass since |
+| **Intermittent Android cold-start ANR** | Seen twice during manual device testing (2026-09-05, real tablet, debug build v2.4.80) — "Input dispatching timed out ... waited 10003ms for FocusEvent", both times right after the device woke from doze immediately before a fresh install + launch. Not reproduced in 5 further attempts on the same device, including deliberately recreating those exact conditions (sleep 60s to settle into doze, wake, reinstall, launch). No thread dump was captured during an actual stall, so the root cause is unconfirmed — `NetworkClient::DetectGeoLocation()` (`src/networkclient.cpp`) does a synchronous network call with no overall timeout guard, up to ~16s worst case, which is a real code smell worth fixing on its own merits, but it only fires once per session on connecting to a server, not at cold launch, so it doesn't obviously line up with this |
 
 ---
 
