@@ -1,5 +1,16 @@
 # Changelog
 
+## v2.4.78
+
+- **Fixed a bug where hosting a network game with bots and cycling through
+  the team picker's "Auto 2/3/4/5" buttons could get you disconnected from
+  the room.** Each tap was sending one extra chat-style message per player
+  in the room to keep everyone in sync, on top of the room-settings update
+  that already did the same job by itself -- redundant traffic that, with
+  several bots in the room, could trip the server's spam protection after
+  only a few taps. Auto-balancing teams no longer sends that redundant
+  traffic at all.
+
 ## v2.4.77
 
 - **Completed the text-rendering cache from v2.4.76 for busy multiplayer
