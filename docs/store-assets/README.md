@@ -12,7 +12,13 @@
   requirements). Landscape, not portrait: the game is TV/landscape-first
   and this is honest to how it actually looks, which is fine — Play doesn't
   require portrait screenshots, just 2–8 images between 320px and 3840px per
-  side with an aspect ratio no more extreme than 2:1.
+  side with an aspect ratio no more extreme than 2:1. Recaptured 2026-09-05
+  on the same tablet/local-server rig as the game-room and Set Teams shots,
+  from a 5-player room with two players on teams — the stats table now
+  shows a **TEAM TOTALS** section (Team 2, Team 5) rolling up Win/Fire/Pop/
+  Sent/Rcv/Blk/KO for each team underneath the per-player rows, confirming
+  the round-stats team aggregation renders correctly. The previous capture
+  had no teams in play and only showed the per-player rows.
 - **`screenshot-1-follow-server.png`**, **`screenshot-4-local-2player.png`**,
   **`screenshot-6-net-5player.png`** (800×600, 24-bit RGB) — gameplay/menu
   captures taken on a real Android tablet with `adb screenrecord`/`screencap`,
