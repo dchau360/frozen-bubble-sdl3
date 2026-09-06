@@ -1,5 +1,15 @@
 # Changelog
 
+## v2.4.80
+
+- **Fixed illegible text on the Set Teams screen.** The full-screen team
+  picker never painted its own backdrop before drawing its translucent
+  panel, unlike every other full-screen page -- so whatever screen it was
+  opened from (the game room) showed straight through, and the two pages'
+  headers landed on the same spot and merged into unreadable text ("SET
+  TEAMS" over "GAME ROOM"). It now paints a fresh backdrop first, like the
+  rest.
+
 ## v2.4.79
 
 - **Fixed the same team-picker disconnect bug from v2.4.78 for large network
