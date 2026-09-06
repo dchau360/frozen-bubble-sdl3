@@ -658,6 +658,17 @@ void FrozenBubble::HandleControllerEvent(SDL_Event *e) {
                 case SDL_GAMEPAD_BUTTON_SOUTH:      PushKey(SDLK_RETURN, down); break;
                 case SDL_GAMEPAD_BUTTON_EAST:       PushKey(SDLK_AC_BACK, down); break;
                 case SDL_GAMEPAD_BUTTON_START:      PushKey(SDLK_PAUSE,   down); break;
+                // The room and Local Multiplayer HELP boxes (kRoomHelpTapIndex /
+                // kLocalMPHelpTapIndex) are deliberately outside the Up/Down
+                // cycle -- see mainmenu_input.cpp's MenuUpKey/MenuDownKey -- and
+                // reachable only by tapping them or pressing F1, which opens the
+                // guide from wherever the cursor already is (see the SDLK_F1
+                // handler in mainmenu_input.cpp). That left a gamepad with no
+                // way to open it at all: this switch had no F1 equivalent, so a
+                // controller-only player (Android TV, no keyboard) could not
+                // reach the guide in net play or Local Multiplayer by any input.
+                // NORTH (Y/Triangle) is otherwise unused here.
+                case SDL_GAMEPAD_BUTTON_NORTH:      PushKey(SDLK_F1,     down); break;
                 default: break;
             }
         }
