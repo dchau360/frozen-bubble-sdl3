@@ -831,6 +831,41 @@ jobs:
     steps:
       - uses: actions/download-artifact@v4
 
+      # GitHub's own generate_release_notes builds "What's Changed" solely
+      # from merged PRs between the two tags. Commits pushed straight to
+      # main (no PR) leave it with nothing to list, so those releases show
+      # just the "Full Changelog" link -- see e.g. v2.4.82. Building the
+      # list from `git log` instead works regardless of how a commit landed
+      # on main. Needs full history + tags, which the default checkout in
+      # this job (there wasn't one -- it only downloaded artifacts) doesn't
+      # give you.
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Generate changelog from commits since the last tag
+        id: changelog
+        run: |
+          current_tag="${GITHUB_REF_NAME}"
+          previous_tag=$(git tag --sort=-v:refname --list 'v*.*.*' \
+            | grep -v "^${current_tag}$" | head -n1)
+
+          {
+            echo "body<<CHANGELOG_EOF"
+            echo "## What's Changed"
+            if [ -n "$previous_tag" ]; then
+              git log --no-merges \
+                --pretty=format:"* %s ([\`%h\`](https://github.com/${{ github.repository }}/commit/%H))" \
+                "${previous_tag}..${current_tag}"
+              echo ""
+              echo ""
+              echo "**Full Changelog**: https://github.com/${{ github.repository }}/compare/${previous_tag}...${current_tag}"
+            else
+              echo "* Initial release"
+            fi
+            echo "CHANGELOG_EOF"
+          } >> "$GITHUB_OUTPUT"
+
       # Cheap visibility for whoever's watching this run: which platforms are
       # actually about to be attached below, vs. which failed and are being
       # left out of this release. needs.*.result is one of success/failure/
@@ -862,7 +897,7 @@ jobs:
       # Console upload to grab directly from that run.
       - uses: softprops/action-gh-release@v2
         with:
-          generate_release_notes: true
+          body: ${{ steps.changelog.outputs.body }}
           files: |
             Linux/frozen-bubble-linux-x86_64.AppImage
             macOS/frozen-bubble-macos-arm64.dmg
