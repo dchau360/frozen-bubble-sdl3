@@ -1,5 +1,17 @@
 # Changelog
 
+## v2.4.81
+
+- **Fixed the room's HELP box being unreachable by Up/Down navigation.**
+  Reported directly: arrow-key users could never highlight or reach it at
+  all, since it sat outside the settings list entirely -- the only way in
+  was tapping it or pressing F1 blind. It's now a real stop in the Up/Down
+  cycle, between the last settings row and the header's "Set Teams" button,
+  for host and joiner alike.
+- **Gamepad had no way to open the HELP guide at all**, in net play or
+  Local Multiplayer -- only F1 on a keyboard could. Gamepad Y/North now
+  triggers the same guide.
+
 ## v2.4.80
 
 - **Fixed illegible text on the Set Teams screen.** The full-screen team
