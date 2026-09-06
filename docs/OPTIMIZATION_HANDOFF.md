@@ -1,6 +1,6 @@
 # Code optimization progress and handoff
 
-Last updated: 2026-09-05 (session 3, after the v2.4.78 bugfix release)
+Last updated: 2026-09-05 (session 3, after the >5-cap-room follow-up fix)
 
 ## Purpose and user preferences
 
@@ -15,8 +15,10 @@ being shown the remaining 4-item list, said "work on them all in order" — all
 four are done (see below), and were pushed to `origin/main` after an explicit
 confirmation. With no optimization backlog left, the user then reported a
 real gameplay bug encountered during their own use (not part of this effort's
-scope) — see "Session 3, continued" below — which is now also fixed, released
-as `v2.4.78`, and pushed/tagged.
+scope) — see "Session 3, continued" below — which is now fixed for both room
+sizes: the <=5-cap case shipped as `v2.4.78`, and the >5-cap follow-up (the
+user explicitly asked "fix the >5-cap room case too") is committed but not
+yet released — see Current checkpoint.
 
 Update this document after meaningful implementation or verification milestones
 and before handing off. Record actual results, outstanding work, and blockers.
@@ -26,20 +28,23 @@ a speedup.
 ## Current checkpoint
 
 - Repository: `/Users/dchau/gr/frozen-bubble-sdl3`
-- Branch: `main`, clean working tree, `main` == `origin/main` (0 ahead, 0
-  behind) as of this writing.
-- Latest commit: `e92ecb6d` (`chore: bump version to 2.4.78`), tagged
-  `v2.4.78`. Full history back to the last handoff update:
+- Branch: `main`, clean working tree.
+- Latest commit: `c5665562` (`fix: batch Auto-balance team sync in >5-cap
+  rooms too`) — **local-only, not yet pushed** as of this writing (`main` is
+  1 commit ahead of `origin/main`, 0 behind). Full history back to the last
+  handoff update:
   - `da37f18d` test: broaden ttftext/render-panel cache correctness coverage
   - `05b4aedd` build: compile the shared test core once instead of 8 times
   - `3d36ff80` perf: cache bot shot scores per landing cell within one decision
   - `459e3d7a` refactor: consolidate player label positions, fix duplicate include
   - `4ea617f4` docs: update optimization handoff after items 1-4
   - `ff93a0a1` fix: stop Auto-balance from flooding the host's own connection
-  - `e92ecb6d` chore: bump version to 2.4.78
-- Both `v2.4.77` (`0a00c367`) and `v2.4.78` (`e92ecb6d`) are pushed and tagged
-  on `origin`. Everything above is pushed; nothing is sitting local-only.
-- Both `build/` and `build-asan/` exist and are up to date with `e92ecb6d`.
+  - `e92ecb6d` chore: bump version to 2.4.78 (pushed, tagged `v2.4.78`)
+  - `7a8e29fd` docs: catch up optimization handoff after items 1-4 push + v2.4.78
+  - `c5665562` fix: batch Auto-balance team sync in >5-cap rooms too (**unpushed**)
+- `v2.4.77` (`0a00c367`) and `v2.4.78` (`e92ecb6d`) are pushed and tagged on
+  `origin`. Everything through `7a8e29fd` is pushed; `c5665562` is not.
+- Both `build/` and `build-asan/` exist and are up to date with `c5665562`.
   No implementation commands or test processes are running.
 
 ## Completed work
@@ -265,11 +270,52 @@ expected); ASan/UBSan pass of `menu-touch-gesture-test` clean.
 **Release:** version bumped to 2.4.78 (same four files as every release, plus
 `CHANGELOG.md`), pushed to `origin/main`, tag `v2.4.78` cut and pushed.
 
+### Session 3, continued again: the >5-cap room case too (commit `c5665562`)
+
+The user asked to fix the >5-cap room gap flagged above right after
+`v2.4.78` shipped — a >5-cap room has no per-slot team field in SETOPTIONS,
+so its Auto-balance TALK-per-seat traffic is not redundant the way the
+<=5-cap case was, and couldn't just be dropped. Left unbatched, a *single*
+Auto tap in a room with 15+ players (all real seats today — `MAX_NET_PLAYERS`
+is 20) would by itself reach the server's 15-TALK/minute flood-kick limit,
+worse than the original bug (which took three taps in a 5-player room).
+
+**Fix:** added `MainMenu::ApplyTeamChoicesBatch(changes)` — applies every
+`{slot, team}` pair locally (same per-slot logic `ApplyTeamChoice` already
+had), then sends ONE combined wire update for the whole batch: a single
+`SyncRoomOptions()` for a <=5-cap room, or one
+`"!teamset:nick1=t1,nick2=t2,..."` TALK for a >5-cap room (parsed in
+`NetPanelChatDockRender`'s existing ">5-cap: every client applies" block).
+Nicknames are server-validated to <=10 chars of `[A-Za-z0-9_-]`
+(`server/game.c`: `is_nick_ok`), so `,`/`=` can never collide with one, and
+a full 20-seat batch comes to well under 300 bytes — nowhere near the
+server's 1000-byte TALK relay buffer. The Auto-balance tap handler now
+collects its changed seats and calls this once per tap instead of looping
+`ApplyTeamChoice`; `ApplyTeamChoice` itself lost the `announce` parameter
+the previous fix added, now superseded by this dedicated batch function.
+
+**Test:** extended the existing 6-player >5-cap test to assert exactly one
+TALK per Auto tap (was only checking correctness before); added a 16-seat
+room (host + 15 bots) case asserting the same across four consecutive taps;
+added a receiving-side case (new `NetworkClientTestAccess::PushChatMessage`
++ `MainMenuTestAccess::RenderChatDock`) that pushes a synthetic
+`"!teamset:"` message and confirms it's actually parsed and applied,
+including that a later batch overwrites rather than merges with an earlier
+one. Verified all of it by stashing this fix (keeping the `v2.4.78` fix in
+place) and re-running — 10 checks failed across every new/extended
+assertion — then restored and re-verified everything passes.
+
+**Verification:** full release build + `ctest` (24 passed, 2 skipped as
+expected); ASan/UBSan pass of `menu-touch-gesture-test` clean.
+
+**Release:** not yet — this commit is local-only as of this writing (see
+Current checkpoint; update after push/tag decision).
+
 ## Remaining improvements
 
-None outstanding from the original 5-item optimization list, and the
-Auto-balance bug above is fixed and released. Possible future work, not
-requested or scoped yet:
+None outstanding from the original 5-item optimization list, and both
+Auto-balance flood-disconnect cases (<=5-cap and >5-cap) are fixed. Possible
+future work, not requested or scoped yet:
 - Runtime texture-creation-count benchmarks for the session-2 render caching
   (still only verified by test, not measured — flagged as open in session 2
   and never picked up since nothing since has needed it).
@@ -277,22 +323,19 @@ requested or scoped yet:
   vector/set/queue allocations per candidate (mentioned as a session-1
   follow-on to the scoring cache, not pursued this session since the map
   cache alone already gave a measured ~3.2x in the benchmark scenario).
-- A >5-cap room's Auto-balance still sends one TALK per changed seat (the
-  wire format has no per-slot team field in SETOPTIONS for P6-20, so there
-  was no cheap way to avoid it this session) — a large room with many bots
-  could in principle still hit the same 15-TALK/minute flood limit on a
-  single Auto tap. Not reported, not reproduced; flagging since it's the
-  same underlying pattern the v2.4.78 fix addressed for <=5-cap rooms. A
-  real fix would need a new batched wire message rather than the
-  one-message-per-player-change protocol used today.
 
 ## Suggested next session
 
 1. Read repository instructions and this document; inspect git state before
    edits (`git log`, `git status`, and whether `origin/main` has moved — as
-   of this writing `main` == `origin/main`, nothing pending).
-2. There is no committed-to backlog left from either the optimization effort
-   or the Auto-balance bugfix; ask the user what to look at next rather than
-   assuming the "Possible future work" bullets above are pre-approved.
-3. Update this document with changed files, verification, remaining
+   of this writing `main` is 1 commit ahead of `origin/main`, unpushed).
+2. Confirm with the user whether to push `c5665562` (and whether a new
+   version bump/tag is wanted for it, matching `v2.4.78`'s pattern, or
+   whether it should just ride along unpushed until a future release) — do
+   not assume either way.
+3. There is no committed-to backlog left from either the optimization effort
+   or the Auto-balance bugfix (now fixed for both room sizes); ask the user
+   what to look at next rather than assuming the "Possible future work"
+   bullets above are pre-approved.
+4. Update this document with changed files, verification, remaining
    concerns, and any new commit/tag/push state.
