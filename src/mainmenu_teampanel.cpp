@@ -206,6 +206,14 @@ void MainMenu::TeamsPanelRender() {
     }
 
     SDL_Renderer* rend = const_cast<SDL_Renderer*>(renderer);
+    // Every other full-screen panel (HelpPanelRender, NetSetupPanelRender...)
+    // paints a fresh opaque backdrop before drawing its own translucent UI on
+    // top of it. This one skipped that step, so the room screen it was opened
+    // from -- not a clean backdrop -- sat directly underneath, and its own
+    // header/body text showed straight through the translucent fill here,
+    // producing illegible overlapping text (e.g. "SET TEAMS" merged with
+    // "GAME ROOM" in the header).
+    menulist::DrawWorldMapBackdrop(rend, netGameBackground);
     const bool isHost = room->creator == netClient->GetPlayerNick();
     const int mySlot = MyRoomSlot();
     const int playerCount = (int)room->players.size();
