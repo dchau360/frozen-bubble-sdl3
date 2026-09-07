@@ -257,14 +257,31 @@ private:
     SDL_Texture *singleButtonAct, *singleButtonIdle;
     int activeSPIdx = 0;
     bool showingSPPanel = false;
-    // F1 on either settings toggle (Arcade Mode, Upload highscore stats) opens
-    // this rather than the two rows fighting the fixed nav-button grid for
-    // header space -- a full description does not reliably fit in the ~71px
-    // gap above row 0 the header text lives in (see SPPanelRender), so it
-    // gets its own popup instead, the same size/style as
-    // showingStatsUploadConfirm's box. Info only: ENTER, ESC, or a tap
-    // anywhere all just dismiss it (see KeysPanelKey/HandlePanelTap).
-    bool showingSPInfoPopup = false;
+    // Shown instead of immediately flipping the row when the player tries to
+    // turn Arcade Mode ON -- same reasoning and same box style as
+    // showingStatsUploadConfirm below: a bare "OFF -> ON" toggle can't say
+    // what it changes, so a confirm popup with a description does. Turning
+    // it back OFF needs no confirmation and skips this entirely. See
+    // KeysPanelKey/SPPanelRender/press().
+    bool showingArcadeModeConfirm = false;
+    // On-screen bands for this popup's two buttons, recomputed each frame by
+    // SPPanelRender and hit-tested by HandlePanelTap -- same reasoning as
+    // statsConfirmYesRect/NoRect below (a dedicated pair rather than folding
+    // into panelTapRows, since that list belongs to the settings rows this
+    // popup is drawn over).
+    SDL_Rect arcadeConfirmYesRect{}, arcadeConfirmNoRect{};
+    // Shared keyboard focus for all three of this panel's two-button popups
+    // (showingArcadeModeConfirm, showingStatsUploadConfirm,
+    // showingStatsNicknamePrompt) -- only one is ever showing at a time, so
+    // one flag covers all three. false = the left/primary button (Turn On /
+    // Save) is focused, true = the right/secondary one (Cancel / Skip).
+    // LEFT/RIGHT/TAB flips it, ENTER activates whichever is focused; ESC
+    // still cancels/skips outright regardless, as a keyboard shortcut. A
+    // tap always wins over stale focus -- see HandlePanelTap, which forces
+    // this to false right before firing the synthetic RETURN for a tap on
+    // the primary button. Reset to false whenever a popup opens or closes,
+    // so the primary action is always the default the next time.
+    bool confirmDialogFocusNo = false;
 
     // Runtime-rendered replacements for this panel's old baked labels
     // (txt_<option>_{text,outlined_text}.png): a heavily stylized carved-wood

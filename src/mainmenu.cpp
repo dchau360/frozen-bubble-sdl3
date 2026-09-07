@@ -385,12 +385,19 @@ void MainMenu::press() {
             runDelay = false;
         }
         else if (activeSPIdx == kSPRowArcadeMode) {
-            // Plain toggle, no confirmation: unlike stats upload below, this
-            // changes nothing outside the game itself. showingSPPanel stays
-            // up so the row's own ON/OFF badge and the header description
-            // (SPPanelRender) can update in place.
-            GameSettings::Instance()->SetValue("Game:ArcadeMode", "");
-            AudioMixer::Instance()->PlaySFX("menu_change");
+            GameSettings* gsArcade = GameSettings::Instance();
+            if (gsArcade->arcadeModeEnabled()) {
+                // Turning it OFF is always safe -- no confirmation needed.
+                gsArcade->SetValue("Game:ArcadeMode", "");
+                AudioMixer::Instance()->PlaySFX("menu_change");
+            } else {
+                // Turning it ON needs the player to see what that changes
+                // first -- SPPanelRender draws the popup, and KeysPanelKey
+                // (mainmenu_input.cpp) actually flips the setting once they
+                // confirm.
+                showingArcadeModeConfirm = true;
+                AudioMixer::Instance()->PlaySFX("menu_selected");
+            }
         }
         else if (activeSPIdx == kSPRowUploadStats) {
             GameSettings* gsStats = GameSettings::Instance();

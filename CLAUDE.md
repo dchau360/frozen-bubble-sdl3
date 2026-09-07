@@ -103,6 +103,37 @@ The game renders to a fixed **640×480 logical canvas** (`WINDOW_W`/`WINDOW_H` i
 
 Transition effects (plasma, bars, circles, etc.) live in `src/shaderstuff.cpp` — pixel-manipulation routines ported from the original Perl/C source. `TransitionManager` calls `TakeSnipOut`/`DoSnipIn` to apply them between screens.
 
+### Input parity (keyboard/gamepad + touch/mouse)
+
+Every menu feature must be reachable both ways: keyboard/gamepad navigation
+(arrow keys/D-pad to move focus, ENTER/A to activate, ESC/B to cancel) *and*
+a tap/click directly on the thing. Neither is allowed to be the only path —
+this codebase has shipped several bugs from exactly that gap:
+- A row rendered but never registered as a tap target (SP panel's toggles
+  were only reachable by keyboard until `BeginPanelTapRows`/`AddPanelTapRow`
+  was added for them).
+- A modal that only ENTER/ESC could answer, with no equivalent tap zones
+  (`HandlePanelTap`'s dedicated hit-tests for confirm/prompt popups exist
+  because of this).
+- A two-button popup where ENTER/ESC could each fire one button, but there
+  was no keyboard way to move focus onto the non-default button and no
+  visual indicator of which one was focused (`confirmDialogFocusNo` in
+  `mainmenu.h` — LEFT/RIGHT/TAB moves focus, ENTER activates whichever is
+  focused, and the focused button is drawn highlighted; ESC still cancels
+  outright as a shortcut).
+
+When adding a new interactive element (row, toggle, button, popup), check
+off all of:
+1. It has (or joins) real keyboard/gamepad navigation into and out of it.
+2. It is registered as a tap target — via `BeginPanelTapRows`/
+   `AddPanelTapRow` for a panel's own row list, or a dedicated hit-test in
+   `HandlePanelTap` for a modal that isn't part of a row list.
+3. If it's one of several choices (Yes/No, Save/Skip, a toggle's two
+   states), keyboard focus between the choices is visible on screen, not
+   just inferred from which key does what.
+4. A footer hint (`menulist::DrawFooterHint`) spells out the controls if
+   they aren't obvious from the UI alone.
+
 ### Controller input
 
 Local multiplayer controller input uses a virtual scancode system: physical gamepad buttons are mapped to virtual scancodes starting at `CTRL_SC_BASE` (300), with 20 slots per player. `virtualKeyState[]` and `controllerInputs[5]` globals (in `src/gamesettings.h`) are written by `FrozenBubble::HandleControllerEvent()` and read by `BubbleGame` each frame alongside keyboard state via `IsKeyPressed()`.
