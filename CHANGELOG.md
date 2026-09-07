@@ -1,5 +1,17 @@
 # Changelog
 
+## v2.4.87
+
+- **Fixed the mini-board attack flash not showing in 3-5 player games.**
+  Sending malus is supposed to flash a yellow border around whichever
+  opponent's mini-board you just hit, but the render code that draws it only
+  ever checked for more than 5 players -- so in the much more common 3-5
+  player case the flash timer got set on every attack and then silently sat
+  there, never drawn and never counted back down. Now uses the same "is this
+  a mini-board" check every other opponent-board visual in the game already
+  uses, so it shows for 3-5 player rooms the same as it always did for
+  battle-royale-sized ones.
+
 ## v2.4.86
 
 - **Fixed single-player score carrying over after death instead of

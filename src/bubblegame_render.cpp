@@ -1013,7 +1013,18 @@ void BubbleGame::Render() {
             // countdown, set in SendMalusToOpponent's send sites). Bounds derive
             // from the board's own limits and shooter rect so the frame hugs
             // whichever of the 4 parked slots the board occupies.
-            if (currentSettings.playerCount > 5 && curArray.boardVisible &&
+            //
+            // Gated on useMini (playerCount >= 3, same boundary every other
+            // opponent-board visual already uses -- bubble textures, chain
+            // bubbles, the stick-animation sprite above), not the >5-only
+            // check this originally shipped with: attackFlashFramesLeft is
+            // set by SendMalusToOpponent for every network game regardless of
+            // room size, but this render side only ever drew it for >5-player
+            // rooms, so a 3-5 player game set the timer every attack and then
+            // silently let it expire unseen. Reported live: "not seeing
+            // mini-board blink when i send malus to opponents" in a 3-5
+            // player room.
+            if (useMini && curArray.boardVisible &&
                 curArray.attackFlashFramesLeft > 0) {
                 const int kBlinkPeriodFrames = 20;  // ~0.33s on/off cycle at 60fps
                 if ((frameCount % kBlinkPeriodFrames) < kBlinkPeriodFrames / 2) {

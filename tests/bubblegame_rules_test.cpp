@@ -1016,6 +1016,22 @@ int main() {
         CHECK(after.playerTeams[1] == 3);  // bot_a is room slot 2 (team 3), not slot 1 (team 2)
         CHECK(after.playerTeams[2] == 2);  // bot_b is room slot 1 (team 2), not slot 2 (team 3)
 
+        // The mini-board attack-flash blink (bubblegame_render.cpp) must
+        // actually run its countdown for a 3-5 player room, not just >5.
+        // Reported live: "not seeing mini-board blink when i send malus to
+        // opponents" in a 3-player room. attackFlashFramesLeft is set by
+        // SendMalusToOpponent for every network game regardless of room
+        // size, but the render side used to gate the whole block (including
+        // the decrement) on playerCount > 5 -- so in this 3-player game the
+        // counter was set on every attack and then never touched again,
+        // and the border code it guards never ran. Driving the real
+        // Render() call and checking the counter actually moved is the
+        // only way to pin the render-side gate itself, not just the value
+        // SendMalusToOpponent wrote.
+        BubbleGameTestAccess::player(game, 1).attackFlashFramesLeft = 40;
+        game.Render();
+        CHECK(BubbleGameTestAccess::player(game, 1).attackFlashFramesLeft == 39);
+
         // Don't leak this fake room into any test that runs after this one.
         NetworkClientTestAccess::SetCurrentGame(*nc, nullptr);
         NetworkClientTestAccess::SetState(*nc, DISCONNECTED);
