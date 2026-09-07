@@ -150,12 +150,19 @@ private:
         SDL_Gamepad *pad = nullptr;
         bool axisLeftHeld = false, axisRightHeld = false;
         bool axisUpHeld   = false, axisDownHeld  = false;
+        // Which physical buttons are currently down, so a disconnect mid-press
+        // knows exactly what to release (see ApplyControllerButtonTarget).
+        bool heldButtons[SDL_GAMEPAD_BUTTON_COUNT] = {};
     };
     std::vector<ControllerState> controllers;
 
     void HandleControllerEvent(SDL_Event *e);
     static void PushKey(SDL_Keycode key, bool down);
     static void PushScancode(SDL_Scancode sc, bool down, bool skipEvent = false);
+    // Applies a MapControllerButton()/MapControllerAxisDirection() result.
+    // Shared by the live button/axis handlers and by disconnect cleanup, so
+    // press and release always agree on what they're pressing and releasing.
+    static void ApplyControllerButtonTarget(const ControllerButtonTarget &target, bool down);
     // Initialized here rather than only in the constructor: the constructor has
     // early-return paths (a failed SDL init, a window or renderer that will not
     // create), and RunForEver and ~FrozenBubble still run afterwards and
@@ -212,6 +219,23 @@ private:
     static FrozenBubble* ptrInstance;
     FrozenBubble();
     ~FrozenBubble();
+
+#ifdef FROZEN_BUBBLE_TEST_ACCESS
+    // The real constructor stands up a window, audio, and the full menu/game
+    // tree -- far more than HandleControllerEvent's button/axis/disconnect
+    // logic needs. This leaves every member at its in-class default (empty
+    // controllers, currentState == TitleScreen, mainMenu/mainGame == nullptr)
+    // so a test can populate just the `controllers` entry it needs and call
+    // HandleControllerEvent directly. headlessTestMode short-circuits the
+    // destructor for the same reason: the real one unconditionally calls
+    // SDL_Quit()/TTF_Quit(), which would tear down every subsystem for the
+    // whole test process (including its still-live event queue) the moment
+    // one headless instance is torn down, not just this object's own state.
+    friend struct FrozenBubbleTestAccess;
+    struct HeadlessTestTag {};
+    explicit FrozenBubble(HeadlessTestTag) : headlessTestMode(true) {}
+    bool headlessTestMode = false;
+#endif
 };
 
 #endif // FROZENBUBBLE_H

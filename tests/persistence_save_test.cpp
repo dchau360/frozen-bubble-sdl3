@@ -226,6 +226,20 @@ int main() {
     CHECK(manager->CheckAndAddScore(17, 12.5f, HighscoreManager::InputMethod::Keyboard));
     CHECK(csvHasLevelAndTime(scorePath, 17, 12.5f));
 
+    // Editing a Unicode name must save intact UTF-8 after Backspace.
+    manager->ShowNewScorePanel(0);
+    SDL_Event nameEvent{};
+    nameEvent.type = SDL_EVENT_TEXT_INPUT;
+    nameEvent.text.text = u8"Aé界🎮";
+    manager->HandleInput(&nameEvent);
+    nameEvent = {};
+    nameEvent.type = SDL_EVENT_KEY_DOWN;
+    nameEvent.key.key = SDLK_BACKSPACE;
+    manager->HandleInput(&nameEvent);
+    nameEvent.key.key = SDLK_RETURN;
+    manager->HandleInput(&nameEvent);
+    CHECK(fileContains(scorePath, u8"Aé界,"));
+
     // Each save now stages a .tmp file beside the real one. Leaving those
     // behind would litter the preferences directory on every toggle and score,
     // so every completed save must have consumed its staging file.

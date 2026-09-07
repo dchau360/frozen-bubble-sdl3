@@ -73,6 +73,75 @@ inline bool IsKeyPressed(SDL_Scancode sc) {
     return SDL_GetKeyboardState(NULL)[sc] != 0;
 }
 
+// What a gamepad button or analog-stick direction should synthesize -- a
+// real SDL key, a per-player virtual scancode, or nothing. Pulled out of
+// FrozenBubble::HandleControllerEvent as a pure function so the exact same
+// mapping can compute both the press (down=true) and, on disconnect, the
+// matching release (down=false): a controller unplugged mid-press used to
+// leave whatever it last pushed latched forever (virtualKeyState[] has no
+// timeout, and SDL's own keyboard state only clears on a real key-up event),
+// so gameplay kept moving/firing, or a menu cursor kept scrolling, with no
+// controller attached at all. Disconnect now replays this same mapping with
+// down=false for everything the controller was tracked as still holding.
+enum class ControllerActionKind { None, RealKey, VirtualScancode };
+struct ControllerButtonTarget {
+    ControllerActionKind kind = ControllerActionKind::None;
+    SDL_Keycode realKey = SDLK_UNKNOWN;
+    SDL_Scancode scancode = SDL_SCANCODE_UNKNOWN;
+};
+
+inline ControllerButtonTarget MapControllerButton(int playerSlot, int button, bool inGame,
+                                                   bool isNetworkGame, bool isChatting,
+                                                   bool isGameFinished) {
+    if (inGame) {
+        if (button == SDL_GAMEPAD_BUTTON_EAST)  return {ControllerActionKind::RealKey, SDLK_AC_BACK};
+        if (button == SDL_GAMEPAD_BUTTON_START) return {ControllerActionKind::RealKey, SDLK_PAUSE};
+        if (button == SDL_GAMEPAD_BUTTON_WEST && isNetworkGame) {
+            return {ControllerActionKind::RealKey, isChatting ? SDLK_RETURN : SDLK_T};
+        }
+        if (button == SDL_GAMEPAD_BUTTON_SOUTH && isGameFinished) {
+            return {ControllerActionKind::RealKey, SDLK_SPACE};
+        }
+        return {ControllerActionKind::VirtualScancode, SDLK_UNKNOWN, VirtualScancode(playerSlot, button)};
+    }
+    switch (button) {
+        case SDL_GAMEPAD_BUTTON_DPAD_LEFT:  return {ControllerActionKind::RealKey, SDLK_LEFT};
+        case SDL_GAMEPAD_BUTTON_DPAD_RIGHT: return {ControllerActionKind::RealKey, SDLK_RIGHT};
+        case SDL_GAMEPAD_BUTTON_DPAD_UP:    return {ControllerActionKind::RealKey, SDLK_UP};
+        case SDL_GAMEPAD_BUTTON_DPAD_DOWN:  return {ControllerActionKind::RealKey, SDLK_DOWN};
+        case SDL_GAMEPAD_BUTTON_SOUTH:      return {ControllerActionKind::RealKey, SDLK_RETURN};
+        case SDL_GAMEPAD_BUTTON_EAST:       return {ControllerActionKind::RealKey, SDLK_AC_BACK};
+        case SDL_GAMEPAD_BUTTON_START:      return {ControllerActionKind::RealKey, SDLK_PAUSE};
+        // The room and Local Multiplayer HELP boxes (kRoomHelpTapIndex /
+        // kLocalMPHelpTapIndex) are deliberately outside the Up/Down cycle --
+        // see mainmenu_input.cpp's MenuUpKey/MenuDownKey -- and reachable only
+        // by tapping them or pressing F1, which opens the guide from wherever
+        // the cursor already is (see the SDLK_F1 handler in
+        // mainmenu_input.cpp). That left a gamepad with no way to open it at
+        // all: this mapping had no F1 equivalent, so a controller-only player
+        // (Android TV, no keyboard) could not reach the guide in net play or
+        // Local Multiplayer by any input. NORTH (Y/Triangle) is otherwise
+        // unused here.
+        case SDL_GAMEPAD_BUTTON_NORTH:      return {ControllerActionKind::RealKey, SDLK_F1};
+        default: return {};
+    }
+}
+
+// Same idea for the left stick's four directions, which stand in for the
+// D-pad: in-game (or while the Keys panel awaits a binding) they drive a
+// virtual scancode, otherwise a real arrow key.
+inline SDL_Scancode MapControllerAxisDirection(int playerSlot, int dpadButton, bool inGame,
+                                                bool awaitingKeyBind) {
+    if (inGame || awaitingKeyBind) return VirtualScancode(playerSlot, dpadButton);
+    switch (dpadButton) {
+        case SDL_GAMEPAD_BUTTON_DPAD_LEFT:  return SDL_SCANCODE_LEFT;
+        case SDL_GAMEPAD_BUTTON_DPAD_RIGHT: return SDL_SCANCODE_RIGHT;
+        case SDL_GAMEPAD_BUTTON_DPAD_UP:    return SDL_SCANCODE_UP;
+        case SDL_GAMEPAD_BUTTON_DPAD_DOWN:  return SDL_SCANCODE_DOWN;
+        default: return SDL_SCANCODE_UNKNOWN;
+    }
+}
+
 struct PlayerKeys {
     // Defaulted to SDL_SCANCODE_UNKNOWN (0), a valid enumerator, rather than
     // left uninitialized: ReadSettings() overwrites these from the ini file

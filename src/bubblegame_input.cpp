@@ -24,6 +24,7 @@
 #include "transitionmanager.h"
 #include "gamesettings.h"
 #include "platform.h"
+#include "textinput.h"
 
 #include <fstream>
 #include <sstream>
@@ -216,8 +217,7 @@ void BubbleGame::HandleInput(SDL_Event *e) {
             // SDL_EVENT_TEXT_INPUT; consuming key-down events prevents gameplay actions.
             if (chattingMode) {
                 if (e->key.key == SDLK_BACKSPACE) {
-                    size_t len = strlen(chatInputBuf);
-                    if (len > 0) chatInputBuf[len - 1] = '\0';
+                    BackspaceUtf8(chatInputBuf);
                 } else if (!e->key.repeat &&
                            (e->key.key == SDLK_RETURN || e->key.key == SDLK_KP_ENTER)) {
                     FinishInGameChat(true);

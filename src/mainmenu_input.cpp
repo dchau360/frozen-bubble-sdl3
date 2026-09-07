@@ -50,6 +50,7 @@
 #endif
 
 #include "mainmenu_internal.h"
+#include "textinput.h"
 
 void MainMenu::HandleInput(SDL_Event *e){
     switch(e->type) {
@@ -296,42 +297,15 @@ void MainMenu::MenuTextInputEvent(SDL_Event *e) {
             }
             // Handle virtual keyboard character input for nickname field (mode 11)
             if (networkInputMode == 11) {
-                size_t len = strlen(networkPreNick);
-                for (const char* p = e->text.text; *p; p++) {
-                    char c = *p;
-                    if (c == '\b') {
-                        if (len > 0) { networkPreNick[--len] = '\0'; }
-                    } else if (len < 15) {
-                        networkPreNick[len++] = c;
-                        networkPreNick[len] = '\0';
-                    }
-                }
+                AppendUtf8Input(networkPreNick, e->text.text, 15);
             }
             // Handle virtual keyboard character input for chat (mode 4)
             if (showingNetPanel && networkInLobby && networkInputMode == 4) {
-                size_t len = strlen(networkChatInput);
-                for (const char* p = e->text.text; *p; p++) {
-                    char c = *p;
-                    if (c == '\b') {
-                        if (len > 0) { networkChatInput[--len] = '\0'; }
-                    } else if (len < 255) {
-                        networkChatInput[len++] = c;
-                        networkChatInput[len] = '\0';
-                    }
-                }
+                AppendUtf8Input(networkChatInput, e->text.text);
             }
             // Handle virtual keyboard character input for username (mode 5)
             if (showingNetPanel && networkInLobby && networkInputMode == 5) {
-                size_t len = strlen(networkUsername);
-                for (const char* p = e->text.text; *p; p++) {
-                    char c = *p;
-                    if (c == '\b') {
-                        if (len > 0) { networkUsername[--len] = '\0'; }
-                    } else if (len < 31) {
-                        networkUsername[len++] = c;
-                        networkUsername[len] = '\0';
-                    }
-                }
+                AppendUtf8Input(networkUsername, e->text.text, 31);
             }
 }
 
@@ -345,8 +319,7 @@ bool MainMenu::MenuEditingKey(SDL_Event *e) {
                     return true;
                 }
                 if (showingNetPanel && !networkInLobby && networkInputMode == 11) {
-                    size_t len = strlen(networkPreNick);
-                    if (len > 0) networkPreNick[len - 1] = '\0';
+                    BackspaceUtf8(networkPreNick);
                     return true;
                 }
             }
@@ -375,8 +348,7 @@ bool MainMenu::MenuEditingKey(SDL_Event *e) {
             } else if (showingNetPanel && networkInLobby && networkInputMode == 4) {
                 // Chat input - characters handled by SDL_EVENT_TEXT_INPUT
                 if (e->key.key == SDLK_BACKSPACE) {
-                    size_t len = strlen(networkChatInput);
-                    if (len > 0) networkChatInput[len - 1] = '\0';
+                    BackspaceUtf8(networkChatInput);
                     return true;
                 }
 #ifdef __WASM_PORT__
@@ -396,8 +368,7 @@ bool MainMenu::MenuEditingKey(SDL_Event *e) {
             } else if (showingNetPanel && networkInLobby && networkInputMode == 5) {
                 // Username input - characters handled by SDL_EVENT_TEXT_INPUT
                 if (e->key.key == SDLK_BACKSPACE) {
-                    size_t len = strlen(networkUsername);
-                    if (len > 0) networkUsername[len - 1] = '\0';
+                    BackspaceUtf8(networkUsername);
                     return true;
                 }
 #ifdef __WASM_PORT__
@@ -413,8 +384,7 @@ bool MainMenu::MenuEditingKey(SDL_Event *e) {
             } else if (showingNetPanel && !networkInLobby && networkInputMode == 11) {
                 // Pre-lobby nickname input - characters handled by SDL_EVENT_TEXT_INPUT
                 if (e->key.key == SDLK_BACKSPACE) {
-                    size_t len = strlen(networkPreNick);
-                    if (len > 0) networkPreNick[len - 1] = '\0';
+                    BackspaceUtf8(networkPreNick);
                     return true;
                 }
 #ifdef __WASM_PORT__
@@ -440,8 +410,7 @@ bool MainMenu::MenuEditingKey(SDL_Event *e) {
             // Handle backspace in chat input when Chat is selected in lobby
             if (showingNetPanel && networkInLobby && networkInputMode == 0 && selectedActionIndex == 0) {
                 if (e->key.key == SDLK_BACKSPACE) {
-                    size_t len = strlen(networkChatInput);
-                    if (len > 0) networkChatInput[len - 1] = '\0';
+                    BackspaceUtf8(networkChatInput);
                     return true;
                 }
             }
