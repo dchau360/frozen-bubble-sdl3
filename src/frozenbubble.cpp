@@ -307,6 +307,10 @@ FrozenBubble::~FrozenBubble() {
 #ifdef FROZEN_BUBBLE_TEST_ACCESS
     if (headlessTestMode) return;
 #endif
+    // Members are destroyed after this destructor's body. Release the overlay
+    // now, while its font library and texture's renderer are still alive.
+    fpsText = TTFText{};
+
     if(renderer) {
         SDL_DestroyRenderer(renderer);
         renderer = nullptr;
