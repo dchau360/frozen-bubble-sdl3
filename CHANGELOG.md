@@ -1,5 +1,29 @@
 # Changelog
 
+## v2.4.90
+
+- **Added Arcade Mode**, a toggle in the 1-player submenu. When it's on,
+  dying in a classic solo game sends you back to Level 1 with your score
+  reset to 0, instead of just retrying the level you lost on. Off by
+  default; turning it on shows a confirm dialogue explaining the effect
+  before it takes hold.
+- **Moved "Upload highscore stats" from the Keys/Settings panel into the
+  1-player submenu**, next to Arcade Mode. Turning it on now also prompts
+  for a nickname (pre-filled if one is already saved) so uploaded stats
+  don't silently show up as "Anonymous".
+- **Fixed the 1-player submenu's new toggles not responding to taps** on
+  touchscreens -- they worked from a keyboard/gamepad but had never been
+  registered as tap targets.
+- **Fixed the nickname field rejecting all typed input and Backspace**
+  when setting a nickname from the 1-player submenu's stats-upload prompt.
+- **Fixed no way to move keyboard/gamepad focus onto a dialogue's "Cancel"
+  or "Skip" button.** The Arcade Mode and Upload-stats confirm dialogues,
+  and the nickname Save/Skip prompt, answered only to a direct ENTER or
+  ESC keypress with no visual indication of which button that would
+  activate. LEFT/RIGHT (or Tab) now move a visible highlight between the
+  two buttons, and ENTER activates whichever one is highlighted; ESC
+  still cancels/skips outright as a shortcut.
+
 ## v2.4.89
 
 - **Fixed Backspace corrupting accented letters, CJK, and emoji in text
