@@ -830,6 +830,12 @@ jobs:
       contents: write
     steps:
       - uses: actions/download-artifact@v4
+        with:
+          # Flatten the artifact directories so the file paths below resolve.
+          # Without this, download-artifact creates Linux/, macOS/, etc. under
+          # the workspace and softprops/action-gh-release silently uploads no
+          # files when given those paths relative to the workspace root.
+          merge-multiple: true
 
       # GitHub's own generate_release_notes builds "What's Changed" solely
       # from merged PRs between the two tags. Commits pushed straight to
