@@ -79,52 +79,7 @@ static EM_BOOL onWebSocketMessage(int /*eventType*/, const EmscriptenWebSocketMe
     if (!handle || !handle->client) return EM_TRUE;
     if (!e->data || e->numBytes == 0) return EM_TRUE;
 
-    const char* data = (const char*)e->data;
-    int numBytes = (int)e->numBytes;
-
-    // In-game: messages are binary prio format — {senderId_byte}{data}\n
-    // Mirror the native TCP ProcessIncomingData logic: parse each newline-delimited
-    // message, strip the leading sender-ID byte, and enqueue as GAMEMSG:{id}:{data}.
-    if (handle->client->GetState() == IN_GAME) {
-        int pos = 0;
-        while (pos < numBytes) {
-            // Need at least 2 bytes: sender ID + at least one data byte
-            if (numBytes - pos < 2) break;
-            unsigned char senderId = (unsigned char)data[pos];
-            int msgStart = pos + 1;
-            const char* nl = (const char*)memchr(data + msgStart, '\n', numBytes - msgStart);
-            int msgLen = nl ? (int)(nl - (data + msgStart)) : (numBytes - msgStart);
-            if (msgLen > 0) {
-                char gameMsg[4096];
-                int copyLen = (msgLen < (int)sizeof(gameMsg) - 1) ? msgLen : (int)sizeof(gameMsg) - 1;
-                memcpy(gameMsg, data + msgStart, copyLen);
-                gameMsg[copyLen] = '\0';
-                char fullMsg[4096];
-                snprintf(fullMsg, sizeof(fullMsg), "GAMEMSG:%d:%s", (int)senderId, gameMsg);
-                handle->client->QueueGameMessage(std::string(fullMsg));
-            }
-            pos = nl ? (int)(nl - data) + 1 : numBytes;
-        }
-        return EM_TRUE;
-    }
-
-    // Lobby/pre-game: text protocol, newline-delimited
-    const char* line = data;
-    const char* end = data + numBytes;
-    while (line < end) {
-        const char* nl = (const char*)memchr(line, '\n', end - line);
-        size_t len = nl ? (size_t)(nl - line) : (size_t)(end - line);
-        if (len > 0) {
-            char msg[4096];
-            size_t copyLen = (len < sizeof(msg) - 1) ? len : sizeof(msg) - 1;
-            memcpy(msg, line, copyLen);
-            msg[copyLen] = '\0';
-            if (copyLen > 0 && msg[copyLen - 1] == '\r') msg[copyLen - 1] = '\0';
-            handle->client->ParseMessage(msg);
-        }
-        if (!nl) break;
-        line = nl + 1;
-    }
+    handle->client->HandleWebSocketMessage((const char*)e->data, (int)e->numBytes);
     return EM_TRUE;
 }
 
@@ -213,6 +168,10 @@ void NetworkClient::Disconnect() {
     pendingJoin = false;
     gameList.clear();
     messageQueue.clear();
+    // See the reset in the native Disconnect() (networkclient.cpp): without
+    // this, a reconnect resumes parsing at the wrong offset using a partial
+    // line left over from the dropped connection.
+    recvBufferLen = 0;
 }
 
 bool NetworkClient::SendCommand(const char* command) {
@@ -240,6 +199,84 @@ bool NetworkClient::ProcessIncomingData() {
     // WebSocket messages arrive asynchronously via onWebSocketMessage callback
     // and are placed directly into the message queue — nothing to poll here.
     return false;
+}
+
+void NetworkClient::HandleWebSocketMessage(const char* data, int numBytes) {
+    // A WebSocket message boundary is not a protocol-message boundary: the
+    // websockify TCP<->WebSocket bridge is free to split one logical
+    // newline-terminated line across two onmessage events, or coalesce many
+    // into one, especially under the bursty traffic a chain reaction's flurry
+    // of single-line malus messages produces. The old version of this parsed
+    // only the bytes handed to it in *this* call and, if the trailing bytes
+    // had no '\n' yet, treated that partial fragment as if it were already a
+    // complete message (in-game) or silently dropped it (lobby) — corrupting
+    // the very next byte pair it read as {senderId}{opcode} on the following
+    // call. That's what an "Unknown game message type: B" log or a stuck
+    // post-round wait (waiting on an 'n'/'l' that arrived mangled) traces
+    // back to. Buffer any trailing partial line across calls instead, mirroring
+    // native's recv()/recvBuffer in ProcessIncomingData (networkclient.cpp).
+    if (recvBufferLen + numBytes >= RECV_BUFFER_SIZE) {
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
+                     "WebSocket receive buffer overflowed with no complete line (%d + %d >= %d); disconnecting",
+                     recvBufferLen, numBytes, RECV_BUFFER_SIZE);
+        Disconnect();
+        return;
+    }
+    memcpy(recvBuffer + recvBufferLen, data, numBytes);
+    recvBufferLen += numBytes;
+
+    if (state == IN_GAME) {
+        // In-game: binary protocol {senderId byte}{msg}\n
+        int processed = 0;
+        while (processed < recvBufferLen) {
+            int msgEnd = -1;
+            for (int i = processed; i < recvBufferLen; i++) {
+                if (recvBuffer[i] == '\n') { msgEnd = i; break; }
+            }
+            if (msgEnd == -1) break;  // No complete message yet -- wait for more
+
+            if (msgEnd > processed) {
+                unsigned char senderId = (unsigned char)recvBuffer[processed];
+                int msgStart = processed + 1;
+                int msgLen = msgEnd - msgStart;
+                if (msgLen >= BUFFER_SIZE) {
+                    SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
+                                "Dropping oversized in-game message from player %d (%d bytes)",
+                                (int)senderId, msgLen);
+                } else if (msgLen > 0) {
+                    char gameMsg[BUFFER_SIZE];
+                    memcpy(gameMsg, recvBuffer + msgStart, msgLen);
+                    gameMsg[msgLen] = '\0';
+                    char fullMsg[BUFFER_SIZE];
+                    snprintf(fullMsg, sizeof(fullMsg), "GAMEMSG:%d:%s", (int)senderId, gameMsg);
+                    QueueGameMessage(std::string(fullMsg));
+                }
+            }
+            processed = msgEnd + 1;
+        }
+        int remaining = recvBufferLen - processed;
+        if (remaining > 0) memmove(recvBuffer, recvBuffer + processed, remaining);
+        recvBufferLen = remaining;
+    } else {
+        // Lobby/pre-game: text protocol, newline-delimited
+        recvBuffer[recvBufferLen] = '\0';
+        char* lineStart = recvBuffer;
+        char* lineEnd;
+        while ((lineEnd = strchr(lineStart, '\n')) != nullptr) {
+            *lineEnd = '\0';
+            size_t lineLen = lineEnd - lineStart;
+            if (lineLen > 0 && lineStart[lineLen - 1] == '\r') lineStart[lineLen - 1] = '\0';
+            ParseMessage(lineStart);
+            lineStart = lineEnd + 1;
+        }
+        int remaining = (int)(recvBuffer + recvBufferLen - lineStart);
+        if (remaining > 0) {
+            memmove(recvBuffer, lineStart, remaining);
+            recvBufferLen = remaining;
+        } else {
+            recvBufferLen = 0;
+        }
+    }
 }
 
 void NetworkClient::Update() {

@@ -226,6 +226,15 @@ public:
     void ParseMessage(const char* message);
     // Enqueue an already-formatted GAMEMSG (used by WASM prio message path)
     void QueueGameMessage(const std::string& msg) { messageQueue.push_back(msg); }
+#ifdef __WASM_PORT__
+    // Entry point for the WASM WebSocket onmessage callback. A WebSocket
+    // message boundary is not a protocol-message boundary -- the websockify
+    // TCP<->WebSocket bridge can split one logical line across two frames, or
+    // coalesce several into one -- so this buffers a trailing partial line
+    // across calls exactly like the native recv()/recvBuffer path does; see
+    // ProcessIncomingData in networkclient.cpp.
+    void HandleWebSocketMessage(const char* data, int numBytes);
+#endif
     size_t MessageQueueSize() const { return messageQueue.size(); }
 
     // Bubble-sync message queue: 'b|', 'N', 'T' messages routed here by ProcessNetworkMessages
@@ -319,6 +328,11 @@ private:
 #ifndef __WASM_PORT__
     char recvBuffer[RECV_BUFFER_SIZE];
     int recvBufferLen;
+#else
+    // Carries a trailing partial line across WebSocket onmessage events --
+    // see HandleWebSocketMessage's declaration comment above.
+    char recvBuffer[RECV_BUFFER_SIZE];
+    int recvBufferLen = 0;
 #endif
 
     unsigned char myPlayerId;  // Player ID assigned by server for game messages

@@ -1,5 +1,26 @@
 # Changelog
 
+## v2.4.88
+
+- **Fixed a browser-tab freeze in WASM network games, traced to corrupted
+  game messages.** Reported as "game freezes... needs refresh of browser" in
+  a network game; browser console output captured mid-freeze showed a
+  smoking gun -- `Unknown game message type: B`, an opcode that has never
+  existed in this protocol. The WASM build's WebSocket receive handler
+  assumed each `onmessage` event handed it one or more *complete*
+  newline-terminated protocol lines, but a WebSocket message boundary isn't
+  a protocol-message boundary: the `websockify` TCP<->WebSocket bridge can
+  split one logical line across two events (especially likely during a
+  chain reaction's burst of single-line malus messages, exactly the kind of
+  moment the freeze was reported around), or coalesce several into one. A
+  split line's leftover fragment got parsed as if it were already complete,
+  corrupting the very next {sender ID}{opcode} byte pair read on the
+  following event -- silently desyncing or, worse, feeding garbage into
+  game-state parsing capable of hanging the single-threaded WASM main loop.
+  The native TCP client already buffers a trailing partial line across
+  `recv()` calls for exactly this reason; the WASM WebSocket path now does
+  the same.
+
 ## v2.4.87
 
 - **Fixed the mini-board attack flash not showing in 3-5 player games.**
