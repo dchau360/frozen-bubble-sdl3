@@ -436,6 +436,23 @@ void BubbleGame::HandleInput(SDL_Event *e) {
                             // upload before gameLost was set, so it is safe to
                             // zero now.
                             bubbleArrays[0].score = 0;
+                            // Arcade mode (SP-panel toggle, GameSettings) sends
+                            // every death back to level 1 rather than retrying
+                            // the level just lost on -- a harder, "one long
+                            // run" alternative to the default's per-level
+                            // retries. Restricted to the same classic solo
+                            // campaign NewGame()'s isDefaultClassic gates
+                            // (default levelset or a custom start level, not
+                            // random levels/training/network): those other
+                            // single-player modes don't treat curLevel as
+                            // campaign progress, so resetting it there would
+                            // not mean the same thing.
+                            const bool isDefaultClassic = !currentSettings.networkGame &&
+                                currentSettings.playerCount == 1 &&
+                                !currentSettings.randomLevels && !currentSettings.mpTraining;
+                            if (isDefaultClassic && GameSettings::Instance()->arcadeModeEnabled()) {
+                                curLevel = 1;
+                            }
                             ReloadGame(curLevel);
                         }
                     }

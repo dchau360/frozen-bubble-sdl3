@@ -224,6 +224,12 @@ constexpr const char *kSPLabel[SP_OPT] = {
     "PLAY RANDOM LEVELS",
     "MULTIPLAYER TRAINING",
     "LOCAL MULTIPLAYER",
+    // These two are toggles, not navigation -- SPPanelRender draws an ON/OFF
+    // badge next to them (not baked into this cached label texture, so it can
+    // change without a re-render) and gives the highlighted one a description
+    // in the panel's header area instead of a fixed label like the rows above.
+    "ARCADE MODE",
+    "UPLOAD HIGHSCORE STATS",
 };
 } // namespace
 
@@ -258,17 +264,46 @@ void MainMenu::EnsureSPLabels() {
 void MainMenu::SPPanelRender() {
     if (!showingSPPanel) return;
     EnsureSPLabels();
+    SDL_Renderer *rend = const_cast<SDL_Renderer*>(renderer);
 
-    // SP panel needs extra height for SP_OPT items: first item at y=191, each 41px apart, 37px tall
-    // For 5 items: last item bottom = 191 + (SP_OPT-1)*41 + 37 = 392 -> need panel bottom >= 400
-    SDL_Rect spPanelRct = {(640/2) - (341/2), (480/2) - (320/2), 341, 320};
-    { SDL_FRect fr = ToFRect(spPanelRct); SDL_RenderTexture(const_cast<SDL_Renderer*>(renderer), singlePanelBG, nullptr, &fr); }
-    for (int i = 0; i < SP_OPT; i++){
-        SDL_Rect entryRct = {(640/2)-(298/2), ((480/2)-90)+(41 * (i + 1)), 298, 37};
+    // The 5 original rows are big carved-plate navigation buttons on a
+    // uniform 41px pitch; Arcade Mode and Upload highscore stats are settings
+    // toggles, not navigation, so they get their own slimmer rows in a
+    // section below instead of stretching the plate grid to fit 7 full-size
+    // buttons -- there just isn't room for that in a fixed 640x480 canvas.
+    // Both sections anchor off spPanelRct.y at a fixed offset, same as the
+    // original single-section layout did, so bumping the panel's height here
+    // cannot silently desync the two.
+    constexpr int kBigRows = 5;
+    constexpr int kBigRowPitch = 41, kBigRowH = 37, kBigRowsTopOffset = 111;
+    constexpr int kToggleRowH = 30, kToggleRowGap = 6, kToggleSectionGapAfterBig = 18;
+    constexpr int kBottomMargin = 10;
+    const int bigRowsBottomOffset = kBigRowsTopOffset + kBigRows * kBigRowPitch;         // 316
+    const int togglesTopOffset = bigRowsBottomOffset + kToggleSectionGapAfterBig;         // 334
+    const int togglesBottomOffset = togglesTopOffset +
+        (SP_OPT - kBigRows) * kToggleRowH + (SP_OPT - kBigRows - 1) * kToggleRowGap;      // 334 + 60 + 6 = 400
+    constexpr int kSPPanelW = 341;
+    const int spPanelH = togglesBottomOffset + kBottomMargin;                             // 410
+
+    SDL_Rect spPanelRct = {(640/2) - (kSPPanelW/2), (480/2) - (spPanelH/2), kSPPanelW, spPanelH};
+    { SDL_FRect fr = ToFRect(spPanelRct); SDL_RenderTexture(rend, singlePanelBG, nullptr, &fr); }
+
+    // Every other panel registers its rows here so a tap first selects, then
+    // (on a second tap landing on the now-selected row) activates -- this
+    // panel never did, so a tap anywhere just re-fired whatever activeSPIdx
+    // already was, disconnected from where the tap actually landed. Harmless
+    // for the 5 nav buttons since missing one just reopens the menu, but the
+    // two toggles below are genuinely unreachable by tap without this: a
+    // player could tap "Upload highscore stats" all day and, if some other
+    // row was selected, keep firing that row instead.
+    BeginPanelTapRows(&activeSPIdx);
+
+    for (int i = 0; i < kBigRows; i++){
+        SDL_Rect entryRct = {(640/2)-(298/2), spPanelRct.y + kBigRowsTopOffset + kBigRowPitch * i, 298, kBigRowH};
+        AddPanelTapRow(i, entryRct);
         bool active = (i == activeSPIdx);
         { SDL_FRect fr = ToFRect(entryRct);
-          SDL_RenderTexture(const_cast<SDL_Renderer*>(renderer),
-                             active ? singleButtonAct : singleButtonIdle, nullptr, &fr); }
+          SDL_RenderTexture(rend, active ? singleButtonAct : singleButtonIdle, nullptr, &fr); }
 
         SDL_Texture *label = active ? spLabelActive[i] : spLabelIdle[i];
         if (label) {
@@ -278,11 +313,269 @@ void MainMenu::SPPanelRender() {
             SDL_Rect dst = {entryRct.x + 14, entryRct.y + (entryRct.h - spLabelSize[i].y) / 2,
                              spLabelSize[i].x, spLabelSize[i].y};
             SDL_FRect fr = ToFRect(dst);
-            SDL_RenderTexture(const_cast<SDL_Renderer*>(renderer), label, nullptr, &fr);
+            SDL_RenderTexture(rend, label, nullptr, &fr);
         }
     }
 
-    { SDL_FRect fr = ToFRect(*panelText.Coords()); SDL_RenderTexture(const_cast<SDL_Renderer*>(renderer), panelText.Texture(), nullptr, &fr); };
+    // Settings toggles: same plate art as the nav buttons (stretched a bit
+    // shorter) with the cached label on the left, plus a live ON/OFF badge on
+    // the right -- unlike the label, that badge's text changes at runtime, so
+    // it is drawn fresh every frame rather than baked into EnsureSPLabels'
+    // cache.
+    GameSettings* gs = GameSettings::Instance();
+    struct ToggleRow { int idx; bool on; };
+    ToggleRow toggles[SP_OPT - kBigRows] = {
+        {kSPRowArcadeMode,   gs->arcadeModeEnabled()},
+        {kSPRowUploadStats,  gs->uploadHighscoreStatsEnabled()},
+    };
+    for (int t = 0; t < SP_OPT - kBigRows; t++) {
+        int i = toggles[t].idx;
+        SDL_Rect entryRct = {(640/2)-(298/2),
+                              spPanelRct.y + togglesTopOffset + t * (kToggleRowH + kToggleRowGap),
+                              298, kToggleRowH};
+        AddPanelTapRow(i, entryRct);
+        bool active = (i == activeSPIdx);
+        { SDL_FRect fr = ToFRect(entryRct);
+          SDL_RenderTexture(rend, active ? singleButtonAct : singleButtonIdle, nullptr, &fr); }
+
+        SDL_Texture *label = active ? spLabelActive[i] : spLabelIdle[i];
+        if (label) {
+            SDL_Rect dst = {entryRct.x + 14, entryRct.y + (entryRct.h - spLabelSize[i].y) / 2,
+                             spLabelSize[i].x, spLabelSize[i].y};
+            SDL_FRect fr = ToFRect(dst);
+            SDL_RenderTexture(rend, label, nullptr, &fr);
+        }
+
+        SDL_Color onColor  = {255, 238, 176, 255};
+        SDL_Color offColor = {190, 190, 190, 255};
+        panelText.UpdateStyle(13, TTF_STYLE_BOLD);
+        panelText.UpdateColor(toggles[t].on ? onColor : offColor, {41, 22, 8, 235});
+        panelText.UpdateAlignment(TTF_HORIZONTAL_ALIGN_RIGHT);
+        panelText.UpdateText(rend, toggles[t].on ? "ON" : "OFF", 0);
+        panelText.UpdatePosition({entryRct.x + entryRct.w - 14 - panelText.Coords()->w,
+                                   entryRct.y + (entryRct.h - panelText.Coords()->h) / 2});
+        { SDL_FRect fr = ToFRect(*panelText.Coords()); SDL_RenderTexture(rend, panelText.Texture(), nullptr, &fr); }
+    }
+    panelText.UpdateAlignment(TTF_HORIZONTAL_ALIGN_CENTER);  // restore default before the header text below
+
+    // Header text: the fixed "Start 1-player game menu" title for the 5 nav
+    // rows, or the highlighted toggle's own name -- the full description of
+    // what each toggle does lives in its confirm popup instead (shown when
+    // turning it ON; see below and press() in mainmenu.cpp), since this slot
+    // is only the ~71px gap above bigRowsTopOffset and a real explanation
+    // does not reliably fit that wrapped to fewer lines than would run into
+    // row 0's plate.
+    panelText.UpdateStyle(15, TTF_STYLE_NORMAL);
+    panelText.UpdateColor({255, 255, 255, 255}, {0, 0, 0, 255});
+    if (activeSPIdx == kSPRowArcadeMode) {
+        panelText.UpdateText(rend, "Arcade Mode", 0);
+    } else if (activeSPIdx == kSPRowUploadStats) {
+        panelText.UpdateText(rend, "Upload highscore stats", 0);
+    } else {
+        panelText.UpdateText(rend, "Start 1-player game menu", 0);
+    }
+    panelText.UpdatePosition({(640/2) - (panelText.Coords()->w / 2), spPanelRct.y + 40});
+    { SDL_FRect fr = ToFRect(*panelText.Coords()); SDL_RenderTexture(rend, panelText.Texture(), nullptr, &fr); }
+
+    // Shown instead of immediately flipping the row when the player tries to
+    // turn Arcade Mode ON (see press()) -- same box style as
+    // showingStatsUploadConfirm below, which this mirrors.
+    if (showingArcadeModeConfirm) {
+        SDL_Rect box = {(640/2) - 155, (480/2) - 112, 310, 224};
+        SDL_SetRenderDrawBlendMode(rend, SDL_BLENDMODE_BLEND);
+        SDL_SetRenderDrawColor(rend, menulist::kHeaderFill.r, menulist::kHeaderFill.g,
+                                menulist::kHeaderFill.b, 245);
+        { SDL_FRect fr = ToFRect(box); SDL_RenderFillRect(rend, &fr); }
+        SDL_SetRenderDrawColor(rend, menulist::kEdge.r, menulist::kEdge.g,
+                                menulist::kEdge.b, menulist::kEdge.a);
+        { SDL_FRect fr = ToFRect(box); SDL_RenderRect(rend, &fr); }
+
+        panelText.UpdateStyle(15, TTF_STYLE_BOLD);
+        panelText.UpdateColor(menulist::kGold, menulist::kTextShadow);
+        panelText.UpdateAlignment(TTF_HORIZONTAL_ALIGN_CENTER);
+        panelText.UpdateText(rend, "Enable Arcade Mode?", 290);
+        panelText.UpdatePosition({box.x + box.w/2 - panelText.Coords()->w/2, box.y + 12});
+        { SDL_FRect fr = ToFRect(*panelText.Coords()); SDL_RenderTexture(rend, panelText.Texture(), nullptr, &fr); }
+
+        panelText.UpdateStyle(13, TTF_STYLE_NORMAL);
+        panelText.UpdateColor(menulist::kText, menulist::kTextShadow);
+        panelText.UpdateAlignment(TTF_HORIZONTAL_ALIGN_LEFT);
+        panelText.UpdateText(rend,
+            "Dying in a classic solo game\n"
+            "will send you back to Level 1\n"
+            "with your score reset to 0,\n"
+            "instead of just retrying the\n"
+            "level you lost on.\n\n"
+            "Turn it off again any time.", 290);
+        panelText.UpdatePosition({box.x + 12, box.y + 44});
+        { SDL_FRect fr = ToFRect(*panelText.Coords()); SDL_RenderTexture(rend, panelText.Texture(), nullptr, &fr); }
+
+        // Two tappable buttons -- see the identical setup below for
+        // showingStatsUploadConfirm, which this mirrors.
+        arcadeConfirmYesRect = {box.x + 12, box.y + box.h - 34, 135, 26};
+        arcadeConfirmNoRect  = {box.x + box.w - 12 - 135, box.y + box.h - 34, 135, 26};
+        auto drawArcadeButton = [&](const SDL_Rect& r, const char* label, bool gold) {
+            SDL_SetRenderDrawColor(rend, 10, 38, 48, 210);
+            { SDL_FRect fr = ToFRect(r); SDL_RenderFillRect(rend, &fr); }
+            SDL_Color edge = gold ? menulist::kGold : menulist::kMuted;
+            SDL_SetRenderDrawColor(rend, edge.r, edge.g, edge.b, 255);
+            { SDL_FRect fr = ToFRect(r); SDL_RenderRect(rend, &fr); }
+            panelText.UpdateStyle(14, TTF_STYLE_BOLD);
+            panelText.UpdateColor(gold ? menulist::kGold : menulist::kText, menulist::kTextShadow);
+            panelText.UpdateText(rend, label, 0);
+            panelText.UpdatePosition({r.x + r.w/2 - panelText.Coords()->w/2,
+                                       r.y + r.h/2 - panelText.Coords()->h/2});
+            { SDL_FRect fr = ToFRect(*panelText.Coords()); SDL_RenderTexture(rend, panelText.Texture(), nullptr, &fr); }
+        };
+        drawArcadeButton(arcadeConfirmYesRect, "Turn On", !confirmDialogFocusNo);
+        drawArcadeButton(arcadeConfirmNoRect, "Cancel", confirmDialogFocusNo);
+
+        panelText.UpdateAlignment(TTF_HORIZONTAL_ALIGN_CENTER);  // restore default for the rest of this panel
+    }
+
+    // The two modals below are opened from the toggles above (see press() in
+    // mainmenu.cpp) but shared with the input-side handling in
+    // mainmenu_input.cpp's KeysPanelKey/MenuEditingKey/MenuTextInputEvent/
+    // HandlePanelTap -- none of those are gated on which panel is open, only
+    // on these two flags, so drawing them here (where showingSPPanel is what
+    // keeps this function reachable at all) is the only place that has to.
+    if (showingStatsUploadConfirm) {
+        SDL_Rect box = {(640/2) - 155, (480/2) - 112, 310, 224};
+        SDL_SetRenderDrawBlendMode(rend, SDL_BLENDMODE_BLEND);
+        SDL_SetRenderDrawColor(rend, menulist::kHeaderFill.r, menulist::kHeaderFill.g,
+                                menulist::kHeaderFill.b, 245);
+        { SDL_FRect fr = ToFRect(box); SDL_RenderFillRect(rend, &fr); }
+        SDL_SetRenderDrawColor(rend, menulist::kEdge.r, menulist::kEdge.g,
+                                menulist::kEdge.b, menulist::kEdge.a);
+        { SDL_FRect fr = ToFRect(box); SDL_RenderRect(rend, &fr); }
+
+        panelText.UpdateStyle(15, TTF_STYLE_BOLD);
+        panelText.UpdateColor(menulist::kGold, menulist::kTextShadow);
+        panelText.UpdateAlignment(TTF_HORIZONTAL_ALIGN_CENTER);
+        panelText.UpdateText(rend, "Upload highscore stats?", 290);
+        panelText.UpdatePosition({box.x + box.w/2 - panelText.Coords()->w/2, box.y + 12});
+        { SDL_FRect fr = ToFRect(*panelText.Coords()); SDL_RenderTexture(rend, panelText.Texture(), nullptr, &fr); }
+
+        // Exactly what sendGameStats() puts in the request body -- see that
+        // file's own header comment for the wire format. Kept in sync by
+        // hand; if the payload changes, this text has to change with it.
+        char body[256];
+        snprintf(body, sizeof(body),
+            "Each time a classic solo game ends\n"
+            "in a loss, this sends to petitain.be:\n\n"
+            "- your nickname (or \"Anonymous\")\n"
+            "- a random per-device id\n"
+            "- your score, level, and play time\n\n"
+            "Sent once, best-effort, over HTTPS.\n"
+            "Turn it off again any time.");
+        panelText.UpdateStyle(13, TTF_STYLE_NORMAL);
+        panelText.UpdateColor(menulist::kText, menulist::kTextShadow);
+        panelText.UpdateAlignment(TTF_HORIZONTAL_ALIGN_LEFT);
+        panelText.UpdateText(rend, body, 290);
+        panelText.UpdatePosition({box.x + 12, box.y + 40});
+        { SDL_FRect fr = ToFRect(*panelText.Coords()); SDL_RenderTexture(rend, panelText.Texture(), nullptr, &fr); }
+
+        // Two tappable buttons -- ENTER/ESC already worked from a keyboard,
+        // but this popup had no touch equivalent at all: HandlePanelTap's
+        // generic row hit-testing sits underneath it and belongs to whatever
+        // row was selected before the popup opened, not to this modal (see
+        // HandlePanelTap's own showingStatsUploadConfirm branch, which reads
+        // the rects stored below rather than routing through that row list).
+        statsConfirmYesRect = {box.x + 12, box.y + box.h - 34, 135, 26};
+        statsConfirmNoRect  = {box.x + box.w - 12 - 135, box.y + box.h - 34, 135, 26};
+        auto drawConfirmButton = [&](const SDL_Rect& r, const char* label, bool gold) {
+            SDL_SetRenderDrawColor(rend, 10, 38, 48, 210);
+            { SDL_FRect fr = ToFRect(r); SDL_RenderFillRect(rend, &fr); }
+            SDL_Color edge = gold ? menulist::kGold : menulist::kMuted;
+            SDL_SetRenderDrawColor(rend, edge.r, edge.g, edge.b, 255);
+            { SDL_FRect fr = ToFRect(r); SDL_RenderRect(rend, &fr); }
+            panelText.UpdateStyle(14, TTF_STYLE_BOLD);
+            panelText.UpdateColor(gold ? menulist::kGold : menulist::kText, menulist::kTextShadow);
+            panelText.UpdateText(rend, label, 0);
+            panelText.UpdatePosition({r.x + r.w/2 - panelText.Coords()->w/2,
+                                       r.y + r.h/2 - panelText.Coords()->h/2});
+            { SDL_FRect fr = ToFRect(*panelText.Coords()); SDL_RenderTexture(rend, panelText.Texture(), nullptr, &fr); }
+        };
+        drawConfirmButton(statsConfirmYesRect, "Turn On", !confirmDialogFocusNo);
+        drawConfirmButton(statsConfirmNoRect, "Cancel", confirmDialogFocusNo);
+
+        panelText.UpdateAlignment(TTF_HORIZONTAL_ALIGN_CENTER);  // restore default for the rest of this panel
+    }
+
+    // Modal drawn right after showingStatsUploadConfirm is answered "Turn On"
+    // -- pre-filled with the nickname already saved, if any, so this doubles
+    // as a chance to review/change it; a player with none set would otherwise
+    // have every upload silently read as "Anonymous" on petitain.be, with no
+    // way to notice short of checking there. Same box layout/colors as
+    // showingStatsUploadConfirm above; text field follows the "[ name_ ]"
+    // convention from the Net Game nickname screen (mainmenu_netpanel.cpp).
+    if (showingStatsNicknamePrompt) {
+        bool hadNickname = GameSettings::Instance()->savedNickname[0] != '\0';
+
+        SDL_Rect box = {(640/2) - 155, (480/2) - 112, 310, 224};
+        SDL_SetRenderDrawBlendMode(rend, SDL_BLENDMODE_BLEND);
+        SDL_SetRenderDrawColor(rend, menulist::kHeaderFill.r, menulist::kHeaderFill.g,
+                                menulist::kHeaderFill.b, 245);
+        { SDL_FRect fr = ToFRect(box); SDL_RenderFillRect(rend, &fr); }
+        SDL_SetRenderDrawColor(rend, menulist::kEdge.r, menulist::kEdge.g,
+                                menulist::kEdge.b, menulist::kEdge.a);
+        { SDL_FRect fr = ToFRect(box); SDL_RenderRect(rend, &fr); }
+
+        panelText.UpdateStyle(15, TTF_STYLE_BOLD);
+        panelText.UpdateColor(menulist::kGold, menulist::kTextShadow);
+        panelText.UpdateAlignment(TTF_HORIZONTAL_ALIGN_CENTER);
+        panelText.UpdateText(rend, hadNickname ? "Confirm your nickname?" : "Set a nickname?", 290);
+        panelText.UpdatePosition({box.x + box.w/2 - panelText.Coords()->w/2, box.y + 12});
+        { SDL_FRect fr = ToFRect(*panelText.Coords()); SDL_RenderTexture(rend, panelText.Texture(), nullptr, &fr); }
+
+        panelText.UpdateStyle(13, TTF_STYLE_NORMAL);
+        panelText.UpdateColor(menulist::kText, menulist::kTextShadow);
+        panelText.UpdateText(rend, hadNickname
+            ? "This is the name your uploaded\nstats will show. Edit it below,\nor skip to keep it as is."
+            : "Stats upload with no nickname\nset shows up as \"Anonymous\".\nType one now, or skip for later.", 290);
+        panelText.UpdatePosition({box.x + box.w/2 - panelText.Coords()->w/2, box.y + 44});
+        { SDL_FRect fr = ToFRect(*panelText.Coords()); SDL_RenderTexture(rend, panelText.Texture(), nullptr, &fr); }
+
+        char fieldBuf[48];
+        snprintf(fieldBuf, sizeof(fieldBuf), "[ %s_ ]", statsUploadNickname);
+        panelText.UpdateStyle(14, TTF_STYLE_BOLD);
+        panelText.UpdateColor(menulist::kGold, menulist::kTextShadow);
+        panelText.UpdateText(rend, fieldBuf, 290);
+        panelText.UpdatePosition({box.x + box.w/2 - panelText.Coords()->w/2, box.y + 128});
+        { SDL_FRect fr = ToFRect(*panelText.Coords()); SDL_RenderTexture(rend, panelText.Texture(), nullptr, &fr); }
+
+        statsNicknameSaveRect = {box.x + 12, box.y + box.h - 34, 135, 26};
+        statsNicknameSkipRect = {box.x + box.w - 12 - 135, box.y + box.h - 34, 135, 26};
+        auto drawPromptButton = [&](const SDL_Rect& r, const char* label, bool gold) {
+            SDL_SetRenderDrawColor(rend, 10, 38, 48, 210);
+            { SDL_FRect fr = ToFRect(r); SDL_RenderFillRect(rend, &fr); }
+            SDL_Color edge = gold ? menulist::kGold : menulist::kMuted;
+            SDL_SetRenderDrawColor(rend, edge.r, edge.g, edge.b, 255);
+            { SDL_FRect fr = ToFRect(r); SDL_RenderRect(rend, &fr); }
+            panelText.UpdateStyle(14, TTF_STYLE_BOLD);
+            panelText.UpdateColor(gold ? menulist::kGold : menulist::kText, menulist::kTextShadow);
+            panelText.UpdateText(rend, label, 0);
+            panelText.UpdatePosition({r.x + r.w/2 - panelText.Coords()->w/2,
+                                       r.y + r.h/2 - panelText.Coords()->h/2});
+            { SDL_FRect fr = ToFRect(*panelText.Coords()); SDL_RenderTexture(rend, panelText.Texture(), nullptr, &fr); }
+        };
+        drawPromptButton(statsNicknameSaveRect, "Save", !confirmDialogFocusNo);
+        drawPromptButton(statsNicknameSkipRect, "Skip", confirmDialogFocusNo);
+
+        panelText.UpdateAlignment(TTF_HORIZONTAL_ALIGN_CENTER);  // restore default for the rest of this panel
+    }
+
+    // Neither modal above has any button-to-button keyboard navigation (Tab,
+    // arrow keys, ...) to a highlighted "Skip"/"Cancel" -- ENTER and ESC are
+    // the whole keyboard interface, same as showingStatsUploadConfirm always
+    // was. This used to be spelled out in KeysPanelRender's footer before the
+    // move to this panel; carried over here rather than left for the player
+    // to discover by guessing, which is what prompted this line to begin with.
+    if (showingStatsNicknamePrompt) {
+        menulist::DrawFooterHint(rend, panelText, "LEFT/RIGHT choose    ENTER select    ESC skip");
+    } else if (showingStatsUploadConfirm || showingArcadeModeConfirm) {
+        menulist::DrawFooterHint(rend, panelText, "LEFT/RIGHT choose    ENTER select    ESC cancel");
+    }
 }
 
 
@@ -600,8 +893,6 @@ void MainMenu::KeysPanelRender() {
     list.Row(kKeyRowSpeed, "Game speed", speedVal, true, true);
     list.Row(kKeyRowSound, "Sound", gs->soundEnabled() ? "ON" : "OFF", gs->soundEnabled());
     list.Row(kKeyRowMouse, "Mouse / touch aim", gs->mouseEnabled ? "ON" : "OFF", gs->mouseEnabled);
-    list.Row(kKeyRowUploadStats, "Upload highscore stats",
-             gs->uploadHighscoreStatsEnabled() ? "ON" : "OFF", gs->uploadHighscoreStatsEnabled());
 #ifndef __WASM_PORT__
     list.Row(kKeyRowFullscreen, "Fullscreen", gs->fullscreenMode() ? "ON" : "OFF", gs->fullscreenMode());
 #endif
@@ -700,77 +991,8 @@ void MainMenu::KeysPanelRender() {
     { SDL_FRect fr = ToFRect(*panelText.Coords()); SDL_RenderTexture(rend, panelText.Texture(), nullptr, &fr); }
 
     menulist::DrawFooterHint(rend, panelText,
-        showingStatsUploadConfirm ? "ENTER confirm    ESC cancel    or tap a button"
-        : awaitKp ? "Press a button or key..."
-                  : "UP/DOWN select    ENTER change    1-4 switch player    ESC done");
-
-    // Modal warning drawn on top of everything above: appears only when the
-    // player has just pressed ENTER on "Upload highscore stats" while it was
-    // OFF (see KeysPanelKey), and blocks every other key until answered.
-    // Spells out precisely what turning this on starts sending, since the
-    // row's own "OFF -> ON" can't.
-    if (showingStatsUploadConfirm) {
-        SDL_Rect box = {(640/2) - 155, (480/2) - 112, 310, 224};
-        SDL_SetRenderDrawBlendMode(rend, SDL_BLENDMODE_BLEND);
-        SDL_SetRenderDrawColor(rend, menulist::kHeaderFill.r, menulist::kHeaderFill.g,
-                                menulist::kHeaderFill.b, 245);
-        { SDL_FRect fr = ToFRect(box); SDL_RenderFillRect(rend, &fr); }
-        SDL_SetRenderDrawColor(rend, menulist::kEdge.r, menulist::kEdge.g,
-                                menulist::kEdge.b, menulist::kEdge.a);
-        { SDL_FRect fr = ToFRect(box); SDL_RenderRect(rend, &fr); }
-
-        panelText.UpdateStyle(15, TTF_STYLE_BOLD);
-        panelText.UpdateColor(menulist::kGold, menulist::kTextShadow);
-        panelText.UpdateAlignment(TTF_HORIZONTAL_ALIGN_CENTER);
-        panelText.UpdateText(rend, "Upload highscore stats?", 290);
-        panelText.UpdatePosition({box.x + box.w/2 - panelText.Coords()->w/2, box.y + 12});
-        { SDL_FRect fr = ToFRect(*panelText.Coords()); SDL_RenderTexture(rend, panelText.Texture(), nullptr, &fr); }
-
-        // Exactly what sendGameStats() puts in the request body -- see that
-        // file's own header comment for the wire format. Kept in sync by
-        // hand; if the payload changes, this text has to change with it.
-        char body[256];
-        snprintf(body, sizeof(body),
-            "Each time a classic solo game ends\n"
-            "in a loss, this sends to petitain.be:\n\n"
-            "- your nickname (or \"Anonymous\")\n"
-            "- a random per-device id\n"
-            "- your score, level, and play time\n\n"
-            "Sent once, best-effort, over HTTPS.\n"
-            "Turn it off again any time.");
-        panelText.UpdateStyle(13, TTF_STYLE_NORMAL);
-        panelText.UpdateColor(menulist::kText, menulist::kTextShadow);
-        panelText.UpdateAlignment(TTF_HORIZONTAL_ALIGN_LEFT);
-        panelText.UpdateText(rend, body, 290);
-        panelText.UpdatePosition({box.x + 12, box.y + 40});
-        { SDL_FRect fr = ToFRect(*panelText.Coords()); SDL_RenderTexture(rend, panelText.Texture(), nullptr, &fr); }
-
-        // Two tappable buttons -- ENTER/ESC already worked from a keyboard,
-        // but this popup had no touch equivalent at all: HandlePanelTap's
-        // generic row hit-testing sits underneath it and belongs to whatever
-        // row was selected before the popup opened, not to this modal (see
-        // HandlePanelTap's own showingStatsUploadConfirm branch, which reads
-        // the rects stored below rather than routing through that row list).
-        statsConfirmYesRect = {box.x + 12, box.y + box.h - 34, 135, 26};
-        statsConfirmNoRect  = {box.x + box.w - 12 - 135, box.y + box.h - 34, 135, 26};
-        auto drawConfirmButton = [&](const SDL_Rect& r, const char* label, bool gold) {
-            SDL_SetRenderDrawColor(rend, 10, 38, 48, 210);
-            { SDL_FRect fr = ToFRect(r); SDL_RenderFillRect(rend, &fr); }
-            SDL_Color edge = gold ? menulist::kGold : menulist::kMuted;
-            SDL_SetRenderDrawColor(rend, edge.r, edge.g, edge.b, 255);
-            { SDL_FRect fr = ToFRect(r); SDL_RenderRect(rend, &fr); }
-            panelText.UpdateStyle(14, TTF_STYLE_BOLD);
-            panelText.UpdateColor(gold ? menulist::kGold : menulist::kText, menulist::kTextShadow);
-            panelText.UpdateText(rend, label, 0);
-            panelText.UpdatePosition({r.x + r.w/2 - panelText.Coords()->w/2,
-                                       r.y + r.h/2 - panelText.Coords()->h/2});
-            { SDL_FRect fr = ToFRect(*panelText.Coords()); SDL_RenderTexture(rend, panelText.Texture(), nullptr, &fr); }
-        };
-        drawConfirmButton(statsConfirmYesRect, "Turn On", true);
-        drawConfirmButton(statsConfirmNoRect, "Cancel", false);
-
-        panelText.UpdateAlignment(TTF_HORIZONTAL_ALIGN_CENTER);  // restore default for the rest of this panel
-    }
+        awaitKp ? "Press a button or key..."
+                : "UP/DOWN select    ENTER change    1-4 switch player    ESC done");
 }
 
 
