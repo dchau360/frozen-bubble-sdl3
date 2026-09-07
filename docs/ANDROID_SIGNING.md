@@ -72,6 +72,25 @@ once the backup from step 2 is verified.
   release signed by a throwaway key is worse than no release, because users who
   install it are stranded on that version.
 
+## Building a signed .aab locally, without CI
+
+`tools/build-android-aab.sh` builds the release App Bundle on your own
+machine and copies it to `~/Downloads` -- useful for a Play Console upload
+you don't want to wait on a CI run (or a public Actions log) for. Nothing it
+does touches git, CI, or any remote host; the keystore and its passwords
+never leave your machine.
+
+It reads signing credentials from, in order: `android/keystore.properties`
+(copy `android/keystore.properties.example` and fill it in -- the real file
+is gitignored, same as the `.keystore` itself), the `KEYSTORE_PATH` /
+`KEYSTORE_PASSWORD` / `KEY_ALIAS` / `KEY_PASSWORD` environment variables, or
+an interactive prompt (passwords read with echo off) for whatever neither
+supplied. Run it with:
+
+```bash
+tools/build-android-aab.sh
+```
+
 ## Related
 
 `versionCode` in `android/app/build.gradle` must increase on every release, or
