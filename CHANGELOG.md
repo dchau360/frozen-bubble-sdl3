@@ -1,5 +1,12 @@
 # Changelog
 
+## v2.4.91
+
+- **Fixed a crash when quitting with ESC on macOS and other SDL_ttf
+  platforms.** The FPS overlay's font was being closed after SDL_ttf had
+  already been shut down, leaving FreeType cleanup with an invalid library
+  handle. The overlay now releases its font and texture before SDL teardown.
+
 ## v2.4.90
 
 - **Added Arcade Mode**, a toggle in the 1-player submenu. When it's on,
