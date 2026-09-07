@@ -1,5 +1,20 @@
 # Changelog
 
+## v2.4.89
+
+- **Fixed Backspace corrupting accented letters, CJK, and emoji in text
+  fields.** Chat, lobby chat, nicknames, usernames, and high-score names all
+  deleted exactly one *byte* per Backspace instead of one character, so any
+  multi-byte UTF-8 character lost its trailing byte(s) and left an invalid
+  partial sequence in the buffer. Backspace now always removes one full
+  character.
+- **Fixed gameplay/menu input getting stuck on after unplugging a
+  controller.** Disconnecting a gamepad while a button was held (or the
+  analog stick was still pushed) never released that input -- a shooter
+  could keep moving or firing, or a menu cursor kept scrolling, with no
+  controller attached at all. A disconnect now releases everything that pad
+  was still holding.
+
 ## v2.4.88
 
 - **Fixed a browser-tab freeze in WASM network games, traced to corrupted
