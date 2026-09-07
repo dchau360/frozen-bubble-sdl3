@@ -122,6 +122,9 @@ void GameSettings::CreateDefaultSettings()
         EvalIniResult(rval, dict, "Stats", NULL);
         EvalIniResult(rval, dict, "Stats:UploadHighscore", "false");
 
+        EvalIniResult(rval, dict, "Game", NULL);
+        EvalIniResult(rval, dict, "Game:ArcadeMode", "false");
+
         EvalIniResult(rval, dict, "Menu", NULL);
         EvalIniResult(rval, dict, "Menu:Theme", "2"); // MENU_THEME_SLATE
 
@@ -264,6 +267,7 @@ void GameSettings::ReadSettings()
     colorblindBubbles = iniparser_getboolean(optDict, "GFX:ColorblindBubbles", false);
     showFps = iniparser_getboolean(optDict, "GFX:ShowFPS", false);
     uploadHighscoreStats = iniparser_getboolean(optDict, "Stats:UploadHighscore", false);
+    arcadeMode = iniparser_getboolean(optDict, "Game:ArcadeMode", false);
     if (gfxQuality > 3 || gfxQuality < 1) gfxQuality = 3;
     if (windowWidth < 640 || windowWidth > 9999) windowWidth = 640;
     if (windowHeight < 480 || windowHeight > 9999) windowHeight = 480;
@@ -694,12 +698,19 @@ void GameSettings::SetValue(const char* option, const char* value)
         return;
     }
     else if (strcmp(option, "Stats:UploadHighscore") == 0) {
-        // Turning this ON is gated behind a confirmation popup (see
-        // KeysPanelKey in mainmenu_input.cpp) that names exactly what starts
-        // being sent -- this setter itself just flips and persists the flag,
-        // the same as every other toggle row here.
+        // Turning this ON is gated behind a confirmation popup, opened from
+        // the 1-player submenu's toggle (see KeysPanelKey in
+        // mainmenu_input.cpp and SPPanelRender/press() in mainmenu.cpp) that
+        // names exactly what starts being sent -- this setter itself just
+        // flips and persists the flag, the same as every other toggle here.
         uploadHighscoreStats = !uploadHighscoreStats;
         iniparser_set(optDict, option, uploadHighscoreStats ? "true" : "false");
+        SaveSettings();
+        return;
+    }
+    else if (strcmp(option, "Game:ArcadeMode") == 0) {
+        arcadeMode = !arcadeMode;
+        iniparser_set(optDict, option, arcadeMode ? "true" : "false");
         SaveSettings();
         return;
     }

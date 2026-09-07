@@ -200,6 +200,14 @@ public:
     // exactly what goes out.
     bool uploadHighscoreStatsEnabled() { return uploadHighscoreStats; }
 
+    // Off by default. When on, dying in classic 1-player play (default
+    // levelset or a custom start level -- not random levels, training, or any
+    // networked mode) sends the run back to level 1 with score reset, instead
+    // of just resetting score and retrying the level just lost on. See the
+    // gameLost branch in bubblegame_input.cpp and the SP-panel toggle in
+    // mainmenu_panels.cpp's SPPanelRender.
+    bool arcadeModeEnabled() { return arcadeMode; }
+
     PlayerKeys player1Keys, player2Keys, player3Keys, player4Keys, player5Keys;
     void LoadDefaultKeys();
     void SaveKeys();
@@ -341,6 +349,7 @@ private:
     bool playMusic = true, playSfx = true, classicSound = false;
     bool showFps = false;
     bool uploadHighscoreStats = false;
+    bool arcadeMode = false;
 
     GameSettings(){};
     ~GameSettings();

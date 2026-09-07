@@ -384,6 +384,29 @@ void MainMenu::press() {
             localMPCR = true;
             runDelay = false;
         }
+        else if (activeSPIdx == kSPRowArcadeMode) {
+            // Plain toggle, no confirmation: unlike stats upload below, this
+            // changes nothing outside the game itself. showingSPPanel stays
+            // up so the row's own ON/OFF badge and the header description
+            // (SPPanelRender) can update in place.
+            GameSettings::Instance()->SetValue("Game:ArcadeMode", "");
+            AudioMixer::Instance()->PlaySFX("menu_change");
+        }
+        else if (activeSPIdx == kSPRowUploadStats) {
+            GameSettings* gsStats = GameSettings::Instance();
+            if (gsStats->uploadHighscoreStatsEnabled()) {
+                // Turning it OFF is always safe -- no confirmation needed.
+                gsStats->SetValue("Stats:UploadHighscore", "");
+                AudioMixer::Instance()->PlaySFX("menu_change");
+            } else {
+                // Turning it ON needs the player to see what that starts
+                // sending first -- SPPanelRender draws the popup, and
+                // KeysPanelKey (mainmenu_input.cpp) actually flips the
+                // setting once they confirm.
+                showingStatsUploadConfirm = true;
+                AudioMixer::Instance()->PlaySFX("menu_selected");
+            }
+        }
         return;
     }
 
