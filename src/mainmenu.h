@@ -317,6 +317,17 @@ private:
     // tap on either button would otherwise be caught by whichever hidden row
     // happens to occupy the same screen position first.
     SDL_Rect statsConfirmYesRect{}, statsConfirmNoRect{};
+    // Shown right after confirming "Upload highscore stats? -> Turn On",
+    // pre-filled with whatever nickname is already saved (blank if none) so
+    // it doubles as a chance to review/change it -- without this a player
+    // with no nickname set would have their uploads silently read as
+    // "Anonymous", with no way to notice short of spotting it on
+    // petitain.be. Answering either way (Save or Skip) finishes turning the
+    // setting on; this only offers a nickname, it never blocks enabling
+    // stats on its own. See KeysPanelKey/KeysPanelRender.
+    bool showingStatsNicknamePrompt = false;
+    char statsUploadNickname[32] = "";  // scratch buffer while typing here
+    SDL_Rect statsNicknameSaveRect{}, statsNicknameSkipRect{};
     void KeysPanelRender();
 
     // LAN server discovery

@@ -299,6 +299,11 @@ void MainMenu::MenuTextInputEvent(SDL_Event *e) {
             if (networkInputMode == 11) {
                 AppendUtf8Input(networkPreNick, e->text.text, 15);
             }
+            // Handle virtual keyboard character input for the post-stats-opt-in
+            // nickname prompt
+            if (showingKeysPanel && showingStatsNicknamePrompt) {
+                AppendUtf8Input(statsUploadNickname, e->text.text, 15);
+            }
             // Handle virtual keyboard character input for chat (mode 4)
             if (showingNetPanel && networkInLobby && networkInputMode == 4) {
                 AppendUtf8Input(networkChatInput, e->text.text);
@@ -320,6 +325,10 @@ bool MainMenu::MenuEditingKey(SDL_Event *e) {
                 }
                 if (showingNetPanel && !networkInLobby && networkInputMode == 11) {
                     BackspaceUtf8(networkPreNick);
+                    return true;
+                }
+                if (showingKeysPanel && showingStatsNicknamePrompt) {
+                    BackspaceUtf8(statsUploadNickname);
                     return true;
                 }
             }
@@ -497,6 +506,21 @@ bool MainMenu::HandlePanelTap(float lx, float ly, float verticalDrift) {
     // fall through would let it silently move the row selection underneath
     // (previously the only way to react to this popup at all was a physical
     // ENTER/ESC keypress -- there was no touch equivalent).
+    if (showingKeysPanel && showingStatsNicknamePrompt) {
+        auto hit = [&](const SDL_Rect& r) {
+            return lx >= r.x && lx < r.x + r.w && ly >= r.y && ly < r.y + r.h;
+        };
+        SDL_Keycode key = SDLK_UNKNOWN;
+        if (hit(statsNicknameSaveRect)) key = SDLK_RETURN;
+        else if (hit(statsNicknameSkipRect)) key = SDLK_ESCAPE;
+        if (key != SDLK_UNKNOWN) {
+            SDL_Event ev = {};
+            ev.type = SDL_EVENT_KEY_DOWN;
+            ev.key.key = key;
+            SDL_PushEvent(&ev);
+        }
+        return true;
+    }
     if (showingKeysPanel && showingStatsUploadConfirm) {
         auto hit = [&](const SDL_Rect& r) {
             return lx >= r.x && lx < r.x + r.w && ly >= r.y && ly < r.y + r.h;
@@ -694,6 +718,28 @@ bool MainMenu::HelpPanelKey(SDL_Event *e) {
 
 bool MainMenu::KeysPanelKey(SDL_Event *e) {
             if (showingKeysPanel) {
+                if (showingStatsNicknamePrompt) {
+                    // Modal, same as showingStatsUploadConfirm below -- typed
+                    // characters/backspace arrive through MenuTextInputEvent/
+                    // MenuEditingKey, only ENTER (save) and ESC (skip) matter
+                    // here. Either one finishes turning the setting on: this
+                    // is an offer to set a nickname, not a second gate on it.
+                    if (e->key.key == SDLK_RETURN) {
+                        if (statsUploadNickname[0] != '\0') {
+                            GameSettings* gs = GameSettings::Instance();
+                            snprintf(gs->savedNickname, sizeof(gs->savedNickname), "%s", statsUploadNickname);
+                            gs->SaveKeys();
+                        }
+                        showingStatsNicknamePrompt = false;
+                        SDL_StopTextInput(SDL_GetKeyboardFocus());
+                        AudioMixer::Instance()->PlaySFX("typewriter");
+                    } else if (e->key.key == SDLK_ESCAPE || e->key.key == SDLK_AC_BACK) {
+                        showingStatsNicknamePrompt = false;
+                        SDL_StopTextInput(SDL_GetKeyboardFocus());
+                        AudioMixer::Instance()->PlaySFX("menu_change");
+                    }
+                    return true;
+                }
                 if (showingStatsUploadConfirm) {
                     // Modal: only ENTER (confirm) and ESC (cancel) mean anything
                     // here, and nothing below this ever sees the keypress.
@@ -701,6 +747,18 @@ bool MainMenu::KeysPanelKey(SDL_Event *e) {
                         GameSettings::Instance()->SetValue("Stats:UploadHighscore", "");
                         showingStatsUploadConfirm = false;
                         AudioMixer::Instance()->PlaySFX("typewriter");
+                        // Ask for a nickname right away, pre-filled with
+                        // whatever is already saved (if anything) so this
+                        // doubles as a chance to review/change it -- without
+                        // this, a player with no nickname set would have
+                        // their uploads silently read as "Anonymous", with
+                        // the Net Game screen the only other place they could
+                        // have discovered to set one.
+                        showingStatsNicknamePrompt = true;
+                        snprintf(statsUploadNickname, sizeof(statsUploadNickname), "%s",
+                                 GameSettings::Instance()->savedNickname);
+                        SDL_StopTextInput(SDL_GetKeyboardFocus());
+                        SDL_StartTextInput(SDL_GetKeyboardFocus());
                     } else if (e->key.key == SDLK_ESCAPE || e->key.key == SDLK_AC_BACK) {
                         showingStatsUploadConfirm = false;
                         AudioMixer::Instance()->PlaySFX("menu_change");

@@ -700,7 +700,8 @@ void MainMenu::KeysPanelRender() {
     { SDL_FRect fr = ToFRect(*panelText.Coords()); SDL_RenderTexture(rend, panelText.Texture(), nullptr, &fr); }
 
     menulist::DrawFooterHint(rend, panelText,
-        showingStatsUploadConfirm ? "ENTER confirm    ESC cancel    or tap a button"
+        showingStatsNicknamePrompt ? "ENTER save    ESC skip    or tap a button"
+        : showingStatsUploadConfirm ? "ENTER confirm    ESC cancel    or tap a button"
         : awaitKp ? "Press a button or key..."
                   : "UP/DOWN select    ENTER change    1-4 switch player    ESC done");
 
@@ -768,6 +769,70 @@ void MainMenu::KeysPanelRender() {
         };
         drawConfirmButton(statsConfirmYesRect, "Turn On", true);
         drawConfirmButton(statsConfirmNoRect, "Cancel", false);
+
+        panelText.UpdateAlignment(TTF_HORIZONTAL_ALIGN_CENTER);  // restore default for the rest of this panel
+    }
+
+    // Modal drawn right after showingStatsUploadConfirm is answered "Turn On"
+    // (see KeysPanelKey) -- pre-filled with the nickname already saved, if
+    // any, so this doubles as a chance to review/change it; a player with
+    // none set would otherwise have every upload silently read as
+    // "Anonymous" on petitain.be, with no way to notice short of checking
+    // there. Same box layout/colors as showingStatsUploadConfirm above; text
+    // field follows the "[ name_ ]" convention from the Net Game nickname
+    // screen (mainmenu_netpanel.cpp).
+    if (showingStatsNicknamePrompt) {
+        bool hadNickname = GameSettings::Instance()->savedNickname[0] != '\0';
+
+        SDL_Rect box = {(640/2) - 155, (480/2) - 112, 310, 224};
+        SDL_SetRenderDrawBlendMode(rend, SDL_BLENDMODE_BLEND);
+        SDL_SetRenderDrawColor(rend, menulist::kHeaderFill.r, menulist::kHeaderFill.g,
+                                menulist::kHeaderFill.b, 245);
+        { SDL_FRect fr = ToFRect(box); SDL_RenderFillRect(rend, &fr); }
+        SDL_SetRenderDrawColor(rend, menulist::kEdge.r, menulist::kEdge.g,
+                                menulist::kEdge.b, menulist::kEdge.a);
+        { SDL_FRect fr = ToFRect(box); SDL_RenderRect(rend, &fr); }
+
+        panelText.UpdateStyle(15, TTF_STYLE_BOLD);
+        panelText.UpdateColor(menulist::kGold, menulist::kTextShadow);
+        panelText.UpdateAlignment(TTF_HORIZONTAL_ALIGN_CENTER);
+        panelText.UpdateText(rend, hadNickname ? "Confirm your nickname?" : "Set a nickname?", 290);
+        panelText.UpdatePosition({box.x + box.w/2 - panelText.Coords()->w/2, box.y + 12});
+        { SDL_FRect fr = ToFRect(*panelText.Coords()); SDL_RenderTexture(rend, panelText.Texture(), nullptr, &fr); }
+
+        panelText.UpdateStyle(13, TTF_STYLE_NORMAL);
+        panelText.UpdateColor(menulist::kText, menulist::kTextShadow);
+        panelText.UpdateText(rend, hadNickname
+            ? "This is the name your uploaded\nstats will show. Edit it below,\nor skip to keep it as is."
+            : "Stats upload with no nickname\nset shows up as \"Anonymous\".\nType one now, or skip for later.", 290);
+        panelText.UpdatePosition({box.x + box.w/2 - panelText.Coords()->w/2, box.y + 44});
+        { SDL_FRect fr = ToFRect(*panelText.Coords()); SDL_RenderTexture(rend, panelText.Texture(), nullptr, &fr); }
+
+        char fieldBuf[48];
+        snprintf(fieldBuf, sizeof(fieldBuf), "[ %s_ ]", statsUploadNickname);
+        panelText.UpdateStyle(14, TTF_STYLE_BOLD);
+        panelText.UpdateColor(menulist::kGold, menulist::kTextShadow);
+        panelText.UpdateText(rend, fieldBuf, 290);
+        panelText.UpdatePosition({box.x + box.w/2 - panelText.Coords()->w/2, box.y + 128});
+        { SDL_FRect fr = ToFRect(*panelText.Coords()); SDL_RenderTexture(rend, panelText.Texture(), nullptr, &fr); }
+
+        statsNicknameSaveRect = {box.x + 12, box.y + box.h - 34, 135, 26};
+        statsNicknameSkipRect = {box.x + box.w - 12 - 135, box.y + box.h - 34, 135, 26};
+        auto drawPromptButton = [&](const SDL_Rect& r, const char* label, bool gold) {
+            SDL_SetRenderDrawColor(rend, 10, 38, 48, 210);
+            { SDL_FRect fr = ToFRect(r); SDL_RenderFillRect(rend, &fr); }
+            SDL_Color edge = gold ? menulist::kGold : menulist::kMuted;
+            SDL_SetRenderDrawColor(rend, edge.r, edge.g, edge.b, 255);
+            { SDL_FRect fr = ToFRect(r); SDL_RenderRect(rend, &fr); }
+            panelText.UpdateStyle(14, TTF_STYLE_BOLD);
+            panelText.UpdateColor(gold ? menulist::kGold : menulist::kText, menulist::kTextShadow);
+            panelText.UpdateText(rend, label, 0);
+            panelText.UpdatePosition({r.x + r.w/2 - panelText.Coords()->w/2,
+                                       r.y + r.h/2 - panelText.Coords()->h/2});
+            { SDL_FRect fr = ToFRect(*panelText.Coords()); SDL_RenderTexture(rend, panelText.Texture(), nullptr, &fr); }
+        };
+        drawPromptButton(statsNicknameSaveRect, "Save", true);
+        drawPromptButton(statsNicknameSkipRect, "Skip", false);
 
         panelText.UpdateAlignment(TTF_HORIZONTAL_ALIGN_CENTER);  // restore default for the rest of this panel
     }
