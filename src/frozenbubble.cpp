@@ -304,6 +304,9 @@ FrozenBubble::FrozenBubble() {
 }
 
 FrozenBubble::~FrozenBubble() {
+#ifdef FROZEN_BUBBLE_TEST_ACCESS
+    if (headlessTestMode) return;
+#endif
     if(renderer) {
         SDL_DestroyRenderer(renderer);
         renderer = nullptr;
@@ -565,6 +568,14 @@ void FrozenBubble::PushScancode(SDL_Scancode sc, bool down, bool skipEvent) {
     SDL_PushEvent(&ev);
 }
 
+void FrozenBubble::ApplyControllerButtonTarget(const ControllerButtonTarget &target, bool down) {
+    switch (target.kind) {
+        case ControllerActionKind::RealKey:         PushKey(target.realKey, down); break;
+        case ControllerActionKind::VirtualScancode: PushScancode(target.scancode, down, true); break;
+        case ControllerActionKind::None:            break;
+    }
+}
+
 void FrozenBubble::HandleControllerEvent(SDL_Event *e) {
     // Hot-plug: open newly connected controllers and assign to next player slot.
     // SDL_JOYDEVICEADDED is a fallback for Emscripten/browser where the Gamepad API
@@ -602,10 +613,37 @@ void FrozenBubble::HandleControllerEvent(SDL_Event *e) {
         SDL_JoystickID idx = (e->type == SDL_EVENT_GAMEPAD_REMOVED) ? e->gdevice.which : e->jdevice.which;
         for (int i = 0; i < (int)controllers.size(); i++) {
             if (controllers[i].id != idx) continue;
-            if (controllers[i].pad) SDL_CloseGamepad(controllers[i].pad);
+            ControllerState &cs = controllers[i];
+            bool inGame = (currentState == MainGame);
+            bool awaitingKeyBind = mainMenu && mainMenu->IsAwaitingKeyBind();
+
+            // Release anything this controller left latched. A button or stick
+            // held at the moment of unplugging (or a mid-press disconnect) never
+            // gets a matching *_UP/false event from a device that is gone, so
+            // without this virtualKeyState[] -- and SDL's own keyboard state --
+            // kept reading it as pressed forever: gameplay went on moving or
+            // firing, or a menu cursor kept scrolling, with no controller
+            // attached at all. mainGame's own methods are only reached when the
+            // held button actually is WEST/SOUTH, so this stays safe even
+            // in-game with no active round.
+            for (int btn = 0; btn < SDL_GAMEPAD_BUTTON_COUNT; btn++) {
+                if (!cs.heldButtons[btn]) continue;
+                bool isNetworkGame  = (inGame && btn == SDL_GAMEPAD_BUTTON_WEST)  && mainGame->IsNetworkGame();
+                bool isChatting     = isNetworkGame && mainGame->IsChatting();
+                bool isGameFinished = (inGame && btn == SDL_GAMEPAD_BUTTON_SOUTH) && mainGame->IsGameFinished();
+                ApplyControllerButtonTarget(
+                    MapControllerButton(i, btn, inGame, isNetworkGame, isChatting, isGameFinished),
+                    false);
+            }
+            if (cs.axisLeftHeld)  PushScancode(MapControllerAxisDirection(i, SDL_GAMEPAD_BUTTON_DPAD_LEFT,  inGame, awaitingKeyBind), false, inGame);
+            if (cs.axisRightHeld) PushScancode(MapControllerAxisDirection(i, SDL_GAMEPAD_BUTTON_DPAD_RIGHT, inGame, awaitingKeyBind), false, inGame);
+            if (cs.axisUpHeld)    PushScancode(MapControllerAxisDirection(i, SDL_GAMEPAD_BUTTON_DPAD_UP,    inGame, awaitingKeyBind), false, inGame);
+            if (cs.axisDownHeld)  PushScancode(MapControllerAxisDirection(i, SDL_GAMEPAD_BUTTON_DPAD_DOWN,  inGame, awaitingKeyBind), false, inGame);
+
+            if (cs.pad) SDL_CloseGamepad(cs.pad);
             // Freed in place rather than erased: erasing would shift every later
             // controller into a different player slot mid-game.
-            controllers[i] = ControllerState{};
+            cs = ControllerState{};
             SDL_Log("Controller disconnected from player %d", i + 1);
             break;
         }
@@ -623,10 +661,11 @@ void FrozenBubble::HandleControllerEvent(SDL_Event *e) {
 
     if (e->type == SDL_EVENT_GAMEPAD_BUTTON_DOWN || e->type == SDL_EVENT_GAMEPAD_BUTTON_UP) {
         bool down = (e->type == SDL_EVENT_GAMEPAD_BUTTON_DOWN);
+        int btn = e->gbutton.button;
 
         // If the Keys panel is waiting for a binding, emit a virtual scancode
         if (down && mainMenu->IsAwaitingKeyBind()) {
-            SDL_Scancode vsc = VirtualScancode(playerIdx, e->gbutton.button);
+            SDL_Scancode vsc = VirtualScancode(playerIdx, btn);
             PushScancode(vsc, true);
             return;
         }
@@ -635,43 +674,16 @@ void FrozenBubble::HandleControllerEvent(SDL_Event *e) {
         // In-game: push virtual scancode into virtualKeyState[] so IsKeyPressed() works.
         // controllerInputs[] approach was wrong: playerIdx (controller slot) != playerAssigned.
         bool inGame = (currentState == MainGame);
-        if (inGame) {
-            int btn = e->gbutton.button;
-            if (btn == SDL_GAMEPAD_BUTTON_EAST)     { PushKey(SDLK_AC_BACK, down); }
-            else if (btn == SDL_GAMEPAD_BUTTON_START) { PushKey(SDLK_PAUSE, down); }
-            else if (btn == SDL_GAMEPAD_BUTTON_WEST && mainGame->IsNetworkGame()) {
-                PushKey(mainGame->IsChatting() ? SDLK_RETURN : SDLK_T, down);
-            }
-            else if (btn == SDL_GAMEPAD_BUTTON_SOUTH && mainGame->IsGameFinished()) {
-                PushKey(SDLK_SPACE, down);
-            }
-            else {
-                SDL_Scancode vsc = VirtualScancode(playerIdx, btn);
-                PushScancode(vsc, down, true);
-            }
-        } else {
-            switch (e->gbutton.button) {
-                case SDL_GAMEPAD_BUTTON_DPAD_LEFT:  PushKey(SDLK_LEFT,   down); break;
-                case SDL_GAMEPAD_BUTTON_DPAD_RIGHT: PushKey(SDLK_RIGHT,  down); break;
-                case SDL_GAMEPAD_BUTTON_DPAD_UP:    PushKey(SDLK_UP,     down); break;
-                case SDL_GAMEPAD_BUTTON_DPAD_DOWN:  PushKey(SDLK_DOWN,   down); break;
-                case SDL_GAMEPAD_BUTTON_SOUTH:      PushKey(SDLK_RETURN, down); break;
-                case SDL_GAMEPAD_BUTTON_EAST:       PushKey(SDLK_AC_BACK, down); break;
-                case SDL_GAMEPAD_BUTTON_START:      PushKey(SDLK_PAUSE,   down); break;
-                // The room and Local Multiplayer HELP boxes (kRoomHelpTapIndex /
-                // kLocalMPHelpTapIndex) are deliberately outside the Up/Down
-                // cycle -- see mainmenu_input.cpp's MenuUpKey/MenuDownKey -- and
-                // reachable only by tapping them or pressing F1, which opens the
-                // guide from wherever the cursor already is (see the SDLK_F1
-                // handler in mainmenu_input.cpp). That left a gamepad with no
-                // way to open it at all: this switch had no F1 equivalent, so a
-                // controller-only player (Android TV, no keyboard) could not
-                // reach the guide in net play or Local Multiplayer by any input.
-                // NORTH (Y/Triangle) is otherwise unused here.
-                case SDL_GAMEPAD_BUTTON_NORTH:      PushKey(SDLK_F1,     down); break;
-                default: break;
-            }
-        }
+        bool isNetworkGame  = (inGame && btn == SDL_GAMEPAD_BUTTON_WEST)  && mainGame->IsNetworkGame();
+        bool isChatting     = isNetworkGame && mainGame->IsChatting();
+        bool isGameFinished = (inGame && btn == SDL_GAMEPAD_BUTTON_SOUTH) && mainGame->IsGameFinished();
+
+        // Tracked so a disconnect mid-press knows exactly what to release --
+        // see the SDL_EVENT_GAMEPAD_REMOVED handler above.
+        if (btn >= 0 && btn < SDL_GAMEPAD_BUTTON_COUNT) cs->heldButtons[btn] = down;
+        ApplyControllerButtonTarget(
+            MapControllerButton(playerIdx, btn, inGame, isNetworkGame, isChatting, isGameFinished),
+            down);
     }
 
     if (e->type == SDL_EVENT_GAMEPAD_AXIS_MOTION) {
@@ -679,47 +691,22 @@ void FrozenBubble::HandleControllerEvent(SDL_Event *e) {
         Sint16 val = e->gaxis.value;
 
         bool inGame = (currentState == MainGame);
+        bool awaitingKeyBind = mainMenu->IsAwaitingKeyBind();
         if (e->gaxis.axis == SDL_GAMEPAD_AXIS_LEFTX) {
             bool wantLeft  = val < -DEAD;
             bool wantRight = val >  DEAD;
-            if (inGame) {
-                SDL_Scancode scLeft  = VirtualScancode(playerIdx, SDL_GAMEPAD_BUTTON_DPAD_LEFT);
-                SDL_Scancode scRight = VirtualScancode(playerIdx, SDL_GAMEPAD_BUTTON_DPAD_RIGHT);
-                if (wantLeft  != cs->axisLeftHeld)  { PushScancode(scLeft,  wantLeft,  true); cs->axisLeftHeld  = wantLeft;  }
-                if (wantRight != cs->axisRightHeld) { PushScancode(scRight, wantRight, true); cs->axisRightHeld = wantRight; }
-            } else {
-                SDL_Scancode scLeft  = mainMenu->IsAwaitingKeyBind()
-                    ? VirtualScancode(playerIdx, SDL_GAMEPAD_BUTTON_DPAD_LEFT)
-                    : SDL_SCANCODE_LEFT;
-                SDL_Scancode scRight = mainMenu->IsAwaitingKeyBind()
-                    ? VirtualScancode(playerIdx, SDL_GAMEPAD_BUTTON_DPAD_RIGHT)
-                    : SDL_SCANCODE_RIGHT;
-                if (wantLeft  && !cs->axisLeftHeld)  { PushScancode(scLeft,  true);  cs->axisLeftHeld  = true;  }
-                if (!wantLeft &&  cs->axisLeftHeld)  { PushScancode(scLeft,  false); cs->axisLeftHeld  = false; }
-                if (wantRight && !cs->axisRightHeld) { PushScancode(scRight, true);  cs->axisRightHeld = true;  }
-                if (!wantRight && cs->axisRightHeld) { PushScancode(scRight, false); cs->axisRightHeld = false; }
-            }
+            SDL_Scancode scLeft  = MapControllerAxisDirection(playerIdx, SDL_GAMEPAD_BUTTON_DPAD_LEFT,  inGame, awaitingKeyBind);
+            SDL_Scancode scRight = MapControllerAxisDirection(playerIdx, SDL_GAMEPAD_BUTTON_DPAD_RIGHT, inGame, awaitingKeyBind);
+            if (wantLeft  != cs->axisLeftHeld)  { PushScancode(scLeft,  wantLeft,  inGame); cs->axisLeftHeld  = wantLeft;  }
+            if (wantRight != cs->axisRightHeld) { PushScancode(scRight, wantRight, inGame); cs->axisRightHeld = wantRight; }
         }
         if (e->gaxis.axis == SDL_GAMEPAD_AXIS_LEFTY) {
             bool wantUp   = val < -DEAD;
             bool wantDown = val >  DEAD;
-            if (inGame) {
-                SDL_Scancode scUp   = VirtualScancode(playerIdx, SDL_GAMEPAD_BUTTON_DPAD_UP);
-                SDL_Scancode scDown = VirtualScancode(playerIdx, SDL_GAMEPAD_BUTTON_DPAD_DOWN);
-                if (wantUp   != cs->axisUpHeld)   { PushScancode(scUp,   wantUp,   true); cs->axisUpHeld   = wantUp;   }
-                if (wantDown != cs->axisDownHeld)  { PushScancode(scDown, wantDown, true); cs->axisDownHeld = wantDown; }
-            } else {
-                SDL_Scancode scUp   = mainMenu->IsAwaitingKeyBind()
-                    ? VirtualScancode(playerIdx, SDL_GAMEPAD_BUTTON_DPAD_UP)
-                    : SDL_SCANCODE_UP;
-                SDL_Scancode scDown = mainMenu->IsAwaitingKeyBind()
-                    ? VirtualScancode(playerIdx, SDL_GAMEPAD_BUTTON_DPAD_DOWN)
-                    : SDL_SCANCODE_DOWN;
-                if (wantUp   && !cs->axisUpHeld)   { PushScancode(scUp,   true);  cs->axisUpHeld   = true;  }
-                if (!wantUp  &&  cs->axisUpHeld)   { PushScancode(scUp,   false); cs->axisUpHeld   = false; }
-                if (wantDown && !cs->axisDownHeld) { PushScancode(scDown, true);  cs->axisDownHeld = true;  }
-                if (!wantDown && cs->axisDownHeld) { PushScancode(scDown, false); cs->axisDownHeld = false; }
-            }
+            SDL_Scancode scUp   = MapControllerAxisDirection(playerIdx, SDL_GAMEPAD_BUTTON_DPAD_UP,   inGame, awaitingKeyBind);
+            SDL_Scancode scDown = MapControllerAxisDirection(playerIdx, SDL_GAMEPAD_BUTTON_DPAD_DOWN, inGame, awaitingKeyBind);
+            if (wantUp   != cs->axisUpHeld)   { PushScancode(scUp,   wantUp,   inGame); cs->axisUpHeld   = wantUp;   }
+            if (wantDown != cs->axisDownHeld) { PushScancode(scDown, wantDown, inGame); cs->axisDownHeld = wantDown; }
         }
     }
 }
