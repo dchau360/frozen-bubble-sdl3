@@ -22,6 +22,7 @@
 #include "frozenbubble.h"
 #include "ttftext.h"
 #include "platform.h"
+#include "textinput.h"
 
 #include <filesystem>
 #include <fstream>
@@ -619,7 +620,7 @@ void HighscoreManager::HandleInput(SDL_Event *e){
                     if (awaitKeyType) {
                         if(newName.size() == 0) AudioMixer::Instance()->PlaySFX("stick");
                         else {
-                            newName.pop_back();
+                            BackspaceUtf8(newName);
                             AudioMixer::Instance()->PlaySFX("typewriter");
                         }
                     }
