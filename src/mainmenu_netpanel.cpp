@@ -225,6 +225,19 @@ void MainMenu::PumpNetworkFrame() {
     netClient->Update();
 }
 
+void MainMenu::CancelPendingConnect() {
+    // Only ever tears down an attempt, never an established session: a player
+    // pressing ESC on a server list they have already left behind must not
+    // drop the lobby they are sitting in.
+    NetworkClient* netClient = NetworkClient::Existing();
+    if (netClient && netClient->IsConnecting()) {
+        SDL_Log("Cancelling connect to %s:%d", netClient->GetHost().c_str(), netClient->GetPort());
+        netClient->Disconnect();
+    }
+    pendingLobbyConnect = false;
+    connectErrorMsg.clear();
+}
+
 void MainMenu::NetPanelRender() {
     if (!showingNetPanel) return;
 
@@ -1915,14 +1928,37 @@ void MainMenu::ServerListPanelRender(bool isLAN) {
         sidebarLine(isLAN ? "one from this list." : "one manually.", menulist::kMuted);
     }
 
+    // Connecting now takes real, visible time on both platforms (async
+    // networking handoff, stage 2a-2e), so this indicator has to reflect the
+    // client's actual state rather than just the WASM-era pendingLobbyConnect
+    // flag -- and it has to show on the LAN list too, which was excluded here
+    // only because on native the connect used to finish inside the keypress
+    // and there was nothing to show.
+    NetworkClient* statusClient = NetworkClient::Existing();
+    const bool connecting = pendingLobbyConnect ||
+                            (statusClient && statusClient->IsConnecting());
+
     sy = sb.y + sb.h - 70;
-    if (!isLAN && pendingLobbyConnect) {
+    if (connecting) {
         sidebarLine("Connecting...", menulist::kGold);
-    } else if (!connectErrorMsg.empty()) {
-        sidebarLine(connectErrorMsg, menulist::kBad, 13);
+        // A tap target for cancelling, not just a keyboard route: CLAUDE.md's
+        // input-parity rule, and this repo has shipped several bugs from
+        // exactly the gap where something was reachable one way only. Sized to
+        // the sidebar so it is comfortably hittable on a phone.
+        cancelConnectTapRect = {sb.x + 8, sy, sb.w - 16, 24};
+        sidebarLine("Tap here or press ESC to cancel", menulist::kMuted, 13);
+    } else {
+        cancelConnectTapRect = {0, 0, 0, 0};  // not showing: nothing to hit
+        if (!connectErrorMsg.empty())
+            sidebarLine(connectErrorMsg, menulist::kBad, 13);
     }
 
-    menulist::DrawFooterHint(rend, panelText, isLAN
-        ? "UP/DOWN select    ENTER connect    R rescan    F follow    ESC cancel"
-        : "UP/DOWN select    ENTER connect    R refresh    F follow    ESC cancel");
+    if (connecting) {
+        menulist::DrawFooterHint(rend, panelText,
+            "Connecting...    ESC cancel");
+    } else {
+        menulist::DrawFooterHint(rend, panelText, isLAN
+            ? "UP/DOWN select    ENTER connect    R rescan    F follow    ESC cancel"
+            : "UP/DOWN select    ENTER connect    R refresh    F follow    ESC cancel");
+    }
 }

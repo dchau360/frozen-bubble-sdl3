@@ -21,7 +21,9 @@
 #define NETWORKCLIENT_H
 
 #include <SDL3/SDL.h>
+#include <atomic>
 #include <functional>
+#include <memory>
 #include <string>
 #include <vector>
 #include <queue>
@@ -57,6 +59,16 @@
 // waiting in front of the next one.
 #define RECV_BUFFER_SIZE 32768
 
+// Deadlines for the three phases of establishing a connection (async
+// networking handoff, stage 2a-2c). Each is judged from when its own phase
+// began, so a slow lookup does not eat the connect's budget and neither eats
+// the handshake's. These bound how long a connection attempt can sit in
+// progress -- they no longer bound how long a frame can take, which is now
+// unrelated to them.
+static const Uint64 kResolveTimeoutMs = 8000;      // DNS can legitimately be slow
+static const Uint64 kConnectTimeoutMs = 5000;      // TCP handshake
+static const Uint64 kServerReadyTimeoutMs = 3000;  // server's greeting
+
 // Highest team number a player may be assigned. Team numbers are one-based and
 // are used to index kTeamColors (bubblegame.h), which static_asserts that it
 // holds exactly this many entries. Peer-supplied team values are clamped to
@@ -89,9 +101,15 @@ inline constexpr int ClampTeamOrNone(int team) {
     return team;
 }
 
+// Ordered so that everything before CONNECTED is "still being established".
+// DISCONNECTED stays 0; RESOLVING and AWAITING_READY were inserted by the
+// async networking handoff (stage 2a) and nothing persists or transmits these
+// values, so renumbering the later ones is safe.
 enum ConnectionState {
     DISCONNECTED,
-    CONNECTING,
+    RESOLVING,       // name lookup in flight on a worker thread (native)
+    CONNECTING,      // TCP connect in flight, or WebSocket not yet open (WASM)
+    AWAITING_READY,  // connected, waiting for the server's SERVER_READY banner
     CONNECTED,
     IN_LOBBY,
     IN_GAME
@@ -153,6 +171,20 @@ public:
     // async-connect work, specifically so this semantic fix has its own
     // clean bisection point if something built on top of it goes wrong.
     bool IsConnected() { return state == CONNECTED || state == IN_LOBBY || state == IN_GAME; }
+    // True while a connection is being established and has neither succeeded
+    // nor failed yet. IsConnected() and IsConnecting() are both false when
+    // DISCONNECTED, so a caller that starts a connection has three outcomes to
+    // distinguish, not two -- "ready", "still trying", and "gave up".
+    //
+    // Getting that wrong is not hypothetical: when IsConnected() was narrowed
+    // (stage 2d) the connect UI still had only a two-way branch, and WASM --
+    // whose Connect() has always returned true with state CONNECTING, leaving
+    // the WebSocket to open later -- fell straight into the "failed" arm and
+    // stopped being able to reach a lobby at all. The third arm is what that
+    // path actually needed.
+    bool IsConnecting() {
+        return state == RESOLVING || state == CONNECTING || state == AWAITING_READY;
+    }
     ConnectionState GetState() { return state; }
 
     // Where we are connected (or were last asked to connect). Used to tell
@@ -344,6 +376,44 @@ private:
     std::function<void()> leaderWaitTick;
     std::string connectedHost;
     int connectedPort = 0;
+
+#ifndef __WASM_PORT__
+    // --- Async connect state machine (async networking handoff, stage 2a-2c).
+    //
+    // Connect() used to run name lookup, TCP connect and the SERVER_READY
+    // handshake to completion before returning, blocking the render loop for
+    // up to 8s plus an unbounded DNS lookup. It is now kickoff-only, and
+    // PumpConnect() -- called every frame from Update() -- advances
+    // RESOLVING -> CONNECTING -> AWAITING_READY -> CONNECTED.
+
+    // Name lookup runs on a detached worker. The result lives in a shared_ptr
+    // the worker co-owns, so cancelling (or destroying the client) mid-lookup
+    // leaves the worker writing to memory that is still valid and simply
+    // nobody's business any more -- rather than into a freed NetworkClient.
+    struct PendingResolve {
+        std::atomic<bool> done{false};
+        std::atomic<bool> ok{false};
+        // Written by the worker before `done` is set, read by the main thread
+        // only after it observes `done`. That release/acquire pairing on the
+        // atomic is what publishes it; no mutex needed.
+        struct sockaddr_in addr {};
+    };
+    std::shared_ptr<PendingResolve> pendingResolve;
+
+    // Deadlines, as absolute SDL_GetTicks() values. Zero means "not armed".
+    Uint64 connectPhaseDeadline = 0;
+    // Accumulates the SERVER_READY banner across reads while AWAITING_READY,
+    // for the same reason the synchronous handshake had to: the banner can
+    // arrive split across TCP segments.
+    std::string readyBanner;
+
+    // Advances the connect state machine by one frame's worth. No-op unless a
+    // connection is being established.
+    void PumpConnect();
+    // Shared teardown for every way a connect can fail, so no path forgets one
+    // of the four things that have to be undone.
+    void FailConnect(const char* reason);
+#endif
     std::string playerNick;
     std::string playerGeoloc;
 

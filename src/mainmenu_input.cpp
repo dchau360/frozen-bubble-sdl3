@@ -507,6 +507,19 @@ void MainMenu::AddPanelTapRow(int index, const SDL_Rect& rect, int subIndex,
 }
 
 bool MainMenu::HandlePanelTap(float lx, float ly, float verticalDrift) {
+    // "Tap here to cancel" on the connecting indicator. Checked before the
+    // server list's own rows because it is drawn over them, and because a tap
+    // landing on it means the player wants out of the connect -- not to start
+    // a second one against whichever row happens to sit underneath. The rect
+    // is zeroed whenever the indicator is not showing, so this is inert the
+    // rest of the time (async networking handoff, stage 2e).
+    if (cancelConnectTapRect.w > 0 &&
+        lx >= cancelConnectTapRect.x && lx < cancelConnectTapRect.x + cancelConnectTapRect.w &&
+        ly >= cancelConnectTapRect.y && ly < cancelConnectTapRect.y + cancelConnectTapRect.h) {
+        AudioMixer::Instance()->PlaySFX("cancel");
+        CancelPendingConnect();
+        return true;
+    }
     // The team picker is drawn over the room whose rows are still registered
     // underneath it, and hit-tests its own swatch rects instead -- first, and
     // consuming every tap, for the same reason as the popups below.
@@ -2195,20 +2208,24 @@ void MainMenu::MenuReturnKey() {
                             port = publicServers[serverIdx].port;
                         }
                         NetworkClient* netClient = NetworkClient::Instance(host, port);
+                        // Worked out before the branch below, not inside its
+                        // first arm: the "still connecting" arm needs the same
+                        // nickname to park in networkPreNick for the deferred
+                        // lobby entry to pick up.
+                        char nickname[32];
+                        if (networkPreNick[0] != '\0') {
+                            snprintf(nickname, sizeof(nickname), "%s", networkPreNick);
+                        } else {
+                            const char* envUser = getenv("USER");
+                            if (envUser && envUser[0] != '\0') snprintf(nickname, sizeof(nickname), "%s", envUser);
+#ifdef __ANDROID__
+                            else snprintf(nickname, sizeof(nickname), "android_user");
+#else
+                            else snprintf(nickname, sizeof(nickname), "unnamed");
+#endif
+                        }
                         if (netClient->IsConnected()) {
                             AudioMixer::Instance()->PlaySFX("menu_selected");
-                            char nickname[32];
-                            if (networkPreNick[0] != '\0') {
-                                snprintf(nickname, sizeof(nickname), "%s", networkPreNick);
-                            } else {
-                                const char* envUser = getenv("USER");
-                                if (envUser && envUser[0] != '\0') snprintf(nickname, sizeof(nickname), "%s", envUser);
-#ifdef __ANDROID__
-                                else snprintf(nickname, sizeof(nickname), "android_user");
-#else
-                                else snprintf(nickname, sizeof(nickname), "unnamed");
-#endif
-                            }
                             if (netClient->SendNick(nickname)) {
                                 // Only save if nick was explicitly set (not auto-filled from env)
                                 if (networkPreNick[0] != '\0') {
@@ -2247,6 +2264,25 @@ void MainMenu::MenuReturnKey() {
                                 pendingLobbyConnect = true;
                                 connectErrorMsg.clear();
                             }
+                        } else if (netClient->IsConnecting()) {
+                            // Connection under way but not finished: name lookup,
+                            // TCP connect, or the SERVER_READY handshake is still
+                            // outstanding (native, async networking handoff stage
+                            // 2a-2c), or the WebSocket has not opened yet (WASM,
+                            // where this has always been the normal path). Park
+                            // the nickname and let NetPanelRender()'s
+                            // pendingLobbyConnect block finish the job once the
+                            // state reaches CONNECTED.
+                            //
+                            // This arm is not optional. Without it a still-
+                            // connecting client falls into the "failed" arm below
+                            // and is told the server is unreachable while the
+                            // connection is still perfectly alive.
+                            SDL_Log("Connect in progress (state=%d), setting pendingLobbyConnect",
+                                    netClient->GetState());
+                            snprintf(networkPreNick, sizeof(networkPreNick), "%s", nickname);
+                            pendingLobbyConnect = true;
+                            connectErrorMsg.clear();
                         } else {
                             SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to connect to %s:%d", host, port);
                             char errBuf[320];
@@ -2283,7 +2319,13 @@ void MainMenu::MenuEscapeKey() {
                             }
                             return;
                         } else if (networkInputMode == 10) {
-                            // Close net panel
+                            // Close net panel. Cancel first: a connect started
+                            // from this list can still be in flight (async
+                            // networking handoff, stage 2a-2c), and leaving it
+                            // running would complete into a lobby the player
+                            // has already left. This branch used to neither
+                            // disconnect nor clear pendingLobbyConnect.
+                            CancelPendingConnect();
                             showingNetPanel = false;
                             return;
                         } else if (networkInputMode == 6) {
@@ -2330,7 +2372,13 @@ void MainMenu::MenuEscapeKey() {
                         } else {
                             showingNetPanel = false;
                             networkInLobby = false;
-                            pendingLobbyConnect = false;
+                            // Two different things to tear down, and the
+                            // IsConnected() check alone catches only one of
+                            // them: an attempt still in flight is not
+                            // "connected" (see IsConnected()'s definition), so
+                            // without this a LAN connect started seconds ago
+                            // would keep running after its screen was gone.
+                            CancelPendingConnect();
                             if (NetworkClient::Instance()->IsConnected()) {
                                 NetworkClient::Instance()->Disconnect();
                             }

@@ -29,6 +29,7 @@
 #include <sstream>
 #include <stdexcept>
 #include <stdio.h>
+#include <thread>   // detached resolver worker in Connect()
 #ifdef __ANDROID__
 #include <jni.h>
 #include <SDL3/SDL_system.h>
@@ -99,6 +100,17 @@ void NetworkClient::Dispose() {
 }
 
 #ifndef __WASM_PORT__
+// Kickoff only. Name lookup, the TCP connect and the SERVER_READY handshake
+// all used to run to completion right here, which meant a single ENTER on
+// "connect" could freeze the render loop for up to 8 seconds plus an
+// unbounded DNS lookup -- no repaint, no cancel, and on macOS the OS painting
+// the window as "not responding". PumpConnect() now advances the phases from
+// the main loop instead (async networking handoff, stage 2a-2c).
+//
+// The return value means "the attempt started", NOT "we are connected" --
+// callers decide what happened by looking at IsConnected() / IsConnecting()
+// on this and later frames. That is the contract WASM's Connect() has always
+// had, so both platforms now behave the same way here.
 bool NetworkClient::Connect(const char* host, int port) {
     if (state != DISCONNECTED) {
         SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "Already connected or connecting");
@@ -109,212 +121,233 @@ bool NetworkClient::Connect(const char* host, int port) {
     connectedPort = port;
     notifySupport = NotifySupport::Unknown;
     pendingNotifyProbe = false;
+    readyBanner.clear();
 
     socket_init();
 
-    // Create socket
-    sockfd = (int)socket(AF_INET, SOCK_STREAM, 0);
-    if (sockfd == (int)INVALID_SOCKET) {
-        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to create socket: %d", SOCK_ERRNO);
-        return false;
-    }
-
-    // Increase socket receive buffer to handle bursts (like level sync)
-    int rcvbuf = 256 * 1024;  // 256 KB receive buffer
-    if (setsockopt(sockfd, SOL_SOCKET, SO_RCVBUF, SETSOCKOPT_OPTVAL(rcvbuf), sizeof(rcvbuf)) < 0) {
-        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "Failed to set SO_RCVBUF: %d", SOCK_ERRNO);
-    } else {
-        SDL_Log("Set socket receive buffer to %d bytes", rcvbuf);
-    }
-
-    // Resolve hostname or IP address via getaddrinfo (supports both)
-    struct addrinfo hints, *res;
-    memset(&hints, 0, sizeof(hints));
-    hints.ai_family   = AF_INET;
-    hints.ai_socktype = SOCK_STREAM;
-
-    char portStr[8];
-    snprintf(portStr, sizeof(portStr), "%d", port);
-    if (getaddrinfo(host, portStr, &hints, &res) != 0 || !res) {
-        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to resolve host: %s", host);
-        SOCKET_CLOSE(sockfd);
-        sockfd = -1;
-        return false;
-    }
-
-    struct sockaddr_in serverAddr;
-    memcpy(&serverAddr, res->ai_addr, sizeof(serverAddr));
-    freeaddrinfo(res);
-
-    // Put the socket in non-blocking mode before connect() -- for both
-    // platforms now, not just Windows. Two reasons:
+    // Name lookup goes to a detached worker: getaddrinfo() has no portable
+    // async form and no timeout of its own, so on a slow or unreachable DNS
+    // server it blocks for as long as the resolver library feels like it.
     //
-    // 1. A plain blocking connect() to an unreachable or filtered host waits
-    //    on the OS's own TCP connect timeout, which is not this codebase's to
-    //    choose (commonly tens of seconds, sometimes minutes) and stalls the
-    //    render loop for all of it. Non-blocking connect() + select() below
-    //    bounds that wait to kConnectTimeoutMs instead.
-    // 2. SendAll's retry loop (this file, above) already expects send() to
-    //    return EWOULDBLOCK/EAGAIN when the socket's send buffer is full and
-    //    the peer isn't reading, and retries with a bounded stall count. On a
-    //    blocking POSIX socket that never happens -- send() just blocks in
-    //    the kernel with no bound at all, so a slow or stopped-reading peer
-    //    could stall the render loop indefinitely, and SendAll's retry
-    //    branch for it was dead code. Windows already got the non-blocking
-    //    fix (below is what used to be Windows-only, right after connect()
-    //    succeeded); POSIX now gets the same socket mode, just earlier.
-#ifdef _WIN32
-    {
-        u_long nonblocking = 1;
-        if (ioctlsocket(sockfd, FIONBIO, &nonblocking) != 0)
-            SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
-                         "Could not set the connection non-blocking: %d", SOCK_ERRNO);
-    }
-#else
-    {
-        int flags = fcntl(sockfd, F_GETFL, 0);
-        if (flags < 0 || fcntl(sockfd, F_SETFL, flags | O_NONBLOCK) < 0)
-            SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
-                         "Could not set the connection non-blocking: %d", SOCK_ERRNO);
-    }
-#endif
+    // The worker writes into a shared_ptr it co-owns rather than into this
+    // object. If the connection is cancelled -- or the client destroyed --
+    // while the lookup is still running, the worker finishes writing into
+    // memory that is still perfectly valid and simply no longer anybody's
+    // business; the block is freed when the last of the two owners drops it.
+    // Passing `this` instead would be a use-after-free waiting for a slow DNS
+    // server to trigger it.
+    auto resolve = std::make_shared<PendingResolve>();
+    pendingResolve = resolve;
+    const std::string hostCopy = connectedHost;
+    const int portCopy = port;
+    std::thread([resolve, hostCopy, portCopy]() {
+        struct addrinfo hints;
+        struct addrinfo* res = nullptr;
+        memset(&hints, 0, sizeof(hints));
+        hints.ai_family = AF_INET;
+        hints.ai_socktype = SOCK_STREAM;
 
-    // Connect (non-blocking): a pending connection reports EINPROGRESS
-    // (POSIX) or WSAEWOULDBLOCK (Windows) immediately rather than blocking:
-    // wait for it to finish (or time out) with select(), then read SO_ERROR
-    // for the real outcome -- writability alone only means the attempt
-    // finished, not that it succeeded (a refused connection also completes
-    // and becomes writable; see the same reasoning in MeasureLatency above).
-    state = CONNECTING;
-    int result = connect(sockfd, (struct sockaddr*)&serverAddr, sizeof(serverAddr));
-#ifdef _WIN32
-    const bool pending = (result < 0 && SOCK_ERRNO == WSAEWOULDBLOCK);
-#else
-    const bool pending = (result < 0 && (errno == EINPROGRESS || errno == EWOULDBLOCK));
-#endif
-    if (result < 0 && !pending) {
-        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to connect: %d", SOCK_ERRNO);
+        char portStr[8];
+        snprintf(portStr, sizeof(portStr), "%d", portCopy);
+
+        bool ok = false;
+        if (getaddrinfo(hostCopy.c_str(), portStr, &hints, &res) == 0 && res) {
+            memcpy(&resolve->addr, res->ai_addr, sizeof(resolve->addr));
+            ok = true;
+        }
+        if (res) freeaddrinfo(res);
+
+        resolve->ok.store(ok);
+        // Written last, and read first on the other side: everything above
+        // happens-before the main thread's read of `addr`.
+        resolve->done.store(true);
+    }).detach();
+
+    state = RESOLVING;
+    connectPhaseDeadline = SDL_GetTicks() + kResolveTimeoutMs;
+    SDL_Log("Connecting to %s:%d (resolving)", connectedHost.c_str(), port);
+    return true;
+}
+
+// Everything a failed connect has to undo, in one place. Each phase used to
+// repeat this inline and it was already inconsistent between them.
+void NetworkClient::FailConnect(const char* reason) {
+    SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Connect to %s:%d failed: %s",
+                 connectedHost.c_str(), connectedPort, reason);
+    if (sockfd >= 0) {
         SOCKET_CLOSE(sockfd);
         sockfd = -1;
-        state = DISCONNECTED;
-        return false;
+    }
+    // Dropping our reference does not disturb a resolver worker still running;
+    // it just stops us caring about the answer.
+    pendingResolve.reset();
+    connectPhaseDeadline = 0;
+    readyBanner.clear();
+    state = DISCONNECTED;
+}
+
+// One frame's worth of progress. Returns immediately unless a connection is
+// actually being established, so it is safe to call unconditionally.
+void NetworkClient::PumpConnect() {
+    if (!IsConnecting()) return;
+
+    if (connectPhaseDeadline != 0 && SDL_GetTicks() > connectPhaseDeadline) {
+        // Phrased by phase: "timed out" during AWAITING_READY means the server
+        // accepted us and then said nothing, which is a very different
+        // diagnosis from a TCP connect that never completed.
+        FailConnect(state == RESOLVING     ? "name lookup timed out"
+                    : state == CONNECTING  ? "connect timed out"
+                                           : "no SERVER_READY from server");
+        return;
     }
 
-    if (pending) {
-        const int kConnectTimeoutMs = 5000;
+    if (state == RESOLVING) {
+        if (!pendingResolve || !pendingResolve->done.load()) return;  // still looking
+        if (!pendingResolve->ok.load()) {
+            FailConnect("could not resolve host");
+            return;
+        }
+
+        struct sockaddr_in serverAddr = pendingResolve->addr;
+        pendingResolve.reset();
+
+        sockfd = (int)socket(AF_INET, SOCK_STREAM, 0);
+        if (sockfd == (int)INVALID_SOCKET) {
+            sockfd = -1;
+            FailConnect("could not create socket");
+            return;
+        }
+
+        // Bursty traffic (level sync) arrives faster than a frame can drain it.
+        int rcvbuf = 256 * 1024;
+        if (setsockopt(sockfd, SOL_SOCKET, SO_RCVBUF, SETSOCKOPT_OPTVAL(rcvbuf), sizeof(rcvbuf)) < 0)
+            SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "Failed to set SO_RCVBUF: %d", SOCK_ERRNO);
+
+        // Non-blocking before connect(), for two reasons. One: a blocking
+        // connect() to an unreachable host waits on the OS's own timeout,
+        // which is not this codebase's to choose (tens of seconds, sometimes
+        // minutes). Two: SendAll's retry loop already expects EWOULDBLOCK when
+        // the send buffer fills and a peer has stopped reading; on a blocking
+        // socket that never happens and send() simply parks in the kernel with
+        // no bound, making that retry branch dead code.
+#ifdef _WIN32
+        {
+            u_long nonblocking = 1;
+            if (ioctlsocket(sockfd, FIONBIO, &nonblocking) != 0)
+                SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
+                             "Could not set the connection non-blocking: %d", SOCK_ERRNO);
+        }
+#else
+        {
+            int flags = fcntl(sockfd, F_GETFL, 0);
+            if (flags < 0 || fcntl(sockfd, F_SETFL, flags | O_NONBLOCK) < 0)
+                SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
+                             "Could not set the connection non-blocking: %d", SOCK_ERRNO);
+        }
+#endif
+
+        const int result = connect(sockfd, (struct sockaddr*)&serverAddr, sizeof(serverAddr));
+#ifdef _WIN32
+        const bool pending = (result < 0 && SOCK_ERRNO == WSAEWOULDBLOCK);
+#else
+        const bool pending = (result < 0 && (errno == EINPROGRESS || errno == EWOULDBLOCK));
+#endif
+        if (result < 0 && !pending) {
+            FailConnect("connect refused");
+            return;
+        }
+
+        if (result == 0) {
+            // Completed immediately -- normal on loopback.
+            state = AWAITING_READY;
+            connectPhaseDeadline = SDL_GetTicks() + kServerReadyTimeoutMs;
+            return;
+        }
+
+        state = CONNECTING;
+        connectPhaseDeadline = SDL_GetTicks() + kConnectTimeoutMs;
+        return;
+    }
+
+    if (state == CONNECTING) {
+        // Poll, never wait: a zero timeout makes this a question about right
+        // now rather than a place the frame can get stuck.
         fd_set wfds;
         FD_ZERO(&wfds);
         FD_SET(sockfd, &wfds);
-        struct timeval connectTimeout{kConnectTimeoutMs / 1000, (kConnectTimeoutMs % 1000) * 1000};
-        const int selectResult = select(sockfd + 1, nullptr, &wfds, nullptr, &connectTimeout);
+        struct timeval noWait{0, 0};
+        if (select(sockfd + 1, nullptr, &wfds, nullptr, &noWait) <= 0) return;  // still in flight
 
-        bool connected = false;
-        if (selectResult > 0) {
-            int soErr = 0;
-            socklen_t soErrLen = sizeof(soErr);
+        // Writability only says the attempt finished, not that it succeeded --
+        // a refused connection also completes and also becomes writable, so
+        // SO_ERROR is what actually distinguishes them. Treating writability
+        // alone as success is what used to list dead servers as online.
+        int soErr = 0;
+        socklen_t soErrLen = sizeof(soErr);
 #ifdef _WIN32
-            char* soErrPtr = reinterpret_cast<char*>(&soErr);
+        char* soErrPtr = reinterpret_cast<char*>(&soErr);
 #else
-            void* soErrPtr = &soErr;
+        void* soErrPtr = &soErr;
 #endif
-            connected = (getsockopt(sockfd, SOL_SOCKET, SO_ERROR, soErrPtr, &soErrLen) == 0 && soErr == 0);
-            if (!connected)
-                SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to connect: %d", soErr);
-        } else {
-            SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
-                         "Connect to %s:%d timed out after %dms", host, port, kConnectTimeoutMs);
+        if (getsockopt(sockfd, SOL_SOCKET, SO_ERROR, soErrPtr, &soErrLen) != 0 || soErr != 0) {
+            FailConnect("connection refused or reset");
+            return;
         }
 
-        if (!connected) {
-            SOCKET_CLOSE(sockfd);
-            sockfd = -1;
-            state = DISCONNECTED;
-            return false;
-        }
+        state = AWAITING_READY;
+        connectPhaseDeadline = SDL_GetTicks() + kServerReadyTimeoutMs;
+        return;
     }
 
-    // Wait for and consume all initial server messages. Poll in short slices
-    // but judge "no more data" against an overall deadline, not the first
-    // quiet slice -- a remote server's banner can take noticeably longer to
-    // arrive than a single 100ms poll (localhost is ~0ms, but connect()
-    // itself plus the first round-trip can add up over a real network).
+    // AWAITING_READY: drain whatever has arrived and look for the banner.
     char buffer[BUFFER_SIZE];
-    bool gotServerReady = false;
-    // Accumulated across reads on purpose. This used to run strtok() over each
-    // recv() chunk on its own, which silently assumed every chunk began and
-    // ended on a line boundary. It does not: the banner is one short line, so
-    // on loopback it does arrive whole and the assumption held by luck, but a
-    // real network, a proxy, or a WebSocket bridge can split it anywhere. When
-    // that happened the client saw "FB/1.3 PUSH: SERVER_R" and then
-    // "EADY <name> <lang>\n", found SERVER_READY in neither, and failed the
-    // connection outright after burning the full deadline -- a working server
-    // reported as unreachable. Caught by tests/fake_server.h's Banner::Split
-    // (netconnect-test), which splits mid-token precisely because a
-    // split-on-a-token-boundary test would not have found this.
-    std::string banner;
-
-    Uint64 timeout = 3000;  // 3 second overall deadline
-    Uint64 startTime = SDL_GetTicks();
-
-    while (SDL_GetTicks() - startTime < timeout) {
-        fd_set readfds;
-        struct timeval selectTimeout;
-        FD_ZERO(&readfds);
-        FD_SET(sockfd, &readfds);
-        selectTimeout.tv_sec = 0;
-        selectTimeout.tv_usec = 100000; // 100ms poll slice
-
-        int selectResult = select(sockfd + 1, &readfds, NULL, NULL, &selectTimeout);
-        if (selectResult <= 0) {
-            continue; // No data this slice; keep polling until the deadline
+    for (;;) {
+        const ssize_t received = recv(sockfd, buffer, sizeof(buffer) - 1, MSG_DONTWAIT);
+        if (received == 0) {
+            FailConnect("server closed the connection during handshake");
+            return;
+        }
+        if (received < 0) {
+            if (SOCK_WOULD_BLOCK(SOCK_ERRNO)) break;  // nothing more this frame
+            FailConnect("receive error during handshake");
+            return;
         }
 
-        ssize_t received = recv(sockfd, buffer, sizeof(buffer) - 1, 0);
-        if (received <= 0) {
-            break; // Connection closed or errored
-        }
+        // Accumulated across reads, and across frames. The banner is one short
+        // line, so on loopback it arrives whole and any per-read parsing looks
+        // correct -- but a real network, a proxy or a WebSocket bridge can
+        // split it anywhere, and then a per-read parser sees neither half
+        // contain SERVER_READY and declares a working server unreachable.
+        // Covered by tests/fake_server.h's Banner::Split, which splits
+        // mid-token precisely because a token-boundary split would not catch
+        // it.
+        readyBanner.append(buffer, (size_t)received);
+        if (readyBanner.find("SERVER_READY") != std::string::npos) break;
 
-        banner.append(buffer, (size_t)received);
-        if (banner.find("SERVER_READY") != std::string::npos) {
-            gotServerReady = true;
-            break;
-        }
-
-        // Bound the accumulation: a peer that streams bytes without ever
-        // saying SERVER_READY must not grow this without limit. Keeping a
-        // trailing window rather than clearing outright means a token
-        // straddling the boundary still matches.
-        if (banner.size() > 8192) banner.erase(0, banner.size() - 1024);
+        // A peer that streams bytes forever without greeting must not grow
+        // this without bound. Keep a trailing window so a token straddling the
+        // boundary still matches.
+        if (readyBanner.size() > 8192) readyBanner.erase(0, readyBanner.size() - 1024);
     }
 
-    // Anything that arrived after the banner belongs to the ordinary message
-    // stream, not to the handshake. Hand it to the buffered reader instead of
-    // dropping it on the floor: the server pipelines its first push messages
-    // right behind SERVER_READY, and this loop reads by byte count, not by
-    // line, so a chunk holding the banner plus the start of the next message
-    // is entirely normal.
-    if (gotServerReady) {
-        const size_t bannerEnd = banner.find('\n');
-        if (bannerEnd != std::string::npos && bannerEnd + 1 < banner.size()) {
-            const std::string leftover = banner.substr(bannerEnd + 1);
-            if (leftover.size() < RECV_BUFFER_SIZE) {
-                memcpy(recvBuffer, leftover.data(), leftover.size());
-                recvBufferLen = (int)leftover.size();
-            }
+    if (readyBanner.find("SERVER_READY") == std::string::npos) return;  // keep waiting
+
+    // Whatever followed the banner belongs to the ordinary message stream, not
+    // to the handshake: the server pipelines its first push messages right
+    // behind SERVER_READY, and this reads by byte count rather than by line.
+    // Hand it to the buffered reader instead of dropping it.
+    const size_t bannerEnd = readyBanner.find('\n');
+    if (bannerEnd != std::string::npos && bannerEnd + 1 < readyBanner.size()) {
+        const std::string leftover = readyBanner.substr(bannerEnd + 1);
+        if (leftover.size() < RECV_BUFFER_SIZE) {
+            memcpy(recvBuffer, leftover.data(), leftover.size());
+            recvBufferLen = (int)leftover.size();
         }
     }
-
-    if (!gotServerReady) {
-        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Did not receive SERVER_READY");
-        SOCKET_CLOSE(sockfd);
-        sockfd = -1;
-        state = DISCONNECTED;
-        return false;
-    }
-
+    readyBanner.clear();
+    connectPhaseDeadline = 0;
     state = CONNECTED;
-    SDL_Log("Connected to server %s:%d", host, port);
-    return true;
+    SDL_Log("Connected to server %s:%d", connectedHost.c_str(), connectedPort);
 }
 #endif // __WASM_PORT__ (Connect)
 
@@ -346,6 +379,14 @@ void NetworkClient::Disconnect() {
     pendingNick = false;
     pendingCreate = false;
     pendingJoin = false;
+    // Abandon any connection attempt still in flight (async networking
+    // handoff, stage 2a-2c). Dropping our reference to the resolve slot does
+    // not disturb a worker still running in it -- the worker co-owns the
+    // block, so it writes its answer into memory that stays valid and simply
+    // stops being anybody's business. This is also the ESC-cancel path.
+    pendingResolve.reset();
+    connectPhaseDeadline = 0;
+    readyBanner.clear();
     SDL_Log("Disconnected from server");
 }
 
@@ -912,7 +953,17 @@ void NetworkClient::AddStatusMessage(const std::string& message) {
 
 #ifndef __WASM_PORT__
 void NetworkClient::Update() {
+    // Advance a connection that is still being established. This has to come
+    // before the guard below, not after: while RESOLVING there is no socket
+    // yet (sockfd is -1), so the guard would return before the state machine
+    // ever ran and the connection would never progress past its first phase.
+    PumpConnect();
+
     if (state == DISCONNECTED || sockfd < 0) return;
+    // Nothing below applies until the handshake is done -- and reading from
+    // the socket during AWAITING_READY would steal the banner bytes out from
+    // under PumpConnect().
+    if (IsConnecting()) return;
 
     // Read all available data to prevent socket buffer from filling up
     // The server will disconnect us if it can't send (buffer full)

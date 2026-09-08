@@ -256,6 +256,14 @@ struct MainMenuTestAccess {
     static void CallPumpNetworkFrame(MainMenu& menu) { menu.PumpNetworkFrame(); }
     static void CallStartLanFetch(MainMenu& menu) { menu.StartLanFetch(); }
     static bool LanFetchInProgress(const MainMenu& menu) { return menu.lanFetchInProgress.load(); }
+    // The connecting indicator's cancel affordance (async networking handoff,
+    // stage 2e). The rect is written by ServerListPanelRender each frame; a
+    // test drives the tap through the real HandlePanelTap so it exercises the
+    // same path a finger does, not a private helper.
+    static SDL_Rect CancelConnectRect(const MainMenu& menu) { return menu.cancelConnectTapRect; }
+    static void SetCancelConnectRect(MainMenu& menu, SDL_Rect r) { menu.cancelConnectTapRect = r; }
+    static bool PendingLobbyConnect(const MainMenu& menu) { return menu.pendingLobbyConnect; }
+    static void SetPendingLobbyConnect(MainMenu& menu, bool v) { menu.pendingLobbyConnect = v; }
     // Keyboard navigation in the game room goes through MenuUpKey/
     // MenuDownKey/MenuReturnKey, which are private. Stand the menu up as
     // "already in a room" (the roster test does the same) and drive the real
@@ -1344,16 +1352,29 @@ int main() {
             NetworkClientTestAccess::SetState(*nc, DISCONNECTED);
             CHECK(nc->GetState() == DISCONNECTED);
 
+            // Connect() is kickoff-only as of the async networking handoff
+            // (stage 2a-2c): it starts the attempt and returns, and the state
+            // machine is advanced by Update() once per frame, exactly as
+            // MainMenu::PumpNetworkFrame() does it. So "did it connect" is a
+            // question you answer by pumping, not by reading the return value.
+            // Frame-stall assertions for this live in netconnect-test, which
+            // can script the awkward peers; here the point is just that a real
+            // localhost server still ends up CONNECTED.
             Uint64 connectStart = SDL_GetTicks();
-            bool connected = nc->Connect("127.0.0.1", testPort);
+            bool started = nc->Connect("127.0.0.1", testPort);
+            CHECK(started);
+            while (nc->IsConnecting() && SDL_GetTicks() - connectStart < 5000) {
+                nc->Update();
+                SDL_Delay(5);
+            }
             Uint64 connectMs = SDL_GetTicks() - connectStart;
 
-            CHECK(connected);
+            CHECK(nc->IsConnected());
             CHECK(nc->GetState() == CONNECTED);
-            CHECK(connectMs < 3000);  // Well under the 5s connect deadline on localhost.
-            if (!connected || connectMs >= 3000)
-                std::fprintf(stderr, "  (Connect to real localhost server: ok=%d, %llu ms)\n",
-                             connected, (unsigned long long)connectMs);
+            CHECK(connectMs < 3000);  // Well under the deadlines on localhost.
+            if (!nc->IsConnected() || connectMs >= 3000)
+                std::fprintf(stderr, "  (Connect to real localhost server: state=%d, %llu ms)\n",
+                             nc->GetState(), (unsigned long long)connectMs);
 
             nc->Disconnect();
             CHECK(nc->GetState() == DISCONNECTED);
@@ -1370,15 +1391,22 @@ int main() {
         {
             NetworkClient* nc = NetworkClient::Instance();
             Uint64 refuseStart = SDL_GetTicks();
-            bool connected = nc->Connect("127.0.0.1", testPort);
+            // Kickoff still succeeds -- a refusal is discovered by the state
+            // machine on a later frame, not by Connect() itself (see the
+            // block above on the stage 2a-2c contract change).
+            CHECK(nc->Connect("127.0.0.1", testPort));
+            while (nc->IsConnecting() && SDL_GetTicks() - refuseStart < 5000) {
+                nc->Update();
+                SDL_Delay(5);
+            }
             Uint64 refuseMs = SDL_GetTicks() - refuseStart;
 
-            CHECK(!connected);
+            CHECK(!nc->IsConnected());
             CHECK(nc->GetState() == DISCONNECTED);
             CHECK(refuseMs < 2000);
-            if (connected || refuseMs >= 2000)
-                std::fprintf(stderr, "  (Connect to refused port: ok=%d, %llu ms)\n",
-                             connected, (unsigned long long)refuseMs);
+            if (nc->IsConnected() || refuseMs >= 2000)
+                std::fprintf(stderr, "  (Connect to refused port: state=%d, %llu ms)\n",
+                             nc->GetState(), (unsigned long long)refuseMs);
         }
 
         // --- LAN discovery now runs on a background thread instead of
@@ -1447,20 +1475,28 @@ int main() {
 
             NetworkClient* nc = NetworkClient::Instance();
             NetworkClientTestAccess::SetState(*nc, DISCONNECTED);
+            // Kickoff plus pump -- Connect() no longer completes on its own
+            // (async networking handoff, stage 2a-2c).
             CHECK(nc->Connect("127.0.0.1", nickTestPort));
+            const Uint64 nickConnectStart = SDL_GetTicks();
+            while (nc->IsConnecting() && SDL_GetTicks() - nickConnectStart < 5000) {
+                nc->Update();
+                SDL_Delay(5);
+            }
             CHECK(nc->GetState() == CONNECTED);
 
             CHECK(nc->SendNick("claimed"));
-            // No assertion on GetPlayerNick()/IsPendingNick() here: on native,
-            // SendCommand() still does its own inline 100ms select()+recv()
-            // (until stage 1c retires it), which on a fast localhost round
-            // trip reliably drives the whole NICK_IN_USE -> retry -> OK
-            // sequence to completion recursively, inside this very call --
-            // so pendingNick can already be false and playerNick already
-            // "claimed2" by the time SendNick() returns. Whether that
-            // happens synchronously here or over the next few polled frames
-            // below is exactly the timing this test must NOT assume either
-            // way; only the eventual outcome matters.
+            // No assertion on GetPlayerNick()/IsPendingNick() immediately
+            // after this call. When this test was written, SendCommand() did
+            // its own inline 100ms select()+recv(), which on a fast localhost
+            // round trip reliably drove the whole NICK_IN_USE -> retry -> OK
+            // sequence to completion recursively inside this very call, so
+            // pendingNick could already be false before SendNick() returned.
+            // Stage 1c has since deleted that inline read, so the sequence now
+            // resolves over the polled frames below instead. The test asserted
+            // neither timing then and asserts neither now -- that indifference
+            // is exactly why it kept passing across the change; only the
+            // eventual outcome matters.
             Uint64 waitStart = SDL_GetTicks();
             while (nc->IsPendingNick() && SDL_GetTicks() - waitStart < 2000) {
                 nc->Update();
@@ -1477,6 +1513,46 @@ int main() {
             nc->Disconnect();
             close(rawSock);
             MainMenuTestAccess::CallStopLocalServer(*menu);
+        }
+
+        // --- Cancelling a connect must be reachable by tap, not only by ESC
+        // (async networking handoff, stage 2e; CLAUDE.md's input-parity rule).
+        // Connecting can now take seconds, so "get me out of this" has to work
+        // for a phone player with no ESC key -- this repo has shipped several
+        // bugs from exactly the gap where something was reachable one way
+        // only, which is why the rule exists.
+        {
+            NetworkClient* nc = NetworkClient::Instance();
+            NetworkClientTestAccess::SetState(*nc, DISCONNECTED);
+
+            // Stand up the state the connecting indicator renders in, and the
+            // rect it publishes, without needing a live half-open socket.
+            const SDL_Rect cancelRect{420, 300, 200, 24};
+            MainMenuTestAccess::SetCancelConnectRect(*menu, cancelRect);
+            MainMenuTestAccess::SetPendingLobbyConnect(*menu, true);
+
+            // A tap inside the rect goes through the real HandlePanelTap, the
+            // same entry point a finger reaches.
+            const float cancelMidX = cancelRect.x + cancelRect.w * 0.5f;
+            const float cancelMidY = cancelRect.y + cancelRect.h * 0.5f;
+            const bool consumed = menu->HandlePanelTap(cancelMidX, cancelMidY, 0.f);
+            CHECK(consumed);  // must not fall through to the row underneath
+            CHECK(!MainMenuTestAccess::PendingLobbyConnect(*menu));
+
+            // And a tap outside it must not cancel anything -- otherwise the
+            // rect would be swallowing taps meant for the server list.
+            MainMenuTestAccess::SetPendingLobbyConnect(*menu, true);
+            menu->HandlePanelTap((float)(cancelRect.x - 40), cancelMidY, 0.f);
+            CHECK(MainMenuTestAccess::PendingLobbyConnect(*menu));
+
+            // Zeroed rect (the indicator is not showing) must be inert, not a
+            // hit at the origin.
+            MainMenuTestAccess::SetCancelConnectRect(*menu, SDL_Rect{0, 0, 0, 0});
+            MainMenuTestAccess::SetPendingLobbyConnect(*menu, true);
+            menu->HandlePanelTap(0.f, 0.f, 0.f);
+            CHECK(MainMenuTestAccess::PendingLobbyConnect(*menu));
+
+            MainMenuTestAccess::SetPendingLobbyConnect(*menu, false);
         }
     }
 #endif

@@ -91,8 +91,8 @@ geolocation stall.
     is not retriable — confirmed against `is_nick_ok()` at `server/game.c:712`).
   - **Ordering bug, found by a real end-to-end test, not by inspection**: all
     three send functions originally set their pending flag *after* calling
-    `SendCommand()`. Native's `SendCommand()` still does its own inline
-    blocking 100 ms `select()`+`recv()` (until 1c retires it) that can
+    `SendCommand()`. Native's `SendCommand()` at the time did its own inline
+    blocking 100 ms `select()`+`recv()` (since deleted by 1c) that could
     synchronously drive a fast localhost reply all the way through
     `HandleServerResponse()` *before the caller returns*. With the flag set
     only afterward, a same-frame `NICK_IN_USE` would find no pending flag set,
@@ -220,16 +220,34 @@ geolocation stall.
 
 ## Stage 2 — Async connect + minimal connecting UI
 
-Status: **2d landed; 2a/2b/2c/2e still open**
+Status: **2a-2e all landed** — stage 2 complete.
 
-- **2a.** `ConnectionState` gains `RESOLVING` and `AWAITING_READY`; `CONNECTING`
-  becomes a state that actually survives a frame (today it is written at
-  `networkclient.cpp:188` and never observed). `Connect()` becomes kickoff-only.
-- **2b.** `getaddrinfo` moves to a detached worker writing into a `shared_ptr`
-  result slot, so a cancelled op never touches a freed client. There is no
-  usable async resolver in the dependency set; a thread is the portable option.
-- **2c.** The `SERVER_READY` handshake becomes frame-driven with a deadline,
-  replacing the 3 s drain loop.
+- **2a. Kickoff-only `Connect()` — landed.** `ConnectionState` gained
+  `RESOLVING` and `AWAITING_READY`, and `CONNECTING` now genuinely survives
+  frames. `Connect()` starts the attempt and returns; `PumpConnect()`, called
+  from `Update()` (and so from `MainMenu::PumpNetworkFrame()` every frame),
+  advances RESOLVING → CONNECTING → AWAITING_READY → CONNECTED. Each phase has
+  its own deadline judged from when that phase began, so a slow lookup no
+  longer eats the connect's budget.
+  **`Connect()`'s return value changed meaning**: it is now "the attempt
+  started", not "we are connected" — which is the contract WASM's `Connect()`
+  has always had, so the two platforms finally agree. Only one production
+  caller exists (`Instance(host, port)`), which is why the blast radius was
+  small; the rest were tests, updated to pump.
+- **2b. Threaded name lookup — landed.** `getaddrinfo` runs on a detached
+  worker writing into a `shared_ptr` slot the worker co-owns. Cancelling — or
+  destroying the client — mid-lookup leaves the worker writing into memory
+  that is still valid and simply nobody's business, rather than into a freed
+  `NetworkClient`. Passing `this` would have been a use-after-free waiting for
+  a slow DNS server to trigger it. `netconnect-test` cancels a connect
+  mid-flight specifically so ASan would catch that if it were ever
+  reintroduced.
+- **2c. Frame-driven `SERVER_READY` handshake — landed.** Replaces the 3 s
+  drain loop. Accumulates the banner across reads *and across frames*, for the
+  same reason the synchronous version had to (see the split-banner bug below).
+  Anything arriving after the banner is handed to the buffered reader instead
+  of dropped — the server pipelines its first push messages right behind
+  SERVER_READY, and this reads by byte count, not by line.
 - **2d. Fix `IsConnected()` — landed, deliberately ahead of 2a/2b/2c.** It was
   `state != DISCONNECTED`, so it returned true while `CONNECTING` — harmless
   only because `Connect()` resolved, connected and handshook synchronously,
@@ -247,12 +265,19 @@ Status: **2d landed; 2a/2b/2c/2e still open**
   `pendingLobbyConnect` completion path in `NetPanelRender()` is unaffected
   because it tests `GetState() == CONNECTED` explicitly rather than going
   through `IsConnected()`.
-- **2e. UI.** `MenuReturnKey`'s `DO_CONNECT` block becomes "kick off and return".
-  Per CLAUDE.md's input-parity rule the connecting state needs all four: an
-  indicator, ESC/B cancel, a **tap target** for cancel, and a
-  `menulist::DrawFooterHint`. Note `MenuEscapeKey`'s mode-10 branch neither
-  disconnects nor clears `pendingLobbyConnect`, unlike mode 7's broad `else`;
-  `connectErrorMsg` is currently never cleared by ESC at all.
+- **2e. Connecting UI — landed.** All four of CLAUDE.md's input-parity
+  requirements: a "Connecting..." indicator (now driven by the client's actual
+  `IsConnecting()` state, and shown on the LAN list too — it was public-list
+  only because on native the connect used to finish inside the keypress and
+  there was nothing to show), ESC cancel, a **tap target** for cancel, and a
+  footer hint that switches to "Connecting...    ESC cancel" while in flight.
+  `MainMenu::CancelPendingConnect()` is the one place that tears an attempt
+  down, wired into both ESC paths and the tap. Both of those paths were
+  genuinely broken for an async connect: mode 10's ESC neither disconnected
+  nor cleared `pendingLobbyConnect`, and the broad `else` covering LAN only
+  disconnected `if (IsConnected())` — which is false while connecting, so an
+  in-flight attempt would have outlived the screen that started it.
+  Tap-cancel has its own regression test (hit, miss, and inert-when-hidden).
 
 ## Stage 3 — Async game start and level sync (highest risk)
 
@@ -348,6 +373,51 @@ touched. 1f's `AddStatusMessage` calls are inside `HandleServerResponse()`,
 shared by both platforms, and reviewed by inspection.
 
 ---
+
+## What's been verified so far (stage 2, 2026-09-08)
+
+`tests/fake_server.h` and `netconnect-test` were built **first**, before the
+state-machine rewrite, specifically so the rewrite had deterministic coverage
+of the cases it exists to handle. That ordering paid for itself immediately:
+the fixture failed on its first run against then-shipping code and exposed the
+split-banner bug (see stage 2c), which no test against a real localhost server
+could have found.
+
+Frame stalls, measured by `netconnect-test` (one `Update()` per simulated
+frame, timing every individual call):
+
+| case | worst single frame | total wait |
+|---|---|---|
+| baseline (instant banner) | 0 ms | 57 ms |
+| banner delayed 600 ms | 1 ms | 772 ms |
+| banner split mid-token | 1 ms | 187 ms |
+| peer accepts, never greets | 2 ms | 3024 ms |
+| refused port | 0 ms | 20 ms |
+| blackholed port | 2 ms | 5014 ms |
+
+The right-hand column is what the old code blocked the render loop for, in a
+single call. The middle column is what it costs now. The test asserts a 50 ms
+budget rather than the 16 ms a 60fps frame allows, because one call
+occasionally losing the CPU to the scheduler is not a blocking bug — the
+measured values sit two orders of magnitude below either bound.
+
+`ctest`: 30 tests, 28 run / 100% pass. ASan/UBSan build reconfigured, rebuilt
+and rerun (no `detect_leaks=1`, unsupported on macOS): all 30 run and pass,
+including the fixture's threads and `netconnect-test`'s cancel-mid-resolve
+case — the one that would catch the detached resolver touching a freed client.
+
+**A WASM regression was introduced and fixed inside this stage, found by
+reading rather than by tests.** Narrowing `IsConnected()` in 2d broke WASM's
+lobby entry: WASM's `Connect()` has always returned true with state
+`CONNECTING`, so the old `state != DISCONNECTED` sent it into the arm that
+sets `pendingLobbyConnect`. With the narrowed predicate it fell into the
+"Failed to connect" arm instead and could never reach a lobby. The 2d commit
+called itself "a provable no-op", which was true for native and wrong for
+WASM. The fix is the three-way branch (`IsConnected()` / `IsConnecting()` /
+neither) that stage 2 needed anyway. There is still no automated WASM
+coverage and the local Emscripten toolchain is broken, so **a real WASM build
+must exercise lobby entry before the next tag** — this is the second stage
+running on inspection alone for that platform.
 
 ## Verification
 

@@ -112,6 +112,19 @@ public:
     // which meant nothing advanced while a connection was still being
     // established, the very situation that needs advancing.
     void PumpNetworkFrame();
+
+    // Abandon a connection attempt that is still in flight, and clear the UI
+    // state that was tracking it. Safe to call when nothing is connecting.
+    //
+    // This exists because connecting stopped being instantaneous (async
+    // networking handoff, stage 2a-2c). While Connect() ran to completion
+    // inside one call there was no such thing as "backing out of a connect in
+    // progress" -- by the time any key could be pressed it had already
+    // succeeded or failed. Now it can be in flight for seconds, so every way
+    // out of the connecting screen has to say so, or the attempt quietly
+    // outlives the screen that started it and completes into a lobby the
+    // player already walked away from.
+    void CancelPendingConnect();
 private:
 #ifdef FROZEN_BUBBLE_TEST_ACCESS
     friend struct MainMenuTestAccess;
@@ -465,6 +478,13 @@ private:
     bool networkFieldEditing = false; // True when keyboard is open for host/port field
     int networkManualFieldIndex = 0;  // 0=host, 1=port, 2=connect (for manual-entry form navigation)
     std::string connectErrorMsg;
+    // Hit rect for the "tap here to cancel" line on the connecting indicator,
+    // written by ServerListPanelRender each frame and zeroed when it is not
+    // showing. A dedicated rect rather than a panel tap row because it is not
+    // part of the server list's row list -- it is an overlay on the sidebar,
+    // the same way HandlePanelTap already special-cases the confirm/prompt
+    // popups. See CancelPendingConnect().
+    SDL_Rect cancelConnectTapRect{0, 0, 0, 0};
     char networkJoinCreator[32] = "";
     char networkChatInput[256] = "";
     char networkUsername[32] = "";
