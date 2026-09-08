@@ -4,7 +4,8 @@ Last updated: 2026-09-08. **Merged** from two documents that grew alongside
 each other: this file (the general code-optimization backlog, items A-G) and
 `ASYNC_NETWORKING_HANDOFF.md` (item A's own four-stage deep dive, spun out
 because it outgrew the rest of the backlog combined). Both efforts have
-landed and shipped as `v2.4.92`, so they're folded into one file now, with
+landed and shipped as `v2.4.93` (`v2.4.92` was blocked in CI), so they're
+folded into one file now, with
 all the completed narrative moved down to **Archive: completed work** so
 this file stays skimmable. Start at "Active work" below for current state;
 go to the archive only when you need the reasoning/verification detail
@@ -25,8 +26,8 @@ for a multi-session, four-stage effort; that document is now merged in here
 under the archive, and its own "what's left" residuals are the first thing
 in the active list below. Most recently the user said "ok lets tag up",
 authorizing a release without waiting for the real-device/browser-pairing
-test that had been recommended as a precondition — `v2.4.92` shipped on that
-explicit go-ahead.
+test that had been recommended as a precondition. The first tag was blocked
+by CI; the corrected `v2.4.93` release shipped on that explicit go-ahead.
 
 Update this document after meaningful implementation or verification milestones
 and before handing off. Record actual results, outstanding work, and blockers.
@@ -36,11 +37,11 @@ a speedup.
 ## Current checkpoint
 
 - Repository: `/Users/dchau/gr/frozen-bubble-sdl3`
-- Branch: `main`; latest source change `6548feab` (`fix: scope async
-  confirmations to their commands`), not yet pushed or released. Tag
+- Branch: `main`; latest source change `8ace51de` (`perf: cache team picker
+  text cells`), not yet pushed or released. Tag
   `v2.4.93` remains the latest release.
 - A fetch on 2026-09-08 found `origin/main` unchanged at `c6eba3e1`; local
-  `main` is one source commit ahead before this handoff update.
+  `main` is two source commits ahead before this handoff update.
 - CMake/Android version: `2.4.93`; Android versionCode: `76`.
 - **`v2.4.92` never shipped.** Its tag build's Linux ASan/UBSan job failed,
   which hard-blocks `Create Release`/`Deploy WASM to Itch.io` by design (see
@@ -73,8 +74,8 @@ a speedup.
 - Status of every backlog item: **A** (async networking) — all four stages
   landed, tagged `v2.4.93` (see above); two residual items remain open,
   listed below. **B** (font sharing) — gameplay + one confirmed menu hot
-  path done, rest of menu caching pending. **C, D, F** — complete. **E** —
-  overlaps B, same pending scope. **G** — measured, found not justified,
+  paths done; remaining menu call sites were measured or inspected and B is
+  complete. **C, D, E, F** — complete. **G** — measured, found not justified,
   deliberately not implemented (closed, no further action).
 
 ## Active work — what's left
@@ -119,25 +120,31 @@ detail). What's left, in priority order:
    playtest" section, which already flags this and the ESC/tap
    cancel-mid-connect check as uncovered by the one playtest run so far.
 
-### B/E — menu-screen label caching (pending)
-
-Gameplay-panel caching (item B) and its one confirmed menu hot path (the
-game-room settings grid) are done — see archive. What's still open, shared
-between items B and E:
-
-- `mainmenu_teampanel.cpp` and `menulist.cpp`'s `panelText` call sites were
-  inspected but not converted: almost all are one-off titles, headers, and
-  footers rendered once or twice per frame (not a per-row loop churning
-  against itself), so they didn't clear the "confirmed hot path" bar these
-  items set.
-- If picked up: measure texture-creation counts on an idle populated team
-  picker first, the same way the settings grid's cell count was measured,
-  before converting anything — don't share a `TTFText` across borrowers
-  that later change font size, style, or alignment unless it tracks
-  external font generations, or those mutations are eliminated first (see
-  item B's prerequisite note in the archive).
-
 ## Completed after v2.4.93 (not released)
+
+### Cache repeated team-picker labels (`8ace51de`)
+
+The existing six-player host-room integration scenario measured 55 successful
+text texture uploads on the first team-picker render and another 55 on an
+identical idle render. The cause was one shared `panelText` rendering one name
+plus six team choices per visible player, along with the picker headings and
+Auto buttons, so each new label evicted the preceding label's cached texture.
+
+`TeamPanelCell` now gives each repeated call-order slot its own `TTFText` cache
+and borrows immutable fonts keyed by size/style. Reassigning the same borrowed
+font is now a `TTFText::LoadFont` no-op, covered directly by
+`ttftext-cache-test`; changing to a different font still invalidates normally.
+A test-only creation counter pins the real picker integration path. The same
+six-player idle render now creates 5 textures, down from 55 (90.9%); those five
+are the header/footer helper's one-off action measurement/title/action/footer
+work, outside the repeated picker-label loop.
+
+Verification on 2026-09-08: focused `ttftext-cache-test` and
+`menu-touch-gesture-test` passed; the full native suite passed (29 runnable
+tests, 2 expected sanitizer-only skips); the full ASan/UBSan suite passed all
+31 tests with macOS leak detection disabled; the WASM Release build compiled;
+and `git diff --check` passed. No version bump, tag, push, or release was
+performed.
 
 ### Scope async confirmations to their commands (`6548feab`)
 
@@ -164,9 +171,9 @@ compiled. No version bump, tag, push, or release was performed.
 ## Suggested next session
 
 1. Read current repository instructions and inspect git state.
-2. Pick from "Active work" above — the async residuals are individually
-   small and self-contained; the menu-caching item needs a measurement pass
-   first, same discipline as every prior item here.
+2. Pick from "Active work" above. The only implementation residual that is
+   not already owned by another task is the optional level-sync state-machine
+   rewrite; leave it alone unless a real multi-round stall reproduces.
 3. Record a baseline or failing regression first, then implement and verify
    in proportion to the change. Preserve input parity required by the
    repository's own instructions (CLAUDE.md's keyboard/gamepad + touch/mouse
@@ -699,7 +706,8 @@ Status: **measured 2026-09-07; not justified, not implemented.**
 Spun out of item A above, which landed two bounded fixes (`00faeaf4`) and
 explicitly deferred the larger rearchitecture to its own batch. This was
 that batch: a multi-session, four-stage effort, each stage independently
-shippable and taggable. All four stages landed and shipped as `v2.4.92`.
+shippable and taggable. All four stages landed and shipped as `v2.4.93` after
+the first `v2.4.92` tag build was blocked by CI.
 
 ### Purpose
 
@@ -1358,9 +1366,10 @@ fixed as a side effect of the stages that touched the same code.
    natively-tested function.
 2. ~~**WASM `Disconnect` never clears `syncQueue`**, leaking stale sync
    messages into the next connection.~~ **Fixed in stage 3c.**
-3. **CREATE confirmation is heuristic** — any non-`PART` `OK` confirms it, so an
-   unrelated `OK` can falsely confirm a pending CREATE. Still open — see
-   "Active work" above.
+3. ~~**CREATE confirmation is heuristic** — any non-`PART` `OK` confirms it, so
+   an unrelated `OK` can falsely confirm a pending CREATE.~~ **Fixed after
+   v2.4.93 in `6548feab`** — confirmations are now scoped to the command the
+   server echoes in each response; see "Completed after v2.4.93" above.
 4. ~~**WASM `SendNick` sets the nick optimistically** and never retries, risking
    a `myPlayerId` mismatch when the server truncates or rejects it.~~ **Fixed
    in stage 1b** — `SendNick` is now unified across platforms with a real
