@@ -118,13 +118,6 @@ void MainMenu::SyncLobbyBots() {
         bot->SetSkill(netRoomBotSkill);
         lobbyBots.push_back(std::move(bot));
     }
-
-    // The leader blocks waiting for every other player to acknowledge the
-    // game start, and a bot acknowledges on its own socket. Without this it
-    // would be waiting behind the very loop that has to service it.
-    if (!lobbyBots.empty()) {
-        netClient->SetLeaderWaitTick([this]() { PumpLobbyBots(); });
-    }
 }
 
 void MainMenu::PumpLobbyBots() {
@@ -203,8 +196,6 @@ void MainMenu::DropLobbyBots() {
     }
     lobbyBots.clear();
     netRoomBotCount = 0;
-    NetworkClient* netClient = NetworkClient::Instance();
-    if (netClient) netClient->SetLeaderWaitTick(nullptr);
 }
 
 void MainMenu::PumpNetworkFrame() {
@@ -371,10 +362,10 @@ void MainMenu::NetPanelRender() {
                         (int)qSize, (int)sSize, (int)waited);
                 wasmSyncWaitStart = 0;
             } else if (!lobbyBots.empty()) {
-                // WASM leader hosting bots. A native leader blocks in
-                // LEADER_CHECK_GAME_START until every other connection has
-                // acknowledged, pumping its bots through leaderWaitTick as it
-                // goes; that loop is compiled out on WASM, so this client
+                // WASM leader hosting bots. A native leader polls
+                // LEADER_CHECK_GAME_START from its per-frame pump until every
+                // other connection has acknowledged; that poll is compiled out
+                // on WASM, so this client
                 // would otherwise walk straight into SyncNetworkLevel and
                 // start broadcasting b|/N/T while its own bots are still
                 // lobby-side. The server only relays those to connections in

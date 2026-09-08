@@ -387,6 +387,12 @@ void NetworkClient::Disconnect() {
     pendingResolve.reset();
     connectPhaseDeadline = 0;
     readyBanner.clear();
+    // Likewise abandon a game start still being polled for (stage 3a) -- with
+    // the socket gone there is nobody left to answer, and leaving the flag set
+    // would have the next connection's first frames poll on its behalf.
+    pendingGameStart = false;
+    gameStartDeadline = 0;
+    gameStartNextPollMs = 0;
     SDL_Log("Disconnected from server");
 }
 
@@ -979,6 +985,10 @@ void NetworkClient::Update() {
         SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
                     "Read %d packets in one frame; network buffer was filling up", readsThisFrame);
     }
+
+    // After the reads, so a LEADER_CHECK_GAME_START answer that arrived this
+    // frame is acted on before we decide whether to send another poll.
+    PumpGameStart();
 }
 
 bool NetworkClient::ProcessIncomingData() {
@@ -1132,6 +1142,29 @@ void NetworkClient::HandleServerResponse(const std::string& response) {
         ParseListResponse(listData);
         return;
     }
+
+#ifndef __WASM_PORT__
+    // The leader's game-start poll (stage 3a). This has to be matched before
+    // the generic "OK" handling below, because that handling attributes a bare
+    // OK to whichever of pendingNick/pendingCreate/pendingJoin is set -- and
+    // "LEADER_CHECK_GAME_START: OK" contains "OK", so it would otherwise be
+    // mistaken for a confirmation of whatever else was last sent.
+    //
+    // Unlike a bare OK, this one is safe to attribute: the server's send_line()
+    // (server/net.c) formats replies as "FB/maj.min <command>: <result>", so a
+    // command-specific response echoes the command that caused it.
+    if (response.find("LEADER_CHECK_GAME_START") != std::string::npos) {
+        if (!pendingGameStart) return;  // stale answer after we already started
+        if (response.find("OTHERS_NOT_READY") != std::string::npos) {
+            return;  // PumpGameStart() will poll again on its own cadence
+        }
+        if (response.find("OK") != std::string::npos) {
+            SDL_Log("Leader: all players ready!");
+            FinishGameStart();
+        }
+        return;
+    }
+#endif
 
     // Handle other responses. The pendingNick/pendingCreate/pendingJoin
     // blocks below run on both platforms as of the async networking handoff
@@ -1555,43 +1588,27 @@ void NetworkClient::HandlePushMessage(const std::string& pushMsg) {
         // This ensures all players are in prio mode before the leader starts sending sync messages.
 #ifndef __WASM_PORT__
         if (IsLeader()) {
+            // Kick off the poll and get out of this push handler. It used to
+            // run right here as a blocking loop -- 50 attempts of up to 200ms
+            // select() plus a 100ms sleep, so up to 15 seconds of frozen
+            // render loop (its own comment claimed 5s), inside a function
+            // reached from the per-frame message pump.
+            //
+            // PumpGameStart() sends the polls from now on and
+            // HandleServerResponse() reads the answers, so the frame keeps
+            // turning throughout -- which also means hosted bots keep being
+            // serviced by the ordinary per-frame pump (stage 1a) instead of
+            // by the leaderWaitTick callback this loop had to call by hand.
+            // That callback had no other caller and is now retired.
             SDL_Log("Leader: polling LEADER_CHECK_GAME_START until all joiners are ready...");
-            int attempts = 0;
-            while (attempts < 50) { // up to 5 seconds
-                // Service anything else this client speaks for; a hosted bot
-                // acknowledges on its own socket, and this loop is what it
-                // would otherwise be waiting behind.
-                if (leaderWaitTick) leaderWaitTick();
-                char buf[BUFFER_SIZE];
-                snprintf(buf, sizeof(buf), "FB/%d.%d LEADER_CHECK_GAME_START\n", PROTO_MAJOR, PROTO_MINOR);
-                SendAll(sockfd, buf, strlen(buf));
-
-                // Wait for server response
-                fd_set readfds; struct timeval tv;
-                FD_ZERO(&readfds); FD_SET(sockfd, &readfds);
-                tv.tv_sec = 0; tv.tv_usec = 200000;
-                if (select(sockfd + 1, &readfds, NULL, NULL, &tv) > 0) {
-                    char resp[BUFFER_SIZE];
-                    ssize_t n = recv(sockfd, resp, sizeof(resp) - 1, MSG_DONTWAIT);
-                    if (n > 0) {
-                        resp[n] = '\0';
-                        if (strstr(resp, "OTHERS_NOT_READY") != NULL) {
-                            SDL_Log("Leader: others not ready yet, waiting...");
-                            SDL_Delay(100);
-                            attempts++;
-                            continue;
-                        }
-                        if (strstr(resp, "OK") != NULL) {
-                            SDL_Log("Leader: all players ready!");
-                            break;
-                        }
-                    }
-                }
-                attempts++;
-            }
+            pendingGameStart = true;
+            gameStartDeadline = SDL_GetTicks() + kGameStartTimeoutMs;
+            gameStartNextPollMs = 0;  // poll on the very next pump
+            return;                   // OK_GAME_START waits for FinishGameStart()
         }
 #endif // __WASM_PORT__ (LEADER_CHECK_GAME_START TCP poll)
 
+        // Non-leaders acknowledge immediately -- they have nobody to wait for.
         SDL_Log("Sending OK_GAME_START acknowledgement (state is still %d)...", state);
         bool sent = SendCommand("OK_GAME_START");
         SDL_Log("OK_GAME_START sent result: %s", sent ? "SUCCESS" : "FAILED");
@@ -1601,6 +1618,44 @@ void NetworkClient::HandlePushMessage(const std::string& pushMsg) {
         state = IN_GAME;
     }
 }
+
+#ifndef __WASM_PORT__
+void NetworkClient::PumpGameStart() {
+    if (!pendingGameStart) return;
+
+    const Uint64 now = SDL_GetTicks();
+    if (now > gameStartDeadline) {
+        // Start anyway. A joiner that never acknowledges costs itself a
+        // desynced board; refusing to start strands everyone else in the
+        // lobby with no way forward, which is strictly worse.
+        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
+                    "Leader: joiners did not all acknowledge in time, starting anyway");
+        FinishGameStart();
+        return;
+    }
+
+    if (now >= gameStartNextPollMs) {
+        char buf[BUFFER_SIZE];
+        snprintf(buf, sizeof(buf), "FB/%d.%d LEADER_CHECK_GAME_START\n", PROTO_MAJOR, PROTO_MINOR);
+        SendAll(sockfd, buf, strlen(buf));
+        // Same 100ms cadence the old loop used between attempts.
+        gameStartNextPollMs = now + 100;
+    }
+}
+
+void NetworkClient::FinishGameStart() {
+    pendingGameStart = false;
+    gameStartDeadline = 0;
+    gameStartNextPollMs = 0;
+
+    SDL_Log("Sending OK_GAME_START acknowledgement (state is still %d)...", state);
+    const bool sent = SendCommand("OK_GAME_START");
+    SDL_Log("OK_GAME_START sent result: %s", sent ? "SUCCESS" : "FAILED");
+
+    SDL_Log("Setting state to IN_GAME (myPlayerId=%d)", (int)myPlayerId);
+    state = IN_GAME;
+}
+#endif
 
 void NetworkClient::ParseListResponse(const char* listData) {
     // Clear current lists

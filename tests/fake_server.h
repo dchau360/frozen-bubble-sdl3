@@ -82,6 +82,20 @@ enum class Reachability {
                  // and the connect runs to the caller's own deadline
 };
 
+// A canned answer to a command the client sends.
+//
+// This is deliberately the smallest thing that can express "the server says no
+// three times and then says yes": match a substring of an incoming line, and
+// reply with the next entry in `replies`, the last of which repeats forever.
+// It is not a protocol implementation and must not grow into one -- a test that
+// needs real server semantics should drive a real fb-server. What it is for is
+// the handful of exchanges whose *timing* is the thing under test, where a real
+// server would answer instantly and prove nothing.
+struct Rule {
+    std::string trigger;               // substring; matched against one line
+    std::vector<std::string> replies;  // consumed in order; the last one repeats
+};
+
 struct FakeServerOptions {
     Banner banner = Banner::Immediate;
 
@@ -104,11 +118,12 @@ struct FakeServerOptions {
     // Whether the port answers connects at all, and how it declines to.
     Reachability reachability = Reachability::Listening;
 
-    // What to answer with, if anything. Left empty, the fixture only ever
-    // sends the banner -- it is a transport-level fixture, not a protocol
-    // implementation, and a test that needs real protocol replies should use
-    // a real fb-server.
     std::string bannerText = RealBannerLine();
+
+    // Canned answers, applied to each newline-terminated line the client
+    // sends. Empty by default: with no rules the fixture only ever sends the
+    // banner, which is all most cases here want. Requires readPeer.
+    std::vector<Rule> rules;
 };
 
 // One listener on 127.0.0.1, on a kernel-assigned port. Starts serving in a
@@ -312,6 +327,12 @@ private:
             return;
         }
 
+        // Per-peer, so each connection starts its rules from the top -- a test
+        // that reconnects gets the same script again rather than the tail of
+        // the previous run's.
+        std::vector<size_t> ruleUses(opts_.rules.size(), 0);
+        std::string lineBuffer;
+
         char buffer[4096];
         while (!stopping_.load()) {
             fd_set readfds;
@@ -322,8 +343,32 @@ private:
 
             const ssize_t got = ::recv(peer, buffer, sizeof(buffer), 0);
             if (got <= 0) return;  // peer closed, or errored
-            std::lock_guard<std::mutex> lock(mutex_);
-            received_.append(buffer, static_cast<size_t>(got));
+            {
+                std::lock_guard<std::mutex> lock(mutex_);
+                received_.append(buffer, static_cast<size_t>(got));
+            }
+            if (opts_.rules.empty()) continue;
+
+            // Buffer to newlines before matching. A command can arrive split
+            // across reads, and matching raw recv() chunks would make the
+            // fixture guilty of exactly the bug it was built to catch.
+            lineBuffer.append(buffer, static_cast<size_t>(got));
+            size_t nl;
+            while ((nl = lineBuffer.find('\n')) != std::string::npos) {
+                const std::string line = lineBuffer.substr(0, nl);
+                lineBuffer.erase(0, nl + 1);
+                for (size_t i = 0; i < opts_.rules.size(); ++i) {
+                    const Rule& rule = opts_.rules[i];
+                    if (rule.replies.empty()) continue;
+                    if (line.find(rule.trigger) == std::string::npos) continue;
+                    const size_t which = ruleUses[i] < rule.replies.size()
+                                             ? ruleUses[i]
+                                             : rule.replies.size() - 1;
+                    ++ruleUses[i];
+                    SendAll(peer, rule.replies[which]);
+                    break;  // first matching rule wins
+                }
+            }
         }
     }
 

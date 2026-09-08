@@ -35,7 +35,7 @@ source as of `3f96b74a`:
 | `NetBotConnection::JoinRoom`'s blocking connect | OS timeout × N bots | fixed (1e) |
 | `Connect` (resolve + connect + drain `SERVER_READY`) | 8 s + unbounded DNS | fixed (2a–2c) |
 | Round 2+ level sync always burning its timeout | 5 s **every round after the first** | fixed (3c) |
-| Leader `GAME_CAN_START` poll | **15 s** (its own comment says 5 s — wrong) | open (3a) |
+| Leader `GAME_CAN_START` poll | **15 s** (its own comment says 5 s — wrong) | fixed (3a) |
 | `WaitForBubble*` family | 5 s each | open (3b) |
 | `SyncNetworkLevel` (40 waits) | **~200 s** | open (3b) |
 
@@ -286,13 +286,40 @@ Status: **2a-2e all landed** — stage 2 complete.
 
 ## Stage 3 — Async game start and level sync (highest risk)
 
-Status: **3c landed; 3a/3b still open**
+Status: **3a and 3c landed; 3b still open**
 
-- **3a.** The leader `GAME_CAN_START` poll becomes a frame-driven deadline,
-  adopting the `wasmBotWaitStart` pattern. Retires `leaderWaitTick()`, whose
-  only purpose is pumping bots from inside the blocking loop — stage 1a's hook
-  takes that over. Also removes a re-entrancy hazard: `Update()` inside
-  `WaitForBubble` re-enters `HandlePushMessage` and can recurse into this poll.
+- **3a. Leader `GAME_CAN_START` poll — landed.** Used to run as a blocking loop
+  *inside a push-message handler* (`HandlePushMessage`, reached from the
+  per-frame message pump): 50 attempts of up to 200 ms `select()` plus a
+  100 ms `SDL_Delay`, so a single slow joiner could freeze the leader's render
+  loop for up to 15 s (the loop's own comment claimed 5 s). Now a kickoff
+  (`pendingGameStart = true`) plus a per-frame pump (`PumpGameStart()`, called
+  from `Update()` after the socket read loop): it re-sends
+  `LEADER_CHECK_GAME_START` on the same ~100 ms cadence the old loop used, and
+  `HandleServerResponse()` matches `LEADER_CHECK_GAME_START`'s reply *before*
+  the generic bare-`OK` handling (the reply's own text contains "OK", which
+  would otherwise be misattributed to a pending nick/create/join). On answer
+  or on `kGameStartTimeoutMs` (5 s) — whichever comes first —
+  `FinishGameStart()` sends `OK_GAME_START` and enters `IN_GAME`; hitting the
+  deadline starts anyway rather than stranding every other player in the room
+  over one silent joiner.
+  This also retires `leaderWaitTick()` — its only purpose was pumping hosted
+  bots from inside the blocking loop by hand, a job stage 1a's per-frame hook
+  already does unconditionally. `SetLeaderWaitTick()` and the member are gone;
+  `MainMenu::AddBots`/`DropLobbyBots` no longer touch it.
+  Also removes a re-entrancy hazard the old loop carried: `Update()` inside
+  `WaitForBubble` re-entered `HandlePushMessage` and could recurse into this
+  poll. That hazard is specific to `WaitForBubble` still being synchronous —
+  it returns once 3b lands.
+  New coverage in `netconnect_test.cpp` drives the real path (`NICK` → `CREATE`
+  → `START` → a `GAME_CAN_START` push in the server's own wire format) against
+  `fake_server.h`, now extended with a small canned-reply mechanism (`Rule`:
+  match a line substring, answer with the next entry in a scripted list). Two
+  cases: a joiner that answers "not ready" a few times then "OK" (worst frame
+  0 ms, ~370 ms total — the ordinary path a real localhost server answers too
+  fast to exercise), and a joiner that never answers at all (worst frame 2 ms,
+  ~5 s total, bounded by the deadline rather than the old loop's 15 s, ~267
+  frames pumped throughout the wait rather than the loop sleeping through it).
 - **3b.** `WaitForBubble`/`WaitForNextBubble`/`WaitForTobeBubble` and
   `SyncNetworkLevel` become a frame-driven state machine. These waits are *not*
   `#ifdef`-guarded today — they compile into WASM too. `NewGame` and

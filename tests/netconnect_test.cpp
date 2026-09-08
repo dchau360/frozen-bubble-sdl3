@@ -21,6 +21,7 @@
 #include <SDL3/SDL.h>
 
 #include <cstdio>
+#include <string>
 
 static int failures = 0;
 #define CHECK(expression) do { \
@@ -76,6 +77,37 @@ static PumpResult PumpUntilSettled(NetworkClient* nc, Uint64 budgetMs) {
     r.connected = nc->IsConnected();
     r.failed = (nc->GetState() == DISCONNECTED);
     return r;
+}
+
+// As above, but settles on an arbitrary condition rather than on the connect
+// state machine -- used by the game-start cases, which run entirely after the
+// connection is up.
+static PumpResult PumpUntil(NetworkClient* nc, Uint64 budgetMs, bool (*done)(NetworkClient*)) {
+    PumpResult r;
+    const Uint64 start = SDL_GetTicks();
+    while (SDL_GetTicks() - start < budgetMs) {
+        const Uint64 frameStart = SDL_GetTicks();
+        nc->Update();
+        const Uint64 frameMs = SDL_GetTicks() - frameStart;
+        if (frameMs > r.worstFrameMs) r.worstFrameMs = frameMs;
+        ++r.frames;
+
+        if (done(nc)) break;
+        SDL_Delay(16);
+    }
+    r.elapsedMs = SDL_GetTicks() - start;
+    r.connected = nc->IsConnected();
+    r.failed = (nc->GetState() == DISCONNECTED);
+    return r;
+}
+
+static size_t CountOccurrences(const std::string& haystack, const std::string& needle) {
+    size_t count = 0;
+    for (size_t at = haystack.find(needle); at != std::string::npos;
+         at = haystack.find(needle, at + needle.size())) {
+        ++count;
+    }
+    return count;
 }
 
 // Printed on success as well as failure, unlike the other tests here. The
@@ -284,6 +316,116 @@ int main() {
         CHECK(nc->Connect("127.0.0.1", good.Port()));
         const PumpResult r = PumpUntilSettled(nc, 5000);
         CHECK(r.connected);
+        ResetClient();
+    }
+
+    // --- The leader's game-start poll (stage 3a).
+    //
+    // After START, the leader must poll LEADER_CHECK_GAME_START until every
+    // joiner has acknowledged and only then send its own OK_GAME_START, so
+    // that everyone is in prio mode before it starts broadcasting level sync.
+    // It used to do that in a blocking loop *inside a push-message handler*:
+    // 50 attempts of up to 200ms select() plus a 100ms sleep each, so a joiner
+    // that was merely slow froze the leader's render loop for up to 15s (the
+    // loop's own comment claimed 5s). Worse, it was reached from the per-frame
+    // pump, so anything else the client spoke for -- a hosted bot on its own
+    // socket -- stopped being serviced for the duration and could miss the
+    // very acknowledgement being waited for.
+    //
+    // Both cases below reach the poll through the real path: NICK, CREATE,
+    // START, and a GAME_CAN_START push in the server's own wire format.
+    {
+        // "the server says no a few times, then yes" -- the ordinary case, and
+        // the one a real fb-server on localhost answers too fast to exercise.
+        fbtest::FakeServerOptions opts;
+        // Rule order matters and is load-bearing: "LEADER_CHECK_GAME_START"
+        // contains "START", and the first matching rule wins.
+        opts.rules = {
+            {"LEADER_CHECK_GAME_START", {"FB/1.3 LEADER_CHECK_GAME_START: OTHERS_NOT_READY\n",
+                                         "FB/1.3 LEADER_CHECK_GAME_START: OTHERS_NOT_READY\n",
+                                         "FB/1.3 LEADER_CHECK_GAME_START: OTHERS_NOT_READY\n",
+                                         "FB/1.3 LEADER_CHECK_GAME_START: OK\n"}},
+            {"NICK", {"FB/1.3 NICK: OK\n"}},
+            {"CREATE", {"FB/1.3 CREATE: OK\n"}},
+            // The player-id byte is binary, so it cannot go in a string
+            // literal next to "leader" without the hex escape swallowing the
+            // following letters.
+            {"START", {std::string("FB/1.3 PUSH: GAME_CAN_START: \x01") + "leader\n"}},
+        };
+        fbtest::FakeServer server(opts);
+        CHECK(server.Started());
+
+        NetworkClient* nc = NetworkClient::Instance();
+        CHECK(nc->Connect("127.0.0.1", server.Port()));
+        CHECK(PumpUntilSettled(nc, 5000).connected);
+
+        CHECK(nc->SendNick("leader"));
+        PumpUntil(nc, 3000, [](NetworkClient* c) { return !c->IsPendingNick(); });
+        CHECK(!nc->IsPendingNick());
+
+        CHECK(nc->CreateGame(2));
+        PumpUntil(nc, 3000, [](NetworkClient* c) { return c->GetState() == IN_LOBBY; });
+        CHECK(nc->GetState() == IN_LOBBY);
+        CHECK(nc->IsLeader());
+
+        CHECK(nc->StartGame());
+        const PumpResult r =
+            PumpUntil(nc, 8000, [](NetworkClient* c) { return c->GetState() == IN_GAME; });
+        CHECK(nc->GetState() == IN_GAME);
+        // The acknowledgement is only correct if it comes *after* the server
+        // said everyone was ready -- sending it early is the desync this whole
+        // handshake exists to prevent.
+        CHECK(server.WaitForReceived("OK_GAME_START", 1000));
+        // It polled more than once (so it really did wait) but nothing like
+        // the old loop's 50, and it finished on the answer rather than on the
+        // deadline.
+        const size_t polls = CountOccurrences(server.Received(), "LEADER_CHECK_GAME_START");
+        CHECK(polls >= 4);
+        CHECK(polls < 20);
+        CHECK(r.elapsedMs < 3000);
+        CHECK(r.worstFrameMs <= kFrameBudgetMs);
+        ReportFrames("game start (server says ready)", r);
+        std::fprintf(stderr, "  [game start] %d polls sent\n", (int)polls);
+        ResetClient();
+    }
+
+    {
+        // A joiner that never acknowledges. The leader has to start anyway on
+        // its own deadline: refusing to start would strand every other player
+        // in the room with no way forward, which is strictly worse than one
+        // client playing a desynced board. What must not happen is the render
+        // loop being held hostage for the whole wait.
+        fbtest::FakeServerOptions opts;
+        opts.rules = {
+            {"LEADER_CHECK_GAME_START", {"FB/1.3 LEADER_CHECK_GAME_START: OTHERS_NOT_READY\n"}},
+            {"NICK", {"FB/1.3 NICK: OK\n"}},
+            {"CREATE", {"FB/1.3 CREATE: OK\n"}},
+            {"START", {std::string("FB/1.3 PUSH: GAME_CAN_START: \x01") + "leader\n"}},
+        };
+        fbtest::FakeServer server(opts);
+        CHECK(server.Started());
+
+        NetworkClient* nc = NetworkClient::Instance();
+        CHECK(nc->Connect("127.0.0.1", server.Port()));
+        CHECK(PumpUntilSettled(nc, 5000).connected);
+        CHECK(nc->SendNick("leader"));
+        PumpUntil(nc, 3000, [](NetworkClient* c) { return !c->IsPendingNick(); });
+        CHECK(nc->CreateGame(2));
+        PumpUntil(nc, 3000, [](NetworkClient* c) { return c->GetState() == IN_LOBBY; });
+        CHECK(nc->IsLeader());
+
+        CHECK(nc->StartGame());
+        const PumpResult r =
+            PumpUntil(nc, 15000, [](NetworkClient* c) { return c->GetState() == IN_GAME; });
+        CHECK(nc->GetState() == IN_GAME);
+        CHECK(server.WaitForReceived("OK_GAME_START", 1000));
+        // Bounded by the client's own deadline, not by the old loop's 15s.
+        CHECK(r.elapsedMs < 8000);
+        CHECK(r.worstFrameMs <= kFrameBudgetMs);
+        // And it kept turning frames throughout rather than sleeping through
+        // the wait -- roughly one per 16ms of it.
+        CHECK(r.frames > 100);
+        ReportFrames("game start (nobody answers)", r);
         ResetClient();
     }
 

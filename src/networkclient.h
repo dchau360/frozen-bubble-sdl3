@@ -22,7 +22,6 @@
 
 #include <SDL3/SDL.h>
 #include <atomic>
-#include <functional>
 #include <memory>
 #include <string>
 #include <vector>
@@ -68,6 +67,10 @@
 static const Uint64 kResolveTimeoutMs = 8000;      // DNS can legitimately be slow
 static const Uint64 kConnectTimeoutMs = 5000;      // TCP handshake
 static const Uint64 kServerReadyTimeoutMs = 3000;  // server's greeting
+// How long the leader waits for every joiner to acknowledge the game start
+// before starting anyway. Starting without a straggler costs that player a
+// desynced board; never starting strands everybody in the lobby.
+static const Uint64 kGameStartTimeoutMs = 5000;
 
 // Highest team number a player may be assigned. Team numbers are one-based and
 // are used to index kTeamColors (bubblegame.h), which static_asserts that it
@@ -215,13 +218,6 @@ public:
     // Where we are connected (or were last asked to connect). Used to tell
     // whether a server picked out of a list is the one this connection is
     // talking to, which decides whether a follow can be registered right now.
-    // Called repeatedly while the leader blocks waiting for every other
-    // player to acknowledge the game start. That wait is synchronous, so
-    // anything else this client is speaking for -- a hosted bot on its own
-    // socket -- stops being serviced for the duration and would miss the
-    // acknowledgement the leader is waiting for. Optional; unset by default.
-    void SetLeaderWaitTick(std::function<void()> tick) { leaderWaitTick = std::move(tick); }
-
     const std::string& GetHost() const { return connectedHost; }
     int GetPort() const { return connectedPort; }
 
@@ -399,7 +395,6 @@ private:
     void* websocketSocket;  // WebSocket handle (WebAssembly builds) - using void* to avoid emscripten header dependency
 #endif
     ConnectionState state;
-    std::function<void()> leaderWaitTick;
     std::string connectedHost;
     int connectedPort = 0;
 
@@ -439,6 +434,24 @@ private:
     // Shared teardown for every way a connect can fail, so no path forgets one
     // of the four things that have to be undone.
     void FailConnect(const char* reason);
+
+    // --- Async game start (async networking handoff, stage 3a).
+    //
+    // The leader must poll LEADER_CHECK_GAME_START until every joiner has
+    // acknowledged, and only then send its own OK_GAME_START -- that ordering
+    // is what puts everyone in prio mode before the leader starts broadcasting
+    // level sync. It used to do that in a blocking loop inside a push-message
+    // handler: 50 attempts of up to 200ms select() plus a 100ms sleep, so up
+    // to 15 seconds of frozen render loop (its own comment claimed 5s).
+    bool pendingGameStart = false;
+    Uint64 gameStartDeadline = 0;
+    Uint64 gameStartNextPollMs = 0;
+    // Drives that poll one frame at a time. No-op unless a start is pending.
+    void PumpGameStart();
+    // Send OK_GAME_START and enter the game. The single place that finishes a
+    // start, whether the server said everyone was ready or the deadline ran
+    // out first.
+    void FinishGameStart();
 #endif
     std::string playerNick;
     std::string playerGeoloc;
