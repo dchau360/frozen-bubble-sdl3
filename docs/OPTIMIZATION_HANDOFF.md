@@ -36,18 +36,47 @@ a speedup.
 ## Current checkpoint
 
 - Repository: `/Users/dchau/gr/frozen-bubble-sdl3`
-- Branch: `main`; latest source change `7f88278a` (`chore: bump version to
-  2.4.92`). Tag `v2.4.92` cut and pushed on the user's explicit go-ahead.
-- `main` and `origin/main` are in sync as of this merge. Re-verify with
-  `git fetch && git log --oneline main..origin/main` before trusting this
-  further into a new session.
-- CMake/Android version: `2.4.92`; Android versionCode: `75`.
+- Branch: `main`; latest source change `742d3f90` (`chore: bump version to
+  2.4.93`). Tag `v2.4.93` cut and pushed.
+- `main` and `origin/main` are in sync as of this checkpoint.
+  Re-verify with `git fetch && git log --oneline main..origin/main` before
+  trusting this further into a new session.
+- CMake/Android version: `2.4.93`; Android versionCode: `76`.
+- **`v2.4.92` never shipped.** Its tag build's Linux ASan/UBSan job failed,
+  which hard-blocks `Create Release`/`Deploy WASM to Itch.io` by design (see
+  CLAUDE.md's CI/release section) — no GitHub Release, no itch.io deploy
+  happened for it. Root cause: two pre-existing bugs the sanitizer job
+  caught for the first time, neither reproducible locally on macOS (leak
+  detection is unsupported there at all, and `rand()`/`srand()` sequences
+  are libc-specific, so the same seed behaves differently on Linux glibc):
+  - `NetworkClient::currentGame` (a raw `GameRoom*`) was allocated with
+    `new` on CREATE/JOIN confirmation but never `delete`d at any of its four
+    reset sites (`Disconnect`, `PartGame`, `ROOM_CLOSED`, kicked) — every
+    room departure leaked one `GameRoom`. Caught by `netconnect-test`'s
+    reconnect-and-recreate scenario (added for stage 3a), apparently the
+    first test to run a real CREATE-confirm → `Disconnect` → CREATE-confirm
+    cycle inside one ASan-instrumented process.
+  - `BubbleGame::PickNextBubble`/`ChooseFirstBubble` indexed
+    `remainingBubbles()` via `ranrange(1, size) - 1` with no empty-vector
+    guard, so a board that goes empty for an instant (a bot's queued shot
+    landing the same frame the board clears, before the round-end check
+    notices) hit a division by zero in `ranrange`. `bubblegame_board.cpp`'s
+    own `nextBubble` re-validation already guards the identical pattern with
+    `!remaining.empty()`; applied the same guard here.
+  - Both fixed in `6706d6d5`, verified with a plain push to `main` first
+    (CI run `34242064542`, all six build/test jobs green including Linux
+    ASan/UBSan) before re-tagging as `v2.4.93` rather than force-moving the
+    dead `v2.4.92` tag. **`v2.4.93`'s own tag-build CI run was still in
+    progress as of this checkpoint (run `34243015633`) — a new session
+    should check `gh run view 34243015633` (or the Actions tab) and confirm
+    `Create Release`/`Deploy WASM to Itch.io` actually succeeded before
+    assuming this release reached itch.io.**
 - Status of every backlog item: **A** (async networking) — all four stages
-  landed, tagged `v2.4.92`; three small residual items open, listed below.
-  **B** (font sharing) — gameplay + one confirmed menu hot path done, rest
-  of menu caching pending. **C, D, F** — complete. **E** — overlaps B, same
-  pending scope. **G** — measured, found not justified, deliberately not
-  implemented (closed, no further action).
+  landed, tagged `v2.4.93` (see above); three small residual items open,
+  listed below. **B** (font sharing) — gameplay + one confirmed menu hot
+  path done, rest of menu caching pending. **C, D, F** — complete. **E** —
+  overlaps B, same pending scope. **G** — measured, found not justified,
+  deliberately not implemented (closed, no further action).
 
 ## Active work — what's left
 
@@ -90,11 +119,18 @@ detail). What's left, in priority order:
    than expanded into this effort's scope — the user has since started that
    task in a separate session; check its outcome before re-investigating.
 4. **Follow-up, not a defect**: a real device/browser pairing test (not
-   just two tabs on one machine) is still worth doing, since `v2.4.92`
-   shipped without it — see the playtest recipe in
+   just two tabs on one machine) is still worth doing, since the release
+   (`v2.4.93`; `v2.4.92` never actually shipped, see "Current checkpoint"
+   above) went out without one — see the playtest recipe in
    `docs/MANUAL_TEST_CHECKLIST.md`'s "Two-browser WASM network playtest"
    section, which already flags this and the ESC/tap cancel-mid-connect
    check as uncovered by the one playtest run so far.
+5. **Confirm `v2.4.93`'s tag-build CI actually finished green and shipped.**
+   As of this checkpoint the tag-build run (`34243015633`) was still in
+   progress — check it (or the Actions tab) before assuming the release
+   reached GitHub Releases and itch.io. If it also failed, read its log
+   (`gh run view <id> --log-failed`) the same way `6706d6d5`'s two bugs were
+   found — don't just re-tag blindly.
 
 ### B/E — menu-screen label caching (pending)
 
