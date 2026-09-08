@@ -127,9 +127,6 @@ bool NetworkClient::Connect(const char* host, int port) {
         SDL_Log("Set socket receive buffer to %d bytes", rcvbuf);
     }
 
-    // Keep socket in blocking mode for initial handshake
-    // Will set non-blocking after connection established
-
     // Resolve hostname or IP address via getaddrinfo (supports both)
     struct addrinfo hints, *res;
     memset(&hints, 0, sizeof(hints));
@@ -149,11 +146,53 @@ bool NetworkClient::Connect(const char* host, int port) {
     memcpy(&serverAddr, res->ai_addr, sizeof(serverAddr));
     freeaddrinfo(res);
 
-    // Connect (blocking mode)
+    // Put the socket in non-blocking mode before connect() -- for both
+    // platforms now, not just Windows. Two reasons:
+    //
+    // 1. A plain blocking connect() to an unreachable or filtered host waits
+    //    on the OS's own TCP connect timeout, which is not this codebase's to
+    //    choose (commonly tens of seconds, sometimes minutes) and stalls the
+    //    render loop for all of it. Non-blocking connect() + select() below
+    //    bounds that wait to kConnectTimeoutMs instead.
+    // 2. SendAll's retry loop (this file, above) already expects send() to
+    //    return EWOULDBLOCK/EAGAIN when the socket's send buffer is full and
+    //    the peer isn't reading, and retries with a bounded stall count. On a
+    //    blocking POSIX socket that never happens -- send() just blocks in
+    //    the kernel with no bound at all, so a slow or stopped-reading peer
+    //    could stall the render loop indefinitely, and SendAll's retry
+    //    branch for it was dead code. Windows already got the non-blocking
+    //    fix (below is what used to be Windows-only, right after connect()
+    //    succeeded); POSIX now gets the same socket mode, just earlier.
+#ifdef _WIN32
+    {
+        u_long nonblocking = 1;
+        if (ioctlsocket(sockfd, FIONBIO, &nonblocking) != 0)
+            SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
+                         "Could not set the connection non-blocking: %d", SOCK_ERRNO);
+    }
+#else
+    {
+        int flags = fcntl(sockfd, F_GETFL, 0);
+        if (flags < 0 || fcntl(sockfd, F_SETFL, flags | O_NONBLOCK) < 0)
+            SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
+                         "Could not set the connection non-blocking: %d", SOCK_ERRNO);
+    }
+#endif
+
+    // Connect (non-blocking): a pending connection reports EINPROGRESS
+    // (POSIX) or WSAEWOULDBLOCK (Windows) immediately rather than blocking:
+    // wait for it to finish (or time out) with select(), then read SO_ERROR
+    // for the real outcome -- writability alone only means the attempt
+    // finished, not that it succeeded (a refused connection also completes
+    // and becomes writable; see the same reasoning in MeasureLatency above).
     state = CONNECTING;
     int result = connect(sockfd, (struct sockaddr*)&serverAddr, sizeof(serverAddr));
-
-    if (result < 0) {
+#ifdef _WIN32
+    const bool pending = (result < 0 && SOCK_ERRNO == WSAEWOULDBLOCK);
+#else
+    const bool pending = (result < 0 && (errno == EINPROGRESS || errno == EWOULDBLOCK));
+#endif
+    if (result < 0 && !pending) {
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to connect: %d", SOCK_ERRNO);
         SOCKET_CLOSE(sockfd);
         sockfd = -1;
@@ -161,20 +200,38 @@ bool NetworkClient::Connect(const char* host, int port) {
         return false;
     }
 
+    if (pending) {
+        const int kConnectTimeoutMs = 5000;
+        fd_set wfds;
+        FD_ZERO(&wfds);
+        FD_SET(sockfd, &wfds);
+        struct timeval connectTimeout{kConnectTimeoutMs / 1000, (kConnectTimeoutMs % 1000) * 1000};
+        const int selectResult = select(sockfd + 1, nullptr, &wfds, nullptr, &connectTimeout);
+
+        bool connected = false;
+        if (selectResult > 0) {
+            int soErr = 0;
+            socklen_t soErrLen = sizeof(soErr);
 #ifdef _WIN32
-    // Winsock has no MSG_DONTWAIT, so the flag passed to every recv() below
-    // compiles to 0 there and the per-frame receive blocks the render loop
-    // until the server happens to say something. Put the socket itself in
-    // non-blocking mode instead, which is how Winsock expresses this.
-    // POSIX is deliberately left alone: MSG_DONTWAIT already does the job
-    // per-call, and switching the socket would make send() non-blocking too.
-    {
-        u_long nonblocking = 1;
-        if (ioctlsocket(sockfd, FIONBIO, &nonblocking) != 0)
-            SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
-                         "Could not set the connection non-blocking: %d", SOCK_ERRNO);
-    }
+            char* soErrPtr = reinterpret_cast<char*>(&soErr);
+#else
+            void* soErrPtr = &soErr;
 #endif
+            connected = (getsockopt(sockfd, SOL_SOCKET, SO_ERROR, soErrPtr, &soErrLen) == 0 && soErr == 0);
+            if (!connected)
+                SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to connect: %d", soErr);
+        } else {
+            SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
+                         "Connect to %s:%d timed out after %dms", host, port, kConnectTimeoutMs);
+        }
+
+        if (!connected) {
+            SOCKET_CLOSE(sockfd);
+            sockfd = -1;
+            state = DISCONNECTED;
+            return false;
+        }
+    }
 
     // Wait for and consume all initial server messages. Poll in short slices
     // but judge "no more data" against an overall deadline, not the first

@@ -157,19 +157,40 @@ void MainMenu::StartLocalServer() {
     // Set host to localhost since we're hosting
     strcpy(networkHost, "127.0.0.1");
 
-    // Give server time to start
+    // Poll for the server actually accepting connections, rather than
+    // sleeping a fixed second regardless of how quickly (or slowly) it
+    // starts -- fork()+exec()+bind()+listen() is normally done in a handful
+    // of milliseconds, so this returns almost immediately in the common
+    // case instead of stalling the render loop for the old fixed delay.
+    // portInUse() is the same connect-probe already used above to detect a
+    // busy port; here it doubles as a readiness check. Bounded to 2 seconds
+    // (double the old fixed delay) so a genuinely slow start still gets a
+    // fair chance rather than being declared dead early.
     SDL_Log("Waiting for server to initialize...");
-    SDL_Delay(1000);
-
-    // Check if child process is still running
-    int status;
-    pid_t result = waitpid(serverPid, &status, WNOHANG);
-    if (result != 0) {
-        // Child exited immediately - server failed to start
-        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Server failed to start (child process exited)");
-        serverPid = -1;
-        serverHosting = false;
-        return;
+    bool serverReady = false;
+    {
+        Uint64 startTime = SDL_GetTicks();
+        const Uint64 timeout = 2000;
+        while (SDL_GetTicks() - startTime < timeout) {
+            int status;
+            if (waitpid(serverPid, &status, WNOHANG) != 0) {
+                // Child exited immediately - server failed to start
+                SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Server failed to start (child process exited)");
+                serverPid = -1;
+                serverHosting = false;
+                return;
+            }
+            if (portInUse(networkPort)) {
+                serverReady = true;
+                break;
+            }
+            SDL_Delay(20);
+        }
+    }
+    if (!serverReady) {
+        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
+                     "Server did not confirm readiness within 2s; proceeding anyway (PID %d)",
+                     serverPid);
     }
 
     SDL_Log("Server started with PID %d on port %d", serverPid, networkPort);

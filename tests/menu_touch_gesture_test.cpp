@@ -209,6 +209,12 @@ struct MainMenuTestAccess {
     static void RenderServerList(MainMenu& menu, bool isLAN) {
         menu.ServerListPanelRender(isLAN);
     }
+    // Drives the real fork+exec+poll-for-readiness path (handoff item A's
+    // StartLocalServer fix), not a stand-in for it.
+    static void SetNetworkPort(MainMenu& menu, int port) { menu.networkPort = port; }
+    static void CallStartLocalServer(MainMenu& menu) { menu.StartLocalServer(); }
+    static void CallStopLocalServer(MainMenu& menu) { menu.StopLocalServer(); }
+    static bool IsServerHosting(const MainMenu& menu) { return menu.serverHosting; }
     // Renders the real lobby/game-room action list -- "Create Game Room"
     // when NetworkClient has no current game, or the >5-cap compact roster
     // and friends when it does (see NetworkClientTestAccess below).
@@ -1268,6 +1274,93 @@ int main() {
 
         NetworkClientTestAccess::SetCurrentGame(*nc, nullptr);
     }
+
+#if !defined(__ANDROID__) && !defined(__WASM_PORT__) && !defined(_WIN32) && !defined(__IOS_PORT__)
+    // --- StartLocalServer polls for readiness instead of sleeping a fixed
+    // second (handoff item A). Drives the real fork+exec+poll path against
+    // the actual fb-server binary this build produced, and checks both that
+    // it returns well under the old fixed delay and that the port is
+    // genuinely accepting connections by the time it returns -- not just
+    // that it didn't crash.
+    {
+        std::unique_ptr<MainMenu> menu = MainMenuTestAccess::Create(renderer);
+        const int testPort = 15519;  // Distinct from the Python server tests' 15512/15513/15517.
+        MainMenuTestAccess::SetNetworkPort(*menu, testPort);
+
+        Uint64 start = SDL_GetTicks();
+        MainMenuTestAccess::CallStartLocalServer(*menu);
+        Uint64 elapsedMs = SDL_GetTicks() - start;
+
+        CHECK(MainMenuTestAccess::IsServerHosting(*menu));
+        // fork+exec+bind+listen for this server is normally single-digit to
+        // low-double-digit milliseconds; 900ms leaves comfortable headroom
+        // while still failing if this ever regresses back to a fixed-delay
+        // wait (the old behavior always took >=1000ms here).
+        CHECK(elapsedMs < 900);
+        if (elapsedMs >= 900)
+            std::fprintf(stderr, "  (StartLocalServer took %llu ms)\n",
+                         (unsigned long long)elapsedMs);
+        // Not just "didn't crash" -- something is actually listening on the
+        // port by the time the call returns.
+        CHECK(portInUse(testPort));
+
+        // --- NetworkClient::Connect against this same real server (handoff
+        // item A): the connect() call and the socket's blocking mode both
+        // changed (non-blocking + select()-bounded connect on POSIX too, not
+        // just Windows), so this is the one existing gap in coverage that
+        // actually matters -- every other test here fakes NetworkClient's
+        // state directly and never opens a real socket. A successful
+        // localhost connect should complete in well under the new 5-second
+        // connect deadline (it was previously bounded only by the OS's own
+        // connect timeout on a plain blocking socket).
+        {
+            NetworkClient* nc = NetworkClient::Instance();
+            // NetworkClient is a true singleton shared by every block in this
+            // file; an earlier one fakes state (line ~1010) to IN_LOBBY and
+            // never resets it, since nothing before this block cared. This
+            // one calls the real Connect(), which refuses to run unless
+            // state is DISCONNECTED, so force a clean starting point here.
+            NetworkClientTestAccess::SetState(*nc, DISCONNECTED);
+            CHECK(nc->GetState() == DISCONNECTED);
+
+            Uint64 connectStart = SDL_GetTicks();
+            bool connected = nc->Connect("127.0.0.1", testPort);
+            Uint64 connectMs = SDL_GetTicks() - connectStart;
+
+            CHECK(connected);
+            CHECK(nc->GetState() == CONNECTED);
+            CHECK(connectMs < 3000);  // Well under the 5s connect deadline on localhost.
+            if (!connected || connectMs >= 3000)
+                std::fprintf(stderr, "  (Connect to real localhost server: ok=%d, %llu ms)\n",
+                             connected, (unsigned long long)connectMs);
+
+            nc->Disconnect();
+            CHECK(nc->GetState() == DISCONNECTED);
+        }
+
+        MainMenuTestAccess::CallStopLocalServer(*menu);
+        CHECK(!MainMenuTestAccess::IsServerHosting(*menu));
+
+        // --- A refused connection (nothing listening, same port just
+        // stopped above) must fail fast via SO_ERROR after connect()
+        // reports ECONNREFUSED, not sit out the full 5-second timeout --
+        // that only bounds a genuinely unresponsive peer, not an actively
+        // refused one.
+        {
+            NetworkClient* nc = NetworkClient::Instance();
+            Uint64 refuseStart = SDL_GetTicks();
+            bool connected = nc->Connect("127.0.0.1", testPort);
+            Uint64 refuseMs = SDL_GetTicks() - refuseStart;
+
+            CHECK(!connected);
+            CHECK(nc->GetState() == DISCONNECTED);
+            CHECK(refuseMs < 2000);
+            if (connected || refuseMs >= 2000)
+                std::fprintf(stderr, "  (Connect to refused port: ok=%d, %llu ms)\n",
+                             connected, (unsigned long long)refuseMs);
+        }
+    }
+#endif
 
     if (failures == 0) {
         std::printf("menu touch gesture tests passed\n");
