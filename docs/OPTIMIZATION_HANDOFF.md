@@ -74,8 +74,9 @@ a speedup.
     `Deploy WASM to Itch.io` and `Create Release`, both confirmed ✓. This is
     the release that's actually live, not `v2.4.92`.
 - Status of every backlog item: **A** (async networking) — all four stages
-  landed, tagged `v2.4.93` (see above); two residual items remain open,
-  listed below. **B** (font sharing) — gameplay + one confirmed menu hot
+  landed, tagged `v2.4.93` (see above); one residual item remains open (the
+  server fairness bug was investigated and closed as not reproducible — see
+  below), listed below. **B** (font sharing) — gameplay + one confirmed menu hot
   paths done; remaining menu call sites were measured or inspected and B is
   complete. **C, D, E, F** — complete. **G** — measured, found not justified,
   deliberately not implemented (closed, no further action).
@@ -103,17 +104,36 @@ detail). What's left, in priority order:
    archive) with no stalls observed, so this is optional hardening rather
    than a known live bug — pick it up only if a real multi-round game is
    ever seen to hit the residual case.
-2. **A real pre-existing server bug, found while writing stage 4's test,
-   was deliberately left unfixed as out-of-scope**: a `select()`-loop
-   fairness gap in `connections_manager()` where one connection's sustained
-   flood can make a *different* connection's inbound data invisible to
-   `FD_ISSET` for the flood's whole duration. Confirmed pre-existing
-   (reproduces against a clean worktree from before any stage-4 change) and
-   confirmed unrelated to stage 4's `write_set` addition or to memory
-   corruption (clean under ASan with `write_set` both present and
-   disabled). Flagged as its own background task (`task_3c17853a`) rather
-   than expanded into this effort's scope — the user has since started that
-   task in a separate session; check its outcome before re-investigating.
+2. ~~A real pre-existing server bug, found while writing stage 4's test~~ —
+   **investigated 2026-09-08 (`task_3c17853a`), not reproducible; closed.**
+   The original finding was a `select()`-loop fairness gap in
+   `connections_manager()`, seemingly reproducible against a clean
+   pre-stage-4 worktree and seemingly unrelated to stage 4's `write_set`
+   addition or memory corruption. A follow-up session rebuilt the server
+   with `FB_DEBUG_SELECT`-gated instrumentation (`fd`/`FD_ISSET` logged on
+   every prio pass) and drove a genuinely sustained, paced, backgrounded
+   flood (~16k msgs/sec) against two topologies — a quiet third peer in the
+   same game, and a quiet peer in a wholly separate game on the same
+   server. In both, the quiet peer's fd was reported readable within
+   0.0-0.4 ms of every send, across 16 sends/run over multiple runs — no
+   starvation. This matches the code: `connections_manager()` runs a fresh
+   `select()` every tick while prio traffic flows, and each tick's
+   `g_list_foreach` over `conns_prio` visits every connection unconditionally
+   (`prio_processed` is only checked *after* the pass completes, so it can't
+   skip a connection mid-pass). The likely explanation for the original
+   finding: several client-side test-harness artifacts each independently
+   produce a "quiet peer's data never arrives" symptom by accident — a raw
+   NUL byte tripping the server's NUL-before-newline guard, unpaced flooding
+   tripping the separate "too much data without LF" guard (killing the
+   *flooder*, not the quiet peer), a blocking socket's `settimeout()` costing
+   real wall-clock time per poll, or conflating BUG-007's (already-fixed)
+   output-queue backpressure with inbound-read fairness. No server change was
+   made — nothing was confirmed to fix. If this is ever seen again against a
+   real client, `FB_DEBUG_SELECT=1 ./fb-server ...` reproduces the exact
+   instrumentation used here (not currently compiled in — reintroduce the
+   `getenv`-gated block from this note if needed). See the archive's "Also
+   discovered" note in the stage-4 section for the original finding's own
+   writeup.
 3. **Follow-up, not a defect**: a real device/browser pairing test (not
    just two tabs on one machine) is still worth doing, since the release
    (`v2.4.93`, confirmed shipped — `v2.4.92` never actually did, see
@@ -1266,19 +1286,22 @@ it:
   ever gets a chance to. The test passes `-g` with a generous value so it
   actually exercises the queue's own cap rather than always hitting the
   unrelated gracetime timer first.
-- **Also discovered, and deliberately left alone**: while a peer floods
+- **Also discovered, and initially left alone**: while a peer floods
   sustained, back-to-back GAMEMSG traffic, a *different* prio-mode
   connection's own inbound data (confirmed with a lone 3-byte ping, sent
-  while flooding was active) can go unnoticed by `select()` for the whole
-  duration of the flood, even though the same connection is read cleanly the
-  moment the flood pauses. Reproduced identically against the pre-stage-4
-  server in a clean worktree, and confirmed it isn't `write_set` (still
-  reproduces with `write_set` disabled entirely) or memory corruption (clean
-  under ASan). This looks like a real fairness/starvation gap in the
-  `prio_processed` → `continue` → fresh-`select()` loop under sustained
-  single-peer load, but it's pre-existing, separate from BUG-007's "blocking
-  send()" defect, and out of this stage's scope — this is the `task_3c17853a`
-  item in "Active work" above.
+  while flooding was active) appeared to go unnoticed by `select()` for the
+  whole duration of the flood, even though the same connection is read
+  cleanly the moment the flood pauses. Reproduced identically against the
+  pre-stage-4 server in a clean worktree, and confirmed it wasn't
+  `write_set` (still reproduced with `write_set` disabled entirely) or
+  memory corruption (clean under ASan). Looked like a real
+  fairness/starvation gap in the `prio_processed` → `continue` →
+  fresh-`select()` loop under sustained single-peer load, pre-existing and
+  separate from BUG-007's "blocking `send()`" defect — flagged as
+  `task_3c17853a`. **Investigated 2026-09-08, not reproducible** — see
+  "Active work" item 2 above for the follow-up methodology, the negative
+  result across two topologies, and the client-side test-harness artifacts
+  that most likely explain the original observation.
 
 ### Verified: live two-browser WASM playtest (2026-09-08)
 
