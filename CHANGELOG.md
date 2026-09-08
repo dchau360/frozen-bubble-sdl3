@@ -1,5 +1,13 @@
 # Changelog
 
+## v2.4.93
+
+- No player-visible change. `v2.4.92`'s tag build failed CI (two
+  pre-existing bugs its Linux sanitizer job caught for the first time:
+  a memory leak on leaving a game room, and a rare crash if the board
+  emptied at the exact instant a shot was fired) and never shipped, so
+  this release carries the same v2.4.92 changes plus both fixes.
+
 ## v2.4.92
 
 - **The game no longer freezes while connecting to a server, joining a
