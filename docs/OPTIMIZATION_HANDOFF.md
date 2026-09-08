@@ -33,9 +33,10 @@ a speedup.
 ## Current checkpoint
 
 - Repository: `/Users/dchau/gr/frozen-bubble-sdl3`
-- Branch: `main`; source changes are committed in `1e2ed8e5`
-  (`perf: tighten text rendering and frame pacing`). This handoff update is
-  committed immediately after that source checkpoint.
+- Branch: `main`; the latest source change is `d79bf01b`
+  (`perf: share immutable multiplayer label fonts`), following the main batch
+  in `1e2ed8e5` (`perf: tighten text rendering and frame pacing`). This
+  handoff update is committed immediately after the source checkpoint.
 - HEAD matches the locally recorded `origin/main`. No fetch was performed in
   this review; this does not establish live remote or CI status.
 - CMake/Android version: `2.4.91`; Android versionCode: `74`.
@@ -342,9 +343,9 @@ All items are pending; none were implemented during this review.
 
 ### B. Share fonts across cached labels
 
-Status: **stats-panel portion implemented and verified** on
-2026-09-07 in `1e2ed8e5`. Broader targeting/name/menu font sharing
-remains pending.
+Status: **gameplay label sharing implemented and verified** on 2026-09-07.
+Stats-panel sharing is in `1e2ed8e5`; targeting/name sharing is in `d79bf01b`.
+Menu font sharing remains pending measurement.
 
 - Evidence: `BubbleGame::StatsPanelCell` in `src/bubblegame_render.cpp` calls
   `LoadFont(path, size)` for every new cell. Targeting and name labels also
@@ -371,10 +372,19 @@ remains pending.
 - Full native build and suite passed after this change: 27 runnable tests
   passed, with the 2 sanitizer-only server tests skipped. The five relevant
   tests passed under ASan/UBSan with `ASAN_OPTIONS=detect_leaks=0` on macOS.
-- Remaining work: measure opens and retained memory, then consider immutable
-  groups for targeting/name labels. Do not combine borrowers that later change
-  font size, style, or alignment unless `TTFText` tracks external font
-  generations or those mutations are eliminated.
+- Follow-up change: all `MAX_NET_PLAYERS` targeting labels now borrow one
+  immutable 12 px font, and the remote-player name labels borrow one immutable
+  centered 16 px font. Player zero retains its distinct 22 px font. The new
+  pointer-identity assertions failed for both groups before the change and the
+  focused test then passed 1/1.
+- After the follow-up, the full native build and suite passed again: 27
+  runnable tests passed and the 2 sanitizer-only server tests skipped. The
+  focused test passed under ASan/UBSan with leak detection disabled on macOS,
+  and the WASM Release build compiled successfully.
+- Remaining work: measure opens and retained memory before extending this to
+  menus. Do not combine borrowers that later change font size, style, or
+  alignment unless `TTFText` tracks external font generations or those
+  mutations are eliminated.
 
 ### C. Preserve frame timing precision in long sessions
 
