@@ -83,6 +83,9 @@ TTFText::TTFText(TTFText&& other) noexcept
       coords(other.coords),
       forecolor(other.forecolor),
       backcolor(other.backcolor),
+      useRing(other.useRing),
+      ringColor(other.ringColor),
+      ringPx(other.ringPx),
       textFont(other.textFont),
       ownsFont(other.ownsFont),
       outTexture(other.outTexture)
@@ -104,6 +107,9 @@ TTFText& TTFText::operator=(TTFText&& other) noexcept {
     coords = other.coords;
     forecolor = other.forecolor;
     backcolor = other.backcolor;
+    useRing = other.useRing;
+    ringColor = other.ringColor;
+    ringPx = other.ringPx;
     curWrapLength = other.curWrapLength;
     textureRenderer = other.textureRenderer;
     textureDirty = other.textureDirty;
@@ -157,6 +163,22 @@ void TTFText::UpdateText(const SDL_Renderer *rend, const char *txt, int wrapLeng
     curText = txt;
     curWrapLength = wrapLength;
     textureDirty = true;
+
+    if (useRing) {
+        SDL_Point sz{};
+        outTexture = RenderRingedText(rend, textFont, txt, forecolor, ringColor, ringPx, &sz);
+        coords.w = sz.x;
+        coords.h = sz.y;
+        if (outTexture != nullptr) {
+#ifdef FROZEN_BUBBLE_TEST_ACCESS
+            ++testTextureCreationCount;
+#endif
+            textureRenderer = rend;
+            textureDirty = false;
+        }
+        return;
+    }
+
     SDL_Surface *front = TTF_RenderText_Blended_Wrapped(textFont, txt, 0, forecolor, wrapLength);
     if (!front) return;
     SDL_Surface *back = TTF_RenderText_Blended_Wrapped(textFont, txt, 0, backcolor, wrapLength);
@@ -191,6 +213,16 @@ void TTFText::UpdateColor(SDL_Color fg, SDL_Color bg) {
     }
     forecolor = fg;
     backcolor = bg;
+}
+
+void TTFText::UpdateRing(SDL_Color ring, int px) {
+    if (!useRing || ringColor.r != ring.r || ringColor.g != ring.g ||
+        ringColor.b != ring.b || ringColor.a != ring.a || ringPx != px) {
+        InvalidateTexture();
+    }
+    useRing = true;
+    ringColor = ring;
+    ringPx = px;
 }
 
 void TTFText::UpdateStyle(int size, int style) {

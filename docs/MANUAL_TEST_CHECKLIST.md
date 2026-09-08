@@ -29,6 +29,26 @@ None of these procedures was executed during the automated remediation work.
   board in Classic mode and confirm the round continues. Repeat in Clear Mode
   and confirm exactly one win, the correct winner presentation, and the
   expected win SFX.
+- [ ] **Race and Timed win banners and HUD, local and network:** play a Race
+  round to the target and a Timed round to the buzzer in both local
+  multiplayer and a network room. Confirm the per-player HUD (anchored beside
+  each player's own next-shot bubble) shows the live pop count against the
+  target in Race, the countdown in Timed, and the gold leader highlight
+  tracks whoever is actually ahead. Confirm the round-end banner reads "First
+  to Pop!"/"Time's Up!" with the correct name, matches for every client in a
+  network game (including one where the winner is a remote player), and that
+  a Timed tie is presented as a draw crediting nobody.
+- [ ] **Timed team pooling vs. Race individual target:** with players split
+  into teams, confirm a Timed round is won by whichever team's *combined*
+  pop total is higher (a 2-player team can out-pool a solo player), while a
+  Race round only ends when one player individually reaches the target —
+  teammates' counts do not add together to reach it, though the win still
+  extends to the whole team once that happens.
+- [ ] **Race/Timed elimination and attack-bubble inheritance:** confirm an
+  eliminated player stays out for the rest of a Race/Timed round while
+  everyone else keeps playing, and that the room's Attack bubbles setting
+  (On/Off/Blockable) carries into Race and Timed unchanged rather than being
+  forced off the way Clear Mode forces it.
 - [ ] **Simultaneous local loss draw:** arrange for the final surviving local
   players to cross the danger line in the same frame. Confirm the round is
   presented as a draw and neither player receives a transient or lasting win.

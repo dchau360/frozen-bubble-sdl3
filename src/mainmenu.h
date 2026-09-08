@@ -518,7 +518,11 @@ private:
     bool playerAimGuide[5] = {false, false, false, false, false};  // Per-player: show aim guide
     int currentPlayerCol = 0;  // Focused player column when navigating per-player grid settings
     bool netRoomMouseEnabled = false;  // Per-session mouse/touch for network games (defaults OFF)
-    bool netClearMode = false;         // Clear Mode for network game
+    GameMode netGameMode = GameMode::Classic;  // Round rules for the network room
+    // Indices into kRaceTargets / kTimedSeconds (gamemode.h). Only the one
+    // belonging to the current mode is ever on screen.
+    int netRaceTargetIndex = kRaceTargetDefaultIndex;
+    int netTimedSecondsIndex = kTimedSecondsDefaultIndex;
     AttackMode netAttackMode = AttackMode::On;  // Attack bubbles for network game (ON/OFF/Cancel)
     // Bots the host has added to the current game room. They are real room
     // members with their own connections; only this client simulates them.
@@ -556,7 +560,9 @@ private:
     size_t teamOverrideChatCount = 0;  // all clients: chat msgs scanned for !team: -> override map (>5 path)
     // Snapshot of playerNoCompress/netAttackMode taken the moment Clear Mode is
     // switched on, restored when switching away from it (Clear Mode forces both
-    // on; without this, leaving Clear Mode left them stuck on forever).
+    // on; without this, leaving Clear Mode left them stuck on forever). Race
+    // and Timed force neither, so stepping the Mode row through them leaves
+    // this snapshot untouched -- see GameModeForcesNoCompression.
     bool netPreClearNoCompress[5] = {false, false, false, false, false};
     AttackMode netPreClearAttackMode = AttackMode::On;
 
@@ -603,13 +609,18 @@ private:
 
     // Local multiplayer setup panel
     bool showingLocalMPPanel = false;
-    int localMPMenuIndex = 0;       // 0=players, 1=CR, 2=row collapse, 3=mode, 4=malus, 5=team mode, 6=victories, 7..7+N-1=aim guide per player, 7+N..7+2N-1=colors per player, 7+2N=start
+    // Row indices are not fixed: Race and Timed insert one extra row under
+    // Mode. Name rows through the accessors in localmultiplayer_settings.h
+    // rather than by number.
+    int localMPMenuIndex = 0;
     int localMPPlayerCount = 2;     // 2-4 players
     int localMPBotCount = 0;        // bots fill the last slots; player 1 stays human
     int localMPBotSkill = 1;        // 0 easy, 1 normal, 2 hard
     bool localMPCR = true;          // Chain reaction enabled
     bool localMPNoCompress = false;  // Disable row compression for all players
-    bool localMPClearMode = false;   // Clear Mode (win by clearing board; defaults compression+malus off)
+    GameMode localMPGameMode = GameMode::Classic;  // Round rules (see gamemode.h)
+    int localMPRaceTargetIndex = kRaceTargetDefaultIndex;
+    int localMPTimedSecondsIndex = kTimedSecondsDefaultIndex;
     AttackMode localMPAttackMode = AttackMode::On;  // Attack bubbles (ON/OFF/Cancel)
     bool localMPTeamMode = false;    // Team Mode: odd player slots vs even (see LocalMPTeamOf)
     int localMPVictoriesIndex = 5;   // Index into kVictoriesLimits
@@ -619,6 +630,29 @@ private:
     AttackMode localMPPreClearAttackMode = AttackMode::On;
     bool localMPAimGuide[5] = {false, false, false, false, false};  // Per-player aim guide
     void LocalMPPanelRender();
+
+    // --- Game mode stepping (gamemode.h) ---
+    // Both screens step the Mode row through the same four values, and both
+    // have to carry Clear Mode's forced settings across the change: entering
+    // Clear snapshots row collapse and Attack bubbles before forcing them, and
+    // leaving it restores them. Race and Timed force neither, so stepping
+    // through them must leave that snapshot alone -- which is the whole reason
+    // this is one function per screen rather than the old inline toggle.
+    void StepLocalMPGameMode(bool forward);
+    void StepNetGameMode(bool forward);
+    // Steps whichever number the current mode owns: Race's pop target, Timed's
+    // round length. No-ops in Classic and Clear, which own neither.
+    void StepLocalMPModeValue(bool forward);
+    void StepNetModeValue(bool forward);
+    // True for a game-room row that exists in the GameRoomRow enum but is not
+    // on screen in the current mode -- today only kRoomModeValue. Up/Down
+    // steps past it. Out of line because that enum lives in
+    // mainmenu_internal.h, which this header does not (and should not) pull in.
+    bool RoomRowHidden(int row) const;
+    // The label the mode's number row shows ("50 bubbles", "0:30"). Written
+    // into `out`; empty when the mode has no number.
+    void ModeValueLabel(char* out, size_t outSize, GameMode mode,
+                        int raceTargetIndex, int timedSecondsIndex) const;
 
     // Settings guide (mainmenu_help.cpp), opened by either screen's HELP box.
     // One frame, two pages: which one is showing is helpTopic.

@@ -39,6 +39,16 @@ public:
     void UpdateText(const SDL_Renderer *rend, const char *txt, int wrapLength);
     void UpdateAlignment(int align);
     void UpdateColor(SDL_Color fg, SDL_Color bg);
+    // Opts into RenderRingedText's proper multi-directional outline in place
+    // of the plain single-corner drop shadow UpdateText otherwise bakes from
+    // `bg` -- legible over a busy, brightly colored background (a bubble
+    // board) rather than just a faint shadow on one side. Once enabled it
+    // stays enabled; `bg` passed to UpdateColor is then unused (the ring
+    // takes over that role). Call before UpdateText; changing the ring color
+    // or thickness invalidates the cached texture like any other
+    // UpdateColor/UpdateStyle call. No wrap support, same as
+    // RenderRingedText itself -- fine for the single-line labels that use it.
+    void UpdateRing(SDL_Color ring, int px);
     void UpdateStyle(int size, int style);
     void UpdateStyle(int style);
     void UpdatePosition(SDL_Point xy);
@@ -76,6 +86,10 @@ private:
 
     SDL_Rect coords{};
     SDL_Color forecolor{}, backcolor{};
+
+    bool useRing = false;
+    SDL_Color ringColor{};
+    int ringPx = 0;
 
     TTF_Font *textFont = nullptr;
     bool ownsFont = false;

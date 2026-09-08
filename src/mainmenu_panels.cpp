@@ -613,7 +613,7 @@ void MainMenu::LocalMPPanelRender() {
     if (localMPTeamMode) LocalMPTeamSplitLabel(teamModeText, sizeof(teamModeText), localMPPlayerCount);
 
     SDL_Renderer* rend = const_cast<SDL_Renderer*>(renderer);
-    const int startRow = LocalMPStartRow(localMPPlayerCount);
+    const int startRow = LocalMPStartRow(localMPPlayerCount, localMPGameMode);
 
     // Same world-map backdrop the lobby/room screens use -- see
     // kMapFillAlpha below and menulist::DrawWorldMapBackdrop's own comment.
@@ -649,35 +649,51 @@ void MainMenu::LocalMPPanelRender() {
     row(kLocalMPRowPlayers, "Players", std::to_string(localMPPlayerCount), true, true);
     row(kLocalMPRowChain, "Chain reaction", localMPCR ? "ON" : "OFF", localMPCR);
     row(kLocalMPRowCollapse, "Row collapse", localMPNoCompress ? "OFF" : "ON", !localMPNoCompress);
-    row(kLocalMPRowMode, "Mode", localMPClearMode ? "Clear" : "Classic", true, true);
-    // Stepped (splitAdjust) rather than a plain toggle now that it has three
-    // states -- a row a tap flips is fine for on/off, but not for a cycle.
-    row(kLocalMPRowMalus, "Attack bubbles", AttackModeName(localMPAttackMode),
+    // Stepped, not a toggle: four modes now, and a row a tap flips is fine
+    // for on/off but not for a cycle.
+    row(kLocalMPRowMode, "Mode", GameModeName(localMPGameMode), true, true);
+    // Race and Timed each own the row directly under Mode; Classic and Clear
+    // leave it out entirely rather than showing a setting that does nothing.
+    // Every row index below here shifts with it -- see LocalMPRowsAfterMode.
+    if (localMPGameMode == GameMode::Race) {
+        char raceText[24];
+        snprintf(raceText, sizeof(raceText), "%d bubbles",
+                 RaceTargetAt(localMPRaceTargetIndex));
+        row(kLocalMPRowModeValue, "First to pop", raceText, true, true);
+    } else if (localMPGameMode == GameMode::Timed) {
+        char timeText[24];
+        const int secs = TimedSecondsAt(localMPTimedSecondsIndex);
+        if (secs < 60) snprintf(timeText, sizeof(timeText), "%d sec", secs);
+        else snprintf(timeText, sizeof(timeText), "%d:%02d", secs / 60, secs % 60);
+        row(kLocalMPRowModeValue, "Round length", timeText, true, true);
+    }
+    row(LocalMPRowMalus(localMPGameMode), "Attack bubbles", AttackModeName(localMPAttackMode),
         localMPAttackMode != AttackMode::Off, true);
-    row(kLocalMPRowTeam, "Team mode", teamModeText, localMPTeamMode);
-    row(kLocalMPRowVictories, "Victories limit", victoriesText, true, true);
+    row(LocalMPRowTeam(localMPGameMode), "Team mode", teamModeText, localMPTeamMode);
+    row(LocalMPRowVictories(localMPGameMode), "Victories limit", victoriesText, true, true);
 
     list.Header("Bots");
-    row(kLocalMPRowBots, "Bots", botsText, botCount > 0, true);
+    row(LocalMPRowBots(localMPGameMode), "Bots", botsText, botCount > 0, true);
     // HELP box at the right-hand end of the Bot skill row, matching where the
     // game room puts its own. menulist carves the box's width out of the space
     // the value is right-aligned into, so "< Med >" moves left rather than
     // being drawn under it, and registers the box's tap zone ahead of the
     // row's own stepped halves.
-    row(kLocalMPRowBotSkill, "Bot skill", LocalMPBotSkillName(localMPBotSkill),
+    row(LocalMPRowBotSkill(localMPGameMode), "Bot skill", LocalMPBotSkillName(localMPBotSkill),
         true, true, SDLK_F1, "HELP", kLocalMPHelpTapIndex);
 
     list.Header("Per-player");
     for (int pi = 0; pi < localMPPlayerCount && pi < 5; pi++) {
         char label[16];
         snprintf(label, sizeof(label), "P%d aim guide", pi + 1);
-        row(LocalMPAimGuideRow(pi), label, localMPAimGuide[pi] ? "ON" : "OFF", localMPAimGuide[pi]);
+        row(LocalMPAimGuideRow(pi, localMPGameMode), label,
+            localMPAimGuide[pi] ? "ON" : "OFF", localMPAimGuide[pi]);
     }
     for (int pi = 0; pi < localMPPlayerCount && pi < 5; pi++) {
         char label[16], val[8];
         snprintf(label, sizeof(label), "P%d max colors", pi + 1);
         snprintf(val, sizeof(val), "%d", playerColorCounts[pi]);
-        row(LocalMPColorsRow(pi, localMPPlayerCount), label, val, true, true);
+        row(LocalMPColorsRow(pi, localMPPlayerCount, localMPGameMode), label, val, true, true);
     }
     // nullptr, not voidPanelBG: that texture is a small wood panel meant for
     // the ~341x280 popups (SPPanelRender, OptPanelRender...), and stretching

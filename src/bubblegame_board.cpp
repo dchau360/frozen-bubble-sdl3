@@ -432,6 +432,8 @@ void BubbleGame::CheckPossibleDestroy(BubbleArray &bArray){
                     totalDestroyed += groupedCount;  // Excludes activator, matching original @will_destroy
 
                     // Stats: count popped bubbles (group incl. activator) for locally-owned arrays.
+                    // The bubbles this shot knocks loose are added below, once
+                    // CheckAirBubbles has counted them.
                     if (OwnsArray(bArray))
                         bArray.rPopped += groupedCount + 1;
 
@@ -461,6 +463,16 @@ void BubbleGame::CheckPossibleDestroy(BubbleArray &bArray){
     int fallingCount = 0;
     if (totalDestroyed > 0) {
         fallingCount = CheckAirBubbles(bArray);
+
+        // Stats: a bubble this shot cut loose counts toward the player's pop
+        // total just like one in the matched group. Both halves are what the
+        // malus formula below already rewards (destroyed + falling - 2), so
+        // ranking Race and Timed rounds on anything narrower would reward a
+        // shot differently from how the game itself values it. This is the one
+        // definition of "popped": the live HUD, the Race target, the Timed
+        // ranking and the post-round Pop column all read this same counter.
+        if (OwnsArray(bArray))
+            bArray.rPopped += fallingCount;
 
         // Assign chain reaction targets to newly falling bubbles (original line 814-865)
         // This happens ONCE per stick event, not every frame

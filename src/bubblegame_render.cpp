@@ -127,6 +127,90 @@ void BubbleGame::UpdatePlayerNameWinText() {
 }
 
 
+void BubbleGame::UpdatePoppedText(BubbleArray &bArray, int idx) {
+    // Live popped-bubble count, in every multiplayer mode -- Classic and Clear
+    // included, where it is just a running total. In Race it also carries the
+    // target, since a bare number there tells you nothing about how close the
+    // round is to ending.
+    if (currentSettings.playerCount < 2) return;
+    if (idx < 0 || idx >= MAX_NET_PLAYERS) return;
+
+    // Mini boards (the 3-5 player corner layouts, and royale's parked slots)
+    // are only 128px wide with just ~40px of board free to the right of the
+    // next-bubble slot, so they drop the "Pop" label and show the bare
+    // number -- the same useMini boundary the render loop already uses for
+    // bubble textures and stick animation.
+    const bool useMini = (currentSettings.playerCount >= 3 && idx >= 1);
+
+    char buf[32];
+    if (currentSettings.gameMode == GameMode::Race) {
+        if (useMini) snprintf(buf, sizeof(buf), "%d/%d", bArray.rPopped, currentSettings.raceTarget);
+        else snprintf(buf, sizeof(buf), "Pop %d/%d", bArray.rPopped, currentSettings.raceTarget);
+    } else {
+        if (useMini) snprintf(buf, sizeof(buf), "%d", bArray.rPopped);
+        else snprintf(buf, sizeof(buf), "Pop %d", bArray.rPopped);
+    }
+
+    // Highlight whoever is winning on pops, but only in the two modes where
+    // that is what decides the round. In Classic and Clear the count is
+    // information, not a standing, and colouring a "leader" there would imply
+    // a race that isn't being run.
+    SDL_Color colour = {120, 255, 140, 255}; // Bright green: reads clearly against any board
+    if (GameModeCountsPops(currentSettings.gameMode)) {
+        const int leader = LeadingPopper();
+        // A tie has no leader (LeadingPopper returns -1) and nobody is
+        // highlighted, which is the honest picture: level is level.
+        if (leader == idx && bArray.rPopped > 0)
+            colour = {255, 225, 60, 255}; // Bright gold: this player is currently leading
+    }
+    poppedText[idx].UpdateColor(colour, {0, 0, 0, 255});
+    poppedText[idx].UpdateText(renderer, buf, 0);
+
+    // Anchored to the right of this board's own "current bubble" slot -- the
+    // one actually loaded in the cannon and about to fire -- rather than the
+    // "next bubble" preview underneath it, so it sits higher up in the same
+    // row as the shot the player is lining up right now instead of next to
+    // the queued-up color. Vertically centered against that slot; every
+    // layout's launch rect is the same 32px square, so this lines up whether
+    // it's the 2-player full board or a 3-5 player mini one.
+    const SDL_Rect &cl = bArray.curLaunchRct;
+    const int gap = 6;
+    SDL_Point at = {cl.x + cl.w + gap, cl.y + cl.h / 2 - poppedText[idx].Coords()->h / 2};
+    poppedText[idx].UpdatePosition(at);
+    { SDL_FRect fr = ToFRect(*poppedText[idx].Coords());
+      SDL_RenderTexture(const_cast<SDL_Renderer*>(renderer), poppedText[idx].Texture(), nullptr, &fr); }
+
+    // Timed mode: the shared countdown stacks directly under the pop line, at
+    // the same anchor, so a player's whole HUD -- their count and the clock
+    // both -- sits next to their own shooter instead of splitting the clock
+    // off to a separate spot on screen that's easy to lose track of mid-shot.
+    // modeTimerText is one shared object (the number is identical for every
+    // board); UpdateText only re-renders its texture on the first of these
+    // per-frame calls and just re-blits it at each board's own position for
+    // the rest, so drawing it once per player costs nothing extra.
+    if (currentSettings.gameMode == GameMode::Timed) {
+        const int remaining = TimedSecondsRemaining();
+        char tbuf[16];
+        if (modeTimerExpired && !gameFinish) {
+            // The gap between our own buzzer and the winner being announced.
+            // Said out loud rather than left on a frozen "0:00", because the
+            // board stops accepting input here (see ModeAwaitingVerdict) and
+            // a player whose shots stopped working deserves to know why.
+            snprintf(tbuf, sizeof(tbuf), "TIME UP");
+        } else {
+            snprintf(tbuf, sizeof(tbuf), "%d:%02d", remaining / 60, remaining % 60);
+        }
+        // Red for the last five seconds, so the finish is visible without reading.
+        const SDL_Color tColour = (!modeTimerExpired && remaining <= 5)
+            ? SDL_Color{255, 70, 70, 255} : SDL_Color{255, 170, 40, 255};
+        modeTimerText.UpdateColor(tColour, {0, 0, 0, 255});
+        modeTimerText.UpdateText(renderer, tbuf, 0);
+        modeTimerText.UpdatePosition({at.x, at.y + poppedText[idx].Coords()->h});
+        { SDL_FRect fr = ToFRect(*modeTimerText.Coords());
+          SDL_RenderTexture(const_cast<SDL_Renderer*>(renderer), modeTimerText.Texture(), nullptr, &fr); }
+    }
+}
+
 void BubbleGame::UpdateScoreText(BubbleArray &bArray, int slot) {
     char scoreStr[64];
     // For 2-player network games, show only player nickname (no score) in wooden banners
@@ -678,6 +762,19 @@ void BubbleGame::Render() {
         frameCount++;
     }
 
+    // Race / Timed (gamemode.h). Both run after the network pump above so the
+    // counts they read already include everything that arrived this frame, and
+    // before the render branches below so a round that ends on this frame is
+    // drawn as finished rather than a frame late.
+    //
+    // BroadcastPoppedCounts is not gated on the mode: the popped HUD is shown
+    // in every multiplayer mode, and it sends nothing on a frame where no
+    // count moved.
+    if (!gameFinish && currentSettings.playerCount >= 2) {
+        BroadcastPoppedCounts();
+        UpdateTimedRound();
+    }
+
     // Multiplayer training mode: periodically inject random malus, enforce 2-min timer
     if (currentSettings.mpTraining && !gameFinish) {
         if (mpTrainStartTime == 0) mpTrainStartTime = SDL_GetTicks();
@@ -728,6 +825,11 @@ void BubbleGame::Render() {
         // The training clock needs the same correction as the highscore timer
         // above, or a paused game burns its two minutes while nothing moves.
         if (mpTrainStartTime > 0) mpTrainStartTime += pausedFor;
+        // Same for a Timed round's clock, and for the leader's deadline for
+        // hearing everyone's final count -- a pause during that window would
+        // otherwise expire it and rank the round on whoever had reported so far.
+        if (modeTimerStart > 0) modeTimerStart += pausedFor;
+        if (modeTimerDeadline > 0) modeTimerDeadline += pausedFor;
     }
 
     // Roll up per-round stats once when a multiplayer round ends (also broadcasts 'S').
@@ -957,6 +1059,12 @@ void BubbleGame::Render() {
             if (curArray.boardVisible && currentSettings.playerCount < 3) {
                 UpdateScoreText(curArray, i);
             }
+            // Drawn for every visible board in every multiplayer mode, on both
+            // sides of the <3 split above: the 2-player layout gets it under
+            // the score banner, the 3-5 player one under the name caption.
+            if (curArray.boardVisible) {
+                UpdatePoppedText(curArray, i);
+            }
 
             // Display "left" overlay for players who actually disconnected (original line 1951-1955)
             // NOTE: LOST = died (still in game), LEFT = disconnected. Only show for LEFT.
@@ -1177,34 +1285,64 @@ void BubbleGame::Render() {
         // >5-player royale HUD: alive count + page indicator. No-op for <=5 players.
         if (currentSettings.playerCount > 5) RenderRoyaleHud(rend);
 
-        // Distinct banner for a win by clearing the board, set apart from an
-        // ordinary last-player-standing win. Positioned above panelRct so it
-        // never overlaps the 2P win-panel image or the 3-5P name/win-count text.
-        if (gameFinish && wonByClearing) {
-            // roundWinnerIdx is the player who actually cleared the board --
+        // Prominent round-end banner naming the winner, shown for every mode
+        // (previously Clear-only). Positioned above panelRct so it never
+        // overlaps the 2P win-panel image or the 3-5P name/win-count text.
+        if (gameFinish && roundWinnerIdx >= 0) {
+            // roundWinnerIdx is the player who actually won the round --
             // CommitRoundWin sets it once, from the asserted winner, and never
             // from a teammate it also credits. A scan for the first mpWinner
             // instead (the previous approach) found whichever teammate
             // happened to sit at the lowest array index, not necessarily the
-            // one who cleared anything, and named only that one player even
+            // one who won anything, and named only that one player even
             // when the win belonged to their whole team (found live: "clear
             // mode with teams set doesn't attribute win to team").
             int winnerIdx = roundWinnerIdx;
-            if (winnerIdx >= 0) {
-                char banner[160];
-                const int winningTeam = currentSettings.playerTeams[winnerIdx];
-                if (winningTeam != kNoTeam) {
-                    snprintf(banner, sizeof(banner), "Board Cleared! Team %d Wins!", winningTeam);
-                } else {
-                    snprintf(banner, sizeof(banner), "Board Cleared! %s Wins!",
-                             StatsPlayerName(bubbleArrays[winnerIdx], winnerIdx, currentSettings.networkGame).c_str());
-                }
-                clearWinText.UpdateText(rend, banner, 0);
-                clearWinText.UpdatePosition({SCREEN_CENTER_X - (clearWinText.Coords()->w / 2), 165});
-                if (clearWinText.Texture()) {
-                    SDL_FRect fr = ToFRect(*clearWinText.Coords());
-                    SDL_RenderTexture(rend, clearWinText.Texture(), nullptr, &fr);
-                }
+
+            // The "how" prefix is recomputed fresh from live state every
+            // frame rather than read back from a transmitted RoundWinCause:
+            // the wire protocol's 'F' message is just "F<nickname>", with no
+            // room to carry Race/Timed as a distinct cause without breaking
+            // old clients, so a remote peer's 'F' handler can only tag a win
+            // Clear or Remote (see bubblegame_net.cpp). Recomputing here
+            // instead works identically on every client, self-corrects on
+            // any one-frame lag between a win being announced and its final
+            // popped-count landing, and stays correct for as long as
+            // gameFinish holds the round-end screen up.
+            const char *prefix = "";
+            if (wonByClearing) {
+                prefix = "Board Cleared! ";
+            } else if (currentSettings.gameMode == GameMode::Race &&
+                       bubbleArrays[winnerIdx].rPopped >= currentSettings.raceTarget) {
+                prefix = "First to Pop! ";
+            } else if (currentSettings.gameMode == GameMode::Timed && modeTimerExpired) {
+                prefix = "Time's Up! ";
+            }
+
+            char banner[160];
+            const int winningTeam = currentSettings.playerTeams[winnerIdx];
+            if (winningTeam != kNoTeam) {
+                snprintf(banner, sizeof(banner), "%sTeam %d Wins!", prefix, winningTeam);
+            } else {
+                snprintf(banner, sizeof(banner), "%s%s Wins!", prefix,
+                         StatsPlayerName(bubbleArrays[winnerIdx], winnerIdx, currentSettings.networkGame).c_str());
+            }
+            clearWinText.UpdateText(rend, banner, 0);
+            clearWinText.UpdatePosition({SCREEN_CENTER_X - (clearWinText.Coords()->w / 2), 165});
+            if (clearWinText.Texture()) {
+                // Semi-transparent plate behind the banner: the ring outline
+                // alone still washed out over a light or similarly-colored
+                // patch of board, so give the whole banner its own contrast
+                // floor independent of what's underneath.
+                SDL_Rect plate = *clearWinText.Coords();
+                plate.x -= 16; plate.y -= 8; plate.w += 32; plate.h += 16;
+                SDL_SetRenderDrawBlendMode(rend, SDL_BLENDMODE_BLEND);
+                SDL_SetRenderDrawColor(rend, 0, 0, 0, 150);
+                SDL_FRect plateFr = ToFRect(plate);
+                SDL_RenderFillRect(rend, &plateFr);
+
+                SDL_FRect fr = ToFRect(*clearWinText.Coords());
+                SDL_RenderTexture(rend, clearWinText.Texture(), nullptr, &fr);
             }
         }
 

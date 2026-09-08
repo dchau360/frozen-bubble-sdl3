@@ -248,7 +248,13 @@ public:
     bool hostChainReactions = true;
     bool hostSinglePlayerTargetting = true;
     int hostVictoriesLimitIndex = 5;
-    bool hostClearMode = false;
+    // GameMode as a plain int for the same reason hostAttackMode is one: the
+    // enum lives in gamemode.h and this header does not need it for one field.
+    // Host:ClearMode is still written alongside it so a build predating Race
+    // and Timed reads a saved Clear room back as Clear (see LoadSettings).
+    int hostGameMode = 0;
+    int hostRaceTargetIndex = 5;    // kRaceTargetDefaultIndex -- 50 bubbles
+    int hostTimedSecondsIndex = 1;  // kTimedSecondsDefaultIndex -- 30 seconds
     int hostAttackMode = 0;
     // Retained on the wire and in old settings files for compatibility. The
     // picker now offers all five teams and its Auto 2..5 actions choose how
@@ -257,7 +263,8 @@ public:
     int hostBotSkill = 1;
     int hostRoomSizeChoice = 2;
     void SaveHostSettings(bool chainReactions, bool singlePlayerTargetting,
-                          int victoriesLimitIndex, bool clearMode, int attackMode,
+                          int victoriesLimitIndex, int gameMode,
+                          int raceTargetIndex, int timedSecondsIndex, int attackMode,
                           int teamCount, int botSkill, int roomSizeChoice);
 
     // Servers the player follows for join notifications. Bounded rather than

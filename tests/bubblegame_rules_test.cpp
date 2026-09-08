@@ -97,6 +97,18 @@ struct BubbleGameTestAccess {
         game.HandleInput(&event);
     }
     static void finishAsDraw(BubbleGame& game) { game.FinishRoundAsDraw(); }
+
+    // ---- Race / Timed (gamemode.h) ----
+    static int leadingPopper(const BubbleGame& game) { return game.LeadingPopper(); }
+    static void checkRaceTarget(BubbleGame& game) { game.CheckRaceTarget(); }
+    static void updateTimedRound(BubbleGame& game) { game.UpdateTimedRound(); }
+    static bool awaitingVerdict(const BubbleGame& game) { return game.ModeAwaitingVerdict(); }
+    static int timedRemaining(const BubbleGame& game) { return game.TimedSecondsRemaining(); }
+    static void startTimedClock(BubbleGame& game, Uint32 startedAt) {
+        game.modeTimerStart = startedAt;
+    }
+    static bool timerExpired(const BubbleGame& game) { return game.modeTimerExpired; }
+    static int winner(const BubbleGame& game) { return game.roundWinnerIdx; }
     // Mirrors the flags a real single-player death leaves set (see the
     // playerCount < 2 branch in CheckGameState/DoFrozenAnimation), without
     // needing a live board to actually put the one player in the danger
@@ -118,12 +130,15 @@ struct BubbleGameTestAccess {
     }
 
     static void reset(BubbleGame& game, int players, bool network, bool clearMode) {
+        // Kept as a bool at this call site: every existing caller asks for
+        // "clear mode or not", and GameMode's other two values are exercised
+        // by their own cases below.
         singleBubbles.clear();
         malusBubbles.clear();
         game.currentSettings = {};
         game.currentSettings.playerCount = players;
         game.currentSettings.networkGame = network;
-        game.currentSettings.clearMode = clearMode;
+        game.currentSettings.gameMode = clearMode ? GameMode::Clear : GameMode::Classic;
         game.gameFinish = game.gameLost = game.gameMatchOver = false;
         game.gameMpDone = false;
         game.wonByClearing = false;
@@ -257,7 +272,7 @@ int main() {
         options.playerCount = 4;
         options.chainReaction = true;
         options.victoriesIndex = 15;
-        options.clearMode = false;
+        options.gameMode = GameMode::Classic;
         options.attackMode = AttackMode::Off;
         options.teamMode = true;
         options.colors = {5, 6, 7, 8, 8};
@@ -993,7 +1008,7 @@ int main() {
         settings.playerCount = 3;
         settings.networkGame = true;
         settings.randomLevels = true;
-        settings.clearMode = true;
+        settings.gameMode = GameMode::Clear;
         // Indexed by room slot: host=team1, bot_b(slot1)=team2, bot_a(slot2)=team3.
         settings.playerTeams[0] = 1;
         settings.playerTeams[1] = 2;
@@ -1282,6 +1297,196 @@ int main() {
         // means "the level just lost on" everywhere else that reads it.
         CHECK(BubbleGameTestAccess::reloadLevel(game) == 4);
         CHECK(BubbleGameTestAccess::player(game, 0).score == 0);
+    }
+
+    // ---- Race mode ------------------------------------------------------
+    // The player who reaches the target wins the round outright, without
+    // anybody having to die for it.
+    {
+        BubbleGame game(renderer);
+        BubbleGameTestAccess::reset(game, 3, false, false);
+        BubbleGameTestAccess::settings(game).gameMode = GameMode::Race;
+        BubbleGameTestAccess::settings(game).raceTarget = 50;
+
+        BubbleGameTestAccess::player(game, 0).rPopped = 49;
+        BubbleGameTestAccess::player(game, 1).rPopped = 30;
+        BubbleGameTestAccess::checkRaceTarget(game);
+        CHECK(!BubbleGameTestAccess::finished(game));   // one short
+
+        BubbleGameTestAccess::player(game, 0).rPopped = 50;
+        BubbleGameTestAccess::checkRaceTarget(game);
+        CHECK(BubbleGameTestAccess::finished(game));
+        CHECK(BubbleGameTestAccess::winner(game) == 0);
+        CHECK(BubbleGameTestAccess::player(game, 0).winCount == 1);
+        CHECK(BubbleGameTestAccess::player(game, 1).winCount == 0);
+    }
+
+    // Overshooting the target still wins -- a shot that pops past it in one
+    // group must not sail by a strict equality check.
+    {
+        BubbleGame game(renderer);
+        BubbleGameTestAccess::reset(game, 2, false, false);
+        BubbleGameTestAccess::settings(game).gameMode = GameMode::Race;
+        BubbleGameTestAccess::settings(game).raceTarget = 50;
+        BubbleGameTestAccess::player(game, 1).rPopped = 57;
+        BubbleGameTestAccess::checkRaceTarget(game);
+        CHECK(BubbleGameTestAccess::winner(game) == 1);
+    }
+
+    // A player already eliminated cannot win on a count they reached earlier;
+    // the round belongs to whoever is still playing.
+    {
+        BubbleGame game(renderer);
+        BubbleGameTestAccess::reset(game, 3, false, false);
+        BubbleGameTestAccess::settings(game).gameMode = GameMode::Race;
+        BubbleGameTestAccess::settings(game).raceTarget = 20;
+        BubbleGameTestAccess::player(game, 0).rPopped = 25;
+        BubbleGameTestAccess::player(game, 0).playerState = BubbleArray::PlayerState::LOST;
+        BubbleGameTestAccess::checkRaceTarget(game);
+        CHECK(!BubbleGameTestAccess::finished(game));
+    }
+
+    // Race does nothing in the other three modes, whatever the counts say.
+    {
+        for (GameMode gm : {GameMode::Classic, GameMode::Clear, GameMode::Timed}) {
+            BubbleGame game(renderer);
+            BubbleGameTestAccess::reset(game, 2, false, false);
+            BubbleGameTestAccess::settings(game).gameMode = gm;
+            BubbleGameTestAccess::settings(game).raceTarget = 10;
+            BubbleGameTestAccess::player(game, 0).rPopped = 999;
+            BubbleGameTestAccess::checkRaceTarget(game);
+            CHECK(!BubbleGameTestAccess::finished(game));
+        }
+    }
+
+    // ---- Timed mode: ranking --------------------------------------------
+    // Most pops wins, and a dead player is still ranked on the count they
+    // froze at rather than dropping out of the reckoning.
+    {
+        BubbleGame game(renderer);
+        BubbleGameTestAccess::reset(game, 3, false, false);
+        BubbleGameTestAccess::settings(game).gameMode = GameMode::Timed;
+        BubbleGameTestAccess::player(game, 0).rPopped = 12;
+        BubbleGameTestAccess::player(game, 1).rPopped = 30;
+        BubbleGameTestAccess::player(game, 2).rPopped = 7;
+        BubbleGameTestAccess::player(game, 1).playerState = BubbleArray::PlayerState::LOST;
+        CHECK(BubbleGameTestAccess::leadingPopper(game) == 1);
+    }
+
+    // A player who disconnected drops out entirely, even leading.
+    {
+        BubbleGame game(renderer);
+        BubbleGameTestAccess::reset(game, 3, false, false);
+        BubbleGameTestAccess::settings(game).gameMode = GameMode::Timed;
+        BubbleGameTestAccess::player(game, 0).rPopped = 12;
+        BubbleGameTestAccess::player(game, 1).rPopped = 30;
+        BubbleGameTestAccess::player(game, 2).rPopped = 7;
+        BubbleGameTestAccess::player(game, 1).playerState = BubbleArray::PlayerState::LEFT;
+        CHECK(BubbleGameTestAccess::leadingPopper(game) == 0);
+    }
+
+    // A tie at the top has no winner: -1, which the round turns into a draw.
+    {
+        BubbleGame game(renderer);
+        BubbleGameTestAccess::reset(game, 3, false, false);
+        BubbleGameTestAccess::settings(game).gameMode = GameMode::Timed;
+        BubbleGameTestAccess::player(game, 0).rPopped = 20;
+        BubbleGameTestAccess::player(game, 1).rPopped = 20;
+        BubbleGameTestAccess::player(game, 2).rPopped = 3;
+        CHECK(BubbleGameTestAccess::leadingPopper(game) == -1);
+    }
+
+    // A tie below the top is not a tie: it does not stop the real leader
+    // from being named.
+    {
+        BubbleGame game(renderer);
+        BubbleGameTestAccess::reset(game, 3, false, false);
+        BubbleGameTestAccess::settings(game).gameMode = GameMode::Timed;
+        BubbleGameTestAccess::player(game, 0).rPopped = 5;
+        BubbleGameTestAccess::player(game, 1).rPopped = 5;
+        BubbleGameTestAccess::player(game, 2).rPopped = 40;
+        CHECK(BubbleGameTestAccess::leadingPopper(game) == 2);
+    }
+
+    // Teammates pool their pops: the side with the higher total takes the
+    // round even when the single highest individual is on the losing side.
+    {
+        BubbleGame game(renderer);
+        BubbleGameTestAccess::reset(game, 3, false, false);
+        BubbleGameTestAccess::settings(game).gameMode = GameMode::Timed;
+        BubbleGameTestAccess::settings(game).playerTeams[0] = 1;
+        BubbleGameTestAccess::settings(game).playerTeams[1] = 1;
+        BubbleGameTestAccess::settings(game).playerTeams[2] = 2;
+        BubbleGameTestAccess::player(game, 0).rPopped = 20;
+        BubbleGameTestAccess::player(game, 1).rPopped = 18;  // team 1: 38
+        BubbleGameTestAccess::player(game, 2).rPopped = 35;  // team 2: 35
+        // The nominal winner is team 1's highest scorer; CommitRoundWin
+        // extends the win to the rest of that team.
+        const int lead = BubbleGameTestAccess::leadingPopper(game);
+        CHECK(lead == 0);
+    }
+
+    // ---- Timed mode: the clock -------------------------------------------
+    // Local multiplayer resolves the moment the clock runs out -- every count
+    // is already this client's, so there is nobody to wait for.
+    {
+        BubbleGame game(renderer);
+        BubbleGameTestAccess::reset(game, 2, false, false);
+        BubbleGameTestAccess::settings(game).gameMode = GameMode::Timed;
+        BubbleGameTestAccess::settings(game).timedSeconds = 30;
+        BubbleGameTestAccess::player(game, 0).rPopped = 11;
+        BubbleGameTestAccess::player(game, 1).rPopped = 40;
+
+        // Clock started 10s ago: still running, nothing decided, and the
+        // board is not frozen.
+        BubbleGameTestAccess::startTimedClock(game, SDL_GetTicks() - 10000);
+        BubbleGameTestAccess::updateTimedRound(game);
+        CHECK(!BubbleGameTestAccess::finished(game));
+        CHECK(!BubbleGameTestAccess::awaitingVerdict(game));
+        const int left = BubbleGameTestAccess::timedRemaining(game);
+        CHECK(left > 15 && left <= 20);
+
+        // Started 31s ago: past the buzzer, so the round ends on the counts.
+        BubbleGameTestAccess::startTimedClock(game, SDL_GetTicks() - 31000);
+        BubbleGameTestAccess::updateTimedRound(game);
+        CHECK(BubbleGameTestAccess::timerExpired(game));
+        CHECK(BubbleGameTestAccess::finished(game));
+        CHECK(BubbleGameTestAccess::winner(game) == 1);
+        CHECK(BubbleGameTestAccess::player(game, 1).winCount == 1);
+        CHECK(BubbleGameTestAccess::timedRemaining(game) == 0);
+        // Once the round is decided nothing is being awaited any more, so
+        // input is not left suppressed on a finished board.
+        CHECK(!BubbleGameTestAccess::awaitingVerdict(game));
+    }
+
+    // A dead-level local Timed round is a draw and credits nobody a win.
+    {
+        BubbleGame game(renderer);
+        BubbleGameTestAccess::reset(game, 2, false, false);
+        BubbleGameTestAccess::settings(game).gameMode = GameMode::Timed;
+        BubbleGameTestAccess::settings(game).timedSeconds = 30;
+        BubbleGameTestAccess::player(game, 0).rPopped = 25;
+        BubbleGameTestAccess::player(game, 1).rPopped = 25;
+        BubbleGameTestAccess::startTimedClock(game, SDL_GetTicks() - 31000);
+        BubbleGameTestAccess::updateTimedRound(game);
+        CHECK(BubbleGameTestAccess::finished(game));
+        CHECK(BubbleGameTestAccess::winner(game) == -1);
+        CHECK(BubbleGameTestAccess::player(game, 0).winCount == 0);
+        CHECK(BubbleGameTestAccess::player(game, 1).winCount == 0);
+    }
+
+    // The clock only runs in Timed mode: no other mode ends on its own.
+    {
+        for (GameMode gm : {GameMode::Classic, GameMode::Clear, GameMode::Race}) {
+            BubbleGame game(renderer);
+            BubbleGameTestAccess::reset(game, 2, false, false);
+            BubbleGameTestAccess::settings(game).gameMode = gm;
+            BubbleGameTestAccess::settings(game).timedSeconds = 30;
+            BubbleGameTestAccess::startTimedClock(game, SDL_GetTicks() - 60000);
+            BubbleGameTestAccess::updateTimedRound(game);
+            CHECK(!BubbleGameTestAccess::finished(game));
+            CHECK(!BubbleGameTestAccess::awaitingVerdict(game));
+        }
     }
 
     SDL_DestroyRenderer(renderer);

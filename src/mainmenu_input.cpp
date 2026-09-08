@@ -754,7 +754,8 @@ bool MainMenu::HelpPanelKey(SDL_Event *e) {
             // Neither fake index is a real row, so leave the player somewhere
             // Up/Down can work from rather than off the end of the list.
             if (selectedActionIndex == kRoomHelpTapIndex) selectedActionIndex = kRoomMalus;
-            if (localMPMenuIndex == kLocalMPHelpTapIndex) localMPMenuIndex = kLocalMPRowBotSkill;
+            if (localMPMenuIndex == kLocalMPHelpTapIndex)
+                localMPMenuIndex = LocalMPRowBotSkill(localMPGameMode);
             PlayMenuSFX("menu_change");
             return true;
         default:
@@ -1075,18 +1076,104 @@ bool MainMenu::LobbyChatTypingKey(SDL_Event *e) {
     return false;
 }
 
+// --- Game mode stepping (gamemode.h) -------------------------------------
+
+void MainMenu::ModeValueLabel(char* out, size_t outSize, GameMode mode,
+                              int raceTargetIndex, int timedSecondsIndex) const {
+    if (out == nullptr || outSize == 0) return;
+    if (mode == GameMode::Race) {
+        snprintf(out, outSize, "%d bubbles", RaceTargetAt(raceTargetIndex));
+    } else if (mode == GameMode::Timed) {
+        const int secs = TimedSecondsAt(timedSecondsIndex);
+        if (secs < 60) snprintf(out, outSize, "%d sec", secs);
+        else snprintf(out, outSize, "%d:%02d", secs / 60, secs % 60);
+    } else {
+        out[0] = '\0';
+    }
+}
+
+bool MainMenu::RoomRowHidden(int row) const {
+    return row == kRoomModeValue && !GameModeCountsPops(netGameMode);
+}
+
+void MainMenu::StepLocalMPGameMode(bool forward) {
+    const GameMode was = localMPGameMode;
+    localMPGameMode = forward ? NextGameMode(was) : PrevGameMode(was);
+
+    // Clear Mode forces row collapse off and attacks off, and is the only mode
+    // that forces anything (GameModeForcesNoCompression). Snapshot on the way
+    // in, restore on the way out -- keyed off whether the *mode* forces them
+    // rather than off a Clear-specific comparison, so a future mode that
+    // forces the same pair inherits this for free.
+    const bool wasForced = GameModeForcesNoCompression(was);
+    const bool nowForced = GameModeForcesNoCompression(localMPGameMode);
+    if (nowForced && !wasForced) {
+        localMPPreClearNoCompress = localMPNoCompress;
+        localMPPreClearAttackMode = localMPAttackMode;
+        localMPNoCompress = true;
+        localMPAttackMode = AttackMode::Off;
+    } else if (wasForced && !nowForced) {
+        localMPNoCompress = localMPPreClearNoCompress;
+        localMPAttackMode = localMPPreClearAttackMode;
+    }
+
+    // The list just grew or shrank by a row under the cursor. The cursor is on
+    // the Mode row itself, which never moves, so nothing needs re-homing here
+    // -- but the start row does move, and a stale index past it would leave
+    // nothing highlighted.
+    const int maxIdx = LocalMPStartRow(localMPPlayerCount, localMPGameMode);
+    if (localMPMenuIndex > maxIdx) localMPMenuIndex = maxIdx;
+}
+
+void MainMenu::StepLocalMPModeValue(bool forward) {
+    if (localMPGameMode == GameMode::Race) {
+        localMPRaceTargetIndex = StepModeValueIndex(
+            localMPRaceTargetIndex, (int)std::size(kRaceTargets), forward);
+    } else if (localMPGameMode == GameMode::Timed) {
+        localMPTimedSecondsIndex = StepModeValueIndex(
+            localMPTimedSecondsIndex, (int)std::size(kTimedSeconds), forward);
+    }
+}
+
+void MainMenu::StepNetGameMode(bool forward) {
+    const GameMode was = netGameMode;
+    netGameMode = forward ? NextGameMode(was) : PrevGameMode(was);
+
+    const bool wasForced = GameModeForcesNoCompression(was);
+    const bool nowForced = GameModeForcesNoCompression(netGameMode);
+    if (nowForced && !wasForced) {
+        for (int i = 0; i < 5; i++) netPreClearNoCompress[i] = playerNoCompress[i];
+        netPreClearAttackMode = netAttackMode;
+        for (int i = 0; i < 5; i++) playerNoCompress[i] = true;
+        netAttackMode = AttackMode::Off;
+    } else if (wasForced && !nowForced) {
+        for (int i = 0; i < 5; i++) playerNoCompress[i] = netPreClearNoCompress[i];
+        netAttackMode = netPreClearAttackMode;
+    }
+}
+
+void MainMenu::StepNetModeValue(bool forward) {
+    if (netGameMode == GameMode::Race) {
+        netRaceTargetIndex = StepModeValueIndex(
+            netRaceTargetIndex, (int)std::size(kRaceTargets), forward);
+    } else if (netGameMode == GameMode::Timed) {
+        netTimedSecondsIndex = StepModeValueIndex(
+            netTimedSecondsIndex, (int)std::size(kTimedSeconds), forward);
+    }
+}
+
 bool MainMenu::LocalMPPanelKey(SDL_Event *e) {
             if (showingLocalMPPanel && !runDelay) {
                 // Row order and the per-player offsets live in
                 // localmultiplayer_settings.h, shared with the panel that
                 // draws them.
-                int localMaxIdx = LocalMPStartRow(localMPPlayerCount);
+                int localMaxIdx = LocalMPStartRow(localMPPlayerCount, localMPGameMode);
                 // The HELP box parks localMPMenuIndex on kLocalMPHelpTapIndex,
                 // which is deliberately outside this list. Fold it back onto
                 // the row the box sits on before stepping, or Up would walk
                 // off the end and leave nothing highlighted. (Down already
                 // wraps to 0 for any index past the end.)
-                if (localMPMenuIndex > localMaxIdx) localMPMenuIndex = kLocalMPRowBotSkill;
+                if (localMPMenuIndex > localMaxIdx) localMPMenuIndex = LocalMPRowBotSkill(localMPGameMode);
                 if (e->key.key == SDLK_UP) {
                     localMPMenuIndex--;
                     if (localMPMenuIndex < 0) localMPMenuIndex = localMaxIdx;
@@ -1104,7 +1191,7 @@ bool MainMenu::LocalMPPanelKey(SDL_Event *e) {
                             : LocalMultiplayerMenuCommand::Right;
                     if (ApplyLocalMultiplayerVictoriesInput(
                             localMPMenuIndex, command,
-                            localMPVictoriesIndex)) {
+                            localMPVictoriesIndex, localMPGameMode)) {
                         PlayMenuSFX("menu_change");
                         return true;
                     }
@@ -1122,8 +1209,8 @@ bool MainMenu::LocalMPPanelKey(SDL_Event *e) {
                         // a stale count would start a game with no human in it.
                         localMPBotCount =
                             ClampLocalBotCount(localMPBotCount, localMPPlayerCount);
-                        if (localMPMenuIndex > LocalMPStartRow(localMPPlayerCount))
-                            localMPMenuIndex = LocalMPStartRow(localMPPlayerCount);
+                        if (localMPMenuIndex > LocalMPStartRow(localMPPlayerCount, localMPGameMode))
+                            localMPMenuIndex = LocalMPStartRow(localMPPlayerCount, localMPGameMode);
                         AudioMixer::Instance()->PlaySFX("menu_change");
                     } else if (localMPMenuIndex == 1) {
                         localMPCR = !localMPCR;
@@ -1131,49 +1218,43 @@ bool MainMenu::LocalMPPanelKey(SDL_Event *e) {
                     } else if (localMPMenuIndex == 2) {
                         localMPNoCompress = !localMPNoCompress;
                         AudioMixer::Instance()->PlaySFX("menu_change");
-                    } else if (localMPMenuIndex == 3) {
-                        localMPClearMode = !localMPClearMode;
-                        if (localMPClearMode) {
-                            // Entering Clear Mode: remember current settings so leaving it can restore them.
-                            localMPPreClearNoCompress = localMPNoCompress;
-                            localMPPreClearAttackMode = localMPAttackMode;
-                            localMPNoCompress = true;
-                            localMPAttackMode = AttackMode::Off;
-                        } else {
-                            localMPNoCompress = localMPPreClearNoCompress;
-                            localMPAttackMode = localMPPreClearAttackMode;
-                        }
+                    } else if (localMPMenuIndex == kLocalMPRowMode) {
+                        StepLocalMPGameMode(e->key.key != SDLK_LEFT);
                         AudioMixer::Instance()->PlaySFX("menu_change");
-                    } else if (localMPMenuIndex == 4) {
+                    } else if (localMPMenuIndex == kLocalMPRowModeValue &&
+                               GameModeCountsPops(localMPGameMode)) {
+                        StepLocalMPModeValue(e->key.key != SDLK_LEFT);
+                        AudioMixer::Instance()->PlaySFX("menu_change");
+                    } else if (localMPMenuIndex == LocalMPRowMalus(localMPGameMode)) {
                         localMPAttackMode = e->key.key == SDLK_LEFT
                             ? PrevAttackMode(localMPAttackMode)
                             : NextAttackMode(localMPAttackMode);
                         AudioMixer::Instance()->PlaySFX("menu_change");
-                    } else if (localMPMenuIndex == 5) {
+                    } else if (localMPMenuIndex == LocalMPRowTeam(localMPGameMode)) {
                         localMPTeamMode = !localMPTeamMode;
                         AudioMixer::Instance()->PlaySFX("menu_change");
-                    } else if (localMPMenuIndex == kLocalMPRowBots) {
+                    } else if (localMPMenuIndex == LocalMPRowBots(localMPGameMode)) {
                         AdjustLocalBotCount(
                             e->key.key == SDLK_LEFT
                                 ? LocalMultiplayerMenuCommand::Left
                                 : LocalMultiplayerMenuCommand::Right,
                             localMPBotCount, localMPPlayerCount);
                         AudioMixer::Instance()->PlaySFX("menu_change");
-                    } else if (localMPMenuIndex == kLocalMPRowBotSkill) {
+                    } else if (localMPMenuIndex == LocalMPRowBotSkill(localMPGameMode)) {
                         if (e->key.key == SDLK_LEFT) {
                             localMPBotSkill = localMPBotSkill <= 0 ? 2 : localMPBotSkill - 1;
                         } else {
                             localMPBotSkill = localMPBotSkill >= 2 ? 0 : localMPBotSkill + 1;
                         }
                         AudioMixer::Instance()->PlaySFX("menu_change");
-                    } else if (localMPMenuIndex >= kLocalMPFirstPlayerRow &&
-                               localMPMenuIndex < LocalMPAimGuideRow(localMPPlayerCount)) {
-                        int pi = localMPMenuIndex - kLocalMPFirstPlayerRow;
+                    } else if (localMPMenuIndex >= LocalMPFirstPlayerRow(localMPGameMode) &&
+                               localMPMenuIndex < LocalMPAimGuideRow(localMPPlayerCount, localMPGameMode)) {
+                        int pi = localMPMenuIndex - LocalMPFirstPlayerRow(localMPGameMode);
                         localMPAimGuide[pi] = !localMPAimGuide[pi];
                         AudioMixer::Instance()->PlaySFX("menu_change");
-                    } else if (localMPMenuIndex >= LocalMPColorsRow(0, localMPPlayerCount) &&
-                               localMPMenuIndex < LocalMPStartRow(localMPPlayerCount)) {
-                        int pi = localMPMenuIndex - LocalMPColorsRow(0, localMPPlayerCount);
+                    } else if (localMPMenuIndex >= LocalMPColorsRow(0, localMPPlayerCount, localMPGameMode) &&
+                               localMPMenuIndex < LocalMPStartRow(localMPPlayerCount, localMPGameMode)) {
+                        int pi = localMPMenuIndex - LocalMPColorsRow(0, localMPPlayerCount, localMPGameMode);
                         if (e->key.key == SDLK_LEFT) {
                             playerColorCounts[pi]--;
                             if (playerColorCounts[pi] < 5) playerColorCounts[pi] = 8;
@@ -1188,7 +1269,8 @@ bool MainMenu::LocalMPPanelKey(SDL_Event *e) {
                     if (ApplyLocalMultiplayerVictoriesInput(
                             localMPMenuIndex,
                             LocalMultiplayerMenuCommand::Enter,
-                            localMPVictoriesIndex)) {
+                            localMPVictoriesIndex,
+                            localMPGameMode)) {
                         PlayMenuSFX("menu_change");
                         return true;
                     }
@@ -1198,8 +1280,8 @@ bool MainMenu::LocalMPPanelKey(SDL_Event *e) {
                             localMPPlayerCount = kMinLocalPlayers;
                         localMPBotCount =
                             ClampLocalBotCount(localMPBotCount, localMPPlayerCount);
-                        if (localMPMenuIndex > LocalMPStartRow(localMPPlayerCount))
-                            localMPMenuIndex = LocalMPStartRow(localMPPlayerCount);
+                        if (localMPMenuIndex > LocalMPStartRow(localMPPlayerCount, localMPGameMode))
+                            localMPMenuIndex = LocalMPStartRow(localMPPlayerCount, localMPGameMode);
                         AudioMixer::Instance()->PlaySFX("menu_change");
                     } else if (localMPMenuIndex == 1) {
                         localMPCR = !localMPCR;
@@ -1207,40 +1289,34 @@ bool MainMenu::LocalMPPanelKey(SDL_Event *e) {
                     } else if (localMPMenuIndex == 2) {
                         localMPNoCompress = !localMPNoCompress;
                         AudioMixer::Instance()->PlaySFX("menu_change");
-                    } else if (localMPMenuIndex == 3) {
-                        localMPClearMode = !localMPClearMode;
-                        if (localMPClearMode) {
-                            // Entering Clear Mode: remember current settings so leaving it can restore them.
-                            localMPPreClearNoCompress = localMPNoCompress;
-                            localMPPreClearAttackMode = localMPAttackMode;
-                            localMPNoCompress = true;
-                            localMPAttackMode = AttackMode::Off;
-                        } else {
-                            localMPNoCompress = localMPPreClearNoCompress;
-                            localMPAttackMode = localMPPreClearAttackMode;
-                        }
+                    } else if (localMPMenuIndex == kLocalMPRowMode) {
+                        StepLocalMPGameMode(true);
                         AudioMixer::Instance()->PlaySFX("menu_change");
-                    } else if (localMPMenuIndex == 4) {
+                    } else if (localMPMenuIndex == kLocalMPRowModeValue &&
+                               GameModeCountsPops(localMPGameMode)) {
+                        StepLocalMPModeValue(true);
+                        AudioMixer::Instance()->PlaySFX("menu_change");
+                    } else if (localMPMenuIndex == LocalMPRowMalus(localMPGameMode)) {
                         localMPAttackMode = NextAttackMode(localMPAttackMode);
                         AudioMixer::Instance()->PlaySFX("menu_change");
-                    } else if (localMPMenuIndex == 5) {
+                    } else if (localMPMenuIndex == LocalMPRowTeam(localMPGameMode)) {
                         localMPTeamMode = !localMPTeamMode;
                         AudioMixer::Instance()->PlaySFX("menu_change");
-                    } else if (localMPMenuIndex == kLocalMPRowBots) {
+                    } else if (localMPMenuIndex == LocalMPRowBots(localMPGameMode)) {
                         AdjustLocalBotCount(LocalMultiplayerMenuCommand::Enter,
                                             localMPBotCount, localMPPlayerCount);
                         AudioMixer::Instance()->PlaySFX("menu_change");
-                    } else if (localMPMenuIndex == kLocalMPRowBotSkill) {
+                    } else if (localMPMenuIndex == LocalMPRowBotSkill(localMPGameMode)) {
                         localMPBotSkill = localMPBotSkill >= 2 ? 0 : localMPBotSkill + 1;
                         AudioMixer::Instance()->PlaySFX("menu_change");
-                    } else if (localMPMenuIndex >= kLocalMPFirstPlayerRow &&
-                               localMPMenuIndex < LocalMPAimGuideRow(localMPPlayerCount)) {
-                        int pi = localMPMenuIndex - kLocalMPFirstPlayerRow;
+                    } else if (localMPMenuIndex >= LocalMPFirstPlayerRow(localMPGameMode) &&
+                               localMPMenuIndex < LocalMPAimGuideRow(localMPPlayerCount, localMPGameMode)) {
+                        int pi = localMPMenuIndex - LocalMPFirstPlayerRow(localMPGameMode);
                         localMPAimGuide[pi] = !localMPAimGuide[pi];
                         AudioMixer::Instance()->PlaySFX("menu_change");
-                    } else if (localMPMenuIndex >= LocalMPColorsRow(0, localMPPlayerCount) &&
-                               localMPMenuIndex < LocalMPStartRow(localMPPlayerCount)) {
-                        int pi = localMPMenuIndex - LocalMPColorsRow(0, localMPPlayerCount);
+                    } else if (localMPMenuIndex >= LocalMPColorsRow(0, localMPPlayerCount, localMPGameMode) &&
+                               localMPMenuIndex < LocalMPStartRow(localMPPlayerCount, localMPGameMode)) {
+                        int pi = localMPMenuIndex - LocalMPColorsRow(0, localMPPlayerCount, localMPGameMode);
                         playerColorCounts[pi]++;
                         if (playerColorCounts[pi] > 8) playerColorCounts[pi] = 5;
                         AudioMixer::Instance()->PlaySFX("menu_change");
@@ -1341,6 +1417,15 @@ void MainMenu::MenuUpKey() {
                                     selectedActionIndex = maxActions - 1;
                                 } else {
                                     selectedActionIndex--;
+                            // kRoomModeValue is in the enum but off screen
+                            // in Classic and Clear, so step past it rather
+                            // than parking the highlight on a row that isn't
+                            // drawn. One extra step always lands on a real row:
+                            // the hidden row is neither the first nor the last
+                            // in the list, so it can never be reached twice in
+                            // a row nor push the cursor off either end.
+                                    if (RoomRowHidden(selectedActionIndex))
+                                        selectedActionIndex--;
                                     if (selectedActionIndex < 0)
                                         selectedActionIndex = kRoomSetTeamsTapIndex;
                                 }
@@ -1418,6 +1503,15 @@ void MainMenu::MenuDownKey() {
                                     selectedActionIndex = 0;
                                 } else {
                                     selectedActionIndex++;
+                            // kRoomModeValue is in the enum but off screen
+                            // in Classic and Clear, so step past it rather
+                            // than parking the highlight on a row that isn't
+                            // drawn. One extra step always lands on a real row:
+                            // the hidden row is neither the first nor the last
+                            // in the list, so it can never be reached twice in
+                            // a row nor push the cursor off either end.
+                                    if (RoomRowHidden(selectedActionIndex))
+                                        selectedActionIndex++;
                                     if (selectedActionIndex >= maxActions)
                                         selectedActionIndex = kRoomHelpTapIndex;
                                 }
@@ -1466,21 +1560,15 @@ void MainMenu::MenuLeftRightKey(SDL_Event *e) {
                             // Only host can change settings
                             bool settingChanged = false;
                             if (selectedActionIndex == kRoomMode) {
-                                // Two states now (Classic <-> Clear), so
-                                // Left and Right agree -- see GameRoomHostReturn's
-                                // own comment on why Teams left this cycle.
-                                bool wasClear = netClearMode;
-                                netClearMode = !wasClear;
-                                if (netClearMode && !wasClear) {
-                                    // Entering Clear Mode: remember current settings so leaving it can restore them.
-                                    for (int i = 0; i < 5; i++) netPreClearNoCompress[i] = playerNoCompress[i];
-                                    netPreClearAttackMode = netAttackMode;
-                                    for (int i = 0; i < 5; i++) playerNoCompress[i] = true;
-                                    netAttackMode = AttackMode::Off;
-                                } else if (wasClear && !netClearMode) {
-                                    for (int i = 0; i < 5; i++) playerNoCompress[i] = netPreClearNoCompress[i];
-                                    netAttackMode = netPreClearAttackMode;
-                                }
+                                // Four states now, so Left has to walk back
+                                // rather than forward -- same as kRoomMalus
+                                // below, and unlike the plain toggles.
+                                StepNetGameMode(e->key.key != SDLK_LEFT);
+                                AudioMixer::Instance()->PlaySFX("menu_change");
+                                settingChanged = true;
+                            } else if (selectedActionIndex == kRoomModeValue &&
+                                       !RoomRowHidden(kRoomModeValue)) {
+                                StepNetModeValue(e->key.key != SDLK_LEFT);
                                 AudioMixer::Instance()->PlaySFX("menu_change");
                                 settingChanged = true;
                             } else if (selectedActionIndex == kRoomMalus) {
@@ -1787,29 +1875,20 @@ void MainMenu::GameRoomHostReturn(NetworkClient *netClient, GameRoom *currentGam
     if (numPlayers > 5) numPlayers = 5;
     bool settingChanged = false;
     if (selectedActionIndex == kRoomMode) {
-        // Cycle game mode: Classic <-> Clear.
+        // Cycle game mode: Classic -> Clear -> Race -> Timed.
         //
         // "Teams" used to be the third stop here, which made team play a
         // property of the whole match: you could either have teams or Clear
         // Mode, never both, and Classic could never have them at all. Teams
         // are a per-player setting now (the Set Teams page), available in
-        // either mode, so the mode row is back to naming just the ruleset.
-        bool wasClear = netClearMode;
-        {
-            AudioMixer::Instance()->PlaySFX("menu_change");
-            netClearMode = !wasClear;
-            if (netClearMode && !wasClear) {
-                // Entering Clear Mode: remember current settings so leaving it can restore them.
-                for (int i = 0; i < 5; i++) netPreClearNoCompress[i] = playerNoCompress[i];
-                netPreClearAttackMode = netAttackMode;
-                for (int i = 0; i < 5; i++) playerNoCompress[i] = true;
-                netAttackMode = AttackMode::Off;
-            } else if (wasClear && !netClearMode) {
-                for (int i = 0; i < 5; i++) playerNoCompress[i] = netPreClearNoCompress[i];
-                netAttackMode = netPreClearAttackMode;
-            }
-            settingChanged = true;
-        }
+        // every mode, so the mode row is back to naming just the ruleset.
+        AudioMixer::Instance()->PlaySFX("menu_change");
+        StepNetGameMode(true);
+        settingChanged = true;
+    } else if (selectedActionIndex == kRoomModeValue && !RoomRowHidden(kRoomModeValue)) {
+        AudioMixer::Instance()->PlaySFX("menu_change");
+        StepNetModeValue(true);
+        settingChanged = true;
     } else if (selectedActionIndex == kRoomMalus) {
         netAttackMode = NextAttackMode(netAttackMode);
         AudioMixer::Instance()->PlaySFX("menu_change");

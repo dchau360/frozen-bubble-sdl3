@@ -1,5 +1,31 @@
 # Changelog
 
+## v2.4.95
+
+- **Added two new multiplayer game modes: Race and Timed.** Race is first to
+  pop a target number of bubbles (50 by default, host-adjustable); Timed is
+  most bubbles popped when a clock runs out (30 seconds by default,
+  host-adjustable). Both are available anywhere Classic and Clear Mode were,
+  local or network, and both support teams -- a Timed round is won by
+  whichever side's *combined* pop total is higher, while Race only ends when
+  one player individually reaches the target (the win still extends to their
+  team once it does). A tie at the Timed buzzer is a draw crediting nobody.
+  An eliminated player sits out the rest of the round while everyone else
+  keeps playing.
+- **Added a live per-player popped-count HUD**, anchored beside each
+  player's own next-shot bubble so it reads as part of their own shooter: a
+  running total in every mode, the count against the target in Race
+  (`Pop 5/50`), and a countdown in Timed. The current leader is highlighted
+  in gold.
+- **Round-end win banners now appear for every mode, not just Clear Mode** --
+  Race shows "First to Pop!", Timed shows "Time's Up!", Classic and a
+  last-team-standing win show a plain "<Name> Wins!". The banner and the HUD
+  text both got a bolder, outlined, higher-contrast treatment so they stay
+  legible over a busy board.
+- **Fixed the network room's per-player setup grid (Max colors, Row
+  collapse, Aim guide, Team) rendering with invisible/black text** on its
+  dark background -- the grid's text cells had never had a color assigned.
+
 ## v2.4.94
 
 - **Fixed unrelated server replies being able to create a phantom game room.**

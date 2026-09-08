@@ -6,8 +6,9 @@
 bool ApplyLocalMultiplayerVictoriesInput(
     int menuIndex,
     LocalMultiplayerMenuCommand command,
-    int& victoriesIndex) {
-    if (menuIndex != kLocalMPRowVictories) return false;
+    int& victoriesIndex,
+    GameMode mode) {
+    if (menuIndex != LocalMPRowVictories(mode)) return false;
 
     if (command == LocalMultiplayerMenuCommand::Left) {
         --victoriesIndex;
@@ -82,19 +83,23 @@ LocalMultiplayerOptions BuildLocalMultiplayerOptions(
     int playerCount,
     bool chainReaction,
     bool noCompression,
-    bool clearMode,
+    GameMode gameMode,
     AttackMode attackMode,
     bool teamMode,
     int victoriesIndex,
     const int colors[5],
     const bool aimGuide[5],
     int botCount,
-    int botSkill) {
+    int botSkill,
+    int raceTargetIndex,
+    int timedSecondsIndex) {
     LocalMultiplayerOptions options;
     options.playerCount = playerCount;
     options.chainReaction = chainReaction;
     options.noCompression = noCompression;
-    options.clearMode = clearMode;
+    options.gameMode = gameMode;
+    options.raceTargetIndex = raceTargetIndex;
+    options.timedSecondsIndex = timedSecondsIndex;
     options.attackMode = attackMode;
     options.teamMode = teamMode;
     options.victoriesIndex = victoriesIndex;
@@ -115,7 +120,12 @@ SetupSettings BuildLocalMultiplayerSettings(
     settings.chainReaction = options.chainReaction;
     settings.randomLevels = true;
     settings.localMultiplayer = true;
-    settings.clearMode = options.clearMode;
+    settings.gameMode = options.gameMode;
+    // Clamped through the shared tables rather than copied: the index arrives
+    // from a menu row, but also from a settings file that could name a step
+    // this build does not have.
+    settings.raceTarget = RaceTargetAt(options.raceTargetIndex);
+    settings.timedSeconds = TimedSecondsAt(options.timedSecondsIndex);
     settings.attackMode = options.attackMode;
 
     const int victoriesIndex = std::clamp(

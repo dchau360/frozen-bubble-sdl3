@@ -25,7 +25,12 @@ struct LocalMultiplayerOptions {
     int playerCount = 2;
     bool chainReaction = true;
     bool noCompression = false;
-    bool clearMode = false;
+    GameMode gameMode = GameMode::Classic;
+    // Indices into kRaceTargets / kTimedSeconds (gamemode.h), not the values
+    // themselves: these ride straight off the stepped menu rows, and an index
+    // cannot land between two steps the way a free-running int could.
+    int raceTargetIndex = kRaceTargetDefaultIndex;
+    int timedSecondsIndex = kTimedSecondsDefaultIndex;
     AttackMode attackMode = AttackMode::On;
     bool teamMode = false;
     int victoriesIndex = 5;
@@ -45,6 +50,21 @@ inline constexpr int kLocalMPRowPlayers      = 0;
 inline constexpr int kLocalMPRowChain        = 1;
 inline constexpr int kLocalMPRowCollapse     = 2;
 inline constexpr int kLocalMPRowMode         = 3;
+// Race and Timed each insert one row directly under Mode -- the pop target,
+// or the duration. Only one of the two is ever on screen, and only in its own
+// mode, so they share the single slot at kLocalMPRowMode + 1 rather than each
+// reserving one and leaving a gap in the other three modes.
+inline constexpr int kLocalMPRowModeValue    = 4;
+
+// Whether that slot is occupied. Every row below Mode shifts by this, so the
+// panel that draws the list and the handler that reads keys must both ask
+// instead of assuming -- the constants below are the layout *without* the
+// extra row, and the accessors after them are the only correct way to name a
+// row once a mode is known.
+inline constexpr int LocalMPRowsAfterMode(GameMode mode) {
+    return GameModeCountsPops(mode) ? 1 : 0;
+}
+
 inline constexpr int kLocalMPRowMalus        = 4;
 inline constexpr int kLocalMPRowTeam         = 5;
 inline constexpr int kLocalMPRowVictories    = 6;
@@ -52,14 +72,32 @@ inline constexpr int kLocalMPRowBots         = 7;
 inline constexpr int kLocalMPRowBotSkill     = 8;
 inline constexpr int kLocalMPFirstPlayerRow  = 9;
 
-inline constexpr int LocalMPAimGuideRow(int playerIndex) {
-    return kLocalMPFirstPlayerRow + playerIndex;
+inline constexpr int LocalMPRowMalus(GameMode mode) {
+    return kLocalMPRowMalus + LocalMPRowsAfterMode(mode);
 }
-inline constexpr int LocalMPColorsRow(int playerIndex, int playerCount) {
-    return kLocalMPFirstPlayerRow + playerCount + playerIndex;
+inline constexpr int LocalMPRowTeam(GameMode mode) {
+    return kLocalMPRowTeam + LocalMPRowsAfterMode(mode);
 }
-inline constexpr int LocalMPStartRow(int playerCount) {
-    return kLocalMPFirstPlayerRow + 2 * playerCount;
+inline constexpr int LocalMPRowVictories(GameMode mode) {
+    return kLocalMPRowVictories + LocalMPRowsAfterMode(mode);
+}
+inline constexpr int LocalMPRowBots(GameMode mode) {
+    return kLocalMPRowBots + LocalMPRowsAfterMode(mode);
+}
+inline constexpr int LocalMPRowBotSkill(GameMode mode) {
+    return kLocalMPRowBotSkill + LocalMPRowsAfterMode(mode);
+}
+inline constexpr int LocalMPFirstPlayerRow(GameMode mode) {
+    return kLocalMPFirstPlayerRow + LocalMPRowsAfterMode(mode);
+}
+inline constexpr int LocalMPAimGuideRow(int playerIndex, GameMode mode) {
+    return LocalMPFirstPlayerRow(mode) + playerIndex;
+}
+inline constexpr int LocalMPColorsRow(int playerIndex, int playerCount, GameMode mode) {
+    return LocalMPFirstPlayerRow(mode) + playerCount + playerIndex;
+}
+inline constexpr int LocalMPStartRow(int playerCount, GameMode mode) {
+    return LocalMPFirstPlayerRow(mode) + 2 * playerCount;
 }
 
 inline const char* LocalMPBotSkillName(int skill) {
@@ -104,10 +142,14 @@ enum class LocalMultiplayerMenuCommand {
     Enter,
 };
 
+// Takes the mode because the Victories row's index moves with it -- Race and
+// Timed push it down one. Callers pass the mode they are drawing rather than a
+// row number, so the two files cannot disagree about where the row is.
 bool ApplyLocalMultiplayerVictoriesInput(
     int menuIndex,
     LocalMultiplayerMenuCommand command,
-    int& victoriesIndex);
+    int& victoriesIndex,
+    GameMode mode = GameMode::Classic);
 
 // Steps the Bots row, growing or shrinking the total player count to fit
 // instead of capping bots at whatever player count happened to be set
@@ -139,14 +181,16 @@ LocalMultiplayerOptions BuildLocalMultiplayerOptions(
     int playerCount,
     bool chainReaction,
     bool noCompression,
-    bool clearMode,
+    GameMode gameMode,
     AttackMode attackMode,
     bool teamMode,
     int victoriesIndex,
     const int colors[5],
     const bool aimGuide[5],
     int botCount = 0,
-    int botSkill = 1);
+    int botSkill = 1,
+    int raceTargetIndex = kRaceTargetDefaultIndex,
+    int timedSecondsIndex = kTimedSecondsDefaultIndex);
 
 // Bots fill the highest player slots. Returns how many the given player count
 // can actually take, which is one fewer than the players in the game.
