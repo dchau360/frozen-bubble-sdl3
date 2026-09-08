@@ -102,10 +102,11 @@ remains, in priority order:
    until a real device/browser pairing (not just two browser tabs on one
    machine) has been tried — see the playtest section below for what has and
    hasn't been covered so far.
-5. **`docs/MANUAL_TEST_CHECKLIST.md` hasn't been updated.** The live
-   two-browser WASM playtest recipe (two `tools/serve-wasm.py` tabs, an
-   ASan/UBSan `fb-server`, drive both via synthetic DOM input) should get an
-   entry there so it's repeatable without re-deriving the setup next time.
+5. ~~**`docs/MANUAL_TEST_CHECKLIST.md` hasn't been updated.**~~ **Done** — see
+   its "Two-browser WASM network playtest" section, which also names two
+   gaps the 2026-09-08 run didn't cover: cancelling an in-flight connect
+   mid-attempt, and testing across genuinely separate devices/networks
+   rather than two tabs on one machine.
 
 ---
 

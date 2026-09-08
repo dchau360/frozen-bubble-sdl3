@@ -200,3 +200,69 @@ waiting for the server.
   `tools/test-wasm-persistence.mjs` drives the packaged bundle in headless
   Chrome, reloads it, and asserts settings and high scores survived. It runs in
   CI on every push.
+
+## 6. Two-browser WASM network playtest (async networking rearchitecture)
+
+See `docs/ASYNC_NETWORKING_HANDOFF.md` for the full background. Nothing in
+this repo can spin up `BubbleGame`/`MainMenu` headlessly and drive a real
+multi-round network match, so the async connect/lobby/game-start/level-sync
+rewrite (stages 1–3 of that doc) has no automated two-client coverage — this
+is the recipe for the hands-on check that stands in for it.
+
+**Setup:**
+
+1. Build the WASM client (README → "Building WASM locally").
+2. Build an ASan/UBSan-instrumented server (see this repo's `CLAUDE.md` →
+   Tests, the `cmake -B build-asan …` block) — running the server under the
+   sanitizer is what makes a silent memory-safety regression show up as a
+   loud one instead of a random hang or corrupted game state.
+3. Serve the WASM build: `python3 tools/serve-wasm.py` (prints the URL; COOP/
+   COEP headers are required for audio).
+4. Start the server in the foreground so its log is visible, e.g.:
+   `ASAN_OPTIONS=detect_leaks=0:fast_unwind_on_malloc=0 UBSAN_OPTIONS=print_stacktrace=1 ./build-asan/fb-server -d -p 1511`
+   (`detect_leaks=0` is required on macOS/Darwin — leak detection isn't
+   supported there at all and aborts every run under `detect_leaks=1`; use
+   `1` on Linux). WASM talks WebSocket, not raw TCP, so it needs a
+   `websockify`-style proxy bridging to this port — see the README's WASM
+   networking notes if one isn't already part of your local setup.
+5. Open two browser tabs at the served WASM URL — ideally on two separate
+   devices/networks; two tabs on one machine is a lesser but still useful
+   substitute (this is what the 2026-09-08 run below used).
+
+**Play through:**
+
+6. Tab A: pick a nickname, create a room. Tab B: pick a different nickname,
+   join it.
+7. Start the game as the room leader; play at least **two full rounds** —
+   round 2+ is the specific case stages 3b/3c exist to fix (previously
+   stalled a full 5s every round after the first).
+8. Trade fire/malus attacks in both directions so the relay path is
+   exercised both ways, not just leader→joiner.
+9. Optionally: back out to the lobby mid-connect elsewhere in the menu and
+   cancel with ESC/tap while a "Connecting…" indicator is showing (stage 2's
+   cancel path) — the playtest below didn't cover this.
+
+**Checks:**
+
+- [ ] Both clients reach the lobby with no visible render-loop freeze (no
+      browser "page unresponsive" warning, input keeps working throughout)
+- [ ] NICK/CREATE/JOIN resolve (including a deliberate nickname collision
+      between the two tabs) without getting stuck in a pending state
+- [ ] Round 1 starts promptly
+- [ ] Round 2 (and later) starts promptly — no multi-second stall before the
+      new round's board appears
+- [ ] Fire/malus actions from each client visibly land on the other client's
+      board
+- [ ] The server's own log has no `AddressSanitizer` or `runtime error:`
+      lines for the whole session
+- [ ] Cancelling an in-flight connect (ESC or tap, per CLAUDE.md's
+      input-parity rule) actually stops it rather than leaving a zombie
+      attempt
+
+**Already run once, informally** — 2026-09-08, two tabs on one machine, per
+`docs/ASYNC_NETWORKING_HANDOFF.md`'s "live two-browser WASM playtest"
+section: lobby entry, NICK/CREATE/JOIN, and several full rounds all
+confirmed with no stalls and a clean sanitizer log. Not covered by that run:
+the ESC/tap cancel-mid-connect check above, and testing across genuinely
+separate devices/networks rather than two tabs on one machine — both still
+worth doing before tagging a release.
