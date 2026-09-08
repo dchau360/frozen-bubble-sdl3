@@ -36,11 +36,11 @@ a speedup.
 ## Current checkpoint
 
 - Repository: `/Users/dchau/gr/frozen-bubble-sdl3`
-- Branch: `main`; latest source change `742d3f90` (`chore: bump version to
-  2.4.93`). Tag `v2.4.93` cut and pushed.
-- `main` and `origin/main` are in sync as of this checkpoint.
-  Re-verify with `git fetch && git log --oneline main..origin/main` before
-  trusting this further into a new session.
+- Branch: `main`; latest source change `6548feab` (`fix: scope async
+  confirmations to their commands`), not yet pushed or released. Tag
+  `v2.4.93` remains the latest release.
+- A fetch on 2026-09-08 found `origin/main` unchanged at `c6eba3e1`; local
+  `main` is one source commit ahead before this handoff update.
 - CMake/Android version: `2.4.93`; Android versionCode: `76`.
 - **`v2.4.92` never shipped.** Its tag build's Linux ASan/UBSan job failed,
   which hard-blocks `Create Release`/`Deploy WASM to Itch.io` by design (see
@@ -71,7 +71,7 @@ a speedup.
     `Deploy WASM to Itch.io` and `Create Release`, both confirmed ✓. This is
     the release that's actually live, not `v2.4.92`.
 - Status of every backlog item: **A** (async networking) — all four stages
-  landed, tagged `v2.4.93` (see above); three small residual items open,
+  landed, tagged `v2.4.93` (see above); two residual items remain open,
   listed below. **B** (font sharing) — gameplay + one confirmed menu hot
   path done, rest of menu caching pending. **C, D, F** — complete. **E** —
   overlaps B, same pending scope. **G** — measured, found not justified,
@@ -100,13 +100,7 @@ detail). What's left, in priority order:
    archive) with no stalls observed, so this is optional hardening rather
    than a known live bug — pick it up only if a real multi-round game is
    ever seen to hit the residual case.
-2. **WASM bug (CREATE confirmation heuristic) is still open.** Any
-   non-`PART` bare `OK` still confirms a pending CREATE; unlike the other
-   pre-existing WASM bugs this effort found, it was never touched, because
-   nothing in the four stages' scope routed through that code path. Small,
-   self-contained fix if picked up later: give CREATE the same
-   request-scoping the NICK retry path got in stage 1b.
-3. **A real pre-existing server bug, found while writing stage 4's test,
+2. **A real pre-existing server bug, found while writing stage 4's test,
    was deliberately left unfixed as out-of-scope**: a `select()`-loop
    fairness gap in `connections_manager()` where one connection's sustained
    flood can make a *different* connection's inbound data invisible to
@@ -117,7 +111,7 @@ detail). What's left, in priority order:
    disabled). Flagged as its own background task (`task_3c17853a`) rather
    than expanded into this effort's scope — the user has since started that
    task in a separate session; check its outcome before re-investigating.
-4. **Follow-up, not a defect**: a real device/browser pairing test (not
+3. **Follow-up, not a defect**: a real device/browser pairing test (not
    just two tabs on one machine) is still worth doing, since the release
    (`v2.4.93`, confirmed shipped — `v2.4.92` never actually did, see
    "Current checkpoint" above) went out without one — see the playtest
@@ -142,6 +136,30 @@ between items B and E:
   that later change font size, style, or alignment unless it tracks
   external font generations, or those mutations are eliminated first (see
   item B's prerequisite note in the archive).
+
+## Completed after v2.4.93 (not released)
+
+### Scope async confirmations to their commands (`6548feab`)
+
+`HandleServerResponse` used a generic `response.find("OK")` branch and then
+settled the first pending NICK/CREATE/JOIN flag, with only a special exclusion
+for `PART`. The server already identifies every reply as
+`FB/<version> <COMMAND>: <result>`, so an unrelated success such as
+`NOTIFYREG: OK` could confirm a pending CREATE, switch the client to
+`IN_LOBBY`, and allocate a phantom room before `CREATE: OK` arrived. The parser
+is shared by native and WASM even though the gap was recorded from the WASM
+flow.
+
+The fix parses the echoed command and lets NICK, CREATE, JOIN, and the notify
+capability probe consume only their own OK. The regression sets a CREATE
+pending, feeds `NOTIFYREG: OK`, and verifies the request and connection state
+remain unchanged; it then feeds `CREATE: OK` and verifies the real room setup.
+It failed at the three phantom-room assertions before the fix and passed after.
+
+Verification on 2026-09-08: full native build and suite passed (29 runnable
+tests; 2 sanitizer-only tests skipped), `netconnect-test` passed under
+ASan/UBSan with macOS leak detection disabled, and the WASM Release build
+compiled. No version bump, tag, push, or release was performed.
 
 ## Suggested next session
 
