@@ -55,6 +55,7 @@ struct BubbleGameTestAccess {
     static bool& netViewAuto(BubbleGame& game) { return game.netViewAuto; }
     static void updatePlayerNames(BubbleGame& game) { game.UpdatePlayerNameWinText(); }
     static TTFText& playerName(BubbleGame& game, int idx) { return game.playerNameWinText[idx]; }
+    static TTFText& targetingLabel(BubbleGame& game, int idx) { return game.targetingText[idx]; }
 };
 
 struct TTFTextTestAccess {
@@ -136,6 +137,18 @@ int main() {
         TTFText& firstAgain = BubbleGameTestAccess::statsPanelCell(game, pool, 0, 16);
         TTFText& last = BubbleGameTestAccess::statsPanelCell(game, pool, 5, 16);
         CHECK(TTFTextTestAccess::font(firstAgain) == TTFTextTestAccess::font(last));
+    }
+
+    {
+        BubbleGame game(renderer);
+        CHECK(TTFTextTestAccess::font(BubbleGameTestAccess::targetingLabel(game, 0)) ==
+              TTFTextTestAccess::font(BubbleGameTestAccess::targetingLabel(game,
+                                                                           MAX_NET_PLAYERS - 1)));
+        // Player zero intentionally uses a larger label. Remote players all
+        // use the same immutable centered 16 px font.
+        CHECK(TTFTextTestAccess::font(BubbleGameTestAccess::playerName(game, 1)) ==
+              TTFTextTestAccess::font(BubbleGameTestAccess::playerName(game,
+                                                                       MAX_NET_PLAYERS - 1)));
     }
 
     // End-to-end: RenderRoundStats itself, across a 3-player non-network game.

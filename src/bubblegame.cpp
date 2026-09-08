@@ -124,8 +124,9 @@ BubbleGame::BubbleGame(const SDL_Renderer *renderer)
     // texture through an indeterminate rect and never appeared at all
     // (audit finding BUG-043). Smaller than inGameText: it sits just above or
     // below a player's shooter and has to fit beside the mini boards.
+    targetingFont12.reset(TTF_OpenFont(ASSET("/gfx/DroidSans.ttf").c_str(), 12.0f));
     for (int i = 0; i < MAX_NET_PLAYERS; i++) {
-        targetingText[i].LoadFont(ASSET("/gfx/DroidSans.ttf").c_str(), 12);
+        targetingText[i].LoadFont(targetingFont12.get());
         targetingText[i].UpdateColor({255, 255, 255, 255}, {0, 0, 0, 255});
     }
 
@@ -160,10 +161,17 @@ BubbleGame::BubbleGame(const SDL_Renderer *renderer)
 
     // Initialize player name/win text for multiplayer (3-5 players)
     // Player 0 (center/local) gets larger font (22), others get smaller font (16)
+    remoteNameFont16.reset(TTF_OpenFont(ASSET("/gfx/DroidSans.ttf").c_str(), 16.0f));
+    if (remoteNameFont16) {
+        TTF_SetFontWrapAlignment(remoteNameFont16.get(), TTF_HORIZONTAL_ALIGN_CENTER);
+    }
     for (int i = 0; i < MAX_NET_PLAYERS; i++) {
-        int fontSize = (i == 0) ? 22 : 16;
-        playerNameWinText[i].LoadFont(ASSET("/gfx/DroidSans.ttf").c_str(), fontSize);
-        playerNameWinText[i].UpdateAlignment(TTF_HORIZONTAL_ALIGN_CENTER);
+        if (i == 0) {
+            playerNameWinText[i].LoadFont(ASSET("/gfx/DroidSans.ttf").c_str(), 22);
+            playerNameWinText[i].UpdateAlignment(TTF_HORIZONTAL_ALIGN_CENTER);
+        } else {
+            playerNameWinText[i].LoadFont(remoteNameFont16.get());
+        }
         playerNameWinText[i].UpdateColor({255, 255, 255, 255}, {0, 0, 0, 255});
     }
 
