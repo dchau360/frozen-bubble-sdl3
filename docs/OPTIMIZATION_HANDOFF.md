@@ -74,67 +74,28 @@ a speedup.
     `Deploy WASM to Itch.io` and `Create Release`, both confirmed ✓. This is
     the release that's actually live, not `v2.4.92`.
 - Status of every backlog item: **A** (async networking) — all four stages
-  landed, tagged `v2.4.93` (see above); one residual item remains open (the
-  server fairness bug was investigated and closed as not reproducible — see
-  below), listed below. **B** (font sharing) — gameplay + one confirmed menu hot
+  landed, tagged `v2.4.93` (see above); both technical residuals are closed
+  (stage 3b accepted as a documented limitation, the server fairness report
+  closed as not reproducible — see "Active work" below); only a manual
+  device-pairing verification follow-up remains. **B** (font sharing) — gameplay + one confirmed menu hot
   paths done; remaining menu call sites were measured or inspected and B is
   complete. **C, D, E, F** — complete. **G** — measured, found not justified,
   deliberately not implemented (closed, no further action).
 
 ## Active work — what's left
 
-### Async networking (item A) residuals
-
 All four stages of the async rearchitecture landed (see archive for full
-detail). What's left, in priority order:
+detail). Both technical residuals that used to be tracked here are now
+closed: stage 3b's synchronous fallback is a documented, accepted
+limitation with no observed live impact (see the archive's stage 3 section
+for why it wasn't worth rewriting), and the server `select()` fairness
+report (`task_3c17853a`) was investigated and found not reproducible (see
+the archive's stage 4 section). Neither needs a next session's attention
+unless new evidence shows up.
 
-1. **Stage 3b's internals are still synchronous.** `WaitForBubble`/
-   `WaitForNextBubble`/`WaitForTobeBubble`/`SyncNetworkLevel` were never
-   turned into a resumable state machine — 3b closed the stall for the
-   common case by gating entry until every sync message is already queued,
-   so the loop finds its data immediately and returns without truly
-   waiting. The residual case (the gate's own 5s timeout expires with
-   messages still missing) still falls through to the old blocking loop,
-   per-message, same as before this effort. Doing the real rewrite means
-   turning ~150 lines of bubble-position math (mini-player offsets,
-   per-player grid replication, launcher/next-bubble assignment) into
-   resumable state with no existing automated coverage of that math to
-   rewrite against — the risk/effort didn't clear the bar in this batch. A
-   live two-browser WASM game exercised the mitigated path end-to-end (see
-   archive) with no stalls observed, so this is optional hardening rather
-   than a known live bug — pick it up only if a real multi-round game is
-   ever seen to hit the residual case.
-2. ~~A real pre-existing server bug, found while writing stage 4's test~~ —
-   **investigated 2026-09-08 (`task_3c17853a`), not reproducible; closed.**
-   The original finding was a `select()`-loop fairness gap in
-   `connections_manager()`, seemingly reproducible against a clean
-   pre-stage-4 worktree and seemingly unrelated to stage 4's `write_set`
-   addition or memory corruption. A follow-up session rebuilt the server
-   with `FB_DEBUG_SELECT`-gated instrumentation (`fd`/`FD_ISSET` logged on
-   every prio pass) and drove a genuinely sustained, paced, backgrounded
-   flood (~16k msgs/sec) against two topologies — a quiet third peer in the
-   same game, and a quiet peer in a wholly separate game on the same
-   server. In both, the quiet peer's fd was reported readable within
-   0.0-0.4 ms of every send, across 16 sends/run over multiple runs — no
-   starvation. This matches the code: `connections_manager()` runs a fresh
-   `select()` every tick while prio traffic flows, and each tick's
-   `g_list_foreach` over `conns_prio` visits every connection unconditionally
-   (`prio_processed` is only checked *after* the pass completes, so it can't
-   skip a connection mid-pass). The likely explanation for the original
-   finding: several client-side test-harness artifacts each independently
-   produce a "quiet peer's data never arrives" symptom by accident — a raw
-   NUL byte tripping the server's NUL-before-newline guard, unpaced flooding
-   tripping the separate "too much data without LF" guard (killing the
-   *flooder*, not the quiet peer), a blocking socket's `settimeout()` costing
-   real wall-clock time per poll, or conflating BUG-007's (already-fixed)
-   output-queue backpressure with inbound-read fairness. No server change was
-   made — nothing was confirmed to fix. If this is ever seen again against a
-   real client, `FB_DEBUG_SELECT=1 ./fb-server ...` reproduces the exact
-   instrumentation used here (not currently compiled in — reintroduce the
-   `getenv`-gated block from this note if needed). See the archive's "Also
-   discovered" note in the stage-4 section for the original finding's own
-   writeup.
-3. **Follow-up, not a defect**: a real device/browser pairing test (not
+The only thing actually left is verification, not implementation:
+
+1. **Follow-up, not a defect**: a real device/browser pairing test (not
    just two tabs on one machine) is still worth doing, since the release
    (`v2.4.93`, confirmed shipped — `v2.4.92` never actually did, see
    "Current checkpoint" above) went out without one — see the playtest
@@ -192,9 +153,8 @@ compiled.
 ## Suggested next session
 
 1. Read current repository instructions and inspect git state.
-2. Pick from "Active work" above. The only implementation residual that is
-   not already owned by another task is the optional level-sync state-machine
-   rewrite; leave it alone unless a real multi-round stall reproduces.
+2. Pick from "Active work" above — currently just the manual device-pairing
+   verification, no code implementation is outstanding.
 3. Record a baseline or failing regression first, then implement and verify
    in proportion to the change. Preserve input parity required by the
    repository's own instructions (CLAUDE.md's keyboard/gamepad + touch/mouse
@@ -1180,11 +1140,17 @@ themselves remains open — see "Active work" above)
   make the very next match's first use of the gate measure "waited" against
   the wrong clock and read as already timed out, silently skipping the wait
   it exists to do.
-  What remains open — see "Active work" above for the current framing: the
-  residual case where the gate's own 5 s timeout is hit with messages still
-  missing still falls through to `WaitForBubble`'s old blocking loop,
-  per-message, exactly as before and exactly as WASM already accepted as its
-  fallback in 3c. No automated regression test was written for the two
+  **Accepted as a documented limitation, not tracked as active work
+  (2026-09-08)** — see "Active work" above: the residual case where the
+  gate's own 5 s timeout is hit with messages still missing still falls
+  through to `WaitForBubble`'s old blocking loop, per-message, exactly as
+  before and exactly as WASM already accepted as its fallback in 3c. This
+  stays real, unfixed code — not a false alarm the way the stage-4 fairness
+  report turned out to be — but the mitigation covers the common case, no
+  live game has ever hit the fallback, and fixing it properly would mean
+  building a multi-round headless test harness that doesn't exist today
+  before even attempting the rewrite. Revisit only if a real multi-round
+  stall is actually observed. No automated regression test was written for the two
   closed call sites either, for the same reason 3b's rewrite itself wasn't
   attempted: nothing here can spin up `BubbleGame`/`MainMenu` headlessly and
   drive a real multi-round match. `bot-play-test`/`netbot-test`/
