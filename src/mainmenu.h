@@ -229,6 +229,31 @@ private:
 
     TTFText panelText;
 
+    // The game room's per-player settings grid (NetPanelLobbyActionsRender's
+    // "ALL / P1..PN" header plus 4 data rows) renders up to 34 short text
+    // cells every frame through one shared TTFText the same way the
+    // gameplay stats table used to: each cell's UpdateText() call sees text
+    // different from the previous cell's, so the shared object invalidates
+    // and recreates a texture every cell, every frame, even when nothing in
+    // the room changed. Same fix as BubbleGame::StatsPanelCell -- one
+    // growable pool, addressed by call order, backed by one immutable font
+    // so a cell whose text is unchanged from last frame keeps its cached
+    // texture. The grid never changes size/style/alignment per cell (see
+    // NetPanelLobbyActionsRender's comment where it resets panelText to 16px
+    // Normal before the grid section), so one immutable font at that size is
+    // sound to share -- see TTFText's own caveat about mutating a font two
+    // borrowers share.
+    struct FontCloser {
+        void operator()(TTF_Font *font) const { if (font) TTF_CloseFont(font); }
+    };
+    std::unique_ptr<TTF_Font, FontCloser> netGridFont16;
+    std::vector<TTFText> netGridCellPool;
+    // Reference valid only until the next call that grows netGridCellPool
+    // (vector::resize can reallocate) -- same caveat as StatsPanelCell,
+    // same reason every call site fetches/updates/renders within one
+    // statement.
+    TTFText &NetGridCell(size_t idx);
+
     // HelpPanelRender renders up to ~24 lines per page, each one a fresh
     // UpdateText() call. Every other panel that shares panelText resizes it
     // only once or twice per render (a header title, a footer hint), but

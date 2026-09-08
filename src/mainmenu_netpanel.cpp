@@ -493,6 +493,21 @@ void MainMenu::NetPanelWorldMapRender() {
         }
 }
 
+// See the declaration comment in mainmenu.h -- same pool-of-cells pattern as
+// BubbleGame::StatsPanelCell, sized for the one grid that uses it.
+TTFText &MainMenu::NetGridCell(size_t idx) {
+    if (idx >= netGridCellPool.size()) {
+        if (!netGridFont16)
+            netGridFont16.reset(TTF_OpenFont(ASSET("/gfx/DroidSans.ttf").c_str(), 16.0f));
+
+        size_t oldSize = netGridCellPool.size();
+        netGridCellPool.resize(idx + 1);
+        for (size_t j = oldSize; j <= idx; j++)
+            netGridCellPool[j].LoadFont(netGridFont16.get());
+    }
+    return netGridCellPool[idx];
+}
+
 void MainMenu::NetPanelLobbyActionsRender() {
     NetworkClient* netClient = NetworkClient::Instance();
     SDL_Renderer* roomRenderer = const_cast<SDL_Renderer*>(renderer);
@@ -849,15 +864,25 @@ void MainMenu::NetPanelLobbyActionsRender() {
                     SDL_RenderLine(rend, (float)x, (float)gridTop, (float)x, (float)gridBot);
                 }
             }
+            // Every cell in this grid (headers, row labels, values) gets its
+            // own persistent slot in netGridCellPool, addressed by this
+            // running index -- see NetGridCell's declaration comment in
+            // mainmenu.h. Reset once per render so cell N always lands on
+            // the same pool slot frame to frame, letting an unchanged cell's
+            // texture survive instead of losing its cache to whichever
+            // other cell rendered most recently through one shared object.
+            size_t gridCellIdx = 0;
+
             // Helper: render text centered within a column cell
             auto renderCentered = [&](const char* txt, int colLeft, int y) {
                 SDL_Renderer* rend2 = const_cast<SDL_Renderer*>(renderer);
-                panelText.UpdateText(rend2, txt, 0);
+                TTFText &cell = NetGridCell(gridCellIdx++);
+                cell.UpdateText(rend2, txt, 0);
                 int tw = 0;
-                if (panelText.Texture()) { float ftw; SDL_GetTextureSize(panelText.Texture(), &ftw, nullptr); tw = (int)ftw; }
+                if (cell.Texture()) { float ftw; SDL_GetTextureSize(cell.Texture(), &ftw, nullptr); tw = (int)ftw; }
                 int cx = colLeft + colW / 2 - tw / 2;
-                panelText.UpdatePosition({cx, y});
-                { SDL_FRect fr = ToFRect(*panelText.Coords()); SDL_RenderTexture(rend2, panelText.Texture(), nullptr, &fr); };
+                cell.UpdatePosition({cx, y});
+                { SDL_FRect fr = ToFRect(*cell.Coords()); SDL_RenderTexture(rend2, cell.Texture(), nullptr, &fr); };
             };
 
             // ALL header
@@ -882,9 +907,12 @@ void MainMenu::NetPanelLobbyActionsRender() {
                 }
 
                 // Row label
-                panelText.UpdateText(const_cast<SDL_Renderer*>(renderer), rowLabels[row], 0);
-                panelText.UpdatePosition({actionStartX, rowY});
-                { SDL_FRect fr = ToFRect(*panelText.Coords()); SDL_RenderTexture(const_cast<SDL_Renderer*>(renderer), panelText.Texture(), nullptr, &fr); };
+                {
+                    TTFText &cell = NetGridCell(gridCellIdx++);
+                    cell.UpdateText(const_cast<SDL_Renderer*>(renderer), rowLabels[row], 0);
+                    cell.UpdatePosition({actionStartX, rowY});
+                    { SDL_FRect fr = ToFRect(*cell.Coords()); SDL_RenderTexture(const_cast<SDL_Renderer*>(renderer), cell.Texture(), nullptr, &fr); };
+                }
 
                 // ALL cell (col 0) — show value if all players match, else "-"
                 {

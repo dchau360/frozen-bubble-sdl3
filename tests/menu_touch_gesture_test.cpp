@@ -215,6 +215,20 @@ struct MainMenuTestAccess {
     static void RenderLobbyActions(MainMenu& menu) {
         menu.NetPanelLobbyActionsRender();
     }
+    // The settings grid's per-cell texture pool (see NetGridCell's
+    // declaration comment in mainmenu.h) -- exposed so a test can mark a
+    // cell's SDL_Texture with a property and check it survives an unchanged
+    // re-render, the same way statspanelcell_cache_test checks the
+    // gameplay stats pools.
+    static size_t NetGridCellPoolSize(const MainMenu& menu) {
+        return menu.netGridCellPool.size();
+    }
+    static SDL_Texture* NetGridCellTexture(MainMenu& menu, size_t idx) {
+        return idx < menu.netGridCellPool.size() ? menu.netGridCellPool[idx].Texture() : nullptr;
+    }
+    static void SetPlayerColorCount(MainMenu& menu, int slot, int count) {
+        menu.playerColorCounts[slot] = count;
+    }
     // Keyboard navigation in the game room goes through MenuUpKey/
     // MenuDownKey/MenuReturnKey, which are private. Stand the menu up as
     // "already in a room" (the roster test does the same) and drive the real
@@ -1191,6 +1205,67 @@ int main() {
         CHECK(MainMenuTestAccess::TeamOfSlot(*menu, 4) == 3);
 
         // Don't leak this fake room into any test that runs after this one.
+        NetworkClientTestAccess::SetCurrentGame(*nc, nullptr);
+    }
+
+    // --- Settings grid per-cell texture caching (handoff item B, menu
+    // portion): NetPanelLobbyActionsRender's "ALL / P1..PN" grid used to run
+    // every cell (headers, row labels, values) through one shared panelText,
+    // so each cell's different text invalidated the previous cell's cached
+    // texture every single call -- the same "alternating cells" defeat the
+    // gameplay stats table had before StatsPanelCell. NetGridCell fixes it
+    // the same way: one persistent pool slot per cell, addressed by call
+    // order. This proves an unchanged cell's texture survives a second,
+    // otherwise-identical render, and that changing one player's value does
+    // not disturb an unrelated cell's cached texture.
+    {
+        std::unique_ptr<MainMenu> menu = MainMenuTestAccess::Create(renderer);
+
+        NetworkClient* nc = NetworkClient::Instance();
+        NetworkClientTestAccess::SetPlayerNick(*nc, "host");
+        GameRoom room;
+        room.creator = "host";
+        room.maxPlayers = 5;  // <=5-cap -- the grid only renders for a real game room
+        room.players.push_back({"host", "", false});
+        room.players.push_back({"joiner", "", false});
+        room.players.push_back({"p3", "", false});
+        NetworkClientTestAccess::SetCurrentGame(*nc, &room);
+
+        MainMenuTestAccess::RenderLobbyActions(*menu);
+
+        // 3 players: 1 ("ALL") + 3 (P1..P3) header cells, then 4 rows of
+        // (1 label + 1 ALL-value + 3 per-player values) = 4 + 4*5 = 24.
+        CHECK(MainMenuTestAccess::NetGridCellPoolSize(*menu) == 24);
+
+        const char* marker = "test_marker";
+        SDL_Texture* allHeaderTex = MainMenuTestAccess::NetGridCellTexture(*menu, 0);
+        SDL_Texture* rowLabelTex = MainMenuTestAccess::NetGridCellTexture(*menu, 4);  // "Max colors:"
+        CHECK(allHeaderTex != nullptr);
+        CHECK(rowLabelTex != nullptr);
+        SDL_SetBooleanProperty(SDL_GetTextureProperties(allHeaderTex), marker, true);
+        SDL_SetBooleanProperty(SDL_GetTextureProperties(rowLabelTex), marker, true);
+
+        // Re-render with nothing in the room changed: every cell's text is
+        // identical to last frame, so every cell should keep its texture.
+        MainMenuTestAccess::RenderLobbyActions(*menu);
+        CHECK(MainMenuTestAccess::NetGridCellPoolSize(*menu) == 24);
+        CHECK(SDL_GetBooleanProperty(SDL_GetTextureProperties(
+            MainMenuTestAccess::NetGridCellTexture(*menu, 0)), marker, false));
+        CHECK(SDL_GetBooleanProperty(SDL_GetTextureProperties(
+            MainMenuTestAccess::NetGridCellTexture(*menu, 4)), marker, false));
+
+        // Change one player's color count -- only that one value cell's text
+        // actually changes. The "ALL" header and the "Max colors:" row label
+        // (neither of which depends on per-player values) must keep their
+        // cached textures rather than losing them to a sibling cell's update,
+        // which is exactly the bug this pool exists to prevent.
+        MainMenuTestAccess::SetPlayerColorCount(*menu, 1, 5);
+        MainMenuTestAccess::RenderLobbyActions(*menu);
+        CHECK(SDL_GetBooleanProperty(SDL_GetTextureProperties(
+            MainMenuTestAccess::NetGridCellTexture(*menu, 0)), marker, false));
+        CHECK(SDL_GetBooleanProperty(SDL_GetTextureProperties(
+            MainMenuTestAccess::NetGridCellTexture(*menu, 4)), marker, false));
+
         NetworkClientTestAccess::SetCurrentGame(*nc, nullptr);
     }
 
