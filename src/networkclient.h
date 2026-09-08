@@ -137,7 +137,22 @@ public:
     // Connection management
     bool Connect(const char* host, int port);
     void Disconnect();
-    bool IsConnected() { return state != DISCONNECTED; }
+    // True once the lobby handshake (SERVER_READY) has completed and the
+    // connection is actually ready to carry commands -- CONNECTED, IN_LOBBY,
+    // or IN_GAME. Deliberately false for DISCONNECTED *and* for CONNECTING:
+    // every caller of this (grep confirms all ~18 of them) uses it to gate
+    // sending a command, reading player/session state, or deciding whether
+    // to request a fresh list -- none of them mean "in any state other than
+    // fully idle." `state != DISCONNECTED` happened to be equivalent to that
+    // only because Connect() resolved, connected, and handshook fully
+    // synchronously, so CONNECTING was never actually observable outside of
+    // it -- it was set and then immediately overwritten before Connect()
+    // returned. Async networking handoff stage 2d: flagged as the highest-
+    // risk single change in the whole handoff (every caller had to be
+    // audited), landed on its own commit *before* any of stage 2's other
+    // async-connect work, specifically so this semantic fix has its own
+    // clean bisection point if something built on top of it goes wrong.
+    bool IsConnected() { return state == CONNECTED || state == IN_LOBBY || state == IN_GAME; }
     ConnectionState GetState() { return state; }
 
     // Where we are connected (or were last asked to connect). Used to tell

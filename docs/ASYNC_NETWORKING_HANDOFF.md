@@ -220,7 +220,7 @@ geolocation stall.
 
 ## Stage 2 — Async connect + minimal connecting UI
 
-Status: **not started**
+Status: **2d landed; 2a/2b/2c/2e still open**
 
 - **2a.** `ConnectionState` gains `RESOLVING` and `AWAITING_READY`; `CONNECTING`
   becomes a state that actually survives a frame (today it is written at
@@ -230,8 +230,23 @@ Status: **not started**
   usable async resolver in the dependency set; a thread is the portable option.
 - **2c.** The `SERVER_READY` handshake becomes frame-driven with a deadline,
   replacing the 3 s drain loop.
-- **2d.** Fix `IsConnected()` — it returns true while `CONNECTING`, which becomes
-  an active landmine once that state persists. Every caller needs auditing.
+- **2d. Fix `IsConnected()` — landed, deliberately ahead of 2a/2b/2c.** It was
+  `state != DISCONNECTED`, so it returned true while `CONNECTING` — harmless
+  only because `Connect()` resolved, connected and handshook synchronously,
+  so `CONNECTING` was set and overwritten before `Connect()` ever returned and
+  no caller could observe it. It becomes an active landmine the moment 2a
+  makes that state persist across frames, so it is fixed *first*, on its own
+  commit, while it is still a provable no-op — if something built on top of
+  it later goes wrong, this has its own clean bisection point rather than
+  being buried inside the state-machine rewrite. Now
+  `state == CONNECTED || state == IN_LOBBY || state == IN_GAME`.
+  All ~18 callers were audited (grep, every hit read in context): every one
+  of them gates sending a command, reading player/session state, or deciding
+  whether to request a fresh list — i.e. all of them mean "ready to carry
+  commands", none mean "in any state other than fully idle". The
+  `pendingLobbyConnect` completion path in `NetPanelRender()` is unaffected
+  because it tests `GetState() == CONNECTED` explicitly rather than going
+  through `IsConnected()`.
 - **2e. UI.** `MenuReturnKey`'s `DO_CONNECT` block becomes "kick off and return".
   Per CLAUDE.md's input-parity rule the connecting state needs all four: an
   indicator, ESC/B cancel, a **tap target** for cancel, and a
