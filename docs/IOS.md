@@ -196,6 +196,16 @@ code signature at install time and there is nothing here to verify. Options:
 - **Xcode**: point a project at the built `.app`, or build with the Xcode
   generator and let Xcode manage signing.
 - **TrollStore / a jailbroken device** installs unsigned bundles directly.
+- **`tools/deploy-ios-device.sh`** automates the Xcode-managed-signing path
+  above for repeat installs on a machine that has already done it once (your
+  Apple ID added in Xcode, a team picked for the target). It reconfigures
+  `build-ios-device/` against current source, builds and signs with
+  `xcodebuild -allowProvisioningUpdates`, then installs and launches on
+  whichever device `xcrun devicectl` reports as connected. Pass `--team
+  <TEAMID>` the first time on a new machine (it's cached in
+  `build-ios-device/.devteam` after that); `--device <UDID>` if more than one
+  device is connected. This is for iterating on your own hardware, not a
+  substitute for the unsigned CI build everyone else uses.
 
 Signing is deliberately left out of the build: baking in a specific team ID
 would produce an artifact that only installs for whoever built it.
