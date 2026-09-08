@@ -60,6 +60,53 @@ Scope: client **and** server (stage 4 closes audit `BUG-007`, the same design
 defect on the other side of the wire). Connect UI is deliberately minimal —
 "Connecting…" plus cancel, not a progress design.
 
+## What's left
+
+All four stages have landed and been pushed (`33c245ae..7974ab30`). What
+remains, in priority order:
+
+1. **Stage 3b's internals are still synchronous.** `WaitForBubble`/
+   `WaitForNextBubble`/`WaitForTobeBubble`/`SyncNetworkLevel` themselves were
+   never turned into a resumable state machine — 3b closed the stall for the
+   common case by gating entry until every sync message is already queued,
+   so the loop finds its data immediately and returns without truly waiting.
+   The residual case (the gate's own 5s timeout expires with messages still
+   missing) still falls through to the old blocking loop, per-message, same
+   as before this effort. Doing the real rewrite means turning ~150 lines of
+   bubble-position math (mini-player offsets, per-player grid replication,
+   launcher/next-bubble assignment) into resumable state with no existing
+   automated coverage of that math to rewrite against — the risk/effort
+   didn't clear the bar this round. Now that a live two-browser WASM game
+   has exercised the mitigated path end-to-end (see the playtest section
+   below) with no stalls observed, this is optional hardening rather than a
+   known live bug — pick it up only if a real multi-round game is ever seen
+   to hit the residual case.
+2. **WASM bug 3 (CREATE confirmation heuristic) is still open** — see
+   "Pre-existing WASM bugs" at the bottom. Any non-`PART` bare `OK` still
+   confirms a pending CREATE; unlike bugs 1, 2, and 4 it was never touched by
+   any of the four stages, because nothing in this effort's scope routed
+   through that code path. Small, self-contained fix if picked up later:
+   give CREATE the same request-scoping the NICK retry path got in stage 1b.
+3. **A real pre-existing server bug, found while writing stage 4's test, was
+   deliberately left unfixed as out-of-scope**: a `select()`-loop fairness
+   gap in `connections_manager()` where one connection's sustained flood can
+   make a *different* connection's inbound data invisible to `FD_ISSET` for
+   the flood's whole duration. Confirmed pre-existing (reproduces against a
+   clean worktree at `f2368bd4`, before any stage-4 change) and confirmed
+   unrelated to stage 4's `write_set` addition or to memory corruption
+   (clean under ASan with `write_set` both present and disabled). Flagged as
+   its own background task (`task_3c17853a`, still open/unstarted as of this
+   writing) rather than expanded into this effort's scope — pick it up
+   separately.
+4. **No release has been tagged for any of this yet.** Recommend holding off
+   until a real device/browser pairing (not just two browser tabs on one
+   machine) has been tried — see the playtest section below for what has and
+   hasn't been covered so far.
+5. **`docs/MANUAL_TEST_CHECKLIST.md` hasn't been updated.** The live
+   two-browser WASM playtest recipe (two `tools/serve-wasm.py` tabs, an
+   ASan/UBSan `fb-server`, drive both via synthetic DOM input) should get an
+   entry there so it's repeatable without re-deriving the setup next time.
+
 ---
 
 ## Stage 1 — Unify on the async command path, kill background stalls
@@ -287,8 +334,9 @@ Status: **2a-2e all landed** — stage 2 complete.
 ## Stage 3 — Async game start and level sync (highest risk)
 
 Status: **3a and 3c landed; 3b partially landed (stall mitigated for both**
-**call sites; a full state-machine rewrite of `WaitForBubble`/`SyncNetworkLevel`**
-**themselves remains open and needs genuine two-client verification)**
+**call sites and confirmed live via a genuine two-browser WASM multi-round**
+**game — see the playtest section below; a full state-machine rewrite of**
+**`WaitForBubble`/`SyncNetworkLevel` themselves remains open, see "What's left")**
 
 - **3a. Leader `GAME_CAN_START` poll — landed.** Used to run as a blocking loop
   *inside a push-message handler* (`HandlePushMessage`, reached from the
@@ -380,8 +428,13 @@ Status: **3a and 3c landed; 3b partially landed (stall mitigated for both**
   and drive a real multi-round match. `bot-play-test`/`netbot-test`/
   `net-bots-test` (a real `fb-server` plus bots) all still pass, but none of
   them exercises this path — a bot is a level-sync *leader*'s local
-  bookkeeping problem, not a joiner waiting on one. **Verifying this needs
-  a genuine two-client multi-round game** (see the manual-test note below).
+  bookkeeping problem, not a joiner waiting on one.
+  **Update:** the genuine two-client multi-round game this needed has now
+  been run — see "What's been verified so far (live two-browser WASM
+  playtest, 2026-09-08)" below. It confirmed the mitigated common path
+  (multiple real rounds, no stalls, clean sanitizer log); it did not exercise
+  the residual gate-timeout fallback case, which is why item 1 in "What's
+  left" above is still open rather than closed.
 - **3c. Round 2+ level-sync stall — landed.** The joiner's wait gate counted
   only `MessageQueueSize()`, but `ProcessNetworkMessages()` moves `b|`/`N`/`T`
   out of that queue and into `syncQueue` as it drains. In round 1 nothing was
@@ -502,8 +555,11 @@ against what's invoking as Python 2). The `#ifdef __WASM_PORT__` branches
 touched here (`StartGeoLocFetch`'s WASM path, the `#ifdef` guards around
 `StartLanFetch`/`StartPublicServerFetch`, `ShowPanel` case 3) were reviewed by
 inspection against the pre-existing `serverFetchThread` pattern, which uses
-the identical conditional-compilation shape and already compiles for WASM. A
-real WASM build should still confirm this before the next tag.
+the identical conditional-compilation shape and already compiles for WASM.
+These paths are all `#ifndef __WASM_PORT__` (WASM has no threads), so there
+is no WASM code path here to exercise at all — the later live playtest
+doesn't add coverage for 1d because there's nothing on that platform to
+cover.
 
 ## What's been verified so far (1b, 2026-09-08)
 
@@ -527,7 +583,9 @@ WASM was again not rebuilt (same local toolchain issue as above); the
 — `networkclient_wasm.cpp`'s own copies of the touched blocks use the same
 `pendingNick`/`pendingCreate`/`pendingJoin` fields already shared via
 `networkclient.h`, so no new `#ifdef` branch was introduced for WASM to diverge
-on. A real WASM build should still confirm this before the next tag.
+on. **Update:** the live two-browser WASM playtest (see below) has since
+exercised this path directly — NICK went through on both real clients — so
+this caveat is closed, not just inspected.
 
 ## What's been verified so far (1c/1e/1f, 2026-09-08)
 
@@ -595,9 +653,42 @@ sets `pendingLobbyConnect`. With the narrowed predicate it fell into the
 called itself "a provable no-op", which was true for native and wrong for
 WASM. The fix is the three-way branch (`IsConnected()` / `IsConnecting()` /
 neither) that stage 2 needed anyway. There is still no automated WASM
-coverage and the local Emscripten toolchain is broken, so **a real WASM build
-must exercise lobby entry before the next tag** — this is the second stage
-running on inspection alone for that platform.
+coverage and the local Emscripten toolchain is broken. **Update:** the live
+two-browser WASM playtest (see below) has since exercised real lobby entry
+on two real WASM clients end to end, so this caveat is closed for the
+happy path — still no automated regression coverage, but no longer
+inspection-only.
+
+## What's been verified so far (live two-browser WASM playtest, 2026-09-08)
+
+The first genuine two-client verification of any of this: two real browser
+tabs, each a real WASM build served via `tools/serve-wasm.py` on port 8090,
+both connected over real WebSockets to a real `fb-server` built with
+`-fsanitize=address,undefined`. Not a harness — actual gameplay, driven by
+synthetic DOM input events into the two tabs, through NICK → CREATE/JOIN →
+lobby → connecting UI → game start → multiple full rounds, with real
+fire/malus GAMEMSG relay between the two clients throughout. Server log
+stayed clean of ASan/UBSan diagnostics for the whole session.
+
+This closes out the "needs a real WASM build to confirm" caveats logged
+under stages 1, 2, and 3 below for every code path actually exercised by
+two clients playing a game together: NICK/CREATE/JOIN's async retry path
+(1b), `SendCommand` fire-and-forget (1c), the async connect state machine
+and connecting UI including `IsConnected()`'s narrowed meaning (2a-2e), the
+leader's async `GAME_CAN_START` poll (3a), and — the specific thing this
+was run to check — round 2+ level sync no longer stalling (3c) and staying
+stalled-free on native/WASM alike under the 3b mitigation (both were
+confirmed live, not just by inspection, for the first time in this session).
+
+Still not covered by this playtest, so still open per "What's left" above:
+stage 1d's threaded discovery/geoloc paths are native-only (`#ifndef
+__WASM_PORT__` — WASM has no threads, so there is no WASM code path to
+verify there), stage 2b's detached DNS resolver is likewise native-only, and
+stage 3b's residual (gate-timeout-exceeded) fallback case was not hit during
+this session's rounds — the mitigated common path was validated, not the
+fallback loop itself. Two browser tabs on one machine also isn't the same as
+two genuinely separate devices/networks; a real device pairing is still the
+recommended bar before tagging a release (see "What's left" above).
 
 ## Verification
 
@@ -628,8 +719,14 @@ the `MainMenuTestAccess`/`NetworkClientTestAccess` friend structs in
 `tests/menu_touch_gesture_test.cpp`, and the Python harness that spawns a real
 `fb-server`. Sanitizer-only tests use `SKIP_RETURN_CODE 77`.
 
-Manual: extend `docs/MANUAL_TEST_CHECKLIST.md`'s network entries. Stages 3 and 4
-need genuine two-client testing.
+Manual: extend `docs/MANUAL_TEST_CHECKLIST.md`'s network entries — not yet
+done. Stages 3 and 4 needed genuine two-client testing: stage 4 got a
+scripted flooder/victim/control harness (`server-stall-test`); stage 3 got a
+live two-browser WASM playtest (see above) rather than an automated
+two-client harness, since driving `BubbleGame`/`MainMenu` headlessly through
+a real match isn't feasible with existing infra. `docs/MANUAL_TEST_CHECKLIST.md`
+should still get an entry describing that playtest recipe so it's repeatable
+without re-deriving the setup.
 
 Per stage, before tagging (CLAUDE.md "Cutting a release"): bump
 `CMakeLists.txt`, `android/app/build.gradle` (`versionCode` must strictly
