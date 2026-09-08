@@ -63,6 +63,9 @@ public:
     TTFText(TTFText&& other) noexcept;
     TTFText& operator=(TTFText&& other) noexcept;
 private:
+#ifdef FROZEN_BUBBLE_TEST_ACCESS
+    friend struct TTFTextTestAccess;
+#endif
     void InvalidateTexture();
 
     std::string curText;

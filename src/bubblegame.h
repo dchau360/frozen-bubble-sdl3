@@ -683,6 +683,13 @@ private:
     TTFText scoreText[2];     // "Score: N" / "Nickname[: N]", indexed by player slot (single-player and 2P only)
     TTFText playerNameWinText[MAX_NET_PLAYERS];  // "PlayerName: WinCount" for each player (3-5 player mode)
     TTFText targetingText[MAX_NET_PLAYERS];      // Targeting indicator, indexed by player
+    struct FontCloser {
+        void operator()(TTF_Font *font) const { if (font) TTF_CloseFont(font); }
+    };
+    // Stats cells mutate only per-label color/text/position, so these fonts stay
+    // immutable and can be borrowed by every texture cache at the same size.
+    std::unique_ptr<TTF_Font, FontCloser> statsPanelFont14;
+    std::unique_ptr<TTF_Font, FontCloser> statsPanelFont16;
     // Post-round stats table and royale HUD render a variable number of text
     // cells per frame (up to MAX_NET_PLAYERS rows x 8 columns for stats). Each
     // panel gets its own growable pool, addressed by call order via

@@ -39,8 +39,9 @@ static int failures = 0;
 } while (false)
 
 struct BubbleGameTestAccess {
-    static TTFText& statsPanelCell(BubbleGame& game, std::vector<TTFText>& pool, size_t idx) {
-        return game.StatsPanelCell(pool, idx);
+    static TTFText& statsPanelCell(BubbleGame& game, std::vector<TTFText>& pool,
+                                   size_t idx, int fontSize = 14) {
+        return game.StatsPanelCell(pool, idx, fontSize);
     }
     static std::vector<TTFText>& statsPool(BubbleGame& game) { return game.statsCellPool; }
     static std::vector<TTFText>& royalePool(BubbleGame& game) { return game.royaleHudCellPool; }
@@ -52,6 +53,12 @@ struct BubbleGameTestAccess {
     static BubbleArray& player(BubbleGame& game, int idx) { return game.bubbleArrays[idx]; }
     static int& roundsPlayed(BubbleGame& game) { return game.roundsPlayed; }
     static bool& netViewAuto(BubbleGame& game) { return game.netViewAuto; }
+    static void updatePlayerNames(BubbleGame& game) { game.UpdatePlayerNameWinText(); }
+    static TTFText& playerName(BubbleGame& game, int idx) { return game.playerNameWinText[idx]; }
+};
+
+struct TTFTextTestAccess {
+    static TTF_Font* font(TTFText& text) { return text.textFont; }
 };
 
 static bool HasMarker(TTFText& cell, const char* marker) {
@@ -113,6 +120,22 @@ int main() {
         CHECK(pool.size() == 2);
         CHECK(cell(2, "Player 3").Texture() != nullptr);
         CHECK(pool.size() == 3);
+
+        // Pool slots keep separate textures but borrow one immutable font.
+        // Re-fetch after growth because resize may move the TTFText objects.
+        CHECK(TTFTextTestAccess::font(cell(0, "Player 1")) ==
+              TTFTextTestAccess::font(cell(2, "Player 3")));
+    }
+
+    {
+        BubbleGame game(renderer);
+        std::vector<TTFText>& pool = BubbleGameTestAccess::malusPool(game);
+        BubbleGameTestAccess::statsPanelCell(game, pool, 0, 16);
+        BubbleGameTestAccess::statsPanelCell(game, pool, 5, 16);
+        // Re-fetch slot zero after the pool grows.
+        TTFText& firstAgain = BubbleGameTestAccess::statsPanelCell(game, pool, 0, 16);
+        TTFText& last = BubbleGameTestAccess::statsPanelCell(game, pool, 5, 16);
+        CHECK(TTFTextTestAccess::font(firstAgain) == TTFTextTestAccess::font(last));
     }
 
     // End-to-end: RenderRoundStats itself, across a 3-player non-network game.
@@ -185,6 +208,36 @@ int main() {
         std::vector<TTFText>& pool = BubbleGameTestAccess::statsPool(game);
         BubbleGameTestAccess::renderRoundStats(game, renderer);
         CHECK(pool.size() == 41);
+    }
+
+    // A team change must recolor a player label immediately, including the
+    // transition back to no team. The texture marker proves the render was
+    // replaced on the first update after each change rather than one frame
+    // late or left tinted with the previous team's color.
+    {
+        BubbleGame game(renderer);
+        SetupSettings& settings = BubbleGameTestAccess::settings(game);
+        settings.playerCount = 3;
+        BubbleArray& player = BubbleGameTestAccess::player(game, 0);
+        player.playerNickname = "Player";
+        player.winCount = 2;
+        TTFText& label = BubbleGameTestAccess::playerName(game, 0);
+        const char* marker = "statspanelcell-cache-test.player-name-color";
+
+        settings.playerTeams[0] = kNoTeam;
+        BubbleGameTestAccess::updatePlayerNames(game);
+        CHECK(label.Texture() != nullptr);
+        SDL_SetBooleanProperty(SDL_GetTextureProperties(label.Texture()), marker, true);
+
+        settings.playerTeams[0] = 1;
+        BubbleGameTestAccess::updatePlayerNames(game);
+        CHECK(!HasMarker(label, marker));
+
+        BubbleGameTestAccess::updatePlayerNames(game);
+        SDL_SetBooleanProperty(SDL_GetTextureProperties(label.Texture()), marker, true);
+        settings.playerTeams[0] = kNoTeam;
+        BubbleGameTestAccess::updatePlayerNames(game);
+        CHECK(!HasMarker(label, marker));
     }
 
     // End-to-end: RenderRoyaleHud, >5-player royale with the local player

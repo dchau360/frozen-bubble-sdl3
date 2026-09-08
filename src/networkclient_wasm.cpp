@@ -89,7 +89,7 @@ static EM_BOOL onWebSocketMessage(int /*eventType*/, const EmscriptenWebSocketMe
 
 NetworkClient::NetworkClient()
     : websocketSocket(nullptr), state(DISCONNECTED), currentGame(nullptr), myPlayerId(0) {
-    SDL_Log("NetworkClient (WASM) constructor called");
+    SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION, "NetworkClient (WASM) constructor called");
 }
 
 NetworkClient::~NetworkClient() {
@@ -191,7 +191,7 @@ bool NetworkClient::SendCommand(const char* command) {
         return false;
     }
 
-    SDL_Log("Sent: %s", command);
+    SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION, "Sent: %s", command);
     return true;
 }
 
@@ -304,7 +304,9 @@ bool NetworkClient::SendGameData(const char* data) {
 
     bool isPing = (strcmp(data, "p") == 0);
     if (!isPing) {
-        SDL_Log(">>> Sending game data: [ID=%d] %s (%d bytes)", (int)myPlayerId, data, totalLen);
+        SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION,
+                     ">>> Sending game data: [ID=%d] %s (%d bytes)",
+                     (int)myPlayerId, data, totalLen);
     }
 
     EMSCRIPTEN_RESULT result = emscripten_websocket_send_binary(handle->socket, buffer, totalLen);

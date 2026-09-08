@@ -109,15 +109,15 @@ void BubbleGame::UpdatePlayerNameWinText() {
             }
         }
 
-        playerNameWinText[i].UpdateText(renderer, nameWinStr, 0);
-
-        // Recolor by team so a team reads the same color here as in the lobby's
-        // team chips (kTeamColors, shared via bubblegame.h). A player on no
-        // team keeps the default color -- there is no chip for them anywhere
-        // else either, and kTeamColors[kNoTeam - 1] would read off the front.
+        // Pick the color before rendering so a team change is visible this
+        // frame. Reset no-team players to white instead of retaining a tint
+        // from their previous team.
+        SDL_Color nameColor = {255, 255, 255, 255};
         if (currentSettings.playerTeams[i] != kNoTeam) {
-            playerNameWinText[i].UpdateColor(kTeamColors[currentSettings.playerTeams[i] - 1], {0, 0, 0, 255});
+            nameColor = kTeamColors[currentSettings.playerTeams[i] - 1];
         }
+        playerNameWinText[i].UpdateColor(nameColor, {0, 0, 0, 255});
+        playerNameWinText[i].UpdateText(renderer, nameWinStr, 0);
 
         // Use fixed positions based on player layout (matching original FB2)
         const SDL_Point slotPos = PlayerSlotPosition(currentSettings.playerCount, i, bArray.parkedSlot);
@@ -265,8 +265,9 @@ static void DrawAimGuide(SDL_Renderer* rend, const BubbleArray& bArray, bool isM
 }
 
 
-// Returns the pool's cell at `idx`, growing the pool and loading each newly
-// added slot's font on first use. Backs the post-round stats table, royale
+// Returns the pool's cell at `idx`, growing the pool and attaching each newly
+// added slot to one immutable font shared by cells of the same size. Backs the
+// post-round stats table, royale
 // HUD, and malus-alert toasts: each renders a per-frame count of text cells
 // that varies with player count/teams/stacked alerts, and giving every cell
 // its own persistent slot (addressed by call order) means a cell whose text
@@ -281,10 +282,20 @@ static void DrawAimGuide(SDL_Renderer* rend, const BubbleArray& bArray, bool isM
 // StatsPanelCell() call on the same pool.
 TTFText &BubbleGame::StatsPanelCell(std::vector<TTFText> &pool, size_t idx, int fontSize) {
     if (idx >= pool.size()) {
+        std::unique_ptr<TTF_Font, FontCloser> *fontOwner = nullptr;
+        if (fontSize == 14) fontOwner = &statsPanelFont14;
+        else if (fontSize == 16) fontOwner = &statsPanelFont16;
+
+        if (fontOwner && !*fontOwner) {
+            fontOwner->reset(TTF_OpenFont(ASSET("/gfx/DroidSans.ttf").c_str(),
+                                          static_cast<float>(fontSize)));
+        }
+
         size_t oldSize = pool.size();
         pool.resize(idx + 1);
         for (size_t j = oldSize; j <= idx; j++) {
-            pool[j].LoadFont(ASSET("/gfx/DroidSans.ttf").c_str(), fontSize);
+            if (fontOwner) pool[j].LoadFont(fontOwner->get());
+            else pool[j].LoadFont(ASSET("/gfx/DroidSans.ttf").c_str(), fontSize);
         }
     }
     return pool[idx];

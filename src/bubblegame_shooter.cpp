@@ -38,7 +38,8 @@
 
 void BubbleGame::LaunchBubble(BubbleArray &bArray) {
     PlaySFX("launch");
-    SDL_Log("Launching bubble at angle: %.4f radians (%.2f degrees from center), lowGfx=%d, cos=%.4f",
+    SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION,
+            "Launching bubble at angle: %.4f radians (%.2f degrees from center), lowGfx=%d, cos=%.4f",
             bArray.shooterSprite.angle,
             (bArray.shooterSprite.angle - PI/2.0f) * 180.0f / PI,
             lowGfx,
@@ -299,7 +300,9 @@ void BubbleGame::UpdatePenguin(BubbleArray &bArray) {
         // For remote players with mp_fire, use the angle from the network message
         if (bArray.mpFirePending) {
             angle = bArray.pendingAngle;
-            SDL_Log("Launching remote player %d bubble with angle %.3f from network", bArray.playerAssigned, angle);
+            SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION,
+                         "Launching remote player %d bubble with angle %.3f from network",
+                         bArray.playerAssigned, angle);
         }
 
         // Lock (or disqualify) which local highscore table this classic solo
@@ -481,13 +484,16 @@ void GetClosestFreeCell(SingleBubble &sBubble, BubbleArray &bArray, int *row, in
 
             if (foundAdj) {
                 if (!calcAdj)
-                    SDL_Log("GetClosestFreeCell: midpoint gave [%d][%d] not adj to anchor [%d][%d]; using [%d][%d]",
+                    SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION,
+                            "GetClosestFreeCell: midpoint gave [%d][%d] not adj to anchor [%d][%d]; using [%d][%d]",
                             cy, cx, anchorRow, anchorCol, bestRow, bestCol);
                 cy = bestRow;
                 cx = bestCol;
             } else {
                 // All anchor neighbors occupied — fall back to original BFS from anchor
-                SDL_Log("WARNING: all anchor [%d][%d] neighbors occupied, BFS fallback", anchorRow, anchorCol);
+                SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
+                            "All anchor [%d][%d] neighbors occupied, using BFS fallback",
+                            anchorRow, anchorCol);
                 std::queue<std::pair<int,int>> q;
                 std::set<std::pair<int,int>> vis;
                 q.push({anchorRow, anchorCol});
@@ -511,7 +517,8 @@ void GetClosestFreeCell(SingleBubble &sBubble, BubbleArray &bArray, int *row, in
         }
     } else if (bArray.bubbleMap[cy][cx].bubbleId != -1) {
         // Ceiling hit (no anchor) — BFS from calculated position
-        SDL_Log("WARNING: Calculated position [%d][%d] is occupied, BFS fallback", cy, cx);
+        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
+                    "Calculated position [%d][%d] is occupied, using BFS fallback", cy, cx);
         std::queue<std::pair<int,int>> q;
         std::set<std::pair<int,int>> vis;
         q.push({cy, cx}); vis.insert({cy, cx});
@@ -577,7 +584,8 @@ void BubbleGame::UpdateSingleBubblesAtScale(float deltaScale) {
 
         // NOW check if chain reaction completed (after UpdatePosition set the flag)
         if (sBubble.chainReachedDest && sBubble.chainRow != -1 && sBubble.chainCol != -1) {
-            SDL_Log("Chain reaction completed! Placing bubble %d at grid[%d][%d]",
+            SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION,
+                    "Chain reaction completed; placing bubble %d at grid[%d][%d]",
                     sBubble.bubbleId, sBubble.chainRow, sBubble.chainCol);
             bArray->PlacePlayerBubble(sBubble.bubbleId, sBubble.chainRow, sBubble.chainCol);
             bArray->newShoot = true;
@@ -608,7 +616,8 @@ void BubbleGame::UpdateSingleBubblesAtScale(float deltaScale) {
             BubbleArray* launchArray = &bubbleArrays[sBubble.assignedArray];
             if (launchArray->mpStickPending) {
                 // Stick bubble at exact position from 's' message (original line 2192)
-                SDL_Log("Processing mp_stick for player %d: cx=%d cy=%d col=%d",
+                SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION,
+                        "Processing mp_stick for player %d: cx=%d cy=%d col=%d",
                         sBubble.assignedArray, launchArray->stickCx, launchArray->stickCy, launchArray->stickCol);
 
                 launchArray->PlacePlayerBubble(launchArray->stickCol, launchArray->stickCy, launchArray->stickCx);
@@ -640,7 +649,9 @@ void BubbleGame::UpdateSingleBubblesAtScale(float deltaScale) {
                 if (sBubble.pos.y <= bArray->topLimit) {
                     int row, col;
                     GetClosestFreeCell(sBubble, *bArray, &row, &col, -1, -1, isMini);
-                    SDL_Log("Ceiling hit: placing at row=%d col=%d pos=(%.1f,%.1f)", row, col, (float)sBubble.pos.x, (float)sBubble.pos.y);
+                    SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION,
+                                 "Ceiling hit: placing at row=%d col=%d pos=(%.1f,%.1f)",
+                                 row, col, (float)sBubble.pos.x, (float)sBubble.pos.y);
                     if (currentSettings.networkGame && OwnsArray(*bArray)) {
                         char stickData[128];
                         snprintf(stickData, sizeof(stickData), "s%d:%d:%d:%s", col, row, sBubble.bubbleId,
@@ -666,7 +677,8 @@ void BubbleGame::UpdateSingleBubblesAtScale(float deltaScale) {
                         if (sBubble.IsCollision(&bubble)) {
                             int row, col;
                             GetClosestFreeCell(sBubble, *bArray, &row, &col, hitRow, hitCol, isMini);
-                            SDL_Log("Bubble stuck at row=%d, col=%d, position=(%.1f, %.1f)",
+                            SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION,
+                                    "Bubble stuck at row=%d, col=%d, position=(%.1f, %.1f)",
                                     row, col, (float)sBubble.pos.x, (float)sBubble.pos.y);
 
                             // In network game, send stick position to opponent
@@ -676,7 +688,8 @@ void BubbleGame::UpdateSingleBubblesAtScale(float deltaScale) {
                                 char stickData[256];
                                 snprintf(stickData, sizeof(stickData), "s%d:%d:%d:%s",
                                     col, row, sBubble.bubbleId, BuildNextColorsStr(*bArray).c_str());
-                                SDL_Log("Sending stick: col=%d row=%d color=%d nextColors=%s",
+                                SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION,
+                                        "Sending stick: col=%d row=%d color=%d nextColors=%s",
                                         col, row, sBubble.bubbleId, BuildNextColorsStr(*bArray).c_str());
                                 SendGameDataFor(*bArray, stickData);
                             }
@@ -758,7 +771,8 @@ void BubbleGame::UpdateSingleBubblesAtScale(float deltaScale) {
             const int topOfCol = TopOccupiedRowInColumn(*malusArray, malus.cx);
             malus.stickY = std::min(topOfCol + 1, 12);
 
-            SDL_Log("Malus bubble sticking at cx=%d stickY=%d", malus.cx, malus.stickY);
+            SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION,
+                         "Malus bubble sticking at cx=%d stickY=%d", malus.cx, malus.stickY);
             malusArray->PlacePlayerBubble(malus.bubbleId, malus.stickY, malus.cx);
             // Malus landing must NOT be a match activator.
             // Original uses real_stick_bubble() (no match check) for malus sticking.
@@ -772,7 +786,8 @@ void BubbleGame::UpdateSingleBubblesAtScale(float deltaScale) {
             if (currentSettings.networkGame && OwnsArray(*malusArray)) {
                 char MMsg[64];
                 snprintf(MMsg, sizeof(MMsg), "M%d:%d", malus.cx, malus.stickY);
-                SDL_Log("Sending malus stick: cx=%d stickY=%d", malus.cx, malus.stickY);
+                SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION,
+                             "Sending malus stick: cx=%d stickY=%d", malus.cx, malus.stickY);
                 SendGameDataFor(*malusArray, MMsg);
             }
 

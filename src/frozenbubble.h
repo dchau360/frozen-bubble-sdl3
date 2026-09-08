@@ -199,7 +199,7 @@ private:
     void AccumulateFrameStats(float elapsedMs);
     void RenderFpsOverlay();
 
-    unsigned int fpsWindowStart = 0;   // ms, start of the current sampling window
+    Uint64 fpsWindowStart = 0;         // ms, start of the current sampling window
     int   fpsFrames = 0;               // frames counted in this window
     float fpsSumMs = 0.0f;             // wall time accumulated in this window
     float fpsMinMs = 0.0f;             // shortest / longest frame seen, to expose
@@ -208,13 +208,13 @@ private:
     std::string fpsOverlayText;        // last formatted overlay string
 
     // Frame timing — used by RunOneFrame (persist across calls in WASM)
-    unsigned int frameTicks = 0;
-    unsigned int frameLastTick = 0;
-    float frameTime = 1000.0f / 60.0f;
+    Uint64 frameTicks = 0;
+    Uint64 frameLastTick = 0;
+    double frameTime = 1000.0 / 60.0;
     // Absolute time the current frame should end, advanced by frameTime each
-    // frame. Kept in float so the fractional part of a 60 fps frame is not lost.
+    // frame. Double precision retains the fractional part even after long runs.
     // Native only; WASM is paced by requestAnimationFrame.
-    float frameDeadline = 0.0f;
+    double frameDeadline = 0.0;
 
     static FrozenBubble* ptrInstance;
     FrozenBubble();

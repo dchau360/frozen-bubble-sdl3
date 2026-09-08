@@ -348,7 +348,7 @@ uint8_t FrozenBubble::RunForEver()
 
     frameLastTick = SDL_GetTicks();
     frameTicks    = frameLastTick;
-    frameDeadline = (float)frameLastTick;
+    frameDeadline = static_cast<double>(frameLastTick);
 
     SDL_Log("RunForEver: starting loop");
 
@@ -478,7 +478,7 @@ void FrozenBubble::RunOneFrame()
             frameLastTick = frameTicks;
             // Same reason for the pacing deadline: it is far in the past after a
             // long suspend, and would otherwise be resynced one frame later.
-            frameDeadline = (float)frameTicks;
+            frameDeadline = static_cast<double>(frameTicks);
         }
         if (e.type == SDL_EVENT_QUIT || e.type == SDL_EVENT_TERMINATING ||
             e.type == SDL_EVENT_WINDOW_CLOSE_REQUESTED ||
@@ -536,7 +536,7 @@ void FrozenBubble::RunOneFrame()
     // A deadline also preserves the 0.667ms per frame that SDL_Delay's integer
     // argument would otherwise truncate away.
     frameDeadline += frameTime;
-    float nowMs = (float)SDL_GetTicks();
+    double nowMs = static_cast<double>(SDL_GetTicks());
     if (frameDeadline < nowMs) {
         // Ran long (asset load, transition, window drag). Resync to now rather
         // than trying to claw back the missed frames with a burst of zero-delay

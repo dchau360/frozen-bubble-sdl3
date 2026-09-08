@@ -2,6 +2,7 @@
 #include "frozenbubble.h"
 #include "gamesettings.h"
 
+#include <cmath>
 #include <cstdio>
 
 static int failures = 0;
@@ -23,6 +24,14 @@ struct FrozenBubbleTestAccess {
         return fb.controllers[i];
     }
     static void dispatch(FrozenBubble &fb, SDL_Event &e) { fb.HandleControllerEvent(&e); }
+    static void setFrameClock(FrozenBubble &fb, double deadline, double interval) {
+        fb.frameDeadline = deadline;
+        fb.frameTime = interval;
+    }
+    static void advanceFrameClock(FrozenBubble &fb, int frames) {
+        for (int i = 0; i < frames; ++i) fb.frameDeadline += fb.frameTime;
+    }
+    static double frameDeadline(const FrozenBubble &fb) { return fb.frameDeadline; }
 };
 
 static void drainEvents() {
@@ -141,6 +150,19 @@ int main() {
         CHECK(sawLeftUp);
         CHECK(!cs.axisLeftHeld);
 
+        FrozenBubbleTestAccess::destroy(fb);
+    }
+
+    // Absolute deadlines must retain sub-frame precision after a long-running
+    // session. A float clock at one day elapsed rounds each 60 Hz increment,
+    // so sixty frames no longer add up to one second.
+    {
+        FrozenBubble *fb = FrozenBubbleTestAccess::create();
+        constexpr double startMs = 86'400'000.0;
+        FrozenBubbleTestAccess::setFrameClock(*fb, startMs, 1000.0 / 60.0);
+        FrozenBubbleTestAccess::advanceFrameClock(*fb, 60);
+        CHECK(std::fabs(FrozenBubbleTestAccess::frameDeadline(*fb) -
+                        (startMs + 1000.0)) < 0.01);
         FrozenBubbleTestAccess::destroy(fb);
     }
 
