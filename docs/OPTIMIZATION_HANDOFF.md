@@ -1,6 +1,6 @@
 # Code optimization progress and handoff
 
-Last updated: 2026-09-05 (session 3, after the >5-cap-room follow-up fix)
+Last updated: 2026-09-07 (follow-up review and next improvement backlog)
 
 ## Purpose and user preferences
 
@@ -17,8 +17,13 @@ confirmation. With no optimization backlog left, the user then reported a
 real gameplay bug encountered during their own use (not part of this effort's
 scope) — see "Session 3, continued" below — which is now fixed for both room
 sizes: the <=5-cap case shipped as `v2.4.78`, and the >5-cap follow-up (the
-user explicitly asked "fix the >5-cap room case too") is committed but not
-yet released — see Current checkpoint.
+user explicitly asked "fix the >5-cap room case too"). Those historical
+checkpoints are superseded by the current checkpoint below.
+
+On 2026-09-07 the user asked for further improvements after the original list
+was completed, asked to add the findings to this document, and then authorized
+implementation. Items B (stats-panel portion), C, D, and F have now been
+implemented and verified as recorded below.
 
 Update this document after meaningful implementation or verification milestones
 and before handing off. Record actual results, outstanding work, and blockers.
@@ -28,24 +33,23 @@ a speedup.
 ## Current checkpoint
 
 - Repository: `/Users/dchau/gr/frozen-bubble-sdl3`
-- Branch: `main`, clean working tree.
-- Latest commit: `c5665562` (`fix: batch Auto-balance team sync in >5-cap
-  rooms too`) — **local-only, not yet pushed** as of this writing (`main` is
-  1 commit ahead of `origin/main`, 0 behind). Full history back to the last
-  handoff update:
-  - `da37f18d` test: broaden ttftext/render-panel cache correctness coverage
-  - `05b4aedd` build: compile the shared test core once instead of 8 times
-  - `3d36ff80` perf: cache bot shot scores per landing cell within one decision
-  - `459e3d7a` refactor: consolidate player label positions, fix duplicate include
-  - `4ea617f4` docs: update optimization handoff after items 1-4
-  - `ff93a0a1` fix: stop Auto-balance from flooding the host's own connection
-  - `e92ecb6d` chore: bump version to 2.4.78 (pushed, tagged `v2.4.78`)
-  - `7a8e29fd` docs: catch up optimization handoff after items 1-4 push + v2.4.78
-  - `c5665562` fix: batch Auto-balance team sync in >5-cap rooms too (**unpushed**)
-- `v2.4.77` (`0a00c367`) and `v2.4.78` (`e92ecb6d`) are pushed and tagged on
-  `origin`. Everything through `7a8e29fd` is pushed; `c5665562` is not.
-- Both `build/` and `build-asan/` exist and are up to date with `c5665562`.
-  No implementation commands or test processes are running.
+- Branch: `main`; source changes are committed in `1e2ed8e5`
+  (`perf: tighten text rendering and frame pacing`). This handoff update is
+  committed immediately after that source checkpoint.
+- HEAD matches the locally recorded `origin/main`. No fetch was performed in
+  this review; this does not establish live remote or CI status.
+- CMake/Android version: `2.4.91`; Android versionCode: `74`.
+- Latest local version tag: `v2.4.91`. HEAD includes subsequent CI/tooling commits.
+- `c5665562` is an ancestor of HEAD and the recorded `origin/main`; the old
+  instructions to push it separately are obsolete.
+- Source/test changes in `1e2ed8e5`: `src/bubblegame.h`,
+  `src/bubblegame_render.cpp`, `src/bubblegame_shooter.cpp`,
+  `src/frozenbubble.h`, `src/frozenbubble.cpp`,
+  `src/networkclient_wasm.cpp`, `src/ttftext.h`,
+  `tests/controller_input_test.cpp`, and
+  `tests/statspanelcell_cache_test.cpp`.
+- Current native, sanitizer, and WASM verification is recorded under the new
+  backlog items. No release tag was created for this batch.
 
 ## Completed work
 
@@ -128,8 +132,8 @@ deliberately left unpushed and untouched per explicit user instruction
 
 ### Session 3: items 2-5 from the session-2 remaining-work list
 
-All four remaining items are now done, each as its own commit on `main`
-(unpushed as of this writing — see Current checkpoint above).
+All four remaining items were completed as separate commits on `main` and
+are included in the current checkpoint.
 
 **Item 2 — broaden cache correctness coverage (`da37f18d`).**
 Extended `tests/ttftext_cache_test.cpp` to cover what it didn't before: an
@@ -308,34 +312,204 @@ assertion — then restored and re-verified everything passes.
 **Verification:** full release build + `ctest` (24 passed, 2 skipped as
 expected); ASan/UBSan pass of `menu-touch-gesture-test` clean.
 
-**Release:** not yet — this commit is local-only as of this writing (see
-Current checkpoint; update after push/tag decision).
+**Historical release status:** this commit was local-only at the end of
+session 3. It is now included in HEAD and the recorded `origin/main`.
 
 ## Remaining improvements
 
-None outstanding from the original 5-item optimization list, and both
-Auto-balance flood-disconnect cases (<=5-cap and >5-cap) are fixed. Possible
-future work, not requested or scoped yet:
-- Runtime texture-creation-count benchmarks for the session-2 render caching
-  (still only verified by test, not measured — flagged as open in session 2
-  and never picked up since nothing since has needed it).
-- Evaluate reusable flood-fill storage in `BubbleAI` instead of repeated
-  vector/set/queue allocations per candidate (mentioned as a session-1
-  follow-on to the scoring cache, not pursued this session since the map
-  cache alone already gave a measured ~3.2x in the benchmark scenario).
+The original five-item list is complete. The following is a new backlog,
+based on source inspection at `b1c217e0`, not measured new speedup claims.
+All items are pending; none were implemented during this review.
+
+### A. Keep networking and server startup responsive (highest user impact)
+
+- Evidence: `NetworkClient::Connect` in `src/networkclient.cpp` uses blocking
+  DNS/connect and a handshake wait. The leader-start path polls inside
+  `HandleServerResponse`. `SendAll` retries with sleeps on Windows; POSIX
+  sockets remain blocking for sends. `MainMenu::StartServer` in
+  `src/mainmenu_server.cpp` sleeps unconditionally for one second.
+- Change: advance connection/handshake/startup states from the main loop, move
+  blocking name resolution off that loop, and queue partial writes on
+  non-blocking sockets. Replace the fixed startup sleep with readiness checks.
+- Preserve protocol ordering, hosted-bot servicing, cancellation, deadlines,
+  and complete lines across partial sends. Reuse the platform's existing async
+  paths where practical rather than creating a second protocol implementation.
+- Verify: delayed/failed connection, fragmented replies, slow or non-reading
+  peer, local-server launch failure, and cancellation. Demonstrate that input
+  and rendering continue during waits; measure worst frame stalls.
+- Scope this as a separate implementation batch: it changes more state than
+  the smaller fixes below.
+
+### B. Share fonts across cached labels
+
+Status: **stats-panel portion implemented and verified** on
+2026-09-07 in `1e2ed8e5`. Broader targeting/name/menu font sharing
+remains pending.
+
+- Evidence: `BubbleGame::StatsPanelCell` in `src/bubblegame_render.cpp` calls
+  `LoadFont(path, size)` for every new cell. Targeting and name labels also
+  load repeated font sizes in `src/bubblegame.cpp`.
+- Change: share font ownership by the properties actually needed by each
+  group while keeping independent per-label textures. Prefer explicit local
+  ownership over an unbounded global cache. Ensure labels die before fonts
+  and textures die before their renderer.
+- Prerequisite: `TTFText::UpdateText` currently uses setter-driven dirty state;
+  it does not detect changes made through another borrower or directly to a
+  font. Investigate `TTF_GetFontGeneration` plus any layout properties it does
+  not cover, or keep shared fonts immutable. Test both borrowers explicitly.
+- Verify: count font opens/retained font instances on large stats panels;
+  compare first-open time and memory; test style/alignment changes and teardown.
+  Texture reuse must remain intact.
+- Changed files for the completed portion: `src/bubblegame.h`,
+  `src/bubblegame_render.cpp`, `src/ttftext.h`, and
+  `tests/statspanelcell_cache_test.cpp`. `BubbleGame` now owns one immutable
+  14 px font for stats/royale cells and one immutable 16 px font for malus
+  alerts. Pool entries borrow those fonts while retaining independent textures.
+- The new pointer-identity regression failed for both font sizes before the
+  change and passed afterward. Existing end-to-end texture-cache coverage also
+  stayed green: `statspanelcell-cache-test` passed 1/1.
+- Full native build and suite passed after this change: 27 runnable tests
+  passed, with the 2 sanitizer-only server tests skipped. The five relevant
+  tests passed under ASan/UBSan with `ASAN_OPTIONS=detect_leaks=0` on macOS.
+- Remaining work: measure opens and retained memory, then consider immutable
+  groups for targeting/name labels. Do not combine borrowers that later change
+  font size, style, or alignment unless `TTFText` tracks external font
+  generations or those mutations are eliminated.
+
+### C. Preserve frame timing precision in long sessions
+
+Status: **implemented and verified** on 2026-09-07 in `1e2ed8e5`. A
+one-day-elapsed regression first failed because 60 float
+deadline increments did not total one second. It passed after changing the
+frame deadline and interval to double precision and widening the frame/FPS
+tick counters to `Uint64`.
+
+- Evidence: `FrozenBubble::frameDeadline` is a `float`, and `RunOneFrame`
+  converts `SDL_GetTicks()` to float before comparing deadlines. As absolute
+  elapsed time grows, float spacing rounds away fractional frame intervals.
+- Change: use double precision or integer high-resolution deadlines; review
+  the related 32-bit tick fields when touching this code.
+- Verify: synthetic elapsed times of hours/days, overrun resynchronization,
+  suspend/resume, and stable 60 FPS pacing without catch-up bursts. Preserve
+  the browser's requestAnimationFrame path and speed-multiplier semantics.
+- Changed files: `src/frozenbubble.h`, `src/frozenbubble.cpp`, and
+  `tests/controller_input_test.cpp`.
+- Focused verification:
+  `cmake --build build --target controller-input-test --parallel &&`
+  `ctest --test-dir build -R '^controller-input-test$' --output-on-failure`
+  passed 1/1 after the production change.
+- Batch verification: the full native build succeeded and all 27 runnable
+  tests passed (29 registered; the 2 sanitizer-only server tests skipped).
+  The ASan/UBSan build succeeded, and the focused controller/timing and player
+  label tests passed 2/2 with `ASAN_OPTIONS=detect_leaks=0` on macOS.
+
+### D. Finish moving routine traces to DEBUG
+
+Status: **implemented and verified for the identified hot paths** on
+2026-09-07 in `1e2ed8e5`.
+
+- Evidence: `src/bubblegame_shooter.cpp` still logs routine launch, placement,
+  and malus events with `SDL_Log`. `src/networkclient_wasm.cpp` logs sent
+  commands/game data at INFO. `Logger::LogOutputCallback` still writes every
+  emitted message to stderr, despite buffering the file stream.
+- Change: classify remaining frequent traces consistently across native/WASM;
+  retain useful lifecycle messages, warnings, and errors. Preserve
+  `FROZEN_BUBBLE_DEBUG=1` for diagnosis.
+- Verify: compare emitted message counts for the same workload in default and
+  debug modes, and check that actual failures remain visible. Do not blindly
+  downgrade all logs or claim buffered file output eliminates console I/O.
+- Changed files: `src/bubblegame_shooter.cpp` and
+  `src/networkclient_wasm.cpp`. Routine launch, placement, chain, malus, and
+  successful-send traces now use DEBUG. Occupied-cell fallbacks now use real
+  WARN priority. WebSocket lifecycle messages and all warning/error paths stay
+  visible at the default INFO threshold.
+- Focused native verification: the game target built, `git diff --check`
+  passed, and `bubblegame-rules-test`, `bot-play-test`, and
+  `logger-priority-test` passed 3/3. The existing priority test confirms INFO
+  by default and DEBUG under `FROZEN_BUBBLE_DEBUG=1`.
+- The existing `build-wasm` Release configuration compiled successfully after
+  the transport change. Its warnings were pre-existing Emscripten/unused-value
+  warnings; no new compile error occurred.
+- Remaining measurement: record a comparable emitted-message count for a
+  repeatable gameplay/network workload. The logger still mirrors emitted
+  messages to stderr; routine DEBUG messages no longer reach the callback in
+  default mode.
+
+### E. Extend per-label caching to menu screens
+
+- Evidence: `src/mainmenu_netpanel.cpp` and `src/mainmenu_teampanel.cpp` render
+  multiple labels through a shared `panelText`; `src/menulist.cpp` also reuses
+  text objects for labels/measurement. The game-panel work did not cover these
+  menu paths. Alternating strings defeat a last-string-only cache.
+- Change: first measure an idle populated room/team picker, then retain
+  per-label textures for confirmed hot paths. Investigate text measurement
+  that rasterizes candidate strings before replacing it with size queries.
+- Verify: texture-creation counts after warm-up, changes in names/options,
+  scrolling/truncation, hover/focus colors, and font-size changes. Observe the
+  same layout and all keyboard/gamepad/touch/mouse paths; caching must not
+  break tap registration or visible focus.
+
+### F. Correct player-name team color updates (small correctness fix)
+
+Status: **implemented and verified** on 2026-09-07 in `1e2ed8e5`. The
+regression first failed for both no-team -> team and team ->
+no-team transitions, then passed after selecting the current color before
+updating the text and resetting no-team labels to white.
+
+- Evidence: `BubbleGame::UpdatePlayerNameWinText` calls `UpdateText` before
+  `UpdateColor`, so the new color is applied to the texture on a later call.
+  It also sets a color only for a real team, with no default-color reset when
+  the player returns to `kNoTeam`. This can retain the previous team tint.
+- Change: choose the current team/default color before updating the text on
+  every call. Keep unchanged setters cheap.
+- Verify: render a label through team A -> team B -> no team, asserting the
+  correct color in the first frame of each change and texture retention on
+  subsequent unchanged frames. Include reuse across rounds/game setup.
+- Changed files: `src/bubblegame_render.cpp` and
+  `tests/statspanelcell_cache_test.cpp`.
+- Focused verification:
+  `cmake --build build --target statspanelcell-cache-test --parallel &&`
+  `ctest --test-dir build -R '^statspanelcell-cache-test$' --output-on-failure`
+  passed 1/1 after the production change.
+- Batch verification is recorded under item C above.
+
+### G. Profile remaining bot allocation and collision costs (conditional)
+
+- Evidence: `Neighbours`, `SameColourGroup`, and `SweepDetached` in
+  `src/bubbleai.cpp` still allocate vectors, sets, and queues. `PredictLanding`
+  scans board cells at every simulated substep for all candidate angles.
+- Measure first on sparse, dense, mini-board, and multi-bot workloads. The
+  existing score cache already improved one benchmark substantially.
+- If justified, reuse bounded traversal storage and evaluate collision
+  candidate pruning. Preserve grid bounds, hit ordering, landing cells,
+  chosen angles, tie handling, and RNG consumption with differential tests.
+- Keep a reproducible benchmark in the repository rather than relying on the
+  old throwaway benchmark or comparing score sums alone.
+
+### Measurement baseline for the next batch
+
+Record test platform/build configuration, warm-up, scenario, and iteration
+count. Track texture/font creation counts, CPU frame times (including slow
+frames), and memory where relevant. Use representative menus, 2/5/20-player
+games, stats screens, and bot loads. A percentage improvement in one scenario
+does not establish a global FPS or battery-life improvement.
+
+Suggested execution: address the small team-color fix and timing precision
+early; treat networking as the highest-impact larger batch. Combine shared
+fonts/cache correctness with measured menu caching if that scope stays clear.
+Only pursue further bot changes if profiling warrants them.
 
 ## Suggested next session
 
-1. Read repository instructions and this document; inspect git state before
-   edits (`git log`, `git status`, and whether `origin/main` has moved — as
-   of this writing `main` is 1 commit ahead of `origin/main`, unpushed).
-2. Confirm with the user whether to push `c5665562` (and whether a new
-   version bump/tag is wanted for it, matching `v2.4.78`'s pattern, or
-   whether it should just ride along unpushed until a future release) — do
-   not assume either way.
-3. There is no committed-to backlog left from either the optimization effort
-   or the Auto-balance bugfix (now fixed for both room sizes); ask the user
-   what to look at next rather than assuming the "Possible future work"
-   bullets above are pre-approved.
-4. Update this document with changed files, verification, remaining
-   concerns, and any new commit/tag/push state.
+1. Read current repository instructions and inspect git state. Use the current
+   checkpoint, not release/push directions embedded in historical sections.
+2. Continue from the new backlog. Items C and F are complete; D is complete
+   except for a workload message-count measurement; B has completed stats-panel
+   sharing with broader label groups still pending.
+3. For the selected item, record a baseline or failing regression first, then
+   implement and verify in proportion to the change. Preserve input parity
+   required by the updated repository instructions.
+4. Update this document after each meaningful checkpoint: pending/in progress/
+   verified, changed files, reproducible measurements, tests, and limitations.
+   Re-check commit/tag/push state before recording it. Do not re-run completed
+   historical work merely because it appears earlier in this file.
