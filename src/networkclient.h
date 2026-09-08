@@ -101,6 +101,31 @@ inline constexpr int ClampTeamOrNone(int team) {
     return team;
 }
 
+// The leader sends a joiner exactly this many messages to describe the level:
+// 38 bubbles, plus 'N' (next bubble) and 'T' (to-be bubble).
+static const size_t kLevelSyncMessageCount = 40;
+
+// Whether a joiner should keep waiting for the leader's level sync to arrive.
+//
+// Deliberately a pure function, and deliberately compiled on every platform
+// even though only the WASM joiner path calls it. The rule it encodes was
+// wrong for two releases and nobody noticed, because it lived inline inside an
+// `#ifdef __WASM_PORT__` block where no test could reach it: the gate counted
+// only the main message queue, but ProcessNetworkMessages() moves 'b|'/'N'/'T'
+// out of that queue and into the sync queue as it drains. In round 1 nothing
+// was draining yet, so the count reached 40 and the wait ended properly. From
+// round 2 on, the game loop was already draining, the count could never reach
+// 40, and every single round after the first sat out the full timeout before
+// starting. Counting both queues is the fix; being callable from a native test
+// is what stops it silently rotting again.
+inline bool ShouldKeepWaitingForLevelSync(size_t queuedMessages,
+                                          size_t queuedSyncMessages,
+                                          Uint64 waitedMs,
+                                          Uint64 timeoutMs) {
+    if (waitedMs > timeoutMs) return false;  // give up rather than strand the player
+    return (queuedMessages + queuedSyncMessages) < kLevelSyncMessageCount;
+}
+
 // Ordered so that everything before CONNECTED is "still being established".
 // DISCONNECTED stays 0; RESOLVING and AWAITING_READY were inserted by the
 // async networking handoff (stage 2a) and nothing persists or transmits these
@@ -289,6 +314,7 @@ public:
     // before SyncNetworkLevel was called (race condition fix for round 2+).
     void PushSyncMessage(const std::string& msg) { syncQueue.push_back(msg); }
     bool HasSyncMessage() const { return !syncQueue.empty(); }
+    size_t SyncQueueSize() const { return syncQueue.size(); }
     std::string GetNextSyncMessage() {
         if (syncQueue.empty()) return "";
         std::string msg = syncQueue.front();

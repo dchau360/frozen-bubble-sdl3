@@ -24,20 +24,25 @@ rather than creating a second protocol implementation.
 Every one of these blocks the render loop on native. Worst cases read from the
 source as of `3f96b74a`:
 
-| Site | File | Worst case |
+| Site | Worst case | Status |
 |---|---|---|
-| `SendCommand`'s unconditional 100 ms `select()` | `src/networkclient.cpp:333-353` | 100 ms **per command** |
-| Lobby idle (`RequestList` every 500 ms) | `src/mainmenu_netpanel.cpp:426`, `:1634` | **~20 % of wall-clock blocked while idle** |
-| `DetectGeoLocation` (2 × `popen(curl)`) | `src/networkclient.cpp:2050-2103` | 16 s |
-| `Connect` (resolve + connect + drain `SERVER_READY`) | `src/networkclient.cpp:102-292` | 8 s + unbounded DNS |
-| `SendNick` / `CreateGame` / `JoinGame` retry loops | `src/networkclient.cpp:385`, `:452`, `:535` | 3 s each |
-| Leader `GAME_CAN_START` poll | `src/networkclient.cpp:1556-1593` | **15 s** (its own comment says 5 s — wrong) |
-| `WaitForBubble*` family | `src/networkclient.cpp:848-1001` | 5 s each |
-| `SyncNetworkLevel` (40 waits) | `src/bubblegame_level.cpp:193-340` | **~200 s** |
-| `R` refresh of public server list (unthreaded) | `src/mainmenu_input.cpp:164` | 16 s + 2 s × N |
+| `SendCommand`'s unconditional 100 ms `select()` | 100 ms **per command** | fixed (1c) |
+| Lobby idle (`RequestList` every 500 ms) | **~20 % of wall-clock blocked while idle** | fixed (1c — it was this `select()`) |
+| `DetectGeoLocation` (2 × `popen(curl)`) | 16 s | fixed (1d) |
+| `R` refresh of public server list (unthreaded) | 16 s + 2 s × N | fixed (1d) |
+| LAN discovery + latency probes | ~1 s + 2 s × N | fixed (1d — was never threaded anywhere) |
+| `SendNick` / `CreateGame` / `JoinGame` retry loops | 3 s each | fixed (1b) |
+| `NetBotConnection::JoinRoom`'s blocking connect | OS timeout × N bots | fixed (1e) |
+| `Connect` (resolve + connect + drain `SERVER_READY`) | 8 s + unbounded DNS | fixed (2a–2c) |
+| Round 2+ level sync always burning its timeout | 5 s **every round after the first** | fixed (3c) |
+| Leader `GAME_CAN_START` poll | **15 s** (its own comment says 5 s — wrong) | open (3a) |
+| `WaitForBubble*` family | 5 s each | open (3b) |
+| `SyncNetworkLevel` (40 waits) | **~200 s** | open (3b) |
 
-**A single ENTER on "connect" can freeze the UI for ~30 seconds.** No spinner, no
-cancel, no repaint — on macOS the OS paints the window as "not responding".
+**A single ENTER on "connect" could freeze the UI for ~30 seconds.** No spinner,
+no cancel, no repaint — on macOS the OS painting the window as "not responding".
+Measured after stages 1–2, the same connect costs a worst single frame of
+**2 ms** (see the stage 2 verification section below).
 
 ## The approach
 
@@ -281,7 +286,7 @@ Status: **2a-2e all landed** — stage 2 complete.
 
 ## Stage 3 — Async game start and level sync (highest risk)
 
-Status: **not started**
+Status: **3c landed; 3a/3b still open**
 
 - **3a.** The leader `GAME_CAN_START` poll becomes a frame-driven deadline,
   adopting the `wasmBotWaitStart` pattern. Retires `leaderWaitTick()`, whose
@@ -292,6 +297,23 @@ Status: **not started**
   `SyncNetworkLevel` become a frame-driven state machine. These waits are *not*
   `#ifdef`-guarded today — they compile into WASM too. `NewGame` and
   `ReloadGame` are both reached from render functions, so the sync must yield.
+- **3c. Round 2+ level-sync stall — landed.** The joiner's wait gate counted
+  only `MessageQueueSize()`, but `ProcessNetworkMessages()` moves `b|`/`N`/`T`
+  out of that queue and into `syncQueue` as it drains. In round 1 nothing was
+  draining yet, so the count reached 40 and the wait ended properly; from
+  round 2 on the game loop was already draining, the count could never reach
+  40, and **every round after the first sat out the full 5 s timeout before
+  starting**. Now counts both queues.
+  The rule was extracted into `ShouldKeepWaitingForLevelSync()` in
+  `networkclient.h` — a pure function compiled on every platform — and given a
+  native test. That is the actual fix for the class of bug: it was wrong for
+  two releases precisely because it lived inline inside an
+  `#ifdef __WASM_PORT__` block where no test could reach it. WASM being this
+  effort's repeated blind spot is why the rule now lives somewhere testable
+  rather than just being corrected in place.
+  Also fixes WASM bug 2 below: WASM's `Disconnect()` never cleared `syncQueue`
+  (native's always has), so a round's leftover sync messages survived into the
+  next connection.
 
 ## Stage 4 — Server output queue (audit BUG-007)
 
@@ -474,12 +496,11 @@ threading added in 1d/2b is exactly what it exists to catch.
 Not regressions from this work — they are latent today, and get fixed as a side
 effect of the stages that touch the same code.
 
-1. **Round 2+ always burns the full 5 s sync timeout.** The gate at
-   `src/mainmenu_netpanel.cpp:319-341` tests `MessageQueueSize()`, which counts
-   only `messageQueue` — but `ProcessNetworkMessages` has already moved
-   `b|`/`N`/`T` into `syncQueue`. The count can never reach 40. (Stage 3c.)
-2. **WASM `Disconnect` never clears `syncQueue`**, leaking stale sync messages
-   into the next connection.
+1. ~~**Round 2+ always burns the full 5 s sync timeout.**~~ **Fixed in stage
+   3c** — the gate counts both queues now, and the rule moved to a pure,
+   natively-tested function.
+2. ~~**WASM `Disconnect` never clears `syncQueue`**, leaking stale sync
+   messages into the next connection.~~ **Fixed in stage 3c.**
 3. **CREATE confirmation is heuristic** — any non-`PART` `OK` confirms it, so an
    unrelated `OK` can falsely confirm a pending CREATE.
 4. ~~**WASM `SendNick` sets the nick optimistically** and never retries, risking

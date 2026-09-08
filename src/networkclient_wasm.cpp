@@ -173,6 +173,10 @@ void NetworkClient::Disconnect() {
     pendingJoin = false;
     gameList.clear();
     messageQueue.clear();
+    // Native's Disconnect() has always cleared this; WASM's never did, so a
+    // round's leftover 'b|'/'N'/'T' messages survived into the next connection
+    // and the joiner there could start reading a previous game's level.
+    syncQueue.clear();
     // See the reset in the native Disconnect() (networkclient.cpp): without
     // this, a reconnect resumes parsing at the wrong offset using a partial
     // line left over from the dropped connection.

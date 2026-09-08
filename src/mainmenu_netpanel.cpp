@@ -352,14 +352,23 @@ void MainMenu::NetPanelRender() {
             // them already in the queue and WaitForBubble returns immediately.
             if (!netClient->IsLeader()) {
                 if (wasmSyncWaitStart == 0) wasmSyncWaitStart = SDL_GetTicks();
-                size_t qSize = netClient->MessageQueueSize();
-                bool timedOut = (SDL_GetTicks() - wasmSyncWaitStart > 5000);
-                SDL_Log("WASM joiner: waiting for sync msgs, queue=%d, waited=%dms",
-                        (int)qSize, (int)(SDL_GetTicks() - wasmSyncWaitStart));
-                if (qSize < 40 && !timedOut) {
+                // Both queues, not just the main one: ProcessNetworkMessages()
+                // moves 'b|'/'N'/'T' into the sync queue as it drains, so from
+                // round 2 on -- when the game loop is already draining -- the
+                // main queue alone could never reach 40 and every round after
+                // the first sat out the full 5s timeout before starting. See
+                // ShouldKeepWaitingForLevelSync() in networkclient.h, which is
+                // where the rule now lives so a native test can reach it.
+                const size_t qSize = netClient->MessageQueueSize();
+                const size_t sSize = netClient->SyncQueueSize();
+                const Uint64 waited = SDL_GetTicks() - wasmSyncWaitStart;
+                SDL_Log("WASM joiner: waiting for sync msgs, queue=%d sync=%d, waited=%dms",
+                        (int)qSize, (int)sSize, (int)waited);
+                if (ShouldKeepWaitingForLevelSync(qSize, sSize, waited, 5000)) {
                     return;  // Come back next frame
                 }
-                SDL_Log("WASM joiner: proceeding with queue=%d timedOut=%d", (int)qSize, timedOut);
+                SDL_Log("WASM joiner: proceeding with queue=%d sync=%d waited=%dms",
+                        (int)qSize, (int)sSize, (int)waited);
                 wasmSyncWaitStart = 0;
             } else if (!lobbyBots.empty()) {
                 // WASM leader hosting bots. A native leader blocks in

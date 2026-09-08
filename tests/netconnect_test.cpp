@@ -287,6 +287,33 @@ int main() {
         ResetClient();
     }
 
+    // --- The level-sync wait rule (stage 3c). This runs only on the WASM
+    // joiner path, but the rule itself is a pure function compiled everywhere
+    // precisely so it can be checked here: it was wrong for two releases and
+    // nobody noticed, because it lived inline inside an #ifdef __WASM_PORT__
+    // block that no test could reach.
+    {
+        // Round 1: nothing is draining the main queue yet, so the messages
+        // pile up there. Keep waiting until all 40 have landed.
+        CHECK(ShouldKeepWaitingForLevelSync(0, 0, 10, 5000));
+        CHECK(ShouldKeepWaitingForLevelSync(39, 0, 10, 5000));
+        CHECK(!ShouldKeepWaitingForLevelSync(40, 0, 10, 5000));
+
+        // Round 2+: ProcessNetworkMessages() has been draining the main queue
+        // into the sync queue all along, so the messages are split across the
+        // two. This is the case the old rule got wrong -- it counted only the
+        // first number, so it never reached 40 and every round after the first
+        // burned the entire timeout before starting.
+        CHECK(!ShouldKeepWaitingForLevelSync(0, 40, 10, 5000));
+        CHECK(!ShouldKeepWaitingForLevelSync(18, 22, 10, 5000));
+        CHECK(ShouldKeepWaitingForLevelSync(18, 21, 10, 5000));  // 39: one short
+
+        // The timeout still wins over an incomplete sync: a joiner whose
+        // leader went quiet must start eventually rather than being stranded.
+        CHECK(!ShouldKeepWaitingForLevelSync(0, 0, 5001, 5000));
+        CHECK(ShouldKeepWaitingForLevelSync(0, 0, 4999, 5000));
+    }
+
     NetworkClient::Dispose();
     SDL_Quit();
 
