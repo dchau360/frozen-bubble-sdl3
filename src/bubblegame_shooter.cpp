@@ -377,8 +377,11 @@ void BubbleGame::ChooseFirstBubble(BubbleArray *bArray) {
     // Original lines 3431-3456: next_num and tobe_num picked once from player 0's colors,
     // then ALL players get the same values.
     std::vector<int> p0Bubbles = bArray[0].remainingBubbles();
-    int firstColor = p0Bubbles[ranrange(1, p0Bubbles.size()) - 1];
-    int nextColor  = p0Bubbles[ranrange(1, p0Bubbles.size()) - 1];
+    // Defensive: a freshly loaded level should never have an empty board, but
+    // an empty p0Bubbles would otherwise index it at [-1] (ranrange(1, 0) - 1)
+    // -- the same guard bubblegame_board.cpp's re-validation already uses.
+    int firstColor = p0Bubbles.empty() ? 0 : p0Bubbles[ranrange(1, p0Bubbles.size()) - 1];
+    int nextColor  = p0Bubbles.empty() ? 0 : p0Bubbles[ranrange(1, p0Bubbles.size()) - 1];
     for (int i = 0; i < currentSettings.playerCount; i++) {
         bArray[i].curLaunch  = firstColor;
         bArray[i].nextBubble = nextColor;
@@ -388,7 +391,14 @@ void BubbleGame::ChooseFirstBubble(BubbleArray *bArray) {
 void BubbleGame::PickNextBubble(BubbleArray &bArray) {
     bArray.curLaunch = bArray.nextBubble;
     std::vector<int> currentBubbles = bArray.remainingBubbles();
-    bArray.nextBubble = currentBubbles[ranrange(1, currentBubbles.size()) - 1];
+    // The board can be empty for an instant between the last pop and the
+    // round-end check noticing it (e.g. a bot's queued shot firing on the
+    // same frame the board clears) -- ranrange(1, 0) would divide by zero.
+    // Same guard as bubblegame_board.cpp's nextBubble re-validation; leaving
+    // nextBubble unchanged here is harmless since the round is about to end.
+    if (!currentBubbles.empty()) {
+        bArray.nextBubble = currentBubbles[ranrange(1, currentBubbles.size()) - 1];
+    }
     // Rotate nextColors queue: remove first (just used), append new random
     // Matches Perl: nextcolors is updated after each shot so all clients can compute future root rows
     if (!bArray.nextColors.empty()) bArray.nextColors.erase(bArray.nextColors.begin());

@@ -359,6 +359,7 @@ void NetworkClient::Disconnect() {
         sockfd = -1;
     }
     state = DISCONNECTED;
+    delete currentGame;
     currentGame = nullptr;
     gameList.clear();
     messageQueue.clear();
@@ -569,6 +570,7 @@ bool NetworkClient::StartGame() {
 bool NetworkClient::PartGame() {
     if (SendCommand("PART")) {
         state = IN_LOBBY;  // Still registered with nick on server, back to lobby
+        delete currentGame;
         currentGame = nullptr;
         return true;
     }
@@ -1392,6 +1394,7 @@ void NetworkClient::HandlePushMessage(const std::string& pushMsg) {
         }
 
         state = IN_LOBBY;
+        delete currentGame;
         currentGame = nullptr;
     } else if (pushMsg.find("PARTED:") == 0) {
         // Player left
@@ -1442,6 +1445,7 @@ void NetworkClient::HandlePushMessage(const std::string& pushMsg) {
         chatMessages.push_back(chat);
         if (chatMessages.size() > 50) chatMessages.erase(chatMessages.begin());
         state = IN_LOBBY;
+        delete currentGame;
         currentGame = nullptr;
     } else if (pushMsg.find("KICKED:") == 0) {
         // Someone else was kicked. This arrives instead of PARTED, so the
