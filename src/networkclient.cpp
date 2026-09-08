@@ -240,6 +240,18 @@ bool NetworkClient::Connect(const char* host, int port) {
     // itself plus the first round-trip can add up over a real network).
     char buffer[BUFFER_SIZE];
     bool gotServerReady = false;
+    // Accumulated across reads on purpose. This used to run strtok() over each
+    // recv() chunk on its own, which silently assumed every chunk began and
+    // ended on a line boundary. It does not: the banner is one short line, so
+    // on loopback it does arrive whole and the assumption held by luck, but a
+    // real network, a proxy, or a WebSocket bridge can split it anywhere. When
+    // that happened the client saw "FB/1.3 PUSH: SERVER_R" and then
+    // "EADY <name> <lang>\n", found SERVER_READY in neither, and failed the
+    // connection outright after burning the full deadline -- a working server
+    // reported as unreachable. Caught by tests/fake_server.h's Banner::Split
+    // (netconnect-test), which splits mid-token precisely because a
+    // split-on-a-token-boundary test would not have found this.
+    std::string banner;
 
     Uint64 timeout = 3000;  // 3 second overall deadline
     Uint64 startTime = SDL_GetTicks();
@@ -262,19 +274,33 @@ bool NetworkClient::Connect(const char* host, int port) {
             break; // Connection closed or errored
         }
 
-        buffer[received] = '\0';
-
-        // Process each line
-        char* line = strtok(buffer, "\n");
-        while (line != NULL) {
-            if (strstr(line, "SERVER_READY") != NULL) {
-                gotServerReady = true;
-            }
-            line = strtok(NULL, "\n");
+        banner.append(buffer, (size_t)received);
+        if (banner.find("SERVER_READY") != std::string::npos) {
+            gotServerReady = true;
+            break;
         }
 
-        if (gotServerReady) {
-            break;
+        // Bound the accumulation: a peer that streams bytes without ever
+        // saying SERVER_READY must not grow this without limit. Keeping a
+        // trailing window rather than clearing outright means a token
+        // straddling the boundary still matches.
+        if (banner.size() > 8192) banner.erase(0, banner.size() - 1024);
+    }
+
+    // Anything that arrived after the banner belongs to the ordinary message
+    // stream, not to the handshake. Hand it to the buffered reader instead of
+    // dropping it on the floor: the server pipelines its first push messages
+    // right behind SERVER_READY, and this loop reads by byte count, not by
+    // line, so a chunk holding the banner plus the start of the next message
+    // is entirely normal.
+    if (gotServerReady) {
+        const size_t bannerEnd = banner.find('\n');
+        if (bannerEnd != std::string::npos && bannerEnd + 1 < banner.size()) {
+            const std::string leftover = banner.substr(bannerEnd + 1);
+            if (leftover.size() < RECV_BUFFER_SIZE) {
+                memcpy(recvBuffer, leftover.data(), leftover.size());
+                recvBufferLen = (int)leftover.size();
+            }
         }
     }
 

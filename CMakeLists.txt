@@ -471,6 +471,19 @@ if(BUILD_TESTING AND NOT EMSCRIPTEN AND NOT ANDROID AND NOT IOS)
     target_link_libraries(menu-touch-gesture-test PRIVATE frozen-bubble-core-test)
     add_test(NAME menu-touch-gesture-test COMMAND menu-touch-gesture-test)
 
+    # Connect() against tests/fake_server.h's scripted awkward peers (late
+    # banner, banner split across two segments, silent peer, refused port) --
+    # none of which a real fb-server on localhost can produce.
+    add_executable(netconnect-test tests/netconnect_test.cpp)
+    set_property(TARGET netconnect-test PROPERTY CXX_STANDARD 17)
+    set_property(TARGET netconnect-test PROPERTY CXX_EXTENSIONS OFF)
+    target_include_directories(netconnect-test PRIVATE tests)
+    target_link_libraries(netconnect-test PRIVATE frozen-bubble-core-test)
+    add_test(NAME netconnect-test COMMAND netconnect-test)
+    # POSIX sockets only; reports itself skipped elsewhere rather than passing
+    # without having connected to anything.
+    set_tests_properties(netconnect-test PROPERTIES SKIP_RETURN_CODE 77)
+
     add_executable(netview-test
         tests/netview_test.cpp
         src/netview.cpp
