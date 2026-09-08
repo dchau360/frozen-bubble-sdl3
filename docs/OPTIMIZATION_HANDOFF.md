@@ -45,16 +45,18 @@ a speedup.
   immediately after this update). Re-verify with
   `git fetch && git log --oneline main..origin/main` before trusting this
   further into a new session.
-- CMake/Android version: `2.4.91`; Android versionCode: `74`. Unchanged since
-  the `00faeaf4` checkpoint below -- **no release tag has been cut for any of
-  the stage 1-4 async networking work**, including the server-side stage 4.
-  `v2.4.91` is 25 commits behind current `HEAD`. Per the standing "always
-  bump before tagging" rule, bump `CMakeLists.txt`/`android/app/build.gradle`
-  (`versionCode` must strictly increase)/`.github/workflows/build.yml`'s two
-  fallbacks/`default.nix` and update `CHANGELOG.md` before any tag -- and per
-  `ASYNC_NETWORKING_HANDOFF.md`'s own recommendation, hold off tagging until
-  a real device/browser pairing (not just two browser tabs on one machine)
-  has exercised the async networking path.
+- CMake/Android version: `2.4.92`; Android versionCode: `75`. Bumped and
+  tagged `v2.4.92` on the user's explicit go-ahead ("ok lets tag up"),
+  covering the full stage 1-4 async networking work including the
+  server-side stage 4 -- see `CHANGELOG.md`'s `v2.4.92` entry for the
+  user-facing summary. The four version files (`CMakeLists.txt`,
+  `android/app/build.gradle`, `.github/workflows/build.yml`'s two fallbacks,
+  `default.nix`) were bumped together per the standing rule, and a full
+  native build + `ctest` (31/31, 2 expected sanitizer-only skips) was run
+  against the bumped version before tagging. This did **not** wait for a
+  real device/browser pairing test first -- `ASYNC_NETWORKING_HANDOFF.md`
+  had recommended that, but it was a recommendation, and the user chose to
+  proceed without it; still worth doing as a follow-up.
 - Older checkpoint, preserved for its own record: at `00faeaf4`, the latest
   source change was `perf: bound network connect/startup waits instead of
   blocking indefinitely`, following `b8409d30` (settings-grid label caching)
@@ -425,10 +427,10 @@ has since landed too, across four stages spun out into its own handoff doc
   fallback path for `WaitForBubble`/`SyncNetworkLevel` is mitigated rather
   than truly rewritten (only the residual gate-timeout case can still block,
   and this session's playtest didn't hit it), one pre-existing WASM bug
-  (heuristic CREATE confirmation) it never touched, an unrelated pre-existing
-  server `select()` fairness bug found and deliberately left out of scope
-  (flagged as its own background task), and no release has been tagged for
-  any of it yet.
+  (heuristic CREATE confirmation) it never touched, and an unrelated
+  pre-existing server `select()` fairness bug found and deliberately left
+  out of scope (flagged as its own background task). It has since been
+  tagged `v2.4.92`.
 
 ### B. Share fonts across cached labels
 

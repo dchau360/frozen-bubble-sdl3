@@ -98,9 +98,12 @@ remains, in priority order:
    its own background task (`task_3c17853a`, still open/unstarted as of this
    writing) rather than expanded into this effort's scope — pick it up
    separately.
-4. **No release has been tagged for any of this yet.** Recommend holding off
-   until a real device/browser pairing (not just two browser tabs on one
-   machine) has been tried — see the playtest section below for what has and
+4. ~~**No release has been tagged for any of this yet.**~~ Tagged `v2.4.92`
+   on the user's explicit go-ahead, without waiting for a real
+   device/browser pairing test — the earlier recommendation to hold off was
+   a recommendation, not a blocker, and the user chose to proceed. A real
+   device/browser pairing (not just two tabs on one machine) is still worth
+   doing as a follow-up; see the playtest section below for what has and
    hasn't been covered so far.
 5. ~~**`docs/MANUAL_TEST_CHECKLIST.md` hasn't been updated.**~~ **Done** — see
    its "Two-browser WASM network playtest" section, which also names two

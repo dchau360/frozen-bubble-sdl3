@@ -1,5 +1,26 @@
 # Changelog
 
+## v2.4.92
+
+- **The game no longer freezes while connecting to a server, joining a
+  room, or starting a network match.** Every one of those used to block
+  input and rendering outright -- a single ENTER on "connect" could freeze
+  the window for up to ~30 seconds with no spinner, no cancel, and no
+  repaint, and macOS would mark it "not responding". Connecting now shows a
+  live "Connecting..." indicator with a cancel button (ESC, or tap), reachable
+  the same way from keyboard/gamepad and touch/mouse, while the game keeps
+  rendering and responding to input throughout.
+- **Fixed every round after the first in a network match pausing for several
+  seconds before starting.** Round 1 always started promptly; round 2 onward
+  silently sat out a multi-second timeout every time, on every platform.
+- **Fixed a stalled or misbehaving player's connection being able to freeze
+  the game for everyone else in the room.** The server used to write game
+  data to each connection with a single blocking call; one player with a
+  frozen client or a bad connection could back that up and stall delivery to
+  every other player until it cleared. The server now queues and drains
+  output per-connection instead, and drops a connection whose backlog grows
+  unreasonably large or old rather than letting it hold up the room.
+
 ## v2.4.91
 
 - **Fixed a crash when quitting with ESC on macOS and other SDL_ttf
