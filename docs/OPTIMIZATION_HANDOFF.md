@@ -444,6 +444,21 @@ Status: **implemented and verified for the identified hot paths** on
   repeatable gameplay/network workload. The logger still mirrors emitted
   messages to stderr; routine DEBUG messages no longer reach the callback in
   default mode.
+- **Measurement completed 2026-09-07.** Throwaway benchmark (not committed;
+  same shape as item 4's bot-scoring benchmark, linking the built
+  `frozen-bubble-core-test` library) drove the identical bot_play_test.cpp
+  workload -- 5 seeds x 4000 frames x 4 players (3 bots, hard skill) -- once
+  with `SDL_SetLogPriorities(SDL_LOG_PRIORITY_INFO)` (the production default)
+  and once at `SDL_LOG_PRIORITY_DEBUG` (`FROZEN_BUBBLE_DEBUG=1`), counting
+  messages actually delivered to the SDL log callback (a warm-up game ran
+  first, unmeasured, so `FrozenBubble::Instance()`'s lazy construction and its
+  own `Logger::Initialize` call happened before the counting callback was
+  installed and could not clobber it mid-measurement). Result: **117 messages
+  at the INFO threshold vs. 2503 at DEBUG** -- DEBUG mode emits 2386 more
+  messages for the same workload, a 21.4x increase. Confirms the item's
+  premise concretely: the routine per-shot/per-stick/per-malus traces D moved
+  to DEBUG are the overwhelming majority of what a normal game session would
+  otherwise log, and default-mode players no longer pay that I/O cost.
 
 ### E. Extend per-label caching to menu screens
 
