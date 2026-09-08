@@ -514,6 +514,18 @@ Status: **implemented and verified for the identified hot paths** on
   scrolling/truncation, hover/focus colors, and font-size changes. Observe the
   same layout and all keyboard/gamepad/touch/mouse paths; caching must not
   break tap registration or visible focus.
+- **Overlaps item B.** The one repeating-list hot path identified by
+  inspection -- `NetPanelLobbyActionsRender`'s game-room settings grid -- was
+  implemented under item B's write-up (`b8409d30`) rather than duplicated
+  here, since it is the same `panelText`/alternating-strings defeat B already
+  describes. `mainmenu_teampanel.cpp` and `menulist.cpp` were inspected but
+  not converted: their `panelText` calls are almost all one-off titles,
+  headers, and footers rendered once or twice per frame (not a per-row loop
+  churning against itself), so they did not clear the "confirmed hot path"
+  bar this item sets. If a future session wants to pursue this further,
+  measure texture-creation counts on an idle populated team picker first, the
+  same way this session measured the settings grid's cell count, before
+  converting anything.
 
 ### F. Correct player-name team color updates (small correctness fix)
 
@@ -541,6 +553,8 @@ updating the text and resetting no-team labels to white.
 
 ### G. Profile remaining bot allocation and collision costs (conditional)
 
+Status: **measured 2026-09-07; not justified, not implemented.**
+
 - Evidence: `Neighbours`, `SameColourGroup`, and `SweepDetached` in
   `src/bubbleai.cpp` still allocate vectors, sets, and queues. `PredictLanding`
   scans board cells at every simulated substep for all candidate angles.
@@ -551,6 +565,23 @@ updating the text and resetting no-team labels to white.
   chosen angles, tie handling, and RNG consumption with differential tests.
 - Keep a reproducible benchmark in the repository rather than relying on the
   old throwaway benchmark or comparing score sums alone.
+- **Measurement:** throwaway benchmark (not committed, same
+  `frozen-bubble-core-test`-linked shape as items 4 and D), timing
+  `BubbleAI::ChooseShot` at Hard skill (the expensive path -- lookahead calls
+  `BestFollowUpScore`, which is where `Neighbours`/`SameColourGroup`/
+  `SweepDetached` allocation actually concentrates) over 1000 calls each on
+  three varied-colour board densities chosen to defeat item 4's per-decision
+  landing-cell cache more than its own cache-favorable benchmark did (a
+  varied-colour fill collapses fewer candidate angles onto the same landing
+  cell than a solid-colour fill): sparse (2 rows filled) 0.885 ms/call, busy
+  (8 rows) 0.659 ms/call, nearly full (11 rows) 0.393 ms/call.
+- **Conclusion:** all three stay under 1 ms/call, and `ChooseShot` runs once
+  per bot shot decision (on the order of once every 1-2 seconds of bot play),
+  not once per frame -- sub-millisecond one-off cost against that cadence is
+  not a frame-time or responsiveness problem regardless of how many
+  allocations happen inside it. Item 4's cache already did the work that
+  mattered here. Per this item's own "if justified" gate, no further bot
+  allocation change is warranted; not implemented.
 
 ### Measurement baseline for the next batch
 
