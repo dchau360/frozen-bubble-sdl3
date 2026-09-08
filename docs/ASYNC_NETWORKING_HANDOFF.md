@@ -36,8 +36,8 @@ source as of `3f96b74a`:
 | `Connect` (resolve + connect + drain `SERVER_READY`) | 8 s + unbounded DNS | fixed (2a–2c) |
 | Round 2+ level sync always burning its timeout | 5 s **every round after the first** | fixed (3c) |
 | Leader `GAME_CAN_START` poll | **15 s** (its own comment says 5 s — wrong) | fixed (3a) |
-| `WaitForBubble*` family | 5 s each | open (3b) |
-| `SyncNetworkLevel` (40 waits) | **~200 s** | open (3b) |
+| `WaitForBubble*` family | 5 s each | mitigated (3b) — gated so the common case doesn't reach this; the loop itself is unchanged |
+| `SyncNetworkLevel` (40 waits) | **~200 s** | mitigated (3b) — same; worst case only if the gate's own timeout is hit |
 
 **A single ENTER on "connect" could freeze the UI for ~30 seconds.** No spinner,
 no cancel, no repaint — on macOS the OS painting the window as "not responding".
@@ -286,7 +286,9 @@ Status: **2a-2e all landed** — stage 2 complete.
 
 ## Stage 3 — Async game start and level sync (highest risk)
 
-Status: **3a and 3c landed; 3b still open**
+Status: **3a and 3c landed; 3b partially landed (stall mitigated for both**
+**call sites; a full state-machine rewrite of `WaitForBubble`/`SyncNetworkLevel`**
+**themselves remains open and needs genuine two-client verification)**
 
 - **3a. Leader `GAME_CAN_START` poll — landed.** Used to run as a blocking loop
   *inside a push-message handler* (`HandlePushMessage`, reached from the
@@ -320,10 +322,66 @@ Status: **3a and 3c landed; 3b still open**
   fast to exercise), and a joiner that never answers at all (worst frame 2 ms,
   ~5 s total, bounded by the deadline rather than the old loop's 15 s, ~267
   frames pumped throughout the wait rather than the loop sleeping through it).
-- **3b.** `WaitForBubble`/`WaitForNextBubble`/`WaitForTobeBubble` and
-  `SyncNetworkLevel` become a frame-driven state machine. These waits are *not*
-  `#ifdef`-guarded today — they compile into WASM too. `NewGame` and
-  `ReloadGame` are both reached from render functions, so the sync must yield.
+- **3b. Partially landed — the stall is closed for the common case; the**
+  **internals are still synchronous for the fallback case.**
+  `WaitForBubble`/`WaitForNextBubble`/`WaitForTobeBubble` and
+  `SyncNetworkLevel` were *not* turned into a frame-driven state machine —
+  that would mean rewriting ~150 lines of bubble-position math (mini-player
+  offsets, per-player grid replication, launcher/next-bubble assignment) into
+  something resumable, for logic with no automated coverage of its own and no
+  way to verify a rewrite's correctness short of a genuine two-client game.
+  Instead this reused the trick already shipped for WASM in 3c: a joiner
+  doesn't enter `SetupNewGame`/`ReloadGame` at all until every level-sync
+  message for that round is already queued, polled from the per-frame path
+  (`ShouldKeepWaitingForLevelSync()`, the same pure rule 3c introduced). Once
+  that gate releases, `SyncNetworkLevel`'s `WaitForBubble` calls find every
+  message already sitting in the queue and return on their first pass rather
+  than genuinely waiting — so the render loop keeps turning during the part
+  that used to freeze it, without touching the math that produces the level
+  at all.
+  This was WASM-only because WASM's `WaitForBubble` spins without yielding
+  and WASM has no threads, so a WebSocket callback can only ever fire between
+  animation frames — a spin that never returns to the browser's event loop
+  can never observe the message it's waiting for, making the gate mandatory
+  there for correctness, not just responsiveness. Native's `Update()` inside
+  that same spin does real, working `recv()` calls, so the gate was never a
+  correctness requirement on native — but the stall was real anyway:
+  `SyncNetworkLevel` runs synchronously inside a render function with no
+  return to the frame loop until it finishes, so one delayed bubble message
+  froze input and rendering for up to 5 s (`WaitForBubble`'s own timeout),
+  compounding across up to 40 such waits in a genuinely bad run. The gate is
+  now unconditional (`mainmenu_netpanel.cpp`'s initial game-start check, and
+  `bubblegame_render.cpp`'s round-2+ `waitingForOpponentNewGame` check) —
+  extending already-shipped, already-tested logic to a second platform,
+  rather than adding a second implementation of it.
+  **Found in the process: the round-2+ gate in `bubblegame_render.cpp` had
+  never received 3c's fix at all.** It's a separate call site from the one
+  3c touched (that one gates the lobby's one-time transition into the first
+  round; this one gates every round after) and still checked only
+  `MessageQueueSize()` — so **every round after the first burned this gate's
+  full 5 s timeout too, on both platforms, independent of and in addition to**
+  **the lobby-entry gate's own bug.** Fixed the same way, with the same
+  pure rule. Also fixed a latent leak this uncovered: neither this gate's
+  timestamp (`wasmRoundSyncWaitStart`, now `roundSyncWaitStart` and no longer
+  `#ifdef`-guarded) nor the lobby-entry one's had ever been reset on starting
+  a fresh match, so a stale value surviving from a quit-mid-wait match could
+  make the very next match's first use of the gate measure "waited" against
+  the wrong clock and read as already timed out, silently skipping the wait
+  it exists to do.
+  What remains open: the residual case where the gate's own 5 s timeout is
+  hit with messages still missing. `WaitForBubble`'s loop is still reached in
+  that case and can still block per remaining message, exactly as before and
+  exactly as WASM already accepted as its fallback in 3c — turning that into
+  a real state machine is the rest of 3b, unattempted here given the effort
+  budget and the correctness risk of touching that math with no test harness
+  that can drive two real network clients through a full match. No automated
+  regression test was written for the two closed call sites either, for the
+  same reason: nothing here can spin up `BubbleGame`/`MainMenu` headlessly
+  and drive a real multi-round match. `bot-play-test`/`netbot-test`/
+  `net-bots-test` (a real `fb-server` plus bots) all still pass, but none of
+  them exercises this path — a bot is a level-sync *leader*'s local
+  bookkeeping problem, not a joiner waiting on one. **Verifying this needs
+  a genuine two-client multi-round game** (see the manual-test note below).
 - **3c. Round 2+ level-sync stall — landed.** The joiner's wait gate counted
   only `MessageQueueSize()`, but `ProcessNetworkMessages()` moves `b|`/`N`/`T`
   out of that queue and into `syncQueue` as it drains. In round 1 nothing was

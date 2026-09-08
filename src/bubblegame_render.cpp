@@ -616,22 +616,34 @@ void BubbleGame::Render() {
 
         // Check if both players are ready for new game after round ends
         if (waitingForOpponentNewGame && opponentReadyForNewGame) {
-#ifdef __WASM_PORT__
-            // WASM joiner: WaitForBubble inside ReloadGame->SyncNetworkLevel cannot yield,
-            // so queue the 40 sync messages first (same fix as initial game start).
+            // Joiner (async networking handoff, stage 3b, extending 3c's fix
+            // to this second call site): wait here, across frames, until all
+            // 40 of round 2+'s level-sync messages are queued, before
+            // handing off to ReloadGame -> SyncNetworkLevel -> WaitForBubble
+            // -- same rationale and same trick as the initial game-start
+            // gate in mainmenu_netpanel.cpp (see the long comment there).
+            //
+            // This site's gate was never given stage 3c's fix and carried
+            // the same bug on its own: it checked only
+            // NetworkClient::MessageQueueSize(), but ProcessNetworkMessages()
+            // has already been draining 'b|'/'N'/'T' into syncQueue for the
+            // entire match by the time round 2 starts, so the main queue
+            // alone could never reach 40 -- every round after the first
+            // burned this gate's full 5s timeout before proceeding, on both
+            // platforms, independent of the lobby-entry gate's own fix.
             NetworkClient* netClientRound = NetworkClient::Instance();
             if (netClientRound && !netClientRound->IsLeader()) {
-                if (wasmRoundSyncWaitStart == 0) wasmRoundSyncWaitStart = SDL_GetTicks();
-                size_t qSize = netClientRound->MessageQueueSize();
-                bool timedOut = (SDL_GetTicks() - wasmRoundSyncWaitStart > 5000);
-                SDL_Log("WASM round sync wait: queue=%d waited=%dms", (int)qSize, (int)(SDL_GetTicks() - wasmRoundSyncWaitStart));
-                if (qSize < 40 && !timedOut) {
+                if (roundSyncWaitStart == 0) roundSyncWaitStart = SDL_GetTicks();
+                const size_t qSize = netClientRound->MessageQueueSize();
+                const size_t sSize = netClientRound->SyncQueueSize();
+                const Uint64 waited = SDL_GetTicks() - roundSyncWaitStart;
+                SDL_Log("Round sync wait: queue=%d sync=%d waited=%dms", (int)qSize, (int)sSize, (int)waited);
+                if (ShouldKeepWaitingForLevelSync(qSize, sSize, waited, 5000)) {
                     return;  // come back next frame
                 }
-                SDL_Log("WASM round sync: proceeding queue=%d timedOut=%d", (int)qSize, timedOut);
-                wasmRoundSyncWaitStart = 0;
+                SDL_Log("Round sync: proceeding queue=%d sync=%d waited=%dms", (int)qSize, (int)sSize, (int)waited);
+                roundSyncWaitStart = 0;
             }
-#endif
             SDL_Log("All players ready - starting new game (detected in render loop)");
             if (chattingMode) FinishInGameChat(false);
             waitingForOpponentNewGame = false;

@@ -629,9 +629,12 @@ private:
     bool opponentReadyForNewGame = false; // Opponent sent 'n' ready signal
     int opponentsReadyCount = 0; // Number of opponents who sent 'n' (for 3+ player)
     int connectedPlayerCount = 0; // Players still connected (decremented when 'l' received)
-#ifdef __WASM_PORT__
-    Uint32 wasmRoundSyncWaitStart = 0; // WASM joiner: timestamp when waiting for Round 2+ sync messages
-#endif
+    // Joiner (both platforms, async networking handoff stage 3b): timestamp
+    // when we started waiting for round 2+'s level-sync messages to finish
+    // queuing, before handing off to ReloadGame -> SyncNetworkLevel ->
+    // WaitForBubble. See the long comment at the call site in
+    // bubblegame_render.cpp.
+    Uint32 roundSyncWaitStart = 0;
 
     int curLevel = 1, pauseFrame = 0, nextPauseUpd = 2;
     int winsP1 = 0, winsP2 = 0; // 2p mode stuff

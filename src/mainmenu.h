@@ -468,7 +468,11 @@ private:
     bool networkGameStarting = false; // Track if game start has been initiated
     bool netStartRequested = false; // We've sent START and are waiting on GAME_CAN_START (see mainmenu_input.cpp)
     Uint32 netStartRequestedMs = 0; // Timestamp of that request, for the timeout in NetPanelRender()
-    Uint32 wasmSyncWaitStart = 0; // WASM joiner: timestamp when we started waiting for sync messages
+    // Joiner (both platforms, async networking handoff stage 3b): timestamp
+    // when we started waiting for level-sync messages to finish queuing,
+    // before handing off to SyncNetworkLevel/WaitForBubble. See the long
+    // comment at the call site in mainmenu_netpanel.cpp.
+    Uint32 syncWaitStart = 0;
     Uint32 wasmBotWaitStart = 0;  // WASM leader: timestamp when we started waiting for our bots to enter the game
     bool serverHosting = false;
     int serverPid = -1;

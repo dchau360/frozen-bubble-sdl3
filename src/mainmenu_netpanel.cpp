@@ -271,7 +271,7 @@ void MainMenu::NetPanelRender() {
             networkInputMode = 0;
             networkGameStarting = false;
             netStartRequested = false;
-            wasmSyncWaitStart = 0;
+            syncWaitStart = 0;
             wasmBotWaitStart = 0;
             RefreshFollowRegistration();
             netClient->RequestList();
@@ -335,14 +335,38 @@ void MainMenu::NetPanelRender() {
 
         // Check if game is ready to start (state transitioned to IN_GAME)
         if (!networkGameStarting && netClient->GetState() == IN_GAME) {
-#ifdef __WASM_PORT__
-            // WASM joiner: WaitForBubble spins without yielding (no Asyncify),
-            // so WebSocket callbacks never fire during SyncNetworkLevel.
-            // Wait here (across animation frames) until all 40 sync messages
-            // (38 bubbles + N + T) are queued, then SetupNewGame will find
-            // them already in the queue and WaitForBubble returns immediately.
+            // Joiner (async networking handoff, stage 3b): wait here, across
+            // frames, until all 40 level-sync messages (38 bubbles + N + T)
+            // are queued, before handing off to SetupNewGame -> NewGame ->
+            // SyncNetworkLevel -> WaitForBubble. WaitForBubble's own loop
+            // then finds every message already queued and returns on its
+            // first pass instead of genuinely waiting.
+            //
+            // This was WASM-only (stage 3c): WaitForBubble spins without
+            // yielding, and WASM has no threads, so a WebSocket callback can
+            // only ever fire between animation frames -- a spin that never
+            // returns to the browser's event loop can never observe the
+            // message it is waiting for, which made the wait mandatory there.
+            //
+            // Native does have a working per-frame recv() inside that same
+            // spin, so on a fast/local connection this was never a
+            // correctness requirement for it -- but it was still a real
+            // stall risk: SyncNetworkLevel runs synchronously inside a
+            // render function, with no return to the frame loop until it
+            // finishes, so a single slow or delayed bubble message froze
+            // input and rendering for up to 5s (WaitForBubble's own
+            // timeout), and a genuinely bad run could compound across up to
+            // 40 such waits. Gating entry the same way WASM already does
+            // moves that wait onto the per-frame path -- exactly the
+            // "input and rendering continue during waits" demonstration the
+            // handoff doc asks for -- without touching SyncNetworkLevel's
+            // bubble-position math at all. The one thing this does not fix:
+            // if the 5s gate itself times out with messages still missing,
+            // WaitForBubble's own loop is reached anyway and can still block
+            // per remaining message, same as it always has and same as WASM
+            // already accepts as its fallback.
             if (!netClient->IsLeader()) {
-                if (wasmSyncWaitStart == 0) wasmSyncWaitStart = SDL_GetTicks();
+                if (syncWaitStart == 0) syncWaitStart = SDL_GetTicks();
                 // Both queues, not just the main one: ProcessNetworkMessages()
                 // moves 'b|'/'N'/'T' into the sync queue as it drains, so from
                 // round 2 on -- when the game loop is already draining -- the
@@ -352,16 +376,18 @@ void MainMenu::NetPanelRender() {
                 // where the rule now lives so a native test can reach it.
                 const size_t qSize = netClient->MessageQueueSize();
                 const size_t sSize = netClient->SyncQueueSize();
-                const Uint64 waited = SDL_GetTicks() - wasmSyncWaitStart;
-                SDL_Log("WASM joiner: waiting for sync msgs, queue=%d sync=%d, waited=%dms",
+                const Uint64 waited = SDL_GetTicks() - syncWaitStart;
+                SDL_Log("Joiner: waiting for sync msgs, queue=%d sync=%d, waited=%dms",
                         (int)qSize, (int)sSize, (int)waited);
                 if (ShouldKeepWaitingForLevelSync(qSize, sSize, waited, 5000)) {
                     return;  // Come back next frame
                 }
-                SDL_Log("WASM joiner: proceeding with queue=%d sync=%d waited=%dms",
+                SDL_Log("Joiner: proceeding with queue=%d sync=%d waited=%dms",
                         (int)qSize, (int)sSize, (int)waited);
-                wasmSyncWaitStart = 0;
-            } else if (!lobbyBots.empty()) {
+                syncWaitStart = 0;
+            }
+#ifdef __WASM_PORT__
+            else if (!lobbyBots.empty()) {
                 // WASM leader hosting bots. A native leader polls
                 // LEADER_CHECK_GAME_START from its per-frame pump until every
                 // other connection has acknowledged; that poll is compiled out

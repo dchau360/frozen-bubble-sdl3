@@ -2247,7 +2247,7 @@ void MainMenu::MenuReturnKey() {
                                 networkInputMode = 0;  // Switch to lobby mode so C/J/T/U keys work
                                 networkGameStarting = false;
                                 netStartRequested = false;
-                                wasmSyncWaitStart = 0;
+                                syncWaitStart = 0;
                                 wasmBotWaitStart = 0;
                                 RefreshFollowRegistration();
                                 netClient->RequestList();  // Immediate list on lobby entry

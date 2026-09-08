@@ -401,6 +401,11 @@ void BubbleGame::NewGame(SetupSettings setup) {
     waitingForOpponentNewGame = false;
     opponentReadyForNewGame = false;
     opponentsReadyCount = 0;
+    // Same leak: a stale nonzero value here would make the round-sync gate
+    // (bubblegame_render.cpp) measure "waited" against a previous match's
+    // clock and read as already timed out, silently skipping the wait it
+    // exists to do on the very next round-2+ transition.
+    roundSyncWaitStart = 0;
     netViewPage = 0;
     netViewAuto = true;
     netViewPinnedIdx = -1;
