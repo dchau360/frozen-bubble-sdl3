@@ -207,6 +207,24 @@ void MainMenu::DropLobbyBots() {
     if (netClient) netClient->SetLeaderWaitTick(nullptr);
 }
 
+void MainMenu::PumpNetworkFrame() {
+    // Drain a finished background geoloc fetch (if any) and send it once
+    // connected. Runs even before a NetworkClient exists so a fetch kicked
+    // off early never has its result silently dropped.
+    PollGeoLocFetch();
+
+    // Never construct a client here -- this runs on every frame of every mode,
+    // single-player included.
+    NetworkClient* netClient = NetworkClient::Existing();
+    if (!netClient) return;
+
+    // Bots first, so a bot that has already been told the game is starting has
+    // answered by the time this client acts on the same news. (Ordering
+    // preserved from the old NetPanelRender() call site.)
+    PumpLobbyBots();
+    netClient->Update();
+}
+
 void MainMenu::NetPanelRender() {
     if (!showingNetPanel) return;
 
@@ -238,36 +256,33 @@ void MainMenu::NetPanelRender() {
             snprintf(gsn->savedNickname, sizeof(gsn->savedNickname), "%s", nickname);
             gsn->SaveKeys();
 #endif
-            std::string geoLoc = NetworkClient::DetectGeoLocation();
-            float gLat = 0.0f, gLon = 0.0f;
-            if (sscanf(geoLoc.c_str(), "%f:%f", &gLat, &gLon) == 2) {
-                myGeoLat = gLat; myGeoLon = gLon; myGeoLocSet = true;
-            }
-            if (netClient->SendGeoLoc(geoLoc.c_str())) {
-                networkInLobby = true;
-                networkInputMode = 0;
-                networkGameStarting = false;
-                netStartRequested = false;
-                wasmSyncWaitStart = 0;
-                wasmBotWaitStart = 0;
-                RefreshFollowRegistration();
-                netClient->RequestList();
-                lastListRequest = SDL_GetTicks();
+            // Geoloc fetch runs on a background thread and is sent whenever it
+            // finishes (PumpNetworkFrame -> PollGeoLocFetch), independent of
+            // lobby entry -- GEOLOC has no server-side ordering requirement
+            // relative to NICK, and DetectGeoLocation() can block up to ~16s,
+            // which used to leave the player stuck on a frozen "connecting"
+            // screen despite already being fully connected and named.
+            StartGeoLocFetch();
+            networkInLobby = true;
+            networkInputMode = 0;
+            networkGameStarting = false;
+            netStartRequested = false;
+            wasmSyncWaitStart = 0;
+            wasmBotWaitStart = 0;
+            RefreshFollowRegistration();
+            netClient->RequestList();
+            lastListRequest = SDL_GetTicks();
 #ifdef __ANDROID__
-                SDL_SendAndroidMessage(0x8001, 0);
+            SDL_SendAndroidMessage(0x8001, 0);
 #endif
-            }
         }
     }
 
-    // Update network client
+    // Socket I/O and bot servicing now happen once per frame regardless of
+    // which screen is up -- see PumpNetworkFrame(), called from
+    // FrozenBubble::RunOneFrame(). What's left here is UI state that only
+    // makes sense while the net panel itself is showing.
     if (netClient->IsConnected()) {
-        // Before netClient->Update(), so a bot that has already been told the
-        // game is starting has answered by the time this client acts on the
-        // same news.
-        PumpLobbyBots();
-        netClient->Update();
-
         // Room-scoped team choices must not leak into the next room when the
         // same nickname appears again. While we are in the plain lobby there
         // is no assignment to preserve, and advancing the chat cursors here
@@ -1761,6 +1776,13 @@ void MainMenu::ServerListPanelRender(bool isLAN) {
             publicServers = std::move(serverFetchResult);
             serverFetchResult.clear();
         }
+    } else {
+        // Same pattern for the LAN scan (async networking handoff, stage 1d).
+        if (!lanFetchInProgress.load() && discoveredServers.empty()) {
+            std::lock_guard<std::mutex> lock(lanFetchMutex);
+            discoveredServers = std::move(lanFetchResult);
+            lanFetchResult.clear();
+        }
     }
 #endif
 
@@ -1805,6 +1827,8 @@ void MainMenu::ServerListPanelRender(bool isLAN) {
 
     if (!isLAN && serverFetchInProgress.load()) {
         list.Row(-1, "Fetching server list...", "");
+    } else if (isLAN && lanFetchInProgress.load()) {
+        list.Row(-1, "Scanning local network...", "");
     } else if (servers.empty()) {
         list.Row(-1, isLAN ? "No servers found" : "No public servers listed", "");
         if (isLAN) list.Row(-1, "Start one: fb-server -l", "");

@@ -252,6 +252,8 @@ MainMenu::MainMenu(const SDL_Renderer *renderer, HeadlessTestTag)
 MainMenu::~MainMenu() {
 #ifndef __WASM_PORT__
     if (serverFetchThread.joinable()) serverFetchThread.join();
+    if (lanFetchThread.joinable()) lanFetchThread.join();
+    if (geoLocFetchThread.joinable()) geoLocFetchThread.join();
 #endif
     SDL_DestroyTexture(background);
     SDL_DestroyTexture(fbLogo);
@@ -491,28 +493,14 @@ void MainMenu::ShowPanel(int which) {
             break;
         case 3: { // LAN game - discover servers via UDP broadcast
             isLANGame = true;
+            discoveredServers.clear();
+#ifdef __WASM_PORT__
+            // WASM has no UDP discovery; DiscoverLANServers() is a fast no-op
+            // there, so no thread is needed.
             discoveredServers = NetworkClient::DiscoverLANServers();
-            // Also add localhost:1511 if server is running locally
-            bool foundLocal = false;
-            for (const auto& s : discoveredServers) {
-                if (s.host == "127.0.0.1" || s.host == "localhost") {
-                    foundLocal = true;
-                    break;
-                }
-            }
-            if (!foundLocal) {
-                // Check if local server is listening on port 1511
-                if (portInUse(1511)) {
-                    ServerInfo localServer;
-                    localServer.host = "127.0.0.1";
-                    localServer.port = 1511;
-                    localServer.name = "Local Server";
-                    localServer.latencyMs = 0;
-                    discoveredServers.push_back(localServer);
-                }
-            }
-            for (auto& s : discoveredServers)
-                s.latencyMs = NetworkClient::MeasureLatency(s.host.c_str(), s.port);
+#else
+            StartLanFetch(); // async: DiscoverLANServers (1s) + per-server MeasureLatency
+#endif
             selectedServerIndex = 0;
             lanMenuIndex = 0;
             connectErrorMsg.clear();
@@ -549,30 +537,7 @@ void MainMenu::ShowPanel(int which) {
             if (!publicServers.empty()) netMenuIndex = 1; // pre-select first server
 #else
             // Native: fetch + latency probe can block for seconds — run on background thread
-            if (!serverFetchInProgress.load()) {
-                serverFetchInProgress = true;
-                if (serverFetchThread.joinable()) serverFetchThread.join();
-                serverFetchThread = std::thread([this]() {
-                    std::vector<ServerInfo> fetched = NetworkClient::FetchPublicServers();
-                    // Add local server if running
-                    bool foundLocal = false;
-                    for (const auto& s : fetched)
-                        if (s.host == "127.0.0.1" || s.host == "localhost") { foundLocal = true; break; }
-                    if (!foundLocal && portInUse(1511)) {
-                        ServerInfo localServer;
-                        localServer.host = "127.0.0.1";
-                        localServer.port = 1511;
-                        localServer.name = "Local Server";
-                        localServer.latencyMs = 0;
-                        fetched.insert(fetched.begin(), localServer);
-                    }
-                    for (auto& s : fetched)
-                        s.latencyMs = NetworkClient::MeasureLatency(s.host.c_str(), s.port);
-                    std::lock_guard<std::mutex> lock(serverFetchMutex);
-                    serverFetchResult = std::move(fetched);
-                    serverFetchInProgress = false;
-                });
-            }
+            StartPublicServerFetch();
 #endif
             break;
         }

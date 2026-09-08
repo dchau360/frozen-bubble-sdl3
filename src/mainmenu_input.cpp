@@ -150,20 +150,32 @@ void MainMenu::HandleInput(SDL_Event *e){
                     }
                     break;
                 case SDLK_R:
+                    // Both refreshes used to run DiscoverLANServers/FetchPublicServers
+                    // plus a per-server MeasureLatency synchronously right here --
+                    // up to 1s+2s*N (LAN) or 16s+2s*N (public) of frozen UI on every
+                    // R press. The initial fetch (ShowPanel/case 3 and case 5) was
+                    // already threaded; this was the one inconsistent path. See the
+                    // async networking handoff doc, stage 1d.
                     if (showingNetPanel && !networkInLobby && networkInputMode == 7) {
                         connectErrorMsg.clear();
-                        discoveredServers = NetworkClient::DiscoverLANServers();
-                        for (auto& s : discoveredServers)
-                            s.latencyMs = NetworkClient::MeasureLatency(s.host.c_str(), s.port);
                         lanMenuIndex = 0;
+#ifdef __WASM_PORT__
+                        discoveredServers = NetworkClient::DiscoverLANServers();
+#else
+                        discoveredServers.clear();
+                        StartLanFetch();
+#endif
                         AudioMixer::Instance()->PlaySFX("menu_change");
                     }
                     if (showingNetPanel && !networkInLobby && networkInputMode == 10) {
                         connectErrorMsg.clear();
                         netMenuIndex = 0;
+#ifdef __WASM_PORT__
                         publicServers = NetworkClient::FetchPublicServers();
-                        for (auto& s : publicServers)
-                            s.latencyMs = NetworkClient::MeasureLatency(s.host.c_str(), s.port);
+#else
+                        publicServers.clear();
+                        StartPublicServerFetch();
+#endif
                         AudioMixer::Instance()->PlaySFX("menu_change");
                     }
                     break;
@@ -2098,12 +2110,23 @@ void MainMenu::MenuReturnKey() {
                                 // "Host a server" selected
                                 if (!serverHosting) {
                                     StartLocalServer();
+                                    // StartLocalServer() only confirms the TCP listener is
+                                    // accepting connections; the UDP discovery responder
+                                    // that DiscoverLANServers() below broadcasts to isn't
+                                    // covered by that readiness poll, so this delay stays
+                                    // (unlike the TCP-covered SDL_Delay calls removed
+                                    // elsewhere in this file for the async networking
+                                    // handoff) -- it just no longer stacks with a second
+                                    // blocking discovery scan on top.
                                     SDL_Delay(500);
                                 }
                                 connectErrorMsg.clear();
+                                discoveredServers.clear();
+#ifdef __WASM_PORT__
                                 discoveredServers = NetworkClient::DiscoverLANServers();
-                                for (auto& s : discoveredServers)
-                                    s.latencyMs = NetworkClient::MeasureLatency(s.host.c_str(), s.port);
+#else
+                                StartLanFetch();
+#endif
                                 lanMenuIndex = 0;
                                 return;
                             }
@@ -2197,27 +2220,24 @@ void MainMenu::MenuReturnKey() {
                                     gsn->SaveKeys();
 #endif
                                 }
-                                SDL_Delay(100);
-                                std::string geoLoc = NetworkClient::DetectGeoLocation();
-                                // Parse for own spot rendering
-                                float gLat = 0.0f, gLon = 0.0f;
-                                if (sscanf(geoLoc.c_str(), "%f:%f", &gLat, &gLon) == 2) {
-                                    myGeoLat = gLat; myGeoLon = gLon; myGeoLocSet = true;
-                                }
-                                if (netClient->SendGeoLoc(geoLoc.c_str())) {
-                                    networkInLobby = true;
-                                    networkInputMode = 0;  // Switch to lobby mode so C/J/T/U keys work
-                                    networkGameStarting = false;
-                                    netStartRequested = false;
-                                    wasmSyncWaitStart = 0;
-                                    wasmBotWaitStart = 0;
-                                    RefreshFollowRegistration();
-                                    netClient->RequestList();  // Immediate list on lobby entry
-                                    lastListRequest = SDL_GetTicks();
+                                // Geoloc fetch runs on a background thread and is sent
+                                // whenever it finishes (see PollGeoLocFetch, driven from
+                                // PumpNetworkFrame), independent of lobby entry -- see the
+                                // matching comment in NetPanelRender's pendingLobbyConnect
+                                // completion for why this is safe to decouple.
+                                StartGeoLocFetch();
+                                networkInLobby = true;
+                                networkInputMode = 0;  // Switch to lobby mode so C/J/T/U keys work
+                                networkGameStarting = false;
+                                netStartRequested = false;
+                                wasmSyncWaitStart = 0;
+                                wasmBotWaitStart = 0;
+                                RefreshFollowRegistration();
+                                netClient->RequestList();  // Immediate list on lobby entry
+                                lastListRequest = SDL_GetTicks();
 #ifdef __ANDROID__
-                                    SDL_SendAndroidMessage(0x8001, 0); // show lobby ad
+                                SDL_SendAndroidMessage(0x8001, 0); // show lobby ad
 #endif
-                                }
                             } else {
                                 // SendNick failed — WebSocket is still connecting (WASM async).
                                 // Store the nickname and complete lobby entry in NetPanelRender()

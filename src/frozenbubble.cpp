@@ -498,6 +498,13 @@ void FrozenBubble::RunOneFrame()
         HandleInput(&e);
     }
 
+    // Drive one frame of network I/O unconditionally -- regardless of
+    // currentState or IsGamePause, and before any rendering, so a connection
+    // in progress keeps advancing (and hosted bots keep being serviced) no
+    // matter what screen is up. See MainMenu::PumpNetworkFrame()'s comment
+    // for why this replaced the old showingNetPanel-gated pump.
+    if (mainMenu) mainMenu->PumpNetworkFrame();
+
     // render
     if(!IsGamePause) {
         // Clear to opaque black explicitly. SDL_RenderClear paints with

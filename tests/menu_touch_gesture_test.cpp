@@ -235,6 +235,15 @@ struct MainMenuTestAccess {
     static void SetPlayerColorCount(MainMenu& menu, int slot, int count) {
         menu.playerColorCounts[slot] = count;
     }
+    // Async networking handoff, stage 1: the per-frame pump and the
+    // background LAN/public-server/geoloc fetches. LAN discovery is the one
+    // fetch that's safe to actually run in an automated test -- it's pure
+    // local UDP broadcast with a fixed ~1s window, unlike the public-server
+    // and geoloc fetches, which hit real internet endpoints and would make
+    // ctest's runtime and pass/fail depend on network reachability.
+    static void CallPumpNetworkFrame(MainMenu& menu) { menu.PumpNetworkFrame(); }
+    static void CallStartLanFetch(MainMenu& menu) { menu.StartLanFetch(); }
+    static bool LanFetchInProgress(const MainMenu& menu) { return menu.lanFetchInProgress.load(); }
     // Keyboard navigation in the game room goes through MenuUpKey/
     // MenuDownKey/MenuReturnKey, which are private. Stand the menu up as
     // "already in a room" (the roster test does the same) and drive the real
@@ -1358,6 +1367,43 @@ int main() {
             if (connected || refuseMs >= 2000)
                 std::fprintf(stderr, "  (Connect to refused port: ok=%d, %llu ms)\n",
                              connected, (unsigned long long)refuseMs);
+        }
+
+        // --- LAN discovery now runs on a background thread instead of
+        // blocking the caller for its fixed ~1s broadcast window plus a
+        // per-server MeasureLatency probe (async networking handoff, stage
+        // 1d) -- exercised through ShowPanel/case 3, the SDLK_R refresh, and
+        // the "Host a server" rescan, all of which now call StartLanFetch()
+        // instead of DiscoverLANServers() inline. The kickoff call itself
+        // must return near-instantly; the actual ~1s scan happens off-thread.
+        {
+            Uint64 kickoffStart = SDL_GetTicks();
+            MainMenuTestAccess::CallStartLanFetch(*menu);
+            Uint64 kickoffMs = SDL_GetTicks() - kickoffStart;
+
+            CHECK(kickoffMs < 100);
+            CHECK(MainMenuTestAccess::LanFetchInProgress(*menu));
+            if (kickoffMs >= 100)
+                std::fprintf(stderr, "  (StartLanFetch kickoff took %llu ms)\n",
+                             (unsigned long long)kickoffMs);
+
+            // PumpNetworkFrame() must never block waiting on this -- it just
+            // drives NetworkClient::Update()/bot servicing, unrelated to the
+            // fetch thread. Confirm it returns promptly while the fetch is
+            // still running.
+            Uint64 pumpStart = SDL_GetTicks();
+            MainMenuTestAccess::CallPumpNetworkFrame(*menu);
+            Uint64 pumpMs = SDL_GetTicks() - pumpStart;
+            CHECK(pumpMs < 100);
+
+            // Wait for the real scan to finish (its own ~1s window), well
+            // under the fixed old synchronous cost of a full scan run twice.
+            Uint64 waitStart = SDL_GetTicks();
+            while (MainMenuTestAccess::LanFetchInProgress(*menu) &&
+                   SDL_GetTicks() - waitStart < 2500) {
+                SDL_Delay(20);
+            }
+            CHECK(!MainMenuTestAccess::LanFetchInProgress(*menu));
         }
     }
 #endif

@@ -219,3 +219,111 @@ void MainMenu::StopLocalServer() {
     SDL_Log("Server stopped");
 #endif
 }
+
+#ifndef __WASM_PORT__
+void MainMenu::StartLanFetch() {
+    // One fetch at a time -- a second call while one is already running (e.g.
+    // rapid-fire R presses) just no-ops rather than queuing another.
+    if (lanFetchInProgress.load()) return;
+    lanFetchInProgress = true;
+    if (lanFetchThread.joinable()) lanFetchThread.join();
+    const int probePort = networkPort > 0 ? networkPort : 1511;
+    lanFetchThread = std::thread([this, probePort]() {
+        std::vector<ServerInfo> fetched = NetworkClient::DiscoverLANServers();
+        bool foundLocal = false;
+        for (const auto& s : fetched)
+            if (s.host == "127.0.0.1" || s.host == "localhost") { foundLocal = true; break; }
+        if (!foundLocal && portInUse(probePort)) {
+            ServerInfo localServer;
+            localServer.host = "127.0.0.1";
+            localServer.port = probePort;
+            localServer.name = "Local Server";
+            localServer.latencyMs = 0;
+            fetched.insert(fetched.begin(), localServer);
+        }
+        for (auto& s : fetched)
+            s.latencyMs = NetworkClient::MeasureLatency(s.host.c_str(), s.port);
+        std::lock_guard<std::mutex> lock(lanFetchMutex);
+        lanFetchResult = std::move(fetched);
+        lanFetchInProgress = false;
+    });
+}
+#endif
+
+#ifndef __WASM_PORT__
+void MainMenu::StartPublicServerFetch() {
+    if (serverFetchInProgress.load()) return;
+    serverFetchInProgress = true;
+    if (serverFetchThread.joinable()) serverFetchThread.join();
+    serverFetchThread = std::thread([this]() {
+        std::vector<ServerInfo> fetched = NetworkClient::FetchPublicServers();
+        bool foundLocal = false;
+        for (const auto& s : fetched)
+            if (s.host == "127.0.0.1" || s.host == "localhost") { foundLocal = true; break; }
+        if (!foundLocal && portInUse(1511)) {
+            ServerInfo localServer;
+            localServer.host = "127.0.0.1";
+            localServer.port = 1511;
+            localServer.name = "Local Server";
+            localServer.latencyMs = 0;
+            fetched.insert(fetched.begin(), localServer);
+        }
+        for (auto& s : fetched)
+            s.latencyMs = NetworkClient::MeasureLatency(s.host.c_str(), s.port);
+        std::lock_guard<std::mutex> lock(serverFetchMutex);
+        serverFetchResult = std::move(fetched);
+        serverFetchInProgress = false;
+    });
+}
+#endif
+
+void MainMenu::StartGeoLocFetch() {
+#ifdef __WASM_PORT__
+    // DetectGeoLocation() is a fast no-op on WASM ("zz"); no thread needed.
+    geoLocRequested = true;
+    geoLocFetchResult = NetworkClient::DetectGeoLocation();
+    geoLocFetchDone = true;
+#else
+    if (geoLocRequested) return;  // once per session -- DetectGeoLocation caches internally too
+    geoLocRequested = true;
+    geoLocFetchInProgress = true;
+    geoLocFetchThread = std::thread([this]() {
+        std::string result = NetworkClient::DetectGeoLocation();
+        std::lock_guard<std::mutex> lock(geoLocFetchMutex);
+        geoLocFetchResult = std::move(result);
+        geoLocFetchDone = true;
+        geoLocFetchInProgress = false;
+    });
+#endif
+}
+
+void MainMenu::PollGeoLocFetch() {
+    if (geoLocFetchDone) {
+        std::string result;
+        {
+            std::lock_guard<std::mutex> lock(geoLocFetchMutex);
+            if (geoLocFetchDone) {
+                result = geoLocFetchResult;
+                geoLocFetchDone = false;  // consumed into geoLocToSend below
+            }
+        }
+        if (!result.empty()) {
+            float gLat = 0.0f, gLon = 0.0f;
+            if (sscanf(result.c_str(), "%f:%f", &gLat, &gLon) == 2) {
+                myGeoLat = gLat;
+                myGeoLon = gLon;
+                myGeoLocSet = true;
+            }
+            geoLocToSend = std::move(result);
+        }
+    }
+    if (geoLocToSend.empty()) return;
+    NetworkClient* netClient = NetworkClient::Existing();
+    // May run several frames before a connection exists (fetch started
+    // early) or completes (fetch finished before Connect() did) -- keep the
+    // result queued rather than dropping it either way.
+    if (netClient && netClient->IsConnected()) {
+        netClient->SendGeoLoc(geoLocToSend.c_str());
+        geoLocToSend.clear();
+    }
+}

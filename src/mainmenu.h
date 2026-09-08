@@ -104,6 +104,14 @@ public:
     void ShowPanel(int which);
     void ReturnToMenu();
     void ReturnToNetLobby();  // Return to network lobby after quitting a network game
+    // Drives one frame of network I/O. Called unconditionally from
+    // FrozenBubble::RunOneFrame() between the event pump and the render
+    // dispatch, so socket reads and hosted-bot servicing keep happening no
+    // matter which screen is up or whether the game is paused. This used to
+    // live inside NetPanelRender(), gated on showingNetPanel && IsConnected() --
+    // which meant nothing advanced while a connection was still being
+    // established, the very situation that needs advancing.
+    void PumpNetworkFrame();
 private:
 #ifdef FROZEN_BUBBLE_TEST_ACCESS
     friend struct MainMenuTestAccess;
@@ -408,6 +416,37 @@ private:
     std::thread serverFetchThread;
     std::mutex serverFetchMutex;
     std::vector<ServerInfo> serverFetchResult; // written by bg thread, swapped in on completion
+    void StartPublicServerFetch(); // kicks off serverFetchThread if one isn't already running
+
+    // LAN discovery + latency probing, threaded the same way as the public
+    // list above (async networking handoff, stage 1d) -- DiscoverLANServers'
+    // fixed 1s wait plus up to 2s of MeasureLatency per server used to run
+    // inline on every "LAN game" open, R-refresh, and "Host a server" rescan.
+    std::atomic<bool> lanFetchInProgress{false};
+    std::thread lanFetchThread;
+    std::mutex lanFetchMutex;
+    std::vector<ServerInfo> lanFetchResult;
+    void StartLanFetch(); // kicks off lanFetchThread if one isn't already running
+
+    // Player geolocation (for the lobby map dot + GEOLOC command), fetched on
+    // a background thread -- DetectGeoLocation() can block up to ~16s (two
+    // sequential curl/HTTP calls). Decoupled from nickname/lobby-entry
+    // entirely: GEOLOC has no server-side ordering requirement relative to
+    // NICK (server/game.c stores it per-fd unconditionally), so lobby entry
+    // no longer waits on this -- SendGeoLoc() fires whenever the fetch
+    // finishes, and myGeoLat/myGeoLon update at that point too.
+    std::atomic<bool> geoLocFetchInProgress{false};
+    std::thread geoLocFetchThread;
+    std::mutex geoLocFetchMutex;
+    std::string geoLocFetchResult;   // set by bg thread; empty until ready
+    bool geoLocFetchDone = false;    // guarded by geoLocFetchMutex alongside the result
+    bool geoLocRequested = false;    // true once a fetch has been kicked off this session
+    // Fetched but not yet sent (e.g. fetch finished before Connect() did).
+    // Kept outside the mutex-guarded pair above so a not-yet-connected frame
+    // doesn't have to choose between consuming and losing the result.
+    std::string geoLocToSend;
+    void StartGeoLocFetch();         // kicks off geoLocFetchThread if not already requested
+    void PollGeoLocFetch();          // drains a finished fetch, sends GEOLOC once connected
 
     //Network panel render
     bool showingNetPanel = false;

@@ -399,14 +399,10 @@ rearchitecture below is still open.**
   waits") is unimplemented. `Connect()` is still a single synchronous call
   from `MainMenu`'s point of view -- bounded to a firm 5s+3s (connect +
   SERVER_READY) worst case instead of an OS-dependent hang, but the render
-  loop still does not pump during that wait. Converting the "click to join,
-  block until connected" UI flow into a real non-blocking state machine with
-  in-progress UI feedback is a materially larger, riskier change (touches
-  `MainMenu`'s call sites, needs new UI state for "connecting..." with
-  cancellation, and the verification matrix the evidence above asks for --
-  fragmented replies, a slow/non-reading peer exercised live, frame-stall
-  measurement) that a future session should still treat as its own batch, per
-  the original scoping note.
+  loop still does not pump during that wait. This is now tracked as its own
+  multi-session handoff: see
+  [`docs/ASYNC_NETWORKING_HANDOFF.md`](ASYNC_NETWORKING_HANDOFF.md) for the
+  full measured-worst-case inventory, the four-stage plan, and progress.
 
 ### B. Share fonts across cached labels
 

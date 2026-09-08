@@ -297,6 +297,11 @@ public:
     const std::map<int, std::string>& GetPlayerIdToNick() const { return playerIdToNick; }
 
     static NetworkClient* Instance(const char* host = nullptr, int port = 0);
+    // Like Instance(), but never constructs one. The per-frame pump in
+    // FrozenBubble::RunOneFrame() runs on every frame of every mode, including
+    // single-player, where Instance() would otherwise allocate a client that
+    // nothing ever uses.
+    static NetworkClient* Existing() { return ptrInstance; }
     static void Dispose();
     static std::vector<ServerInfo> DiscoverLANServers();
     static std::vector<ServerInfo> FetchPublicServers();
