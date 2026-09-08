@@ -297,20 +297,75 @@ bool NetBotConnection::JoinRoom(const std::string& host, int port,
         Leave();
         return false;
     }
-    const int rc = connect(sockfd, res->ai_addr, static_cast<socklen_t>(res->ai_addrlen));
+
+    // Non-blocking connect, bounded by select() -- the same fix
+    // NetworkClient::Connect() already has (async networking handoff, stage
+    // 1e). This used to be a plain blocking connect(), so a caller adding
+    // several bots at once (MainMenu::SyncLobbyBots()'s while loop, called
+    // synchronously from an input handler) could freeze the render loop for
+    // as many multiples of the OS's own TCP connect timeout -- commonly tens
+    // of seconds each -- as bots were being added, with no way to cancel.
+    // Set non-blocking BEFORE connect() rather than after: connect() itself
+    // is what used to block.
+#ifdef _WIN32
+    {
+        u_long nonblocking = 1;
+        ioctlsocket(sockfd, FIONBIO, &nonblocking);
+    }
+#else
+    {
+        int flags = fcntl(sockfd, F_GETFL, 0);
+        if (flags >= 0) fcntl(sockfd, F_SETFL, flags | O_NONBLOCK);
+    }
+#endif
+
+    int rc = connect(sockfd, res->ai_addr, static_cast<socklen_t>(res->ai_addrlen));
     freeaddrinfo(res);
-    if (rc < 0) {
+#ifdef _WIN32
+    const bool pending = (rc < 0 && SOCK_ERRNO == WSAEWOULDBLOCK);
+#else
+    const bool pending = (rc < 0 && (errno == EINPROGRESS || errno == EWOULDBLOCK));
+#endif
+    if (rc < 0 && !pending) {
         SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "netbot: connect failed: %d", SOCK_ERRNO);
         Leave();
         return false;
     }
+    if (pending) {
+        // A bot always connects to the same host:port the player's own
+        // client is already talking to, so a working connection is normally
+        // near-instant -- this bound exists for the case where the network
+        // degrades or the port stops answering between the player's connect
+        // and this one, not for the common case.
+        constexpr int kBotConnectTimeoutMs = 3000;
+        fd_set wfds;
+        FD_ZERO(&wfds);
+        FD_SET(sockfd, &wfds);
+        struct timeval connectTimeout{kBotConnectTimeoutMs / 1000, (kBotConnectTimeoutMs % 1000) * 1000};
+        const int selectResult = select(sockfd + 1, nullptr, &wfds, nullptr, &connectTimeout);
 
+        bool connected = false;
+        if (selectResult > 0) {
+            int soErr = 0;
+            socklen_t soErrLen = sizeof(soErr);
 #ifdef _WIN32
-    u_long nonblocking = 1;
-    ioctlsocket(sockfd, FIONBIO, &nonblocking);
+            char* soErrPtr = reinterpret_cast<char*>(&soErr);
 #else
-    fcntl(sockfd, F_SETFL, fcntl(sockfd, F_GETFL, 0) | O_NONBLOCK);
+            void* soErrPtr = &soErr;
 #endif
+            connected = (getsockopt(sockfd, SOL_SOCKET, SO_ERROR, soErrPtr, &soErrLen) == 0 && soErr == 0);
+            if (!connected)
+                SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "netbot: connect failed: %d", soErr);
+        } else {
+            SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
+                        "netbot: connect to %s:%d timed out after %dms",
+                        host.c_str(), port, kBotConnectTimeoutMs);
+        }
+        if (!connected) {
+            Leave();
+            return false;
+        }
+    }
 
     nick = botNick;
     myPlayerId = 0;

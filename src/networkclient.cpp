@@ -341,28 +341,20 @@ bool NetworkClient::SendCommand(const char* command) {
 
     SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION, "Sent: %s", command);
 
-    // Wait a moment and read any immediate response to keep socket clean
-    fd_set readfds;
-    struct timeval timeout;
-    FD_ZERO(&readfds);
-    FD_SET(sockfd, &readfds);
-    timeout.tv_sec = 0;
-    timeout.tv_usec = 100000; // 100ms
-
-    if (select(sockfd + 1, &readfds, NULL, NULL, &timeout) > 0) {
-        char response[BUFFER_SIZE];
-        ssize_t received = recv(sockfd, response, sizeof(response) - 1, MSG_DONTWAIT);
-        if (received > 0) {
-            response[received] = '\0';
-            // Process response lines through the normal message parsing
-            char* line = strtok(response, "\n");
-            while (line != NULL) {
-                ParseMessage(line);  // Add to message queue for processing
-                line = strtok(NULL, "\n");
-            }
-        }
-    }
-
+    // Fire-and-forget as of the async networking handoff, stage 1c. This used
+    // to block here for up to 100ms on a select()+recv(), feeding whatever
+    // came back through strtok() directly -- which, unlike
+    // ProcessIncomingData()'s buffered reader, has no memory across calls: a
+    // line split across two recv()s (or a partial line left over after the
+    // last complete one) was silently mishandled, violating stream semantics
+    // (audit BUG-017's inbound half). The reply now arrives through the same
+    // path every other inbound byte does -- ProcessIncomingData(), driven by
+    // MainMenu::PumpNetworkFrame()'s unconditional per-frame Update() call
+    // (stage 1a) -- typically within the same frame on a fast localhost link,
+    // and within one round trip otherwise. This is only safe now that stage
+    // 1b moved every pending-flag write to before its SendCommand() call --
+    // callers used to rely on this inline read to populate lastErrorResponse
+    // synchronously before they returned.
     return true;
 }
 #endif // __WASM_PORT__ (Disconnect, SendCommand)
@@ -385,18 +377,23 @@ bool NetworkClient::SendNick(const char* nickname) {
     char cmd[128];
     snprintf(cmd, sizeof(cmd), "NICK %s", originalNick.c_str());
 
-    // Pending state must be set BEFORE SendCommand(), not after. On native,
-    // SendCommand() still does its own inline 100ms select()+recv() (until
-    // stage 1c retires it) and can synchronously drive the server's reply
-    // through HandleServerResponse() before this function returns -- on a
-    // fast localhost round trip, reliably so. If pendingNick were set only
-    // after SendCommand() returned, a NICK_IN_USE that arrives inside that
-    // inline read would find no pending flags set at all and be silently
-    // dropped, leaving pendingNick stuck true forever with no retry ever
+    // Pending state is set BEFORE SendCommand(), not after. This ordering
+    // was load-bearing under stage 1b: native's SendCommand() used to do its
+    // own inline 100ms select()+recv() and could synchronously drive the
+    // server's reply through HandleServerResponse() before this function
+    // returned -- reliably so on a fast localhost round trip. Setting the
+    // flag only after SendCommand() returned meant a NICK_IN_USE arriving
+    // inside that inline read would find no pending flag set, get silently
+    // dropped, and leave pendingNick stuck true forever with no retry ever
     // sent. Caught by a real end-to-end test against a live server
     // (menu_touch_gesture_test.cpp) racing a second connection for the same
     // nick -- a synthetic/mocked test could not have surfaced this, since it
-    // never drives a real synchronous response through SendCommand().
+    // depended on a genuinely synchronous response through SendCommand().
+    // Stage 1c has since deleted that inline read (SendCommand() is now
+    // strictly fire-and-forget, replies arrive only via the next Update()),
+    // so this exact race can no longer happen -- kept set-before-send anyway
+    // as the safer default rather than re-introducing an ordering dependency
+    // for no benefit.
     pendingNick = true;
     pendingNickOrig = originalNick;
     pendingNickTry = originalNick;
@@ -442,9 +439,8 @@ bool NetworkClient::CreateGame(int maxPlayers) {
     snprintf(cmd, sizeof(cmd), "CREATE %s %d", originalNick.c_str(), maxPlayers);
 
     // Pending state set BEFORE SendCommand() -- see SendNick()'s comment on
-    // this same ordering for why (SendCommand()'s own inline read on native
-    // can synchronously drive the reply through HandleServerResponse()
-    // before this function returns).
+    // this same ordering for why (a stage 1b race, closed by stage 1c
+    // deleting SendCommand()'s inline read; kept as the safer default).
     pendingCreate = true;
     pendingCreateOrigNick = originalNick;
     pendingCreateNick = originalNick;
@@ -1156,6 +1152,7 @@ void NetworkClient::HandleServerResponse(const std::string& response) {
             myNickname = retryNick;
         } else if (pendingNick) {
             SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "NICK failed: all nick variants in use");
+            AddStatusMessage("Could not set nickname '" + pendingNickOrig + "': too many players already using it");
             pendingNick = false;
         } else if (pendingCreate && pendingCreateSuffix <= 20) {
             char suffixBuf[8];
@@ -1169,6 +1166,7 @@ void NetworkClient::HandleServerResponse(const std::string& response) {
             SendCommand(cmd);
         } else if (pendingCreate) {
             SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "CREATE failed: all nick variants in use");
+            AddStatusMessage("Could not create room: nickname already taken, too many times");
             pendingCreate = false;
         } else if (pendingJoin && pendingJoinSuffix <= 20) {
             char suffixBuf[8];
@@ -1182,6 +1180,7 @@ void NetworkClient::HandleServerResponse(const std::string& response) {
             SendCommand(cmd);
         } else if (pendingJoin) {
             SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "JOIN failed: all nick variants in use");
+            AddStatusMessage("Could not join room: nickname already taken, too many times");
             pendingJoin = false;
         }
     } else if (response.find("INVALID_NICK") != std::string::npos) {
@@ -1193,12 +1192,15 @@ void NetworkClient::HandleServerResponse(const std::string& response) {
         lastErrorResponse = "INVALID_NICK";
         if (pendingNick) {
             SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "NICK failed: server rejected '%s' as invalid", pendingNickTry.c_str());
+            AddStatusMessage("Nickname '" + pendingNickTry + "' was rejected by the server as invalid");
             pendingNick = false;
         } else if (pendingCreate) {
             SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "CREATE failed: server rejected nick as invalid");
+            AddStatusMessage("Could not create room: nickname rejected by the server as invalid");
             pendingCreate = false;
         } else if (pendingJoin) {
             SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "JOIN failed: server rejected nick as invalid");
+            AddStatusMessage("Could not join room: nickname rejected by the server as invalid");
             pendingJoin = false;
         }
     } else if (response.find("GAME_FULL") != std::string::npos) {
@@ -1207,6 +1209,7 @@ void NetworkClient::HandleServerResponse(const std::string& response) {
         lastErrorResponse = "GAME_FULL";
         if (pendingJoin) {
             SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "JOIN failed: GAME_FULL for '%s'", pendingJoinCreator.c_str());
+            AddStatusMessage("Could not join " + pendingJoinCreator + "'s room: it's full");
             pendingJoin = false;
         }
     } else if (response.find("NO_SUCH_GAME") != std::string::npos) {
@@ -1214,6 +1217,7 @@ void NetworkClient::HandleServerResponse(const std::string& response) {
         lastErrorResponse = "NO_SUCH_GAME";
         if (pendingJoin) {
             SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "JOIN failed: NO_SUCH_GAME for '%s'", pendingJoinCreator.c_str());
+            AddStatusMessage("Could not join " + pendingJoinCreator + "'s room: it no longer exists");
             pendingJoin = false;
         }
     } else if (response.find("ALREADY_IN_GAME") != std::string::npos) {

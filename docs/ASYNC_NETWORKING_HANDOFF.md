@@ -59,7 +59,7 @@ defect on the other side of the wire). Connect UI is deliberately minimal —
 
 ## Stage 1 — Unify on the async command path, kill background stalls
 
-Status: **1a, 1b, and 1d landed; 1c/1e/most of 1f still open**
+Status: **1a–1f all landed** — stage 1 complete.
 
 Highest value per unit of risk. Removes the always-on lobby tax and the 16 s
 geolocation stall.
@@ -125,10 +125,24 @@ geolocation stall.
     after `SendNick()` returns — the whole retry can resolve synchronously
     inside that call on a fast localhost round trip, so only the eventual
     outcome is checked.
-- **1c. `SendCommand` fire-and-forget — not started.** Delete the
-  `select()`+`recv()`+`strtok` block. Only safe *after* 1a and 1b, because the
-  retry loops depend on that inline read populating `lastErrorResponse`. Also
-  fixes the inbound half of audit `BUG-017`.
+- **1c. `SendCommand` fire-and-forget — landed.** Deleted the inline
+  `select()`+`recv()`+`strtok` block entirely (native `SendCommand()` now just
+  sends and returns `true`/`false`). Safe now that 1b moved every
+  pending-flag write to *before* its `SendCommand()` call — the inline read
+  is what used to make that ordering load-bearing, and 1b's own comments in
+  `SendNick`/`CreateGame` were updated to say so rather than still describing
+  the now-deleted read. Replies now arrive only through
+  `ProcessIncomingData()`'s buffered reader, driven every frame by
+  `MainMenu::PumpNetworkFrame()` (1a) — typically the same frame on a fast
+  localhost link, one round trip otherwise. This also fixes the inbound half
+  of audit `BUG-017`: the deleted block ran `strtok` directly on each raw
+  `recv()` chunk with no memory across calls, so a line split across two
+  reads (or a partial line left over from the last complete one) was
+  mishandled — `ProcessIncomingData()`'s `recvBuffer`/`recvBufferLen` state
+  doesn't have that problem. `lastErrorResponse` (set throughout
+  `HandleServerResponse`, never read by any caller — confirmed by grep) was
+  left as-is; it was already dead code before this change, not made dead by
+  it.
 - **1d. Thread the HTTP/UDP stalls — landed, expanded beyond the original
   scope.** All four blocking discovery/geoloc paths are now backed by a
   background thread, not just the two originally named:
@@ -171,12 +185,38 @@ geolocation stall.
     real internet endpoints, which would make ctest's runtime and pass/fail
     depend on network reachability (the same reasoning that kept `Connect()`'s
     unreachable-host case out of automated coverage in the item A slice).
-- **1e. Bound `NetBotConnection::JoinRoom`'s connect — not started**
-  (`src/netbot.cpp:299`).
-- **1f. Bare delays — partially done.** The two `SDL_Delay` calls in the
-  DO_CONNECT nick/geoloc chain (100ms, 500ms-adjacent context) were removed as
-  a side effect of 1d's decoupling; `IsPendingCreate()`/`IsPendingJoin()`
-  status rows are still not surfaced (depends on 1b).
+- **1e. Bound `NetBotConnection::JoinRoom`'s connect — landed.** Mirrors the
+  same non-blocking-connect + bounded-`select()` fix `NetworkClient::Connect()`
+  already had from item A (`00faeaf4`): the socket is set non-blocking
+  *before* `connect()` rather than after, a pending (`EINPROGRESS`/
+  `EWOULDBLOCK`) connect is bounded by a 3s `select()`, and the real outcome
+  is read via `SO_ERROR`. Previously a plain blocking `connect()` — called
+  synchronously from `MainMenu::SyncLobbyBots()`'s `while` loop, itself
+  reached from an input handler (adjusting the bot-count setting), so adding
+  several bots at once could freeze the render loop for that many multiples
+  of the OS's own TCP connect timeout (commonly tens of seconds each), with
+  no way to cancel. A bot always connects to the same host:port the player's
+  own client is already talking to, so 3s is generous for the common case;
+  the bound exists for when the network degrades or the port stops answering
+  between the player's own connect and the bot's. Verified against a real
+  server: `net-bots-test` and `server-bot-cap-test` both exercise
+  `JoinRoom()` end-to-end and pass.
+- **1f. Bare delays and pending-status feedback — done.** The two `SDL_Delay`
+  calls in the DO_CONNECT nick/geoloc chain (100ms, 500ms-adjacent context)
+  were removed as a side effect of 1d's decoupling. `IsPendingCreate()`/
+  `IsPendingJoin()`/`IsPendingNick()` themselves are not surfaced as their own
+  UI row (the lobby already shows an optimistic status line the moment
+  `CreateGame()`/`JoinGame()`/`SendNick()` is called, e.g. "Game created - now
+  you need to wait for players to join", and the room screen appears on its
+  own once `currentGame` is populated by the async confirmation) — what *was*
+  genuinely missing, and is now fixed, is failure feedback: every terminal
+  failure path in `HandleServerResponse` (`NICK_IN_USE`/`INVALID_NICK`/
+  `GAME_FULL`/`NO_SUCH_GAME` exhausting retries or hitting a non-retriable
+  error) used to clear its pending flag with only an `SDL_LogWarn` — invisible
+  to the player, who just saw nothing happen. Each of those paths now also
+  calls `AddStatusMessage()`, the same "Server: ..." status-line mechanism
+  already used elsewhere in the lobby, so a rejected CREATE/JOIN/NICK now
+  visibly says why.
 
 ## Stage 2 — Async connect + minimal connecting UI
 
@@ -268,6 +308,29 @@ WASM was again not rebuilt (same local toolchain issue as above); the
 `pendingNick`/`pendingCreate`/`pendingJoin` fields already shared via
 `networkclient.h`, so no new `#ifdef` branch was introduced for WASM to diverge
 on. A real WASM build should still confirm this before the next tag.
+
+## What's been verified so far (1c/1e/1f, 2026-09-08)
+
+Full native build clean. Plain `ctest --test-dir build`: 29 tests, 27 run /
+100% pass — notably `menu-touch-gesture-test`'s NICK_IN_USE end-to-end test
+(now genuinely exercising the multi-frame async path, since `SendCommand()`
+can no longer resolve it synchronously) and `net-bots-test`/
+`server-bot-cap-test` (exercise `NetBotConnection::JoinRoom()` end-to-end
+against a real server) still pass. Sanitizer build rebuilt and re-run
+(`UBSAN_OPTIONS=print_stacktrace=1 ctest --test-dir build-asan`, no
+`detect_leaks=1` per the macOS limitation above): all 29 run and pass,
+including the two sanitizer-only ones, after each of the three changes in
+this batch (1c's `SendCommand` deletion, 1e's `netbot.cpp` connect fix, 1f's
+`AddStatusMessage` failure-feedback additions) — rebuilt and re-tested
+separately after each, not just once at the end.
+
+WASM was not rebuilt (same local toolchain issue as above). 1c's change is
+native-only (`#ifndef __WASM_PORT__`, WASM's own `SendCommand` was already
+async). 1e's `netbot.cpp` change is inside the same `#ifndef __WASM_PORT__`
+block the pre-existing blocking connect lived in; WASM's `JoinRoom` (a
+separate `#else` implementation using `emscripten_websocket_new`) was not
+touched. 1f's `AddStatusMessage` calls are inside `HandleServerResponse()`,
+shared by both platforms, and reviewed by inspection.
 
 ---
 
