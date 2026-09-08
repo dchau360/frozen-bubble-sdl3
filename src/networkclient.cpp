@@ -37,6 +37,17 @@
 
 NetworkClient* NetworkClient::ptrInstance = nullptr;
 
+namespace {
+bool IsResponseForCommand(const std::string& response, const char* command) {
+    const size_t commandStart = response.find(' ');
+    if (commandStart == std::string::npos) return false;
+    const size_t nameStart = commandStart + 1;
+    const size_t nameEnd = response.find(':', nameStart);
+    return nameEnd != std::string::npos &&
+           response.compare(nameStart, nameEnd - nameStart, command) == 0;
+}
+}  // namespace
+
 #ifndef __WASM_PORT__
 namespace {
 // Write the whole buffer, or report failure. On Windows the socket is
@@ -1168,30 +1179,23 @@ void NetworkClient::HandleServerResponse(const std::string& response) {
     }
 #endif
 
-    // Handle other responses. The pendingNick/pendingCreate/pendingJoin
-    // blocks below run on both platforms as of the async networking handoff
-    // stage 1b (previously WASM-only; native resolved these synchronously
-    // inside SendNick/CreateGame/JoinGame's own blocking retry loops
-    // instead). The wire protocol carries no request id, so a response is
-    // attributed to whichever pending flag is set -- checked in send order
-    // (nick, then create, then join) since the call sites never have more
-    // than one in flight at a time.
+    // Handle other responses. The server echoes the command name in every
+    // reply (`FB/1.3 CREATE: OK`, for example), so a successful unrelated
+    // command must not settle whichever async operation happens to be pending.
+    // These pending blocks run on both platforms as of async stage 1b.
     if (response.find("OK") != std::string::npos) {
         SDL_Log("Command successful: %s", response.c_str());
         lastErrorResponse.clear();
-        if (pendingNotifyProbe) {
+        if (pendingNotifyProbe && IsResponseForCommand(response, "NOTIFYREG")) {
             notifySupport = NotifySupport::Supported;
             pendingNotifyProbe = false;
         }
-        // Exclude PART: OK (which arrives when we send PART before a
-        // CREATE/JOIN retry after ALREADY_IN_GAME) so we don't prematurely
-        // confirm until the retry's own OK arrives.
-        if (pendingNick && response.find("PART") == std::string::npos) {
+        if (pendingNick && IsResponseForCommand(response, "NICK")) {
             SDL_Log("NICK confirmed by server (pendingNick=true): '%s'", pendingNickTry.c_str());
             playerNick = pendingNickTry;
             myNickname = pendingNickTry;
             pendingNick = false;
-        } else if (pendingCreate && response.find("PART") == std::string::npos) {
+        } else if (pendingCreate && IsResponseForCommand(response, "CREATE")) {
             SDL_Log("CREATE confirmed by server (pendingCreate=true): game '%s'", pendingCreateNick.c_str());
             state = IN_LOBBY;
             playerNick = pendingCreateNick;
@@ -1206,7 +1210,7 @@ void NetworkClient::HandleServerResponse(const std::string& response) {
             currentGame->players.clear();
             currentGame->players.push_back(self);
             pendingCreate = false;
-        } else if (pendingJoin && response.find("PART") == std::string::npos) {
+        } else if (pendingJoin && IsResponseForCommand(response, "JOIN")) {
             SDL_Log("JOIN confirmed by server (pendingJoin=true): joined '%s' as '%s'", pendingJoinCreator.c_str(), pendingJoinNick.c_str());
             state = IN_LOBBY;
             playerNick = pendingJoinNick;

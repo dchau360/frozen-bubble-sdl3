@@ -327,10 +327,7 @@ public:
     bool IsPendingJoin() const { return pendingJoin; }
     // True while waiting for async NICK OK/rejection from server. Used by
     // MainMenu::PollGeoLocFetch() to hold off sending GEOLOC until NICK has
-    // settled -- both ride the same "next OK belongs to whichever pending
-    // flag is set" protocol convention (the wire format carries no request
-    // id), so two commands racing in flight at once would misattribute a
-    // response.
+    // settled, preserving command order during nickname suffix retries.
     bool IsPendingNick() const { return pendingNick; }
 
     // Send game options to other players (host only)

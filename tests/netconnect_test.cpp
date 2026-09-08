@@ -128,6 +128,19 @@ static void ResetClient() {
     NetworkClient::Instance()->Disconnect();
 }
 
+struct NetworkClientTestAccess {
+    static void BeginPendingCreate(NetworkClient& client, const char* nick, int maxPlayers) {
+        client.pendingCreate = true;
+        client.pendingCreateOrigNick = nick;
+        client.pendingCreateNick = nick;
+        client.pendingCreateSuffix = 2;
+        client.pendingCreateMaxPlayers = maxPlayers;
+    }
+    static void HandleResponse(NetworkClient& client, const char* response) {
+        client.HandleServerResponse(response);
+    }
+};
+
 int main() {
     SDL_SetEnvironmentVariable(SDL_GetEnvironment(), "SDL_VIDEODRIVER", "dummy", true);
     SDL_Init(SDL_INIT_VIDEO);
@@ -454,6 +467,30 @@ int main() {
         // leader went quiet must start eventually rather than being stranded.
         CHECK(!ShouldKeepWaitingForLevelSync(0, 0, 5001, 5000));
         CHECK(ShouldKeepWaitingForLevelSync(0, 0, 4999, 5000));
+    }
+
+    // --- CREATE confirmation must be scoped to CREATE's own reply. The
+    // server echoes the command in every response, so an unrelated successful
+    // command cannot be allowed to create a phantom room while CREATE is still
+    // pending. This parser is shared by native and WASM even though the bug was
+    // first identified in the WebSocket flow.
+    {
+        NetworkClient* nc = NetworkClient::Instance();
+        nc->SetConnected();
+        NetworkClientTestAccess::BeginPendingCreate(*nc, "creator", 8);
+
+        NetworkClientTestAccess::HandleResponse(*nc, "FB/1.3 NOTIFYREG: OK");
+        CHECK(nc->IsPendingCreate());
+        CHECK(nc->GetState() == CONNECTED);
+        CHECK(nc->GetCurrentGame() == nullptr);
+
+        NetworkClientTestAccess::HandleResponse(*nc, "FB/1.3 CREATE: OK");
+        CHECK(!nc->IsPendingCreate());
+        CHECK(nc->GetState() == IN_LOBBY);
+        CHECK(nc->GetCurrentGame() != nullptr);
+        CHECK(nc->GetCurrentGame()->creator == "creator");
+        CHECK(nc->GetCurrentGame()->maxPlayers == 8);
+        ResetClient();
     }
 
     NetworkClient::Dispose();
