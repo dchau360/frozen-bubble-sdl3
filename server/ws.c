@@ -8,6 +8,7 @@
  */
 
 #include "ws.h"
+#include "net.h"
 #include "win32_compat.h"
 
 #ifndef _WIN32
@@ -17,15 +18,10 @@
 #  include <arpa/inet.h>
 #endif
 
-#include <errno.h>
 #include <stdlib.h>
 #include <string.h>
 #include <stdint.h>
 #include <stdio.h>
-
-#ifndef MSG_NOSIGNAL
-#define MSG_NOSIGNAL 0
-#endif
 
 /* ── Per-connection WebSocket flag ───────────────────────────────────────── */
 
@@ -171,7 +167,7 @@ int ws_detect_and_upgrade(int fd)
         "Connection: Upgrade\r\n"
         "Sec-WebSocket-Accept: %s\r\n\r\n",
         accept_key);
-    send(fd, response, (size_t)rlen, MSG_NOSIGNAL);
+    net_queue_send(fd, response, (size_t)rlen);  // BUG-007: never block on this either
 
     is_ws[fd] = 1;
     return 1;
@@ -226,7 +222,7 @@ int ws_try_upgrade_from_data(int fd, const char* data, int len)
         "Connection: Upgrade\r\n"
         "Sec-WebSocket-Accept: %s\r\n\r\n",
         accept_key);
-    send(fd, response, (size_t)rlen, MSG_NOSIGNAL);
+    net_queue_send(fd, response, (size_t)rlen);  // BUG-007: never block on this either
 
     is_ws[fd] = 1;
     return (int)(end - data);  /* bytes consumed: the full HTTP request */
@@ -234,16 +230,38 @@ int ws_try_upgrade_from_data(int fd, const char* data, int len)
 
 /* ── WebSocket frame send (server → client, no masking) ─────────────────── */
 
-/* Returns len when the whole frame reached the socket, -1 otherwise. Callers
-   treat any nonnegative result as "sent it all", so a partial result must never
-   be reported as success: the peer would be left mid-frame and every later
-   frame would be parsed at the wrong offset. */
+/* Returns len on success -- the frame either reached the socket immediately
+   or was queued for delivery once the peer's socket has room (see
+   net_queue_send() in net.c, and the BUG-007 comment above it) -- or -1 if
+   the first, immediate send attempt hard-errors. Callers treat any
+   nonnegative result as "handled", so a partial result must never be
+   reported as success: the peer would be left mid-frame and every later
+   frame would be parsed at the wrong offset. Queuing can't cause that --
+   net_queue_send() only ever hands a peer a byte-exact prefix of what was
+   asked, never a truncation of this frame -- but the caller genuinely not
+   knowing whether len bytes are on the wire yet or still waiting in the
+   queue is a real, deliberate change from this function's old contract
+   (which used to block until the whole frame really had reached the
+   socket, or fail outright). That old behaviour was itself the bug: this
+   function's own retry loop blocked -- unboundedly, on a peer that simply
+   stopped reading -- exactly the single-threaded-event-loop stall
+   BUG-007 is about, and unlike send_line()'s plain-TCP path this loop had
+   no MSG_DONTWAIT at all. A WebSocket peer now gets the same queued,
+   capped-backlog treatment as everything else instead of either blocking
+   the server or (the only alternative that preserves "returns instantly")
+   being dropped on any single momentary stall -- which would have made
+   WebSocket connections *less* tolerant of exactly the kind of brief
+   backpressure (a backgrounded browser tab, a slow mobile link) they are
+   most likely to hit. game.c's process_msg_prio_(), the other caller that
+   checks this return value, was updated to route its own plain-TCP branch
+   through net_queue_send() too, so both transports get one consistent
+   queue-and-cap policy rather than the WebSocket side alone becoming more
+   lenient than plain TCP for the same message. */
 ssize_t ws_send(int fd, const char* data, int len)
 {
     /* Max game protocol message is well under 16 KB */
     unsigned char frame[16400];
     int hdr;
-    ssize_t sent;
 
     if (len < 0)
         return -1;
@@ -271,16 +289,8 @@ ssize_t ws_send(int fd, const char* data, int len)
     }
     memcpy(frame + hdr, data, (size_t)len);
 
-    for (sent = 0; sent < (ssize_t)(hdr + len); ) {
-        ssize_t n = send(fd, frame + sent, (size_t)((ssize_t)(hdr + len) - sent), MSG_NOSIGNAL);
-        if (n > 0) {
-            sent += n;
-            continue;
-        }
-        if (n < 0 && errno == EINTR)
-            continue;
+    if (net_queue_send(fd, (const char*)frame, (size_t)(hdr + len)) < 0)
         return -1;
-    }
     return len;
 }
 

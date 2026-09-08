@@ -45,6 +45,15 @@ ssize_t send_line_log_push(int fd, char* dest_msg);
 ssize_t send_line_log_push_binary(int fd, char* dest_msg, char* printable_msg);
 ssize_t send_ok(int fd, char* inco_msg);
 
+/* Non-blocking send-or-queue (BUG-007, see the long comment above its
+ * definition in net.c). Every write to a client fd -- ws_send()'s framed
+ * WebSocket output included -- goes through this rather than a bare send(),
+ * so a peer that has stopped reading can no longer stall the whole
+ * single-threaded event loop. Returns len on success (sent immediately, or
+ * queued for later delivery -- both count as "handled"), -1 only if the
+ * first, immediate attempt hard-errors. */
+ssize_t net_queue_send(int fd, const char* data, size_t len);
+
 void connections_manager(void);
 void conn_terminated(int fd, char* reason);
 int conn_recently_active(int fd);

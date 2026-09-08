@@ -153,6 +153,131 @@ static time_t minute_for_talk_flood[256];
 int amount_talk_flood[256];
 static int prio[256];
 
+// Hoisted above the output-queue block below, which needs it -- was
+// otherwise declared much further down, right before its first use at the
+// time (inside handle_incoming_data_generic()).
+static int prio_processed;
+static time_t current_time;
+
+/* --- Per-fd output queue (audit finding BUG-007) ---------------------------
+ *
+ * Every accepted fd is read non-blockingly throughout this file (recv() is
+ * always called with MSG_DONTWAIT), but until now nothing on the write side
+ * matched that: send_line()'s plain-TCP branch called a bare blocking
+ * send(), and ws_send() looped calling send() until a WebSocket frame was
+ * either fully out or the socket hard-errored. Both are blocking sends on a
+ * blocking-mode socket (accept() never sets O_NONBLOCK on these fds) -- so a
+ * single peer whose TCP receive window fills up (deliberately or not: a
+ * background browser tab, a client that hung, a hostile one) could stall
+ * either call for as long as the peer's window stayed full. Since this is a
+ * single-threaded select() loop, that stall isn't scoped to the stuck peer --
+ * it freezes service to every other connected player for the duration.
+ *
+ * Fix: every send in this file now goes through net_queue_send() (directly,
+ * or via ws_send(), which frames the WebSocket header/payload and then
+ * queues the framed bytes the same way). It always makes one non-blocking
+ * attempt; whatever doesn't fit is appended to a per-fd byte queue instead
+ * of being waited for. connections_manager()'s select() call also watches
+ * writability for any fd with a non-empty queue (so it wakes up promptly
+ * once space frees), and handle_incoming_data_generic() drains each
+ * connection's queue once per loop tick regardless -- the same per-fd pass
+ * that already handles reads and the gracetime check, reusing its existing,
+ * already-safe conn_terminated()-from-deep-in-a-callback pattern rather than
+ * adding a new one.
+ *
+ * A queue is not allowed to grow or age without limit: a peer whose backlog
+ * exceeds OUTQUEUE_MAX_BYTES, or that has had anything unsent for longer
+ * than OUTQUEUE_MAX_AGE_SECONDS, gets dropped. This is the same trade-off
+ * game.c's process_msg_prio_() already made for real-time gameplay messages
+ * on the plain-TCP path (a peer that has genuinely stopped reading cannot be
+ * kept indefinitely without starving everyone else) -- applied uniformly
+ * here, for every kind of traffic on both transports, instead of being one
+ * path's ad hoc policy.
+ */
+#define OUTQUEUE_MAX_BYTES (256 * 1024)
+#define OUTQUEUE_MAX_AGE_SECONDS 30
+
+static GByteArray * outqueue[256];
+static time_t outqueue_since[256];  // when outqueue[fd] first became non-empty; 0 while empty
+
+static void outqueue_reset(int fd)
+{
+        if (outqueue[fd]) {
+                g_byte_array_free(outqueue[fd], TRUE);
+                outqueue[fd] = NULL;
+        }
+        outqueue_since[fd] = 0;
+}
+
+/* Drains as much of fd's queue as the socket will currently accept, without
+ * blocking. Safe to call whether or not anything is queued. Returns -1 only
+ * on a hard send error (peer gone); the caller decides whether/how to drop
+ * the connection, matching every other fatal socket error in this file.
+ * Leaves outqueue[fd] fully freed once drained. */
+static int outqueue_flush(int fd)
+{
+        if (!outqueue[fd] || outqueue[fd]->len == 0)
+                return 0;
+        while (outqueue[fd]->len > 0) {
+                ssize_t n = send(fd, outqueue[fd]->data, outqueue[fd]->len, MSG_NOSIGNAL | MSG_DONTWAIT);
+                if (n > 0) {
+                        g_byte_array_remove_range(outqueue[fd], 0, (guint)n);
+                        continue;
+                }
+                if (n < 0 && errno == EINTR)
+                        continue;
+                if (n < 0 && SOCK_EAGAIN)
+                        return 0;  // still full -- try again once writable
+                return -1;  // hard error
+        }
+        outqueue_reset(fd);
+        return 0;
+}
+
+/* Send-or-queue: the single point every write in this file (and ws.c, via
+ * ws_send()) ultimately goes through. Never blocks. Returns len on success
+ * (sent immediately, or queued for later -- both count as "handled", the
+ * same contract send() itself had for its caller), -1 only if the first,
+ * immediate attempt hard-errors. A backlog that grows or ages past the caps
+ * above is *not* a failure here -- outqueue_flush()'s caller in
+ * handle_incoming_data_generic() is what notices and drops the connection,
+ * once per loop tick; this function's only job is queuing correctly. */
+ssize_t net_queue_send(int fd, const char* data, size_t len)
+{
+        if (len == 0)
+                return 0;
+
+        // Preserve ordering: anything already queued has to stay ahead of
+        // this write, so a fresh immediate-send attempt here would risk the
+        // peer seeing bytes out of order the moment this one's attempt beat
+        // the queue to the socket.
+        if (outqueue[fd] && outqueue[fd]->len > 0) {
+                g_byte_array_append(outqueue[fd], (const guint8*)data, (guint)len);
+                return (ssize_t)len;
+        }
+
+        ssize_t sent = send(fd, data, len, MSG_NOSIGNAL | MSG_DONTWAIT);
+        if (sent == (ssize_t)len)
+                return sent;  // common case: went straight out
+        if (sent < 0 && !(errno == EINTR || SOCK_EAGAIN))
+                return -1;  // hard error
+
+        size_t already = sent > 0 ? (size_t)sent : 0;
+        if (!outqueue[fd]) {
+                outqueue[fd] = g_byte_array_new();
+                outqueue_since[fd] = current_time;
+        }
+        g_byte_array_append(outqueue[fd], (const guint8*)(data + already), (guint)(len - already));
+        return (ssize_t)len;
+}
+
+static void fill_write_set_if_pending(gpointer data, gpointer user_data)
+{
+        int fd = GPOINTER_TO_INT(data);
+        if (outqueue[fd] && outqueue[fd]->len > 0)
+                FD_SET(fd, (fd_set *) user_data);
+}
+
 /* send line adding the protocol in front of the supplied msg */
 static ssize_t send_line(int fd, char* msg)
 {
@@ -169,7 +294,7 @@ static ssize_t send_line(int fd, char* msg)
         if (size > 0) {
                 if (ws_is_websocket(fd))
                         return ws_send(fd, buf, size);
-                return send(fd, buf, size, MSG_NOSIGNAL);
+                return net_queue_send(fd, buf, (size_t)size);
         } else {
                 l2(OUTPUT_TYPE_ERROR, "[%d] Format failure, impossible to send message '%s'", fd, msg);
                 return 0;
@@ -238,6 +363,7 @@ void conn_terminated(int fd, char* reason)
                 free(ws_raw_frame_buf[fd]);
                 ws_raw_frame_buf[fd] = NULL;
                 ws_raw_frame_len[fd] = 0;
+                outqueue_reset(fd);  // BUG-007: drop any unsent backlog along with everything else
                 if (nick[fd] != NULL) {
                         FILE *jf = fopen("joiners.log", "a");
                         if (jf) {
@@ -273,9 +399,6 @@ void conn_terminated(int fd, char* reason)
         }
 }
 
-static int prio_processed;
-static time_t current_time;
-
 /* Has fd sent us anything within the last few seconds? Lobby clients poll
  * LIST every 500ms (see mainmenu_netpanel.cpp), so a genuinely live
  * connection always has very recent traffic; a connection that's gone
@@ -294,6 +417,30 @@ static int need_another_run;
 static void handle_incoming_data_generic(gpointer data, gpointer user_data, int prio)
 {
         int fd = GPOINTER_TO_INT(data);
+
+        /* Drain this connection's pending output before anything else this
+         * tick (BUG-007 -- see the long comment above net_queue_send()). A
+         * hard error while flushing, or a backlog that has grown or aged
+         * past the caps, means this peer has effectively stopped reading;
+         * terminate it the same way a read error would, reusing the exact
+         * conn_terminated()-then-return pattern already used throughout the
+         * rest of this function rather than adding a new one. */
+        if (outqueue[fd]) {
+                if (outqueue_flush(fd) < 0) {
+                        conn_terminated(fd, "system error on send");
+                        return;
+                }
+                if (outqueue[fd] &&
+                    (outqueue[fd]->len >= OUTQUEUE_MAX_BYTES ||
+                     current_time - outqueue_since[fd] > OUTQUEUE_MAX_AGE_SECONDS)) {
+                        l2(OUTPUT_TYPE_INFO,
+                           "[%d] Output backlog stalled (%u bytes unsent) -- destination is not reading data "
+                           "(illegal FB client) or our upload bandwidth is saturated, closing connection",
+                           fd, outqueue[fd]->len);
+                        conn_terminated(fd, "output queue stalled -- peer not reading");
+                        return;
+                }
+        }
 
         /* Classify newly accepted connections: WebSocket upgrade or plain TCP.
          * Moves the detection out of the synchronous accept path into the
@@ -628,6 +775,7 @@ void connections_manager(void)
                 int fd;
                 int retval;
                 fd_set conns_set;
+                fd_set write_set;  // fds with a non-empty output queue (BUG-007)
 
                 reregister_server_if_needed();
 
@@ -649,12 +797,25 @@ void connections_manager(void)
 
                 if (!need_another_run) {
                         FD_ZERO(&conns_set);
+                        FD_ZERO(&write_set);
                         g_list_foreach(conns, fill_conns_set, &conns_set);
                         g_list_foreach(conns_prio, fill_conns_set, &conns_set);
                         if (tcp_server_socket != -1)
                                 FD_SET(tcp_server_socket, &conns_set);
                         if (udp_server_socket != -1)
                                 FD_SET(udp_server_socket, &conns_set);
+
+                        // Also wake up as soon as a backlogged connection's socket
+                        // becomes writable again, rather than only on the next read
+                        // activity from *some* connection or the 30s/200ms timeout
+                        // below. handle_incoming_data_generic() is what actually
+                        // drains a queue once woken (see BUG-007 above); this only
+                        // decides how promptly select() returns to let it do that --
+                        // the flush itself never depends on this bit being set, since
+                        // a non-blocking send() that isn't actually ready just costs
+                        // a harmless EAGAIN.
+                        g_list_foreach(conns, fill_write_set_if_pending, &write_set);
+                        g_list_foreach(conns_prio, fill_write_set_if_pending, &write_set);
 
                         /* When connections are waiting for WebSocket-vs-TCP
                          * classification, use a short timeout so native clients
@@ -668,7 +829,7 @@ void connections_manager(void)
                                 tv.tv_usec = 0;
                         }
 
-                        if ((retval = select(FD_SETSIZE, &conns_set, NULL, NULL, &tv)) == -1) {
+                        if ((retval = select(FD_SETSIZE, &conns_set, &write_set, NULL, &tv)) == -1) {
                                 l1(OUTPUT_TYPE_ERROR, "select: %s", strerror(errno));
                                 exit(EXIT_FAILURE);
                         }
@@ -784,6 +945,11 @@ void connections_manager(void)
                         geoloc[fd] = NULL;
                         IP[fd] = strdup_(inet_ntoa(client_addr.sin_addr));
                         prio[fd] = 0;
+                        // Defensive: conn_terminated() already resets this when the
+                        // previous connection on this fd number closed, but a fd
+                        // number is only ever reused by the OS, never guaranteed
+                        // clean by this program's own bookkeeping alone.
+                        outqueue_reset(fd);
                         remote_proto_minor[fd] = -1;
                         // Defer WebSocket detection to the event loop so the
                         // accept path never blocks. Browser clients send their

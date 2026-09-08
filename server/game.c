@@ -1185,10 +1185,16 @@ void process_msg_prio_(int fd, char* msg, ssize_t len, struct game* g)
                                 int dest = g->players_conn[i];
                                 synchro4self[0] = g->players_id[i];
                                 l1(OUTPUT_TYPE_DEBUG, "[%d] sending self synchro", dest);
+                                // net_queue_send() (BUG-007) on both branches now -- ws_send()
+                                // already routes through it internally. A short/blocked send is
+                                // no longer possible here: it's either queued (reported as if
+                                // fully sent, same contract send() itself gave this caller) or a
+                                // hard -1. The dead-code "short send" branch below is left in
+                                // place rather than removed, in case that contract ever changes.
                                 if (ws_is_websocket(dest))
                                         retval = (ws_send(dest, synchro4self, sizeof(synchro4self) - 1) < 0) ? -1 : (ssize_t)(sizeof(synchro4self) - 1);
                                 else
-                                        retval = send(dest, synchro4self, sizeof(synchro4self) - 1, MSG_NOSIGNAL|MSG_DONTWAIT);
+                                        retval = net_queue_send(dest, synchro4self, sizeof(synchro4self) - 1);
                                 if (retval != (ssize_t)(sizeof(synchro4self) - 1)) {
                                         if (retval != -1) {
                                                 l4(OUTPUT_TYPE_INFO, "[%d] short send of %zd instead of %zd bytes from %d - destination is not reading data "
@@ -1206,7 +1212,7 @@ void process_msg_prio_(int fd, char* msg, ssize_t len, struct game* g)
                                 if (ws_is_websocket(dest))
                                         retval = (ws_send(dest, msg, (int)len) < 0) ? -1 : len;
                                 else
-                                        retval = send(dest, msg, len, MSG_NOSIGNAL|MSG_DONTWAIT);
+                                        retval = net_queue_send(dest, msg, (size_t)len);
                                 if (retval != len) {
                                         if (retval != -1) {
                                                 l4(OUTPUT_TYPE_INFO, "[%d] short send of %zd instead of %zd bytes from %d - destination is not reading data "

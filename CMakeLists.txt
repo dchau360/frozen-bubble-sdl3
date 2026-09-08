@@ -545,6 +545,14 @@ if(BUILD_TESTING AND NOT EMSCRIPTEN AND NOT ANDROID AND NOT IOS)
         # instead of a green result that never ran anything.
         set_tests_properties(server-massleave-test server-udp-probe-test
             PROPERTIES SKIP_RETURN_CODE 77)
+        # BUG-007: a peer that stops reading must not stall service to
+        # everyone else. Unlike massleave/udp-probe this is a behavioral
+        # regression test, not an ASan-only one -- it passes on a plain
+        # build too -- but it floods real gameplay traffic and waits out
+        # the output queue's age cap, so give it real headroom.
+        add_test(NAME server-stall-test
+            COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tests/server_stall_test.py $<TARGET_FILE:fb-server>)
+        set_tests_properties(server-stall-test PROPERTIES TIMEOUT 120)
     endif()
 endif()
 

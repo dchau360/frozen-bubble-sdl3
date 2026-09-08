@@ -402,17 +402,90 @@ Status: **3a and 3c landed; 3b partially landed (stall mitigated for both**
 
 ## Stage 4 — Server output queue (audit BUG-007)
 
-Status: **not started**
+Status: **landed**
 
-`server/net.c`'s `send_line()` (`:157-177`) is a bare blocking `send()` with no
-queue, and `connections_manager()` (`:616`) builds a read-set only — there is no
-`O_NONBLOCK` anywhere in `server/`. One peer that stops reading stalls every
-other player.
+`server/net.c`'s `send_line()` was a bare blocking `send()` with no queue, and
+`connections_manager()`'s `select()` built a read-set only — there was no
+`O_NONBLOCK` anywhere in `server/`. One peer that stopped reading (a frozen
+client, a bad connection, or a hostile one) could stall the single-threaded
+event loop's `send()` call indefinitely, freezing service to every other
+connected player for as long as that one peer's TCP receive window stayed
+full.
 
-Add a per-fd FIFO output buffer; set accepted fds non-blocking; add a write-set
-to the `select()`; flush on writable; drop a peer whose queue exceeds a size or
-age cap. `send_line` appends rather than sending. FIFO ordering must be
-preserved — the protocol is order-dependent.
+**The fix**: `net_queue_send(fd, data, len)` — a non-blocking send-or-queue
+that is now the single choke point every write in `server/` goes through,
+directly or via `ws_send()` (which frames a WebSocket message, then queues).
+Each fd gets a `GByteArray` output buffer (`outqueue[256]`) plus a timestamp
+of when it first went non-empty (`outqueue_since[256]`), capped at
+`OUTQUEUE_MAX_BYTES` (256 KiB) and `OUTQUEUE_MAX_AGE_SECONDS` (30s). A `send()`
+that can't take the whole payload immediately queues the remainder instead of
+blocking; a later call appends to the existing queue rather than re-sending.
+
+The queue is drained from one safe, already-existing call site:
+`handle_incoming_data_generic()`'s entry, once per connection per event-loop
+pass. Termination on a cap being exceeded happens only from there too — never
+from inside `net_queue_send`/`outqueue_flush` themselves, reusing the same
+`conn_terminated(fd, ...); return;` idiom used throughout the rest of that
+function rather than adding a second, less-audited teardown path.
+`connections_manager()`'s `select()` also gained a write-set (any fd with a
+non-empty queue) purely to shorten its wakeup latency — the flush attempt
+itself is always unconditional and non-blocking regardless of that bit, so a
+platform quirk in write-readiness detection can't make it miss a flush.
+
+`ws_send()`'s contract changed to match: it used to block until the whole
+frame reached the socket or hard-failed; now it returns success as soon as the
+frame is either sent or queued, and only hard-errors immediately. `game.c`'s
+`process_msg_prio_()` — the real-time gameplay relay every fire/stick/malus
+message goes through — was updated so its plain-TCP branch also routes through
+`net_queue_send()`, so WebSocket and native TCP clients get the identical
+backpressure/cap policy for the same message types rather than leaving one
+transport more lenient than the other.
+
+**Verification**: `tests/server_stall_test.py` (`server-stall-test` in
+`ctest`) is a dedicated regression test — a real `fb-server` subprocess, a
+flooder and a victim that start a real game together, and an unrelated
+"control" connection. The victim stops calling `recv()` entirely (without
+closing its socket) right after the game starts; the flooder then sends real
+GAMEMSG fire traffic (the same relay path every shot takes) until the queue
+comfortably exceeds both victim's kernel receive buffer and the app-level cap.
+Throughout, control's `LIST` requests must keep getting answered within 2s —
+that promptness is the actual BUG-007 claim. The test then confirms the
+server's log shows the victim actually got dropped (the byte/age cap doing its
+job), and that the server process is still alive with no ASan/UBSan
+diagnostics. Passes cleanly (~6-7s) under both a plain build and
+`build-asan`; the full existing suite is 31/31 either way (2 sanitizer-only
+skips on a plain build, all 31 running clean under ASan/UBSan).
+
+This test needed two adjustments to test the right thing rather than an
+artifact of the test harness itself, both discovered empirically while writing
+it:
+- The flooder must send in small, paced batches (a few hundred messages,
+  <1000 bytes, with a short pause), not one giant blob. A single oversized
+  `sendall()` can fill the server's own fixed-size *inbound* framing buffer
+  (`INCOMING_DATA_BUFSIZE`, unrelated to BUG-007's output queue) before a
+  trailing `\n` lands inside it, which trips a pre-existing "too much data
+  without LF" guard and kills the flooder itself. Confirmed this is
+  pre-existing, unrelated behavior by reproducing it against the pre-stage-4
+  server in a clean worktree — not something this stage introduced or fixes.
+- The server's default 5-second in-game "gracetime" (kicks a connection that
+  has *sent* nothing in 5s — a liveness check, unrelated to BUG-007's
+  *output*-side queue) fires long before the queue's own 30-second age cap
+  ever gets a chance to. The test passes `-g` with a generous value so it
+  actually exercises the queue's own cap rather than always hitting the
+  unrelated gracetime timer first.
+- **Also discovered, and deliberately left alone**: while a peer floods
+  sustained, back-to-back GAMEMSG traffic, a *different* prio-mode
+  connection's own inbound data (confirmed with a lone 3-byte ping, sent
+  while flooding was active) can go unnoticed by `select()` for the whole
+  duration of the flood, even though the same connection is read cleanly the
+  moment the flood pauses. Reproduced identically against the pre-stage-4
+  server in a clean worktree, and confirmed it isn't `write_set` (still
+  reproduces with `write_set` disabled entirely) or memory corruption (clean
+  under ASan). This looks like a real fairness/starvation gap in the
+  `prio_processed` → `continue` → fresh-`select()` loop under sustained
+  single-peer load, but it's pre-existing, separate from BUG-007's "blocking
+  send()" defect, and out of this stage's scope — worth its own investigation
+  later.
 
 ---
 
