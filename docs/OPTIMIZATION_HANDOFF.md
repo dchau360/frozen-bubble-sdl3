@@ -66,11 +66,10 @@ a speedup.
   - Both fixed in `6706d6d5`, verified with a plain push to `main` first
     (CI run `34242064542`, all six build/test jobs green including Linux
     ASan/UBSan) before re-tagging as `v2.4.93` rather than force-moving the
-    dead `v2.4.92` tag. **`v2.4.93`'s own tag-build CI run was still in
-    progress as of this checkpoint (run `34243015633`) — a new session
-    should check `gh run view 34243015633` (or the Actions tab) and confirm
-    `Create Release`/`Deploy WASM to Itch.io` actually succeeded before
-    assuming this release reached itch.io.**
+    dead `v2.4.92` tag. **`v2.4.93` shipped successfully** — its tag-build
+    run (`34243015633`) finished all six build/test jobs green plus
+    `Deploy WASM to Itch.io` and `Create Release`, both confirmed ✓. This is
+    the release that's actually live, not `v2.4.92`.
 - Status of every backlog item: **A** (async networking) — all four stages
   landed, tagged `v2.4.93` (see above); three small residual items open,
   listed below. **B** (font sharing) — gameplay + one confirmed menu hot
@@ -120,17 +119,11 @@ detail). What's left, in priority order:
    task in a separate session; check its outcome before re-investigating.
 4. **Follow-up, not a defect**: a real device/browser pairing test (not
    just two tabs on one machine) is still worth doing, since the release
-   (`v2.4.93`; `v2.4.92` never actually shipped, see "Current checkpoint"
-   above) went out without one — see the playtest recipe in
-   `docs/MANUAL_TEST_CHECKLIST.md`'s "Two-browser WASM network playtest"
-   section, which already flags this and the ESC/tap cancel-mid-connect
-   check as uncovered by the one playtest run so far.
-5. **Confirm `v2.4.93`'s tag-build CI actually finished green and shipped.**
-   As of this checkpoint the tag-build run (`34243015633`) was still in
-   progress — check it (or the Actions tab) before assuming the release
-   reached GitHub Releases and itch.io. If it also failed, read its log
-   (`gh run view <id> --log-failed`) the same way `6706d6d5`'s two bugs were
-   found — don't just re-tag blindly.
+   (`v2.4.93`, confirmed shipped — `v2.4.92` never actually did, see
+   "Current checkpoint" above) went out without one — see the playtest
+   recipe in `docs/MANUAL_TEST_CHECKLIST.md`'s "Two-browser WASM network
+   playtest" section, which already flags this and the ESC/tap
+   cancel-mid-connect check as uncovered by the one playtest run so far.
 
 ### B/E — menu-screen label caching (pending)
 
