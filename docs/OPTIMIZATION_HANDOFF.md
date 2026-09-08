@@ -38,11 +38,13 @@ a speedup.
 
 - Repository: `/Users/dchau/gr/frozen-bubble-sdl3`
 - Branch: `main`; latest source change `8ace51de` (`perf: cache team picker
-  text cells`), not yet pushed or released. Tag
-  `v2.4.93` remains the latest release.
-- A fetch on 2026-09-08 found `origin/main` unchanged at `c6eba3e1`; local
-  `main` is two source commits ahead before this handoff update.
-- CMake/Android version: `2.4.93`; Android versionCode: `76`.
+  text cells`). The user authorized pushing and tagging this checkpoint as
+  `v2.4.94`; the release commit includes this handoff update and the version
+  files listed below.
+- A fetch immediately before release preparation on 2026-09-08 found
+  `origin/main` unchanged at `c6eba3e1`; local `main` was four commits ahead.
+- CMake/Android version: `2.4.94`; Android versionCode: `77`. The two CI
+  fallback versions and `default.nix` also read `2.4.94`.
 - **`v2.4.92` never shipped.** Its tag build's Linux ASan/UBSan job failed,
   which hard-blocks `Create Release`/`Deploy WASM to Itch.io` by design (see
   CLAUDE.md's CI/release section) — no GitHub Release, no itch.io deploy
@@ -120,7 +122,7 @@ detail). What's left, in priority order:
    playtest" section, which already flags this and the ESC/tap
    cancel-mid-connect check as uncovered by the one playtest run so far.
 
-## Completed after v2.4.93 (not released)
+## Included in v2.4.94
 
 ### Cache repeated team-picker labels (`8ace51de`)
 
@@ -143,8 +145,7 @@ Verification on 2026-09-08: focused `ttftext-cache-test` and
 `menu-touch-gesture-test` passed; the full native suite passed (29 runnable
 tests, 2 expected sanitizer-only skips); the full ASan/UBSan suite passed all
 31 tests with macOS leak detection disabled; the WASM Release build compiled;
-and `git diff --check` passed. No version bump, tag, push, or release was
-performed.
+and `git diff --check` passed.
 
 ### Scope async confirmations to their commands (`6548feab`)
 
@@ -166,7 +167,7 @@ It failed at the three phantom-room assertions before the fix and passed after.
 Verification on 2026-09-08: full native build and suite passed (29 runnable
 tests; 2 sanitizer-only tests skipped), `netconnect-test` passed under
 ASan/UBSan with macOS leak detection disabled, and the WASM Release build
-compiled. No version bump, tag, push, or release was performed.
+compiled.
 
 ## Suggested next session
 

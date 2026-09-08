@@ -1,5 +1,14 @@
 # Changelog
 
+## v2.4.94
+
+- **Fixed unrelated server replies being able to create a phantom game room.**
+  NICK, CREATE, JOIN, and notification-probe confirmations now match the
+  command echoed by the server instead of accepting any successful reply.
+- **Reduced idle team-picker text texture uploads from 55 to 5 per frame** in
+  the measured six-player room by caching the repeated player and team-choice
+  labels with fixed shared fonts.
+
 ## v2.4.93
 
 - No player-visible change. `v2.4.92`'s tag build failed CI (two
