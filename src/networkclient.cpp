@@ -309,6 +309,17 @@ void NetworkClient::Disconnect() {
     // and a buffer left full stayed full, carrying the deaf state across the
     // reconnect that was supposed to clear it.
     recvBufferLen = 0;
+    // A NICK/CREATE/JOIN in flight when the connection drops must not stay
+    // "pending" into the next connection -- the wire protocol carries no
+    // request id, so a stale pending flag would misattribute the new
+    // connection's first unrelated OK as this one's answer. Native didn't
+    // need this before the async networking handoff, stage 1b (these three
+    // flags were WASM-only and its own Disconnect() already clears
+    // pendingCreate/pendingJoin, though it was missing pendingNick too --
+    // fixed alongside this).
+    pendingNick = false;
+    pendingCreate = false;
+    pendingJoin = false;
     SDL_Log("Disconnected from server");
 }
 
@@ -357,64 +368,55 @@ bool NetworkClient::SendCommand(const char* command) {
 #endif // __WASM_PORT__ (Disconnect, SendCommand)
 
 bool NetworkClient::SendNick(const char* nickname) {
-    // Implement retry with suffix if NICK_IN_USE, mirroring CreateGame()'s
-    // handling below. The server now rejects a nickname that's already held
-    // by another currently-active connection (rather than silently killing
-    // it), so two clients defaulting to the same nickname (e.g. both taking
-    // it from the OS username) no longer fight over the same nick.
-    // Clamp to what the server will actually keep, before storing or sending:
-    // the roster it echoes back is truncated, and an untruncated local copy
-    // fails to match it (see MAX_NICK_LENGTH in networkclient.h).
+    // Fire-and-forget on both platforms (async networking handoff, stage 1b).
+    // This used to be a blocking 20-retry loop on native (up to ~3s: each
+    // iteration sent NICK, then slept 50ms on top of SendCommand's own 100ms
+    // inline read, waiting to see whether lastErrorResponse came back
+    // NICK_IN_USE) while WASM fired once and never retried a collision at
+    // all. Both are replaced by the same async pattern CreateGame/JoinGame
+    // already used on WASM: send once, record pending state, and let
+    // HandleServerResponse()'s OK/NICK_IN_USE handling (below) retry with a
+    // numeric suffix or confirm the final nick once it sticks.
+    //
+    // Clamp to what the server will actually keep, before storing or
+    // sending: the roster it echoes back is truncated, and an untruncated
+    // local copy fails to match it (see MAX_NICK_LENGTH in networkclient.h).
     std::string originalNick = std::string(nickname).substr(0, MAX_NICK_LENGTH);
-    std::string tryNick = originalNick;
-    int suffix = 2; // Start with suffix 2 for first retry
-
-#ifdef __WASM_PORT__
-    // In WASM, WebSocket responses arrive asynchronously between frames, so
-    // lastErrorResponse can't be observed synchronously here the way the
-    // native blocking path does below. Keep this a simple fire-and-forget;
-    // HandleServerResponse() already retries NICK_IN_USE responses for the
-    // pending CREATE/JOIN flows, and this repo's NICK usage doesn't need
-    // more than that for now.
-    playerNick = tryNick;
-    myNickname = tryNick;  // Store for ID mapping
     char cmd[128];
-    snprintf(cmd, sizeof(cmd), "NICK %s", tryNick.c_str());
-    return SendCommand(cmd);
-#else
-    int maxRetries = 20;
-    for (int retry = 0; retry < maxRetries; retry++) {
-        char cmd[128];
-        snprintf(cmd, sizeof(cmd), "NICK %s", tryNick.c_str());
-        SDL_Log("Attempting to set nick: %s (attempt %d)", tryNick.c_str(), retry + 1);
+    snprintf(cmd, sizeof(cmd), "NICK %s", originalNick.c_str());
 
-        lastErrorResponse.clear(); // Clear previous error
+    // Pending state must be set BEFORE SendCommand(), not after. On native,
+    // SendCommand() still does its own inline 100ms select()+recv() (until
+    // stage 1c retires it) and can synchronously drive the server's reply
+    // through HandleServerResponse() before this function returns -- on a
+    // fast localhost round trip, reliably so. If pendingNick were set only
+    // after SendCommand() returned, a NICK_IN_USE that arrives inside that
+    // inline read would find no pending flags set at all and be silently
+    // dropped, leaving pendingNick stuck true forever with no retry ever
+    // sent. Caught by a real end-to-end test against a live server
+    // (menu_touch_gesture_test.cpp) racing a second connection for the same
+    // nick -- a synthetic/mocked test could not have surfaced this, since it
+    // never drives a real synchronous response through SendCommand().
+    pendingNick = true;
+    pendingNickOrig = originalNick;
+    pendingNickTry = originalNick;
+    pendingNickSuffix = 2;
+    // Set optimistically rather than waiting for confirmation (matching
+    // WASM's pre-existing SendNick behavior) -- CreateGame/JoinGame and a lot
+    // of render code read playerNick, and some of those can run before the
+    // OK for this NICK has come back (e.g. a room screen shown right after
+    // sending NICK, or a chat command that fires SendNick then immediately
+    // reads GetPlayerNick() for its confirmation message). A NICK_IN_USE
+    // retry below corrects this to the final suffixed nick if needed.
+    playerNick = originalNick;
+    myNickname = originalNick;
 
-        if (!SendCommand(cmd)) {
-            SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to send NICK command");
-            return false;
-        }
-
-        // Wait a bit for server response (SendCommand already waits 100ms in TCP path)
-        SDL_Delay(50);
-
-        // Check if we got NICK_IN_USE error (another connection is actively using this nick)
-        if (lastErrorResponse == "NICK_IN_USE") {
-            SDL_Log("Nickname '%s' is in use by an active connection, trying with suffix %d", tryNick.c_str(), suffix);
-            char suffixStr[16];
-            snprintf(suffixStr, sizeof(suffixStr), "%d", suffix);
-            tryNick = originalNick.substr(0, std::min((size_t)(MAX_NICK_LENGTH - 1), originalNick.length())) + suffixStr;
-            suffix++;
-            continue;
-        }
-        break; // No error — success
+    if (!SendCommand(cmd)) {
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to send NICK command");
+        pendingNick = false;
+        return false;
     }
-
-    // Update playerNick and myNickname to whichever nickname actually succeeded
-    playerNick = tryNick;
-    myNickname = tryNick;  // Store for ID mapping
     return true;
-#endif // __WASM_PORT__
 }
 
 bool NetworkClient::SendGeoLoc(const char* location) {
@@ -425,190 +427,63 @@ bool NetworkClient::SendGeoLoc(const char* location) {
 }
 
 bool NetworkClient::CreateGame(int maxPlayers) {
-    // CREATE requires a game name argument (uses player's nickname)
-    // Implement retry with suffix if NICK_IN_USE (original lines 4768-4785)
-
+    // CREATE requires a game name argument (uses player's nickname).
+    // Async on both platforms (async networking handoff, stage 1b) -- this
+    // used to be a blocking 20-retry loop on native (up to ~3s) that set up
+    // currentGame/state synchronously on "success", while WASM fired once and
+    // deferred that setup to HandleServerResponse()'s pendingCreate handling
+    // below. Native now takes the same path: state/currentGame are set up
+    // only once the server's real OK arrives. Do NOT optimistically set
+    // state=IN_LOBBY here -- that caused a "phantom game" bug where the
+    // client got stuck in a create-game view after server rejection.
     std::string originalNick = playerNick.substr(0, MAX_NICK_LENGTH);
-    std::string tryNick = originalNick;
-    int suffix = 2; // Start with suffix 2 for first retry
-
-#ifdef __WASM_PORT__
-    // In WASM, WebSocket responses arrive asynchronously between frames.
-    // Send CREATE and record the pending state; HandleServerResponse() will
-    // confirm or reject and set up currentGame/state once the OK arrives.
-    // Do NOT optimistically set state=IN_LOBBY — that caused a "phantom game"
-    // bug where the client got stuck in a create-game view after server rejection.
-    SDL_Log("WASM CreateGame: sending CREATE %s %d", tryNick.c_str(), maxPlayers);
+    SDL_Log("CreateGame: sending CREATE %s %d", originalNick.c_str(), maxPlayers);
     char cmd[128];
-    snprintf(cmd, sizeof(cmd), "CREATE %s %d", tryNick.c_str(), maxPlayers);
-    if (!SendCommand(cmd)) {
-        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "WASM CreateGame: SendCommand failed");
-        return false;
-    }
+    snprintf(cmd, sizeof(cmd), "CREATE %s %d", originalNick.c_str(), maxPlayers);
+
+    // Pending state set BEFORE SendCommand() -- see SendNick()'s comment on
+    // this same ordering for why (SendCommand()'s own inline read on native
+    // can synchronously drive the reply through HandleServerResponse()
+    // before this function returns).
     pendingCreate = true;
     pendingCreateOrigNick = originalNick;
-    pendingCreateNick = tryNick;
+    pendingCreateNick = originalNick;
     pendingCreateSuffix = 2;
     pendingCreateMaxPlayers = maxPlayers;
+
+    if (!SendCommand(cmd)) {
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "CreateGame: SendCommand failed");
+        pendingCreate = false;
+        return false;
+    }
     return true;  // state/currentGame set later when server sends OK
-#else
-    int maxRetries = 20;
-    for (int retry = 0; retry < maxRetries; retry++) {
-        char cmd[128];
-        snprintf(cmd, sizeof(cmd), "CREATE %s %d", tryNick.c_str(), maxPlayers);
-        SDL_Log("Attempting to create game with nick: %s (attempt %d)", tryNick.c_str(), retry + 1);
-
-        lastErrorResponse.clear(); // Clear previous error
-
-        if (!SendCommand(cmd)) {
-            SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to send CREATE command");
-            return false;
-        }
-
-        // Wait a bit for server response (SendCommand already waits 100ms in TCP path)
-        SDL_Delay(50);
-
-        // Check if we got NICK_IN_USE error
-        if (lastErrorResponse == "NICK_IN_USE") {
-            SDL_Log("Nickname '%s' is in use, trying with suffix %d", tryNick.c_str(), suffix);
-            char suffixStr[16];
-            snprintf(suffixStr, sizeof(suffixStr), "%d", suffix);
-            tryNick = originalNick.substr(0, std::min((size_t)(MAX_NICK_LENGTH - 1), originalNick.length())) + suffixStr;
-            suffix++;
-            continue;
-        }
-        break; // No error — success
-    }
-#endif // __WASM_PORT__
-
-    // Set up local game room state (optimistic for WASM; confirmed for native)
-    SDL_Log("CREATE sent with nickname '%s', setting state to IN_LOBBY", tryNick.c_str());
-    state = IN_LOBBY;
-
-    // Update playerNick and myNickname to the one that worked (for ID mapping)
-    playerNick = tryNick;
-    myNickname = tryNick;
-
-    // Set up currentGame structure
-    if (!currentGame) {
-        currentGame = new GameRoom();
-    }
-    currentGame->creator = playerNick;
-    currentGame->started = false;
-    currentGame->maxPlayers = maxPlayers;
-
-    // Add self as the first player
-    NetworkPlayer self;
-    self.nick = playerNick;
-    self.ready = false;
-    currentGame->players.clear();
-    currentGame->players.push_back(self);
-
-    SDL_Log("Created game, currentGame has %d players", (int)currentGame->players.size());
-
-    return true;
 }
 
 bool NetworkClient::JoinGame(const char* creator) {
-    // JOIN requires creator_nick and player_nick
-    // Implement retry with suffix if NICK_IN_USE (original lines 4768-4785)
-
+    // JOIN requires creator_nick and player_nick. Async on both platforms
+    // (same stage 1b note as CreateGame above) -- native's blocking 20-retry
+    // loop and its synchronous currentGame setup on "success" are gone;
+    // HandleServerResponse()'s pendingJoin handling below does both once the
+    // server actually answers.
     std::string originalNick = playerNick;
-    std::string tryNick = playerNick;
-
-#ifdef __WASM_PORT__
-    // In WASM, WebSocket responses arrive asynchronously between frames.
-    // SDL_Delay does NOT pump the JS event loop, so we cannot poll for server
-    // responses inline. Send JOIN and record pending state; HandleServerResponse()
-    // will confirm or reject and set up currentGame/state once the OK arrives.
-    SDL_Log("WASM JoinGame: sending JOIN %s %s", creator, tryNick.c_str());
+    SDL_Log("JoinGame: sending JOIN %s %s", creator, originalNick.c_str());
     char cmd[128];
-    snprintf(cmd, sizeof(cmd), "JOIN %s %s", creator, tryNick.c_str());
-    if (!SendCommand(cmd)) {
-        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "WASM JoinGame: SendCommand failed");
-        return false;
-    }
+    snprintf(cmd, sizeof(cmd), "JOIN %s %s", creator, originalNick.c_str());
+
+    // Pending state set BEFORE SendCommand() -- see SendNick()'s comment on
+    // this same ordering for why.
     pendingJoin = true;
     pendingJoinCreator = std::string(creator);
     pendingJoinOrigNick = originalNick;
-    pendingJoinNick = tryNick;
+    pendingJoinNick = originalNick;
     pendingJoinSuffix = 2;
-    return true;  // state/currentGame set later when server sends OK
-#else
 
-    int suffix = 2;
-    int maxRetries = 20;
-
-    for (int retry = 0; retry < maxRetries; retry++) {
-        char cmd[128];
-        snprintf(cmd, sizeof(cmd), "JOIN %s %s", creator, tryNick.c_str());
-        SDL_Log("Attempting to join game created by %s with nick: %s (attempt %d)", creator, tryNick.c_str(), retry + 1);
-
-        lastErrorResponse.clear();
-
-        if (!SendCommand(cmd)) {
-            SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to send JOIN command");
-            return false;
-        }
-
-        // Wait for server response
-        SDL_Delay(50);
-
-        // Check for NICK_IN_USE error (retry with different nick)
-        if (lastErrorResponse == "NICK_IN_USE") {
-            SDL_Log("Nickname '%s' is in use, trying with suffix %d", tryNick.c_str(), suffix);
-            char suffixStr[16];
-            snprintf(suffixStr, sizeof(suffixStr), "%d", suffix);
-            tryNick = originalNick.substr(0, std::min((size_t)(MAX_NICK_LENGTH - 1), originalNick.length())) + suffixStr;
-            suffix++;
-            continue;
-        }
-
-        // Any other server error (NO_SUCH_GAME, ALREADY_IN_GAME, GAME_FULL, etc.) = fail
-        if (!lastErrorResponse.empty()) {
-            SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "JOIN rejected by server: %s", lastErrorResponse.c_str());
-            return false;
-        }
-
-        // Success - set up currentGame
-        SDL_Log("JOIN command successful with nickname '%s', setting state to IN_LOBBY", tryNick.c_str());
-        state = IN_LOBBY;
-
-        // Update playerNick and myNickname to the one that worked (for ID mapping)
-        playerNick = tryNick;
-        myNickname = tryNick;
-
-        // Set up currentGame - find it from the game list
-        for (const auto& game : gameList) {
-            if (game.creator == creator) {
-                if (!currentGame) {
-                    currentGame = new GameRoom();
-                }
-                *currentGame = game;
-                SDL_Log("Set currentGame to %s's game with %d players from gameList", creator, (int)currentGame->players.size());
-                break;
-            }
-        }
-
-        // IMPORTANT: Add ourselves to the player list!
-        // The server sends JOINED messages only to OTHER players, not to the joiner themselves
-        // (see server/game.c add_player function - it sends to i < players_number before incrementing)
-        if (currentGame) {
-            NetworkPlayer self;
-            self.nick = playerNick;
-            self.ready = false;
-            currentGame->players.push_back(self);
-            SDL_Log("Added self (%s) to currentGame, now has %d players", playerNick.c_str(), (int)currentGame->players.size());
-        } else {
-            SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "Failed to find game in gameList!");
-        }
-
-        return true;
+    if (!SendCommand(cmd)) {
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "JoinGame: SendCommand failed");
+        pendingJoin = false;
+        return false;
     }
-
-    SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to join game after %d retries", maxRetries);
-    return false;
-#endif // __WASM_PORT__
+    return true;  // state/currentGame set later when server sends OK
 }
 
 bool NetworkClient::StartGame() {
@@ -1185,7 +1060,14 @@ void NetworkClient::HandleServerResponse(const std::string& response) {
         return;
     }
 
-    // Handle other responses
+    // Handle other responses. The pendingNick/pendingCreate/pendingJoin
+    // blocks below run on both platforms as of the async networking handoff
+    // stage 1b (previously WASM-only; native resolved these synchronously
+    // inside SendNick/CreateGame/JoinGame's own blocking retry loops
+    // instead). The wire protocol carries no request id, so a response is
+    // attributed to whichever pending flag is set -- checked in send order
+    // (nick, then create, then join) since the call sites never have more
+    // than one in flight at a time.
     if (response.find("OK") != std::string::npos) {
         SDL_Log("Command successful: %s", response.c_str());
         lastErrorResponse.clear();
@@ -1193,12 +1075,15 @@ void NetworkClient::HandleServerResponse(const std::string& response) {
             notifySupport = NotifySupport::Supported;
             pendingNotifyProbe = false;
         }
-#ifdef __WASM_PORT__
-        // Confirm a pending WASM CREATE on any OK response that isn't PART: OK.
-        // We only need pendingCreate here — CREATE is the only command that sets it.
-        // Exclude PART: OK (which arrives when we send PART before a CREATE retry)
-        // so we don't prematurely confirm until the retry CREATE OK arrives.
-        if (pendingCreate && response.find("PART") == std::string::npos) {
+        // Exclude PART: OK (which arrives when we send PART before a
+        // CREATE/JOIN retry after ALREADY_IN_GAME) so we don't prematurely
+        // confirm until the retry's own OK arrives.
+        if (pendingNick && response.find("PART") == std::string::npos) {
+            SDL_Log("NICK confirmed by server (pendingNick=true): '%s'", pendingNickTry.c_str());
+            playerNick = pendingNickTry;
+            myNickname = pendingNickTry;
+            pendingNick = false;
+        } else if (pendingCreate && response.find("PART") == std::string::npos) {
             SDL_Log("CREATE confirmed by server (pendingCreate=true): game '%s'", pendingCreateNick.c_str());
             state = IN_LOBBY;
             playerNick = pendingCreateNick;
@@ -1245,7 +1130,6 @@ void NetworkClient::HandleServerResponse(const std::string& response) {
             SDL_Log("Joined game '%s', currentGame has %d players", pendingJoinCreator.c_str(), (int)currentGame->players.size());
             pendingJoin = false;
         }
-#endif
     } else if (response.find("UNKNOWN_COMMAND") != std::string::npos) {
         if (pendingNotifyProbe) {
             notifySupport = NotifySupport::Unsupported;
@@ -1256,9 +1140,24 @@ void NetworkClient::HandleServerResponse(const std::string& response) {
     } else if (response.find("NICK_IN_USE") != std::string::npos) {
         SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "NICK_IN_USE error received");
         lastErrorResponse = "NICK_IN_USE";
-#ifdef __WASM_PORT__
-        // Retry CREATE with a suffix if the game name was taken
-        if (pendingCreate && pendingCreateSuffix <= 20) {
+        if (pendingNick && pendingNickSuffix <= 20) {
+            char suffixBuf[8];
+            snprintf(suffixBuf, sizeof(suffixBuf), "%d", pendingNickSuffix);
+            std::string retryNick = pendingNickOrig.substr(0, std::min((size_t)9, pendingNickOrig.length())) + suffixBuf;
+            pendingNickTry = retryNick;
+            pendingNickSuffix++;
+            char cmd[128];
+            snprintf(cmd, sizeof(cmd), "NICK %s", retryNick.c_str());
+            SDL_Log("NICK NICK_IN_USE, retrying with: %s", retryNick.c_str());
+            SendCommand(cmd);
+            // Optimistic, same as SendNick() itself -- corrected again if this
+            // retry also collides.
+            playerNick = retryNick;
+            myNickname = retryNick;
+        } else if (pendingNick) {
+            SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "NICK failed: all nick variants in use");
+            pendingNick = false;
+        } else if (pendingCreate && pendingCreateSuffix <= 20) {
             char suffixBuf[8];
             snprintf(suffixBuf, sizeof(suffixBuf), "%d", pendingCreateSuffix);
             std::string retryNick = pendingCreateOrigNick.substr(0, std::min((size_t)9, pendingCreateOrigNick.length())) + suffixBuf;
@@ -1285,20 +1184,41 @@ void NetworkClient::HandleServerResponse(const std::string& response) {
             SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "JOIN failed: all nick variants in use");
             pendingJoin = false;
         }
-#endif
+    } else if (response.find("INVALID_NICK") != std::string::npos) {
+        // Not retriable with a numeric suffix (empty, too long, or contains a
+        // character the server rejects -- server/game.c is_nick_ok) --
+        // previously fell through HandleServerResponse unhandled on every
+        // platform, leaving whichever pending flag was set stuck forever.
+        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "INVALID_NICK error received");
+        lastErrorResponse = "INVALID_NICK";
+        if (pendingNick) {
+            SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "NICK failed: server rejected '%s' as invalid", pendingNickTry.c_str());
+            pendingNick = false;
+        } else if (pendingCreate) {
+            SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "CREATE failed: server rejected nick as invalid");
+            pendingCreate = false;
+        } else if (pendingJoin) {
+            SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "JOIN failed: server rejected nick as invalid");
+            pendingJoin = false;
+        }
+    } else if (response.find("GAME_FULL") != std::string::npos) {
+        // Same pre-existing gap as INVALID_NICK above, specific to JOIN.
+        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "GAME_FULL error received");
+        lastErrorResponse = "GAME_FULL";
+        if (pendingJoin) {
+            SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "JOIN failed: GAME_FULL for '%s'", pendingJoinCreator.c_str());
+            pendingJoin = false;
+        }
     } else if (response.find("NO_SUCH_GAME") != std::string::npos) {
         SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "NO_SUCH_GAME error received");
         lastErrorResponse = "NO_SUCH_GAME";
-#ifdef __WASM_PORT__
         if (pendingJoin) {
             SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "JOIN failed: NO_SUCH_GAME for '%s'", pendingJoinCreator.c_str());
             pendingJoin = false;
         }
-#endif
     } else if (response.find("ALREADY_IN_GAME") != std::string::npos) {
         SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "ALREADY_IN_GAME error received");
         lastErrorResponse = "ALREADY_IN_GAME";
-#ifdef __WASM_PORT__
         if (pendingCreate) {
             // Send PART to clear server-side stale game state, then retry
             SDL_Log("CREATE rejected (ALREADY_IN_GAME), sending PART and retrying");
@@ -1316,7 +1236,6 @@ void NetworkClient::HandleServerResponse(const std::string& response) {
             SendCommand(cmd);
             // pendingJoin stays true, waiting for the new response
         }
-#endif
     }
 }
 

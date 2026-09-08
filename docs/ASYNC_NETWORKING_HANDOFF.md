@@ -59,7 +59,7 @@ defect on the other side of the wire). Connect UI is deliberately minimal —
 
 ## Stage 1 — Unify on the async command path, kill background stalls
 
-Status: **1a and 1d landed; 1b/1c/1e/most of 1f still open**
+Status: **1a, 1b, and 1d landed; 1c/1e/most of 1f still open**
 
 Highest value per unit of risk. Removes the always-on lobby tax and the 16 s
 geolocation stall.
@@ -74,11 +74,57 @@ geolocation stall.
   live inside `NetPanelRender`'s `IsConnected()` block was removed (it's now
   called once per frame regardless of which screen is up, instead of twice
   per frame while the net panel happened to be showing).
-- **1b. `SendNick`/`CreateGame`/`JoinGame` async on native — not started.**
-  Delete the `#ifdef __WASM_PORT__` forks and their 20-iteration
-  `SDL_Delay(50)` retry loops; make the pending-flag path unconditional. Add a
-  deadline so a silent server fails visibly. NICK gains a pending path too (it
-  has none on WASM today).
+- **1b. `SendNick`/`CreateGame`/`JoinGame` async on native — landed.** The
+  `#ifdef __WASM_PORT__` forks and native's 20-iteration `SDL_Delay(50)` retry
+  loops (up to 3 s each) are gone; all three now go through the pending-flag
+  path unconditionally, on both platforms. `NICK` gained a pending path it
+  never had before (`pendingNick`/`IsPendingNick()`) — WASM's old `SendNick`
+  set the nick optimistically and never retried a collision at all (bug 4
+  below); now a `NICK_IN_USE` retries with a numeric suffix up to 20 times on
+  both platforms, exactly like `CREATE`/`JOIN` already did on WASM.
+  Went further than originally scoped, found by reading `server/game.c`'s
+  actual error strings rather than trusting the existing `#ifdef` branches
+  were complete:
+  - **`INVALID_NICK` and `GAME_FULL` were unhandled on every platform**,
+    silently falling through `HandleServerResponse`'s if/else chain with no
+    error surfaced at all. Both now fail their pending op cleanly (`INVALID_NICK`
+    is not retriable — confirmed against `is_nick_ok()` at `server/game.c:712`).
+  - **Ordering bug, found by a real end-to-end test, not by inspection**: all
+    three send functions originally set their pending flag *after* calling
+    `SendCommand()`. Native's `SendCommand()` still does its own inline
+    blocking 100 ms `select()`+`recv()` (until 1c retires it) that can
+    synchronously drive a fast localhost reply all the way through
+    `HandleServerResponse()` *before the caller returns*. With the flag set
+    only afterward, a same-frame `NICK_IN_USE` would find no pending flag set,
+    get silently dropped, and leave the flag stuck true forever with no retry
+    ever sent. Fixed by setting pending state *before* `SendCommand()` in all
+    three functions, with the flag cleared again on the `SendCommand()`
+    failure path. A mocked/synthetic test could not have caught this — it
+    depends on a genuinely synchronous round trip through the real socket
+    code, which is why the regression test below opens a second raw TCP
+    connection against a live `fb-server` rather than mocking server state.
+  - **`Disconnect()` now clears all three pending flags** on both platforms —
+    native previously cleared none of them (they were WASM-only fields before
+    this stage), and WASM's own `Disconnect()` was missing the newly-added
+    `pendingNick`. Without this, a disconnect mid-NICK/CREATE/JOIN would leave
+    a stale flag that could misattribute the next connection's first
+    unrelated `OK` (the wire protocol carries no request id).
+  - **`MainMenu::PollGeoLocFetch()` now holds `GEOLOC` back while
+    `IsPendingNick()`** — same "no request id" hazard: if the background
+    geoloc fetch finishes while a NICK retry is still in flight, sending
+    `GEOLOC` immediately risks its `OK` being consumed as the NICK
+    confirmation instead (since `HandleServerResponse` checks `pendingNick`
+    first), leaving the real NICK `OK` to fall through unowned. The result
+    stays queued in `geoLocToSend` and sends a frame or two later once NICK
+    settles — never dropped.
+  - New end-to-end regression test in `menu-touch-gesture-test`: opens a raw
+    POSIX socket to a real `fb-server`, claims a nickname on it, then drives
+    the real `NetworkClient` singleton's `SendNick()` for the same name and
+    polls until `IsPendingNick()` clears, asserting the retry lands on the
+    `2`-suffixed name. Deliberately does not assert on timing immediately
+    after `SendNick()` returns — the whole retry can resolve synchronously
+    inside that call on a fast localhost round trip, so only the eventual
+    outcome is checked.
 - **1c. `SendCommand` fire-and-forget — not started.** Delete the
   `select()`+`recv()`+`strtok` block. Only safe *after* 1a and 1b, because the
   retry loops depend on that inline read populating `lastErrorResponse`. Also
@@ -199,6 +245,30 @@ inspection against the pre-existing `serverFetchThread` pattern, which uses
 the identical conditional-compilation shape and already compiles for WASM. A
 real WASM build should still confirm this before the next tag.
 
+## What's been verified so far (1b, 2026-09-08)
+
+Full native build clean. Plain `ctest --test-dir build`: 29 tests, 27 run /
+100% pass (2 sanitizer-only skips as expected), including the new NICK_IN_USE
+end-to-end test described above. Sanitizer build rebuilt
+(`cmake --build build-asan`) and re-run without `detect_leaks=1` — macOS/Darwin
+does not support ASan leak detection at all (confirmed directly: running a test
+binary under `detect_leaks=1` aborts immediately with "AddressSanitizer:
+detect_leaks is not supported on this platform", a pre-existing local-environment
+limitation, not a code defect; the documented `detect_leaks=1` command in
+CLAUDE.md targets Linux CI, where it is supported). Under
+`UBSAN_OPTIONS=print_stacktrace=1 ctest --test-dir build-asan`, all 29 tests
+run and pass, including the two sanitizer-only ones — confirming the new
+recursive-call pattern (a reply processed synchronously inside `SendCommand()`,
+inside `SendNick()`/`CreateGame()`/`JoinGame()`, inside `HandleServerResponse()`)
+is memory- and UB-safe.
+
+WASM was again not rebuilt (same local toolchain issue as above); the
+`Disconnect()` and `HandleServerResponse()` changes were reviewed by inspection
+— `networkclient_wasm.cpp`'s own copies of the touched blocks use the same
+`pendingNick`/`pendingCreate`/`pendingJoin` fields already shared via
+`networkclient.h`, so no new `#ifdef` branch was introduced for WASM to diverge
+on. A real WASM build should still confirm this before the next tag.
+
 ---
 
 ## Verification
@@ -264,5 +334,7 @@ effect of the stages that touch the same code.
    into the next connection.
 3. **CREATE confirmation is heuristic** — any non-`PART` `OK` confirms it, so an
    unrelated `OK` can falsely confirm a pending CREATE.
-4. **WASM `SendNick` sets the nick optimistically** and never retries, risking a
-   `myPlayerId` mismatch when the server truncates or rejects it. (Stage 1b.)
+4. ~~**WASM `SendNick` sets the nick optimistically** and never retries, risking
+   a `myPlayerId` mismatch when the server truncates or rejects it.~~ **Fixed
+   in stage 1b** — `SendNick` is now unified across platforms with a real
+   `NICK_IN_USE` retry.

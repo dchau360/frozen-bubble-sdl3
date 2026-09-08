@@ -164,6 +164,11 @@ void NetworkClient::Disconnect() {
     }
     state = DISCONNECTED;
     currentGame = nullptr;
+    // pendingNick added alongside native's Disconnect() gaining the same
+    // reset (async networking handoff, stage 1b) -- NICK is now async on
+    // both platforms, so a connection drop mid-NICK needs the same cleanup
+    // CREATE/JOIN already got here.
+    pendingNick = false;
     pendingCreate = false;
     pendingJoin = false;
     gameList.clear();

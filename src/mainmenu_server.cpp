@@ -321,8 +321,15 @@ void MainMenu::PollGeoLocFetch() {
     NetworkClient* netClient = NetworkClient::Existing();
     // May run several frames before a connection exists (fetch started
     // early) or completes (fetch finished before Connect() did) -- keep the
-    // result queued rather than dropping it either way.
-    if (netClient && netClient->IsConnected()) {
+    // result queued rather than dropping it either way. Also hold off while
+    // a NICK is still pending: the wire protocol carries no request id, so
+    // HandleServerResponse attributes the next unclaimed OK to whichever
+    // pending* flag is set, checking NICK first. Sending GEOLOC while a NICK
+    // retry is in flight risks its OK being consumed as the NICK
+    // confirmation instead, leaving the real NICK OK to fall through
+    // unowned. Queuing here just delays the send a frame or two -- it never
+    // drops it.
+    if (netClient && netClient->IsConnected() && !netClient->IsPendingNick()) {
         netClient->SendGeoLoc(geoLocToSend.c_str());
         geoLocToSend.clear();
     }

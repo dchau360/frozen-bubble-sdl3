@@ -250,10 +250,19 @@ public:
     }
     // Called by WASM open callback to transition state to CONNECTED
     void SetConnected() { state = CONNECTED; }
-    // True while waiting for async CREATE OK/rejection from server (WASM only)
+    // True while waiting for async CREATE OK/rejection from server (both
+    // platforms as of the async networking handoff, stage 1b -- was WASM only)
     bool IsPendingCreate() const { return pendingCreate; }
-    // True while waiting for async JOIN OK/rejection from server (WASM only)
+    // True while waiting for async JOIN OK/rejection from server (both
+    // platforms as of the async networking handoff, stage 1b -- was WASM only)
     bool IsPendingJoin() const { return pendingJoin; }
+    // True while waiting for async NICK OK/rejection from server. Used by
+    // MainMenu::PollGeoLocFetch() to hold off sending GEOLOC until NICK has
+    // settled -- both ride the same "next OK belongs to whichever pending
+    // flag is set" protocol convention (the wire format carries no request
+    // id), so two commands racing in flight at once would misattribute a
+    // response.
+    bool IsPendingNick() const { return pendingNick; }
 
     // Send game options to other players (host only)
     bool SendOptions(bool chainReaction, bool continueWhenLeave, bool singleTarget, int victoriesLimit, const int playerColors[5], const bool noCompress[5], const bool aimGuide[5], bool mouseEnabled, bool clearMode, AttackMode attackMode, const int playerTeams[5], int teamCount);
@@ -350,24 +359,34 @@ private:
     void ParseListResponse(const char* listData);
     void HandlePushMessage(const std::string& pushMsg);
 
-    // Follow-feature capability probe (native and WASM both use this, unlike
-    // the WASM-only pending* blocks below).
+    // Follow-feature capability probe (native and WASM both use this).
     NotifySupport notifySupport = NotifySupport::Unknown;
     bool pendingNotifyProbe = false;
 
-    // WASM async CREATE state
+    // Async CREATE state (async networking handoff, stage 1b -- shared by
+    // both platforms; was WASM-only before native's blocking SDL_Delay retry
+    // loop was retired in favor of this).
     bool pendingCreate = false;
     std::string pendingCreateOrigNick;
     std::string pendingCreateNick;
-    [[maybe_unused]] int pendingCreateSuffix = 2; // referenced only in networkclient_wasm.cpp
-    [[maybe_unused]] int pendingCreateMaxPlayers = 5;  // room size chosen for the in-flight CREATE, carried across nick-suffix retries
+    int pendingCreateSuffix = 2;
+    int pendingCreateMaxPlayers = 5;  // room size chosen for the in-flight CREATE, carried across nick-suffix retries
 
-    // WASM async JOIN state
+    // Async JOIN state (same stage 1b note as CREATE above).
     bool pendingJoin = false;
     std::string pendingJoinCreator;
     std::string pendingJoinOrigNick;
     std::string pendingJoinNick;
-    [[maybe_unused]] int pendingJoinSuffix = 2; // referenced only in networkclient_wasm.cpp
+    int pendingJoinSuffix = 2;
+
+    // Async NICK state (same stage 1b note as CREATE above -- this one is new
+    // rather than promoted from an existing WASM path: WASM's own SendNick
+    // used to set playerNick optimistically and never retry NICK_IN_USE at
+    // all).
+    bool pendingNick = false;
+    std::string pendingNickOrig;
+    std::string pendingNickTry;
+    int pendingNickSuffix = 2;
 
 #ifdef FROZEN_BUBBLE_TEST_ACCESS
 public:

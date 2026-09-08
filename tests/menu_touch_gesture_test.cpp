@@ -81,6 +81,18 @@
 #include <utility>
 #include <vector>
 
+#if !defined(__ANDROID__) && !defined(__WASM_PORT__) && !defined(_WIN32) && !defined(__IOS_PORT__)
+// For the raw-socket NICK_IN_USE regression test below -- a second,
+// unmanaged TCP connection to a real fb-server, used to claim a nickname out
+// from under NetworkClient so its async retry-with-suffix path (async
+// networking handoff, stage 1b) can be exercised end to end rather than only
+// unit-tested against synthetic state.
+#include <arpa/inet.h>
+#include <netinet/in.h>
+#include <sys/socket.h>
+#include <unistd.h>
+#endif
+
 static int failures = 0;
 #define CHECK(expression) do { \
     if (!(expression)) { \
@@ -1404,6 +1416,67 @@ int main() {
                 SDL_Delay(20);
             }
             CHECK(!MainMenuTestAccess::LanFetchInProgress(*menu));
+        }
+
+        // --- NetworkClient::SendNick's NICK_IN_USE retry now runs
+        // end-to-end through HandleServerResponse's async pending-flag path
+        // on native too (async networking handoff, stage 1b) -- previously
+        // a blocking 20-retry loop with its own inline SDL_Delay(50)s. A
+        // second, raw (unmanaged) TCP connection claims the nickname first,
+        // so the singleton NetworkClient's own SendNick() is forced into a
+        // real collision against the real server, not a synthetic one.
+        {
+            const int nickTestPort = 15522;  // distinct from every other port used in this file
+            MainMenuTestAccess::SetNetworkPort(*menu, nickTestPort);
+            MainMenuTestAccess::CallStartLocalServer(*menu);
+            CHECK(MainMenuTestAccess::IsServerHosting(*menu));
+
+            int rawSock = socket(AF_INET, SOCK_STREAM, 0);
+            CHECK(rawSock >= 0);
+            struct sockaddr_in addr{};
+            addr.sin_family = AF_INET;
+            addr.sin_port = htons(nickTestPort);
+            inet_pton(AF_INET, "127.0.0.1", &addr.sin_addr);
+            CHECK(connect(rawSock, (struct sockaddr*)&addr, sizeof(addr)) == 0);
+            const char* claimCmd = "FB/1.3 NICK claimed\n";
+            CHECK(send(rawSock, claimCmd, strlen(claimCmd), 0) == (ssize_t)strlen(claimCmd));
+            // Give the server a moment to process the claim before the real
+            // client's NICK arrives -- TCP ordering across two independent
+            // connections isn't guaranteed the way it is within one.
+            SDL_Delay(100);
+
+            NetworkClient* nc = NetworkClient::Instance();
+            NetworkClientTestAccess::SetState(*nc, DISCONNECTED);
+            CHECK(nc->Connect("127.0.0.1", nickTestPort));
+            CHECK(nc->GetState() == CONNECTED);
+
+            CHECK(nc->SendNick("claimed"));
+            // No assertion on GetPlayerNick()/IsPendingNick() here: on native,
+            // SendCommand() still does its own inline 100ms select()+recv()
+            // (until stage 1c retires it), which on a fast localhost round
+            // trip reliably drives the whole NICK_IN_USE -> retry -> OK
+            // sequence to completion recursively, inside this very call --
+            // so pendingNick can already be false and playerNick already
+            // "claimed2" by the time SendNick() returns. Whether that
+            // happens synchronously here or over the next few polled frames
+            // below is exactly the timing this test must NOT assume either
+            // way; only the eventual outcome matters.
+            Uint64 waitStart = SDL_GetTicks();
+            while (nc->IsPendingNick() && SDL_GetTicks() - waitStart < 2000) {
+                nc->Update();
+                SDL_Delay(10);
+            }
+            CHECK(!nc->IsPendingNick());
+            // The collision must have actually been resolved by a retry, not
+            // silently accepted or silently given up on.
+            CHECK(nc->GetPlayerNick() == "claimed2");
+            if (nc->IsPendingNick() || nc->GetPlayerNick() != "claimed2")
+                std::fprintf(stderr, "  (SendNick NICK_IN_USE retry: pending=%d, final nick='%s')\n",
+                             nc->IsPendingNick(), nc->GetPlayerNick().c_str());
+
+            nc->Disconnect();
+            close(rawSock);
+            MainMenuTestAccess::CallStopLocalServer(*menu);
         }
     }
 #endif
