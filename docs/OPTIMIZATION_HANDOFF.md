@@ -1,6 +1,7 @@
 # Code optimization progress and handoff
 
-Last updated: 2026-09-07 (follow-up review and next improvement backlog)
+Last updated: 2026-09-08 (item A's async rearchitecture landed; checkpoint
+refreshed to match)
 
 ## Purpose and user preferences
 
@@ -33,27 +34,38 @@ a speedup.
 ## Current checkpoint
 
 - Repository: `/Users/dchau/gr/frozen-bubble-sdl3`
-- Branch: `main`; the latest source change is `00faeaf4`
-  (`perf: bound network connect/startup waits instead of blocking
-  indefinitely`), following `b8409d30` (settings-grid label caching) and the
-  `d79bf01b`/`1e2ed8e5` batch below. This handoff update is committed
-  immediately after the source checkpoint.
-- Local `main` was 4 commits ahead of `origin/main` at the start of this
-  session (`1e2ed8e5`..`21397a04`, the prior session's B/C/D/F work); pushed
-  at the start of this session, confirmed by `git push` reporting a
-  fast-forward. Re-verify with `git fetch && git log --oneline main..origin/main`
-  before trusting this further into a new session.
-- CMake/Android version: `2.4.91`; Android versionCode: `74`. Unchanged this
-  session -- no release tag was cut for this batch of doc/perf/test-only work.
-- Latest local version tag: `v2.4.91`. HEAD includes subsequent CI/tooling commits.
-- Source/test changes in `1e2ed8e5`: `src/bubblegame.h`,
-  `src/bubblegame_render.cpp`, `src/bubblegame_shooter.cpp`,
-  `src/frozenbubble.h`, `src/frozenbubble.cpp`,
+- Branch: `main`; the latest source change is `979c67ea` (`docs: point
+  OPTIMIZATION_HANDOFF's item A at the landed async doc`). Since the
+  `00faeaf4` checkpoint below, item A's larger async rearchitecture landed
+  as its own 12-commit, four-stage effort (`672c9b9b`..`7974ab30`) plus three
+  follow-up doc-only commits -- see `docs/ASYNC_NETWORKING_HANDOFF.md` for
+  that work in full; this file's item A section above now just points to it
+  rather than duplicating its status.
+- `main` and `origin/main` are in sync as of this checkpoint (pushed
+  immediately after this update). Re-verify with
+  `git fetch && git log --oneline main..origin/main` before trusting this
+  further into a new session.
+- CMake/Android version: `2.4.91`; Android versionCode: `74`. Unchanged since
+  the `00faeaf4` checkpoint below -- **no release tag has been cut for any of
+  the stage 1-4 async networking work**, including the server-side stage 4.
+  `v2.4.91` is 25 commits behind current `HEAD`. Per the standing "always
+  bump before tagging" rule, bump `CMakeLists.txt`/`android/app/build.gradle`
+  (`versionCode` must strictly increase)/`.github/workflows/build.yml`'s two
+  fallbacks/`default.nix` and update `CHANGELOG.md` before any tag -- and per
+  `ASYNC_NETWORKING_HANDOFF.md`'s own recommendation, hold off tagging until
+  a real device/browser pairing (not just two browser tabs on one machine)
+  has exercised the async networking path.
+- Older checkpoint, preserved for its own record: at `00faeaf4`, the latest
+  source change was `perf: bound network connect/startup waits instead of
+  blocking indefinitely`, following `b8409d30` (settings-grid label caching)
+  and the `d79bf01b`/`1e2ed8e5` batch. Source/test changes in `1e2ed8e5`:
+  `src/bubblegame.h`, `src/bubblegame_render.cpp`,
+  `src/bubblegame_shooter.cpp`, `src/frozenbubble.h`, `src/frozenbubble.cpp`,
   `src/networkclient_wasm.cpp`, `src/ttftext.h`,
-  `tests/controller_input_test.cpp`, and
-  `tests/statspanelcell_cache_test.cpp`.
-- Current native, sanitizer, and WASM verification is recorded under the new
-  backlog items. No release tag was created for this batch.
+  `tests/controller_input_test.cpp`, and `tests/statspanelcell_cache_test.cpp`.
+- Current native, sanitizer, and WASM verification for items B-G is recorded
+  under the backlog items below; item A's is recorded in
+  `docs/ASYNC_NETWORKING_HANDOFF.md` instead.
 
 ## Completed work
 
