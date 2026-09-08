@@ -324,15 +324,18 @@ session 3. It is now included in HEAD and the recorded `origin/main`.
 The original five-item list is complete. The following is a new backlog,
 based on source inspection at `b1c217e0`, not measured new speedup claims.
 As of 2026-09-08: C, D, and F are complete; B's stats-panel and one confirmed
-menu hot path are complete; G was measured and found not justified; A has two
-bounded fixes landed with its larger async rearchitecture still open; E
-remains pending (see each item's own status line for current detail).
+menu hot path are complete; G was measured and found not justified; A's
+larger async rearchitecture has since landed across four stages in its own
+handoff doc, with a short residual list there (see A's own status line for
+the pointer); E remains pending (see each item's own status line for current
+detail).
 
 ### A. Keep networking and server startup responsive (highest user impact)
 
-Status: **partially implemented and verified 2026-09-07/08 (`00faeaf4`) --
-two bounded, low-risk fixes landed; the larger main-loop-driven async
-rearchitecture below is still open.**
+Status: **the two bounded fixes below landed and were verified 2026-09-07/08
+(`00faeaf4`); the larger main-loop-driven async rearchitecture they deferred
+has since landed too, across four stages spun out into its own handoff doc
+-- see "What landed" at the end of this section.**
 
 - Evidence: `NetworkClient::Connect` in `src/networkclient.cpp` uses blocking
   DNS/connect and a handshake wait. The leader-start path polls inside
@@ -393,16 +396,27 @@ rearchitecture below is still open.**
   skips as expected. ASan/UBSan focused pass of `menu-touch-gesture-test`
   clean. WASM Release build compiled clean (`Connect()` is
   `#ifndef __WASM_PORT__`, so unaffected there).
-- **Not done, deliberately out of scope for this slice:** the main-loop-
-  driven async state machine ("advance connection/handshake/startup states
-  from the main loop... demonstrate that input and rendering continue during
-  waits") is unimplemented. `Connect()` is still a single synchronous call
-  from `MainMenu`'s point of view -- bounded to a firm 5s+3s (connect +
-  SERVER_READY) worst case instead of an OS-dependent hang, but the render
-  loop still does not pump during that wait. This is now tracked as its own
-  multi-session handoff: see
-  [`docs/ASYNC_NETWORKING_HANDOFF.md`](ASYNC_NETWORKING_HANDOFF.md) for the
-  full measured-worst-case inventory, the four-stage plan, and progress.
+- **Deliberately out of scope for this slice, since landed as its own
+  multi-session effort:** the main-loop-driven async state machine ("advance
+  connection/handshake/startup states from the main loop... demonstrate that
+  input and rendering continue during waits") was tracked separately as
+  [`docs/ASYNC_NETWORKING_HANDOFF.md`](ASYNC_NETWORKING_HANDOFF.md), which now
+  has **all four of its stages landed** (async command path, async connect +
+  minimal connecting UI, async game start + level-sync stall mitigation, and
+  a matching non-blocking output queue on the server side, closing audit
+  `BUG-007`). `Connect()` is no longer a single synchronous call from
+  `MainMenu`'s point of view -- the render loop keeps pumping through
+  connect, lobby, game-start, and level-sync waits on both native and WASM,
+  and this was confirmed live via a real two-browser WASM game against an
+  ASan/UBSan server, not just by inspection.
+  That doc's own "What's left" section lists what's still open: stage 3b's
+  fallback path for `WaitForBubble`/`SyncNetworkLevel` is mitigated rather
+  than truly rewritten (only the residual gate-timeout case can still block,
+  and this session's playtest didn't hit it), one pre-existing WASM bug
+  (heuristic CREATE confirmation) it never touched, an unrelated pre-existing
+  server `select()` fairness bug found and deliberately left out of scope
+  (flagged as its own background task), and no release has been tagged for
+  any of it yet.
 
 ### B. Share fonts across cached labels
 
@@ -662,14 +676,16 @@ Only pursue further bot changes if profiling warrants them.
    complete/closed (G deliberately not implemented -- see its status line).
    B and E have their one confirmed hot path each (or, for E, B's hot path
    doubling as E's) done, with the rest of `panelText`'s menu call sites left
-   unconverted since they didn't clear the "confirmed hot path" bar. A has
-   two bounded, low-risk fixes landed (`Connect()`'s connect-timeout bound +
-   POSIX non-blocking send, `StartLocalServer`'s poll-instead-of-sleep); its
-   larger main-loop-driven async rearchitecture (input/rendering continuing
-   during a connect wait, live fragmented-reply/slow-peer verification) is
-   still open and was deliberately deferred as its own future batch -- do not
-   attempt it casually alongside smaller items; see item A's own note on
-   what would be required to verify it properly.
+   unconverted since they didn't clear the "confirmed hot path" bar. A's two
+   bounded, low-risk fixes (`Connect()`'s connect-timeout bound + POSIX
+   non-blocking send, `StartLocalServer`'s poll-instead-of-sleep) landed
+   first, and its larger main-loop-driven async rearchitecture -- deferred as
+   its own batch at the time -- has since landed too, across all four stages
+   of `docs/ASYNC_NETWORKING_HANDOFF.md`. That doc's own "What's left"
+   section is now the place to look for A's remaining scope (a mitigated but
+   not fully rewritten level-sync fallback path, one untouched pre-existing
+   WASM bug, an out-of-scope server fairness bug flagged separately, and no
+   release tagged yet), not this file.
 3. For the selected item, record a baseline or failing regression first, then
    implement and verify in proportion to the change. Preserve input parity
    required by the updated repository instructions.
