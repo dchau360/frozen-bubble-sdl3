@@ -33,11 +33,11 @@ a speedup.
 ## Current checkpoint
 
 - Repository: `/Users/dchau/gr/frozen-bubble-sdl3`
-- Branch: `main`; the latest source change is `b8409d30`
-  (`perf: cache the game room's per-player settings grid labels`), following
-  `21397a04`/`8d4fb473` (handoff/measurement doc updates) and the `d79bf01b`/
-  `1e2ed8e5` batch below. This handoff update is committed immediately after
-  the source checkpoint.
+- Branch: `main`; the latest source change is `00faeaf4`
+  (`perf: bound network connect/startup waits instead of blocking
+  indefinitely`), following `b8409d30` (settings-grid label caching) and the
+  `d79bf01b`/`1e2ed8e5` batch below. This handoff update is committed
+  immediately after the source checkpoint.
 - Local `main` was 4 commits ahead of `origin/main` at the start of this
   session (`1e2ed8e5`..`21397a04`, the prior session's B/C/D/F work); pushed
   at the start of this session, confirmed by `git push` reporting a
@@ -323,11 +323,16 @@ session 3. It is now included in HEAD and the recorded `origin/main`.
 
 The original five-item list is complete. The following is a new backlog,
 based on source inspection at `b1c217e0`, not measured new speedup claims.
-As of 2026-09-07: C, D, and F are complete; B's stats-panel and one
-confirmed menu hot path are complete; A, E, and G remain pending (see each
-item's own status line for current detail).
+As of 2026-09-08: C, D, and F are complete; B's stats-panel and one confirmed
+menu hot path are complete; G was measured and found not justified; A has two
+bounded fixes landed with its larger async rearchitecture still open; E
+remains pending (see each item's own status line for current detail).
 
 ### A. Keep networking and server startup responsive (highest user impact)
+
+Status: **partially implemented and verified 2026-09-07/08 (`00faeaf4`) --
+two bounded, low-risk fixes landed; the larger main-loop-driven async
+rearchitecture below is still open.**
 
 - Evidence: `NetworkClient::Connect` in `src/networkclient.cpp` uses blocking
   DNS/connect and a handshake wait. The leader-start path polls inside
@@ -345,6 +350,63 @@ item's own status line for current detail).
   and rendering continue during waits; measure worst frame stalls.
 - Scope this as a separate implementation batch: it changes more state than
   the smaller fixes below.
+
+**What landed (`00faeaf4`):**
+
+- `NetworkClient::Connect`'s initial `connect()` is now non-blocking +
+  `select()`-bounded to 5s on both platforms (previously a plain blocking
+  call, bounded only by the OS's own TCP connect timeout -- commonly tens of
+  seconds, sometimes minutes, and not this codebase's choice). Uses the same
+  non-blocking-connect-then-`SO_ERROR` idiom already shipping in this file's
+  `MeasureLatency`/`IsReachable`, not a new pattern.
+- The same change puts the POSIX socket in non-blocking mode from before
+  `connect()` (previously only Windows did this, and only after a successful
+  blocking connect). This closes the second gap the evidence names directly:
+  `SendAll`'s bounded retry-on-`EWOULDBLOCK`/`EAGAIN` loop already existed but
+  was dead code on POSIX, since a blocking socket's `send()` never returns
+  those -- it just blocks in the kernel with no bound at all when the peer
+  stops reading. POSIX now gets the same non-blocking socket Windows already
+  had, so that retry path is reachable on both platforms.
+- `MainMenu::StartLocalServer`'s fixed 1-second `SDL_Delay` is now a
+  20ms-interval poll (reusing the existing `portInUse()` connect-probe as a
+  readiness check), bounded to 2s, that also still catches an immediate
+  child-process exit. The common case (fork+exec+bind+listen, normally
+  single-digit to low-double-digit ms) now returns almost immediately.
+- Test: `tests/menu_touch_gesture_test.cpp` gained a real end-to-end block --
+  fork+exec the actual `fb-server` binary this build produced via
+  `StartLocalServer`, assert it returns well under the old fixed delay and
+  the port is genuinely accepting connections, then a real
+  `NetworkClient::Connect` against that real server (success, bounded time,
+  correct state transition), then a real refused-connection case (server
+  stopped, same port, fails fast). Verified the `StartLocalServer` timing
+  assertion catches the regression: reverting only that change failed it;
+  restored and re-verified. The `Connect()` success/refusal assertions pass
+  under both the old and new `networkclient.cpp` -- a localhost connect or
+  refusal is fast either way, so this coverage guards the refactor (a broken
+  non-blocking-connect rewrite would fail it) rather than demonstrating the
+  original unbounded-hang bug, which would need an actually
+  unreachable/filtered host and was judged unsafe to depend on in an
+  automated test (real-network behavior varies by CI sandbox). The 5-second
+  connect bound and the `SendAll` fix are verified by code inspection against
+  an already-proven idiom, not by a test that reproduces a multi-minute hang.
+- Full native build + `ctest`: 27 runnable tests passed, 2 sanitizer-only
+  skips as expected. ASan/UBSan focused pass of `menu-touch-gesture-test`
+  clean. WASM Release build compiled clean (`Connect()` is
+  `#ifndef __WASM_PORT__`, so unaffected there).
+- **Not done, deliberately out of scope for this slice:** the main-loop-
+  driven async state machine ("advance connection/handshake/startup states
+  from the main loop... demonstrate that input and rendering continue during
+  waits") is unimplemented. `Connect()` is still a single synchronous call
+  from `MainMenu`'s point of view -- bounded to a firm 5s+3s (connect +
+  SERVER_READY) worst case instead of an OS-dependent hang, but the render
+  loop still does not pump during that wait. Converting the "click to join,
+  block until connected" UI flow into a real non-blocking state machine with
+  in-progress UI feedback is a materially larger, riskier change (touches
+  `MainMenu`'s call sites, needs new UI state for "connecting..." with
+  cancellation, and the verification matrix the evidence above asks for --
+  fragmented replies, a slow/non-reading peer exercised live, frame-stall
+  measurement) that a future session should still treat as its own batch, per
+  the original scoping note.
 
 ### B. Share fonts across cached labels
 
@@ -600,9 +662,18 @@ Only pursue further bot changes if profiling warrants them.
 
 1. Read current repository instructions and inspect git state. Use the current
    checkpoint, not release/push directions embedded in historical sections.
-2. Continue from the new backlog. Items C and F are complete; D is complete
-   except for a workload message-count measurement; B has completed stats-panel
-   sharing with broader label groups still pending.
+2. Continue from the new backlog. As of `00faeaf4`: C, D, F, and G are
+   complete/closed (G deliberately not implemented -- see its status line).
+   B and E have their one confirmed hot path each (or, for E, B's hot path
+   doubling as E's) done, with the rest of `panelText`'s menu call sites left
+   unconverted since they didn't clear the "confirmed hot path" bar. A has
+   two bounded, low-risk fixes landed (`Connect()`'s connect-timeout bound +
+   POSIX non-blocking send, `StartLocalServer`'s poll-instead-of-sleep); its
+   larger main-loop-driven async rearchitecture (input/rendering continuing
+   during a connect wait, live fragmented-reply/slow-peer verification) is
+   still open and was deliberately deferred as its own future batch -- do not
+   attempt it casually alongside smaller items; see item A's own note on
+   what would be required to verify it properly.
 3. For the selected item, record a baseline or failing regression first, then
    implement and verify in proportion to the change. Preserve input parity
    required by the updated repository instructions.
@@ -610,3 +681,7 @@ Only pursue further bot changes if profiling warrants them.
    verified, changed files, reproducible measurements, tests, and limitations.
    Re-check commit/tag/push state before recording it. Do not re-run completed
    historical work merely because it appears earlier in this file.
+5. No release tag was cut for this session's work (`21397a04` through
+   `00faeaf4`, plus this doc update) -- it's all perf/test/doc changes, no
+   version bump. Bump and tag only if the user asks, per the standing "always
+   bump before tagging" rule.
