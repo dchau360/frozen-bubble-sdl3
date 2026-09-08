@@ -148,9 +148,11 @@ BubbleGame::BubbleGame(const SDL_Renderer *renderer)
     comboText.UpdateAlignment(TTF_HORIZONTAL_ALIGN_CENTER);
     comboText.UpdateColor({255, 255, 0, 255}, {0, 0, 0, 255}); // Yellow text
 
-    clearWinText.LoadFont(ASSET("/gfx/DroidSans.ttf").c_str(), 32);
+    clearWinText.LoadFont(ASSET("/gfx/DroidSans.ttf").c_str(), 36);
     clearWinText.UpdateAlignment(TTF_HORIZONTAL_ALIGN_CENTER);
-    clearWinText.UpdateColor({255, 255, 0, 255}, {0, 0, 0, 255}); // Yellow text
+    clearWinText.UpdateStyle(36, TTF_STYLE_BOLD);
+    clearWinText.UpdateColor({255, 220, 40, 255}, {0, 0, 0, 255}); // Gold text
+    clearWinText.UpdateRing({0, 0, 0, 255}, 3); // Thick black ring: readable over any board
 
     finalScoreText.LoadFont(ASSET("/gfx/DroidSans.ttf").c_str(), 28);
     finalScoreText.UpdateAlignment(TTF_HORIZONTAL_ALIGN_CENTER);
@@ -174,6 +176,23 @@ BubbleGame::BubbleGame(const SDL_Renderer *renderer)
         }
         playerNameWinText[i].UpdateColor({255, 255, 255, 255}, {0, 0, 0, 255});
     }
+
+    // Popped-count HUD: one shared 14pt face, one text object per player.
+    // Colour is set per player at draw time (the mode's leader is highlighted),
+    // so nothing is set here beyond the font. A ringed outline (rather than the
+    // default single-corner shadow) keeps the count legible sitting right next
+    // to a busy, brightly coloured next-bubble preview.
+    poppedFont14.reset(TTF_OpenFont(ASSET("/gfx/DroidSans.ttf").c_str(), 14.0f));
+    if (poppedFont14) {
+        for (int i = 0; i < MAX_NET_PLAYERS; i++) {
+            poppedText[i].LoadFont(poppedFont14.get());
+            poppedText[i].UpdateColor({120, 255, 140, 255}, {0, 0, 0, 255}); // Bright green
+            poppedText[i].UpdateRing({0, 0, 0, 255}, 2);
+        }
+    }
+    modeTimerText.LoadFont(ASSET("/gfx/DroidSans.ttf").c_str(), 20);
+    modeTimerText.UpdateColor({255, 120, 40, 255}, {0, 0, 0, 255}); // Bright orange: reads as urgent
+    modeTimerText.UpdateRing({0, 0, 0, 255}, 2);
 
     // In-game chat text (white on transparent — overlay drawn separately)
     for (int i = 0; i < kMaxChatLines; i++) {
@@ -422,6 +441,8 @@ void BubbleGame::NewGame(SetupSettings setup) {
     mpTrainScore = 0;
     mpTrainDone = false;
     mpTrainStartTime = 0;
+
+    ResetModeState();
 
     winsP1 = winsP2 = 0;
     roundStatsFinalized = false;
@@ -1356,6 +1377,11 @@ void BubbleGame::ReloadGame(int level) {
         bubbleArrays[i].malusAlerts.clear();
     }
     roundStatsFinalized = false;
+    // Round 2 of a Timed match starts a fresh clock, and every mode's live
+    // popped sync starts from 0 again alongside the rPopped reset above --
+    // without this the first shot of the new round would compare against last
+    // round's total and send nothing until it passed it.
+    ResetModeState();
     frameCount = 0;
     gameStartTime = SDL_GetTicks();
     scoringInputMethod = ScoringInputMethod::Unset;

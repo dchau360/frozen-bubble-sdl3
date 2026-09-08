@@ -302,8 +302,9 @@ void MainMenu::NetPanelRender() {
 
         // Apply any options broadcast by the host (joiners receive SETOPTIONS push)
         {
-            bool cr, cl, st; int vl; int pc[5]; bool nc[5]; bool ag[5]; bool me; bool cm; AttackMode dm; int pt[5]; int rcvTc;
-            if (netClient->GetAndClearPendingOptions(cr, cl, st, vl, pc, nc, ag, me, cm, dm, pt, rcvTc)) {
+            bool cr, cl, st; int vl; int pc[5]; bool nc[5]; bool ag[5]; bool me;
+            GameMode gm; int rt, ts; AttackMode dm; int pt[5]; int rcvTc;
+            if (netClient->GetAndClearPendingOptions(cr, cl, st, vl, pc, nc, ag, me, gm, rt, ts, dm, pt, rcvTc)) {
                 chainReactionEnabled = cr;
                 (void)cl;  // "continue when players leave" is always on now
                 singlePlayerTargetting = st;
@@ -313,12 +314,25 @@ void MainMenu::NetPanelRender() {
                 for (int i = 0; i < 18; i++) { if (vLimits[i] == vl) { victoriesLimitIndex = i; break; } }
                 for (int i = 0; i < 5; i++) { playerColorCounts[i] = pc[i]; playerNoCompress[i] = nc[i]; playerAimGuide[i] = ag[i]; }
                 netRoomMouseEnabled = me;
-                netClearMode = cm;
+                netGameMode = gm;
+                // The host's room carries a value, not a step, so a joiner
+                // whose own table has no exact match lands on the nearest one
+                // it can display. What the game actually runs on is the value
+                // the host pushed (SetupSettings::raceTarget), which the
+                // joiner takes straight from NetworkClient rather than
+                // re-deriving from this index -- so a joiner showing "50" for
+                // a host's 55 is a display rounding, never a rules mismatch.
+                netRaceTargetIndex = RaceTargetIndexOf(rt);
+                netTimedSecondsIndex = TimedSecondsIndexOf(ts);
                 netAttackMode = dm;
+                // A joiner parked on the mode-value row when the host switches
+                // to a mode without one would be highlighting a row that is no
+                // longer drawn.
+                if (RoomRowHidden(selectedActionIndex)) selectedActionIndex = kRoomMode;
                 if (rcvTc >= 2 && rcvTc <= 5) netTeamCount = rcvTc;
                 for (int i = 0; i < 5; i++) netPlayerTeams[i] = pt[i];
-                SDL_Log("Applied host options: cr=%d cl=%d st=%d vl=%d colors=%d,%d,%d,%d,%d mouse=%d cm=%d dm=%d",
-                    cr,cl,st,vl,pc[0],pc[1],pc[2],pc[3],pc[4],me,cm,(int)dm);
+                SDL_Log("Applied host options: cr=%d cl=%d st=%d vl=%d colors=%d,%d,%d,%d,%d mouse=%d mode=%s rt=%d ts=%d dm=%d",
+                    cr,cl,st,vl,pc[0],pc[1],pc[2],pc[3],pc[4],me,GameModeName(gm),rt,ts,(int)dm);
             }
         }
 
@@ -556,8 +570,19 @@ TTFText &MainMenu::NetGridCell(size_t idx) {
 
         size_t oldSize = netGridCellPool.size();
         netGridCellPool.resize(idx + 1);
-        for (size_t j = oldSize; j <= idx; j++)
+        for (size_t j = oldSize; j <= idx; j++) {
             netGridCellPool[j].LoadFont(netGridFont16.get());
+            // A freshly default-constructed TTFText has forecolor/backcolor
+            // both {0,0,0,0} -- fully transparent -- and nothing else in this
+            // pool's call sites ever set one, so every header, row label, and
+            // value cell in the grid (Max colors/Row collapse/Aim guide/Team)
+            // rendered completely invisible over the room's dark panel
+            // background: it read as a blank/black patch where a label or an
+            // "on"/"off" should be (found live: "the section that shows auto
+            // aim is black"). Set once here rather than at every call site --
+            // nothing in this grid needs a per-cell color today.
+            netGridCellPool[j].UpdateColor({230, 235, 225, 255}, {20, 12, 32, 255});
+        }
     }
     return netGridCellPool[idx];
 }
@@ -620,12 +645,17 @@ void MainMenu::NetPanelLobbyActionsRender() {
 
             // Mode and Malus (indices 1-2) — surfaced first since they define the
             // match type; newly created rooms default focus to "Game mode".
-            char modeText[64], malusText[64];
-            const char* mode = netClearMode ? "Clear" : "Classic";
-            snprintf(modeText, sizeof(modeText), "Game mode: %s", mode);
+            char modeText[64], modeValueText[64], malusText[64];
+            snprintf(modeText, sizeof(modeText), "Game mode: %s", GameModeName(netGameMode));
             snprintf(malusText, sizeof(malusText), "Attack bubbles: %s", AttackModeName(netAttackMode));
-            actions.push_back(modeText);  // index 1
-            actions.push_back(malusText); // index 2
+            actions.push_back(modeText);  // kRoomMode
+            // kRoomModeValue is only a row in the modes that have a number;
+            // pushed as an empty placeholder otherwise so the positions after
+            // it keep matching the GameRoomRow enum.
+            ModeValueLabel(modeValueText, sizeof(modeValueText), netGameMode,
+                           netRaceTargetIndex, netTimedSecondsIndex);
+            actions.push_back(modeValueText[0] ? std::string(modeValueText) : std::string());
+            actions.push_back(malusText); // kRoomMalus
 
             // Global settings - same for host and joiner. "Continue when
             // players leave" used to sit between chain-reaction and targetting;
@@ -830,8 +860,20 @@ void MainMenu::NetPanelLobbyActionsRender() {
             menulist::List roomList(roomListRect, selectedActionIndex, 28,
                                      menulist::kMapFillAlpha);
             roomList.Header("Match rules");
-            const char* mode = netClearMode ? "Clear" : "Classic";
-            roomList.Row(kRoomMode, "Game mode", mode);
+            // Stepped (splitAdjust), like Attack bubbles below: four values
+            // now, and a row a tap flips is fine for on/off but not a cycle.
+            roomList.Row(kRoomMode, "Game mode", GameModeName(netGameMode), true, true);
+            // Race and Timed each own the row directly under Mode; the other
+            // two modes have no number and the row is left out entirely --
+            // Up/Down steps past it (RoomRowHidden).
+            if (!RoomRowHidden(kRoomModeValue)) {
+                char modeValueText[64];
+                ModeValueLabel(modeValueText, sizeof(modeValueText), netGameMode,
+                               netRaceTargetIndex, netTimedSecondsIndex);
+                roomList.Row(kRoomModeValue,
+                             netGameMode == GameMode::Race ? "First to pop" : "Round length",
+                             modeValueText, true, true);
+            }
             roomList.Row(kRoomMalus, "Attack bubbles", AttackModeName(netAttackMode),
                          netAttackMode != AttackMode::Off, true);
             roomList.Row(kRoomChain, "Chain reaction", chainReactionEnabled ? "ON" : "OFF", chainReactionEnabled);

@@ -300,7 +300,17 @@ void GameSettings::ReadSettings()
         iniparser_getboolean(optDict, "Host:SinglePlayerTargetting", true);
     hostVictoriesLimitIndex = iniparser_getint(optDict, "Host:VictoriesLimitIndex", 5);
     if (hostVictoriesLimitIndex < 0 || hostVictoriesLimitIndex > 17) hostVictoriesLimitIndex = 5;
-    hostClearMode = iniparser_getboolean(optDict, "Host:ClearMode", false);
+    // Host:GameMode when this device has saved one; otherwise fall back to the
+    // older Host:ClearMode boolean, so a settings file written before Race and
+    // Timed existed still comes back on the mode it was left on. Range-checked
+    // rather than trusted: an ini file is user-editable.
+    hostGameMode = iniparser_getint(optDict, "Host:GameMode",
+                                    iniparser_getboolean(optDict, "Host:ClearMode", false) ? 1 : 0);
+    if (hostGameMode < 0 || hostGameMode > 3) hostGameMode = 0;
+    hostRaceTargetIndex = iniparser_getint(optDict, "Host:RaceTargetIndex", 5);
+    if (hostRaceTargetIndex < 0 || hostRaceTargetIndex > 9) hostRaceTargetIndex = 5;
+    hostTimedSecondsIndex = iniparser_getint(optDict, "Host:TimedSecondsIndex", 1);
+    if (hostTimedSecondsIndex < 0 || hostTimedSecondsIndex > 7) hostTimedSecondsIndex = 1;
     hostAttackMode = iniparser_getint(optDict, "Host:AttackMode", 0);
     if (hostAttackMode < 0 || hostAttackMode > 2) hostAttackMode = 0;
     // Host:TeamMode is no longer read: teams became a per-player setting
@@ -630,14 +640,17 @@ void GameSettings::setSoundEnabled(bool on) {
 }
 
 void GameSettings::SaveHostSettings(bool chainReactions, bool singlePlayerTargetting,
-                                    int victoriesLimitIndex, bool clearMode, int attackMode,
+                                    int victoriesLimitIndex, int gameMode,
+                                    int raceTargetIndex, int timedSecondsIndex, int attackMode,
                                     int teamCount, int botSkill,
                                     int roomSizeChoice)
 {
     hostChainReactions = chainReactions;
     hostSinglePlayerTargetting = singlePlayerTargetting;
     hostVictoriesLimitIndex = victoriesLimitIndex;
-    hostClearMode = clearMode;
+    hostGameMode = gameMode;
+    hostRaceTargetIndex = raceTargetIndex;
+    hostTimedSecondsIndex = timedSecondsIndex;
     hostAttackMode = attackMode;
     hostTeamCount = teamCount;
     hostBotSkill = botSkill;
@@ -650,7 +663,13 @@ void GameSettings::SaveHostSettings(bool chainReactions, bool singlePlayerTarget
                   singlePlayerTargetting ? "true" : "false");
     iniparser_set(optDict, "Host:VictoriesLimitIndex",
                   std::to_string(victoriesLimitIndex).c_str());
-    iniparser_set(optDict, "Host:ClearMode", clearMode ? "true" : "false");
+    iniparser_set(optDict, "Host:GameMode", std::to_string(gameMode).c_str());
+    iniparser_set(optDict, "Host:RaceTargetIndex", std::to_string(raceTargetIndex).c_str());
+    iniparser_set(optDict, "Host:TimedSecondsIndex", std::to_string(timedSecondsIndex).c_str());
+    // Still written, and still only ever true for Clear: a build without Race
+    // and Timed reads this key rather than Host:GameMode, and would otherwise
+    // reset a returning player's room to Classic every time they downgrade.
+    iniparser_set(optDict, "Host:ClearMode", gameMode == 1 ? "true" : "false");
     iniparser_set(optDict, "Host:AttackMode", std::to_string(attackMode).c_str());
     iniparser_set(optDict, "Host:TeamCount", std::to_string(teamCount).c_str());
     iniparser_set(optDict, "Host:BotSkill", std::to_string(botSkill).c_str());

@@ -28,7 +28,10 @@ struct MainMenuTestAccess {
     static std::string RenderVictories(MainMenu& menu, int victoriesIndex) {
         menu.showingLocalMPPanel = true;
         menu.runDelay = false;
-        menu.localMPMenuIndex = 6;
+        // Not a literal 6: the Victories row moves down one in Race and Timed,
+        // so the row has to be asked for by name at whatever mode the menu is
+        // currently on.
+        menu.localMPMenuIndex = LocalMPRowVictories(menu.localMPGameMode);
         menu.localMPVictoriesIndex = victoriesIndex;
         menu.LocalMPPanelRender();
         return menu.lastLocalMPPanelText;
@@ -40,7 +43,7 @@ struct MainMenuTestAccess {
     static std::string RenderAttackMode(MainMenu& menu, AttackMode mode) {
         menu.showingLocalMPPanel = true;
         menu.runDelay = false;
-        menu.localMPMenuIndex = kLocalMPRowMalus;
+        menu.localMPMenuIndex = LocalMPRowMalus(menu.localMPGameMode);
         menu.localMPAttackMode = mode;
         menu.LocalMPPanelRender();
         return menu.lastLocalMPPanelText;
@@ -49,7 +52,7 @@ struct MainMenuTestAccess {
     static void SelectAttackRow(MainMenu& menu, AttackMode mode) {
         menu.showingLocalMPPanel = true;
         menu.runDelay = false;
-        menu.localMPMenuIndex = kLocalMPRowMalus;
+        menu.localMPMenuIndex = LocalMPRowMalus(menu.localMPGameMode);
         menu.localMPAttackMode = mode;
     }
 
@@ -57,14 +60,22 @@ struct MainMenuTestAccess {
         return menu.localMPAttackMode;
     }
 
-    static void SetClearMode(MainMenu& menu, bool on) {
+    // Parks the cursor on the Mode row with the mode one step *before* the
+    // one wanted, so a single RIGHT lands on it. Written against the same
+    // NextGameMode the panel steps with rather than a hardcoded predecessor,
+    // so reordering the cycle cannot silently make this select the wrong mode.
+    static void SelectModeRowBefore(MainMenu& menu, GameMode wanted) {
         menu.showingLocalMPPanel = true;
         menu.runDelay = false;
         menu.localMPMenuIndex = kLocalMPRowMode;
-        menu.localMPClearMode = !on;   // PressKey toggles it to `on`
+        GameMode m = wanted;
+        while (NextGameMode(m) != wanted) m = NextGameMode(m);
+        menu.localMPGameMode = m;
     }
 
-    static bool ClearMode(const MainMenu& menu) { return menu.localMPClearMode; }
+    static GameMode CurrentGameMode(const MainMenu& menu) { return menu.localMPGameMode; }
+    static int RaceTargetIndex(const MainMenu& menu) { return menu.localMPRaceTargetIndex; }
+    static int TimedSecondsIndex(const MainMenu& menu) { return menu.localMPTimedSecondsIndex; }
 
     // ---- settings guide ----------------------------------------------
     // The page is only reachable through a live game room, so drive it
@@ -95,7 +106,7 @@ struct MainMenuTestAccess {
     static void SetVictories(MainMenu& menu, int victoriesIndex) {
         menu.showingLocalMPPanel = true;
         menu.runDelay = false;
-        menu.localMPMenuIndex = 6;
+        menu.localMPMenuIndex = LocalMPRowVictories(menu.localMPGameMode);
         menu.localMPVictoriesIndex = victoriesIndex;
     }
 
@@ -132,13 +143,13 @@ struct MainMenuTestAccess {
         MainMenu& menu,
         bool chainReaction,
         bool noCompression,
-        bool clearMode,
+        GameMode gameMode,
         AttackMode attackMode,
         bool teamMode) {
         menu.localMPPlayerCount = 4;
         menu.localMPCR = chainReaction;
         menu.localMPNoCompress = noCompression;
-        menu.localMPClearMode = clearMode;
+        menu.localMPGameMode = gameMode;
         menu.localMPAttackMode = attackMode;
         menu.localMPTeamMode = teamMode;
         menu.localMPVictoriesIndex = 15;
@@ -180,26 +191,41 @@ int main() {
         return 1;
     }
 
-    // The active victories row owns index 6 and wraps left from unlimited.
+    // The active victories row wraps left from unlimited. Named through the
+    // accessor rather than as a literal 6 -- the row sits one lower in Race
+    // and Timed, and a literal here would only ever test Classic's layout.
+    const int victoriesRow = LocalMPRowVictories(GameMode::Classic);
     int victoriesIndex = 0;
     CHECK(ApplyLocalMultiplayerVictoriesInput(
-        6, LocalMultiplayerMenuCommand::Left, victoriesIndex));
+        victoriesRow, LocalMultiplayerMenuCommand::Left, victoriesIndex));
     CHECK(victoriesIndex == 17);
 
     // Both forward commands wrap the last finite limit back to unlimited.
     victoriesIndex = 17;
     CHECK(ApplyLocalMultiplayerVictoriesInput(
-        6, LocalMultiplayerMenuCommand::Right, victoriesIndex));
+        victoriesRow, LocalMultiplayerMenuCommand::Right, victoriesIndex));
     CHECK(victoriesIndex == 0);
     victoriesIndex = 17;
     CHECK(ApplyLocalMultiplayerVictoriesInput(
-        6, LocalMultiplayerMenuCommand::Enter, victoriesIndex));
+        victoriesRow, LocalMultiplayerMenuCommand::Enter, victoriesIndex));
     CHECK(victoriesIndex == 0);
+
+    // That same row index answers for nothing once the mode moves the row:
+    // in Race it belongs to Team mode, and stepping it must not silently
+    // adjust the victories limit instead.
+    victoriesIndex = 4;
+    CHECK(!ApplyLocalMultiplayerVictoriesInput(
+        victoriesRow, LocalMultiplayerMenuCommand::Right, victoriesIndex, GameMode::Race));
+    CHECK(victoriesIndex == 4);
+    CHECK(ApplyLocalMultiplayerVictoriesInput(
+        LocalMPRowVictories(GameMode::Race), LocalMultiplayerMenuCommand::Right,
+        victoriesIndex, GameMode::Race));
+    CHECK(victoriesIndex == 5);
 
     // Adjacent active rows do not mutate the victories selection.
     victoriesIndex = 4;
     CHECK(!ApplyLocalMultiplayerVictoriesInput(
-        5, LocalMultiplayerMenuCommand::Right, victoriesIndex));
+        victoriesRow - 1, LocalMultiplayerMenuCommand::Right, victoriesIndex));
     CHECK(victoriesIndex == 4);
     CHECK(!ApplyLocalMultiplayerVictoriesInput(
         7, LocalMultiplayerMenuCommand::Left, victoriesIndex));
@@ -210,11 +236,11 @@ int main() {
     const int colors[5] = {5, 6, 7, 8, 5};
     const bool aimGuide[5] = {true, false, true, false, true};
     LocalMultiplayerOptions options = BuildLocalMultiplayerOptions(
-        4, false, true, false, AttackMode::Off, false, 15, colors, aimGuide);
+        4, false, true, GameMode::Classic, AttackMode::Off, false, 15, colors, aimGuide);
     CHECK(options.playerCount == 4);
     CHECK(!options.chainReaction);
     CHECK(options.noCompression);
-    CHECK(!options.clearMode);
+    CHECK(options.gameMode == GameMode::Classic);
     CHECK(options.attackMode == AttackMode::Off);
     CHECK(!options.teamMode);
     CHECK(options.victoriesIndex == 15);
@@ -230,7 +256,7 @@ int main() {
     CHECK(settings.playerCount == 4);
     CHECK(!settings.chainReaction);
     CHECK(settings.disableCompression[3]);
-    CHECK(!settings.clearMode);
+    CHECK(settings.gameMode == GameMode::Classic);
     CHECK(settings.attackMode == AttackMode::Off);
     for (int i = 0; i < settings.playerCount; ++i)
         CHECK(settings.playerTeams[i] == kNoTeam);
@@ -273,13 +299,71 @@ int main() {
     // Clear Mode forces attacks off and restores the previous choice on the
     // way back out -- including Blockable, which the old boolean could not hold.
     MainMenuTestAccess::SelectAttackRow(*menu, AttackMode::Canceling);
-    MainMenuTestAccess::SetClearMode(*menu, true);
+    MainMenuTestAccess::SelectModeRowBefore(*menu, GameMode::Clear);
     CHECK(MainMenuTestAccess::PressKey(*menu, SDLK_RIGHT));
-    CHECK(MainMenuTestAccess::ClearMode(*menu));
+    CHECK(MainMenuTestAccess::CurrentGameMode(*menu) == GameMode::Clear);
     CHECK(MainMenuTestAccess::CurrentAttackMode(*menu) == AttackMode::Off);
     CHECK(MainMenuTestAccess::PressKey(*menu, SDLK_RIGHT));   // leave Clear Mode
-    CHECK(!MainMenuTestAccess::ClearMode(*menu));
+    CHECK(MainMenuTestAccess::CurrentGameMode(*menu) != GameMode::Clear);
     CHECK(MainMenuTestAccess::CurrentAttackMode(*menu) == AttackMode::Canceling);
+
+    // Race and Timed force nothing, so stepping through them must leave the
+    // restored Attack bubbles setting alone -- the snapshot belongs to Clear
+    // Mode, and a mode that never took one must not spend it.
+    MainMenuTestAccess::SelectModeRowBefore(*menu, GameMode::Race);
+    CHECK(MainMenuTestAccess::PressKey(*menu, SDLK_RIGHT));
+    CHECK(MainMenuTestAccess::CurrentGameMode(*menu) == GameMode::Race);
+    CHECK(MainMenuTestAccess::CurrentAttackMode(*menu) == AttackMode::Canceling);
+    CHECK(MainMenuTestAccess::PressKey(*menu, SDLK_RIGHT));
+    CHECK(MainMenuTestAccess::CurrentGameMode(*menu) == GameMode::Timed);
+    CHECK(MainMenuTestAccess::CurrentAttackMode(*menu) == AttackMode::Canceling);
+
+    // The full cycle returns to where it started, in both directions.
+    {
+        GameMode start = MainMenuTestAccess::CurrentGameMode(*menu);
+        GameMode m = start;
+        for (int i = 0; i < 4; ++i) m = NextGameMode(m);
+        CHECK(m == start);
+        for (int i = 0; i < 4; ++i) m = PrevGameMode(m);
+        CHECK(m == start);
+        CHECK(NextGameMode(PrevGameMode(start)) == start);
+    }
+
+    // Race and Timed each show one extra row, so the value row is a real stop
+    // and every row under Mode shifts down by exactly one.
+    {
+        CHECK(LocalMPRowsAfterMode(GameMode::Classic) == 0);
+        CHECK(LocalMPRowsAfterMode(GameMode::Clear) == 0);
+        CHECK(LocalMPRowsAfterMode(GameMode::Race) == 1);
+        CHECK(LocalMPRowsAfterMode(GameMode::Timed) == 1);
+        CHECK(LocalMPRowMalus(GameMode::Race) == LocalMPRowMalus(GameMode::Classic) + 1);
+        CHECK(LocalMPRowMalus(GameMode::Race) == kLocalMPRowModeValue + 1);
+        CHECK(LocalMPStartRow(4, GameMode::Timed) == LocalMPStartRow(4, GameMode::Clear) + 1);
+    }
+
+    // Stepping the pop target and the round length wraps at both ends, and
+    // each only moves the number its own mode owns.
+    {
+        MainMenuTestAccess::SelectModeRowBefore(*menu, GameMode::Race);
+        CHECK(MainMenuTestAccess::PressKey(*menu, SDLK_RIGHT));
+        const int timedBefore = MainMenuTestAccess::TimedSecondsIndex(*menu);
+        const int raceBefore = MainMenuTestAccess::RaceTargetIndex(*menu);
+        MainMenuTestAccess::LocalSelection(*menu) = kLocalMPRowModeValue;
+        CHECK(MainMenuTestAccess::PressKey(*menu, SDLK_RIGHT));
+        CHECK(MainMenuTestAccess::RaceTargetIndex(*menu) == raceBefore + 1);
+        CHECK(MainMenuTestAccess::TimedSecondsIndex(*menu) == timedBefore);
+        CHECK(MainMenuTestAccess::PressKey(*menu, SDLK_LEFT));
+        CHECK(MainMenuTestAccess::RaceTargetIndex(*menu) == raceBefore);
+
+        // Wrapping: Left from the first step lands on the last, not on -1.
+        CHECK(StepModeValueIndex(0, (int)std::size(kRaceTargets), false)
+              == (int)std::size(kRaceTargets) - 1);
+        CHECK(StepModeValueIndex((int)std::size(kRaceTargets) - 1,
+                                 (int)std::size(kRaceTargets), true) == 0);
+        // The default really is "first to 50", which is what the row shows.
+        CHECK(kRaceTargetDefault == 50);
+        CHECK(kTimedSecondsDefault == 30);
+    }
 
     // ---- settings guide ------------------------------------------------
     {
@@ -320,7 +404,8 @@ int main() {
         CHECK(MainMenuTestAccess::PressHelpKey(*menu, SDLK_ESCAPE));
         CHECK(!MainMenuTestAccess::HelpOpen(*menu));
         CHECK(MainMenuTestAccess::RoomSelection(*menu) == kRoomMalus);
-        CHECK(MainMenuTestAccess::LocalSelection(*menu) == kLocalMPRowBotSkill);
+        CHECK(MainMenuTestAccess::LocalSelection(*menu) ==
+              LocalMPRowBotSkill(MainMenuTestAccess::CurrentGameMode(*menu)));
 
         // The local page is a different page, not the online one rescrolled:
         // it has its own length, so a scroll position valid for one is not
@@ -349,10 +434,12 @@ int main() {
         MainMenuTestAccess::SelectAttackRow(*menu, AttackMode::On);
         MainMenuTestAccess::LocalSelection(*menu) = kLocalMPHelpTapIndex;
         CHECK(MainMenuTestAccess::PressKey(*menu, SDLK_UP));
-        CHECK(MainMenuTestAccess::LocalSelection(*menu) == kLocalMPRowBotSkill - 1);
+        CHECK(MainMenuTestAccess::LocalSelection(*menu) ==
+              LocalMPRowBotSkill(MainMenuTestAccess::CurrentGameMode(*menu)) - 1);
         MainMenuTestAccess::LocalSelection(*menu) = kLocalMPHelpTapIndex;
         CHECK(MainMenuTestAccess::PressKey(*menu, SDLK_DOWN));
-        CHECK(MainMenuTestAccess::LocalSelection(*menu) == kLocalMPRowBotSkill + 1);
+        CHECK(MainMenuTestAccess::LocalSelection(*menu) ==
+              LocalMPRowBotSkill(MainMenuTestAccess::CurrentGameMode(*menu)) + 1);
     }
 
     // The Bot skill row still reports its value with the HELP box beside it.
@@ -526,12 +613,12 @@ int main() {
     for (int enabledField = 0; enabledField < 5; ++enabledField) {
         const bool chainReaction = enabledField == 0;
         const bool noCompression = enabledField == 1;
-        const bool clearMode = enabledField == 2;
+        const GameMode gameMode = enabledField == 2 ? GameMode::Clear : GameMode::Classic;
         const AttackMode attackMode =
             enabledField == 3 ? AttackMode::Off : AttackMode::On;
         const bool teamMode = enabledField == 4;
         MainMenuTestAccess::ConfigureLocalGame(
-            *menu, chainReaction, noCompression, clearMode, attackMode,
+            *menu, chainReaction, noCompression, gameMode, attackMode,
             teamMode);
 
         bool captured = false;
@@ -543,7 +630,7 @@ int main() {
         CHECK(started.chainReaction == chainReaction);
         CHECK(started.disableCompression[0] == noCompression);
         CHECK(started.disableCompression[4] == noCompression);
-        CHECK(started.clearMode == clearMode);
+        CHECK(started.gameMode == gameMode);
         CHECK(started.attackMode == attackMode);
         for (int i = 0; i < started.playerCount; ++i)
             CHECK(started.playerTeams[i] == (teamMode ? LocalMPTeamOf(i) : kNoTeam));
@@ -708,29 +795,39 @@ int main() {
     // The panel and the key handler both index rows through these helpers, so
     // the two can only disagree if the helpers themselves are wrong.
     {
-        CHECK(LocalMPAimGuideRow(0) == kLocalMPFirstPlayerRow);
-        CHECK(LocalMPColorsRow(0, 4) == kLocalMPFirstPlayerRow + 4);
-        CHECK(LocalMPStartRow(4) == kLocalMPFirstPlayerRow + 8);
-        // The rows a fifth player adds land past the fourth player's, and
-        // Start moves down with them.
-        CHECK(LocalMPColorsRow(0, 5) == kLocalMPFirstPlayerRow + 5);
-        CHECK(LocalMPAimGuideRow(4) < LocalMPColorsRow(0, 5));
-        CHECK(LocalMPColorsRow(4, 5) < LocalMPStartRow(5));
-        CHECK(LocalMPStartRow(5) == kLocalMPFirstPlayerRow + 10);
-        // Every row index in a 4-player panel is distinct and contiguous.
-        std::set<int> rows;
-        for (int i = 0; i <= LocalMPStartRow(4); ++i) rows.insert(i);
-        CHECK((int)rows.size() == LocalMPStartRow(4) + 1);
-        CHECK(kLocalMPRowBots < kLocalMPRowBotSkill);
-        CHECK(kLocalMPRowBotSkill < kLocalMPFirstPlayerRow);
-        // Victories input still answers only for its own row.
-        int victories = 3;
-        CHECK(!ApplyLocalMultiplayerVictoriesInput(
-            kLocalMPRowBots, LocalMultiplayerMenuCommand::Right, victories));
-        CHECK(victories == 3);
-        CHECK(ApplyLocalMultiplayerVictoriesInput(
-            kLocalMPRowVictories, LocalMultiplayerMenuCommand::Right, victories));
-        CHECK(victories == 4);
+        // Checked in both a mode that adds the value row and one that does
+        // not: the shift is exactly what the two files have to agree about.
+        for (GameMode gm : {GameMode::Classic, GameMode::Race}) {
+            const int first = LocalMPFirstPlayerRow(gm);
+            CHECK(LocalMPAimGuideRow(0, gm) == first);
+            CHECK(LocalMPColorsRow(0, 4, gm) == first + 4);
+            CHECK(LocalMPStartRow(4, gm) == first + 8);
+            // The rows a fifth player adds land past the fourth player's, and
+            // Start moves down with them.
+            CHECK(LocalMPColorsRow(0, 5, gm) == first + 5);
+            CHECK(LocalMPAimGuideRow(4, gm) < LocalMPColorsRow(0, 5, gm));
+            CHECK(LocalMPColorsRow(4, 5, gm) < LocalMPStartRow(5, gm));
+            CHECK(LocalMPStartRow(5, gm) == first + 10);
+            // Every row index in a 4-player panel is distinct and contiguous.
+            std::set<int> rows;
+            for (int i = 0; i <= LocalMPStartRow(4, gm); ++i) rows.insert(i);
+            CHECK((int)rows.size() == LocalMPStartRow(4, gm) + 1);
+            CHECK(LocalMPRowBots(gm) < LocalMPRowBotSkill(gm));
+            CHECK(LocalMPRowBotSkill(gm) < first);
+            // No row collides with the mode-value slot except in a mode that
+            // actually owns it.
+            CHECK((LocalMPRowMalus(gm) == kLocalMPRowModeValue) ==
+                  (LocalMPRowsAfterMode(gm) == 0));
+            // Victories input still answers only for its own row, and follows
+            // that row when the mode moves it.
+            int victories = 3;
+            CHECK(!ApplyLocalMultiplayerVictoriesInput(
+                LocalMPRowBots(gm), LocalMultiplayerMenuCommand::Right, victories, gm));
+            CHECK(victories == 3);
+            CHECK(ApplyLocalMultiplayerVictoriesInput(
+                LocalMPRowVictories(gm), LocalMultiplayerMenuCommand::Right, victories, gm));
+            CHECK(victories == 4);
+        }
     }
 
     menu.reset();

@@ -335,6 +335,39 @@ void BubbleGame::ProcessNetworkMessages() {
                         // Ping - ignore (keepalive only)
                         break;
                     }
+                    case 'P': {
+                        // Live popped-bubble count from a remote player:
+                        // P{popped}:{final}
+                        //
+                        // Sent whenever that player's total moves -- at most
+                        // once per shot -- so the popped HUD can show a live
+                        // number in every multiplayer mode instead of waiting
+                        // for the end-of-round 'S'. {final} is 1 only on the
+                        // count a player froze at when their own Timed clock
+                        // ran out; the leader uses it to know it has heard
+                        // from everyone and can rank the round (see
+                        // UpdateTimedRound). Older peers never send this at
+                        // all, which just leaves their HUD count at 0 until
+                        // their 'S' arrives.
+                        int rp = 0, isFinal = 0;
+                        if (sscanf(gameData + 1, "%d:%d", &rp, &isFinal) >= 1) {
+                            int idx = -1;
+                            for (int i = 0; i < currentSettings.playerCount; i++) {
+                                if (bubbleArrays[i].lobbyPlayerId == senderId) { idx = i; break; }
+                            }
+                            // Only remote seats: our own boards are counted as
+                            // they pop and must never be overwritten by an echo.
+                            if (idx >= 1 && !OwnsArrayIndex(idx)) {
+                                if (rp < 0) rp = 0;
+                                bubbleArrays[idx].rPopped = rp;
+                                if (isFinal) finalPoppedReported[idx] = true;
+                            } else {
+                                SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION,
+                                             "Ignoring 'P' count from senderId %d", senderId);
+                            }
+                        }
+                        break;
+                    }
                     case 'n': {
                         // Newgame - an opponent is ready for next round
                         opponentsReadyCount++;
@@ -608,6 +641,16 @@ void BubbleGame::ProcessNetworkMessages() {
                         std::string winnerNick = gameData + 1;  // Everything after 'F'
                         SDL_Log("Received win notification: F'%s'", winnerNick.c_str());
 
+                        // A bare 'F' names nobody, which is how the leader
+                        // announces a Timed round that ended level: the top
+                        // pop count was tied, so the round is a draw and
+                        // credits nobody a win (see UpdateTimedRound). Every
+                        // other 'F' carries a nickname.
+                        if (winnerNick.empty()) {
+                            if (!gameFinish) FinishRoundAsDraw();
+                            break;
+                        }
+
                         int winnerPlayer = -1;
 
                         // Try legacy format first: "F:{digit}"
@@ -632,9 +675,14 @@ void BubbleGame::ProcessNetworkMessages() {
                             // Guard: only process the first 'F' per round (multiple clients may send it)
                             if (!gameFinish) {
                                 RoundWinCause cause =
-                                    currentSettings.clearMode && bubbleArrays[winnerPlayer].allClear()
+                                    currentSettings.gameMode == GameMode::Clear && bubbleArrays[winnerPlayer].allClear()
                                         ? RoundWinCause::Clear
                                         : RoundWinCause::Remote;
+                                // Nothing here distinguishes a Race or Timed
+                                // win from any other remote one, and nothing
+                                // needs to: Remote already means "somebody
+                                // else's board ended this", and the mode is
+                                // what the banner reads to say how.
                                 ResolveRoundOutcome(winnerPlayer, cause, false);
                             }
                         } else {

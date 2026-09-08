@@ -33,6 +33,7 @@
 #include "socket_compat.h"
 #endif
 #include "attackmode.h"  // AttackMode is used below regardless of platform
+#include "gamemode.h"    // GameMode likewise -- see its header comment on the cycle
 
 #define PROTO_MAJOR 1
 #define PROTO_MINOR 3
@@ -331,7 +332,7 @@ public:
     bool IsPendingNick() const { return pendingNick; }
 
     // Send game options to other players (host only)
-    bool SendOptions(bool chainReaction, bool continueWhenLeave, bool singleTarget, int victoriesLimit, const int playerColors[5], const bool noCompress[5], const bool aimGuide[5], bool mouseEnabled, bool clearMode, AttackMode attackMode, const int playerTeams[5], int teamCount);
+    bool SendOptions(bool chainReaction, bool continueWhenLeave, bool singleTarget, int victoriesLimit, const int playerColors[5], const bool noCompress[5], const bool aimGuide[5], bool mouseEnabled, GameMode gameMode, int raceTarget, int timedSeconds, AttackMode attackMode, const int playerTeams[5], int teamCount);
 
     // Received options from host (updated when SETOPTIONS push arrives)
     bool pendingOptions = false;
@@ -343,20 +344,25 @@ public:
     bool rcvNoCompress[5] = {false, false, false, false, false};
     bool rcvAimGuide[5] = {false, false, false, false, false};
     bool rcvMouseEnabled = false;
-    bool rcvClearMode = false;
+    GameMode rcvGameMode = GameMode::Classic;
+    // Values, not table indices: a room set to "first to 50" means 50 to every
+    // client whatever its own kRaceTargets happens to hold, so the number is
+    // what crosses the wire and each client finds its own nearest step.
+    int rcvRaceTarget = kRaceTargetDefault;
+    int rcvTimedSeconds = kTimedSecondsDefault;
     AttackMode rcvAttackMode = AttackMode::On;
     // No team until an OPTIONS push says otherwise -- the same default a
     // room starts every player on now.
     int rcvPlayerTeams[5] = {0, 0, 0, 0, 0};
     int rcvTeamCount = 2;
     // Returns true (and clears flag) if new options arrived since last call
-    bool GetAndClearPendingOptions(bool& cr, bool& cl, bool& st, int& vl, int pc[5], bool nc[5], bool ag[5], bool& me, bool& cm, AttackMode& dm, int pt[5], int& tc) {
+    bool GetAndClearPendingOptions(bool& cr, bool& cl, bool& st, int& vl, int pc[5], bool nc[5], bool ag[5], bool& me, GameMode& gm, int& rt, int& ts, AttackMode& dm, int pt[5], int& tc) {
         if (!pendingOptions) return false;
         pendingOptions = false;
         cr = rcvChainReaction; cl = rcvContinueLeave; st = rcvSingleTarget; vl = rcvVictoriesLimit;
         for (int i = 0; i < 5; i++) { pc[i] = rcvPlayerColors[i]; nc[i] = rcvNoCompress[i]; ag[i] = rcvAimGuide[i]; }
         me = rcvMouseEnabled;
-        cm = rcvClearMode; dm = rcvAttackMode;
+        gm = rcvGameMode; rt = rcvRaceTarget; ts = rcvTimedSeconds; dm = rcvAttackMode;
         for (int i = 0; i < 5; i++) pt[i] = rcvPlayerTeams[i];
         tc = rcvTeamCount;
         return true;

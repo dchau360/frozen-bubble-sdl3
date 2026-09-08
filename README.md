@@ -43,12 +43,16 @@ Building from source: [docs/BUILDING.md](docs/BUILDING.md).
 
 **Network multiplayer (2–20 players)** — LAN or internet, using the included server. Rooms hold 5, 10, or 20 players.
 
-Both game modes are available in both local and network play, chosen by the host:
+All four game modes are available in both local and network play, chosen by the host:
 
 - **Classic** — standard chain-reaction gameplay; last player or team standing wins.
 - **Clear Mode** — first player to clear their entire board wins the round (the last survivor also wins). Malus and row compression are off by default here, though the host can override both.
+- **Race** — first to pop a target number of bubbles (50 by default, host-adjustable) wins the round. A live popped-count HUD sits next to each player's own shooter; on a team, one player has to personally reach the target, and the win then extends to their teammates the same way any other win does.
+- **Timed** — most bubbles popped when the clock runs out (30 seconds by default, host-adjustable) wins. The same HUD spot carries a countdown instead of (well, alongside) the pop count. Teams pool their pops here — the side with the higher combined total wins — so this is the one mode where teammates' counts add together. A tie at the buzzer is a draw; nobody scores a win.
 
-**Teams** are a per-player setting available in either mode, not a mode of their own: any player can join a team (1–5) or stay a free agent, from the room's **Set Teams** page (a header button reachable by click, tap, or keyboard/gamepad Up/Down + Enter, or the **A** hotkey). Malus only lands on living opponents outside your team; a room where nobody picks a team plays exactly like the old free-for-all. Hosts get **Auto 2/3/4/5** buttons that round-robin every seat across that many teams, and tapping a player's name cycles their own team, including back to no team.
+In Race and Timed, an eliminated player stays out for the rest of the round while everyone else keeps playing — reaching the target or running out the clock doesn't need every board still standing. "Popped" counts a bubble the instant it's cleared, whether it was part of the matched group or knocked loose and fell separately, so the same number a player sees mid-round is the number the mode judges them on.
+
+**Teams** are a per-player setting available in any mode, not a mode of their own: any player can join a team (1–5) or stay a free agent, from the room's **Set Teams** page (a header button reachable by click, tap, or keyboard/gamepad Up/Down + Enter, or the **A** hotkey). Malus only lands on living opponents outside your team; a room where nobody picks a team plays exactly like the old free-for-all. Hosts get **Auto 2/3/4/5** buttons that round-robin every seat across that many teams, and tapping a player's name cycles their own team, including back to no team.
 
 The host configures chain reactions, victories limit, per-player colours and aim guides, mouse/touch aim and more from the game room — all joined players see changes live. Rooms above 5 players get battle-royale UI: four opponent boards on screen at a time, ranked by who's most relevant to you, with **Tab** to page manually, keys **1–4** to target a visible opponent, and a spectate mode after you're knocked out.
 

@@ -193,7 +193,7 @@ MainMenu::MainMenu(const SDL_Renderer *renderer)
     // Restore the host's last-used room settings (see SyncRoomOptions()) so
     // the first room this device creates this session already reflects them,
     // not just rooms created after visiting the net panel once (which is all
-    // the netClearMode/netAttackMode loads above cover -- those two are
+    // the netGameMode/netAttackMode loads above cover -- those two are
     // re-loaded every time the panel opens since a room's Clear
     // Mode temporarily overrides them; the rest only need setting once here).
     {
@@ -201,7 +201,9 @@ MainMenu::MainMenu(const SDL_Renderer *renderer)
         chainReactionEnabled = gs->hostChainReactions;
         singlePlayerTargetting = gs->hostSinglePlayerTargetting;
         victoriesLimitIndex = gs->hostVictoriesLimitIndex;
-        netClearMode = gs->hostClearMode;
+        netGameMode = ClampGameMode(gs->hostGameMode);
+        netRaceTargetIndex = gs->hostRaceTargetIndex;
+        netTimedSecondsIndex = gs->hostTimedSecondsIndex;
         netAttackMode = (AttackMode)gs->hostAttackMode;
         netTeamCount = gs->hostTeamCount;
         netRoomBotSkill = gs->hostBotSkill;
@@ -211,7 +213,8 @@ MainMenu::MainMenu(const SDL_Renderer *renderer)
 
 void MainMenu::SaveHostDefaults() {
     GameSettings::Instance()->SaveHostSettings(chainReactionEnabled, singlePlayerTargetting,
-        victoriesLimitIndex, netClearMode, (int)netAttackMode, netTeamCount,
+        victoriesLimitIndex, (int)netGameMode, netRaceTargetIndex, netTimedSecondsIndex,
+        (int)netAttackMode, netTeamCount,
         netRoomBotSkill, netRoomSizeChoice);
 }
 
@@ -221,7 +224,8 @@ void MainMenu::SyncRoomOptions() {
     static const int vLimits[] = {0,1,2,3,4,5,6,7,8,9,10,11,12,15,20,30,50,100};
     netClient->SendOptions(chainReactionEnabled, /*continueWhenLeave=*/true,
         singlePlayerTargetting, vLimits[victoriesLimitIndex], playerColorCounts,
-        playerNoCompress, playerAimGuide, netRoomMouseEnabled, netClearMode,
+        playerNoCompress, playerAimGuide, netRoomMouseEnabled, netGameMode,
+        RaceTargetAt(netRaceTargetIndex), TimedSecondsAt(netTimedSecondsIndex),
         netAttackMode, netPlayerTeams, netTeamCount);
     SaveHostDefaults();
 }
@@ -511,7 +515,9 @@ void MainMenu::ShowPanel(int which) {
             // these are what the host last configured on this device (possibly
             // in an earlier session), see MainMenu::SyncRoomOptions().
             netRoomMouseEnabled = GameSettings::Instance()->mouseEnabled; // load persisted default
-            netClearMode = GameSettings::Instance()->hostClearMode;
+            netGameMode = ClampGameMode(GameSettings::Instance()->hostGameMode);
+            netRaceTargetIndex = GameSettings::Instance()->hostRaceTargetIndex;
+            netTimedSecondsIndex = GameSettings::Instance()->hostTimedSecondsIndex;
             netAttackMode = (AttackMode)GameSettings::Instance()->hostAttackMode;
             for (int i = 0; i < 5; i++) netPlayerTeams[i] = kNoTeam;
             lastProcessedChatCount = 0;
@@ -526,7 +532,9 @@ void MainMenu::ShowPanel(int which) {
             networkInputMode = 10; // Public server list
             // See the matching comment in case 4 just above.
             netRoomMouseEnabled = GameSettings::Instance()->mouseEnabled; // load persisted default
-            netClearMode = GameSettings::Instance()->hostClearMode;
+            netGameMode = ClampGameMode(GameSettings::Instance()->hostGameMode);
+            netRaceTargetIndex = GameSettings::Instance()->hostRaceTargetIndex;
+            netTimedSecondsIndex = GameSettings::Instance()->hostTimedSecondsIndex;
             netAttackMode = (AttackMode)GameSettings::Instance()->hostAttackMode;
             for (int i = 0; i < 5; i++) netPlayerTeams[i] = kNoTeam;
             lastProcessedChatCount = 0;
@@ -614,7 +622,9 @@ void MainMenu::SetupNewGame(int mode) {
                 ns.networkGame = true;
                 ns.randomLevels = true;
                 ns.singlePlayerTargetting = singlePlayerTargetting;
-                ns.clearMode = netClearMode;
+                ns.gameMode = netGameMode;
+                ns.raceTarget = RaceTargetAt(netRaceTargetIndex);
+                ns.timedSeconds = TimedSecondsAt(netTimedSecondsIndex);
                 ns.attackMode = netAttackMode;
                 // Always on: the room option that used to disable it is gone.
                 ns.continueWhenPlayersLeave = true;
@@ -684,14 +694,16 @@ void MainMenu::SetupNewGame(int mode) {
                 localMPPlayerCount,
                 localMPCR,
                 localMPNoCompress,
-                localMPClearMode,
+                localMPGameMode,
                 localMPAttackMode,
                 localMPTeamMode,
                 localMPVictoriesIndex,
                 playerColorCounts,
                 localMPAimGuide,
                 localMPBotCount,
-                localMPBotSkill);
+                localMPBotSkill,
+                localMPRaceTargetIndex,
+                localMPTimedSecondsIndex);
             StartLocalGame(BuildLocalMultiplayerSettings(options));
             break;
         }

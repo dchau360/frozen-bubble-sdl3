@@ -671,7 +671,7 @@ void NetworkClient::ProbeNotifySupportIfNeeded() {
     SendCommand("NOTIFYUNREG fb-follow-capability-probe");
 }
 
-bool NetworkClient::SendOptions(bool chainReaction, bool continueWhenLeave, bool singleTarget, int victoriesLimit, const int playerColors[5], const bool noCompress[5], const bool aimGuide[5], bool mouseEnabled, bool clearMode, AttackMode attackMode, const int playerTeams[5], int teamCount) {
+bool NetworkClient::SendOptions(bool chainReaction, bool continueWhenLeave, bool singleTarget, int victoriesLimit, const int playerColors[5], const bool noCompress[5], const bool aimGuide[5], bool mouseEnabled, GameMode gameMode, int raceTarget, int timedSeconds, AttackMode attackMode, const int playerTeams[5], int teamCount) {
     // Send game options using SETOPTIONS command (original line 4468-4474)
     // Format: SETOPTIONS CHAINREACTION:0/1,...,NUMCOLORS_P1:N,...,NUMCOLORS_P5:N
     char cmd[768];
@@ -694,7 +694,15 @@ bool NetworkClient::SendOptions(bool chainReaction, bool continueWhenLeave, bool
              // reading this room's OPTIONS simply finds no TEAMMODE key and
              // falls back to its own default of "off", the same as it does
              // today for any key it predates.
-             ",MOUSEENABLED:%d,CLEARMODE:%d,DISABLEMALUS:%d,MALUSCANCEL:%d"
+             // CLEARMODE keeps its original 0/1 meaning -- set only for
+             // GameMode::Clear -- so a client built before Race and Timed
+             // existed still reads a Clear room as Clear, and reads a Race or
+             // Timed room as Classic rather than as something it cannot name.
+             // GAMEMODE rides alongside it with the full four-way value and is
+             // simply not found by that client's parser. Same shape, and the
+             // same kind of degradation, as MALUSCANCEL above.
+             ",MOUSEENABLED:%d,CLEARMODE:%d,GAMEMODE:%d,RACETARGET:%d,TIMELIMIT:%d"
+             ",DISABLEMALUS:%d,MALUSCANCEL:%d"
              ",TEAMCOUNT:%d,PLAYERTEAM_P1:%d,PLAYERTEAM_P2:%d,PLAYERTEAM_P3:%d,PLAYERTEAM_P4:%d,PLAYERTEAM_P5:%d",
              chainReaction ? 1 : 0,
              continueWhenLeave ? 1 : 0,
@@ -703,7 +711,8 @@ bool NetworkClient::SendOptions(bool chainReaction, bool continueWhenLeave, bool
              playerColors[0], playerColors[1], playerColors[2], playerColors[3], playerColors[4],
              noCompress[0] ? 1 : 0, noCompress[1] ? 1 : 0, noCompress[2] ? 1 : 0, noCompress[3] ? 1 : 0, noCompress[4] ? 1 : 0,
              aimGuide[0] ? 1 : 0, aimGuide[1] ? 1 : 0, aimGuide[2] ? 1 : 0, aimGuide[3] ? 1 : 0, aimGuide[4] ? 1 : 0,
-             mouseEnabled ? 1 : 0, clearMode ? 1 : 0,
+             mouseEnabled ? 1 : 0, gameMode == GameMode::Clear ? 1 : 0,
+             (int)gameMode, raceTarget, timedSeconds,
              attackMode == AttackMode::Off ? 1 : 0,
              attackMode == AttackMode::Canceling ? 1 : 0,
              teamCount, playerTeams[0], playerTeams[1], playerTeams[2], playerTeams[3], playerTeams[4]);
@@ -1507,7 +1516,18 @@ void NetworkClient::HandlePushMessage(const std::string& pushMsg) {
         rcvAimGuide[3] = parseVal("AIMGUIDE_P4", 0) != 0;
         rcvAimGuide[4] = parseVal("AIMGUIDE_P5", 0) != 0;
         rcvMouseEnabled = parseVal("MOUSEENABLED", 0) != 0;
-        rcvClearMode = parseVal("CLEARMODE", 0) != 0;
+        // GAMEMODE when the room's host is new enough to send one; otherwise
+        // fall back to the CLEARMODE bit, which is all an older host says.
+        // ClampGameMode is the trust boundary: this value comes straight off
+        // another client's push and selects behaviour on this one.
+        rcvGameMode = ClampGameMode(
+            parseVal("GAMEMODE", parseVal("CLEARMODE", 0) != 0 ? (int)GameMode::Clear
+                                                              : (int)GameMode::Classic));
+        // Taken at face value inside sane bounds rather than snapped to this
+        // build's own menu steps -- see ClampRaceTarget's comment on why the
+        // room's number has to survive the trip intact.
+        rcvRaceTarget = ClampRaceTarget(parseVal("RACETARGET", kRaceTargetDefault));
+        rcvTimedSeconds = ClampTimedSeconds(parseVal("TIMELIMIT", kTimedSecondsDefault));
         // Off wins over canceling if a malformed push somehow sets both:
         // "no attacks at all" is the safer of the two to land on.
         rcvAttackMode = parseVal("DISABLEMALUS", 0) != 0 ? AttackMode::Off

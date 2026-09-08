@@ -148,7 +148,14 @@ void BubbleGame::UpdatePenguin(BubbleArray &bArray) {
         // Don't accept input if player has lost or game is finished (except local player 0 in finished state)
         // Original: checks if $pdata{state} eq 'game'
         bool acceptInput = (bArray.playerState == BubbleArray::PlayerState::ALIVE)
-            && !(chattingMode && currentSettings.networkGame && bArray.playerAssigned == 0);
+            && !(chattingMode && currentSettings.networkGame && bArray.playerAssigned == 0)
+            // Timed mode, buzzer gone but the winner not announced yet: the
+            // count we just reported is final, so a shot landing in that
+            // window would pop bubbles nobody is counting any more. Freezing
+            // here rather than at the fire check also stops the launcher
+            // turning, which is what makes the freeze read as the end of the
+            // round instead of a stutter.
+            && !ModeAwaitingVerdict();
         if (!acceptInput && bArray.playerAssigned == 0 && gameFinish) {
             // Allow local player to continue for a bit during finish sequence
             acceptInput = false;
@@ -222,7 +229,12 @@ void BubbleGame::UpdatePenguin(BubbleArray &bArray) {
     // Hurry timer and warnings only for local, still-alive players (remote players have their
     // own timers; a dead player's board is frozen and must not accumulate hurry time or force-fire
     // — original gates the whole per-player update on state == 'ingame', bin/frozen-bubble ~2106).
-    if (isLocalPlayer && bArray.playerState == BubbleArray::PlayerState::ALIVE) {
+    // ModeAwaitingVerdict for the same reason acceptInput carries it above:
+    // this block force-fires on its own once the hurry timer maxes out, so
+    // without it a board frozen at the Timed buzzer would still let one last
+    // shot off -- past the count it already reported as final.
+    if (isLocalPlayer && bArray.playerState == BubbleArray::PlayerState::ALIVE &&
+        !ModeAwaitingVerdict()) {
         // Only the classic numbered single-player campaign gets the longer hurry timer
         // (original ~line 3330-3332); random 1P levels and mp_train use the shorter default,
         // same as multiplayer (original ~line 3300-3302).

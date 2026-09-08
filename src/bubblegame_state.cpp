@@ -718,6 +718,203 @@ void BubbleGame::CommitRoundWin(int winnerIdx,
     }
 }
 
+// --- Race / Timed (gamemode.h) -------------------------------------------
+
+void BubbleGame::ResetModeState() {
+    modeTimerStart = 0;
+    modeTimerExpired = false;
+    modeTimerDeadline = 0;
+    for (int i = 0; i < MAX_NET_PLAYERS; i++) {
+        lastSentPopped[i] = 0;
+        finalPoppedReported[i] = false;
+    }
+}
+
+void BubbleGame::BroadcastPoppedCounts() {
+    // Runs in every network multiplayer mode, not just the two that rank by
+    // pops: the live popped HUD is shown in all of them, and without this a
+    // remote player's count would sit at 0 until their end-of-round 'S'.
+    //
+    // Cheap despite being called every frame -- rPopped only moves when a shot
+    // pops something, so this sends at most once per shot and nothing at all
+    // in between.
+    if (!currentSettings.networkGame) return;
+    if (currentSettings.playerCount < 2) return;
+
+    for (int i = 0; i < currentSettings.playerCount; i++) {
+        BubbleArray &arr = bubbleArrays[i];
+        if (!OwnsArray(arr)) continue;
+        if (arr.rPopped == lastSentPopped[i]) continue;
+        lastSentPopped[i] = arr.rPopped;
+        char msg[24];
+        snprintf(msg, sizeof(msg), "P%d:0", arr.rPopped);
+        SendGameDataFor(arr, msg);
+    }
+}
+
+void BubbleGame::CheckRaceTarget() {
+    if (currentSettings.gameMode != GameMode::Race) return;
+    if (gameFinish || currentSettings.playerCount < 2) return;
+
+    // Only boards this client simulates can announce a Race win, exactly as
+    // only the owner announces a Clear win. A remote player who reaches the
+    // target tells us so with their own 'F'; deciding it here off their synced
+    // count would race their announcement and could credit a different winner
+    // on each client. CommitRoundWin ignores every 'F' after the first, so the
+    // announcement that arrives first is the one that stands.
+    for (int i = 0; i < currentSettings.playerCount; i++) {
+        BubbleArray &arr = bubbleArrays[i];
+        if (!OwnsArray(arr)) continue;
+        if (arr.playerState != BubbleArray::PlayerState::ALIVE) continue;
+        if (arr.rPopped < currentSettings.raceTarget) continue;
+        SDL_Log("Race target reached: array %d popped %d/%d",
+                i, arr.rPopped, currentSettings.raceTarget);
+        ResolveRoundOutcome(i, RoundWinCause::Target, currentSettings.networkGame);
+        return;
+    }
+}
+
+int BubbleGame::TimedSecondsRemaining() const {
+    if (currentSettings.gameMode != GameMode::Timed) return 0;
+    if (modeTimerStart == 0) return currentSettings.timedSeconds;
+    const Uint32 limit = (Uint32)currentSettings.timedSeconds * 1000u;
+    const Uint32 elapsed = SDL_GetTicks() - modeTimerStart;
+    if (elapsed >= limit) return 0;
+    return (int)((limit - elapsed + 999u) / 1000u);
+}
+
+int BubbleGame::LeadingPopper() const {
+    // Ranks whole sides, not individuals: teammates pool their pops, so the
+    // side with the higher total takes the round and CommitRoundWin extends
+    // the win to the rest of that team. With nobody on a team every player is
+    // their own side and this reduces to "most pops wins", which is what a
+    // free-for-all Timed round should do.
+    //
+    // Players who died are still ranked on the count they froze at -- being
+    // eliminated in Timed mode costs you the rest of the clock, not the
+    // bubbles you already popped. Only players who disconnected drop out of
+    // the reckoning entirely.
+    int bestTotal = -1;
+    int bestLeader = -1;      // nominal winner: highest individual on the top side
+    int bestLeaderPopped = -1;
+    bool tied = false;
+
+    for (int i = 0; i < currentSettings.playerCount; i++) {
+        const BubbleArray &arr = bubbleArrays[i];
+        if (arr.playerState == BubbleArray::PlayerState::LEFT) continue;
+
+        const int team = currentSettings.playerTeams[i];
+        int total = 0, leader = i, leaderPopped = -1;
+        for (int j = 0; j < currentSettings.playerCount; j++) {
+            const BubbleArray &other = bubbleArrays[j];
+            if (other.playerState == BubbleArray::PlayerState::LEFT) continue;
+            if (j != i && !AreTeammates(currentSettings.playerTeams[j], team)) continue;
+            total += other.rPopped;
+            if (other.rPopped > leaderPopped) { leaderPopped = other.rPopped; leader = j; }
+        }
+
+        if (total > bestTotal) {
+            bestTotal = total;
+            bestLeader = leader;
+            bestLeaderPopped = leaderPopped;
+            tied = false;
+        } else if (total == bestTotal && bestLeader >= 0 &&
+                   !AreTeammates(currentSettings.playerTeams[bestLeader], team)) {
+            // Two different sides level on pops. Keep scanning rather than
+            // returning here: a third side may still be ahead of both.
+            tied = true;
+        }
+    }
+
+    (void)bestLeaderPopped;
+    return tied ? -1 : bestLeader;
+}
+
+void BubbleGame::UpdateTimedRound() {
+    if (currentSettings.gameMode != GameMode::Timed) return;
+    if (gameFinish || currentSettings.playerCount < 2) return;
+
+    // How long the leader waits for a straggler's final count before ranking
+    // on what it has, and how much longer than that everyone else waits for
+    // the leader's verdict before ranking for themselves. The second window
+    // exists for the case where the leader disconnected mid-round: with no
+    // verdict coming, each client falls back to the same computation off the
+    // same final counts, which is deterministic as long as they all arrived.
+    const Uint32 kReportWaitMs  = 1500;
+    const Uint32 kVerdictGraceMs = 2000;
+
+    if (modeTimerStart == 0) modeTimerStart = SDL_GetTicks();
+    const Uint32 limit = (Uint32)currentSettings.timedSeconds * 1000u;
+    const Uint32 now = SDL_GetTicks();
+
+    if (!modeTimerExpired) {
+        if (now - modeTimerStart < limit) return;
+        modeTimerExpired = true;
+        SDL_Log("Timed round: %ds elapsed, freezing local boards",
+                currentSettings.timedSeconds);
+
+        if (currentSettings.networkGame) {
+            // Report the totals our seats actually finished on, flagged final
+            // so the leader knows not to wait on them any longer. Sent even
+            // when unchanged since the last 'P': the flag is the point, not
+            // the number.
+            for (int i = 0; i < currentSettings.playerCount; i++) {
+                BubbleArray &arr = bubbleArrays[i];
+                if (!OwnsArray(arr)) continue;
+                lastSentPopped[i] = arr.rPopped;
+                finalPoppedReported[i] = true;
+                char msg[24];
+                snprintf(msg, sizeof(msg), "P%d:1", arr.rPopped);
+                SendGameDataFor(arr, msg);
+            }
+            modeTimerDeadline = now + kReportWaitMs;
+        }
+    }
+
+    if (!currentSettings.networkGame) {
+        // Local multiplayer: every count is already ours, so rank immediately.
+        const int winner = LeadingPopper();
+        if (winner < 0) FinishRoundAsDraw();
+        else ResolveRoundOutcome(winner, RoundWinCause::Timeout, false);
+        return;
+    }
+
+    NetworkClient *netClient = NetworkClient::Instance();
+    const bool leader = netClient && netClient->IsLeader();
+    if (!leader && now < modeTimerDeadline + kVerdictGraceMs) return;
+
+    if (now < modeTimerDeadline) {
+        for (int i = 0; i < currentSettings.playerCount; i++) {
+            if (bubbleArrays[i].playerState == BubbleArray::PlayerState::LEFT) continue;
+            if (!finalPoppedReported[i]) return;  // still waiting on someone
+        }
+    }
+
+    // Announced over our own connection rather than through CommitRoundWin's
+    // sendNetworkFinish, which routes by winner: SendGameDataFor refuses to
+    // speak for a remote seat, so the leader declaring somebody else's Timed
+    // win would silently send nothing. The receiving 'F' handler matches the
+    // winner by nickname and never by sender, so it reads a leader-relayed
+    // result exactly as it reads a self-announced one.
+    const int winner = LeadingPopper();
+    if (winner < 0) {
+        // Nobody to name, so the ordinary "F{nick}" has nothing to carry: a
+        // bare 'F' is the draw. A client too old to know this mode is playing
+        // Classic in this room anyway (see gamemode.h) and will log the empty
+        // nick as unidentifiable rather than acting on it.
+        SDL_Log("Timed round ended level -- draw");
+        if (leader) SendGameDataFor(bubbleArrays[0], "F");
+        FinishRoundAsDraw();
+    } else {
+        SDL_Log("Timed round won by array %d with %d pops", winner, bubbleArrays[winner].rPopped);
+        if (leader) {
+            const std::string &nick = bubbleArrays[winner].playerNickname;
+            SendGameDataFor(bubbleArrays[0], ("F" + nick).c_str());
+        }
+        ResolveRoundOutcome(winner, RoundWinCause::Timeout, false);
+    }
+}
+
 void BubbleGame::FinishRoundAsDraw() {
     SDL_Log("Draw game - all players are dead!");
     gameFinish = true;
@@ -753,7 +950,7 @@ void BubbleGame::CheckGameState(BubbleArray &bArray, bool countForRoot) {
         }
     }
     if (bArray.allClear() &&
-        (currentSettings.playerCount < 2 || currentSettings.clearMode)) {
+        (currentSettings.playerCount < 2 || currentSettings.gameMode == GameMode::Clear)) {
         // Award bonus for clearing the level -- once. This runs again after the
         // level is already won: UpdateSingleBubblesAtScale keeps driving bubbles
         // that were still in flight (unlike UpdatePenguin, it has no gameFinish
@@ -793,6 +990,11 @@ void BubbleGame::CheckGameState(BubbleArray &bArray, bool countForRoot) {
     // otherwise a local player pushed into the danger zone purely by incoming malus (rather
     // than their own shot) wouldn't be flagged lost until they next fired themselves.
     if (currentSettings.playerCount >= 2) {
+        // Before the danger-zone sweep, deliberately: the shot that carries a
+        // player over the Race target has already been counted, so reaching it
+        // wins the round even if the malus that landed alongside it would have
+        // pushed that same board into the danger zone this frame.
+        CheckRaceTarget();
         ResolveDangerZoneLosses();
     } else {
         // Single player - only check the current (only) player

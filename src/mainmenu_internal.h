@@ -92,22 +92,29 @@ static const int kKeyPlayerTapBase = 900;
 enum GameRoomRow {
     kRoomChat       = 0,
     kRoomMode       = 1,
-    kRoomMalus      = 2,
-    kRoomChain      = 3,
-    kRoomTarget     = 4,
-    kRoomVictories  = 5,
-    kRoomMouse      = 6,
+    // The mode's own number -- Race's pop target, Timed's round length. Unlike
+    // every other row here this one is not always shown: Classic and Clear have
+    // no such number, and the row is skipped in both the drawing and the
+    // Up/Down walk (MainMenu::RoomRowHidden). It still owns a permanent slot in
+    // this enum rather than being appended at the end, because the row belongs
+    // directly under Mode on screen and this enum is the list's order.
+    kRoomModeValue  = 2,
+    kRoomMalus      = 3,
+    kRoomChain      = 4,
+    kRoomTarget     = 5,
+    kRoomVictories  = 6,
+    kRoomMouse      = 7,
     // Per-player grid: label on the left, one cell per player across.
-    kRoomMaxColors  = 7,
-    kRoomRows       = 8,
-    kRoomAim        = 9,
-    kRoomTeam       = 10,
+    kRoomMaxColors  = 8,
+    kRoomRows       = 9,
+    kRoomAim        = 10,
+    kRoomTeam       = 11,
     // Bots are the host's to add, and "Start game!" is host-only too, so a
     // joiner's list simply ends at kRoomTeam and never reaches either.
-    kRoomBots       = 11,   // host only
-    kRoomBotSkill   = 12,   // host only (shown even at zero bots, so the
+    kRoomBots       = 12,   // host only
+    kRoomBotSkill   = 13,   // host only (shown even at zero bots, so the
                             // rows below it never renumber)
-    kRoomStart      = 13,   // host only, and only with more than one player
+    kRoomStart      = 14,   // host only, and only with more than one player
 
     kRoomGridFirst  = kRoomMaxColors,
     kRoomGridLast   = kRoomAim,   // Team is edited through the roster, not here

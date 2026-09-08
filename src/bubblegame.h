@@ -31,6 +31,7 @@
 #include "ttftext.h"
 #include "networkclient.h"
 #include "attackmode.h"
+#include "gamemode.h"
 #include "netteams.h"   // kNoTeam, AreTeammates, CountFactions
 
 #include <map>
@@ -284,7 +285,11 @@ struct SetupSettings {
     bool aimGuide[MAX_NET_PLAYERS] = {};  // Per-player: show aim trajectory guide
     int victoriesLimit = 0;  // 0 = unlimited; >0 = first to reach this wins the match
     bool mouseEnabled = false;  // Mouse/touchscreen aim+fire for player 1
-    bool clearMode = false;    // Clear Mode: win by clearing the board
+    // What ends a round: last player standing, clearing your board, racing to a
+    // pop count, or a countdown. See gamemode.h for the per-mode rules.
+    GameMode gameMode = GameMode::Classic;
+    int raceTarget = kRaceTargetDefault;      // Race: pops needed to win the round
+    int timedSeconds = kTimedSecondsDefault;  // Timed: how long the round runs
     AttackMode attackMode = AttackMode::On;  // Attack bubbles: ON / OFF / with canceling
     // Per-player team number: kNoTeam (0) for a free agent, or 1..kMaxTeams.
     // Widened to MAX_NET_PLAYERS to match playerColors/disableCompression/
@@ -616,7 +621,7 @@ private:
 
     bool lowGfx = false, gameWon = false, gameLost = false, gameFinish = false, firstRenderDone = false, gameMpDone = false;
     bool gameMatchOver = false; // Victories limit reached - match is over, return to lobby
-    enum class RoundWinCause { Elimination, Clear, Departure, Remote };
+    enum class RoundWinCause { Elimination, Clear, Departure, Remote, Target, Timeout };
 
     // True only when this round's win came from clearing the board (CheckGameState's
     // allClear() branch, or its network-derived equivalent) rather than from
@@ -642,6 +647,28 @@ private:
     int comboDisplayTimer = 0; // Timer for showing combo text
     int frameCount = 0;  // Global frame counter for malus timing
     int networkFrameCounter = 0; // Frame counter for network ping timing
+
+    // Race/Timed state. All of it is per-round and reset by NewGame/ReloadGame.
+    //
+    // The Timed round is resolved by the leader, not by each client for
+    // itself: unlike Race -- where the player who reaches the target knows it
+    // first and can announce their own win the way a Clear win already does --
+    // nobody wins a Timed round locally, so somebody has to compare everyone's
+    // totals. Each client freezes its own board the moment its own clock runs
+    // out and sends its final count; the leader waits for every live seat (or
+    // for modeTimerDeadline, so one wedged client cannot hang the round) and
+    // then announces the winner with the ordinary 'F'. Without the wait the
+    // leader would rank players on counts that lag what those players just
+    // watched their own HUD show.
+    Uint32 modeTimerStart = 0;      // SDL_GetTicks() when the Timed round's clock started
+    bool modeTimerExpired = false;  // our own clock ran out; board frozen, awaiting the verdict
+    Uint32 modeTimerDeadline = 0;   // leader only: stop waiting for stragglers at this tick
+    // Last popped total broadcast for each seat we own, so the live 'P' sync
+    // sends only on change -- at most once per shot, and nothing at all during
+    // the frames between shots.
+    int lastSentPopped[MAX_NET_PLAYERS] = {};
+    // Timed, leader only: this seat has reported the final count it ended on.
+    bool finalPoppedReported[MAX_NET_PLAYERS] = {};
 
     // Multiplayer training state
     Uint32 mpTrainStartTime = 0;  // SDL_GetTicks() when mp_train round started
@@ -683,18 +710,35 @@ private:
     // These owners precede every borrowing TTFText so member destruction keeps
     // the immutable fonts alive until all label and cell textures are gone.
     std::unique_ptr<TTF_Font, FontCloser> targetingFont12;
+    // Popped-count HUD. Shared by every board, so it is opened once here
+    // rather than per player -- the counts differ but the face does not.
+    std::unique_ptr<TTF_Font, FontCloser> poppedFont14;
     std::unique_ptr<TTF_Font, FontCloser> remoteNameFont16;
     std::unique_ptr<TTF_Font, FontCloser> statsPanelFont14;
     std::unique_ptr<TTF_Font, FontCloser> statsPanelFont16;
 
     TTFText inGameText, winsP1Text, winsP2Text, comboText, finalScoreText, mpTrainText;
-    TTFText clearWinText;    // "Board Cleared — <Name> Wins!" banner, shown when wonByClearing
+    // Round-end winner banner, shown for every mode ("Board Cleared! <Name>
+    // Wins!" / "First to Pop! <Name> Wins!" / "Time's Up! <Name> Wins!" /
+    // plain "<Name> Wins!" for an ordinary elimination win).
+    TTFText clearWinText;
     // One slot per player rather than one shared object: a shared TTFText's cache
     // only remembers its last string, so reusing it across a per-player loop where
     // each player's text differs would invalidate and re-render every single call
     // even when nothing about that player's own line changed frame to frame.
     TTFText scoreText[2];     // "Score: N" / "Nickname[: N]", indexed by player slot (single-player and 2P only)
     TTFText playerNameWinText[MAX_NET_PLAYERS];  // "PlayerName: WinCount" for each player (3-5 player mode)
+    // Live popped-bubble count per player, drawn to the right of that
+    // player's own "next bubble" preview slot. Shown in every multiplayer
+    // mode; in Race it also carries the target ("Pop 12/50"). One slot each
+    // for the same reason playerNameWinText has one: a shared TTFText only
+    // caches its last string, so a per-player loop through one object
+    // re-renders every call.
+    TTFText poppedText[MAX_NET_PLAYERS];
+    // Timed mode countdown. One shared object -- the value is identical for
+    // every board -- redrawn at each player's own popped-count anchor in
+    // UpdatePoppedText rather than once at a fixed screen position.
+    TTFText modeTimerText;
     TTFText targetingText[MAX_NET_PLAYERS];      // Targeting indicator, indexed by player
     // Stats cells mutate only per-label color/text/position, so these fonts stay
     // immutable and can be borrowed by every texture cache at the same size.
@@ -773,6 +817,37 @@ private:
         bool sendNetworkFinish = false);
     void CommitRoundWin(int winnerIdx, RoundWinCause cause, bool sendNetworkFinish);
     void FinishRoundAsDraw();
+
+    // --- Race / Timed (gamemode.h) ---
+    // Reset the per-round mode state. Called from both NewGame and ReloadGame
+    // so round 2 of a Timed match starts a fresh clock rather than inheriting
+    // an already-expired one.
+    void ResetModeState();
+    // Push each owned seat's popped total out over the wire when it changes.
+    // Cheap enough to call every frame: it compares against lastSentPopped and
+    // sends nothing when nothing moved.
+    void BroadcastPoppedCounts();
+    // Race: has any board we simulate reached the target? Announces the win
+    // itself, the same way a Clear win is self-announced.
+    void CheckRaceTarget();
+    // Timed: advance the clock, freeze our own board at expiry, and (as leader)
+    // rank the final counts once everyone has reported.
+    void UpdateTimedRound();
+    // Whoever has the most pops, or -1 if the top is tied -- which is a draw,
+    // crediting nobody a win. Ignores players who never joined the round.
+    int LeadingPopper() const;
+    // True while our own Timed clock has run out but the round has not been
+    // decided yet. Input and firing are suppressed for exactly this window so a
+    // shot landing after the buzzer cannot change a count already reported.
+    bool ModeAwaitingVerdict() const {
+        return currentSettings.gameMode == GameMode::Timed && modeTimerExpired && !gameFinish;
+    }
+    // Seconds still on the clock, for the HUD. 0 once expired.
+    int TimedSecondsRemaining() const;
+    // Draws one player's live popped count -- and, in Timed mode, the shared
+    // countdown stacked right under it, anchored beside that board's own
+    // "next bubble" preview. No-op outside multiplayer.
+    void UpdatePoppedText(BubbleArray &bArray, int idx);
     void UpdateDepartureMatchTermination();
     void HandlePlayerDeparture(int playerIdx);
     bool HasDepartedPlayers() const;

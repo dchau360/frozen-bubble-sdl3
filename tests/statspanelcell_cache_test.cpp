@@ -197,7 +197,7 @@ int main() {
         CHECK(HasMarker(pool[player0NameIdx], marker));
     }
 
-    // RenderRoundStats has no clearMode gate on the team-totals block --
+    // RenderRoundStats has no game-mode gate on the team-totals block --
     // Clear Mode gets the same "TEAM TOTALS" rows Classic does whenever
     // someone is on a team. Same 3-player shape as the test above (1 header +
     // 8 column headers + 3*8 player rows = 33), plus one team of 2 adding a
@@ -208,7 +208,7 @@ int main() {
         SetupSettings& settings = BubbleGameTestAccess::settings(game);
         settings.playerCount = 3;
         settings.networkGame = false;
-        settings.clearMode = true;
+        settings.gameMode = GameMode::Clear;
         settings.playerTeams[0] = settings.playerTeams[1] = 1;
         BubbleGameTestAccess::roundsPlayed(game) = 1;
         for (int i = 0; i < 3; i++) {
