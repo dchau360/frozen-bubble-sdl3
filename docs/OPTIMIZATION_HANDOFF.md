@@ -33,16 +33,19 @@ a speedup.
 ## Current checkpoint
 
 - Repository: `/Users/dchau/gr/frozen-bubble-sdl3`
-- Branch: `main`; the latest source change is `d79bf01b`
-  (`perf: share immutable multiplayer label fonts`), following the main batch
-  in `1e2ed8e5` (`perf: tighten text rendering and frame pacing`). This
-  handoff update is committed immediately after the source checkpoint.
-- HEAD matches the locally recorded `origin/main`. No fetch was performed in
-  this review; this does not establish live remote or CI status.
-- CMake/Android version: `2.4.91`; Android versionCode: `74`.
+- Branch: `main`; the latest source change is `b8409d30`
+  (`perf: cache the game room's per-player settings grid labels`), following
+  `21397a04`/`8d4fb473` (handoff/measurement doc updates) and the `d79bf01b`/
+  `1e2ed8e5` batch below. This handoff update is committed immediately after
+  the source checkpoint.
+- Local `main` was 4 commits ahead of `origin/main` at the start of this
+  session (`1e2ed8e5`..`21397a04`, the prior session's B/C/D/F work); pushed
+  at the start of this session, confirmed by `git push` reporting a
+  fast-forward. Re-verify with `git fetch && git log --oneline main..origin/main`
+  before trusting this further into a new session.
+- CMake/Android version: `2.4.91`; Android versionCode: `74`. Unchanged this
+  session -- no release tag was cut for this batch of doc/perf/test-only work.
 - Latest local version tag: `v2.4.91`. HEAD includes subsequent CI/tooling commits.
-- `c5665562` is an ancestor of HEAD and the recorded `origin/main`; the old
-  instructions to push it separately are obsolete.
 - Source/test changes in `1e2ed8e5`: `src/bubblegame.h`,
   `src/bubblegame_render.cpp`, `src/bubblegame_shooter.cpp`,
   `src/frozenbubble.h`, `src/frozenbubble.cpp`,
@@ -320,7 +323,9 @@ session 3. It is now included in HEAD and the recorded `origin/main`.
 
 The original five-item list is complete. The following is a new backlog,
 based on source inspection at `b1c217e0`, not measured new speedup claims.
-All items are pending; none were implemented during this review.
+As of 2026-09-07: C, D, and F are complete; B's stats-panel and one
+confirmed menu hot path are complete; A, E, and G remain pending (see each
+item's own status line for current detail).
 
 ### A. Keep networking and server startup responsive (highest user impact)
 
@@ -385,6 +390,42 @@ Menu font sharing remains pending measurement.
   menus. Do not combine borrowers that later change font size, style, or
   alignment unless `TTFText` tracks external font generations or those
   mutations are eliminated.
+- **Menu portion, first confirmed hot path implemented and verified
+  2026-09-07 (`b8409d30`).** Scoped to `mainmenu_netpanel.cpp`'s game-room
+  settings grid (`NetPanelLobbyActionsRender`'s "ALL / P1..PN" header + 4
+  data rows) -- up to 34 short text cells rendered every frame the grid is
+  open, all through one shared `panelText`, so every cell's different text
+  invalidated the previous cell's just-cached texture. Confirmed this is a
+  real immutable-font-safe target first: the comment already in that
+  function documents the grid is deliberately reset to one fixed 16px
+  Normal style right before this section and never changes it per cell, the
+  same precondition item B's own prerequisite note asks for.
+  `MainMenu::NetGridCell(idx)` mirrors `StatsPanelCell` exactly (growable
+  pool, one shared immutable font, resolved by call order) rather than
+  reusing `BubbleGame`'s pool -- `MainMenu` and `BubbleGame` are separate
+  classes with independent lifetimes.
+- Changed files: `src/mainmenu.h`, `src/mainmenu_netpanel.cpp`,
+  `tests/menu_touch_gesture_test.cpp`.
+- New regression: a 3-player room asserts the pool's expected cell count
+  (24), that an unrelated cell's cached texture survives a second identical
+  render, and that changing one player's color count doesn't disturb the
+  "ALL" header or "Max colors:" row label's textures (sibling-cell
+  independence, the same property `statspanelcell_cache_test` checks for
+  the gameplay pools). Verified it catches the regression: reverting only
+  the render-site change (pool/member still declared) failed all 8
+  assertions; restored and re-verified passing.
+- Full native build + `ctest`: 27 runnable tests passed, 2 sanitizer-only
+  skips as expected. ASan/UBSan focused pass of `menu-touch-gesture-test`
+  clean (`detect_leaks=0`, `fast_unwind_on_malloc=0`). WASM Release build
+  compiled clean.
+- Not measured: texture-creation counts before/after on a live idle room
+  (the fix's correctness rests on the pointer-identity regression, not a
+  counted benchmark). Every other `panelText` call site in
+  `mainmenu_netpanel.cpp`, `mainmenu_teampanel.cpp`, and `menulist.cpp`
+  remains unconverted -- most are one-off titles/headers/footers rendered
+  once or twice per frame, not repeating per-row loops, so they were not
+  "confirmed hot paths" by the standard this item sets. Re-scope and repeat
+  this same pattern if profiling later shows one of them matters.
 
 ### C. Preserve frame timing precision in long sessions
 
