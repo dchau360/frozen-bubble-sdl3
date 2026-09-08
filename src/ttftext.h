@@ -65,6 +65,7 @@ public:
 private:
 #ifdef FROZEN_BUBBLE_TEST_ACCESS
     friend struct TTFTextTestAccess;
+    static size_t testTextureCreationCount;
 #endif
     void InvalidateTexture();
 

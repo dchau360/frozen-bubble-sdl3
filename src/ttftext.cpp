@@ -20,6 +20,10 @@
 #include "ttftext.h"
 #include <utility>
 
+#ifdef FROZEN_BUBBLE_TEST_ACCESS
+size_t TTFText::testTextureCreationCount = 0;
+#endif
+
 SDL_Texture *RenderRingedText(const SDL_Renderer *rend, TTF_Font *font,
                                const char *text, SDL_Color fg, SDL_Color ring,
                                int ringPx, SDL_Point *outSize)
@@ -129,6 +133,7 @@ void TTFText::LoadFont(const char *path, int size) {
     InvalidateTexture();
 }
 void TTFText::LoadFont(TTF_Font *fnt) {
+    if (!ownsFont && textFont == fnt) return;
     if (ownsFont && textFont) {
         TTF_CloseFont(textFont);
     }
@@ -162,6 +167,9 @@ void TTFText::UpdateText(const SDL_Renderer *rend, const char *txt, int wrapLeng
     coords.w = back->w;
     coords.h = back->h;
     if (outTexture != nullptr) {
+#ifdef FROZEN_BUBBLE_TEST_ACCESS
+        ++testTextureCreationCount;
+#endif
         textureRenderer = rend;
         textureDirty = false;
     }

@@ -102,6 +102,11 @@ static int failures = 0;
     } \
 } while (false)
 
+struct TTFTextTestAccess {
+    static void ResetTextureCreationCount() { TTFText::testTextureCreationCount = 0; }
+    static size_t TextureCreationCount() { return TTFText::testTextureCreationCount; }
+};
+
 // Mirrors the minimal slice of MainMenuTestAccess (tests/localmultiplayer_settings_test.cpp)
 // this file needs: BeginPanelTapRows, AddPanelTapRow, KeysPanelRender and
 // keyConfigIndex are private, published through the same friend declaration
@@ -835,8 +840,24 @@ int main() {
             SDL_PumpEvents();
             for (SDL_Event drain; SDL_PollEvent(&drain); ) {}
 
-            // One render to publish the swatch rects a real tap would hit.
+            // Measure the real populated picker before deciding whether its
+            // text path merits a cache. The first render fills any cache; an
+            // identical second render measures steady-state texture uploads.
+            TTFTextTestAccess::ResetTextureCreationCount();
             MainMenuTestAccess::RenderTeamsPanel(*menu);
+            const size_t teamPickerColdTextureCreates =
+                TTFTextTestAccess::TextureCreationCount();
+            TTFTextTestAccess::ResetTextureCreationCount();
+            MainMenuTestAccess::RenderTeamsPanel(*menu);
+            const size_t teamPickerIdleTextureCreates =
+                TTFTextTestAccess::TextureCreationCount();
+            std::fprintf(stderr,
+                         "team picker texture creates: cold=%zu idle=%zu\n",
+                         teamPickerColdTextureCreates, teamPickerIdleTextureCreates);
+            // The five remaining uploads are DrawHeaderBar's action measure,
+            // title, and action draws plus the footer path. The 50 repeated
+            // picker labels themselves must remain cached.
+            CHECK(teamPickerIdleTextureCreates <= 5);
             // Host, so every seat's no-team choice plus all five team choices
             // are tappable. All players begin unaffiliated.
             CHECK(MainMenuTestAccess::SwatchCount(*menu) ==

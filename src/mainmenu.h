@@ -275,6 +275,15 @@ private:
     // statement.
     TTFText &NetGridCell(size_t idx);
 
+    // The full-screen team picker renders one player name and six choices
+    // per visible row. Stable call-order cells retain those textures across
+    // idle frames. Each size/style combination has its own immutable shared
+    // font; mutating one borrowed font would invalidate the assumptions of
+    // every TTFText that points to it.
+    std::map<std::pair<int, int>, std::unique_ptr<TTF_Font, FontCloser>> teamPanelFonts;
+    std::vector<TTFText> teamPanelCellPool;
+    TTFText &TeamPanelCell(size_t idx, int size, int style);
+
     // HelpPanelRender renders up to ~24 lines per page, each one a fresh
     // UpdateText() call. Every other panel that shares panelText resizes it
     // only once or twice per render (a header title, a footer hint), but

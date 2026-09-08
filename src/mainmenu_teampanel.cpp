@@ -46,12 +46,30 @@
 #include "audiomixer.h"
 #include "networkclient.h"
 #include "bubblegame.h"   // kTeamColors
+#include "platform.h"
 
 #include <algorithm>
 #include <cstdio>
 #include <string>
 #include <utility>
 #include <vector>
+
+TTFText &MainMenu::TeamPanelCell(size_t idx, int size, int style) {
+    const std::pair<int, int> key{size, style};
+    auto &font = teamPanelFonts[key];
+    if (!font) {
+        font.reset(TTF_OpenFont(ASSET("/gfx/DroidSans.ttf").c_str(), (float)size));
+        if (font) {
+            TTF_SetFontStyle(font.get(), style);
+            TTF_SetFontWrapAlignment(font.get(), TTF_HORIZONTAL_ALIGN_CENTER);
+        }
+    }
+
+    if (idx >= teamPanelCellPool.size())
+        teamPanelCellPool.resize(idx + 1);
+    teamPanelCellPool[idx].LoadFont(font.get());
+    return teamPanelCellPool[idx];
+}
 
 int MainMenu::MyRoomSlot() const {
     NetworkClient* netClient = NetworkClient::Instance();
@@ -253,12 +271,13 @@ void MainMenu::TeamsPanelRender() {
                            menulist::kEdge.b, menulist::kEdge.a);
     { SDL_FRect fr = ToFRect(body); SDL_RenderRect(rend, &fr); }
 
+    size_t textCellIdx = 0;
     auto drawText = [&](const char* txt, int x, int y, SDL_Color color, int size, int style) {
-        panelText.UpdateStyle(size, style);
-        panelText.UpdateColor(color, menulist::kTextShadow);
-        panelText.UpdateText(rend, txt, 0);
-        panelText.UpdatePosition({x, y});
-        { SDL_FRect fr = ToFRect(*panelText.Coords()); SDL_RenderTexture(rend, panelText.Texture(), nullptr, &fr); }
+        TTFText &text = TeamPanelCell(textCellIdx++, size, style);
+        text.UpdateColor(color, menulist::kTextShadow);
+        text.UpdateText(rend, txt, 0);
+        text.UpdatePosition({x, y});
+        { SDL_FRect fr = ToFRect(*text.Coords()); SDL_RenderTexture(rend, text.Texture(), nullptr, &fr); }
     };
 
     // Column header over the swatch block, so the choices are identified once
@@ -287,12 +306,12 @@ void MainMenu::TeamsPanelRender() {
             SDL_SetRenderDrawColor(rend, menulist::kSelEdge.r, menulist::kSelEdge.g,
                                    menulist::kSelEdge.b, 190);
             { SDL_FRect fr = ToFRect(box); SDL_RenderRect(rend, &fr); }
-            panelText.UpdateStyle(13, TTF_STYLE_BOLD);
-            panelText.UpdateColor(menulist::kText, menulist::kTextShadow);
-            panelText.UpdateText(rend, label, 0);
-            panelText.UpdatePosition({box.x + box.w/2 - panelText.Coords()->w/2,
-                                      box.y + box.h/2 - panelText.Coords()->h/2});
-            { SDL_FRect fr = ToFRect(*panelText.Coords()); SDL_RenderTexture(rend, panelText.Texture(), nullptr, &fr); }
+            TTFText &text = TeamPanelCell(textCellIdx++, 13, TTF_STYLE_BOLD);
+            text.UpdateColor(menulist::kText, menulist::kTextShadow);
+            text.UpdateText(rend, label, 0);
+            text.UpdatePosition({box.x + box.w/2 - text.Coords()->w/2,
+                                 box.y + box.h/2 - text.Coords()->h/2});
+            { SDL_FRect fr = ToFRect(*text.Coords()); SDL_RenderTexture(rend, text.Texture(), nullptr, &fr); }
             teamAutoBalanceTaps.push_back({box, teamCount});
         };
 
@@ -384,14 +403,15 @@ void MainMenu::TeamsPanelRender() {
             char num[4];
             if (team == kNoTeam) snprintf(num, sizeof(num), "-");
             else snprintf(num, sizeof(num), "%d", team);
-            panelText.UpdateStyle(14, on ? TTF_STYLE_BOLD : TTF_STYLE_NORMAL);
-            panelText.UpdateColor(on ? menulist::kTextShadow
-                                     : (editable ? menulist::kText : menulist::kMuted),
-                                  on ? chip : menulist::kTextShadow);
-            panelText.UpdateText(rend, num, 0);
-            panelText.UpdatePosition({box.x + box.w/2 - panelText.Coords()->w/2,
-                                       box.y + box.h/2 - panelText.Coords()->h/2});
-            { SDL_FRect fr = ToFRect(*panelText.Coords()); SDL_RenderTexture(rend, panelText.Texture(), nullptr, &fr); }
+            TTFText &text = TeamPanelCell(textCellIdx++, 14,
+                                          on ? TTF_STYLE_BOLD : TTF_STYLE_NORMAL);
+            text.UpdateColor(on ? menulist::kTextShadow
+                                : (editable ? menulist::kText : menulist::kMuted),
+                             on ? chip : menulist::kTextShadow);
+            text.UpdateText(rend, num, 0);
+            text.UpdatePosition({box.x + box.w/2 - text.Coords()->w/2,
+                                 box.y + box.h/2 - text.Coords()->h/2});
+            { SDL_FRect fr = ToFRect(*text.Coords()); SDL_RenderTexture(rend, text.Texture(), nullptr, &fr); }
 
             // Only rows this client may actually change become tap targets.
             // A joiner tapping someone else's row would otherwise send a

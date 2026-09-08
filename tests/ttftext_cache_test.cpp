@@ -156,6 +156,28 @@ int main() {
         CHECK(!HasMarker(text.Texture(), marker));
     }
 
+    // Reassigning the same externally-owned font must preserve the cached
+    // texture. Callers with per-cell text caches select a fixed shared font
+    // on every render; treating the same pointer as a new font would defeat
+    // the cache even though no rendering input changed.
+    {
+        TTF_Font* borrowed = TTF_OpenFont(ASSET("/gfx/DroidSans.ttf").c_str(), 16);
+        CHECK(borrowed != nullptr);
+        if (borrowed) {
+            TTFText text;
+            text.LoadFont(borrowed);
+            text.UpdateColor({255, 255, 255, 255}, {0, 0, 0, 255});
+            text.UpdateText(renderer, "borrowed-font-test", 0);
+            CHECK(text.Texture() != nullptr);
+            SDL_SetBooleanProperty(SDL_GetTextureProperties(text.Texture()), marker, true);
+
+            text.LoadFont(borrowed);
+            text.UpdateText(renderer, "borrowed-font-test", 0);
+            CHECK(HasMarker(text.Texture(), marker));
+        }
+        TTF_CloseFont(borrowed);
+    }
+
     // A failed render (no font loaded) leaves no texture and stays retryable:
     // loading a font afterward and asking for the same string again succeeds,
     // rather than the earlier failure being mistaken for "already up to date."
