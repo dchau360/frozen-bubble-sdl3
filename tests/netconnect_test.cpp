@@ -12,8 +12,8 @@
 // one ENTER on a dead server froze the render loop for up to 8 seconds plus an
 // unbounded DNS lookup. Every case below therefore measures the worst single
 // call and asserts the frame budget was never blown -- that is what
-// docs/ASYNC_NETWORKING_HANDOFF.md means by "demonstrate that input and
-// rendering continue during waits".
+// docs/OPTIMIZATION_HANDOFF.md's "Async networking rearchitecture" section
+// means by "demonstrate that input and rendering continue during waits".
 
 #include "networkclient.h"
 #include "platform.h"

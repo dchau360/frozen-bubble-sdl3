@@ -203,11 +203,12 @@ waiting for the server.
 
 ## 6. Two-browser WASM network playtest (async networking rearchitecture)
 
-See `docs/ASYNC_NETWORKING_HANDOFF.md` for the full background. Nothing in
-this repo can spin up `BubbleGame`/`MainMenu` headlessly and drive a real
-multi-round network match, so the async connect/lobby/game-start/level-sync
-rewrite (stages 1–3 of that doc) has no automated two-client coverage — this
-is the recipe for the hands-on check that stands in for it.
+See `docs/OPTIMIZATION_HANDOFF.md`'s "Async networking rearchitecture"
+section for the full background. Nothing in this repo can spin up
+`BubbleGame`/`MainMenu` headlessly and drive a real multi-round network
+match, so the async connect/lobby/game-start/level-sync rewrite (stages 1–3)
+has no automated two-client coverage — this is the recipe for the hands-on
+check that stands in for it.
 
 **Setup:**
 
@@ -260,7 +261,7 @@ is the recipe for the hands-on check that stands in for it.
       attempt
 
 **Already run once, informally** — 2026-09-08, two tabs on one machine, per
-`docs/ASYNC_NETWORKING_HANDOFF.md`'s "live two-browser WASM playtest"
+`docs/OPTIMIZATION_HANDOFF.md`'s "Verified: live two-browser WASM playtest"
 section: lobby entry, NICK/CREATE/JOIN, and several full rounds all
 confirmed with no stalls and a clean sanitizer log. Not covered by that run:
 the ESC/tap cancel-mid-connect check above, and testing across genuinely

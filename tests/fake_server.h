@@ -1,9 +1,10 @@
 // A scriptable stand-in for fb-server, for tests that need a peer which
 // misbehaves in a specific, repeatable way.
 //
-// Why this exists: the async networking work (docs/ASYNC_NETWORKING_HANDOFF.md)
-// is almost entirely about what happens when a server is slow, silent, or
-// rude, and none of those cases can be produced by pointing a test at a real
+// Why this exists: the async networking work (docs/OPTIMIZATION_HANDOFF.md's
+// "Async networking rearchitecture" section) is almost entirely about what
+// happens when a server is slow, silent, or rude, and none of those cases
+// can be produced by pointing a test at a real
 // fb-server on localhost -- localhost always answers, and it answers instantly.
 // Tests written against a real server can only ever confirm the happy path,
 // which is the path least likely to break. This listener lets a test say
