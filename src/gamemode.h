@@ -99,7 +99,7 @@ inline bool GameModeForcesAttacksOff(GameMode m)    { return m == GameMode::Clea
 // True when the mode ranks players by how many bubbles they popped -- which is
 // also exactly when the round can end without anyone dying, and so when the
 // live popped counts have to be synced every shot rather than once at the end.
-inline bool GameModeCountsPops(GameMode m) {
+inline constexpr bool GameModeCountsPops(GameMode m) {
     return m == GameMode::Race || m == GameMode::Timed;
 }
 

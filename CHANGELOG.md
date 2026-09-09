@@ -1,5 +1,13 @@
 # Changelog
 
+## v2.4.96
+
+- No player-visible change beyond v2.4.95 below. `v2.4.95`'s tag build
+  failed CI (GCC rejected a `constexpr` function that called a non-`constexpr`
+  helper -- `LocalMPRowsAfterMode` calling `GameModeCountsPops`, caught only
+  by the Linux jobs' stricter compiler) and never shipped, so this release
+  carries the same v2.4.95 changes plus that fix.
+
 ## v2.4.95
 
 - **Added two new multiplayer game modes: Race and Timed.** Race is first to
