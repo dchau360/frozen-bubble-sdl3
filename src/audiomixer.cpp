@@ -156,7 +156,12 @@ void AudioMixer::PlayMusic(const char *track)
         }
     }
 
-    curMusicAudio = MIX_LoadAudio(mixer, path.c_str(), false);
+    // predecode=true: MIX_SetTrackLoops's infinite loop silently stops at the
+    // loop point instead of looping if the input isn't seekable, and the
+    // streamed (non-predecoded) OGG decode path here isn't -- music used to
+    // play once through (~5 minutes for the longest track) and then just
+    // stop, instead of looping like the original Perl version.
+    curMusicAudio = MIX_LoadAudio(mixer, path.c_str(), true);
     if (!curMusicAudio)
         fprintf(stderr, "Warning: failed to load music %s\n", path.c_str());
     if(curMusicAudio && musicTrack) {
