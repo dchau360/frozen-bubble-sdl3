@@ -156,18 +156,25 @@ void AudioMixer::PlayMusic(const char *track)
         }
     }
 
-    // predecode=true: MIX_SetTrackLoops's infinite loop silently stops at the
-    // loop point instead of looping if the input isn't seekable, and the
-    // streamed (non-predecoded) OGG decode path here isn't -- music used to
-    // play once through (~5 minutes for the longest track) and then just
-    // stop, instead of looping like the original Perl version.
+    // predecode=true so the audio is fully in memory and seekable -- an
+    // infinite loop silently stops at the loop point instead of looping if
+    // the input isn't seekable, and the streamed (non-predecoded) OGG decode
+    // path isn't.
     curMusicAudio = MIX_LoadAudio(mixer, path.c_str(), true);
     if (!curMusicAudio)
         fprintf(stderr, "Warning: failed to load music %s\n", path.c_str());
     if(curMusicAudio && musicTrack) {
         MIX_SetTrackAudio(musicTrack, curMusicAudio);
-        MIX_SetTrackLoops(musicTrack, -1);
-        MIX_PlayTrack(musicTrack, 0);
+        // The loop count has to be requested via MIX_PlayTrack's properties,
+        // not a MIX_SetTrackLoops call beforehand -- MIX_PlayTrack(track, 0)
+        // (re)starts the track with *default* parameters, which silently
+        // resets the loop count back to 0 (no loop), undoing SetTrackLoops.
+        // Together with predecode=true above, this is what actually made
+        // music loop instead of stopping after one play-through.
+        SDL_PropertiesID opts = SDL_CreateProperties();
+        SDL_SetNumberProperty(opts, MIX_PROP_PLAY_LOOPS_NUMBER, -1);
+        MIX_PlayTrack(musicTrack, opts);
+        SDL_DestroyProperties(opts);
     }
 }
 

@@ -1,5 +1,17 @@
 # Changelog
 
+## v2.4.98
+
+- **Actually fixed background music not looping** (v2.4.97's fix was
+  incomplete — thanks to [#59](https://github.com/dchau360/frozen-bubble-sdl3/issues/59)
+  for tracking down the real cause). The loop count was being set with
+  `MIX_SetTrackLoops()` *before* `MIX_PlayTrack()`, but starting a track
+  with `MIX_PlayTrack(track, 0)` resets it to its default parameters,
+  silently overwriting that loop count back to zero (no loop) — so music
+  still stopped after one play-through. The loop count now goes through
+  `MIX_PlayTrack`'s own properties (`MIX_PROP_PLAY_LOOPS_NUMBER`), which is
+  the API's documented way to request it.
+
 ## v2.4.97
 
 - **Fixed background music stopping after one play-through instead of
