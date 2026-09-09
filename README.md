@@ -41,16 +41,16 @@ four multiplayer modes and full team play, local or online.
 
 - **Classic** — last player or team standing wins.
 - **Clear Mode** — first to clear your entire board wins the round.
-- **Race** — first to pop a target number of bubbles (50 by default, host-adjustable) wins.
-- **Timed** — most bubbles popped when the clock runs out (30 seconds by default, host-adjustable) wins.
+- **Race** — first to pop a target number of bubbles (50 by default) wins.
+- **Timed** — most bubbles popped when the clock runs out (30 seconds by default) wins.
 
-Every mode plays the same whether you're local or online, and the host can adjust each mode's numbers to fit the room. An eliminated player in Race or Timed stays out for the rest of the round while everyone else keeps playing, and "popped" counts a bubble the instant it's cleared, whether it was part of the matched group or knocked loose and fell separately.
+Every mode plays the same whether you're local or online, and the host can adjust each mode's numbers to fit the room.
 
-**Teams** — join a team, or stay a free agent, from any room's **Set Teams** page (a header button reachable by click, tap, or keyboard/gamepad Up/Down + Enter, or the **A** hotkey) — teams work in all four modes above, not just one. Teammates share the win when one of you takes the round, and in Timed mode your team's pops even pool together, so a coordinated pair can out-pop a solo player; in Race, one player still has to individually reach the target, though the win extends to the team once they do. Malus only lands on living opponents outside your team; a room where nobody picks a team plays exactly like the old free-for-all. Hosts get one-tap **Auto 2/3/4/5** buttons to split the room into that many teams instantly, and tapping a player's name cycles their own team, including back to no team.
+**Teams** — join a team, or stay a free agent, from any room's Set Teams screen — teams work in all four modes above, not just one. Teammates share the win when one of you takes the round, and in Timed mode your team's pops even pool together, so a coordinated pair can out-pop a solo player. Hosts get one-tap Auto-balance buttons to split the room into 2, 3, 4, or 5 teams instantly.
 
-**Online multiplayer** — play with friends or strangers over the internet, 2–20 players per room, using the included dedicated server (rooms hold 5, 10, or 20 players). Rooms bigger than 5 players get a battle-royale layout: four opponent boards on screen at a time, ranked by who's most relevant to you, **Tab** to page manually, keys **1–4** to target a visible opponent, and a spectate mode once you're out. The host controls chain reactions, victories limit, per-player colours and aim guides, mouse/touch aim, and more — every joined player sees the rules update live.
+**Online multiplayer** — play with friends or strangers over the internet, 2–20 players per room, on the included dedicated server. Rooms bigger than 5 players get a battle-royale layout showing your most relevant opponents, quick-target hotkeys, and a spectate mode once you're out. The host controls chain reactions, attack bubbles, per-player aim assist, mouse/touch aim, and more — every joined player sees the rules update live. Follow a quiet server and get notified the moment someone joins it.
 
-**Local multiplayer** — 2–5 players, same keyboard or controllers. Player 1 uses the arrow keys with Up to fire; player 2 uses C/X/V with D to fire. Five is the ceiling: that is the last hand-authored layout (one full board in the centre, four minis in the corners), and above it a game has to be a network room. The setup screen can fill any remaining slots with bots and a skill (Low/Med/High), so you don't need a full set of controllers to play a bigger match — player 1 is always a person.
+**Local multiplayer** — 2–5 players, one device — keyboard, controller, or a mix. Empty seats can be filled with bots at three skill levels, so a bigger match doesn't need a full house of controllers.
 
 > Local games above two players are **experimental** — far less
 > play-tested than two-player and network play, and the smaller side boards
