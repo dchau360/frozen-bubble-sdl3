@@ -11,43 +11,62 @@ This is the drafted content so you're not starting from a blank form.
 **App name:** Frozen Bubble
 
 **Promo text** (Play's separate promotional-text field, 80 chars max — this
-one is 76):
+one is 78):
 
 ```
-Aim, fire, pop! Classic bubble-shooting fun -- solo, local co-op, or online.
+Aim, fire, pop -- 4 multiplayer modes, teams, and online play up to 20 strong.
 ```
 
-**Short description** (max 80 chars — this one is 79):
+**Short description** (max 80 chars — this one is 78):
 
 ```
-Pop chains of bubbles solo, with friends locally, or online. Free & open source.
+4 multiplayer modes, team play, and online rooms up to 20. Free & open source.
 ```
 
-**Full description** (max 4000 chars):
+**Full description** (max 4000 chars — this one is 2508, updated to lead with
+the multiplayer modes, teams, and online play, per the game's v2.4.95 Race
+and Timed mode addition):
 
 ```
 Frozen Bubble is a free, open-source arcade puzzle game: aim, fire, and pop
 chains of colored bubbles before they reach the bottom. A faithful port of
-the beloved 2002 classic, rebuilt from scratch for modern devices.
+the beloved 2002 classic, rebuilt from scratch for modern devices -- with
+four multiplayer modes and full team play, local or online.
+
+FOUR WAYS TO PLAY MULTIPLAYER
+- Classic -- last player or team standing wins.
+- Clear Mode -- first to clear your entire board wins the round.
+- Race -- first to pop a target number of bubbles (50 by default) wins.
+- Timed -- most bubbles popped when the clock runs out (30 seconds by
+  default) wins.
+Every mode plays the same whether you're local or online, and the host can
+adjust each mode's numbers to fit the room.
+
+TEAMS
+Join a team, or stay a free agent, from any room's Set Teams screen -- teams
+work in all four modes above, not just one. Teammates share the win when
+one of you takes the round, and in Timed mode your team's pops even pool
+together, so a coordinated pair can out-pop a solo player. Hosts get
+one-tap Auto-balance buttons to split the room into 2, 3, 4, or 5 teams
+instantly.
+
+ONLINE MULTIPLAYER
+Play with friends or strangers over the internet, 2-20 players per room, on
+the included dedicated server. Rooms bigger than 5 players get a
+battle-royale layout showing your most relevant opponents, quick-target
+hotkeys, and a spectate mode once you're out. The host controls chain
+reactions, attack bubbles, per-player aim assist, mouse/touch aim, and
+more -- every joined player sees the rules update live. Follow a quiet
+server and get notified the moment someone joins it.
+
+LOCAL MULTIPLAYER
+2-5 players, one device -- keyboard, controller, or a mix. Empty seats can
+be filled with bots at three skill levels, so a bigger match doesn't need a
+full house of controllers. (3-5 player local games are still experimental
+and less tested than 2-player.)
 
 SINGLE PLAYER
 100 levels of classic bubble-popping, with scoring and chain reactions.
-
-LOCAL MULTIPLAYER
-2-5 players, same device — keyboard, controller, or a mix. Perfect for
-couch play, and empty seats can be filled with bots. Note that local games
-above 2 players are still experimental and less tested than the rest.
-
-ONLINE MULTIPLAYER
-Play with friends or strangers over the internet, 2-20 players per room.
-Choose Classic (last player standing) or Clear Mode (first to clear their
-board wins), and split into teams if you want -- it's a per-player option
-in either mode. The host controls chain reactions, attack bubbles, aim
-assist, and more — everyone sees the rules live.
-
-FOLLOW A SERVER
-Mark a quiet server as followed and get a notification when someone joins
-it, so you don't have to keep checking back.
 
 CONTROLLER SUPPORT
 Full gamepad support with per-player rebindable controls, built for both

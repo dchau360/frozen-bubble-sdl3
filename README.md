@@ -32,29 +32,32 @@ Building from source: [docs/BUILDING.md](docs/BUILDING.md).
 
 ## Game Modes
 
-**Single player** — 100 levels, scoring, chain reactions.
+Frozen Bubble is a free, open-source arcade puzzle game: aim, fire, and pop
+chains of colored bubbles before they reach the bottom. A faithful port of
+the beloved 2002 classic, rebuilt from scratch for modern devices — with
+four multiplayer modes and full team play, local or online.
 
-**Local multiplayer (2–5 players)** — same keyboard or controllers. Player 1 uses the arrow keys with Up to fire; player 2 uses C/X/V with D to fire. Five is the ceiling: that is the last hand-authored layout (one full board in the centre, four minis in the corners), and above it a game has to be a network room. The setup screen can fill any remaining slots with bots and a skill (Low/Med/High), so you don't need a full set of controllers to play a bigger match — player 1 is always a person.
+**Four ways to play multiplayer**
+
+- **Classic** — last player or team standing wins.
+- **Clear Mode** — first to clear your entire board wins the round.
+- **Race** — first to pop a target number of bubbles (50 by default, host-adjustable) wins.
+- **Timed** — most bubbles popped when the clock runs out (30 seconds by default, host-adjustable) wins.
+
+Every mode plays the same whether you're local or online, and the host can adjust each mode's numbers to fit the room. An eliminated player in Race or Timed stays out for the rest of the round while everyone else keeps playing, and "popped" counts a bubble the instant it's cleared, whether it was part of the matched group or knocked loose and fell separately.
+
+**Teams** — join a team, or stay a free agent, from any room's **Set Teams** page (a header button reachable by click, tap, or keyboard/gamepad Up/Down + Enter, or the **A** hotkey) — teams work in all four modes above, not just one. Teammates share the win when one of you takes the round, and in Timed mode your team's pops even pool together, so a coordinated pair can out-pop a solo player; in Race, one player still has to individually reach the target, though the win extends to the team once they do. Malus only lands on living opponents outside your team; a room where nobody picks a team plays exactly like the old free-for-all. Hosts get one-tap **Auto 2/3/4/5** buttons to split the room into that many teams instantly, and tapping a player's name cycles their own team, including back to no team.
+
+**Online multiplayer** — play with friends or strangers over the internet, 2–20 players per room, using the included dedicated server (rooms hold 5, 10, or 20 players). Rooms bigger than 5 players get a battle-royale layout: four opponent boards on screen at a time, ranked by who's most relevant to you, **Tab** to page manually, keys **1–4** to target a visible opponent, and a spectate mode once you're out. The host controls chain reactions, victories limit, per-player colours and aim guides, mouse/touch aim, and more — every joined player sees the rules update live.
+
+**Local multiplayer** — 2–5 players, same keyboard or controllers. Player 1 uses the arrow keys with Up to fire; player 2 uses C/X/V with D to fire. Five is the ceiling: that is the last hand-authored layout (one full board in the centre, four minis in the corners), and above it a game has to be a network room. The setup screen can fill any remaining slots with bots and a skill (Low/Med/High), so you don't need a full set of controllers to play a bigger match — player 1 is always a person.
 
 > Local games above two players are **experimental** — far less
 > play-tested than two-player and network play, and the smaller side boards
 > have had rendering glitches. Two causes are fixed (see
 > [CHANGELOG.md](CHANGELOG.md)); the mode has not had a full pass since.
 
-**Network multiplayer (2–20 players)** — LAN or internet, using the included server. Rooms hold 5, 10, or 20 players.
-
-All four game modes are available in both local and network play, chosen by the host:
-
-- **Classic** — standard chain-reaction gameplay; last player or team standing wins.
-- **Clear Mode** — first player to clear their entire board wins the round (the last survivor also wins). Malus and row compression are off by default here, though the host can override both.
-- **Race** — first to pop a target number of bubbles (50 by default, host-adjustable) wins the round. A live popped-count HUD sits next to each player's own shooter; on a team, one player has to personally reach the target, and the win then extends to their teammates the same way any other win does.
-- **Timed** — most bubbles popped when the clock runs out (30 seconds by default, host-adjustable) wins. The same HUD spot carries a countdown instead of (well, alongside) the pop count. Teams pool their pops here — the side with the higher combined total wins — so this is the one mode where teammates' counts add together. A tie at the buzzer is a draw; nobody scores a win.
-
-In Race and Timed, an eliminated player stays out for the rest of the round while everyone else keeps playing — reaching the target or running out the clock doesn't need every board still standing. "Popped" counts a bubble the instant it's cleared, whether it was part of the matched group or knocked loose and fell separately, so the same number a player sees mid-round is the number the mode judges them on.
-
-**Teams** are a per-player setting available in any mode, not a mode of their own: any player can join a team (1–5) or stay a free agent, from the room's **Set Teams** page (a header button reachable by click, tap, or keyboard/gamepad Up/Down + Enter, or the **A** hotkey). Malus only lands on living opponents outside your team; a room where nobody picks a team plays exactly like the old free-for-all. Hosts get **Auto 2/3/4/5** buttons that round-robin every seat across that many teams, and tapping a player's name cycles their own team, including back to no team.
-
-The host configures chain reactions, victories limit, per-player colours and aim guides, mouse/touch aim and more from the game room — all joined players see changes live. Rooms above 5 players get battle-royale UI: four opponent boards on screen at a time, ranked by who's most relevant to you, with **Tab** to page manually, keys **1–4** to target a visible opponent, and a spectate mode after you're knocked out.
+**Single player** — 100 levels of classic bubble-popping, with scoring and chain reactions.
 
 **Attack bubbles** is a three-way setting, host-controlled in the room and per-player in local multiplayer: **ON** sends every malus you earn straight at your opponents, **OFF** turns attacks off entirely, and **Blockable** has the malus you earn pay down whatever is still queued against you first, sending only the surplus — it can't go negative, so blocking more than you owe just empties your queue rather than banking credit. A HELP button next to Bot skill (or **F1**/gamepad **Y** anytime) opens a full settings guide covering this and everything else on the panel, including how malus targeting differs once a room has 6 or more players alive.
 
