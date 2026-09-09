@@ -9,27 +9,6 @@ The original was written in Perl; this is a full rewrite in C++. Core gameplay a
 
 ---
 
-## Download
-
-Latest builds are on the [releases page](https://github.com/dchau360/frozen-bubble-sdl3/releases/latest). [itch.io](https://dchau360.itch.io/frozenbubble2) hosts the browser version.
-
-| Platform | Download | Notes |
-|---|---|---|
-| **Linux** | `frozen-bubble-linux-x86_64.AppImage` | `chmod +x` and run |
-| **macOS** | `frozen-bubble-macos-arm64.dmg` | **Apple Silicon only** — see [macOS notes](#macos-notes) |
-| **Windows** | `frozen-bubble-windows-setup.exe` | Unsigned; SmartScreen will warn |
-| **Android** | `frozen-bubble-android-tv.apk` | Same APK for TV boxes and phones/tablets — see [Android](#android-tv) |
-| **Browser** | [Play on itch.io](https://dchau360.itch.io/frozenbubble2) | Works on desktop and mobile, including iPhone |
-
-**iOS** has no download: the build exists but is experimental and unsigned, so it
-must be re-signed before a device will install it. Build it yourself with
-`tools/build-ios.sh` — see [docs/IOS.md](docs/IOS.md). To just play on an iPhone,
-use the browser build above.
-
-Building from source: [docs/BUILDING.md](docs/BUILDING.md).
-
----
-
 ## Game Modes
 
 Frozen Bubble is a free, open-source arcade puzzle game: aim, fire, and pop
@@ -166,6 +145,27 @@ xattr -cr /Applications/FrozenBubble.app
 ```
 
 Or right-click the app → **Open** → **Open** to bypass Gatekeeper once.
+
+---
+
+## Download
+
+Latest builds are on the [releases page](https://github.com/dchau360/frozen-bubble-sdl3/releases/latest). [itch.io](https://dchau360.itch.io/frozenbubble2) hosts the browser version.
+
+| Platform | Download | Notes |
+|---|---|---|
+| **Linux** | `frozen-bubble-linux-x86_64.AppImage` | `chmod +x` and run |
+| **macOS** | `frozen-bubble-macos-arm64.dmg` | **Apple Silicon only** — see [macOS notes](#macos-notes) |
+| **Windows** | `frozen-bubble-windows-setup.exe` | Unsigned; SmartScreen will warn |
+| **Android** | `frozen-bubble-android-tv.apk` | Same APK for TV boxes and phones/tablets — see [Android](#android-tv) |
+| **Browser** | [Play on itch.io](https://dchau360.itch.io/frozenbubble2) | Works on desktop and mobile, including iPhone |
+
+**iOS** has no download: the build exists but is experimental and unsigned, so it
+must be re-signed before a device will install it. Build it yourself with
+`tools/build-ios.sh` — see [docs/IOS.md](docs/IOS.md). To just play on an iPhone,
+use the browser build above.
+
+Building from source: [docs/BUILDING.md](docs/BUILDING.md).
 
 ---
 
