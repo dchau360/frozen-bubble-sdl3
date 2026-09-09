@@ -1,5 +1,15 @@
 # Changelog
 
+## v2.4.97
+
+- **Fixed background music stopping after one play-through instead of
+  looping** (reported in [#59](https://github.com/dchau360/frozen-bubble-sdl3/issues/59)).
+  Music was loaded in a streamed (non-predecoded) mode that isn't seekable
+  enough for SDL3_mixer's infinite-loop track to actually loop, so it
+  silently stopped at the loop point instead -- five minutes and change
+  into a 1-player game, matching `frozen-mainzik-1p.ogg`'s length. Music
+  is now predecoded into memory so it loops like the original Perl version.
+
 ## v2.4.96
 
 - No player-visible change beyond v2.4.95 below. `v2.4.95`'s tag build
