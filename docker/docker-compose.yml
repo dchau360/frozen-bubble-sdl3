@@ -12,11 +12,17 @@ services:
     # truncated to 12 chars, which inside a container is the container ID --
     # so the server advertises itself to the public list, and announces every
     # arrival to Discord, as something like "ce98fdda68c6", and that string
-    # changes on every rebuild. Set FB_SERVER_NAME in docker/.env (the domain
-    # players connect to is the obvious choice). Overrides the image's CMD, so
-    # every other flag has to be repeated here.
+    # changes on every rebuild. Set FB_SERVER_NAME in docker/.env.
+    #
+    # -n itself caps out at 12 chars, [a-zA-Z0-9.-] only, and fb-server
+    # refuses to start at all on a violation -- not a warning, exit(1), which
+    # under restart: unless-stopped means a crash loop. Confirmed live: the
+    # obvious choice, this server's own domain, was too long and took the
+    # game server down until caught. The fallback below is deliberately NOT
+    # "frozen-bubble" (13 chars, itself over the limit) for the same reason.
+    # Overrides the image's CMD, so every other flag has to be repeated here.
     command: ["/usr/local/bin/fb-server", "-d", "-q", "-l", "-z",
-              "-o", "CONNECT", "-n", "${FB_SERVER_NAME:-frozen-bubble}"]
+              "-o", "CONNECT", "-n", "${FB_SERVER_NAME:-frozenbubble}"]
     ports:
       - "1511:1511"        # native TCP clients connect here directly
     environment:
