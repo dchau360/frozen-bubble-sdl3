@@ -1,12 +1,30 @@
 # discord-relay
 
-Posts a Discord message whenever a player joins a room on `fb-server`,
-carrying the joining player's nick and self-reported geolocation (a Google
-Maps link) when one is available. The player's IP arrives in the datagram
-from `fb-server` (see Wire format below) but is deliberately never included
-in the Discord message -- a channel can have members well beyond whoever
-runs the server, and a joining player never agreed to have their IP posted
-there.
+Posts a Discord message whenever a player arrives on `fb-server`, carrying
+their nick and the server's name -- and nothing else.
+
+"Arrives" means joining the *server* (their first accepted `NICK`, the point
+at which the lobby can see them), not joining a game room. A player sitting
+alone in a room they just opened is exactly who an alert should summon
+company for, and by the time somebody has joined their room the two have
+already found each other.
+
+The joining player's IP and their self-reported geolocation both arrive in
+the datagram from `fb-server` (see Wire format below); neither is ever
+included in the Discord message. The IP never was. The location was, as a
+Google Maps link, up until the game itself began advertising a community
+Discord to players from the NET GAME list and the online lobby: a channel
+the game recruits players into is one where every joining player's
+approximate whereabouts would be visible to anyone who took up the offer,
+which is not something a player agreed to by letting the client geolocate
+them for the lobby's world map. The map is unaffected -- that data simply
+stops here.
+
+If you are running a genuinely private, operators-only channel and want the
+location back, `build_message()` in `relay.py` is where it was, and
+`handle_datagram()` still has the value in hand. Weigh it against who can
+actually read the channel, and remember that a webhook URL is one paste away
+from a wider audience than you planned.
 
 `fb-server` cannot do this itself: it has no TLS stack, and it runs one
 single-threaded blocking event loop for every connected player, so an HTTPS
@@ -19,10 +37,13 @@ the datagram is dropped and gameplay is unaffected.
 
     JOIN|<nick>|<ip>|<geoloc>|<servername>
 
-`geoloc` is the joining player's self-reported `lat:lon` or an empty string
--- a fast joiner routinely beats their own client-side geolocation lookup
-(it can take up to ~16s), so a missing location is the normal case, not an
-error. `ip` is parsed but not used -- see `build_message()` in `relay.py`.
+`geoloc` is the arriving player's self-reported `lat:lon` or an empty string
+-- in practice always empty, since the client sends `GEOLOC` after `NICK`
+and the lookup behind it can take up to ~16s. Both `ip` and `geoloc` are
+parsed and then discarded -- see
+`handle_datagram()` and `build_message()` in `relay.py`. They stay in the
+wire format because `fb-server` already has them and a datagram costs the
+same either way.
 
 ## Running
 
@@ -36,7 +57,7 @@ and point the game server at it:
 
 With no webhook configured, the relay logs what it *would* have posted:
 
-    [stub] would post: 🔔 **alice** joined **fb.servequake.com** from [this location](https://www.google.com/maps?q=37.77,-122.42)
+    [stub] would post: 🔔 **alice** joined **fb.servequake.com**
 
 This is the default and needs no dependencies at all -- the standard library
 covers everything a Discord webhook POST needs (it's a plain JSON POST, no
@@ -60,9 +81,10 @@ gets 429'd is logged and dropped rather than queued or retried, the same
 best-effort handling as any other delivery failure -- see the comment on
 `_post_sync` in `relay.py`.
 
-The message itself carries no IP, but it does carry a nick and, when
-available, an approximate location -- keep the webhook URL and the channel
-it posts to reasonably private all the same.
+The message carries neither an IP nor a location, but it does carry a nick,
+and the stream of them is a record of who plays where and when -- keep the
+webhook URL somewhere sensible all the same. Anyone holding it can post
+anything to that channel.
 
 ## Collecting joins from servers you don't run
 

@@ -22,9 +22,8 @@
 
 // Discord join-alert relay hookup. Replaces the old "follow a server" push
 // feature (removed) with a single operator-facing notification instead of
-// per-player push registrations: every room join posts a message to one
-// Discord channel via a webhook, optionally carrying the joining player's
-// self-reported geolocation.
+// per-player push registrations: every player arriving on the server posts a
+// message to one Discord channel via a webhook.
 //
 // Same reasoning as the feature this replaces: fb-server has no TLS and runs
 // a single-threaded blocking event loop, so it cannot POST to a Discord
@@ -45,10 +44,14 @@
 // startup, next to stats_init().
 void discordalert_init(void);
 
-// Call once per successful room join, from add_player(). geoloc may be NULL
-// (nothing self-reported by that client yet -- see GEOLOC's own comment on
-// why that's the normal case for a fast joiner). A no-op (and free) when the
-// relay isn't configured.
+// Call once per player arriving on the server, from the NICK handler's
+// success path -- the point at which a connection acquires a name and
+// becomes visible in the lobby to everyone else. Not from add_player(): a
+// room join is a later, less useful moment (see the call site's comment).
+//
+// geoloc is almost always NULL here, since GEOLOC arrives after NICK and the
+// client-side lookup behind it can take ~16s. That costs nothing: the relay
+// discards the field. A no-op (and free) when the relay isn't configured.
 void discordalert_fire_join_event(const char* nick, const char* ip, const char* geoloc);
 
 // Close the UDP socket. Call once at shutdown, next to stats_cleanup().

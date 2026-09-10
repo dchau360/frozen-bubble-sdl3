@@ -574,6 +574,19 @@ private:
     // differing. One function serves both rather than keeping two ~110-line
     // near-duplicates in sync by hand.
     void ServerListPanelRender(bool isLAN);
+    // Index of the "Join our Discord" row on the NET GAME list, or -1 when
+    // that row is not built this frame (LAN screen, or no invite compiled in).
+    // The renderer, the Up/Down bounds and ENTER's activation all resolve
+    // through this one function: as a hand-copied `2 + publicServers.size()`
+    // in three places it would only take one of them missing a change to the
+    // rows above for a tap on Discord to fire "Set name" instead.
+    int ServerListDiscordIndex() const;
+    // Same idea for the online lobby's own action list, where the row sits
+    // one past the last game room (0 = Chat, 1 = Create, 2..n+1 = rooms).
+    // Takes the room count rather than reading it back off NetworkClient so
+    // every caller resolves it against the same list it is already drawing or
+    // navigating this frame.
+    static int LobbyDiscordIndex(size_t roomCount);
     void NetSetupPanelRender(); // Chain reaction prompt for network games
     void SavePreNick();         // Persist networkPreNick (localStorage on WASM, INI elsewhere)
     void StartLocalServer();

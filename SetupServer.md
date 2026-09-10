@@ -153,15 +153,33 @@ docker compose down
 
 ## Optional — Discord Join Alerts
 
-Every time a player joins a room on your server, it can post a message to a
-Discord channel of your choosing — the joining player's nick and, when
-available, a Google Maps link built from their self-reported geolocation.
-The player's IP is not included in the message, deliberately — a Discord
-channel can have members well beyond whoever runs the server.
+Every time a player arrives on your server, it can post a message to a
+Discord channel of your choosing — their nick and your server's name, and
+nothing else. The alert fires when they connect and appear in the lobby,
+not when they join a game room: someone waiting alone in a room they just
+opened is the person an alert should bring company to, and once a second
+player has joined them the notification has nothing left to offer. Neither the player's IP nor their
+self-reported location is included, deliberately: a Discord channel can
+have members well beyond whoever runs the server, and the game itself now
+invites players into a community Discord from its own UI, so an alert
+channel is a good deal more public than it used to be.
 
 This works out of the box in a **stub mode** that logs what it would have
 posted but delivers nothing. Making alerts actually arrive needs a Discord
 webhook URL, which only you as the operator can obtain.
+
+> **Name your server first.** The alert says *"alice joined **&lt;your server&gt;**"*,
+> and that name comes from `fb-server`'s `-n` flag. Without it the name falls
+> back to the hostname, which inside a container is the container ID — your
+> alerts read `alice joined ce98fdda68c6`, and the ID changes every rebuild.
+> Set it in `docker/.env`:
+>
+> ```bash
+> FB_SERVER_NAME=fb.example.org
+> ```
+>
+> The same name is what your server advertises to the public server list, so
+> this is worth setting whether or not you use Discord alerts at all.
 
 **Nothing breaks if you skip this.** Joins still happen normally; the alert
 just never fires. The relay is also entirely optional — remove
@@ -177,7 +195,7 @@ docker compose logs discord-relay
 A join logs a line like:
 
 ```
-[stub] would post: 🔔 **alice** joined **myserver** from [this location](https://www.google.com/maps?q=37.77,-122.42)
+[stub] would post: 🔔 **alice** joined **myserver**
 ```
 
 ### Going live
@@ -205,9 +223,18 @@ on the issuing end.
 A burst of joins can hit Discord's per-webhook rate limit; a request that
 gets rate-limited is logged and dropped rather than queued or retried.
 
-The message carries no IP address, but it does carry a nick and, when
-available, an approximate location — keep the webhook URL and the channel
-it posts to reasonably private all the same.
+The message carries neither an IP address nor a location, but it does carry
+a nick, and a running stream of them says who plays on your server and when
+— keep the webhook URL somewhere sensible all the same. Anyone who has it
+can post anything to that channel, not just what this relay sends.
+
+> **The in-game "Join our Discord" row is not this.** The NET GAME list and
+> the online lobby each offer players a link to the game's *community*
+> Discord, which is a fixed URL compiled into the client — it has nothing to
+> do with your webhook and does not point at your channel. If you want your
+> own players in your own Discord, advertise it yourself; there is no way
+> for a server to change where that in-game link goes, deliberately (see
+> `kDiscordInviteUrl` in `src/platform.cpp`).
 
 See [server/discord-relay/README.md](server/discord-relay/README.md) for the
 protocol and internals.

@@ -789,6 +789,14 @@ void MainMenu::NetPanelLobbyActionsRender() {
             for (size_t i = 2; i < actions.size() && i < 18; i++) {
                 lobbyList.Row((int)i, actions[i], "");
             }
+            // Last row, after the rooms: same offer as the NET GAME list, for
+            // the player who got as far as the lobby without going through it.
+            // A plain row rather than the pinned section the server list uses
+            // -- there is no room to pin one here, with the persistent chat
+            // dock already taking everything below y=334.
+            const int lobbyDiscordIdx = LobbyDiscordIndex(actions.size() - 2);
+            if (lobbyDiscordIdx >= 0)
+                lobbyList.Row(lobbyDiscordIdx, "Join our Discord", "connect alerts");
             lobbyList.End(roomRenderer, panelText, nullptr, menulistTap);
         }
 
@@ -1722,6 +1730,18 @@ void MainMenu::NetPanelConnectionScreensRender() {
     { SDL_FRect fr = ToFRect(*panelText.Coords()); SDL_RenderTexture(const_cast<SDL_Renderer*>(renderer), panelText.Texture(), nullptr, &fr); };
 }
 
+int MainMenu::LobbyDiscordIndex(size_t roomCount) {
+    if (!HasDiscordInvite()) return -1;
+    return 2 + (int)roomCount;
+}
+
+int MainMenu::ServerListDiscordIndex() const {
+    if (!HasDiscordInvite()) return -1;
+    // One past Set name, which is itself one past the last server row
+    // (0 = Manual entry, 1..n = servers, n+1 = Set name).
+    return 2 + (int)publicServers.size();
+}
+
 void MainMenu::ServerListPanelRender(bool isLAN) {
     SDL_Renderer* rend = const_cast<SDL_Renderer*>(renderer);
     int& menuIndex = isLAN ? lanMenuIndex : netMenuIndex;
@@ -1768,10 +1788,29 @@ void MainMenu::ServerListPanelRender(bool isLAN) {
     // the two sections together fill exactly the space one List used to.
     const int kSetNameSectionH = 2 * menulist::kRowH;  // header row + the one row
     const int kSetNameGap = 8;
+    // The Discord invite gets its own section between the list and Set name,
+    // rather than riding along in either: it belongs to neither "servers you
+    // can join" nor "your account", and as a scrolling row it would disappear
+    // off the bottom of a long server list, which is the one place a player
+    // browsing servers is most likely to want it. Net only -- the alerts it
+    // advertises are about players connecting to public servers, so offering
+    // it on the LAN screen would be promising something a LAN game never
+    // produces. Absent entirely when no invite is configured (a fork with no
+    // Discord shows no row, rather than a button that goes nowhere).
+    const int discordIdx = isLAN ? -1 : ServerListDiscordIndex();
+    const bool showDiscord = discordIdx >= 0;
+    const int kDiscordSectionH = showDiscord ? 2 * menulist::kRowH : 0;
     SDL_Rect serverListViewport = menulist::kListFull;
-    serverListViewport.h -= kSetNameSectionH + kSetNameGap;
+    serverListViewport.h -= kSetNameSectionH + kSetNameGap
+                          + (showDiscord ? kDiscordSectionH + kSetNameGap : 0);
+    SDL_Rect discordViewport = menulist::kListFull;
+    discordViewport.y = menulist::kListFull.y + serverListViewport.h + kSetNameGap;
+    discordViewport.h = kDiscordSectionH;
+    // Pinned to kListFull's own bottom edge rather than measured down from the
+    // list above it, so inserting the Discord section between them cannot
+    // push it off the panel.
     SDL_Rect setNameViewport = menulist::kListFull;
-    setNameViewport.y = menulist::kListFull.y + serverListViewport.h + kSetNameGap;
+    setNameViewport.y = menulist::kListFull.y + menulist::kListFull.h - kSetNameSectionH;
     setNameViewport.h = kSetNameSectionH;
 
     menulist::List list(serverListViewport, menuIndex, menulist::kRowH, menulist::kMapFillAlpha);
@@ -1810,6 +1849,18 @@ void MainMenu::ServerListPanelRender(bool isLAN) {
     // Set Name: its own section, pinned to the bottom of the panel -- see
     // serverListViewport/setNameViewport above.
     int lastIdx = 1 + (int)servers.size();
+
+    if (showDiscord) {
+        menulist::List discordList(discordViewport, menuIndex, menulist::kRowH,
+                                    menulist::kMapFillAlpha);
+        discordList.Header("Community");
+        // Label short enough to survive the 404px row at this type size; the
+        // full sentence lives in the sidebar, which is where every other row
+        // on this panel explains itself too.
+        discordList.Row(discordIdx, "Join our Discord", "connect alerts");
+        discordList.End(rend, panelText, nullptr, tap);
+    }
+
     const char* curNick = networkPreNick[0] != '\0' ? networkPreNick
 #ifdef __ANDROID__
         : (getenv("USER") ? getenv("USER") : "android_user");
@@ -1851,7 +1902,17 @@ void MainMenu::ServerListPanelRender(bool isLAN) {
         sy += size + 10;
     };
 
-    if (menuIndex >= 1 && menuIndex <= (int)servers.size()) {
+    if (showDiscord && menuIndex == discordIdx) {
+        // The row label only has room for "Join our Discord"; this is where
+        // the player actually finds out what joining it gets them. Hand-
+        // wrapped -- sidebarLine draws one unwrapped line at a time, and the
+        // sidebar is 208px wide.
+        sidebarLine("Join our Discord", menulist::kText, 16);
+        sidebarLine("server to get alerts", menulist::kMuted);
+        sidebarLine("when online players", menulist::kMuted);
+        sidebarLine("connect.", menulist::kMuted);
+        sidebarLine("Opens in your browser.", menulist::kMuted, 13);
+    } else if (menuIndex >= 1 && menuIndex <= (int)servers.size()) {
         const ServerInfo& s = servers[menuIndex - 1];
         bool offline = (s.latencyMs < 0);
         sidebarLine(s.name.empty() ? s.host : s.name, menulist::kText, 16);
