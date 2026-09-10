@@ -54,6 +54,16 @@ services:
       # to show the real thing (a full domain, say) in Discord without
       # touching -n at all. Leave unset to just show whatever fb-server sent.
       - DISCORD_SERVER_NAME=${DISCORD_SERVER_NAME:-}
+      # Optional: threads round-result alerts per room instead of posting
+      # each round as a fresh top-level message. Needs a Discord bot (not
+      # just the webhook above) since a webhook can only create a new
+      # thread on a forum/media channel -- see
+      # server/discord-relay/README.md#threading-rounds-per-room and
+      # SetupServer.md#round-result-alerts for how to set one up. Leaving
+      # either unset (the default) keeps round-result alerts flat via
+      # DISCORD_WEBHOOK_URL; join alerts are unaffected either way.
+      - DISCORD_BOT_TOKEN=${DISCORD_BOT_TOKEN:-}
+      - DISCORD_CHANNEL_ID=${DISCORD_CHANNEL_ID:-}
 
   # ── nginx TLS termination ───────────────────────────────────────────────────
   # Terminates SSL and proxies WebSocket connections to fb-server.

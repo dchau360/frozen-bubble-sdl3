@@ -54,6 +54,31 @@ void discordalert_init(void);
 // discards the field. A no-op (and free) when the relay isn't configured.
 void discordalert_fire_join_event(const char* nick, const char* ip, const char* geoloc);
 
+// Call once per round-end, from the 'F' opcode sniffed in process_msg_prio_
+// (game.c) -- a bare "F" is a draw, "F<nick>" is a win claim, and the
+// server relays either verbatim to clients whether or not this fires.
+//
+// game_id is the room's g->game_id: an opaque, per-process-monotonic value
+// assigned once at CREATE and never reused, carried along purely so the
+// relay can group every round from the same room into one Discord thread.
+// It means nothing to this file or to fb-server generally -- it is not a
+// player-facing id and never touches the client wire protocol, only this
+// UDP datagram.
+//
+// roster_csv is every current player's nick, comma-joined -- each one
+// already passed is_nick_ok() when its owner connected or joined, unlike
+// winner_nick, which is exactly what the reporting client's payload said
+// and is not validated against anything here beyond a length cap and
+// stripping '|' at the call site. A modified client can claim a win it did
+// not earn; it cannot forge a false roster, since that comes from this
+// server's own bookkeeping, not the wire message. Pass NULL for winner_nick
+// on a draw. game_mode is the room's raw 0-3 GAMEMODE value (see
+// src/gamemode.h) or 0 if the room never set one -- the relay maps it to a
+// display name, not this file, so a value this build doesn't recognize
+// degrades to "unlabelled" rather than needing a matching update here.
+// A no-op (and free) when the relay isn't configured.
+void discordalert_fire_result_event(int game_id, const char* roster_csv, const char* winner_nick, int game_mode);
+
 // Close the UDP socket. Call once at shutdown, next to stats_cleanup().
 void discordalert_cleanup(void);
 
