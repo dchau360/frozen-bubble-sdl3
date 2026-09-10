@@ -121,7 +121,17 @@ def _post_sync(webhook_url, content):
     }).encode("utf-8")
     req = urllib.request.Request(
         webhook_url, data=body, method="POST",
-        headers={"Content-Type": "application/json"},
+        headers={
+            "Content-Type": "application/json",
+            # Discord's edge WAF rejects urllib's default User-Agent
+            # ("Python-urllib/3.x") outright with a 403 -- on every request,
+            # not just POST, and with no body explaining why. Confirmed by
+            # hand: a GET to the same URL succeeds with curl's UA and 403s
+            # with urllib's. A stock deploy with no other overrides hits this
+            # on the very first join, unconditionally.
+            "User-Agent": "fb-server-discord-relay/1.0 "
+                          "(+https://github.com/dchau360/frozen-bubble-sdl3)",
+        },
     )
     # Discord's webhook rate limit (per-webhook, a handful of requests per
     # few seconds) means a burst of joins can 429. That is treated the same

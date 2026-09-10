@@ -152,6 +152,7 @@ class PayloadTest(unittest.TestCase):
 
         def fake_urlopen(req, timeout=None):
             captured["body"] = json.loads(req.data.decode("utf-8"))
+            captured["user_agent"] = req.get_header("User-agent")
             return FakeResponse()
 
         original = relay.urllib.request.urlopen
@@ -160,15 +161,26 @@ class PayloadTest(unittest.TestCase):
             relay._post_sync("https://discord.example/webhook", content)
         finally:
             relay.urllib.request.urlopen = original
-        return captured["body"]
+        return captured
 
     def test_post_suppresses_every_mention(self):
-        body = self._payload("🔔 **alice** joined **@everyone**")
+        body = self._payload("🔔 **alice** joined **@everyone**")["body"]
         self.assertEqual(body["allowed_mentions"], {"parse": []})
 
     def test_post_still_carries_the_content(self):
-        body = self._payload("hello")
+        body = self._payload("hello")["body"]
         self.assertEqual(body["content"], "hello")
+
+    def test_post_overrides_the_default_user_agent(self):
+        # Discord's edge WAF 403s urllib's default User-Agent
+        # ("Python-urllib/3.x") outright -- confirmed against the live
+        # endpoint, GET included, so it is not a POST-specific quirk. A
+        # request left at urllib's default fails on the very first join a
+        # stock deploy tries to post, with nothing in the response body to
+        # explain why.
+        ua = self._payload("hello")["user_agent"]
+        self.assertIsNotNone(ua)
+        self.assertNotIn("urllib", ua.lower())
 
 
 if __name__ == "__main__":
