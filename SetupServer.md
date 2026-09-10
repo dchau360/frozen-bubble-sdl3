@@ -187,6 +187,17 @@ webhook URL, which only you as the operator can obtain.
 >
 > The same name is what your server advertises to the public server list, so
 > this is worth setting whether or not you use Discord alerts at all.
+>
+> **Want the real name in Discord anyway?** `-n`'s limit only constrains
+> what's advertised in-game — the Discord side of the pipe has no such cap.
+> Set `DISCORD_SERVER_NAME` in `docker/.env` and every alert shows that
+> instead, with `-n` untouched:
+>
+> ```bash
+> DISCORD_SERVER_NAME=fb.example.org
+> ```
+>
+> See [server/discord-relay/README.md](server/discord-relay/README.md#live-delivery).
 
 **Nothing breaks if you skip this.** Joins still happen normally; the alert
 just never fires. The relay is also entirely optional — remove
