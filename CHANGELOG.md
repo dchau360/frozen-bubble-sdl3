@@ -1,5 +1,26 @@
 # Changelog
 
+## v2.4.99
+
+- **Replaced "follow a server" push notifications with Discord join
+  alerts.** The old feature let a player follow a server and be pushed a
+  notification when someone joined it, which needed an APNs/FCM relay,
+  Firebase credentials, and per-platform push plumbing on both iOS and
+  Android. It is gone in its entirety — the server-side registry, the relay
+  sidecar, the lobby follow toggle and its `F` key, the star rows in the
+  server list, and the Firebase dependency and `POST_NOTIFICATIONS`
+  permission on Android. The iOS app now needs no custom entitlements to
+  codesign.
+
+  In its place is a server-operator feature. A server can post a message to
+  a Discord channel whenever a player joins a room, carrying the player's
+  nick and — when their client has reported one — a map link to their
+  approximate location. The joining player's IP is deliberately never
+  included in the message. This is opt-in per operator and does nothing
+  unless they configure a webhook; players need no client update and see no
+  change in game. See `SetupServer.md` and
+  `server/discord-relay/README.md`.
+
 ## v2.4.98
 
 - **Actually fixed background music not looping** (v2.4.97's fix was
