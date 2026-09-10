@@ -1,5 +1,40 @@
 # Changelog
 
+## v2.4.101
+
+- **Discord alerts for round results** — game mode, who won (or that it was
+  a draw), and the full player roster, posted once per round from the same
+  `F` opcode the server already relays to clients on round-end. Deliberately
+  per-round rather than per-match: detecting a "final match" server-side
+  would mean replicating the client's own win-count comparison, which
+  desyncs the moment it changes mid-room or a player leaves and rejoins.
+  The winner name is exactly the reporting client's own claim — never
+  validated server-side, same as it always wasn't — while the roster is
+  the server's own bookkeeping and can't be forged the same way. Does not
+  post the departure-inferred win/loss already tracked for stats purposes,
+  since a rage-quit and a dropped connection are indistinguishable there
+  and misattributing an outcome to a named player publicly would be worse
+  than not posting one.
+
+- **Round results now thread per room in Discord**, instead of one flat
+  message per round, when an operator configures a Discord bot
+  (`DISCORD_BOT_TOKEN` + `DISCORD_CHANNEL_ID`) alongside the existing
+  webhook. A room's first result opens a thread named after the room;
+  every later round for that room replies into it. This needs a bot, not
+  just a webhook: Discord's webhook API can only create a new thread when
+  the webhook's own channel is a forum/media channel, which would conflict
+  with sharing an ordinary text channel with join alerts. Leaving the bot
+  variables unset keeps posting flat, exactly as before. See
+  `SetupServer.md`'s "Round-result alerts" section for setup.
+
+- **The full server name can now show in Discord independent of `-n`'s
+  12-character cap.** `fb-server`'s own `-n` flag is capped at 12 characters
+  and a restricted charset for legacy in-game/server-list reasons — a
+  server whose real name is longer (a full domain, say) had no way to show
+  that name in Discord without violating that cap in-game too. Setting
+  `DISCORD_SERVER_NAME` on the relay overrides only what Discord shows,
+  leaving `-n` and everything players see in-game untouched.
+
 ## v2.4.100
 
 - **Discord join alerts now fire when a player connects, not when a second
