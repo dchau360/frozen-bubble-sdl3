@@ -114,6 +114,32 @@ void discordalert_fire_join_event(const char* nick, const char* ip, const char* 
     }
 }
 
+void discordalert_fire_result_event(int game_id, const char* roster_csv, const char* winner_nick, int game_mode)
+{
+    if (!relay_configured) return;
+
+    // roster_csv came from build_roster_csv() (game.c), joining nicks that
+    // already passed is_nick_ok() -- [A-Za-z0-9_-]{1,10} -- so it can never
+    // contain '|'. winner_nick had its own '|' stripped at the call site
+    // (game.c) for the same reason, since it is not validated against
+    // is_nick_ok at all. Only net_servername() is genuinely unbounded, same
+    // as for JOIN, which is why it stays last rather than split further.
+    // game_id is a plain int (see the doc comment in discordalert.h), so it
+    // needs no such treatment -- it goes right after RESULT rather than at
+    // the end, since it is the one field every consumer needs before it can
+    // even start parsing the rest.
+    char datagram[1024];
+    snprintf(datagram, sizeof(datagram), "RESULT|%d|%d|%s|%s|%s",
+             game_id, game_mode, winner_nick ? winner_nick : "", roster_csv ? roster_csv : "", net_servername());
+
+    if (sendto(relay_socket, datagram, strlen(datagram), 0,
+               (struct sockaddr*)&relay_addr, sizeof(relay_addr)) < 0) {
+        // Best-effort by design: log and move on, never block or retry on
+        // the main event loop.
+        l1(OUTPUT_TYPE_ERROR, "discordalert: sendto relay failed: %s", strerror(errno));
+    }
+}
+
 void discordalert_cleanup(void)
 {
     if (relay_socket != -1) {

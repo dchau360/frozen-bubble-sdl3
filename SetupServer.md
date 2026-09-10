@@ -151,7 +151,7 @@ docker compose down
 
 ---
 
-## Optional — Discord Join Alerts
+## Optional — Discord Join & Result Alerts
 
 Every time a player arrives on your server, it can post a message to a
 Discord channel of your choosing — their nick and your server's name, and
@@ -163,6 +163,13 @@ self-reported location is included, deliberately: a Discord channel can
 have members well beyond whoever runs the server, and the game itself now
 invites players into a community Discord from its own UI, so an alert
 channel is a good deal more public than it used to be.
+
+The same relay also posts a message at the end of every round: the game
+mode, who won (or that it was a draw), and the full player roster. It uses
+the same webhook, the same `DISCORD_SERVER_NAME` override, and the same
+stub/live modes below — there is nothing extra to configure. See
+[Round-result alerts](#round-result-alerts) further down for the details
+and what it does and doesn't include.
 
 This works out of the box in a **stub mode** that logs what it would have
 posted but delivers nothing. Making alerts actually arrive needs a Discord
@@ -216,6 +223,12 @@ A join logs a line like:
 [stub] would post: 🔔 **alice** joined **myserver**
 ```
 
+A round ending logs one too:
+
+```
+[stub] would post: 🏆 **alice** won (Race) on **myserver** — alice, bob
+```
+
 ### Going live
 
 In Discord: Server Settings → Integrations → Webhooks → New Webhook, pick the
@@ -253,6 +266,70 @@ can post anything to that channel, not just what this relay sends.
 > own players in your own Discord, advertise it yourself; there is no way
 > for a server to change where that in-game link goes, deliberately (see
 > `kDiscordInviteUrl` in `src/platform.cpp`).
+
+### Round-result alerts
+
+Posted once per round — when someone claims the win (or the round ends in a
+draw), not once per full match. There's no reliable way to tell server-side
+when a "match" (best-of-N by whatever win count a room's players agreed on)
+is truly over, since that count only ever lives client-side and can differ
+room to room, so this posts at the same granularity already shown to
+players in the post-round stats table: one alert per round, saying who won,
+which game mode it was played in (Classic/Clear/Race/Timed — unlabelled if
+a room never set one), and every player who was in the room.
+
+**The winner name is not verified.** It's exactly what the reporting
+client's own message said, the same way the round-over notice every other
+player's screen shows is. A modified client could in principle claim a win
+it didn't earn; the roster next to it, by contrast, is always accurate,
+since that comes from the server's own player list, not anything a client
+sent. This alert does not, and cannot, replace the winner claim any client
+already displays — it's the same information, on Discord.
+
+**A rage-quit or dropped connection is never posted as a loss.** The server
+already infers a win/loss from a player leaving mid-round for its own
+internal stats, but that inference is unreliable — there's no way to tell a
+rage-quit from a connection drop — and misattributing an outcome to a named
+player in public would be worse than just not posting one.
+
+> **One thread per room, not one message per round.** By default a busy
+> server's round-results are flat top-level messages, same as a join alert —
+> fine at first, but a long-lived room can clutter the channel with one
+> message per round. Set `DISCORD_BOT_TOKEN` and `DISCORD_CHANNEL_ID` and
+> every room's first result opens a Discord thread named after that room;
+> every later round for the same room posts into it instead. Join alerts are
+> unaffected either way — they always stay flat, since a join isn't part of
+> any one room's result history.
+>
+> This needs a Discord **bot**, not just the webhook above: Discord's
+> webhook API can only create a *new* thread when the webhook's channel is a
+> forum/media channel, and this relay is designed to share an ordinary text
+> channel with join alerts. To set it up:
+>
+> 1. [Create a Discord Application](https://discord.com/developers/applications) →
+>    **Bot** tab → **Reset Token** (or copy the existing one) → this is
+>    `DISCORD_BOT_TOKEN`.
+> 2. **OAuth2** tab → URL Generator → scope `bot` → permissions **View
+>    Channel**, **Send Messages**, **Create Public Threads**, **Send
+>    Messages in Threads** → open the generated URL and add the bot to your
+>    server.
+> 3. In Discord, right-click the channel you want round-results threaded in
+>    → **Copy Channel ID** (enable Developer Mode under Settings → Advanced
+>    if that option isn't there) → this is `DISCORD_CHANNEL_ID`.
+> 4. Add both to `docker/.env`:
+>
+> ```bash
+> DISCORD_BOT_TOKEN=your-bot-token-here
+> DISCORD_CHANNEL_ID=123456789012345678
+> ```
+>
+> Then `docker compose up -d --build discord-relay`. Setting only one of the
+> two logs a warning and falls back to flat result alerts via the webhook,
+> the same as setting neither.
+>
+> A relay restart forgets which rooms already have a thread open — the next
+> result for a room already in progress just opens a new one, no worse than
+> every room got before this existed.
 
 See [server/discord-relay/README.md](server/discord-relay/README.md) for the
 protocol and internals.

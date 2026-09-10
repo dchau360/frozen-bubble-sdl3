@@ -1,7 +1,11 @@
 # discord-relay
 
 Posts a Discord message whenever a player arrives on `fb-server`, carrying
-their nick and the server's name -- and nothing else.
+their nick and the server's name -- and nothing else. It also posts one at
+the end of every round, carrying the game mode, the winner (or that it was a
+draw), and the full player roster -- see [Round results](#round-results)
+below. Same webhook, same stub/live modes, same `DISCORD_SERVER_NAME`
+override; nothing extra to configure for one versus the other.
 
 "Arrives" means joining the *server* (their first accepted `NICK`, the point
 at which the lobby can see them), not joining a game room. A player sitting
@@ -36,6 +40,7 @@ the datagram is dropped and gameplay is unaffected.
 ## Wire format
 
     JOIN|<nick>|<ip>|<geoloc>|<servername>
+    RESULT|<game_id>|<game_mode>|<winner>|<roster>|<servername>
 
 `geoloc` is the arriving player's self-reported `lat:lon` or an empty string
 -- in practice always empty, since the client sends `GEOLOC` after `NICK`
@@ -44,6 +49,20 @@ parsed and then discarded -- see
 `handle_datagram()` and `build_message()` in `relay.py`. They stay in the
 wire format because `fb-server` already has them and a datagram costs the
 same either way.
+
+`game_id` is an opaque int identifying the room -- `fb-server` assigns it
+once, monotonically, when the room is created (`g->game_id` in
+`server/game.c`), and it never changes for that room's whole lifetime. It's
+never displayed; the relay uses it only to group a room's rounds into one
+Discord thread (see Round results below). `game_mode` is `fb-server`'s raw
+0-3 `GAMEMODE` value (0 Classic, 1 Clear, 2 Race, 3 Timed), or 0 if the room
+never set one. `winner` is empty on a draw. `roster` is every player
+currently in the room, comma-joined -- unlike `winner`, every name in it
+already passed `fb-server`'s `is_nick_ok()`, so it can never itself contain
+a `|`; `winner` had any literal `|` stripped at the C-layer extraction point
+(`game.c`) for the same reason, since it is *not* validated against
+`is_nick_ok()` at all -- see Round results below. Both message kinds keep
+`servername` last, since it is the only field with no length or charset cap.
 
 ## Running
 
@@ -58,6 +77,7 @@ and point the game server at it:
 With no webhook configured, the relay logs what it *would* have posted:
 
     [stub] would post: 🔔 **alice** joined **fb.servequake.com**
+    [stub] would post: 🏆 **alice** won (Race) on **fb.servequake.com** — alice, bob
 
 This is the default and needs no dependencies at all -- the standard library
 covers everything a Discord webhook POST needs (it's a plain JSON POST, no
@@ -102,6 +122,79 @@ The message carries neither an IP nor a location, but it does carry a nick,
 and the stream of them is a record of who plays where and when -- keep the
 webhook URL somewhere sensible all the same. Anyone holding it can post
 anything to that channel.
+
+## Round results
+
+Fired once per round -- on the `F` opcode (round-over: a bare `"F"` is a
+draw, `"F<nick>"` is a win claim), sniffed in `process_msg_prio_()`
+(`server/game.c`) alongside the server's normal, unrelated relay of that
+same opcode to every client in the room -- not once per full match. There is
+no reliable way for the server to know when a "match" (best-of-N by
+whichever win count a room's players agreed on client-side) is actually
+over, so this posts at the same granularity already shown to players in the
+post-round stats table.
+
+**The winner name is not verified.** It comes straight from the reporting
+client's own `F` payload, the same claim every other player's screen already
+shows for that round -- `fb-server` has never validated it, alert or not.
+The roster next to it, by contrast, always reflects the server's own player
+list, so a modified client can claim an unearned win but cannot forge who
+was actually in the room.
+
+`build_result_message()` in `relay.py` maps `game_mode` to a display name
+(`_GAME_MODE_NAMES`); a mode value a future client version sends that this
+build doesn't recognize just degrades to no label rather than a crash or a
+stale mapping needing an update first. `_sanitize_display()` (the same
+Discord-markdown escaping and `allowed_mentions` lockdown used for `JOIN`)
+applies to every name in the winner and roster fields too, since the roster
+comes from `nick`s that already satisfy `is_nick_ok()` but the winner field
+does not.
+
+The server never infers or posts a result from a player disconnecting
+mid-round (the stats bookkeeping that already exists for that, in
+`player_part_game_()`, stays local to the server) -- a dropped connection and
+a rage-quit are indistinguishable there, and publicly misattributing an
+outcome to a named player would be worse than not posting one.
+
+### Threading rounds per room
+
+With `DISCORD_BOT_TOKEN` and `DISCORD_CHANNEL_ID` both set, every room's
+first result opens a Discord thread (named after the room), and every later
+result for the same room (same `game_id`) posts into that thread instead of
+a fresh top-level message. Leaving either unset (the default) keeps posting
+flat via `DISCORD_WEBHOOK_URL`, exactly as before this existed -- join
+alerts are entirely unaffected by this setting either way, since a join
+isn't part of any one room's round history.
+
+This needs a **bot**, not the webhook everything else in this file uses:
+Discord's Execute Webhook endpoint can only create a *new* thread
+(`thread_name` in the request body) when the webhook's own channel is a
+forum or media channel -- it cannot on an ordinary text channel, which is
+what this relay assumes it's sharing with join alerts. A bot token has no
+such restriction: `_post_result_via_bot_sync()` posts an ordinary message
+via `POST /channels/{channel}/messages`, then converts it into a thread via
+`POST /channels/{channel}/messages/{message}/threads`, both authenticated
+`Authorization: Bot <token>` rather than a webhook URL. Every later result
+for that room posts straight to `POST /channels/{thread}/messages` -- a
+thread is addressable as an ordinary channel id once it exists, so no
+webhook-style `?thread_id=` query parameter is needed here.
+
+The bot needs **View Channel**, **Send Messages**, **Create Public
+Threads**, and **Send Messages in Threads** in `DISCORD_CHANNEL_ID`. Set up
+via the [Discord Developer Portal](https://discord.com/developers/applications):
+create an Application, add a Bot, copy its token as `DISCORD_BOT_TOKEN`,
+generate an OAuth2 URL with scope `bot` and those permissions, and use it to
+add the bot to your server.
+
+`_room_threads` (a `game_id -> thread id` dict) is purely in-memory: a relay
+restart forgets every thread currently open, so the next result for a room
+already in progress just opens a fresh one -- no worse than every room got
+before this existed, and nothing worth persisting across a restart of a
+best-effort sidecar. If posting into an already-cached thread ever fails
+(the channel was deleted, a permission got revoked, anything), that cache
+entry is dropped so the *next* round tries a new thread instead of repeating
+the same failure forever; the round whose post actually failed is logged and
+dropped, same as any other delivery failure in this file.
 
 ## Collecting joins from servers you don't run
 

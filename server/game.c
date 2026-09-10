@@ -62,6 +62,26 @@ struct game
          * collide with the \n/\r/, framing and corrupt the client's parse. */
         int players_id[MAX_PLAYERS_PER_GAME];
         int next_player_id;
+
+        /* For the Discord match-result alert (discordalert_fire_result_event,
+         * fired from a sniffed 'F' in process_msg_prio_). None of these
+         * change anything about how the game is played -- all three are
+         * read back, never acted on. */
+        int game_mode;      /* raw GAMEMODE:%d from the room's last SETOPTIONS,
+                              * or 0 (Classic) if none was ever set -- see
+                              * setoptions() below. */
+        int result_posted;  /* guards against posting the same round twice;
+                              * reset on 'n' (ready for next round). */
+        int game_id;        /* opaque, monotonically-assigned key identifying
+                              * this room to the relay across every round it
+                              * plays -- see next_game_id() below. Lets the
+                              * relay group a room's round-result alerts into
+                              * one Discord thread without relying on
+                              * players_nick[0], which is not a stable room
+                              * name: it is CREATE's argument, but a departure
+                              * shifts the whole players_nick[] array down
+                              * (see player leave handling), so it can change
+                              * mid-room. */
 };
 
 static GList * games = NULL;
@@ -278,6 +298,13 @@ void calculate_list_games(void)
         free(free_players);
 }
 
+/* Monotonic across the process's whole lifetime, never reused -- see
+ * g->game_id's comment. A plain counter is fine here, unlike next_seat_id()'s
+ * wraparound dance: this value never touches the wire protocol (it only ever
+ * leaves the process in a RESULT datagram to the Discord relay), so it has
+ * no framing bytes to avoid and no per-game cap to wrap within. */
+static int next_game_id = 1;
+
 static void create_game(int fd, char* nick, int max_players)
 {
         struct game * g = malloc_(sizeof(struct game));
@@ -288,6 +315,9 @@ static void create_game(int fd, char* nick, int max_players)
         g->players_nick[0] = nick;
         g->status = GAME_STATUS_OPEN;
         g->max_players = max_players;
+        g->game_mode = 0;      /* Classic, until/unless SETOPTIONS says otherwise */
+        g->result_posted = 0;
+        g->game_id = next_game_id++;
         games = g_list_append(games, g);
         open_players = g_list_remove(open_players, GINT_TO_POINTER(fd));
         calculate_list_games();
@@ -419,6 +449,23 @@ int find_player_number(struct game *g, int fd)
         return i;
 }
 
+/* Comma-joined roster for the Discord match-result alert. Every name in
+ * g->players_nick[] already passed through is_nick_ok() when its owner
+ * connected or joined -- unlike the winner claim in a sniffed 'F' payload
+ * (see process_msg_prio_), which is not validated at all. Bounded the same
+ * way mapping_str is below: MAX_PLAYERS_PER_GAME nicks of at most 10 chars
+ * each comfortably fit 512 bytes with room for the commas. */
+static void build_roster_csv(struct game* g, char* out, size_t outsz)
+{
+        int i;
+        out[0] = '\0';
+        for (i = 0; i < g->players_number; i++) {
+                if (i > 0)
+                        strconcat(out, ",", outsz);
+                strconcat(out, g->players_nick[i], outsz);
+        }
+}
+
 static void real_start_game(struct game* g)
 {
         int i;
@@ -496,6 +543,21 @@ static int min_protocol_level(struct game* g)
         return minor;
 }
 
+/* Pulls GAMEMODE:%d out of a SETOPTIONS string, purely for labelling the
+ * Discord match-result alert -- the server has no other use for game mode
+ * and does not otherwise interpret this string at all (setoptions() below
+ * relays it to clients verbatim, same as always). Missing key or an
+ * out-of-range value both fall back to 0 (Classic): a value this server
+ * doesn't recognize should degrade to "unlabelled", not crash or read out
+ * of the mode-name table's bounds. See src/gamemode.h for the 0-3 mapping. */
+static int parse_game_mode(const char* options)
+{
+        const char* key = strstr(options, "GAMEMODE:");
+        if (!key) return 0;
+        int mode = atoi(key + strlen("GAMEMODE:"));
+        return (mode >= 0 && mode <= 3) ? mode : 0;
+}
+
 static void setoptions(int fd, char* options)
 {
         struct game * g = find_game_by_fd(fd);
@@ -503,6 +565,7 @@ static void setoptions(int fd, char* options)
                 if (g->players_conn[0] == fd) {
                         int i;
                         char* msg;
+                        g->game_mode = parse_game_mode(options);
                         send_ok(fd, "SETOPTIONS");
                         msg = asprintf_("OPTIONS: %s,PROTOCOLLEVEL:%d", options, min_protocol_level(g));
                         for (i = 0; i < g->players_number; i++)
@@ -1172,6 +1235,46 @@ void process_msg_prio_(int fd, char* msg, ssize_t len, struct game* g)
                         if (sender_slot >= 0 && len > 0)
                                 msg[0] = g->players_id[sender_slot];
                 }
+
+                /* Sniff round-end ('F') and ready-for-next-round ('n') for the
+                 * Discord match-result alert. Read-only with respect to
+                 * everything below -- it never changes what gets relayed, only
+                 * whether a datagram also goes to discord-relay.
+                 *
+                 * 'F' means round over: bare "F" is a draw, "F<nick>" is a win
+                 * claim (src/bubblegame_state.cpp). Multiple clients can send
+                 * their own 'F' for the same round -- the client's own
+                 * CommitRoundWin ignores every one after the first, and
+                 * result_posted is this function's equivalent, cleared on the
+                 * next round's 'n' rather than reset by any explicit
+                 * round-boundary signal, since there isn't one on the wire.
+                 *
+                 * The winner name is exactly what the reporting client's
+                 * payload said and is NOT checked against is_nick_ok -- a
+                 * modified client could claim a win it did not earn, or embed
+                 * something adversarial. Stripping '|' below only protects
+                 * this datagram's own field boundaries; discord-relay applies
+                 * its usual markdown/mention escaping on top of that, same
+                 * distrust as the join alert's nick and servername fields. */
+                if (len >= 3 && msg[1] == 'F' && !g->result_posted) {
+                        char winner[32] = "";
+                        size_t wlen = (size_t)len - 3;  /* id + 'F' + '\n' */
+                        if (wlen > 0 && wlen < sizeof(winner)) {
+                                size_t j, w = 0;
+                                for (j = 0; j < wlen; j++)
+                                        winner[w++] = (msg[2 + j] == '|') ? ' ' : msg[2 + j];
+                                winner[w] = '\0';
+                        }
+                        {
+                                char roster[512];
+                                build_roster_csv(g, roster, sizeof(roster));
+                                discordalert_fire_result_event(g->game_id, roster, winner[0] ? winner : NULL, g->game_mode);
+                        }
+                        g->result_posted = 1;
+                } else if (len >= 2 && msg[1] == 'n') {
+                        g->result_posted = 0;
+                }
+
                 for (i = 0; i < g->players_number; i++) {
                         // Pings are for the server only. Don't broadcast them to save bandwidth.
                         if (len == 3 && msg[1] == 'p') {

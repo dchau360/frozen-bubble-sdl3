@@ -27,7 +27,7 @@ Every mode plays the same whether you're local or online, and the host can adjus
 
 **Teams** — join a team, or stay a free agent, from any room's Set Teams screen — teams work in all four modes above, not just one. Teammates share the win when one of you takes the round, and in Timed mode your team's pops even pool together, so a coordinated pair can out-pop a solo player. Hosts get one-tap Auto-balance buttons to split the room into 2, 3, 4, or 5 teams instantly.
 
-**Online multiplayer** — play with friends or strangers over the internet, 2–20 players per room, on the included dedicated server. Rooms bigger than 5 players get a battle-royale layout showing your most relevant opponents, quick-target hotkeys, and a spectate mode once you're out. The host controls chain reactions, attack bubbles, per-player aim assist, mouse/touch aim, and more — every joined player sees the rules update live. Follow a quiet server and get notified the moment someone joins it.
+**Online multiplayer** — play with friends or strangers over the internet, 2–20 players per room, on the included dedicated server. Rooms bigger than 5 players get a battle-royale layout showing your most relevant opponents, quick-target hotkeys, and a spectate mode once you're out. The host controls chain reactions, attack bubbles, per-player aim assist, mouse/touch aim, and more — every joined player sees the rules update live.
 
 **Local multiplayer** — 2–5 players, one device — keyboard, controller, or a mix. Empty seats can be filled with bots at three skill levels, so a bigger match doesn't need a full house of controllers.
 
@@ -168,10 +168,12 @@ Building from source: [docs/BUILDING.md](docs/BUILDING.md).
 [Join the Discord](https://discord.gg/uE4dq8fqGW) — the same invite the
 **Join our Discord** row on the NET GAME server list and the online lobby
 opens in your browser. There's an alert whenever someone connects to a
-public server, if you're looking for an opponent.
+public server, plus a result alert at the end of every round — game mode,
+winner (or draw), and the full player roster — if you're looking for an
+opponent or just keeping an eye on how things are going.
 
-Running your own server? It can post its own join alerts to a Discord
-channel of your choosing — see [SetupServer.md](SetupServer.md#optional--discord-join-alerts).
+Running your own server? It can post its own join and round-result alerts to
+a Discord channel of your choosing — see [SetupServer.md](SetupServer.md#optional--discord-join-alerts).
 
 ---
 
