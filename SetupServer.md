@@ -168,6 +168,19 @@ This works out of the box in a **stub mode** that logs what it would have
 posted but delivers nothing. Making alerts actually arrive needs a Discord
 webhook URL, which only you as the operator can obtain.
 
+> **Name your server first.** The alert says *"alice joined **&lt;your server&gt;**"*,
+> and that name comes from `fb-server`'s `-n` flag. Without it the name falls
+> back to the hostname, which inside a container is the container ID — your
+> alerts read `alice joined ce98fdda68c6`, and the ID changes every rebuild.
+> Set it in `docker/.env`:
+>
+> ```bash
+> FB_SERVER_NAME=fb.example.org
+> ```
+>
+> The same name is what your server advertises to the public server list, so
+> this is worth setting whether or not you use Discord alerts at all.
+
 **Nothing breaks if you skip this.** Joins still happen normally; the alert
 just never fires. The relay is also entirely optional — remove
 `FB_SERVER_DISCORD_RELAY` from the `fb-server` service to turn the feature
