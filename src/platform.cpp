@@ -286,6 +286,34 @@ bool DeviceHasTouchscreen() {
     return count > 0;
 }
 
+// The community Discord invite. See platform.h for why this is a build-time
+// constant and not something a server advertises over the wire.
+//
+// Use a permanent, never-expiring invite: Discord's default invites expire
+// after 7 days, and one that lapses turns every Discord row in the game into a
+// dead end for everyone still on that release -- there is no way to fix it
+// short of shipping a new build. In Discord: right-click the channel → Invite
+// People → Edit invite link → Expire after: Never, Max number of uses: No
+// limit.
+const char* const kDiscordInviteUrl = "";
+
+bool HasDiscordInvite() {
+    return kDiscordInviteUrl != nullptr && kDiscordInviteUrl[0] != '\0';
+}
+
+bool OpenDiscordInvite() {
+    if (!HasDiscordInvite()) return false;
+    // SDL_OpenURL covers every platform this game ships on -- xdg-open/
+    // ShellExecute/NSWorkspace on desktop, ACTION_VIEW on Android,
+    // openURL: on iOS, window.open in Emscripten -- so there is no
+    // per-platform branch to keep in step here.
+    if (!SDL_OpenURL(kDiscordInviteUrl)) {
+        SDL_Log("OpenDiscordInvite: SDL_OpenURL failed: %s", SDL_GetError());
+        return false;
+    }
+    return true;
+}
+
 void SetTextInputAreaLogical(SDL_Renderer *renderer, const SDL_Rect &logical) {
     SDL_Window *window = renderer ? SDL_GetRenderWindow(renderer) : SDL_GetKeyboardFocus();
     if (window == nullptr) return;

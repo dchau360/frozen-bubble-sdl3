@@ -1358,6 +1358,11 @@ void MainMenu::MenuUpKey() {
                                 // In lobby
                                 std::vector<GameRoom> games = netClient->GetGameList();
                                 maxActions = 2 + games.size(); // Chat + Create + Join games
+                                // ...plus the "Join our Discord" row the lobby
+                                // list draws after the rooms, when one is
+                                // compiled in. Without this it renders but
+                                // arrow keys stop one short of it.
+                                if (LobbyDiscordIndex(games.size()) >= 0) maxActions++;
                             }
                             // The HELP box (kRoomHelpTapIndex) and the >5-cap
                             // roster's tap rows park selectedActionIndex on fake
@@ -1433,7 +1438,13 @@ void MainMenu::MenuDownKey() {
                     }
                     // Net game menu navigation
                     if (showingNetPanel && !networkInLobby && networkInputMode == 10) {
-                        int netMenuMax = 2 + (int)publicServers.size(); // 0=Manual, 1..n=servers, n+1=SetName
+                        // 0=Manual, 1..n=servers, n+1=SetName, and n+2=Join our
+                        // Discord when an invite is compiled in -- without the
+                        // extra stop, keyboard and gamepad players could see
+                        // the Discord row but never reach it, which is exactly
+                        // the input-parity gap CLAUDE.md calls out.
+                        int netMenuMax = 2 + (int)publicServers.size();
+                        if (ServerListDiscordIndex() >= 0) netMenuMax++;
                         if (netMenuIndex < netMenuMax - 1) { netMenuIndex++; AudioMixer::Instance()->PlaySFX("menu_change"); }
                         return;
                     }
@@ -1463,6 +1474,11 @@ void MainMenu::MenuDownKey() {
                                 // In lobby
                                 std::vector<GameRoom> games = netClient->GetGameList();
                                 maxActions = 2 + games.size(); // Chat + Create + Join games
+                                // ...plus the "Join our Discord" row the lobby
+                                // list draws after the rooms, when one is
+                                // compiled in. Without this it renders but
+                                // arrow keys stop one short of it.
+                                if (LobbyDiscordIndex(games.size()) >= 0) maxActions++;
                             }
                             if (currentGame) {
                                 if (selectedActionIndex == kRoomSetTeamsTapIndex) {
@@ -2038,6 +2054,15 @@ void MainMenu::MenuReturnKey() {
                                     // Join game (selectedActionIndex >= 2)
                                     SDL_Log("Join game action: selectedActionIndex=%d", selectedActionIndex);
                                     std::vector<GameRoom> games = netClient->GetGameList();
+                                    // The Discord row sits one past the last
+                                    // room, so it would otherwise land in the
+                                    // "gameIndex out of bounds" arm below and
+                                    // silently do nothing.
+                                    if (selectedActionIndex == LobbyDiscordIndex(games.size())) {
+                                        OpenDiscordInvite();
+                                        AudioMixer::Instance()->PlaySFX("menu_selected");
+                                        return;
+                                    }
                                     int gameIndex = selectedActionIndex - 2;
                                     SDL_Log("Join game: gameIndex=%d, games.size()=%d", gameIndex, (int)games.size());
                                     if (gameIndex >= 0 && gameIndex < (int)games.size()) {
@@ -2227,6 +2252,14 @@ void MainMenu::MenuReturnKey() {
                                 networkFieldEditing = false;
                                 networkManualFieldIndex = 0;
                                 SDL_StopTextInput(SDL_GetKeyboardFocus());
+                                return;
+                            }
+                            // Checked before the Set-name branch below, which is
+                            // a catch-all for "any index past the last server"
+                            // and would otherwise swallow this one.
+                            if (netMenuIndex == ServerListDiscordIndex()) {
+                                OpenDiscordInvite();
+                                AudioMixer::Instance()->PlaySFX("menu_selected");
                                 return;
                             }
                             int serverIdx = netMenuIndex - 1;

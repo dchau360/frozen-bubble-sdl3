@@ -46,19 +46,30 @@ where players and servers are. It is not stored beyond the current session.
 **Discord join alerts (server-operator feature, not controlled by the
 developer).** A server's operator can optionally run a relay that posts a
 message to a Discord channel of their choosing every time a player joins a
-room on their server. That message includes your nickname and — only when
-your client has already fetched it, per the "Approximate location"
-paragraph above — a Google Maps link built from your approximate location.
-Your IP address is not included in the message: it briefly reaches the
-relay as part of the join event (the same information the server already
-receives under "Network connection data" above), but the relay does not
-forward it anywhere. This is opt-in **per server operator**, not per
-player — there is no in-app setting to disable it, because the decision
-belongs to whichever server you choose to join. Whether a given server does
-this, and what channel it posts to, is outside the developer's control; see
+room on their server. **That message contains your nickname and the
+server's name, and nothing else.** Neither your IP address nor your
+approximate location is included: both briefly reach the relay as part of
+the join event (the same information the server already receives under
+"Network connection data" and "Approximate location" above), and the relay
+discards both rather than forwarding them anywhere. This is opt-in **per
+server operator**, not per player — there is no in-app setting to disable
+it, because the decision belongs to whichever server you choose to join.
+Whether a given server does this, and what channel it posts to, is outside
+the developer's control; see
 [SetupServer.md](https://github.com/dchau360/frozen-bubble-sdl3/blob/main/SetupServer.md)
 for the mechanism, and ask a server's operator directly if you want to know
-whether they've enabled it.
+whether they've enabled it. Note that the relay is ordinary source code an
+operator runs themselves, so an operator who modifies their copy could post
+more than the stock version does — as could any server software that is not
+this one. What is described here is what the shipped relay sends.
+
+**Opening the community Discord.** The NET GAME server list and the online
+lobby each offer a "Join our Discord" row. It is a link and nothing more:
+selecting it hands a fixed invite URL to your browser, and no information
+about you is sent anywhere by the act of opening it. What happens after
+that is between you and Discord, under
+[Discord's own privacy policy](https://discord.com/privacy). Nothing is
+sent if you never select the row.
 
 **Advertising identifiers (Android only).** The Android build shows an
 interstitial ad via Google AdMob when entering the multiplayer lobby.
@@ -81,9 +92,10 @@ or analytics SDK, so none is collected by the developer.
 ## How information is used
 
 - Nickname and network data: to run the multiplayer match you're playing.
-- Nickname and approximate location: also used, at a server operator's
-  discretion, to post a Discord join alert for that server (see above). Your
-  IP briefly reaches the same relay but is not part of the posted message.
+- Nickname: also used, at a server operator's discretion, to post a Discord
+  join alert for that server (see above). Your IP and your approximate
+  location both briefly reach the same relay; neither is part of the posted
+  message.
 - Advertising identifiers: handled entirely within Google's AdMob SDK to
   select and measure ads; not accessed by the developer directly.
 - Purchase token: to keep the "ads removed" state accurate on your device.
@@ -97,8 +109,9 @@ or analytics SDK, so none is collected by the developer.
   approximate location from your IP address, for the network lobby's world
   map
 - [Discord](https://discord.com/privacy) — some servers relay a join alert
-  (nickname, approximate location) to a channel the server's operator
-  chooses; not run or controlled by the developer
+  (nickname and server name only) to a channel the server's operator
+  chooses; not run or controlled by the developer. Discord's policy also
+  applies if you follow the game's "Join our Discord" link.
 
 ## Data retention
 

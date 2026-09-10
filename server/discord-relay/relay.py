@@ -19,9 +19,10 @@ beats their own geolocation lookup, so this is the normal case, not an
 error. servername is everything remaining after the fourth "|" (it can
 itself contain spaces or, in principle, "|").
 
-ip is parsed but never posted to Discord -- see build_message(). It rides
-along in the datagram because fb-server already has it for free and it costs
-nothing to send, not because this relay does anything with it.
+ip and geoloc are parsed but never posted to Discord -- see build_message(),
+which explains why the location came out. Both ride along in the datagram
+because fb-server already has them for free and it costs nothing to send,
+not because this relay does anything with them.
 
 Without DISCORD_WEBHOOK_URL configured this runs in stub mode: it logs what
 it *would* have posted and returns. That is the intended state until an
@@ -81,35 +82,24 @@ def _sanitize_display(text):
     return text[:MAX_DISPLAY].translate(_MD_ESCAPE)
 
 
-def _maps_link(geoloc):
-    """geoloc is "lat:lon" (see GEOLOC's own comment on the format) or "" --
-    returns a Google Maps link, or None when there is nothing to link."""
-    if not geoloc:
-        return None
-    try:
-        lat_s, lon_s = geoloc.split(":", 1)
-        lat, lon = float(lat_s), float(lon_s)
-    except ValueError:
-        log.warning("unparseable geoloc, dropped from message: %r", geoloc)
-        return None
-    return f"https://www.google.com/maps?q={lat},{lon}"
+def build_message(nick, servername):
+    """The whole message: who joined, and where. Nothing else.
 
+    Neither the joining player's IP nor their location appears here, and both
+    arrive in the datagram -- see handle_datagram(), which drops them.
 
-def build_message(nick, geoloc, servername):
-    # ip deliberately does not appear here. fb-server still sends it in the
-    # datagram (see the module docstring) since it costs nothing to include
-    # on a link nothing else uses, but nothing this relay does forwards it
-    # anywhere -- a Discord channel can have members far beyond whoever runs
-    # the server, and a joining player never agreed to have their IP posted
-    # there.
+    The IP was never posted. The location was, as a Google Maps link, back
+    when this fed a private operators-only channel. It came out when the game
+    itself started advertising the channel to players ("Join our Discord" on
+    the NET GAME list and in the lobby): a channel the game recruits players
+    into is one where every joining player's approximate location would be on
+    show to everyone who took up the offer, which is not a thing a player
+    agreed to by letting the client geolocate them for the lobby's world map.
+    The map still works exactly as before -- that data simply stops here.
+    """
     nick = _sanitize_display(nick)
     servername = _sanitize_display(servername)
-    # geoloc needs no equivalent: _maps_link only ever emits a URL built from
-    # two parsed floats, so nothing a client puts in GEOLOC survives into the
-    # message as text.
-    link = _maps_link(geoloc)
-    location = f" from [this location]({link})" if link else ""
-    content = f"🔔 **{nick}** joined **{servername}**{location}"
+    content = f"🔔 **{nick}** joined **{servername}**"
     return content[:MAX_DISCORD_CONTENT]
 
 
@@ -154,8 +144,13 @@ async def handle_datagram(data, webhook_url):
         return
 
     _, nick, ip, geoloc, servername = parts
-    del ip  # received but never posted to Discord -- see build_message()
-    content = build_message(nick, geoloc, servername)
+    # Both received, neither posted -- see build_message(). They stay in the
+    # wire format because fb-server already has them and a datagram costs the
+    # same either way; dropping them here rather than at the sender keeps the
+    # decision in one reviewable place, and leaves an operator who forks this
+    # file for a private channel something to work from.
+    del ip, geoloc
+    content = build_message(nick, servername)
 
     if not webhook_url:
         log.info("[stub] would post: %s", content)

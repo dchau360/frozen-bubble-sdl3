@@ -112,6 +112,31 @@ std::string IosFetchUrl(const char* url, int timeoutSeconds);
 void IosPostJson(const std::string& url, const std::string& jsonBody);
 #endif
 
+// ── Community Discord ─────────────────────────────────────────────────────────
+//
+// One community Discord for the whole game, not a per-server thing: the invite
+// is a build-time constant rather than something a server or the public server
+// list advertises. That matters for trust -- an invite that arrived over the
+// wire would let any server operator (or anyone who got a line into the server
+// list) redirect players to a Discord of their choosing from inside the game's
+// own UI, which is a phishing primitive, not a feature. Changing where players
+// are sent therefore takes a release, deliberately.
+extern const char* const kDiscordInviteUrl;
+
+// True when kDiscordInviteUrl is actually set to something. The rows that
+// offer it are not built at all when it is empty, so a fork that has no
+// Discord of its own simply doesn't show them rather than shipping a dead
+// button.
+bool HasDiscordInvite();
+
+// Hands the invite to the platform's browser (SDL_OpenURL: Safari/Chrome on
+// desktop, an Intent on Android, Safari on iOS, window.open in the browser
+// build). Returns false when there is no invite configured or the platform
+// refused to open it -- callers surface that rather than silently doing
+// nothing, since on a phone the browser taking focus is the only feedback a
+// player gets that the tap registered at all.
+bool OpenDiscordInvite();
+
 // ── In-app purchases (Android only) ───────────────────────────────────────────
 //
 // Ads and the purchases that remove them exist only on Android, so these are
