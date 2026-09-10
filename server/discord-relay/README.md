@@ -1,8 +1,12 @@
 # discord-relay
 
 Posts a Discord message whenever a player joins a room on `fb-server`,
-carrying the joining player's IP and self-reported geolocation (a Google
-Maps link) when one is available.
+carrying the joining player's nick and self-reported geolocation (a Google
+Maps link) when one is available. The player's IP arrives in the datagram
+from `fb-server` (see Wire format below) but is deliberately never included
+in the Discord message -- a channel can have members well beyond whoever
+runs the server, and a joining player never agreed to have their IP posted
+there.
 
 `fb-server` cannot do this itself: it has no TLS stack, and it runs one
 single-threaded blocking event loop for every connected player, so an HTTPS
@@ -18,7 +22,7 @@ the datagram is dropped and gameplay is unaffected.
 `geoloc` is the joining player's self-reported `lat:lon` or an empty string
 -- a fast joiner routinely beats their own client-side geolocation lookup
 (it can take up to ~16s), so a missing location is the normal case, not an
-error.
+error. `ip` is parsed but not used -- see `build_message()` in `relay.py`.
 
 ## Running
 
@@ -32,7 +36,7 @@ and point the game server at it:
 
 With no webhook configured, the relay logs what it *would* have posted:
 
-    [stub] would post: 🔔 **alice** joined **fb.servequake.com** from [this location](https://www.google.com/maps?q=37.77,-122.42) (203.0.113.5)
+    [stub] would post: 🔔 **alice** joined **fb.servequake.com** from [this location](https://www.google.com/maps?q=37.77,-122.42)
 
 This is the default and needs no dependencies at all -- the standard library
 covers everything a Discord webhook POST needs (it's a plain JSON POST, no
@@ -56,6 +60,6 @@ gets 429'd is logged and dropped rather than queued or retried, the same
 best-effort handling as any other delivery failure -- see the comment on
 `_post_sync` in `relay.py`.
 
-The IP address included in the message is a real piece of PII -- keep the
-webhook URL and the channel it posts to appropriately private, the same as
-you would `joiners.log` on the game server itself.
+The message itself carries no IP, but it does carry a nick and, when
+available, an approximate location -- keep the webhook URL and the channel
+it posts to reasonably private all the same.

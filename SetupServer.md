@@ -154,8 +154,10 @@ docker compose down
 ## Optional — Discord Join Alerts
 
 Every time a player joins a room on your server, it can post a message to a
-Discord channel of your choosing — the joining player's nick, IP, and (when
-available) a Google Maps link built from their self-reported geolocation.
+Discord channel of your choosing — the joining player's nick and, when
+available, a Google Maps link built from their self-reported geolocation.
+The player's IP is not included in the message, deliberately — a Discord
+channel can have members well beyond whoever runs the server.
 
 This works out of the box in a **stub mode** that logs what it would have
 posted but delivers nothing. Making alerts actually arrive needs a Discord
@@ -175,7 +177,7 @@ docker compose logs discord-relay
 A join logs a line like:
 
 ```
-[stub] would post: 🔔 **alice** joined **myserver** from [this location](https://www.google.com/maps?q=37.77,-122.42) (203.0.113.5)
+[stub] would post: 🔔 **alice** joined **myserver** from [this location](https://www.google.com/maps?q=37.77,-122.42)
 ```
 
 ### Going live
@@ -195,9 +197,9 @@ different channel.
 A burst of joins can hit Discord's per-webhook rate limit; a request that
 gets rate-limited is logged and dropped rather than queued or retried.
 
-The IP address included in each message is a real piece of PII — keep the
-webhook URL and the channel it posts to appropriately private, the same as
-you would `joiners.log` on the game server itself.
+The message carries no IP address, but it does carry a nick and, when
+available, an approximate location — keep the webhook URL and the channel
+it posts to reasonably private all the same.
 
 See [server/discord-relay/README.md](server/discord-relay/README.md) for the
 protocol and internals.

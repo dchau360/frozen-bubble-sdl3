@@ -19,6 +19,10 @@ beats their own geolocation lookup, so this is the normal case, not an
 error. servername is everything remaining after the fourth "|" (it can
 itself contain spaces or, in principle, "|").
 
+ip is parsed but never posted to Discord -- see build_message(). It rides
+along in the datagram because fb-server already has it for free and it costs
+nothing to send, not because this relay does anything with it.
+
 Without DISCORD_WEBHOOK_URL configured this runs in stub mode: it logs what
 it *would* have posted and returns. That is the intended state until an
 operator supplies a webhook -- the whole pipeline stays exercisable without
@@ -61,10 +65,16 @@ def _maps_link(geoloc):
     return f"https://www.google.com/maps?q={lat},{lon}"
 
 
-def build_message(nick, ip, geoloc, servername):
+def build_message(nick, geoloc, servername):
+    # ip deliberately does not appear here. fb-server still sends it in the
+    # datagram (see the module docstring) since it costs nothing to include
+    # on a link nothing else uses, but nothing this relay does forwards it
+    # anywhere -- a Discord channel can have members far beyond whoever runs
+    # the server, and a joining player never agreed to have their IP posted
+    # there.
     link = _maps_link(geoloc)
     location = f" from [this location]({link})" if link else ""
-    content = f"🔔 **{nick}** joined **{servername}**{location} ({ip})"
+    content = f"🔔 **{nick}** joined **{servername}**{location}"
     return content[:MAX_DISCORD_CONTENT]
 
 
@@ -101,7 +111,8 @@ async def handle_datagram(data, webhook_url):
         return
 
     _, nick, ip, geoloc, servername = parts
-    content = build_message(nick, ip, geoloc, servername)
+    del ip  # received but never posted to Discord -- see build_message()
+    content = build_message(nick, geoloc, servername)
 
     if not webhook_url:
         log.info("[stub] would post: %s", content)
