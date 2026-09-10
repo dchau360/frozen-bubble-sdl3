@@ -9,6 +9,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /src
 COPY server/ ./
+# server/CMakeLists.txt reads its version from the root CMakeLists.txt at
+# ../CMakeLists.txt relative to /src — i.e. /CMakeLists.txt. Copy it in so the
+# binary gets the real version instead of the 0.0.0-unknown fallback.
+COPY CMakeLists.txt /CMakeLists.txt
 RUN cmake -B /build -G Ninja -DCMAKE_BUILD_TYPE=Release . \
     && cmake --build /build --parallel
 
