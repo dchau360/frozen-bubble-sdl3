@@ -8,16 +8,19 @@ every connected player. Instead it fires a best-effort UDP datagram at this
 process, which owns the actual HTTPS call -- and the webhook URL, which
 never needs to reach fb-server at all.
 
-Wire format, one datagram per room join:
+Wire format, one datagram per player arriving on the server (their first
+accepted NICK -- not a game-room join, which is a later and much less
+actionable moment):
 
     JOIN|<nick>|<ip>|<geoloc>|<servername>
 
-nick and ip are always present. geoloc is the joining player's self-reported
+nick and ip are always present. geoloc is the player's self-reported
 "lat:lon" (see the client's DetectGeoLocation()/GEOLOC command) or an empty
-string when nothing had arrived yet at join time -- a fast joiner routinely
-beats their own geolocation lookup, so this is the normal case, not an
-error. servername is everything remaining after the fourth "|" (it can
-itself contain spaces or, in principle, "|").
+string -- in practice always empty, since the client sends GEOLOC after NICK
+and the lookup behind it can take up to ~16s. The field stays in the format
+anyway: it costs nothing, and this end discards it regardless. servername is
+everything remaining after the fourth "|" (it can itself contain spaces or,
+in principle, "|").
 
 ip and geoloc are parsed but never posted to Discord -- see build_message(),
 which explains why the location came out. Both ride along in the datagram

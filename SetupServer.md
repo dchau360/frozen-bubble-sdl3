@@ -153,9 +153,12 @@ docker compose down
 
 ## Optional — Discord Join Alerts
 
-Every time a player joins a room on your server, it can post a message to a
-Discord channel of your choosing — the joining player's nick and your
-server's name, and nothing else. Neither the player's IP nor their
+Every time a player arrives on your server, it can post a message to a
+Discord channel of your choosing — their nick and your server's name, and
+nothing else. The alert fires when they connect and appear in the lobby,
+not when they join a game room: someone waiting alone in a room they just
+opened is the person an alert should bring company to, and once a second
+player has joined them the notification has nothing left to offer. Neither the player's IP nor their
 self-reported location is included, deliberately: a Discord channel can
 have members well beyond whoever runs the server, and the game itself now
 invites players into a community Discord from its own UI, so an alert

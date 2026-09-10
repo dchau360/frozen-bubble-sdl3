@@ -1,8 +1,13 @@
 # discord-relay
 
-Posts a Discord message whenever a player joins a room on `fb-server`,
-carrying the joining player's nick and the server's name -- and nothing
-else.
+Posts a Discord message whenever a player arrives on `fb-server`, carrying
+their nick and the server's name -- and nothing else.
+
+"Arrives" means joining the *server* (their first accepted `NICK`, the point
+at which the lobby can see them), not joining a game room. A player sitting
+alone in a room they just opened is exactly who an alert should summon
+company for, and by the time somebody has joined their room the two have
+already found each other.
 
 The joining player's IP and their self-reported geolocation both arrive in
 the datagram from `fb-server` (see Wire format below); neither is ever
@@ -32,10 +37,10 @@ the datagram is dropped and gameplay is unaffected.
 
     JOIN|<nick>|<ip>|<geoloc>|<servername>
 
-`geoloc` is the joining player's self-reported `lat:lon` or an empty string
--- a fast joiner routinely beats their own client-side geolocation lookup
-(it can take up to ~16s), so a missing location is the normal case, not an
-error. Both `ip` and `geoloc` are parsed and then discarded -- see
+`geoloc` is the arriving player's self-reported `lat:lon` or an empty string
+-- in practice always empty, since the client sends `GEOLOC` after `NICK`
+and the lookup behind it can take up to ~16s. Both `ip` and `geoloc` are
+parsed and then discarded -- see
 `handle_datagram()` and `build_message()` in `relay.py`. They stay in the
 wire format because `fb-server` already has them and a datagram costs the
 same either way.

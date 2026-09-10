@@ -295,7 +295,7 @@ bool DeviceHasTouchscreen() {
 // short of shipping a new build. In Discord: right-click the channel → Invite
 // People → Edit invite link → Expire after: Never, Max number of uses: No
 // limit.
-const char* const kDiscordInviteUrl = "";
+const char* const kDiscordInviteUrl = "https://discord.gg/uE4dq8fqGW";
 
 bool HasDiscordInvite() {
     return kDiscordInviteUrl != nullptr && kDiscordInviteUrl[0] != '\0';

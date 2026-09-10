@@ -45,11 +45,11 @@ where players and servers are. It is not stored beyond the current session.
 
 **Discord join alerts (server-operator feature, not controlled by the
 developer).** A server's operator can optionally run a relay that posts a
-message to a Discord channel of their choosing every time a player joins a
-room on their server. **That message contains your nickname and the
-server's name, and nothing else.** Neither your IP address nor your
-approximate location is included: both briefly reach the relay as part of
-the join event (the same information the server already receives under
+message to a Discord channel of their choosing every time a player connects
+to their server. **That message contains your nickname and the server's
+name, and nothing else.** Neither your IP address nor your approximate
+location is included: both briefly reach the relay as part of the connect
+event (the same information the server already receives under
 "Network connection data" and "Approximate location" above), and the relay
 discards both rather than forwarding them anywhere. This is opt-in **per
 server operator**, not per player — there is no in-app setting to disable
@@ -93,9 +93,9 @@ or analytics SDK, so none is collected by the developer.
 
 - Nickname and network data: to run the multiplayer match you're playing.
 - Nickname: also used, at a server operator's discretion, to post a Discord
-  join alert for that server (see above). Your IP and your approximate
-  location both briefly reach the same relay; neither is part of the posted
-  message.
+  alert when you connect to that server (see above). Your IP and your
+  approximate location both briefly reach the same relay; neither is part of
+  the posted message.
 - Advertising identifiers: handled entirely within Google's AdMob SDK to
   select and measure ads; not accessed by the developer directly.
 - Purchase token: to keep the "ads removed" state accurate on your device.
@@ -108,9 +108,9 @@ or analytics SDK, so none is collected by the developer.
 - [ipinfo.io](https://ipinfo.io/privacy-policy) / [ip-api.com](https://ip-api.com/docs/legal) —
   approximate location from your IP address, for the network lobby's world
   map
-- [Discord](https://discord.com/privacy) — some servers relay a join alert
-  (nickname and server name only) to a channel the server's operator
-  chooses; not run or controlled by the developer. Discord's policy also
+- [Discord](https://discord.com/privacy) — some servers relay an alert when
+  you connect (nickname and server name only) to a channel the server's
+  operator chooses; not run or controlled by the developer. Discord's policy also
   applies if you follow the game's "Join our Discord" link.
 
 ## Data retention

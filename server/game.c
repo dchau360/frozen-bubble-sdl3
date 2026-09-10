@@ -349,7 +349,6 @@ static int add_player(struct game * g, int fd, char* nick)
                 g->players_number++;
                 open_players = g_list_remove(open_players, GINT_TO_POINTER(fd));
                 calculate_list_games();
-                discordalert_fire_join_event(nick, IP[fd], geoloc[fd]);
                 return 1;
         } else {
                 free(nick);
@@ -825,6 +824,13 @@ int process_msg(int fd, char* msg)
                                 if (live_collision_fd != -1) {
                                         send_line_log(fd, wn_nick_in_use, msg_orig);
                                 } else {
+                                        /* A connection's *first* accepted NICK is the moment a
+                                         * player arrives: they now have a name and show up in
+                                         * LIST for everyone in the lobby. A later NICK on the
+                                         * same fd is a rename, which is not an arrival -- see
+                                         * the Discord alert below. */
+                                        int first_nick = (nick[fd] == NULL);
+                                        int replaced_ghost = 0;
                                         if (nick[fd] != NULL) {
                                                 free(nick[fd]);
                                         }
@@ -853,11 +859,36 @@ int process_msg(int fd, char* msg)
                                                         iter = iter->next;
                                                         if (other_fd != fd && nick[other_fd] != NULL && streq(nick[other_fd], args)) {
                                                                 conn_terminated(other_fd, "replaced by new connection with same nick");
+                                                                replaced_ghost = 1;
                                                         }
                                                 }
                                         }
                                         calculate_list_games();
                                         send_ok(fd, msg_orig);
+
+                                        /* Tell the operator's Discord channel somebody showed up.
+                                         *
+                                         * This fires on arrival at the *server*, not on a room
+                                         * join: a player alone in a room they just created is
+                                         * exactly the person an alert should summon company for,
+                                         * and by the time a second player has joined their room
+                                         * the two have already found each other. The client's own
+                                         * copy for the feature promises the same thing --
+                                         * "alerts when online players connect".
+                                         *
+                                         * Two arrivals that aren't: a rename (same connection,
+                                         * already announced) and a reconnect after a silent TCP
+                                         * drop, which the eviction above has just identified by
+                                         * finding this nick still seated on a dead fd. Without
+                                         * that second guard a player on a flapping connection
+                                         * redials the channel every time their link blinks.
+                                         *
+                                         * geoloc[fd] is essentially always NULL here -- GEOLOC
+                                         * arrives after NICK, and the lookup behind it can take
+                                         * ~16s. It stays in the datagram because the wire format
+                                         * has the field and the relay discards it either way. */
+                                        if (first_nick && !replaced_ghost)
+                                                discordalert_fire_join_event(nick[fd], IP[fd], geoloc[fd]);
                                 }
                         }
                 }
