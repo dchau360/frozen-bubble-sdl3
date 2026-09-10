@@ -76,6 +76,14 @@ separate "which channel" setting here; create a different webhook (and point
 a different relay instance, or swap the env var) to alert a different
 channel.
 
+**If you swap out the HTTP client**, keep a real `User-Agent` header.
+Discord's edge WAF rejects the stock `urllib` default
+(`Python-urllib/3.x`) with a bare 403 on every request, GET included, not
+just POST -- confirmed against the live endpoint. `_post_sync()` already
+sets one; a rewrite that drops it fails on the very first join with
+nothing in the response to explain why, indistinguishable in the log from
+a bad or revoked webhook URL.
+
 A burst of joins can hit Discord's per-webhook rate limit; a request that
 gets 429'd is logged and dropped rather than queued or retried, the same
 best-effort handling as any other delivery failure -- see the comment on

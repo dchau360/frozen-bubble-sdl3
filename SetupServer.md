@@ -175,8 +175,15 @@ webhook URL, which only you as the operator can obtain.
 > Set it in `docker/.env`:
 >
 > ```bash
-> FB_SERVER_NAME=fb.example.org
+> FB_SERVER_NAME=myserver
 > ```
+>
+> **`-n` caps out at 12 characters, `[a-zA-Z0-9.-]` only, and `fb-server`
+> refuses to start at all if it's violated** — not a warning, a hard exit,
+> which under `restart: unless-stopped` means a crash loop. A domain like
+> `fb.example.org` (14 chars) is already too long; something short and
+> recognizable is safer than the domain itself. Confirm it took with
+> `docker compose logs fb-server | grep Servername`.
 >
 > The same name is what your server advertises to the public server list, so
 > this is worth setting whether or not you use Discord alerts at all.

@@ -163,6 +163,18 @@ Building from source: [docs/BUILDING.md](docs/BUILDING.md).
 
 ---
 
+## Community
+
+[Join the Discord](https://discord.gg/uE4dq8fqGW) — the same invite the
+**Join our Discord** row on the NET GAME server list and the online lobby
+opens in your browser. There's an alert whenever someone connects to a
+public server, if you're looking for an opponent.
+
+Running your own server? It can post its own join alerts to a Discord
+channel of your choosing — see [SetupServer.md](SetupServer.md#optional--discord-join-alerts).
+
+---
+
 ## More
 
 - [Changelog](CHANGELOG.md) — release history
