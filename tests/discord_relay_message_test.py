@@ -134,6 +134,38 @@ class NoLocationLeakTest(unittest.TestCase):
         self.assertNotIn("://", line)
 
 
+class ServerNameOverrideTest(unittest.TestCase):
+    """DISCORD_SERVER_NAME lets an operator show a full name in Discord that
+    fb-server's own -n could never carry (12 chars, [a-zA-Z0-9.-] only)."""
+
+    def _posted_line(self, datagram):
+        import asyncio
+        captured = []
+        original = relay.log.info
+        relay.log.info = lambda fmt, *a: captured.append(fmt % a)
+        try:
+            asyncio.run(relay.handle_datagram(datagram, ""))
+        finally:
+            relay.log.info = original
+        self.assertEqual(len(captured), 1)
+        return captured[0]
+
+    def test_unset_uses_whatever_fb_server_sent(self):
+        self.assertEqual(relay.DISCORD_SERVER_NAME, "")
+        line = self._posted_line(b"JOIN|alice|203.0.113.7||servequake")
+        self.assertIn("**servequake**", line)
+
+    def test_set_overrides_the_datagram_servername(self):
+        original = relay.DISCORD_SERVER_NAME
+        relay.DISCORD_SERVER_NAME = "fb.servequake.com"
+        try:
+            line = self._posted_line(b"JOIN|alice|203.0.113.7||servequake")
+        finally:
+            relay.DISCORD_SERVER_NAME = original
+        self.assertIn("**fb.servequake.com**", line)
+        self.assertNotIn("**servequake**", line)
+
+
 class PayloadTest(unittest.TestCase):
     """The JSON actually handed to Discord, as opposed to the text in it."""
 

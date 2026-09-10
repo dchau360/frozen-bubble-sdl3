@@ -35,6 +35,9 @@ one.
 Environment:
     DISCORD_RELAY_BIND    host:port to listen on (default 0.0.0.0:9100)
     DISCORD_WEBHOOK_URL    Discord's channel webhook URL; unset = stub mode
+    DISCORD_SERVER_NAME    overrides the server name shown in Discord,
+                            independent of fb-server's own -n (which caps at
+                            12 chars); unset = use whatever fb-server sent
 """
 
 import asyncio
@@ -57,6 +60,16 @@ MAX_DISCORD_CONTENT = 1900
 # past any honest server name, and short enough that one field cannot crowd
 # out the rest of the line.
 MAX_DISPLAY = 64
+
+# Overrides the server name shown in every Discord message, independent of
+# what fb-server sent on the wire. fb-server's own -n flag caps at 12
+# characters and *charset* too ([a-zA-Z0-9.-]) -- a limit that constrains
+# what's advertised to players in the lobby and the public server list, not
+# anything on this side of the pipe. An operator whose real name doesn't fit
+# there (a full domain, say) sets what should actually appear in Discord
+# here instead; -n stays short for the in-game UI, this can be anything.
+# Empty (the default) means use whatever fb-server sent, unchanged.
+DISCORD_SERVER_NAME = os.environ.get("DISCORD_SERVER_NAME", "").strip()
 
 # Discord markdown metacharacters, escaped rather than stripped so an honest
 # name containing one still reads correctly. "[" and "(" are the pair that
@@ -163,6 +176,8 @@ async def handle_datagram(data, webhook_url):
     # decision in one reviewable place, and leaves an operator who forks this
     # file for a private channel something to work from.
     del ip, geoloc
+    if DISCORD_SERVER_NAME:
+        servername = DISCORD_SERVER_NAME
     content = build_message(nick, servername)
 
     if not webhook_url:

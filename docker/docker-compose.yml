@@ -47,6 +47,13 @@ services:
       - DISCORD_RELAY_BIND=0.0.0.0:9100
       # The one Discord channel join alerts post to; leave unset for stub mode.
       - DISCORD_WEBHOOK_URL=${DISCORD_WEBHOOK_URL:-}
+      # Overrides the server name shown in Discord messages. fb-server's own
+      # -n (set via FB_SERVER_NAME above) caps at 12 chars and a restricted
+      # charset -- a limit that only constrains what's advertised in-game and
+      # on the public server list, nothing on this side of the pipe. Set this
+      # to show the real thing (a full domain, say) in Discord without
+      # touching -n at all. Leave unset to just show whatever fb-server sent.
+      - DISCORD_SERVER_NAME=${DISCORD_SERVER_NAME:-}
 
   # ── nginx TLS termination ───────────────────────────────────────────────────
   # Terminates SSL and proxies WebSocket connections to fb-server.

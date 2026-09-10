@@ -76,6 +76,15 @@ separate "which channel" setting here; create a different webhook (and point
 a different relay instance, or swap the env var) to alert a different
 channel.
 
+**Showing the server's full name.** `fb-server`'s own `-n` caps at 12
+characters and a restricted charset -- a limit on what's advertised in the
+lobby and the public server list, not on anything here. If your real name
+doesn't fit there (a full domain, say), set `DISCORD_SERVER_NAME` and every
+message shows that instead of whatever the datagram carried, with no change
+to `-n` or to what players see in-game:
+
+    DISCORD_SERVER_NAME=fb.example.org python3 relay.py
+
 **If you swap out the HTTP client**, keep a real `User-Agent` header.
 Discord's edge WAF rejects the stock `urllib` default
 (`Python-urllib/3.x`) with a bare 403 on every request, GET included, not
