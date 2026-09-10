@@ -273,7 +273,6 @@ void MainMenu::NetPanelRender() {
             netStartRequested = false;
             syncWaitStart = 0;
             wasmBotWaitStart = 0;
-            RefreshFollowRegistration();
             netClient->RequestList();
             lastListRequest = SDL_GetTicks();
 #ifdef __ANDROID__
@@ -714,7 +713,6 @@ void MainMenu::NetPanelLobbyActionsRender() {
             // In lobby - show create/join options
             actions.push_back("Chat");
             actions.push_back("Create new game");
-            actions.push_back("Follow this server");  // index kLobbyFollow; rendered in the header below, not here
 
             std::vector<GameRoom> games = netClient->GetGameList();
             for (const auto& game : games) {
@@ -761,50 +759,6 @@ void MainMenu::NetPanelLobbyActionsRender() {
             char title[160];
             snprintf(title, sizeof(title), "ONLINE LOBBY   |   %s", netClient->GetPlayerNick().c_str());
             drawLabel(title, 20, 14, textGold);
-
-            // Follow-this-server toggle, right-aligned in the header bar --
-            // same treatment as "Start game!" in the room header above, and
-            // reachable however this server was connected to (list star, LAN
-            // discovery, manual entry), since all of them land here once
-            // connected. netClient->GetNotifySupport() answers a one-time
-            // capability probe (ProbeNotifySupportIfNeeded()) so a server
-            // that has never heard of the follow protocol says so instead of
-            // silently doing nothing when toggled.
-            {
-                netClient->ProbeNotifySupportIfNeeded();
-                NotifySupport support = netClient->GetNotifySupport();
-                bool followed = GameSettings::Instance()->IsServerFollowed(
-                    netClient->GetHost(), netClient->GetPort());
-
-                const char* followText;
-                bool interactive;
-                if (support == NotifySupport::Unsupported) {
-                    followText = "Follow: not supported by server";
-                    interactive = false;
-                } else if (support == NotifySupport::Unknown) {
-                    followText = "Follow: checking...";
-                    interactive = false;
-                } else if (followed) {
-                    followText = "★ Following this server";
-                    interactive = true;
-                } else {
-                    followText = "☆ Follow this server (F)";
-                    interactive = true;
-                }
-
-                bool followSel = interactive && (selectedActionIndex == kLobbyFollow);
-                SDL_Color followColor = followSel ? textGold : (interactive ? textMain : textMuted);
-                panelText.UpdateColor(followColor, {20, 12, 32, 255});
-                panelText.UpdateText(roomRenderer, followText, 0);
-                int tw = panelText.Coords()->w;
-                int sx = 622 - tw;
-                if (followSel) drawSelection({sx - 6, 10, tw + 12, 24});
-                drawLabel(followText, sx, 14, followColor);
-                if (interactive) {
-                    AddPanelTapRow(kLobbyFollow, {sx - 6, 10, tw + 12, 24}, -1, false, SDLK_F);
-                }
-            }
-
         }
 
         // Lobby room browser, as a menulist::List -- same widget, same
@@ -832,7 +786,7 @@ void MainMenu::NetPanelLobbyActionsRender() {
             char createValue[32];
             snprintf(createValue, sizeof(createValue), "%d players", kRoomSizes[netRoomSizeChoice]);
             lobbyList.Row(1, "Create Game Room", createValue, true, true, SDLK_RETURN);
-            for (size_t i = (size_t)(kLobbyFollow + 1); i < actions.size() && i < 18; i++) {
+            for (size_t i = 2; i < actions.size() && i < 18; i++) {
                 lobbyList.Row((int)i, actions[i], "");
             }
             lobbyList.End(roomRenderer, panelText, nullptr, menulistTap);
@@ -1506,81 +1460,6 @@ void MainMenu::NetPanelChatDockRender(bool expanded) {
     }
 }
 
-void MainMenu::ToggleFollowServer(const ServerInfo& server) {
-    GameSettings* gs = GameSettings::Instance();
-    NetworkClient* netClient = NetworkClient::Instance();
-
-    const bool wasFollowed = gs->IsServerFollowed(server.host, server.port);
-    const bool nowFollowed =
-        gs->ToggleServerFollowed(server.host, server.port, server.name);
-
-    if (!wasFollowed && !nowFollowed) {
-        // Refused: the list is full. Say so rather than letting the star
-        // silently fail to light up.
-        connectErrorMsg = "Already following " +
-                          std::to_string(GameSettings::kMaxFollowedServers) +
-                          " servers -- unfollow one first";
-        PlayMenuSFX("menu_change");
-        return;
-    }
-
-    gs->SaveKeys();
-
-    // Tell the server, but only if this is the server we are actually talking
-    // to -- there is no way to reach any other one from here, and the
-    // registration is re-sent on connect anyway.
-    const char* platform = PushPlatformName();
-    const std::string token = PushDeviceToken();
-    if (platform != nullptr && !token.empty() && netClient->IsConnected() &&
-        netClient->GetHost() == server.host && netClient->GetPort() == server.port) {
-        if (nowFollowed) netClient->SendNotifyReg(platform, token.c_str());
-        else             netClient->SendNotifyUnreg(token.c_str());
-    }
-
-    PlayMenuSFX("menu_selected");
-}
-
-void MainMenu::ToggleFollowCurrentServer() {
-    NetworkClient* netClient = NetworkClient::Instance();
-    if (!netClient->IsConnected()) return;
-
-    switch (netClient->GetNotifySupport()) {
-        case NotifySupport::Unsupported:
-            connectErrorMsg = "This server doesn't support follow notifications";
-            PlayMenuSFX("menu_change");
-            return;
-        case NotifySupport::Unknown:
-            // Still probing -- act on nothing rather than guess.
-            PlayMenuSFX("menu_change");
-            return;
-        case NotifySupport::Supported:
-            break;
-    }
-
-    ServerInfo server;
-    server.host = netClient->GetHost();
-    server.port = netClient->GetPort();
-    server.name = netClient->GetHost();  // no separate display name once connected
-    ToggleFollowServer(server);
-}
-
-void MainMenu::RefreshFollowRegistration() {
-    const char* platform = PushPlatformName();
-    if (platform == nullptr) return;                 // no push story on this build
-
-    const std::string token = PushDeviceToken();
-    if (token.empty()) return;                       // nothing to register yet
-
-    NetworkClient* netClient = NetworkClient::Instance();
-    if (!netClient->IsConnected()) return;
-
-    if (!GameSettings::Instance()->IsServerFollowed(netClient->GetHost(),
-                                                    netClient->GetPort()))
-        return;
-
-    netClient->SendNotifyReg(platform, token.c_str());
-}
-
 void MainMenu::NetPanelConnectionScreensRender() {
     NetworkClient* netClient = NetworkClient::Instance();
 
@@ -1920,12 +1799,9 @@ void MainMenu::ServerListPanelRender(bool isLAN) {
             const std::string& name = s.name.empty()
                 ? s.host + ":" + std::to_string(s.port) : s.name;
             std::string latency = offline ? "offline" : std::to_string(s.latencyMs) + " ms";
-            bool followed = GameSettings::Instance()->IsServerFollowed(s.host, s.port);
             // Offline servers stay tappable: selecting one is how the player
             // reads its address, and keyboard/gamepad nav can land on them too.
-            list.RowWithPrefix(i + 1, followed ? "★" : "☆",
-                followed ? menulist::kGold : menulist::kMuted,
-                name, latency, !offline, SDLK_F);
+            list.Row(i + 1, name, latency, !offline);
         }
     }
 
@@ -1978,15 +1854,10 @@ void MainMenu::ServerListPanelRender(bool isLAN) {
     if (menuIndex >= 1 && menuIndex <= (int)servers.size()) {
         const ServerInfo& s = servers[menuIndex - 1];
         bool offline = (s.latencyMs < 0);
-        bool followed = GameSettings::Instance()->IsServerFollowed(s.host, s.port);
         sidebarLine(s.name.empty() ? s.host : s.name, menulist::kText, 16);
         sidebarLine(s.host + "  :" + std::to_string(s.port), menulist::kMuted);
         sidebarLine(offline ? "offline" : std::to_string(s.latencyMs) + " ms",
                     offline ? menulist::kBad : menulist::kMuted);
-        sy += 10;
-        sidebarLine(followed ? "★ Following" : "☆ Not followed",
-                    followed ? menulist::kGold : menulist::kMuted);
-        sidebarLine("notified when someone joins", menulist::kMuted, 13);
     } else if (!isLAN && servers.empty() && !serverFetchInProgress.load()) {
         sidebarLine("No servers to show yet.", menulist::kMuted);
         sidebarLine("Press R to refresh.", menulist::kMuted);
@@ -2026,7 +1897,7 @@ void MainMenu::ServerListPanelRender(bool isLAN) {
             "Connecting...    ESC cancel");
     } else {
         menulist::DrawFooterHint(rend, panelText, isLAN
-            ? "UP/DOWN select    ENTER connect    R rescan    F follow    ESC cancel"
-            : "UP/DOWN select    ENTER connect    R refresh    F follow    ESC cancel");
+            ? "UP/DOWN select    ENTER connect    R rescan    ESC cancel"
+            : "UP/DOWN select    ENTER connect    R refresh    ESC cancel");
     }
 }

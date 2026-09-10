@@ -87,9 +87,9 @@ using TapRowFn = std::function<void(int index, const SDL_Rect& rect,
                                      SDL_Keycode activateKey)>;
 
 // The {10,8,620,28} header bar every screen shares: a bold title on the
-// left and, optionally, one right-aligned action ("Start game!", "Follow
-// this server") that becomes its own tap row when interactive. Pass
-// actionIndex < 0 when this screen has no header action this frame.
+// left and, optionally, one right-aligned action ("Start game!") that
+// becomes its own tap row when interactive. Pass actionIndex < 0 when this
+// screen has no header action this frame.
 // fillAlpha overrides kHeaderFill's own alpha when >= 0 -- see kMapFillAlpha.
 void DrawHeaderBar(SDL_Renderer* rend, TTFText& text, const SDL_Rect& bar,
                     const char* title, const char* action, bool actionSelected,

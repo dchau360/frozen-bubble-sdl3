@@ -158,15 +158,6 @@ static const int kRoomHelpTapIndex = 950;
 // neither of which is visible on screen. A labelled box is.
 static const int kRoomSetTeamsTapIndex = 952;
 
-// The plain lobby's "Follow this server" toggle (0 = chat, 1 = create,
-// 2 = follow, 3+ = one per room). Rendered in the header bar rather than as
-// a list row -- the same treatment kRoomStart gets for "Start game!" -- but
-// it still occupies a real slot in the action list so keyboard/gamepad
-// Up/Down can reach it, not just touch. Reachable regardless of how this
-// server was connected to (list star, LAN discovery, or manual entry), since
-// all of those funnel through this one lobby screen once connected.
-static const int kLobbyFollow = 2;
-
 // Fake row indices for the >5-cap compact roster's per-player rows (game
 // room, NetPanelLobbyActionsRender in mainmenu_netpanel.cpp). Entering
 // per-player team-assignment mode used to be reachable only through the [A]

@@ -170,12 +170,6 @@ struct ServerInfo {
     int latencyMs = -1;   // Round-trip TCP connect time in ms; -1 = unreachable/unknown
 };
 
-// Whether the currently-connected server understands NOTIFYREG/NOTIFYUNREG at
-// all -- an older fb-server, or anything else answering on that port, has
-// never heard of them and the protocol gives no other way to tell short of
-// asking. Reset to Unknown on every new connection.
-enum class NotifySupport { Unknown, Supported, Unsupported };
-
 class NetworkClient {
 public:
     NetworkClient();
@@ -218,7 +212,7 @@ public:
 
     // Where we are connected (or were last asked to connect). Used to tell
     // whether a server picked out of a list is the one this connection is
-    // talking to, which decides whether a follow can be registered right now.
+    // actually talking to.
     const std::string& GetHost() const { return connectedHost; }
     int GetPort() const { return connectedPort; }
 
@@ -233,15 +227,6 @@ public:
     bool SendGameData(const char* data);
     bool RequestList();
 
-    // "Follow this server": hand the server this device's push token so it can
-    // notify us when someone joins, including after we disconnect. platform
-    // must be "ios" or "android" -- the server rejects anything else, and no
-    // other platform has a push story to register for. Safe to re-send on
-    // every connect; the server upserts by token without resetting its
-    // notification cooldown.
-    bool SendNotifyReg(const char* platform, const char* token);
-    bool SendNotifyUnreg(const char* token);
-
     // Report a player for abuse. The server appends it to a file for its
     // operator to review; nothing is enforced automatically (a nick is not an
     // identity here, so auto-acting on reports would be trivially abusable).
@@ -252,15 +237,6 @@ public:
     // (game.c) -- a non-host's KICK comes back as an error, so the check
     // does not rest on the client asking nicely.
     bool KickPlayer(const char* nick);
-
-    // Capability probe for the follow feature: sends a side-effect-free
-    // NOTIFYUNREG for a token nothing will ever hold, once per connection,
-    // and reads the next "OK" (supported) vs "UNKNOWN_COMMAND" (not) off the
-    // wire in HandleServerResponse(). No-op once notifySupport is already
-    // known, or while a probe is already in flight, so it is safe to call
-    // every frame from render code.
-    void ProbeNotifySupportIfNeeded();
-    NotifySupport GetNotifySupport() const { return notifySupport; }
 
     bool SendCommand(const char* command);
 
@@ -485,10 +461,6 @@ private:
     void HandleServerResponse(const std::string& response);
     void ParseListResponse(const char* listData);
     void HandlePushMessage(const std::string& pushMsg);
-
-    // Follow-feature capability probe (native and WASM both use this).
-    NotifySupport notifySupport = NotifySupport::Unknown;
-    bool pendingNotifyProbe = false;
 
     // Async CREATE state (async networking handoff, stage 1b -- shared by
     // both platforms; was WASM-only before native's blocking SDL_Delay retry

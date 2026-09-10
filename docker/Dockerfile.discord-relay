@@ -1,0 +1,20 @@
+# discord-relay — posts "a player joined" alerts to a Discord channel via webhook
+# Build context: repo root (so COPY can reach server/discord-relay/)
+#
+# Runs in stub mode by default: with no DISCORD_WEBHOOK_URL set it logs what
+# it would have posted. Needs nothing beyond the Python standard library
+# either way -- a Discord webhook POST is a plain JSON POST, no OAuth/JWT
+# dance the way the old APNs/FCM relay needed -- so there is no
+# requirements.txt to install here.
+
+FROM python:3.12-slim
+
+WORKDIR /app
+
+COPY server/discord-relay/relay.py ./
+
+# UDP, and only ever reachable from fb-server on the compose-internal network —
+# deliberately not published to the host.
+EXPOSE 9100/udp
+
+CMD ["python3", "-u", "relay.py"]

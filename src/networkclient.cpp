@@ -130,8 +130,6 @@ bool NetworkClient::Connect(const char* host, int port) {
 
     connectedHost = host ? host : "";
     connectedPort = port;
-    notifySupport = NotifySupport::Unknown;
-    pendingNotifyProbe = false;
     readyBanner.clear();
 
     socket_init();
@@ -597,26 +595,6 @@ bool NetworkClient::SendTalk(const char* message) {
     return SendCommand(cmd);
 }
 
-bool NetworkClient::SendNotifyReg(const char* platform, const char* token) {
-    if (!platform || !*platform || !token || !*token) return false;
-    // A token containing a space would split into a third argument the server
-    // discards, silently registering a truncated token that can never receive
-    // anything. Neither APNs (hex) nor FCM (base64url-ish) tokens contain
-    // spaces, so this only ever rejects something already broken.
-    if (strchr(token, ' ') != nullptr) return false;
-    char cmd[512];
-    snprintf(cmd, sizeof(cmd), "NOTIFYREG %s %s", platform, token);
-    return SendCommand(cmd);
-}
-
-bool NetworkClient::SendNotifyUnreg(const char* token) {
-    if (!token || !*token) return false;
-    if (strchr(token, ' ') != nullptr) return false;
-    char cmd[512];
-    snprintf(cmd, sizeof(cmd), "NOTIFYUNREG %s", token);
-    return SendCommand(cmd);
-}
-
 bool NetworkClient::SendReport(const char* nick, const char* reason) {
     if (!nick || !*nick || !reason || !*reason) return false;
     // The server splits on the first space to separate nick from reason, so a
@@ -653,22 +631,6 @@ bool NetworkClient::KickPlayer(const char* nick) {
     char cmd[128];
     snprintf(cmd, sizeof(cmd), "KICK %s", nick);
     return SendCommand(cmd);
-}
-
-void NetworkClient::ProbeNotifySupportIfNeeded() {
-    if (notifySupport != NotifySupport::Unknown || pendingNotifyProbe) return;
-    if (!IsConnected()) return;
-    // NOTIFYUNREG on a token nothing will ever hold is a genuine no-op on a
-    // server that understands it (notify_unregister() on an unregistered
-    // token does nothing) and answers "OK" -- an older fb-server, or
-    // anything else listening on that port, has never heard of NOTIFYREG /
-    // NOTIFYUNREG at all and answers "UNKNOWN_COMMAND" instead. That is the
-    // only signal the wire protocol offers for "does this server support
-    // follow", and it costs nothing to ask either way. HandleServerResponse()
-    // reads the answer off the very next line, same idiom as pendingCreate /
-    // pendingJoin above.
-    pendingNotifyProbe = true;
-    SendCommand("NOTIFYUNREG fb-follow-capability-probe");
 }
 
 bool NetworkClient::SendOptions(bool chainReaction, bool continueWhenLeave, bool singleTarget, int victoriesLimit, const int playerColors[5], const bool noCompress[5], const bool aimGuide[5], bool mouseEnabled, GameMode gameMode, int raceTarget, int timedSeconds, AttackMode attackMode, const int playerTeams[5], int teamCount) {
@@ -1195,10 +1157,6 @@ void NetworkClient::HandleServerResponse(const std::string& response) {
     if (response.find("OK") != std::string::npos) {
         SDL_Log("Command successful: %s", response.c_str());
         lastErrorResponse.clear();
-        if (pendingNotifyProbe && IsResponseForCommand(response, "NOTIFYREG")) {
-            notifySupport = NotifySupport::Supported;
-            pendingNotifyProbe = false;
-        }
         if (pendingNick && IsResponseForCommand(response, "NICK")) {
             SDL_Log("NICK confirmed by server (pendingNick=true): '%s'", pendingNickTry.c_str());
             playerNick = pendingNickTry;
@@ -1250,11 +1208,6 @@ void NetworkClient::HandleServerResponse(const std::string& response) {
             if (!alreadyIn) currentGame->players.push_back(self);
             SDL_Log("Joined game '%s', currentGame has %d players", pendingJoinCreator.c_str(), (int)currentGame->players.size());
             pendingJoin = false;
-        }
-    } else if (response.find("UNKNOWN_COMMAND") != std::string::npos) {
-        if (pendingNotifyProbe) {
-            notifySupport = NotifySupport::Unsupported;
-            pendingNotifyProbe = false;
         }
     } else if (response.find("PONG") != std::string::npos) {
         SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION, "Ping response");

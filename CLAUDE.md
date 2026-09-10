@@ -147,12 +147,14 @@ Assets live in `share/` (gfx, snd, data, fonts) and are referenced via `ASSET("/
 ### Network protocol
 
 Server is the original `fb-server` (C, in `server/`). Protocol is line-based text over TCP/WebSocket:
-- Lobby commands: `NICK`, `LIST`, `CREATE`, `JOIN`, `START`, `PART`, `TALK`, `NOTIFYREG`/`NOTIFYUNREG` (follow-a-server push registration), `REPORT <nick> <reason>` (abuse report, appended to a flat file for the operator; never acted on automatically)
+- Lobby commands: `NICK`, `LIST`, `CREATE`, `JOIN`, `START`, `PART`, `TALK`, `REPORT <nick> <reason>` (abuse report, appended to a flat file for the operator; never acted on automatically)
 - In-game messages: `GAMEMSG` prefix wrapping single-char opcodes — `f` (fire), `s` (stick/place), `g` (malus attack), `m`/`M` (bubble sync), `F` (game over/win), `n` (ready for next round), `l` (player left), `o` (options), `r` (targeting), `S` (round stats sync: `S{fired}:{popped}:{malusSent}:{malusReceived}`, broadcast once per round so all clients can render the post-round stats table)
 
 The leader (game creator) is authoritative for level generation and sends bubble positions to joiners via `b|`/`N`/`T` sync messages during `SyncNetworkLevel()`.
 
 **Production server deployment:** `docker/docker-compose.yml` runs `fb-server` on TCP 1511 (native clients) plus an nginx container that terminates TLS and proxies WebSocket connections on port 443 (browser/WASM clients). See `SetupServer.md` for SSL certificate setup.
+
+**Discord join alerts:** on every `add_player()` (a room join, not just a lobby connect), `server/discordalert.c` fires a best-effort UDP datagram at an optional sidecar (`server/discord-relay/`, `FB_SERVER_DISCORD_RELAY` env var) carrying the player's nick, IP, self-reported geolocation (`geoloc[fd]`, may be empty), and the server's name. The sidecar owns the actual Discord webhook POST — `fb-server` has no TLS stack and must never block on network I/O mid-game. Stateless: no registry, no persistence, no per-player opt-in: every join fires, at the server operator's discretion to run the relay at all. See `server/discord-relay/README.md` and `SetupServer.md`.
 
 ### Original Perl source (for verification)
 

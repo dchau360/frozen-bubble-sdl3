@@ -1,4 +1,0 @@
-# Push credentials are secrets — never commit them.
-*
-!.gitignore
-!README.md

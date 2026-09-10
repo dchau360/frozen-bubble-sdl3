@@ -236,14 +236,6 @@ FrozenBubble::FrozenBubble() {
     }
 #endif
 
-#ifdef __IOS_PORT__
-    // Ask for notification permission and start APNs registration. Done after
-    // the window exists so SDL's application delegate -- the one the APNs
-    // callbacks are grafted onto -- is already in place. Entirely asynchronous:
-    // the token turns up later if it turns up at all, and nothing waits for it.
-    IosRegisterForPush();
-#endif
-
 #ifndef __WASM_PORT__
     // Present in step with the display instead of free-running on a timer. SDL3
     // defaults this off. Without it the frame limiter in RunOneFrame holds 60 fps

@@ -41,13 +41,14 @@ __pycache__/
 *.p12
 keystore.properties
 
-# Push notification credentials -- identify a specific Firebase/Apple account
-# and must never be committed. See docs/PUSH_SETUP.md.
-android/app/google-services.json
-*.p8
-
-# docker-compose environment overrides — holds credential file paths.
+# docker-compose environment overrides — holds credential file paths (e.g. a
+# Discord webhook URL for server/discord-relay/).
 docker/.env
+
+# Leftover from the removed push-notification relay -- not used by anything
+# now, but never commit whatever is still sitting in here.
+docker/push-credentials/
+android/app/google-services.json
 
 # Output of tools/build-site.py (the GitHub Pages site, rendered at deploy time)
 _site/

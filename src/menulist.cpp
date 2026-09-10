@@ -207,8 +207,8 @@ int List::End(SDL_Renderer* rend, TTFText& text, SDL_Texture* panelBG,
     const int visibleRows = std::max(1, viewport_.h / rowH_);
 
     // Find this row list's copy of the current selection, if it has one --
-    // a header-bar action (Start game!, Follow this server) can be the
-    // selected index while never appearing as a row here at all.
+    // a header-bar action (Start game!) can be the selected index while
+    // never appearing as a row here at all.
     int selPos = -1;
     for (int i = 0; i < total; i++) {
         if (rows_[i].index == selectedIndex_) { selPos = i; break; }
