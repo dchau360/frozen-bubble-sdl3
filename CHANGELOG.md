@@ -1,5 +1,67 @@
 # Changelog
 
+## v2.4.100
+
+- **Discord join alerts now fire when a player connects, not when a second
+  player joins their room.** The v2.4.99 hook only reached `add_player()`,
+  which `JOIN` alone triggers — connecting fired nothing, creating a room
+  fired nothing, and the one alert a session produced announced whoever
+  arrived *second*, by which point the two players had already found each
+  other. It now fires from the first accepted `NICK`, the moment a
+  connection becomes visible to everyone in the lobby — the player it
+  should summon company for, alone in a room they just opened, is no
+  longer silent. A rename and a reconnect that evicts its own stale ghost
+  are both filtered so neither re-announces.
+
+- **The alert no longer includes the joining player's approximate
+  location.** It now carries only a nick and the server's name. The
+  location came out because the game itself started advertising the
+  Discord channel to players (below), and a channel the game recruits
+  people into is not a place to put every joiner's whereabouts — that
+  was fine for a private, operators-only channel, wrong for a public one.
+  `docs/PRIVACY_POLICY.md` and `server/discord-relay/README.md` describe
+  what an operator running a genuinely private channel can restore and
+  how.
+
+- **"Join our Discord" — a new row on the NET GAME server list and in the
+  online lobby**, opening the community Discord in the player's browser.
+  It's a fixed invite compiled into the client, not something a server or
+  the public server list can point anywhere — an invite arriving over the
+  wire would let any operator redirect players to a Discord of their
+  choosing from inside the game's own UI.
+
+- **Fixed GitHub Releases publishing with zero downloadable files**, true
+  of every release back to at least v2.4.93. Two independent causes: the
+  checkout step ran after the artifact download and wiped it (`checkout`
+  defaults to `clean: true`), and the release step's file list still
+  carried directory prefixes that predated flattening the artifacts to
+  the workspace root. Neither failure was visible in CI, since a release
+  step logs "no file matched" as a warning and still exits 0 — a
+  verification step now hard-fails the build instead when a platform that
+  built successfully left no file behind.
+
+- **Fixed the Docker server image failing to build from a clean clone.**
+  `server/CMakeLists.txt` reads the project version from the repo root's
+  `CMakeLists.txt`, a path the Dockerfile never copied into the build
+  context — a missing-file read is a hard CMake error, not a fallback, so
+  the image's build step exited non-zero. Only ran in production at all
+  because of an uncommitted local fix on the deploy host that had never
+  made it back upstream.
+
+- **A containerized server now names itself explicitly** instead of
+  falling back to the container ID, which changed on every rebuild and
+  was what both the public server list and Discord alerts showed in its
+  place. Set via `FB_SERVER_NAME` in `docker/.env`; `SetupServer.md` and
+  `CLAUDE.md` both document the real constraint behind it — `fb-server`'s
+  `-n` caps at 12 characters and refuses to start at all past that,
+  which under `restart: unless-stopped` is a crash loop, not a warning.
+
+- **Fixed the Discord relay failing to deliver anything at all when run
+  with a stock Python install.** `urllib`'s default User-Agent
+  (`Python-urllib/3.x`) is rejected outright by Discord's edge WAF with a
+  bare 403 on every request — indistinguishable in the relay's own log
+  from a genuinely bad or revoked webhook URL.
+
 ## v2.4.99
 
 - **Replaced "follow a server" push notifications with Discord join
