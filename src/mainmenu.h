@@ -206,28 +206,6 @@ private:
     void AddPanelTapRow(int index, const SDL_Rect& rect, int subIndex = -1,
                         bool splitAdjust = false, SDL_Keycode activateKey = 0);
 
-    // Follow/unfollow a server for join notifications: updates the persisted
-    // list and, when we happen to be connected to that same server, tells it
-    // to start or stop notifying this device. Shared by the LAN and Net server
-    // lists.
-    void ToggleFollowServer(const ServerInfo& server);
-
-    // Follow toggle for the online lobby's header row (kLobbyFollow): the
-    // list-based ToggleFollowServer() above needs a ServerInfo, but the
-    // lobby only knows "whatever we're connected to right now" -- this
-    // builds one from NetworkClient's connection state and also gates on
-    // GetNotifySupport() so it's a no-op (with a status message) against a
-    // server that has already told us, or is still telling us, whether it
-    // understands the follow protocol at all.
-    void ToggleFollowCurrentServer();
-
-    // Re-send this device's push token if the server we just entered is one the
-    // player follows. Called on every lobby entry: push tokens rotate, and a
-    // stale one on the server silently stops delivering, so refreshing costs
-    // one line on the wire and removes a whole class of "notifications just
-    // stopped working" failures. A no-op where there is no token.
-    void RefreshFollowRegistration();
-
     // HandleInput decomposition (mainmenu_input.cpp)
     void MenuTextInputEvent(SDL_Event *e);
     bool MenuEditingKey(SDL_Event *e);

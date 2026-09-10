@@ -179,31 +179,6 @@ void MainMenu::HandleInput(SDL_Event *e){
                         AudioMixer::Instance()->PlaySFX("menu_change");
                     }
                     break;
-                case SDLK_F:
-                    // Follow/unfollow the highlighted server, so it can notify
-                    // this device when someone joins it. Index 0 is "Host a
-                    // server"/"Manual entry" and the last row is "Set Name" --
-                    // only the entries in between are real servers.
-                    if (showingNetPanel && !networkInLobby && networkInputMode == 7) {
-                        const int serverIdx = lanMenuIndex - 1;
-                        if (serverIdx >= 0 && serverIdx < (int)discoveredServers.size())
-                            ToggleFollowServer(discoveredServers[serverIdx]);
-                    }
-                    if (showingNetPanel && !networkInLobby && networkInputMode == 10) {
-                        const int serverIdx = netMenuIndex - 1;
-                        if (serverIdx >= 0 && serverIdx < (int)publicServers.size())
-                            ToggleFollowServer(publicServers[serverIdx]);
-                    }
-                    // Same key, once already connected: follow the server
-                    // for this whole lobby rather than a list entry. Not
-                    // offered inside a game room -- you follow a server from
-                    // its lobby, matching the server side (see server/game.c
-                    // NOTIFYREG's own comment on the same rule).
-                    if (showingNetPanel && networkInLobby && networkInputMode == 0 &&
-                        !NetworkClient::Instance()->GetCurrentGame()) {
-                        ToggleFollowCurrentServer();
-                    }
-                    break;
                 case SDLK_J:
                     if (showingNetPanel && networkInLobby) {
                         NetworkClient* netClient = NetworkClient::Instance();
@@ -1382,7 +1357,7 @@ void MainMenu::MenuUpKey() {
                             } else {
                                 // In lobby
                                 std::vector<GameRoom> games = netClient->GetGameList();
-                                maxActions = (kLobbyFollow + 1) + games.size(); // Chat + Create + Follow + Join games
+                                maxActions = 2 + games.size(); // Chat + Create + Join games
                             }
                             // The HELP box (kRoomHelpTapIndex) and the >5-cap
                             // roster's tap rows park selectedActionIndex on fake
@@ -1487,7 +1462,7 @@ void MainMenu::MenuDownKey() {
                             } else {
                                 // In lobby
                                 std::vector<GameRoom> games = netClient->GetGameList();
-                                maxActions = (kLobbyFollow + 1) + games.size(); // Chat + Create + Follow + Join games
+                                maxActions = 2 + games.size(); // Chat + Create + Join games
                             }
                             if (currentGame) {
                                 if (selectedActionIndex == kRoomSetTeamsTapIndex) {
@@ -2059,16 +2034,11 @@ void MainMenu::MenuReturnKey() {
                                     netClient->CreateGame(kRoomSizes[netRoomSizeChoice]);
                                     netClient->AddStatusMessage("Game created - now you need to wait for players to join");
                                     AudioMixer::Instance()->PlaySFX("menu_selected");
-                                } else if (selectedActionIndex == kLobbyFollow) {
-                                    // Enter on the header's Follow row -- same action as the F
-                                    // shortcut, so a keyboard/gamepad user who found this row by
-                                    // navigating to it isn't left needing to know the letter.
-                                    ToggleFollowCurrentServer();
                                 } else {
-                                    // Join game (selectedActionIndex >= kLobbyFollow + 1)
+                                    // Join game (selectedActionIndex >= 2)
                                     SDL_Log("Join game action: selectedActionIndex=%d", selectedActionIndex);
                                     std::vector<GameRoom> games = netClient->GetGameList();
-                                    int gameIndex = selectedActionIndex - (kLobbyFollow + 1);
+                                    int gameIndex = selectedActionIndex - 2;
                                     SDL_Log("Join game: gameIndex=%d, games.size()=%d", gameIndex, (int)games.size());
                                     if (gameIndex >= 0 && gameIndex < (int)games.size()) {
                                         SDL_Log("Attempting to join game created by: %s", games[gameIndex].creator.c_str());
@@ -2328,7 +2298,6 @@ void MainMenu::MenuReturnKey() {
                                 netStartRequested = false;
                                 syncWaitStart = 0;
                                 wasmBotWaitStart = 0;
-                                RefreshFollowRegistration();
                                 netClient->RequestList();  // Immediate list on lobby entry
                                 lastListRequest = SDL_GetTicks();
 #ifdef __ANDROID__

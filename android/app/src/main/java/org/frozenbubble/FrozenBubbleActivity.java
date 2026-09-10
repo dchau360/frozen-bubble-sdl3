@@ -72,10 +72,6 @@ public class FrozenBubbleActivity extends SDLActivity {
 
         // Initialize billing client (restores prior purchases on connect)
         mBillingManager = new BillingManager(this);
-
-        // Ask for notification permission (Android 13+). Cheap and does not
-        // touch the SDL surface, unlike the AdMob init deferred above.
-        PushManager.init(this);
     }
 
     @Override
@@ -147,25 +143,6 @@ public class FrozenBubbleActivity extends SDLActivity {
      * Returns the response body as a string, or "" on error.
      */
     /**
-     * Called from C++ via JNI to get this device's FCM push token.
-     * Must be called from a background thread (not the main/UI thread) --
-     * PushManager.getToken() blocks. Returns "" if there isn't one.
-     *
-     * A thin wrapper rather than calling PushManager directly by class name:
-     * JNI's FindClass("org/frozenbubble/PushManager") fails when called from
-     * a native thread the JVM did not create (SDL's game thread is exactly
-     * that) because it resolves against the wrong classloader off the main
-     * thread -- a well-known JNI trap. Routing through a static method
-     * already on FrozenBubbleActivity sidesteps it: the native side reaches
-     * this class via GetObjectClass() on the already-valid Activity object
-     * (see androidFetchUrl() in networkclient.cpp for the identical pattern),
-     * which needs no name-based class lookup at all.
-     */
-    public static String getPushToken() {
-        return PushManager.getToken();
-    }
-
-    /**
      * Called from C++ via JNI. True on a TV box, false on a phone or tablet.
      *
      * The game needs this to pick a screen orientation, an aim default and a
@@ -185,7 +162,10 @@ public class FrozenBubbleActivity extends SDLActivity {
      * boxes that under-report their UI mode.
      *
      * Wrapped as a static on this class for the same JNI-classloader reason
-     * as {@link #getPushToken()} above.
+     * as {@link #adsRemoved()} above: JNI's FindClass()-by-name fails when
+     * called from a native thread the JVM did not create (SDL's game thread
+     * is exactly that), so this goes through a static method reached via
+     * GetObjectClass() on the already-valid Activity object instead.
      */
     public static boolean isTelevision() {
         Context ctx = SDL.getContext();

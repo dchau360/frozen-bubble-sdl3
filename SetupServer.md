@@ -143,7 +143,7 @@ cd docker
 ```
 
 This builds fb-server from source and starts the game server, the nginx TLS
-proxy, and the push-notification relay. To stop:
+proxy, and the Discord join-alert relay. To stop:
 
 ```bash
 docker compose down
@@ -151,61 +151,65 @@ docker compose down
 
 ---
 
-## Optional — Push Notifications for Followed Servers
+## Optional — Discord Join Alerts
 
-Players can mark your server as **followed** (press **F** on its row in the
-server list, or tap the star). Their device then gets a notification when
-somebody joins, even with the game closed — useful for a server that is quiet
-most of the day.
+Every time a player joins a room on your server, it can post a message to a
+Discord channel of your choosing — the joining player's nick and, when
+available, a Google Maps link built from their self-reported geolocation.
+The player's IP is not included in the message, deliberately — a Discord
+channel can have members well beyond whoever runs the server.
 
-This works out of the box in a **stub mode** that logs what it would have sent
-but delivers nothing. Making notifications actually arrive needs push
-credentials, which only you as the operator can obtain.
+This works out of the box in a **stub mode** that logs what it would have
+posted but delivers nothing. Making alerts actually arrive needs a Discord
+webhook URL, which only you as the operator can obtain.
 
-**Nothing breaks if you skip this.** Follows are still accepted and stored; they
-just never fire. The relay is also entirely optional — remove
-`FB_SERVER_NOTIFY_RELAY` from the `fb-server` service to turn the feature off.
+**Nothing breaks if you skip this.** Joins still happen normally; the alert
+just never fires. The relay is also entirely optional — remove
+`FB_SERVER_DISCORD_RELAY` from the `fb-server` service to turn the feature
+off.
 
 ### Checking the stub
 
 ```bash
-docker compose logs notify-relay
+docker compose logs discord-relay
 ```
 
-A join on a followed server logs a line like:
+A join logs a line like:
 
 ```
-[stub] would push to ios token=abc123...ef01: A player just joined myserver!
+[stub] would post: 🔔 **alice** joined **myserver** from [this location](https://www.google.com/maps?q=37.77,-122.42)
 ```
 
 ### Going live
 
-**iOS** needs an Apple Developer account: create a Push Notifications auth key
-(a `.p8` file) and note its Key ID, your Team ID, and the app's bundle id.
-
-**Android** needs a Firebase project with Cloud Messaging enabled, and a
-service-account JSON.
-
-Put the credential files in `docker/push-credentials/` (git-ignored) and set the
-matching variables in a `.env` file next to `docker-compose.yml`:
+In Discord: Server Settings → Integrations → Webhooks → New Webhook, pick the
+channel it should post to, and copy its URL. Set it in a `.env` file next to
+`docker-compose.yml`:
 
 ```bash
-APNS_KEY_PATH=/credentials/AuthKey_XXXXXXXXXX.p8
-APNS_KEY_ID=XXXXXXXXXX
-APNS_TEAM_ID=YYYYYYYYYY
-APNS_TOPIC=org.frozenbubble.sdl3
-FCM_SERVICE_ACCOUNT_JSON=/credentials/firebase-service-account.json
+DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/...
 ```
 
-Then `docker compose up -d --build notify-relay`. The startup log says which of
-the two is configured; anything still unconfigured stays in stub mode. Device
-tokens are redacted in all log output.
+Then `docker compose up -d --build discord-relay`. That one URL is both the
+credential and the channel selector — create a different webhook to alert a
+different channel.
 
-Notifications are rate-limited to one per device per 10 minutes
-(`FB_SERVER_NOTIFY_COOLDOWN_SECONDS` on the `fb-server` service), so a busy
-server does not turn into a stream of banners.
+The webhook does not have to be one you made. If a community channel has
+issued you a URL so your server's joins show up alongside everyone else's,
+set that as `DISCORD_WEBHOOK_URL` here and nothing else changes. Running
+your own channel and posting to someone else's are the same one-variable
+setup — see
+[server/discord-relay/README.md](server/discord-relay/README.md) if you are
+on the issuing end.
 
-See [server/notify-relay/README.md](server/notify-relay/README.md) for the
+A burst of joins can hit Discord's per-webhook rate limit; a request that
+gets rate-limited is logged and dropped rather than queued or retried.
+
+The message carries no IP address, but it does carry a nick and, when
+available, an approximate location — keep the webhook URL and the channel
+it posts to reasonably private all the same.
+
+See [server/discord-relay/README.md](server/discord-relay/README.md) for the
 protocol and internals.
 
 ---

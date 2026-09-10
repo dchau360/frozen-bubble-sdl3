@@ -479,7 +479,7 @@ int main() {
         nc->SetConnected();
         NetworkClientTestAccess::BeginPendingCreate(*nc, "creator", 8);
 
-        NetworkClientTestAccess::HandleResponse(*nc, "FB/1.3 NOTIFYREG: OK");
+        NetworkClientTestAccess::HandleResponse(*nc, "FB/1.3 TALK: OK");
         CHECK(nc->IsPendingCreate());
         CHECK(nc->GetState() == CONNECTED);
         CHECK(nc->GetCurrentGame() == nullptr);

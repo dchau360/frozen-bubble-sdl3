@@ -221,9 +221,12 @@ void RequestPersistentStorageFlush() {
 }
 
 #ifdef __ANDROID__
-// Calls a no-arg static boolean method on FrozenBubbleActivity by name. Same
-// Activity-object route as androidPushToken() below, and for the same
-// JNI-classloader reason. Shared by androidIsTelevision() and
+// Calls a no-arg static boolean method on FrozenBubbleActivity by name. Goes
+// through the Activity object (SDL_GetAndroidActivity() + GetObjectClass())
+// rather than FindClass()-by-name, which resolves against the wrong
+// classloader when called from a thread the JVM did not create -- the SDL
+// game thread this runs on -- and silently returns null there instead of
+// throwing anything logged. Shared by androidIsTelevision() and
 // androidIsTablet() below, which differ only in which method they call.
 static bool callAndroidStaticBoolMethod(const char *methodName) {
     JNIEnv *env = (JNIEnv *)SDL_GetAndroidJNIEnv();
@@ -300,84 +303,10 @@ void SetTextInputAreaLogical(SDL_Renderer *renderer, const SDL_Rect &logical) {
     SDL_SetTextInputArea(window, &windowRect, 0);
 }
 
-const char* PushPlatformName() {
-#if defined(__IOS_PORT__)
-    return "ios";
-#elif defined(__ANDROID__) || defined(__ANDROID_PORT__)
-    return "android";
-#else
-    return nullptr;
-#endif
-}
-
-#if defined(__ANDROID__) || defined(__ANDROID_PORT__)
-// Calls FrozenBubbleActivity.getPushToken() -> String, which just delegates to
-// PushManager.getToken(). Blocking, so it must not run on the UI thread; the
-// SDL thread this is called from is not the UI thread.
-//
-// Goes through the Activity object (SDL_GetAndroidActivity() +
-// GetObjectClass()) rather than FindClass("org/frozenbubble/PushManager") by
-// name -- the exact same shape androidFetchUrl() in networkclient.cpp already
-// uses. FindClass-by-name resolves against the wrong classloader when called
-// from a thread the JVM did not create, which the SDL game thread is; it
-// silently returns null there instead of throwing anything logged. Looking up
-// a method on an already-valid jobject has no such problem, which is why
-// PushManager itself is reached only through this one-line wrapper.
-static std::string androidPushToken() {
-    JNIEnv *env = (JNIEnv *)SDL_GetAndroidJNIEnv();
-    jobject activity = (jobject)SDL_GetAndroidActivity();
-    if (!env || !activity) return "";
-
-    jclass cls = env->GetObjectClass(activity);
-    jmethodID mid = env->GetStaticMethodID(cls, "getPushToken", "()Ljava/lang/String;");
-    if (!mid) {
-        SDL_Log("androidPushToken: getPushToken method not found");
-        env->ExceptionClear();
-        env->DeleteLocalRef(cls);
-        env->DeleteLocalRef(activity);
-        return "";
-    }
-
-    jstring jresult = (jstring)env->CallStaticObjectMethod(cls, mid);
-    if (env->ExceptionCheck()) {
-        env->ExceptionClear();
-        env->DeleteLocalRef(cls);
-        env->DeleteLocalRef(activity);
-        return "";
-    }
-    env->DeleteLocalRef(cls);
-    env->DeleteLocalRef(activity);
-
-    if (jresult == nullptr) return "";
-    const char *chars = env->GetStringUTFChars(jresult, nullptr);
-    std::string result(chars ? chars : "");
-    env->ReleaseStringUTFChars(jresult, chars);
-    env->DeleteLocalRef(jresult);
-    return result;
-}
-#endif
-
-std::string PushDeviceToken() {
-#if defined(__IOS_PORT__)
-    // Defined in push_ios.mm. Returns "" until APNs hands back a token, which
-    // is asynchronous and needs the aps-environment entitlement -- an unsigned
-    // build never gets one.
-    return IosPushDeviceToken();
-#elif defined(__ANDROID__) || defined(__ANDROID_PORT__)
-    return androidPushToken();
-#else
-    // Desktop and browser builds have no push service to register with.
-    // Following a server is still allowed and still persists; it simply
-    // registers nothing from here.
-    return std::string();
-#endif
-}
-
 #if defined(__ANDROID__) || defined(__ANDROID_PORT__)
 // Both of these reach static methods on FrozenBubbleActivity through the
-// Activity object rather than FindClass()-by-name, for the reason spelled out
-// above androidPushToken(): FindClass resolves against the wrong classloader
-// on the SDL game thread and silently returns null.
+// Activity object rather than FindClass()-by-name: FindClass resolves against
+// the wrong classloader on the SDL game thread and silently returns null.
 //
 // Deliberately uncached, unlike androidIsTelevision(): a price arrives
 // asynchronously from Play some time after startup, and the entitlement

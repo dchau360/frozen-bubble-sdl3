@@ -35,15 +35,6 @@ repo). The developer only controls the logging behavior of the reference
 server code; a third-party server operator's own practices are outside this
 policy's scope.
 
-**"Follow a server" push token (opt-in, Android/iOS only).** If you tap the
-star on a server to follow it, the app registers a Firebase Cloud Messaging
-(Android) or APNs (iOS) device token with **that specific server**, so its
-operator's optional push relay can notify you when someone joins. The token
-is sent only to servers you explicitly follow, is stored alongside your
-platform (`ios`/`android`) and a last-notified timestamp for cooldown
-purposes, and is removed when you unfollow. See
-[docs/PUSH_SETUP.md](https://github.com/dchau360/frozen-bubble-sdl3/blob/main/docs/PUSH_SETUP.md) for the full mechanism.
-
 **Approximate location.** On startup the app asks a third-party IP-geolocation
 service (ipinfo.io, falling back to ip-api.com) for a rough position derived
 from your IP address — not GPS, and not anything requiring a location
@@ -51,6 +42,23 @@ permission. The result is cached to one decimal place, roughly city or
 region accuracy rather than a precise address, and is shown as a pin on a
 world map in the network lobby so other online players can see approximately
 where players and servers are. It is not stored beyond the current session.
+
+**Discord join alerts (server-operator feature, not controlled by the
+developer).** A server's operator can optionally run a relay that posts a
+message to a Discord channel of their choosing every time a player joins a
+room on their server. That message includes your nickname and — only when
+your client has already fetched it, per the "Approximate location"
+paragraph above — a Google Maps link built from your approximate location.
+Your IP address is not included in the message: it briefly reaches the
+relay as part of the join event (the same information the server already
+receives under "Network connection data" above), but the relay does not
+forward it anywhere. This is opt-in **per server operator**, not per
+player — there is no in-app setting to disable it, because the decision
+belongs to whichever server you choose to join. Whether a given server does
+this, and what channel it posts to, is outside the developer's control; see
+[SetupServer.md](https://github.com/dchau360/frozen-bubble-sdl3/blob/main/SetupServer.md)
+for the mechanism, and ask a server's operator directly if you want to know
+whether they've enabled it.
 
 **Advertising identifiers (Android only).** The Android build shows an
 interstitial ad via Google AdMob when entering the multiplayer lobby.
@@ -73,8 +81,9 @@ or analytics SDK, so none is collected by the developer.
 ## How information is used
 
 - Nickname and network data: to run the multiplayer match you're playing.
-- Push token: solely to deliver the join notification for servers you
-  followed; never used for advertising or analytics.
+- Nickname and approximate location: also used, at a server operator's
+  discretion, to post a Discord join alert for that server (see above). Your
+  IP briefly reaches the same relay but is not part of the posted message.
 - Advertising identifiers: handled entirely within Google's AdMob SDK to
   select and measure ads; not accessed by the developer directly.
 - Purchase token: to keep the "ads removed" state accurate on your device.
@@ -84,23 +93,20 @@ or analytics SDK, so none is collected by the developer.
 - [Google AdMob](https://policies.google.com/privacy) — ads (Android)
 - [Google Play Billing](https://policies.google.com/privacy) — in-app
   purchases (Android)
-- [Firebase Cloud Messaging](https://firebase.google.com/support/privacy) —
-  push delivery for followed servers (Android)
-- Apple Push Notification service — push delivery for followed servers
-  (iOS)
 - [ipinfo.io](https://ipinfo.io/privacy-policy) / [ip-api.com](https://ip-api.com/docs/legal) —
   approximate location from your IP address, for the network lobby's world
   map
+- [Discord](https://discord.com/privacy) — some servers relay a join alert
+  (nickname, approximate location) to a channel the server's operator
+  chooses; not run or controlled by the developer
 
 ## Data retention
 
 - Nickname and settings live only in local app storage until you clear app
   data or uninstall.
-- Followed-server push tokens are removed from a server's registry when you
-  unfollow, or can be requested removed by contacting that server's
-  operator.
-- Server-side connection logs and match statistics are retained at the
-  discretion of whoever operates that particular server.
+- Server-side connection logs, match statistics, and any Discord channel a
+  server's join alerts are posted to are retained at the discretion of
+  whoever operates that particular server.
 
 ## Children's privacy
 
@@ -113,7 +119,6 @@ avoid entering real names or other identifying information.
 - Turn off ads for a year, or permanently, with an in-app purchase. The
   yearly one is an auto-renewing subscription you can cancel any time in the
   Play Store.
-- Unfollow any server to stop push registration for it.
 - Play local single-player or local multiplayer to avoid any network data
   transmission entirely — this also means no location lookup happens, since
   it only runs before network play.

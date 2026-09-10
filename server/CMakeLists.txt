@@ -44,7 +44,7 @@ add_executable(fb-server
     net.c
     tools.c
     stats.c
-    notify.c
+    discordalert.c
     ws.c
 )
 
