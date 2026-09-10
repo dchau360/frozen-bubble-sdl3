@@ -63,3 +63,43 @@ best-effort handling as any other delivery failure -- see the comment on
 The message itself carries no IP, but it does carry a nick and, when
 available, an approximate location -- keep the webhook URL and the channel
 it posts to reasonably private all the same.
+
+## Collecting joins from servers you don't run
+
+Anyone can run an `fb-server`, so a channel that announces joins across
+several of them means letting other operators post into it. Use **one
+webhook per operator**, never a bot token:
+
+- A webhook can only create messages in the single channel it was made for.
+  A bot token is one shared credential that grants far more, everywhere the
+  bot is installed, and cannot be withdrawn from one holder without
+  rotating it for all of them.
+- Per-operator webhooks make revocation surgical: delete that one webhook
+  and that one operator stops posting, with nobody else disturbed.
+- Discord caps a channel at 15 webhooks, which is the practical ceiling on
+  this approach.
+
+The operator's side needs no special build -- they set the URL you issued
+as their `DISCORD_WEBHOOK_URL`, exactly as above.
+
+**What issuing a webhook actually grants.** Whoever holds it can post
+anything to that channel, not just what this relay would send; nothing on
+Discord's side constrains a URL holder to running this code. In particular
+`servername` is self-asserted -- it comes from `net_servername()`, which
+imposes no charset rule (unlike `nick`, which fb-server's `is_nick_ok()`
+restricts to `[A-Za-z0-9_-]{1,10}`) -- so a hostile or compromised operator
+can claim to be a server they are not. `build_message()` escapes Discord
+markdown in both fields and `_post_sync()` sends
+`allowed_mentions: {"parse": []}`, which together stop a name injecting a
+`[label](url)` link, forging a second alert with a newline, or pinging the
+channel; `tests/discord_relay_message_test.py` holds that line. None of
+that makes the *claim* trustworthy. Issue a webhook only to an operator you
+would vouch for.
+
+If you would rather not extend that trust, invert the design: run one
+ingest service that holds the webhook and issue each operator an API key
+pointing at it, so the channel name each alert displays is one you map from
+the key rather than one the sender asserts. That service must build the
+message from structured fields -- passing a sender-supplied `content`
+string through to Discord would hand back exactly the trust you set out to
+withhold.

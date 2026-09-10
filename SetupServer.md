@@ -194,6 +194,14 @@ Then `docker compose up -d --build discord-relay`. That one URL is both the
 credential and the channel selector — create a different webhook to alert a
 different channel.
 
+The webhook does not have to be one you made. If a community channel has
+issued you a URL so your server's joins show up alongside everyone else's,
+set that as `DISCORD_WEBHOOK_URL` here and nothing else changes. Running
+your own channel and posting to someone else's are the same one-variable
+setup — see
+[server/discord-relay/README.md](server/discord-relay/README.md) if you are
+on the issuing end.
+
 A burst of joins can hit Discord's per-webhook rate limit; a request that
 gets rate-limited is logged and dropped rather than queued or retried.
 

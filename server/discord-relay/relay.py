@@ -49,6 +49,36 @@ MAX_DATAGRAM = 2048
 # custom server name (or, in principle, a hostile one) get the message
 # rejected outright.
 MAX_DISCORD_CONTENT = 1900
+# Per-field cap for the two names that get interpolated into a message. Well
+# past any honest server name, and short enough that one field cannot crowd
+# out the rest of the line.
+MAX_DISPLAY = 64
+
+# Discord markdown metacharacters, escaped rather than stripped so an honest
+# name containing one still reads correctly. "[" and "(" are the pair that
+# actually matter: without them a display string can inject a [label](url)
+# link that renders as innocent text pointing anywhere.
+_MD_ESCAPE = str.maketrans({c: "\\" + c for c in "\\*_~`|>[]()#-"})
+
+
+def _sanitize_display(text):
+    """Neutralise a display string that came from outside this process.
+
+    Both fields this is applied to arrive over the wire: nick from a player
+    (fb-server's is_nick_ok() already limits it to [A-Za-z0-9_-]{1,10}, but
+    this relay is not entitled to assume the sender is an unmodified
+    fb-server) and servername from whoever runs that server, which
+    net_servername() does not constrain at all. Once one webhook is shared
+    with other operators -- see README.md -- servername is somebody else's
+    free-form config arriving in your channel.
+
+    Control characters are dropped outright rather than escaped: a newline
+    would let a single alert forge a second, arbitrary-looking one.
+    """
+    text = "".join(ch for ch in text if ch.isprintable())
+    # Truncate before escaping, or a cut can land mid-escape and leave a
+    # trailing backslash that eats the character after it.
+    return text[:MAX_DISPLAY].translate(_MD_ESCAPE)
 
 
 def _maps_link(geoloc):
@@ -72,6 +102,11 @@ def build_message(nick, geoloc, servername):
     # anywhere -- a Discord channel can have members far beyond whoever runs
     # the server, and a joining player never agreed to have their IP posted
     # there.
+    nick = _sanitize_display(nick)
+    servername = _sanitize_display(servername)
+    # geoloc needs no equivalent: _maps_link only ever emits a URL built from
+    # two parsed floats, so nothing a client puts in GEOLOC survives into the
+    # message as text.
     link = _maps_link(geoloc)
     location = f" from [this location]({link})" if link else ""
     content = f"🔔 **{nick}** joined **{servername}**{location}"
@@ -82,7 +117,15 @@ def _post_sync(webhook_url, content):
     """Blocking HTTPS POST -- run this off the event loop thread (see
     handle_datagram) so one slow request can never delay the next datagram
     from being picked up off the socket."""
-    body = json.dumps({"content": content}).encode("utf-8")
+    body = json.dumps({
+        "content": content,
+        # Nothing this relay posts may ping anyone, ever. Belt to
+        # _sanitize_display's braces: that stops a name *rendering* as a
+        # mention, this stops one being delivered as a notification even if
+        # some future edit reintroduces an unescaped path. A channel that
+        # can be @everyone'd by naming a server is one nobody leaves on.
+        "allowed_mentions": {"parse": []},
+    }).encode("utf-8")
     req = urllib.request.Request(
         webhook_url, data=body, method="POST",
         headers={"Content-Type": "application/json"},

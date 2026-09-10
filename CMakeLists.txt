@@ -510,6 +510,18 @@ if(BUILD_TESTING AND NOT EMSCRIPTEN AND NOT ANDROID AND NOT IOS)
     target_link_libraries(teamclamp-test PRIVATE SDL3::SDL3)
     add_test(NAME teamclamp-test COMMAND teamclamp-test)
 
+    # The other half of the Discord join-alert pipe from
+    # server-discordalert-test below, and the only guard on what may actually
+    # reach a channel: nick and servername both cross a trust boundary to get
+    # into a message (servername is another operator's free-form config the
+    # moment one webhook is shared -- see server/discord-relay/README.md), so
+    # the escaping that stops a name injecting a link needs a test that fails
+    # loudly if it is ever simplified away. Pure Python against relay.py, so
+    # unlike its companion it needs no fb-server and runs on Windows too,
+    # where fb-server is not built at all.
+    add_test(NAME discord-relay-message-test
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tests/discord_relay_message_test.py)
+
     if(TARGET fb-server)
         add_test(NAME server-list-cap-test
             COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tests/server_list_cap_test.py $<TARGET_FILE:fb-server>)
