@@ -53,3 +53,7 @@ android/app/google-services.json
 # Output of tools/build-site.py (the GitHub Pages site, rendered at deploy time)
 _site/
 .DS_Store
+
+# Scratch working notes for in-progress feature work (superpowers SDD
+# ledgers) -- internal process artifacts, not project documentation.
+.superpowers/
