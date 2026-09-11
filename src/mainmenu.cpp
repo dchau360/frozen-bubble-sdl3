@@ -663,17 +663,33 @@ void MainMenu::SetupNewGame(int mode) {
                     for (int i = 0; i < 5; i++) ns.playerTeams[i] = netPlayerTeams[i];
                 }
                 if (netClient && netClient->tournaments.assignment.tournament && !netClient->tournaments.assignment.returned) {
-                    ns.gameMode = GameMode::Classic;
-                    ns.chainReaction = false;
-                    // The tournament coordinator owns the first-to-two score.
-                    // Each reserved room contains exactly one game round.
+                    // Structural constraints only: a tournament match is
+                    // always exactly two entrants with no teams, and the
+                    // tournament coordinator (not the client's own
+                    // victoriesLimit) owns the first-to-two score -- each
+                    // reserved room contains exactly one game round (see the
+                    // CFG_CONFIRM comment in mainmenu_tournament.cpp).
+                    //
+                    // Game mode, chain reaction, colors, and aim guide are
+                    // NOT forced here: the tournament creation screen's
+                    // CFG_MODE/CFG_CHAIN/CFG_COLORS/CFG_AIM toggles already
+                    // send the organizer's real choice to the server via
+                    // TOUR CREATE's BuildOptionsBlob, and every participant's
+                    // client (organizer and joiners alike) receives it back
+                    // through the room's normal SETOPTIONS push, landing in
+                    // netGameMode/chainReactionEnabled/playerColorCounts/
+                    // playerAimGuide above (see GetAndClearPendingOptions in
+                    // mainmenu_netpanel.cpp) -- ns already carries the right
+                    // values by the time this block runs. This code used to
+                    // clobber all four back to Classic/off/8-colors/no-aim
+                    // regardless, a leftover from before those toggles
+                    // existed, which is why "chain reaction wasn't working"
+                    // in tournament matches no matter what the organizer
+                    // picked (2026-09-11).
                     ns.victoriesLimit = 0;
                     ns.mouseEnabled = true;
                     netRoomMouseEnabled = true;
-                    for (int i = 0; i < 5; ++i) {
-                        ns.playerColors[i] = 8; ns.disableCompression[i] = false;
-                        ns.aimGuide[i] = false; ns.playerTeams[i] = 0;
-                    }
+                    for (int i = 0; i < 5; ++i) ns.playerTeams[i] = 0;
                 }
                 // Apply per-session mouse setting (off by default in multiplayer)
                 GameSettings::Instance()->mouseEnabled = netRoomMouseEnabled;
