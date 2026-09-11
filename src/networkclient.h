@@ -33,6 +33,7 @@
 #include "socket_compat.h"
 #endif
 #include "attackmode.h"  // AttackMode is used below regardless of platform
+#include "tournamentstate.h"
 #include "gamemode.h"    // GameMode likewise -- see its header comment on the cycle
 
 #define PROTO_MAJOR 1
@@ -215,6 +216,12 @@ public:
     // actually talking to.
     const std::string& GetHost() const { return connectedHost; }
     int GetPort() const { return connectedPort; }
+
+    TournamentState tournaments;
+    std::map<int, Uint64> tournamentReceivedAt;
+    std::string tournamentError;
+    bool TournamentCommand(const std::string& operation);
+    void ConsumeIncomingLines();
 
     // Protocol commands
     bool SendNick(const char* nickname);
