@@ -1302,11 +1302,15 @@ void NetworkClient::HandlePushMessage(const std::string& pushMsg) {
             for (const auto& name : {a.nickA, a.nickB}) { NetworkPlayer p{}; p.nick = name; currentGame->players.push_back(p); }
             state = IN_LOBBY;
             messageQueue.clear(); syncQueue.clear(); playerIdToNick.clear();
+#ifndef __WASM_PORT__
             pendingGameStart = false;
+#endif
         } else if (a.returned && !previous.returned) {
             state = IN_LOBBY;
             delete currentGame; currentGame = nullptr;
+#ifndef __WASM_PORT__
             pendingGameStart = false;
+#endif
             messageQueue.clear(); syncQueue.clear(); playerIdToNick.clear();
         }
         return;
