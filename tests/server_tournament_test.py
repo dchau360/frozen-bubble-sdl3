@@ -72,7 +72,19 @@ class TournamentTest(unittest.TestCase):
         for p in self.peers:
             p.sock.close()
         self.server.terminate()
-        self.server.wait(timeout=5)
+        # 5s was tight enough to flake under the ASan/UBSan CI job specifically
+        # on this file's heaviest test (test_eight_entrants_complete_best_of_
+        # three_stage_barriers -- a full 8-entrant bracket is the most
+        # struct game/struct tournament churn any test in the suite produces,
+        # and ASan's own instrumentation plus LeakSanitizer's scan at exit
+        # both add real overhead SIGTERM-to-exit that a debug/no-sanitizer
+        # build never pays -- CI log showed a bare subprocess.TimeoutExpired
+        # in this wait(), no sanitizer report of any kind, so this was pure
+        # shutdown-time margin, not a caught bug. 20s comfortably covers that
+        # overhead without meaningfully slowing a normal run, where the
+        # server exits almost immediately and wait() returns as soon as it
+        # does.
+        self.server.wait(timeout=20)
 
     def peer(self, name):
         p = Peer(self.port)
