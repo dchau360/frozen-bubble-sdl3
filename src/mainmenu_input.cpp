@@ -53,6 +53,7 @@
 #include "textinput.h"
 
 void MainMenu::HandleInput(SDL_Event *e){
+    if (TournamentPanelKey(e)) return;
     switch(e->type) {
         case SDL_EVENT_TEXT_INPUT:
             MenuTextInputEvent(e);
@@ -1363,6 +1364,10 @@ void MainMenu::MenuUpKey() {
                                 // compiled in. Without this it renders but
                                 // arrow keys stop one short of it.
                                 if (LobbyDiscordIndex(games.size()) >= 0) maxActions++;
+                                // "Create Tournament" plus one row per
+                                // already-existing joinable tournament
+                                // (2026-09-11 -- see LobbyJoinableTournaments).
+                                if (LobbyTournamentIndex() >= 0) maxActions += 1 + LobbyTournamentListCount();
                             }
                             // The HELP box (kRoomHelpTapIndex) and the >5-cap
                             // roster's tap rows park selectedActionIndex on fake
@@ -1479,6 +1484,10 @@ void MainMenu::MenuDownKey() {
                                 // compiled in. Without this it renders but
                                 // arrow keys stop one short of it.
                                 if (LobbyDiscordIndex(games.size()) >= 0) maxActions++;
+                                // "Create Tournament" plus one row per
+                                // already-existing joinable tournament
+                                // (2026-09-11 -- see LobbyJoinableTournaments).
+                                if (LobbyTournamentIndex() >= 0) maxActions += 1 + LobbyTournamentListCount();
                             }
                             if (currentGame) {
                                 if (selectedActionIndex == kRoomSetTeamsTapIndex) {
@@ -2054,16 +2063,39 @@ void MainMenu::MenuReturnKey() {
                                     // Join game (selectedActionIndex >= 2)
                                     SDL_Log("Join game action: selectedActionIndex=%d", selectedActionIndex);
                                     std::vector<GameRoom> games = netClient->GetGameList();
-                                    // The Discord row sits one past the last
-                                    // room, so it would otherwise land in the
-                                    // "gameIndex out of bounds" arm below and
-                                    // silently do nothing.
+                                    // "Create Tournament" now sits at its own
+                                    // fixed slot (2) right after Create Game
+                                    // Room, ahead of the room list; Discord
+                                    // still trails the room list. Both would
+                                    // otherwise land in the "gameIndex out of
+                                    // bounds" arm below and silently do
+                                    // nothing. Zero or more "join this
+                                    // tournament" rows (2026-09-11) sit
+                                    // directly between "Create Tournament"
+                                    // and the room list -- same
+                                    // LobbyJoinableTournaments() list the
+                                    // renderer just drew, so the row tapped
+                                    // is the tournament resolved here.
+                                    const int tourIdx = LobbyTournamentIndex();
+                                    if (tourIdx >= 0 && selectedActionIndex == tourIdx) {
+                                        OpenTournament();
+                                        return;
+                                    }
+                                    if (tourIdx >= 0 && selectedActionIndex > tourIdx && selectedActionIndex < LobbyRoomListStart()) {
+                                        const auto joinable = LobbyJoinableTournaments();
+                                        size_t idx = (size_t)(selectedActionIndex - tourIdx - 1);
+                                        if (idx < joinable.size()) {
+                                            OpenTournament(joinable[idx].id);
+                                            AudioMixer::Instance()->PlaySFX("menu_selected");
+                                        }
+                                        return;
+                                    }
                                     if (selectedActionIndex == LobbyDiscordIndex(games.size())) {
                                         OpenDiscordInvite();
                                         AudioMixer::Instance()->PlaySFX("menu_selected");
                                         return;
                                     }
-                                    int gameIndex = selectedActionIndex - 2;
+                                    int gameIndex = selectedActionIndex - LobbyRoomListStart();
                                     SDL_Log("Join game: gameIndex=%d, games.size()=%d", gameIndex, (int)games.size());
                                     if (gameIndex >= 0 && gameIndex < (int)games.size()) {
                                         SDL_Log("Attempting to join game created by: %s", games[gameIndex].creator.c_str());

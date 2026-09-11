@@ -459,6 +459,8 @@ void MainMenu::NetPanelRender() {
         return;
     }
 
+    if (showingTournament) { TournamentPanelRender(); return; }
+
     // If in lobby, use world map background; otherwise use void panel for connection screens
 
     if (networkInLobby && netGameBackground && networkInputMode == 0) {
@@ -488,11 +490,18 @@ void MainMenu::NetPanelWorldMapRender() {
     // left panelText set to yellow, which persists across frames.
     panelText.UpdateColor({255, 255, 255, 255}, {0, 0, 0, 255});
 
-        // Request LIST periodically (every 2 seconds)
+        // Request LIST periodically (every 500ms)
         Uint32 now = SDL_GetTicks();
         if (now - lastListRequest > 500) {
             netClient->RequestList();
             lastListRequest = now;
+            // Piggyback "TOUR LIST" on the same timer so a tournament that
+            // already exists shows up in the room list below without the
+            // player ever opening the (still separate) browse/create screen
+            // (2026-09-11, user feedback). Gated on capability support, same
+            // as the "Create Tournament" row itself, so a server without
+            // tournament support never gets asked.
+            if (netClient->tournaments.supported) netClient->TournamentCommand("LIST");
         }
 
         // Render world map background
@@ -786,8 +795,32 @@ void MainMenu::NetPanelLobbyActionsRender() {
             char createValue[32];
             snprintf(createValue, sizeof(createValue), "%d players", kRoomSizes[netRoomSizeChoice]);
             lobbyList.Row(1, "Create Game Room", createValue, true, true, SDLK_RETURN);
+            // "Create Tournament" sits right under Create Game Room
+            // (2026-09-11 -- moved out of the right "Online" sidebar per user
+            // feedback: the organizer feature reads as another
+            // room-management action, not something that belongs alongside
+            // the free-player list). Fixed at LobbyTournamentIndex()==2 when
+            // supported. Renamed from "Tournaments" the same day, once it
+            // stopped being the only way to reach one: any tournament already
+            // in registration or running gets its own row directly below
+            // (same feedback -- an existing tournament is exactly as joinable
+            // as a game room and belongs in this list, not one more screen
+            // away). Those rows, if any, are what LobbyRoomListStart() adds
+            // its offset for, so the room loop below still just starts from
+            // that helper instead of a hardcoded 2 or 3.
+            const int tourIdx = LobbyTournamentIndex();
+            if (tourIdx >= 0) {
+                lobbyList.Row(tourIdx, "Create Tournament", "");
+                const auto joinable = LobbyJoinableTournaments();
+                for (size_t i = 0; i < joinable.size(); i++) {
+                    const auto& t = joinable[i];
+                    std::string value = std::to_string(t.count) + " · " + t.state;
+                    lobbyList.Row(tourIdx + 1 + (int)i, t.owner + "'s tournament", value);
+                }
+            }
+            const int roomListStart = LobbyRoomListStart();
             for (size_t i = 2; i < actions.size() && i < 18; i++) {
-                lobbyList.Row((int)i, actions[i], "");
+                lobbyList.Row(roomListStart + (int)(i - 2), actions[i], "");
             }
             // "Join our Discord" no longer rides along here -- it's pinned to
             // the bottom of the Online sidebar instead (see the !currentGame
@@ -1289,6 +1322,9 @@ void MainMenu::NetPanelLobbyActionsRender() {
             // is actually for) is exactly who would otherwise scroll it out
             // of view. Reserved here rather than appended after the loop
             // below, so free-player rows never draw underneath it.
+            // Tournaments used to have a second reserved row right here too,
+            // but moved under Create Game Room in the left box (2026-09-11,
+            // user feedback) -- this sidebar is player-list-only now.
             const int lobbyDiscordIdx = LobbyDiscordIndex(actions.size() - 2);
             const bool showDiscordHere = lobbyDiscordIdx >= 0;
             const int kDiscordRowH = 22;
@@ -1634,7 +1670,7 @@ void MainMenu::NetPanelConnectionScreensRender() {
         // Main lobby screen with game list
         const char* stateStr = "Disconnected";
         if (netClient->IsConnected()) {
-            // Request LIST periodically (every 2 seconds)
+            // Request LIST periodically (every 500ms)
             Uint32 now = SDL_GetTicks();
             Uint32 timeSinceLastRequest = now - lastListRequest;
             if (timeSinceLastRequest > 500) {
@@ -1752,9 +1788,9 @@ void MainMenu::NetPanelConnectionScreensRender() {
     { SDL_FRect fr = ToFRect(*panelText.Coords()); SDL_RenderTexture(const_cast<SDL_Renderer*>(renderer), panelText.Texture(), nullptr, &fr); };
 }
 
-int MainMenu::LobbyDiscordIndex(size_t roomCount) {
+int MainMenu::LobbyDiscordIndex(size_t roomCount) const {
     if (!HasDiscordInvite()) return -1;
-    return 2 + (int)roomCount;
+    return LobbyRoomListStart() + (int)roomCount;
 }
 
 int MainMenu::ServerListDiscordIndex() const {

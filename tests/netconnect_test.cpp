@@ -442,6 +442,56 @@ int main() {
         ResetClient();
     }
 
+    // --- Tournament control stays text-framed while the connection is in
+    // priority gameplay mode. A return can share a read with an ordinary
+    // game message without either line being misclassified or discarded.
+    {
+        fbtest::FakeServerOptions opts;
+        opts.rules = {
+            {"NICK Bob", {"FB/1.3 NICK: OK\n"}},
+            {"TOUR CAPS", {"FB/1.3 PUSH: TOUR_CAPS: 1\nFB/1.3 TOUR: OK\n"}},
+            {"TOUR READY", {
+                "FB/1.3 PUSH: TOUR_ASSIGN: 7 3 1 11 Ada 14 Bob\n"
+                "FB/1.3 PUSH: GAME_CAN_START: AAda,BBob\n"
+                "FB/1.3 TOUR: OK\n"}},
+            {"OK_GAME_START", {"FB/1.3 OK_GAME_START: OK\n"}},
+            {"TOUR REPORT", {
+                "Ahello\n"
+                "FB/1.3 TOUR: OK\n"}},
+            {"TOUR STATE", {
+                "FB/1.3 PUSH: TOUR_RETURN: 7 3 1\n"
+                "FB/1.3 TOUR: OK\n"}},
+        };
+        fbtest::FakeServer server(opts);
+        CHECK(server.Started());
+        NetworkClient* nc = NetworkClient::Instance();
+        CHECK(nc->Connect("127.0.0.1", server.Port()));
+        CHECK(PumpUntilSettled(nc, 5000).connected);
+        CHECK(nc->SendNick("Bob"));
+        PumpUntil(nc, 3000, [](NetworkClient* c) { return c->tournaments.supported; });
+        CHECK(nc->tournaments.supported);
+        CHECK(nc->TournamentCommand("READY 7 3 1"));
+        PumpUntil(nc, 3000, [](NetworkClient* c) { return c->GetState() == IN_GAME; });
+        CHECK(nc->GetState() == IN_GAME);
+        CHECK(nc->GetCurrentGame() != nullptr);
+        CHECK(nc->GetCurrentGame()->creator == "Ada");
+        CHECK(nc->GetCurrentGame()->players.size() == 2);
+        CHECK(nc->tournaments.assignment.b == 14);
+        CHECK(nc->TournamentCommand("REPORT 7 3 1 11"));
+        PumpUntil(nc, 3000, [](NetworkClient* c) { return c->HasMessage(); });
+        CHECK(nc->GetState() == IN_GAME);
+        CHECK(nc->HasMessage());
+        CHECK(nc->GetNextMessage().find("hello") != std::string::npos);
+        CHECK(nc->TournamentCommand("STATE 7"));
+        PumpUntil(nc, 3000, [](NetworkClient* c) {
+            return c->tournaments.assignment.returned;
+        });
+        CHECK(nc->GetState() == IN_LOBBY);
+        CHECK(nc->GetCurrentGame() == nullptr);
+        CHECK(!nc->HasMessage());
+        ResetClient();
+    }
+
     // --- The level-sync wait rule (stage 3c). This runs only on the WASM
     // joiner path, but the rule itself is a pure function compiled everywhere
     // precisely so it can be checked here: it was wrong for two releases and

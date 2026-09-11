@@ -662,6 +662,35 @@ void MainMenu::SetupNewGame(int mode) {
                     // <=5-cap: unchanged grid path.
                     for (int i = 0; i < 5; i++) ns.playerTeams[i] = netPlayerTeams[i];
                 }
+                if (netClient && netClient->tournaments.assignment.tournament && !netClient->tournaments.assignment.returned) {
+                    // Structural constraints only: a tournament match is
+                    // always exactly two entrants with no teams, and the
+                    // tournament coordinator (not the client's own
+                    // victoriesLimit) owns the first-to-two score -- each
+                    // reserved room contains exactly one game round (see the
+                    // CFG_CONFIRM comment in mainmenu_tournament.cpp).
+                    //
+                    // Game mode, chain reaction, colors, and aim guide are
+                    // NOT forced here: the tournament creation screen's
+                    // CFG_MODE/CFG_CHAIN/CFG_COLORS/CFG_AIM toggles already
+                    // send the organizer's real choice to the server via
+                    // TOUR CREATE's BuildOptionsBlob, and every participant's
+                    // client (organizer and joiners alike) receives it back
+                    // through the room's normal SETOPTIONS push, landing in
+                    // netGameMode/chainReactionEnabled/playerColorCounts/
+                    // playerAimGuide above (see GetAndClearPendingOptions in
+                    // mainmenu_netpanel.cpp) -- ns already carries the right
+                    // values by the time this block runs. This code used to
+                    // clobber all four back to Classic/off/8-colors/no-aim
+                    // regardless, a leftover from before those toggles
+                    // existed, which is why "chain reaction wasn't working"
+                    // in tournament matches no matter what the organizer
+                    // picked (2026-09-11).
+                    ns.victoriesLimit = 0;
+                    ns.mouseEnabled = true;
+                    netRoomMouseEnabled = true;
+                    for (int i = 0; i < 5; ++i) ns.playerTeams[i] = 0;
+                }
                 // Apply per-session mouse setting (off by default in multiplayer)
                 GameSettings::Instance()->mouseEnabled = netRoomMouseEnabled;
                 showingTeamsPanel = false;
@@ -741,6 +770,9 @@ void MainMenu::ReturnToMenu() {
 void MainMenu::ReturnToNetLobby() {
     SDL_Log("ReturnToNetLobby() called - returning to network lobby");
 
+    const bool returningFromTournament =
+        FrozenBubble::Instance()->bubbleGame()->IsTournamentRound();
+
     // Clear the current game room data so it doesn't show stale info
     // The room is torn down below, so the bots in it go too -- whether they
     // are still ours or the game has taken them over.
@@ -757,7 +789,7 @@ void MainMenu::ReturnToNetLobby() {
             currentGame->started = false;
         }
         // If somehow still IN_GAME (BubbleGame normally calls PartGame first), clean up
-        if (netClient->GetState() == IN_GAME) {
+        if (netClient->GetState() == IN_GAME && !returningFromTournament) {
             netClient->PartGame();
         }
     }
@@ -770,6 +802,9 @@ void MainMenu::ReturnToNetLobby() {
     syncWaitStart = 0;
     wasmBotWaitStart = 0;
     pendingLobbyConnect = false;
+    if (returningFromTournament && netClient &&
+        netClient->tournaments.assignment.tournament)
+        OpenTournament(netClient->tournaments.assignment.tournament);
     SDL_StopTextInput(SDL_GetKeyboardFocus());
 
     // Clear stale game list immediately so ESC-quitter can't see/join the in-progress game

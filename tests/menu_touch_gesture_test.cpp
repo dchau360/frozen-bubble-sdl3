@@ -304,6 +304,32 @@ struct MainMenuTestAccess {
         menu.testNetworkGameStart = {};
         return settings;
     }
+    // The lobby sidebar's optional "Join Discord server"/"Tournaments" row
+    // indices -- private so the row list and the keyboard-navigation wrap in
+    // mainmenu_input.cpp can't drift apart from what's actually drawn (see
+    // CLAUDE.md's input-parity section).
+    static int LobbyDiscordIndexOf(const MainMenu& menu, size_t roomCount) {
+        return menu.LobbyDiscordIndex(roomCount);
+    }
+    static int LobbyTournamentIndexOf(const MainMenu& menu) { return menu.LobbyTournamentIndex(); }
+    static int LobbyTournamentListCountOf(const MainMenu& menu) { return menu.LobbyTournamentListCount(); }
+    static int LobbyRoomListStartOf(const MainMenu& menu) { return menu.LobbyRoomListStart(); }
+    static int ServerListDiscordIndexOf(const MainMenu& menu) { return menu.ServerListDiscordIndex(); }
+    // Tournament bracket/browser panel (mainmenu_tournament.cpp).
+    static void CallOpenTournament(MainMenu& menu, int id = 0) { menu.OpenTournament(id); }
+    static void RenderTournamentPanel(MainMenu& menu) { menu.TournamentPanelRender(); }
+    static bool SendTournamentPanelKey(MainMenu& menu, SDL_Event* e) { return menu.TournamentPanelKey(e); }
+    static bool ShowingTournament(const MainMenu& menu) { return menu.showingTournament; }
+    static void SetShowingTournament(MainMenu& menu, bool on) { menu.showingTournament = on; }
+    static bool TournamentConfirmShowing(const MainMenu& menu) { return menu.tournamentConfirm; }
+    static void SetTournamentConfirm(MainMenu& menu, bool on) { menu.tournamentConfirm = on; }
+    static int TournamentSelection(const MainMenu& menu) { return menu.tournamentSelection; }
+    static void SetTournamentSelection(MainMenu& menu, int index) { menu.tournamentSelection = index; }
+    static void SetTournamentViewId(MainMenu& menu, int id) { menu.tournamentViewId = id; }
+    static int TournamentViewId(const MainMenu& menu) { return menu.tournamentViewId; }
+    static const std::vector<TournamentAction>& TournamentButtons(const MainMenu& menu) {
+        return menu.tournamentButtons;
+    }
 };
 
 // NetworkClient is a true singleton (NetworkClient::Instance()), and the
@@ -330,6 +356,12 @@ struct NetworkClientTestAccess {
     static void PushChatMessage(NetworkClient& nc, const std::string& nick,
                                 const std::string& message) {
         nc.chatMessages.push_back({nick, message, 0});
+    }
+    // Stands up the lobby room list GetGameList() reads, so a lobby-index
+    // test can drive a real row count instead of only the always-empty
+    // default.
+    static void SetGameList(NetworkClient& nc, std::vector<GameRoom> games) {
+        nc.gameList = std::move(games);
     }
 };
 
@@ -1323,6 +1355,327 @@ int main() {
             MainMenuTestAccess::NetGridCellTexture(*menu, 4)), marker, false));
 
         NetworkClientTestAccess::SetCurrentGame(*nc, nullptr);
+    }
+
+    // --- Online lobby sidebar: "Tournaments" / "Join Discord server" row
+    // indices, with and without each, must match what MenuUpKey/MenuDownKey's
+    // maxActions count in mainmenu_input.cpp actually navigates to, and both
+    // rows must be real tap targets -- the exact input-parity gap CLAUDE.md
+    // calls out (a row rendered but never registered as a tap target, or
+    // reachable by only one of keyboard/tap). Tournaments moved under Create
+    // Game Room (2026-09-11, user feedback: it's a room-management action,
+    // not a sidebar row) -- it now sits at a FIXED slot 2 when supported,
+    // ahead of the room list, while Discord still trails the room list at
+    // LobbyRoomListStart()+rooms. So with both present: Chat(0), Create(1),
+    // Tournaments(2), rooms(3..), Discord(last). Runs the real
+    // NetPanelLobbyActionsRender/MenuUpKey/MenuDownKey against all four
+    // combinations, not just the one this build ships with.
+    {
+        NetworkClient* nc = NetworkClient::Instance();
+        NetworkClientTestAccess::SetPlayerNick(*nc, "host");
+        NetworkClientTestAccess::SetState(*nc, IN_LOBBY);
+        NetworkClientTestAccess::SetCurrentGame(*nc, nullptr);
+        std::vector<GameRoom> games;
+        games.push_back(GameRoom{});
+        games.push_back(GameRoom{});
+        games[0].creator = "alice"; games[0].maxPlayers = 5;
+        games[1].creator = "bob"; games[1].maxPlayers = 5;
+        NetworkClientTestAccess::SetGameList(*nc, games);
+        const size_t roomCount = games.size();  // 2
+
+        for (bool discordOn : {true, false}) {
+            for (bool tournamentsOn : {true, false}) {
+                testForceDiscordInviteOff = !discordOn;
+                nc->tournaments.supported = tournamentsOn;
+
+                std::unique_ptr<MainMenu> menu = MainMenuTestAccess::Create(renderer);
+                MainMenuTestAccess::EnterNetRoom(*menu);
+                MainMenuTestAccess::RenderLobbyActions(*menu);
+
+                const int tourIdx = MainMenuTestAccess::LobbyTournamentIndexOf(*menu);
+                const int roomListStart = MainMenuTestAccess::LobbyRoomListStartOf(*menu);
+                const int discordIdx = MainMenuTestAccess::LobbyDiscordIndexOf(*menu, roomCount);
+                CHECK((tourIdx >= 0) == tournamentsOn);
+                CHECK((discordIdx >= 0) == discordOn);
+                // Tournaments is always the fixed slot 2 when present,
+                // regardless of Discord/room count.
+                if (tournamentsOn) CHECK(tourIdx == 2);
+                // Room list starts right after Tournaments' slot when
+                // present, else right after Create Game Room.
+                CHECK(roomListStart == (tournamentsOn ? 3 : 2));
+                if (discordOn) {
+                    // Discord trails the room list, wherever it starts.
+                    CHECK(discordIdx == roomListStart + (int)roomCount);
+                }
+
+                // Whichever rows are present must each be a real, separately
+                // tappable row -- not merged into, or missing from, the row
+                // list a keyboard would also see.
+                if (tourIdx >= 0)
+                    CHECK(!MainMenuTestAccess::RectsForIndex(*menu, tourIdx).empty());
+                if (discordIdx >= 0)
+                    CHECK(!MainMenuTestAccess::RectsForIndex(*menu, discordIdx).empty());
+                // And no stray row at the "other configuration"'s position:
+                // e.g. with Discord off, the slot it would occupy if it were
+                // on (right after the room list) must not silently have a
+                // leftover row squatting there instead.
+                if (!discordOn) {
+                    const int wouldBeIdxIfDiscordOn = roomListStart + (int)roomCount;
+                    CHECK(MainMenuTestAccess::RectsForIndex(*menu, wouldBeIdxIfDiscordOn).empty());
+                }
+
+                // Keyboard reach: Up from the very first row (Chat, index 0)
+                // wraps all the way around to the last row. Discord, when
+                // present, is always the last row (it trails the room
+                // list); otherwise it's the last room row.
+                const int expectedLast = discordIdx >= 0 ? discordIdx
+                                        : roomListStart + (int)roomCount - 1;
+                MainMenuTestAccess::SetSelectedActionIndex(*menu, 0);
+                MainMenuTestAccess::PressUp(*menu);
+                CHECK(MainMenuTestAccess::SelectedActionIndex(*menu) == expectedLast);
+
+                // Tournaments, when present, is an ordinary stop between
+                // Create Game Room and the room list -- not an island only
+                // reachable by wrapping past it. Up from the first room row
+                // steps to Tournaments (or to Create Game Room if it isn't
+                // shown), and Up from there steps to Create Game Room.
+                MainMenuTestAccess::SetSelectedActionIndex(*menu, roomListStart);
+                MainMenuTestAccess::PressUp(*menu);
+                CHECK(MainMenuTestAccess::SelectedActionIndex(*menu) == (tourIdx >= 0 ? tourIdx : 1));
+                if (tourIdx >= 0) {
+                    MainMenuTestAccess::PressUp(*menu);
+                    CHECK(MainMenuTestAccess::SelectedActionIndex(*menu) == 1);
+                }
+
+                // And Down from the last row wraps back to Chat, the same
+                // cycle in the other direction.
+                MainMenuTestAccess::SetSelectedActionIndex(*menu, expectedLast);
+                MainMenuTestAccess::PressDown(*menu);
+                CHECK(MainMenuTestAccess::SelectedActionIndex(*menu) == 0);
+            }
+        }
+
+        // Restore defaults so no later test in this binary inherits them.
+        testForceDiscordInviteOff = false;
+        nc->tournaments.supported = false;
+        NetworkClientTestAccess::SetGameList(*nc, {});
+        NetworkClientTestAccess::SetState(*nc, DISCONNECTED);
+    }
+
+    // --- Online lobby: an already-existing tournament shows up as its own
+    // row in the room list (2026-09-11, user feedback) instead of only being
+    // reachable by opening the "Tournaments" row's browse screen. Renamed to
+    // "Create Tournament" the same day since it's no longer the only way in.
+    // Covers what the four-combination test above can't: it only ever runs
+    // with an empty net->tournaments.list, so LobbyTournamentListCount() is
+    // always 0 there and this whole code path goes untouched otherwise.
+    {
+        NetworkClient* nc = NetworkClient::Instance();
+        NetworkClientTestAccess::SetPlayerNick(*nc, "host");
+        NetworkClientTestAccess::SetState(*nc, IN_LOBBY);
+        NetworkClientTestAccess::SetCurrentGame(*nc, nullptr);
+        std::vector<GameRoom> games;
+        games.push_back(GameRoom{});
+        games[0].creator = "alice"; games[0].maxPlayers = 5;
+        NetworkClientTestAccess::SetGameList(*nc, games);
+
+        nc->tournaments.supported = true;
+        nc->tournaments.list.clear();
+        TournamentListing entered; entered.id = 5; entered.owner = "alice"; entered.count = 4; entered.state = "registration";
+        TournamentListing playing; playing.id = 6; playing.owner = "bob"; playing.count = 2; playing.state = "running";
+        TournamentListing done; done.id = 7; done.owner = "carol"; done.count = 2; done.state = "complete";
+        nc->tournaments.list = {entered, playing, done};
+
+        std::unique_ptr<MainMenu> menu = MainMenuTestAccess::Create(renderer);
+        MainMenuTestAccess::EnterNetRoom(*menu);
+        MainMenuTestAccess::RenderLobbyActions(*menu);
+
+        const int tourIdx = MainMenuTestAccess::LobbyTournamentIndexOf(*menu);
+        const int listCount = MainMenuTestAccess::LobbyTournamentListCountOf(*menu);
+        const int roomListStart = MainMenuTestAccess::LobbyRoomListStartOf(*menu);
+        CHECK(tourIdx == 2);
+        // "complete" is excluded -- only the registration and running entries
+        // get a row.
+        CHECK(listCount == 2);
+        CHECK(roomListStart == tourIdx + 1 + listCount);
+
+        // Both joinable tournaments are real, separately tappable rows, not
+        // just something the ENTER-dispatch below happens to accept.
+        CHECK(!MainMenuTestAccess::RectsForIndex(*menu, tourIdx + 1).empty());
+        CHECK(!MainMenuTestAccess::RectsForIndex(*menu, tourIdx + 2).empty());
+
+        // ENTER on "Create Tournament" itself still opens the general browse
+        // view (id 0), same as when no tournament exists yet.
+        MainMenuTestAccess::SetTournamentViewId(*menu, 99);
+        MainMenuTestAccess::SetShowingTournament(*menu, false);
+        MainMenuTestAccess::SetSelectedActionIndex(*menu, tourIdx);
+        MainMenuTestAccess::PressReturn(*menu);
+        CHECK(MainMenuTestAccess::ShowingTournament(*menu));
+        CHECK(MainMenuTestAccess::TournamentViewId(*menu) == 0);
+
+        // ENTER on the first listed row opens that exact tournament, not the
+        // browse view and not its neighbor.
+        MainMenuTestAccess::SetTournamentViewId(*menu, 0);
+        MainMenuTestAccess::SetShowingTournament(*menu, false);
+        MainMenuTestAccess::SetSelectedActionIndex(*menu, tourIdx + 1);
+        MainMenuTestAccess::PressReturn(*menu);
+        CHECK(MainMenuTestAccess::ShowingTournament(*menu));
+        CHECK(MainMenuTestAccess::TournamentViewId(*menu) == entered.id);
+
+        // ENTER on the second listed row opens THAT one -- the two rows
+        // resolve to different tournaments, not both to the first.
+        MainMenuTestAccess::SetTournamentViewId(*menu, 0);
+        MainMenuTestAccess::SetShowingTournament(*menu, false);
+        MainMenuTestAccess::SetSelectedActionIndex(*menu, tourIdx + 2);
+        MainMenuTestAccess::PressReturn(*menu);
+        CHECK(MainMenuTestAccess::ShowingTournament(*menu));
+        CHECK(MainMenuTestAccess::TournamentViewId(*menu) == playing.id);
+
+        // Restore defaults so no later test in this binary inherits them.
+        nc->tournaments.supported = false;
+        nc->tournaments.list.clear();
+        NetworkClientTestAccess::SetGameList(*nc, {});
+        NetworkClientTestAccess::SetState(*nc, DISCONNECTED);
+        MainMenuTestAccess::SetShowingTournament(*menu, false);
+        MainMenuTestAccess::SetTournamentViewId(*menu, 0);
+    }
+
+    // --- Tournament withdrawal confirmation: visible keyboard focus --------
+    //
+    // CLAUDE.md's input-parity rule specifically calls out a two-button
+    // popup where ENTER/ESC could each fire one button but there was no
+    // keyboard way to move focus onto the non-default button and no visible
+    // indicator of which one was focused. TournamentPanelKey's LEFT/RIGHT/TAB
+    // moves tournamentSelection between "Stay" (0) and "Withdraw" (1), ENTER
+    // activates whichever is focused, and TournamentPanelRender highlights
+    // the focused button (drawSelection background) the same way every other
+    // selectable row in this game does -- so this pins that the focus
+    // actually moves, that ENTER really does activate the currently
+    // highlighted button rather than always the same one, and that ESC still
+    // cancels outright as the documented shortcut.
+    //
+    // TournamentPanelRender rebuilds tournamentButtons to exactly the
+    // {"Stay","STAY"},{"Withdraw","LEAVE <id>"} pair whenever tournamentConfirm
+    // is set, regardless of what (if any) snapshot the panel is otherwise
+    // showing -- so the confirmation state is forced directly, the same state
+    // a real WITHDRAW row's RETURN press transitions into
+    // (mainmenu_tournament.cpp), isolating the focus/ESC behavior under test
+    // from the unrelated registration-flow plumbing that leads into it.
+    {
+        std::unique_ptr<MainMenu> menu = MainMenuTestAccess::Create(renderer);
+        NetworkClient* nc = NetworkClient::Instance();
+        // TournamentPanelRender bails (and clears showingTournament) unless
+        // IsConnected() -- same guard the real lobby is behind when this
+        // panel is reachable at all.
+        NetworkClientTestAccess::SetState(*nc, IN_LOBBY);
+
+        MainMenuTestAccess::SetShowingTournament(*menu, true);
+        MainMenuTestAccess::SetTournamentViewId(*menu, 7);
+        MainMenuTestAccess::SetTournamentConfirm(*menu, true);
+        MainMenuTestAccess::SetTournamentSelection(*menu, 0);
+        MainMenuTestAccess::RenderTournamentPanel(*menu);
+
+        const auto& buttons = MainMenuTestAccess::TournamentButtons(*menu);
+        CHECK(buttons.size() == 2);
+        CHECK(buttons[0].command == "STAY");
+        CHECK(buttons[1].command == "LEAVE 7");
+
+        // Starts focused on "Stay" (index 0) -- the safer default a stray
+        // ENTER should land on, matching confirmDialogFocusNo's own
+        // Yes/No-default precedent in mainmenu.h.
+        CHECK(MainMenuTestAccess::TournamentSelection(*menu) == 0);
+
+        SDL_Event right{}; right.type = SDL_EVENT_KEY_DOWN; right.key.key = SDLK_RIGHT;
+        SDL_Event left{};  left.type  = SDL_EVENT_KEY_DOWN; left.key.key  = SDLK_LEFT;
+        SDL_Event tab{};   tab.type   = SDL_EVENT_KEY_DOWN; tab.key.key   = SDLK_TAB;
+        SDL_Event ret{};   ret.type   = SDL_EVENT_KEY_DOWN; ret.key.key   = SDLK_RETURN;
+        SDL_Event esc{};   esc.type   = SDL_EVENT_KEY_DOWN; esc.key.key   = SDLK_ESCAPE;
+
+        // RIGHT/LEFT/TAB all move focus between the two buttons -- the
+        // visible highlight TournamentPanelRender draws (i ==
+        // tournamentSelection) tracks this same field, so moving it is what
+        // makes the focus visible on screen, not just inferred from which
+        // key does what.
+        CHECK(MainMenuTestAccess::SendTournamentPanelKey(*menu, &right));
+        CHECK(MainMenuTestAccess::TournamentSelection(*menu) == 1);  // Withdraw now focused
+        CHECK(MainMenuTestAccess::SendTournamentPanelKey(*menu, &left));
+        CHECK(MainMenuTestAccess::TournamentSelection(*menu) == 0);  // back to Stay
+        CHECK(MainMenuTestAccess::SendTournamentPanelKey(*menu, &tab));
+        CHECK(MainMenuTestAccess::TournamentSelection(*menu) == 1);
+
+        // ENTER activates whichever button is actually focused, not always
+        // the same one: with Withdraw focused, ENTER's the "LEAVE 7" path,
+        // which closes the confirmation and clears the selection back to 0
+        // (mainmenu_tournament.cpp's `command.compare(0, 6, "LEAVE ") == 0`
+        // branch), never actually calling TournamentCommand() here since no
+        // NetworkClient connection is standing -- SendCommand's own
+        // DISCONNECTED guard makes that a safe, side-effect-free no-op, and
+        // is not what this test is pinning.
+        CHECK(MainMenuTestAccess::SendTournamentPanelKey(*menu, &ret));
+        CHECK(!MainMenuTestAccess::TournamentConfirmShowing(*menu));
+        CHECK(MainMenuTestAccess::TournamentSelection(*menu) == 0);
+
+        // Re-open the confirmation and prove the opposite: with "Stay"
+        // focused (the default), ENTER takes the STAY branch instead --
+        // dismissing the confirmation without ever reaching "LEAVE 7". If
+        // focus were cosmetic only (ENTER always firing one fixed button
+        // regardless of tournamentSelection), this and the case above would
+        // be indistinguishable; this pins that the highlighted button is the
+        // one that actually activates.
+        MainMenuTestAccess::SetTournamentConfirm(*menu, true);
+        MainMenuTestAccess::SetTournamentSelection(*menu, 0);
+        MainMenuTestAccess::RenderTournamentPanel(*menu);
+        CHECK(MainMenuTestAccess::SendTournamentPanelKey(*menu, &ret));
+        CHECK(!MainMenuTestAccess::TournamentConfirmShowing(*menu));
+
+        // ESC still cancels outright as the documented shortcut, regardless
+        // of which button currently has focus.
+        MainMenuTestAccess::SetTournamentConfirm(*menu, true);
+        MainMenuTestAccess::SetTournamentSelection(*menu, 1);  // Withdraw focused
+        MainMenuTestAccess::RenderTournamentPanel(*menu);
+        CHECK(MainMenuTestAccess::SendTournamentPanelKey(*menu, &esc));
+        CHECK(!MainMenuTestAccess::TournamentConfirmShowing(*menu));
+        // ESC on the confirmation only backs out of it, leaving the
+        // tournament panel itself open (a second ESC leaves that) -- pins
+        // that it doesn't blow past two levels at once.
+        CHECK(MainMenuTestAccess::ShowingTournament(*menu));
+
+        // Each button is also its own tap target, not just a keyboard focus
+        // stop -- both halves of the input-parity rule, same as every other
+        // row this file tests.
+        MainMenuTestAccess::SetTournamentConfirm(*menu, true);
+        MainMenuTestAccess::SetTournamentSelection(*menu, 0);
+        MainMenuTestAccess::RenderTournamentPanel(*menu);
+        const std::vector<SDL_Rect> withdrawRects = MainMenuTestAccess::RectsForIndex(*menu, 1);
+        CHECK(!withdrawRects.empty());
+        if (!withdrawRects.empty()) {
+            const SDL_Rect& r = withdrawRects[0];
+            const float tx = r.x + r.w * 0.5f, ty = r.y + r.h * 0.5f;
+
+            SDL_PumpEvents();
+            for (SDL_Event drain; SDL_PollEvent(&drain); ) {}
+
+            // Same two-tap dance as every other plain row in this file
+            // (HandlePanelTap only activates a row that was already
+            // selected): starting on "Stay" (index 0), a first tap on
+            // "Withdraw" only moves focus there.
+            CHECK(menu->HandlePanelTap(tx, ty));
+            CHECK(MainMenuTestAccess::TournamentConfirmShowing(*menu));
+            CHECK(MainMenuTestAccess::TournamentSelection(*menu) == 1);
+
+            // The second tap, now on the already-selected row, pushes the
+            // activation as a key event (same as every other plain row) --
+            // pump it back through the real HandleInput to see it actually
+            // take effect, not just that the right key was queued.
+            CHECK(menu->HandlePanelTap(tx, ty));
+            SDL_Event ev;
+            CHECK(SDL_PollEvent(&ev) && ev.type == SDL_EVENT_KEY_DOWN && ev.key.key == SDLK_RETURN);
+            menu->HandleInput(&ev);
+            CHECK(!MainMenuTestAccess::TournamentConfirmShowing(*menu));
+        }
+
+        MainMenuTestAccess::SetShowingTournament(*menu, false);
+        NetworkClientTestAccess::SetState(*nc, DISCONNECTED);
     }
 
 #if !defined(__ANDROID__) && !defined(__WASM_PORT__) && !defined(_WIN32) && !defined(__IOS_PORT__)

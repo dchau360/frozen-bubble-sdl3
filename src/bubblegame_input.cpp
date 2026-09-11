@@ -38,6 +38,12 @@
 
 bool BubbleGame::HandleFinishedTap(float lx, float ly) {
     if (!currentSettings.networkGame || !gameFinish) return false;
+    if (statsTournamentBtn.w > 0 &&
+        lx >= statsTournamentBtn.x && lx < statsTournamentBtn.x + statsTournamentBtn.w &&
+        ly >= statsTournamentBtn.y && ly < statsTournamentBtn.y + statsTournamentBtn.h) {
+        QuitToTitle();
+        return true;
+    }
     if (statsChatBtn.w <= 0) return false;
     if (lx < statsChatBtn.x || lx >= statsChatBtn.x + statsChatBtn.w ||
         ly < statsChatBtn.y || ly >= statsChatBtn.y + statsChatBtn.h)
@@ -365,6 +371,10 @@ void BubbleGame::HandleInput(SDL_Event *e) {
 
                     // In network game, synchronize new game with opponent
                     if (currentSettings.networkGame) {
+                        if (IsTournamentRound()) {
+                            QuitToTitle();
+                            break;
+                        }
                         // If match is over (victories limit reached), return to lobby
                         if (gameMatchOver) {
                             SDL_Log("Match over - victories limit reached, returning to lobby");

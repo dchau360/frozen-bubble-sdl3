@@ -51,6 +51,7 @@
 #include <glib.h>
 
 #include "game.h"
+#include "tournament.h"
 #include "tools.h"
 #include "log.h"
 #include "net.h"
@@ -348,6 +349,7 @@ static void fill_conns_set(gpointer data, gpointer user_data)
 
 static int recalculate_list_games = 0;
 static GList * new_conns;
+static int iterating_connections; /* 0 idle, 1 priority, 2 lobby */
 static int interrupt_loop_processing = 0;
 void conn_terminated(int fd, char* reason)
 {
@@ -401,14 +403,31 @@ void conn_terminated(int fd, char* reason)
 
 /* Has fd sent us anything within the last few seconds? Lobby clients poll
  * LIST every 500ms (see mainmenu_netpanel.cpp), so a genuinely live
- * connection always has very recent traffic; a connection that's gone
- * silent for longer than this is almost certainly a stale ghost from an
- * unclean disconnect rather than a still-open second session. Used by the
- * NICK handler to decide whether a same-nickname collision is a real
- * duplicate live client (reject the new one) or a ghost to evict. */
+ * connection has very recent traffic *once it reaches the lobby list
+ * screen*; a connection that's gone silent for longer than this is almost
+ * certainly a stale ghost from an unclean disconnect rather than a
+ * still-open second session. Used by the NICK handler to decide whether a
+ * same-nickname collision is a real duplicate live client (reject the new
+ * one) or a ghost to evict.
+ *
+ * 2026-09-11: widened from 2s to 10s after a report of "half the players in
+ * a local 4-instance tournament immediately left." Several app instances
+ * launched close together all default to the same nickname (one shared
+ * SDL_GetPrefPath() prefs file per machine) and race to send NICK before
+ * every instance's 500ms LIST polling has ramped up -- screen transitions,
+ * asset loading, or simply the user still clicking through menus on the
+ * other windows can leave a genuinely live connection quiet for longer than
+ * 2s before its first poll. A false "stale" verdict here doesn't reject the
+ * newcomer, it silently conn_terminated()s the real, still-connected
+ * player -- exactly what "immediately left" looks like from their side. 10s
+ * is a wide enough margin to absorb that startup jitter while still being
+ * far shorter than the many seconds a person actually takes to notice a
+ * real disconnect and relaunch, so genuine ghost cleanup on reconnect is
+ * unaffected. See tests/server_discordalert_test.py's
+ * test_reconnect_replacing_a_ghost_does_not_re_announce. */
 int conn_recently_active(int fd)
 {
-        return (current_time - last_data_in[fd]) < 2;
+        return (current_time - last_data_in[fd]) < 10;
 }
 
 static char * get_greets_msg(void);
@@ -634,6 +653,13 @@ static void handle_incoming_data_generic(gpointer data, gpointer user_data, int 
                                                         conn_terminated(fd, "process_msg said to shutdown this connection");
                                                         return;
                                                 }
+                                                if (interrupt_loop_processing) return;
+                                                ssize_t remaining = len - (eol + 1 - ptr);
+                                                if (remaining > 0) {
+                                                        memcpy(incoming_data_buffers[fd], eol + 1, (size_t)remaining);
+                                                        incoming_data_buffers_count[fd] = remaining;
+                                                        need_another_run = 1;
+                                                }
                                                 break;
                                         }
                                         process_msg_prio(fd, ptr, eol - ptr + 1);
@@ -777,6 +803,7 @@ void connections_manager(void)
                 fd_set conns_set;
                 fd_set write_set;  // fds with a non-empty output queue (BUG-007)
 
+                tournament_tick(g_get_monotonic_time() / G_USEC_PER_SEC);
                 reregister_server_if_needed();
 
                 if (recalculate_list_games)
@@ -821,7 +848,7 @@ void connections_manager(void)
                          * classification, use a short timeout so native clients
                          * receive the server greeting promptly instead of waiting
                          * for the full gracetime interval. */
-                        if (ws_pending_count > 0) {
+                        if (ws_pending_count > 0 || tournament_has_running()) {
                                 tv.tv_sec = 0;
                                 tv.tv_usec = 200000;
                         } else {
@@ -840,14 +867,18 @@ void connections_manager(void)
                                 current_time = get_current_time();
                                 // conns_set is empty after timeout; FD_ISSET will be false for all
                                 // fds, so handle_incoming_data_generic falls through to gracetime check
-                                new_conns = g_list_copy(conns);
+                                iterating_connections = 2;
+                new_conns = g_list_copy(conns);
                                 g_list_foreach(conns, handle_incoming_data, &conns_set);
                                 g_list_free(conns);
                                 conns = new_conns;
-                                new_conns = g_list_copy(conns_prio);
+                iterating_connections = 0;
+                                iterating_connections = 1;
+                new_conns = g_list_copy(conns_prio);
                                 g_list_foreach(conns_prio, handle_incoming_data_prio, &conns_set);
                                 g_list_free(conns_prio);
                                 conns_prio = new_conns;
+                iterating_connections = 0;
                                 continue;
                         }
                 }
@@ -856,19 +887,23 @@ void connections_manager(void)
                 prio_processed = 0;
                 interrupt_loop_processing = 0;
                 need_another_run = 0;
+                iterating_connections = 1;
                 new_conns = g_list_copy(conns_prio);
                 g_list_foreach(conns_prio, handle_incoming_data_prio, &conns_set);
                 g_list_free(conns_prio);
                 conns_prio = new_conns;
+                iterating_connections = 0;
 
                 // prio has higher priority (astounding statement, eh?)
                 if (prio_processed || interrupt_loop_processing)
                         continue;
 
+                iterating_connections = 2;
                 new_conns = g_list_copy(conns);
                 g_list_foreach(conns, handle_incoming_data, &conns_set);
                 g_list_free(conns);
                 conns = new_conns;
+                iterating_connections = 0;
 
                 if (did_select && tcp_server_socket != -1 && FD_ISSET(tcp_server_socket, &conns_set)) {
                         if ((fd = accept(tcp_server_socket, (struct sockaddr *) &client_addr, (socklen_t *) &len)) == -1) {
@@ -981,8 +1016,23 @@ int conns_nb(void)
 
 void add_prio(int fd)
 {
+        /* Same hazard remove_prio() documents above: a tournament can start
+         * a room straight from the idle tick (iterating_connections == 0,
+         * via tournament_tick() -> game_tournament_start()), not just from
+         * a normal OK_GAME_START while conns is being iterated
+         * (iterating_connections == 2). new_conns is a fresh copy of conns
+         * only during that second case; at idle it's just a stale alias of
+         * conns itself (or, mid-game, of conns_prio) left over from the
+         * previous segment. Removing fd from it there mutates conns's own
+         * nodes without conns ever being reassigned to the result -- if fd
+         * was the list head, conns is left pointing at freed storage.
+         * Guarding on prio[fd] also prevents double-appending fd into
+         * conns_prio if it's already been promoted. */
+        if (prio[fd])
+                return;
+        GList **source = iterating_connections == 2 ? &new_conns : &conns;
+        *source = g_list_remove(*source, GINT_TO_POINTER(fd));
         conns_prio = g_list_append(conns_prio, GINT_TO_POINTER(fd));
-        new_conns = g_list_remove(new_conns, GINT_TO_POINTER(fd));
         prio[fd] = 1;
         if (lan_game_mode && g_list_length(conns_prio) > 0 && !lan_listeners_retired) {
                 if (tcp_server_socket != -1)
@@ -1014,11 +1064,13 @@ void remove_prio(int fd)
 {
         if (!prio[fd])
                 return;
-        /* Remove from the iteration copy — this becomes conns_prio at end of tick */
-        new_conns = g_list_remove(new_conns, GINT_TO_POINTER(fd));
+        /* A tournament can retire two rooms from a timer, a lobby command,
+         * or a priority report. Mutate the copy of whichever list is active. */
+        GList **source = iterating_connections == 1 ? &new_conns : &conns_prio;
+        GList **dest = iterating_connections == 2 ? &new_conns : &conns;
+        *source = g_list_remove(*source, GINT_TO_POINTER(fd));
         prio[fd] = 0;
-        /* Move to normal lobby list so subsequent LIST/JOIN commands work */
-        conns = g_list_append(conns, GINT_TO_POINTER(fd));
+        if (!g_list_find(*dest, GINT_TO_POINTER(fd))) *dest = g_list_append(*dest, GINT_TO_POINTER(fd));
 }
 
 void close_server(void) {

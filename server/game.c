@@ -44,6 +44,7 @@
 #include "game.h"
 #include "stats.h"
 #include "discordalert.h"
+#include "tournament.h"
 
 enum game_status { GAME_STATUS_OPEN, GAME_STATUS_CLOSED, GAME_STATUS_PLAYING };
 
@@ -51,6 +52,7 @@ enum game_status { GAME_STATUS_OPEN, GAME_STATUS_CLOSED, GAME_STATUS_PLAYING };
 struct game
 {
         enum game_status status;
+        int tournament_id, tournament_match, tournament_round;
         int players_number;
         int max_players;
         int players_conn[MAX_PLAYERS_PER_GAME];
@@ -323,6 +325,7 @@ static int next_game_id = 1;
 static void create_game(int fd, char* nick, int max_players)
 {
         struct game * g = malloc_(sizeof(struct game));
+        g->tournament_id = g->tournament_match = g->tournament_round = 0;
         g->players_number = 1;
         g->players_conn[0] = fd;
         g->players_id[0] = 'A';
@@ -698,11 +701,13 @@ static void kick_player(int fd, struct game * g, char * nick)
 
 void player_connects(int fd)
 {
+        tournament_connect(fd);
         open_players = g_list_append(open_players, GINT_TO_POINTER(fd));
 }
 
 void player_disconnects(int fd)
 {
+        tournament_disconnect(fd);
         open_players = g_list_remove(open_players, GINT_TO_POINTER(fd));
 }
 
@@ -854,8 +859,26 @@ int process_msg(int fd, char* msg)
         /* check for leading protocol tag */
         if (!str_begins_static_str(msg, "FB/")
             || strlen(msg) < 8) {  // 8 stands for "FB/M.m f"(oo)
-                send_line_log(fd, fl_line_unrecognized, msg);
-                return 1;
+                /* A tournament match's room is torn down (game_tournament_retire
+                 * -> remove_prio) the instant both sides' "TOUR REPORT" land,
+                 * which can race a player's own trailing in-game byte for that
+                 * same room (win-claim 'F', stats-sync 'S', ...) still in
+                 * flight -- it arrives after this fd is back in plain/non-prio
+                 * mode and lands here looking like garbage, tag and all,
+                 * because the binary GAMEMSG format never had one. That is a
+                 * structurally-expected side effect of one room per bracket
+                 * round, not a hostile or broken client, so only disconnect
+                 * over it while fd still belongs to a room; a stray non-FB/
+                 * line with no game to route to is silently dropped instead.
+                 * See mainmenu_tournament.cpp's victoriesLimit=1 comment for
+                 * the fix that makes this race rare, and
+                 * docs/ONLINE_TOURNAMENT_HANDOFF.md for the incident. */
+                if (find_game_by_fd(fd)) {
+                        send_line_log(fd, fl_line_unrecognized, msg);
+                        return 1;
+                }
+                l2(OUTPUT_TYPE_DEBUG, "[%d] dropping non-FB/ line with no current game (likely a stale in-game byte): %s", fd, msg);
+                return 0;
         }
     
         /* check if client protocol is compatible; for simplicity, we don't support client protocol more recent
@@ -882,7 +905,18 @@ int process_msg(int fd, char* msg)
         } else
                 args = NULL;
 
-        if (streq(current_command, "PING")) {
+        if (streq(current_command, "TOUR")) {
+                tournament_command(fd, args);
+        } else if (tournament_active(fd) &&
+            (streq(current_command, "CREATE") || streq(current_command, "JOIN") ||
+             streq(current_command, "NICK") || streq(current_command, "BOT") ||
+             streq(current_command, "SETOPTIONS") || streq(current_command, "START") ||
+             streq(current_command, "CLOSE") || streq(current_command, "KICK"))) {
+                send_line_log(fd, "TOURNAMENT_ACTIVE", msg_orig);
+        } else if (streq(current_command, "PART") && tournament_active(fd)) {
+                tournament_withdraw(fd);
+                send_ok(fd, msg_orig);
+        } else if (streq(current_command, "PING")) {
                 send_line_log(fd, ok_pong, msg_orig);
         } else if (streq(current_command, "BOT")) {
                 // Self-declared: a bot is otherwise an ordinary connection,
@@ -1388,6 +1422,7 @@ void process_msg_prio_(int fd, char* msg, ssize_t len, struct game* g)
         if (!g)
                 g = find_game_by_fd(fd);
         if (g) {
+                if (g->tournament_id && len >= 2 && msg[1] == 'n') return;
                 int i;
                 /* Stamp the sender byte with the seat this server assigned, so a
                    client cannot claim to be another player. Peers read msg[0] as
@@ -1424,7 +1459,7 @@ void process_msg_prio_(int fd, char* msg, ssize_t len, struct game* g)
                  * this datagram's own field boundaries; discord-relay applies
                  * its usual markdown/mention escaping on top of that, same
                  * distrust as the join alert's nick and servername fields. */
-                if (len >= 3 && msg[1] == 'F' && !g->result_posted) {
+                if (!g->tournament_id && len >= 3 && msg[1] == 'F' && !g->result_posted) {
                         char winner[32] = "";
                         size_t wlen = (size_t)len - 3;  /* id + 'F' + '\n' */
                         if (wlen > 0 && wlen < sizeof(winner)) {
@@ -1440,7 +1475,7 @@ void process_msg_prio_(int fd, char* msg, ssize_t len, struct game* g)
                         }
                         report_round_result(g, winner[0] ? winner : NULL);
                         g->result_posted = 1;
-                } else if (len >= 2 && msg[1] == 'n') {
+                } else if (!g->tournament_id && len >= 2 && msg[1] == 'n') {
                         g->result_posted = 0;
                 }
 
@@ -1523,6 +1558,12 @@ void player_part_game(int fd)
 
 void player_part_game_(int fd, char* reason)
 {
+        /* A detected disconnect has already cleared nick[fd]; never turn its
+         * reserved-room teardown into the ordinary departure-win path. */
+        if (tournament_active(fd)) {
+                if (!nick[fd]) tournament_disconnect(fd);
+                else tournament_withdraw(fd);
+        }
         struct game * g = find_game_by_fd(fd);
         if (g) {
                 char * save_nick;
@@ -1623,4 +1664,70 @@ void player_part_game_(int fd, char* reason)
                 open_players = g_list_append(open_players, GINT_TO_POINTER(fd));
                 calculate_list_games();  // recalculate now that player is back in open_players
         }
+}
+
+
+int game_has_room(int fd) { return already_in_game(fd); }
+
+int game_tournament_start(int tid, int mid, int round, int a, int fd_a, int b, int fd_b, const char *options) {
+        if (already_in_game(fd_a) || already_in_game(fd_b) || !nick[fd_a] || !nick[fd_b]) return 0;
+        create_game(fd_a, strdup(nick[fd_a]), 2);
+        struct game *g = find_game_by_fd(fd_a);
+        g->tournament_id = tid; g->tournament_match = mid; g->tournament_round = round;
+        /* Seat directly: JOINED assumes the client's room already exists. */
+        g->players_conn[1] = fd_b; g->players_id[1] = 'B';
+        g->players_nick[1] = strdup(nick[fd_b]); g->players_number = 2;
+        g->next_player_id = 'C';
+        open_players = g_list_remove(open_players, GINT_TO_POINTER(fd_b));
+        g->status = GAME_STATUS_CLOSED;
+        char line[256];
+        snprintf(line, sizeof(line), "TOUR_ASSIGN: %d %d %d %d %s %d %s", tid, mid, round, a, nick[fd_a], b, nick[fd_b]);
+        send_line_log_push_binary(fd_a, line, line);
+        send_line_log_push_binary(fd_b, line, line);
+        /* Apply the organizer's ruleset (TOUR CREATE's options blob, stored
+         * verbatim on the tournament) to this match's freshly created room,
+         * exactly as setoptions() above does for a live room's own
+         * SETOPTIONS -- same game_mode/team bookkeeping, same OPTIONS push
+         * to both seats, sent before real_start_game() so each side's own
+         * pendingOptions/GetAndClearPendingOptions() has already applied it
+         * (see src/mainmenu_netpanel.cpp) by the time gameplay begins. Every
+         * match in the bracket gets the identical ruleset this way, so
+         * nothing can drift partway through. A bare "TOUR CREATE" (no
+         * options) leaves this string empty and the room simply keeps the
+         * server's zero-initialized game defaults, same as before this
+         * feature existed. */
+        if (options && *options) {
+                g->game_mode = parse_game_mode(options);
+                parse_teams(g, options);
+                char *msg = asprintf_("OPTIONS: %s,PROTOCOLLEVEL:%d", options, min_protocol_level(g));
+                send_line_log_push(fd_a, msg);
+                send_line_log_push(fd_b, msg);
+                free(msg);
+        }
+        real_start_game(g);
+        calculate_list_games();
+        return 1;
+}
+
+void game_tournament_retire(int tid, int mid, int round) {
+        struct game *g = NULL;
+        for (GList *item = games; item; item = item->next) {
+                struct game *candidate = item->data;
+                if (candidate->tournament_id == tid && candidate->tournament_match == mid && candidate->tournament_round == round) { g = candidate; break; }
+        }
+        if (!g) return;
+        games = g_list_remove(games, g);
+        char line[128];
+        snprintf(line, sizeof(line), "TOUR_RETURN: %d %d %d", tid, mid, round);
+        for (int i = 0; i < g->players_number; ++i) {
+                int fd = g->players_conn[i];
+                if (nick[fd]) {
+                        send_line_log_push_binary(fd, line, line);
+                        remove_prio(fd);
+                        if (!g_list_find(open_players, GINT_TO_POINTER(fd))) open_players = g_list_append(open_players, GINT_TO_POINTER(fd));
+                }
+                free(g->players_nick[i]);
+        }
+        free(g);
+        calculate_list_games();
 }

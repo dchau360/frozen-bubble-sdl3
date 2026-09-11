@@ -33,6 +33,7 @@ set(FROZEN_BUBBLE_CORE_SOURCES
     ${FB_SRC}/mainmenu_panels.cpp
     ${FB_SRC}/mainmenu_help.cpp
     ${FB_SRC}/mainmenu_teampanel.cpp
+    ${FB_SRC}/mainmenu_tournament.cpp
     ${FB_SRC}/mainmenu_server.cpp
     ${FB_SRC}/menulist.cpp
     ${FB_SRC}/localmultiplayer_settings.cpp
@@ -51,6 +52,7 @@ set(FROZEN_BUBBLE_CORE_SOURCES
     ${FB_SRC}/sendGameStats.cpp
     ${FB_SRC}/netbot.cpp
     ${FB_SRC}/netview.cpp
+    ${FB_SRC}/tournamentstate.cpp
     ${FB_SRC}/netteams.cpp
     ${FB_SRC}/roundstats_color.cpp
     ${FB_SRC}/transitionmanager.cpp

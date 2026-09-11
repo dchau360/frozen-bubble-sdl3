@@ -385,6 +385,10 @@ void BubbleGame::NewGame(SetupSettings setup) {
     SDL_Renderer *rend = const_cast<SDL_Renderer*>(renderer);
     currentSettings = setup;
     currentSettings.mouseEnabled = GameSettings::Instance()->mouseEnabled;
+    NetworkClient* netClient = NetworkClient::Existing();
+    tournamentRound = currentSettings.networkGame && netClient &&
+        netClient->tournaments.assignment.tournament != 0 &&
+        !netClient->tournaments.assignment.returned;
 
     lowGfx = GameSettings::Instance()->gfxLevel() > 2;
 
@@ -446,6 +450,7 @@ void BubbleGame::NewGame(SetupSettings setup) {
 
     winsP1 = winsP2 = 0;
     roundStatsFinalized = false;
+    tournamentResultReported = false;
     roundsPlayed = 0;
     for (int i = 0; i < MAX_NET_PLAYERS; i++) {
         bubbleArrays[i].winCount = 0;
@@ -1522,9 +1527,11 @@ void BubbleGame::QuitToTitle() {
     if (currentSettings.networkGame) {
         NetworkClient* netClient = NetworkClient::Instance();
         if (netClient && netClient->IsConnected()) {
-            netClient->PartGame();  // Notify server we left (transitions us to IN_LOBBY)
-            // Leader posts the match summary to the lobby chatroom (now that TALK is valid again).
-            SendLobbyMatchSummary();
+            if (!IsTournamentRound()) {
+                netClient->PartGame();  // Notify server we left (transitions us to IN_LOBBY)
+                // Leader posts the match summary to the lobby chatroom (now that TALK is valid again).
+                SendLobbyMatchSummary();
+            }
         }
         FrozenBubble::Instance()->CallNetLobbyReturn();
     } else {

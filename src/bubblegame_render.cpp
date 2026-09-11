@@ -624,11 +624,14 @@ void BubbleGame::RenderRoundStats(SDL_Renderer *rend) {
     }
 
     if (currentSettings.networkGame) {
-        const char *hint = waitingForOpponentNewGame
-            ? "T / X: CHAT    WAITING FOR PLAYERS"
-            : (gameMatchOver
-                ? "T / X: CHAT    ENTER: LOBBY"
-                : "T / X: CHAT    ENTER / FIRE: NEXT ROUND");
+        const bool tournament = IsTournamentRound();
+        const char *hint = tournament
+            ? "T / X: CHAT    ENTER / FIRE: BRACKET"
+            : (waitingForOpponentNewGame
+                ? "T / X: CHAT    WAITING FOR PLAYERS"
+                : (gameMatchOver
+                    ? "T / X: CHAT    ENTER: LOBBY"
+                    : "T / X: CHAT    ENTER / FIRE: NEXT ROUND"));
         cell(hint, colName, y, hdr);
 
         // Tappable CHAT button (touch devices have no T key). Anchored under
@@ -641,8 +644,19 @@ void BubbleGame::RenderRoundStats(SDL_Renderer *rend) {
         { SDL_FRect fr = ToFRect(statsChatBtn); SDL_RenderRect(rend, &fr); }
         SDL_SetRenderDrawBlendMode(rend, SDL_BLENDMODE_NONE);
         cell(chattingMode ? "SEND" : "CHAT", statsChatBtn.x + 24, statsChatBtn.y + 4, hdr);
+        if (tournament) {
+            statsTournamentBtn = {statsChatBtn.x + statsChatBtn.w + 8,
+                                  statsChatBtn.y, 112, statsChatBtn.h};
+            SDL_SetRenderDrawColor(rend, 255, 218, 92, 200);
+            { SDL_FRect fr = ToFRect(statsTournamentBtn); SDL_RenderRect(rend, &fr); }
+            cell("BRACKET", statsTournamentBtn.x + 20,
+                 statsTournamentBtn.y + 4, hdr);
+        } else {
+            statsTournamentBtn = {0, 0, 0, 0};
+        }
     } else {
         statsChatBtn = {0, 0, 0, 0};
+        statsTournamentBtn = {0, 0, 0, 0};
     }
 }
 
@@ -686,6 +700,13 @@ void BubbleGame::Render() {
     // Process network messages if this is a network game
     if (currentSettings.networkGame) {
         ProcessNetworkMessages();
+        NetworkClient* net = NetworkClient::Existing();
+        if (IsTournamentRound() && net &&
+            net->tournaments.assignment.tournament &&
+            net->tournaments.assignment.returned) {
+            QuitToTitle();
+            return;
+        }
 
         // Send ping every second to prevent idle timeout (60 FPS = 60 frames/sec)
         // This matches the original Perl implementation which sends 'p' every second

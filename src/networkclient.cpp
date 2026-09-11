@@ -368,6 +368,9 @@ void NetworkClient::Disconnect() {
         sockfd = -1;
     }
     state = DISCONNECTED;
+    tournaments.Reset();
+    tournamentReceivedAt.clear();
+    tournamentError.clear();
     delete currentGame;
     currentGame = nullptr;
     gameList.clear();
@@ -633,12 +636,13 @@ bool NetworkClient::KickPlayer(const char* nick) {
     return SendCommand(cmd);
 }
 
-bool NetworkClient::SendOptions(bool chainReaction, bool continueWhenLeave, bool singleTarget, int victoriesLimit, const int playerColors[5], const bool noCompress[5], const bool aimGuide[5], bool mouseEnabled, GameMode gameMode, int raceTarget, int timedSeconds, AttackMode attackMode, const int playerTeams[5], int teamCount) {
-    // Send game options using SETOPTIONS command (original line 4468-4474)
-    // Format: SETOPTIONS CHAINREACTION:0/1,...,NUMCOLORS_P1:N,...,NUMCOLORS_P5:N
+std::string NetworkClient::BuildOptionsBlob(bool chainReaction, bool continueWhenLeave, bool singleTarget, int victoriesLimit, const int playerColors[5], const bool noCompress[5], const bool aimGuide[5], bool mouseEnabled, GameMode gameMode, int raceTarget, int timedSeconds, AttackMode attackMode, const int playerTeams[5], int teamCount) {
+    // Format: CHAINREACTION:0/1,...,NUMCOLORS_P1:N,...,NUMCOLORS_P5:N
+    // (SendOptions below prefixes this with "SETOPTIONS "; a caller sending
+    // it as a TOUR CREATE argument instead prefixes "CREATE ".)
     char cmd[768];
     snprintf(cmd, sizeof(cmd),
-             "SETOPTIONS CHAINREACTION:%d,CONTINUEGAMEWHENPLAYERSLEAVE:%d,SINGLEPLAYERTARGETTING:%d,VICTORIESLIMIT:%d"
+             "CHAINREACTION:%d,CONTINUEGAMEWHENPLAYERSLEAVE:%d,SINGLEPLAYERTARGETTING:%d,VICTORIESLIMIT:%d"
              ",NUMCOLORS_P1:%d,NUMCOLORS_P2:%d,NUMCOLORS_P3:%d,NUMCOLORS_P4:%d,NUMCOLORS_P5:%d"
              ",NOCOMPRESS_P1:%d,NOCOMPRESS_P2:%d,NOCOMPRESS_P3:%d,NOCOMPRESS_P4:%d,NOCOMPRESS_P5:%d"
              ",AIMGUIDE_P1:%d,AIMGUIDE_P2:%d,AIMGUIDE_P3:%d,AIMGUIDE_P4:%d,AIMGUIDE_P5:%d"
@@ -678,8 +682,17 @@ bool NetworkClient::SendOptions(bool chainReaction, bool continueWhenLeave, bool
              attackMode == AttackMode::Off ? 1 : 0,
              attackMode == AttackMode::Canceling ? 1 : 0,
              teamCount, playerTeams[0], playerTeams[1], playerTeams[2], playerTeams[3], playerTeams[4]);
-    SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION, "Sending game options: %s", cmd);
-    return SendCommand(cmd);
+    return cmd;
+}
+
+bool NetworkClient::SendOptions(bool chainReaction, bool continueWhenLeave, bool singleTarget, int victoriesLimit, const int playerColors[5], const bool noCompress[5], const bool aimGuide[5], bool mouseEnabled, GameMode gameMode, int raceTarget, int timedSeconds, AttackMode attackMode, const int playerTeams[5], int teamCount) {
+    // Send game options using SETOPTIONS command (original line 4468-4474)
+    std::string blob = BuildOptionsBlob(chainReaction, continueWhenLeave, singleTarget, victoriesLimit,
+        playerColors, noCompress, aimGuide, mouseEnabled, gameMode, raceTarget, timedSeconds,
+        attackMode, playerTeams, teamCount);
+    std::string cmd = "SETOPTIONS " + blob;
+    SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION, "Sending game options: %s", cmd.c_str());
+    return SendCommand(cmd.c_str());
 }
 
 #ifndef __WASM_PORT__
@@ -1014,92 +1027,38 @@ bool NetworkClient::ProcessIncomingData() {
         memcpy(recvBuffer + recvBufferLen, tempBuffer, received);
         recvBufferLen += received;
 
-        if (state == IN_GAME) {
-            // In-game: binary protocol {id byte}{msg}\n
-            int processed = 0;
-            while (processed < recvBufferLen) {
-                // Look for newline
-                int msgEnd = -1;
-                for (int i = processed; i < recvBufferLen; i++) {
-                    if (recvBuffer[i] == '\n') {
-                        msgEnd = i;
-                        break;
-                    }
-                }
-
-                if (msgEnd == -1) {
-                    // No complete message yet
-                    break;
-                }
-
-                // Extract message: first byte is sender ID, rest is message
-                if (msgEnd > processed) {
-                    unsigned char senderId = (unsigned char)recvBuffer[processed];
-                    int msgStart = processed + 1;
-                    int msgLen = msgEnd - msgStart;
-
-                    // recvBuffer is larger than gameMsg, so this bound is what
-                    // keeps a long line from running off the end of a stack
-                    // buffer. In-game frames are a few bytes; anything near this
-                    // is not one, so skip it rather than truncate it into
-                    // something that parses as a different message.
-                    if (msgLen >= BUFFER_SIZE) {
-                        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
-                                    "Dropping oversized in-game message from player %d (%d bytes)",
-                                    (int)senderId, msgLen);
-                    } else if (msgLen > 0) {
-                        char gameMsg[BUFFER_SIZE];
-                        memcpy(gameMsg, recvBuffer + msgStart, msgLen);
-                        gameMsg[msgLen] = '\0';
-
-                        SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION,
-                                     "Game message from player %d: %s", (int)senderId, gameMsg);
-
-                        // Add to message queue for game to process
-                        char fullMsg[BUFFER_SIZE];
-                        snprintf(fullMsg, sizeof(fullMsg), "GAMEMSG:%d:%s", (int)senderId, gameMsg);
-                        messageQueue.push_back(std::string(fullMsg));
-                    }
-                }
-
-                processed = msgEnd + 1;
-            }
-
-            // Move remaining data to start of buffer
-            if (processed > 0) {
-                int remaining = recvBufferLen - processed;
-                if (remaining > 0) {
-                    memmove(recvBuffer, recvBuffer + processed, remaining);
-                }
-                recvBufferLen = remaining;
-            }
-        } else {
-            // Lobby: text protocol FB/1.2 format
-            recvBuffer[recvBufferLen] = '\0';
-
-            // Process complete lines
-            char* lineStart = recvBuffer;
-            char* lineEnd;
-
-            while ((lineEnd = strchr(lineStart, '\n')) != nullptr) {
-                *lineEnd = '\0';
-                ParseMessage(lineStart);
-                lineStart = lineEnd + 1;
-            }
-
-            // Move remaining data to start of buffer
-            int remaining = recvBuffer + recvBufferLen - lineStart;
-            if (remaining > 0) {
-                memmove(recvBuffer, lineStart, remaining);
-                recvBufferLen = remaining;
-            } else {
-                recvBufferLen = 0;
-            }
-        }
+        ConsumeIncomingLines();
     }
     return true;  // Successfully read and processed data
 }
 #endif // __WASM_PORT__ (Update, ProcessIncomingData)
+
+bool NetworkClient::TournamentCommand(const std::string& operation) {
+    tournamentError.clear();
+    return SendCommand(("TOUR " + operation).c_str());
+}
+
+void NetworkClient::ConsumeIncomingLines() {
+    int consumed = 0;
+    while (consumed < recvBufferLen) {
+        const void* newline = memchr(recvBuffer + consumed, '\n', recvBufferLen - consumed);
+        if (!newline) break;
+        const int end = static_cast<const char*>(newline) - recvBuffer;
+        std::string line(recvBuffer + consumed, end - consumed);
+        if (!line.empty() && line.back() == '\r') line.pop_back();
+        // Control messages remain text even while a gameplay room is active.
+        // Classify each line independently: a preceding line can change state.
+        if (line.compare(0, 3, "FB/") == 0) ParseMessage(line.c_str());
+        else if (state == IN_GAME && line.size() > 1 && line.size() < BUFFER_SIZE) {
+            QueueGameMessage("GAMEMSG:" + std::to_string(static_cast<unsigned char>(line[0])) + ":" + line.substr(1));
+        }
+        consumed = end + 1;
+    }
+    if (consumed) {
+        recvBufferLen -= consumed;
+        memmove(recvBuffer, recvBuffer + consumed, recvBufferLen);
+    }
+}
 
 void NetworkClient::ParseMessage(const char* message) {
     if (strlen(message) == 0) return;
@@ -1116,6 +1075,13 @@ void NetworkClient::HandleServerResponse(const std::string& response) {
         size_t pushPos = response.find("PUSH:") + 6; // Skip "PUSH: "
         std::string pushMsg = response.substr(pushPos);
         HandlePushMessage(pushMsg);
+        return;
+    }
+
+    if (IsResponseForCommand(response, "TOUR")) {
+        const auto colon = response.find(": ");
+        const auto result = colon == std::string::npos ? "BAD_RESPONSE" : response.substr(colon + 2);
+        if (result != "OK" && result != "UNKNOWN_COMMAND") tournamentError = result;
         return;
     }
 
@@ -1162,6 +1128,7 @@ void NetworkClient::HandleServerResponse(const std::string& response) {
             playerNick = pendingNickTry;
             myNickname = pendingNickTry;
             pendingNick = false;
+            TournamentCommand("CAPS");
         } else if (pendingCreate && IsResponseForCommand(response, "CREATE")) {
             SDL_Log("CREATE confirmed by server (pendingCreate=true): game '%s'", pendingCreateNick.c_str());
             state = IN_LOBBY;
@@ -1324,6 +1291,40 @@ void NetworkClient::HandleServerResponse(const std::string& response) {
 void NetworkClient::HandlePushMessage(const std::string& pushMsg) {
     SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION, "PUSH message: %s", pushMsg.c_str());
 
+    if (pushMsg.compare(0, 5, "TOUR_") == 0) {
+        auto previous = tournaments.assignment;
+        std::map<int, int> revisions;
+        for (const auto& item : tournaments.snapshots) revisions[item.first] = item.second.revision;
+        if (!tournaments.Apply(pushMsg)) {
+            tournamentError = "Invalid tournament update";
+            return;
+        }
+        for (const auto& item : tournaments.snapshots)
+            if (revisions[item.first] != item.second.revision) tournamentReceivedAt[item.first] = SDL_GetTicks();
+        const auto& a = tournaments.assignment;
+        if (pushMsg.compare(0, 12, "TOUR_ASSIGN:") == 0) {
+            if (myNickname != a.nickA && myNickname != a.nickB) { tournaments.assignment = previous; return; }
+            delete currentGame;
+            currentGame = new GameRoom();
+            currentGame->creator = a.nickA;
+            currentGame->maxPlayers = 2;
+            currentGame->started = false;
+            for (const auto& name : {a.nickA, a.nickB}) { NetworkPlayer p{}; p.nick = name; currentGame->players.push_back(p); }
+            state = IN_LOBBY;
+            messageQueue.clear(); syncQueue.clear(); playerIdToNick.clear();
+#ifndef __WASM_PORT__
+            pendingGameStart = false;
+#endif
+        } else if (a.returned && !previous.returned) {
+            state = IN_LOBBY;
+            delete currentGame; currentGame = nullptr;
+#ifndef __WASM_PORT__
+            pendingGameStart = false;
+#endif
+            messageQueue.clear(); syncQueue.clear(); playerIdToNick.clear();
+        }
+        return;
+    }
     if (pushMsg.find("SERVER_READY") == 0) {
         // Server ready, extract server name
         SDL_Log("Server ready");

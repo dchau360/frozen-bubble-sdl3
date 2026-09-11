@@ -6,6 +6,9 @@ CMakeLists.txt.user
 # Packaged WASM output, produced by the workflow's packaging step and by
 # anyone reproducing the reload test locally.
 /dist-wasm
+# Packaged macOS .app output, produced by the workflow's packaging step and
+# by anyone reproducing it locally (see CI's build-macos job).
+/dist-macos
 /.vscode
 /.claude
 /.cache
@@ -53,3 +56,7 @@ android/app/google-services.json
 # Output of tools/build-site.py (the GitHub Pages site, rendered at deploy time)
 _site/
 .DS_Store
+
+# Scratch working notes for in-progress feature work (superpowers SDD
+# ledgers) -- internal process artifacts, not project documentation.
+.superpowers/

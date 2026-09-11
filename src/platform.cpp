@@ -297,7 +297,14 @@ bool DeviceHasTouchscreen() {
 // limit.
 const char* const kDiscordInviteUrl = "https://discord.gg/uE4dq8fqGW";
 
+#ifdef FROZEN_BUBBLE_TEST_ACCESS
+bool testForceDiscordInviteOff = false;
+#endif
+
 bool HasDiscordInvite() {
+#ifdef FROZEN_BUBBLE_TEST_ACCESS
+    if (testForceDiscordInviteOff) return false;
+#endif
     return kDiscordInviteUrl != nullptr && kDiscordInviteUrl[0] != '\0';
 }
 

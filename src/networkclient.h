@@ -33,6 +33,7 @@
 #include "socket_compat.h"
 #endif
 #include "attackmode.h"  // AttackMode is used below regardless of platform
+#include "tournamentstate.h"
 #include "gamemode.h"    // GameMode likewise -- see its header comment on the cycle
 
 #define PROTO_MAJOR 1
@@ -216,6 +217,12 @@ public:
     const std::string& GetHost() const { return connectedHost; }
     int GetPort() const { return connectedPort; }
 
+    TournamentState tournaments;
+    std::map<int, Uint64> tournamentReceivedAt;
+    std::string tournamentError;
+    bool TournamentCommand(const std::string& operation);
+    void ConsumeIncomingLines();
+
     // Protocol commands
     bool SendNick(const char* nickname);
     bool SendGeoLoc(const char* location);
@@ -309,6 +316,15 @@ public:
 
     // Send game options to other players (host only)
     bool SendOptions(bool chainReaction, bool continueWhenLeave, bool singleTarget, int victoriesLimit, const int playerColors[5], const bool noCompress[5], const bool aimGuide[5], bool mouseEnabled, GameMode gameMode, int raceTarget, int timedSeconds, AttackMode attackMode, const int playerTeams[5], int teamCount);
+
+    // The same comma-separated KEY:value ruleset blob SendOptions() sends
+    // after "SETOPTIONS ", built standalone (no leading command word, no
+    // network I/O) so a caller that isn't editing a live room's options --
+    // MainMenu::CreateTournament(), which needs it as the argument to
+    // "TOUR CREATE " -- can reuse the exact same encoding instead of
+    // duplicating this format string. See server/tournament.c's
+    // tournament_create() and game_tournament_start() for what reads it.
+    static std::string BuildOptionsBlob(bool chainReaction, bool continueWhenLeave, bool singleTarget, int victoriesLimit, const int playerColors[5], const bool noCompress[5], const bool aimGuide[5], bool mouseEnabled, GameMode gameMode, int raceTarget, int timedSeconds, AttackMode attackMode, const int playerTeams[5], int teamCount);
 
     // Received options from host (updated when SETOPTIONS push arrives)
     bool pendingOptions = false;

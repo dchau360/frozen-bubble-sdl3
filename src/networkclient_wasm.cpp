@@ -161,6 +161,10 @@ void NetworkClient::Disconnect() {
         s_handle = nullptr;
     }
     state = DISCONNECTED;
+    tournaments.Reset();
+    tournamentReceivedAt.clear();
+    tournamentError.clear();
+    delete currentGame;
     currentGame = nullptr;
     // pendingNick added alongside native's Disconnect() gaining the same
     // reset (async networking handoff, stage 1b) -- NICK is now async on
@@ -232,58 +236,7 @@ void NetworkClient::HandleWebSocketMessage(const char* data, int numBytes) {
     memcpy(recvBuffer + recvBufferLen, data, numBytes);
     recvBufferLen += numBytes;
 
-    if (state == IN_GAME) {
-        // In-game: binary protocol {senderId byte}{msg}\n
-        int processed = 0;
-        while (processed < recvBufferLen) {
-            int msgEnd = -1;
-            for (int i = processed; i < recvBufferLen; i++) {
-                if (recvBuffer[i] == '\n') { msgEnd = i; break; }
-            }
-            if (msgEnd == -1) break;  // No complete message yet -- wait for more
-
-            if (msgEnd > processed) {
-                unsigned char senderId = (unsigned char)recvBuffer[processed];
-                int msgStart = processed + 1;
-                int msgLen = msgEnd - msgStart;
-                if (msgLen >= BUFFER_SIZE) {
-                    SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
-                                "Dropping oversized in-game message from player %d (%d bytes)",
-                                (int)senderId, msgLen);
-                } else if (msgLen > 0) {
-                    char gameMsg[BUFFER_SIZE];
-                    memcpy(gameMsg, recvBuffer + msgStart, msgLen);
-                    gameMsg[msgLen] = '\0';
-                    char fullMsg[BUFFER_SIZE];
-                    snprintf(fullMsg, sizeof(fullMsg), "GAMEMSG:%d:%s", (int)senderId, gameMsg);
-                    QueueGameMessage(std::string(fullMsg));
-                }
-            }
-            processed = msgEnd + 1;
-        }
-        int remaining = recvBufferLen - processed;
-        if (remaining > 0) memmove(recvBuffer, recvBuffer + processed, remaining);
-        recvBufferLen = remaining;
-    } else {
-        // Lobby/pre-game: text protocol, newline-delimited
-        recvBuffer[recvBufferLen] = '\0';
-        char* lineStart = recvBuffer;
-        char* lineEnd;
-        while ((lineEnd = strchr(lineStart, '\n')) != nullptr) {
-            *lineEnd = '\0';
-            size_t lineLen = lineEnd - lineStart;
-            if (lineLen > 0 && lineStart[lineLen - 1] == '\r') lineStart[lineLen - 1] = '\0';
-            ParseMessage(lineStart);
-            lineStart = lineEnd + 1;
-        }
-        int remaining = (int)(recvBuffer + recvBufferLen - lineStart);
-        if (remaining > 0) {
-            memmove(recvBuffer, lineStart, remaining);
-            recvBufferLen = remaining;
-        } else {
-            recvBufferLen = 0;
-        }
-    }
+    ConsumeIncomingLines();
 }
 
 void NetworkClient::Update() {

@@ -207,8 +207,10 @@ class ServerDiscordAlertTest(_FbServerTestBase):
         # server an event it acts on at once, and the fd is gone before the
         # redial lands -- no ghost, nothing to evict. So leave the socket open
         # and say nothing until conn_recently_active() stops vouching for it,
-        # which is a 2-second window (server/net.c).
-        time.sleep(2.5)
+        # which is a 10-second window (server/net.c, widened 2026-09-11 to
+        # absorb startup jitter across freshly-launched clients that
+        # collide on the same default nickname -- see the comment there).
+        time.sleep(10.5)
 
         b = self.connect()
         b.sendall(b"FB/1.3 NICK flappy\n")

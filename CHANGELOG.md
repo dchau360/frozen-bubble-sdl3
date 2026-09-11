@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- **Online tournaments** — single-elimination brackets for 4–16 human entrants, byes for non-power-of-two counts up to 16, best of three per match. Create or join one from the online lobby's new **Tournaments** row; a locked ruleset (Classic, two players, 8 colors, chain reactions off) applies to every match so no per-room setting can drift the bracket partway through. Leaving or disconnecting mid-tournament forfeits the current and any future match. Conflicting result reports leave a match **disputed** until a server operator resolves it — see `SetupServer.md`'s "Online Tournaments" section.
 - **The privacy policy now names Solina AI LLC as the publisher and data
   controller for the Google Play build** (effective date moved to
   September 11, 2026). It previously said the project had "no company behind

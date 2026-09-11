@@ -46,6 +46,7 @@ pkg_check_modules(GLIB2 REQUIRED IMPORTED_TARGET glib-2.0>=2.10)
 add_executable(fb-server
     fb-server.c
     game.c
+    tournament.c
     log.c
     net.c
     tools.c
