@@ -1318,7 +1318,7 @@ void MainMenu::NetPanelLobbyActionsRender() {
                                (float)(discordRect.x + discordRect.w), (float)(discordRect.y - 3));
                 if (discordSel) drawSelection(discordRect);
                 AddPanelTapRow(lobbyDiscordIdx, discordRect);
-                drawLabel("Join Discord", discordRect.x + 4, discordRect.y + 3,
+                drawLabel("Join Discord server", discordRect.x + 4, discordRect.y + 3,
                           discordSel ? textGold : textMain);
             }
         }
@@ -1879,7 +1879,7 @@ void MainMenu::ServerListPanelRender(bool isLAN) {
         // Label short enough to survive the 404px row at this type size; the
         // full sentence lives in the sidebar, which is where every other row
         // on this panel explains itself too.
-        discordList.Row(discordIdx, "Join our Discord", "connect alerts");
+        discordList.Row(discordIdx, "Join Discord server", "connect alerts");
         discordList.End(rend, panelText, nullptr, tap);
     }
 
@@ -1925,13 +1925,13 @@ void MainMenu::ServerListPanelRender(bool isLAN) {
     };
 
     if (showDiscord && menuIndex == discordIdx) {
-        // The row label only has room for "Join our Discord"; this is where
-        // the player actually finds out what joining it gets them. Hand-
-        // wrapped -- sidebarLine draws one unwrapped line at a time, and the
-        // sidebar is 208px wide.
-        sidebarLine("Join our Discord", menulist::kText, 16);
-        sidebarLine("server to get alerts", menulist::kMuted);
-        sidebarLine("when online players", menulist::kMuted);
+        // The row label only has room for "Join Discord server"; this is
+        // where the player actually finds out what joining it gets them.
+        // Hand-wrapped -- sidebarLine draws one unwrapped line at a time,
+        // and the sidebar is 208px wide.
+        sidebarLine("Join Discord server", menulist::kText, 16);
+        sidebarLine("to get alerts when", menulist::kMuted);
+        sidebarLine("online players", menulist::kMuted);
         sidebarLine("connect.", menulist::kMuted);
         sidebarLine("Opens in your browser.", menulist::kMuted, 13);
     } else if (menuIndex >= 1 && menuIndex <= (int)servers.size()) {
