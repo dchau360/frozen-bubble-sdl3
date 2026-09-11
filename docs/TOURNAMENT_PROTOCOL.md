@@ -58,7 +58,7 @@ On countdown completion, send to each assigned client, before GAME_CAN_START:
 
 The first entrant is gameplay leader. Client constructs its currentGame with those two names, maxPlayers=2, creator=aNick, sets isLeader by own nickname, clears old gameplay/sync queues, and prepares a fresh game. Server sends normal GAME_CAN_START and runs existing OK_GAME_START/LEADER_CHECK_GAME_START handshake. Reserved rooms do not appear joinable to outsiders. Reuse bubble level generation/sync and ordinary gameplay messages inside this room.
 
-Locked preset: Classic, two players, two wins per series, chain reactions off, eight colors per player, compression on, aim guide off, mouse/touch aiming on, teams off, default attack mode. Client displays series score from tournament snapshots (a fresh game room has no series history).
+Structurally fixed regardless of `CREATE`'s options: two players, two wins per series (best-of-three across separate rooms, one round per room), teams off, mouse/touch aiming on. Game mode, attack mode, chain reactions, aim guide, and colors instead follow whatever ruleset the organizer chose in `CREATE`'s options blob (server zero-initialized defaults if it carried none), applied identically to every match's room — these are not locked, and a client must not re-force them at game start. Client displays series score from tournament snapshots (a fresh game room has no series history).
 
 Normal F messages can convey gameplay outcome to the peer but never score the tournament or emit legacy round-result announcements from reserved rooms. Each client sends REPORT when it observes the result. Ignore legacy n in reserved rooms. On result commit/dispute/forfeit, retire that game's reserved room without departure-result side effects and send:
 
