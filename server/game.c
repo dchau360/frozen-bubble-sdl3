@@ -72,6 +72,21 @@ struct game
                               * setoptions() below. */
         int result_posted;  /* guards against posting the same round twice;
                               * reset on 'n' (ready for next round). */
+
+        /* Rounds won so far this room, and each seat's team -- both indexed
+         * the same as players_nick[]/players_id[] and shifted the same way
+         * on departure (see player_part_game_). Used by report_round_result()
+         * below to announce win-counts, top scorers and team wins to the
+         * lobby; never read by anything that affects actual gameplay. */
+        int players_wins[MAX_PLAYERS_PER_GAME];
+        int team_count;               /* TEAMCOUNT from the room's last SETOPTIONS,
+                                        * or 0 if none was ever set (no teams). */
+        int players_team[MAX_PLAYERS_PER_GAME]; /* kNoTeam(0) or 1..5; only slots
+                                        * 0-4 are ever set by parse_teams() below --
+                                        * SETOPTIONS has no PLAYERTEAM_Pn field past
+                                        * P5, same cap NUMCOLORS_Pn/AIMGUIDE_Pn already
+                                        * have (src/mainmenu_teampanel.cpp). */
+
         int game_id;        /* opaque, monotonically-assigned key identifying
                               * this room to the relay across every round it
                               * plays -- see next_game_id() below. Lets the
@@ -317,6 +332,14 @@ static void create_game(int fd, char* nick, int max_players)
         g->max_players = max_players;
         g->game_mode = 0;      /* Classic, until/unless SETOPTIONS says otherwise */
         g->result_posted = 0;
+        {
+                int k;
+                for (k = 0; k < MAX_PLAYERS_PER_GAME; k++) {
+                        g->players_wins[k] = 0;
+                        g->players_team[k] = 0;
+                }
+        }
+        g->team_count = 0;
         g->game_id = next_game_id++;
         games = g_list_append(games, g);
         open_players = g_list_remove(open_players, GINT_TO_POINTER(fd));
@@ -558,6 +581,30 @@ static int parse_game_mode(const char* options)
         return (mode >= 0 && mode <= 3) ? mode : 0;
 }
 
+/* Extract TEAMCOUNT and PLAYERTEAM_P1..P5 from the room's SETOPTIONS string
+ * into g->team_count / g->players_team[0..4], the same way parse_game_mode()
+ * above pulls out GAMEMODE. Both keys already ride along on every SETOPTIONS
+ * (src/networkclient.cpp's SendOptions) -- the server has just never read
+ * them before now, only relayed them opaquely to other clients, same as it
+ * still does. A missing key or an out-of-range value both fall back to "no
+ * teams"/"no team" (0/kNoTeam): a value this server doesn't recognize should
+ * degrade to untracked, not crash or index players_team[] out of range. */
+static void parse_teams(struct game* g, const char* options)
+{
+        const char* key = strstr(options, "TEAMCOUNT:");
+        int tc = key ? atoi(key + strlen("TEAMCOUNT:")) : 0;
+        g->team_count = (tc >= 0 && tc <= 5) ? tc : 0;
+
+        int p;
+        for (p = 0; p < 5; p++) {
+                char name[16];
+                snprintf(name, sizeof(name), "PLAYERTEAM_P%d:", p + 1);
+                key = strstr(options, name);
+                int t = key ? atoi(key + strlen(name)) : 0;
+                g->players_team[p] = (t >= 0 && t <= 5) ? t : 0;
+        }
+}
+
 static void setoptions(int fd, char* options)
 {
         struct game * g = find_game_by_fd(fd);
@@ -566,6 +613,7 @@ static void setoptions(int fd, char* options)
                         int i;
                         char* msg;
                         g->game_mode = parse_game_mode(options);
+                        parse_teams(g, options);
                         send_ok(fd, "SETOPTIONS");
                         msg = asprintf_("OPTIONS: %s,PROTOCOLLEVEL:%d", options, min_protocol_level(g));
                         for (i = 0; i < g->players_number; i++)
@@ -1214,6 +1262,126 @@ static void conn_to_terminate_helper(gpointer data, gpointer user_data)
         conn_terminated(GPOINTER_TO_INT(data), "system error on send (probably peer shutdown or try again)");
 }
 
+/* Seat holding this exact nick, or -1. Unlike find_game_by_nick_aux (which
+ * only ever checks slot 0, the room's creator), this scans every seat --
+ * report_round_result() below needs to resolve an arbitrary winner claim to
+ * a seat, not just ask whether the creator holds a name. */
+static int find_player_slot_by_nick(const struct game* g, const char* nick)
+{
+        int i;
+        for (i = 0; i < g->players_number; i++)
+                if (streq(g->players_nick[i], nick))
+                        return i;
+        return -1;
+}
+
+/* "Server: <text>" pushed to every connection sitting in the lobby right
+ * now (open_players) -- the same scope talk()'s own server-wide branch uses
+ * when its sender isn't seated in a game. Reuses ok_talk purely so this
+ * renders identically to a real chat line on every client; "Server" is not
+ * a nick anyone can hold (is_nick_ok forbids the ':' TALK's own parser
+ * would need to see here, but nothing stops a player literally naming
+ * themselves "Server" -- same ambiguity join/leave system messages already
+ * carry under a real nick, not a new one this introduces). */
+static void broadcast_serverwide(const char* text)
+{
+        char buf[1000];
+        snprintf(buf, sizeof(buf), ok_talk, "Server", text);
+        g_list_foreach(open_players, talk_serverwide_aux, buf);
+}
+
+/* Up to 5 players with at least one win this match, most wins first, as
+ * "nick (n), nick (n)". Ties break by room-slot order (join order) rather
+ * than needing a stable sort -- deterministic without extra bookkeeping.
+ * Win-count, not bubbles popped or any other per-round tally, is this
+ * server's only notion of "score": it already tracks it (players_wins[]
+ * below) from the 'F' opcode it was sniffing anyway, where popped-bubble
+ * counts exist only in the client-to-client 'S' stats opcode this server
+ * has never parsed and still doesn't. */
+static void top_scorers_line(const struct game* g, char* out, size_t outsz)
+{
+        int order[MAX_PLAYERS_PER_GAME];
+        int i, j, n = g->players_number;
+        int shown = 0;
+        for (i = 0; i < n; i++) order[i] = i;
+        for (i = 0; i < n - 1; i++)
+                for (j = i + 1; j < n; j++)
+                        if (g->players_wins[order[j]] > g->players_wins[order[i]]) {
+                                int tmp = order[i]; order[i] = order[j]; order[j] = tmp;
+                        }
+        out[0] = '\0';
+        for (i = 0; i < n && shown < 5; i++) {
+                char entry[80];
+                if (g->players_wins[order[i]] <= 0)
+                        break;  /* sorted descending -- the rest are 0 too */
+                snprintf(entry, sizeof(entry), "%s%s (%d)", shown > 0 ? ", " : "",
+                         g->players_nick[order[i]], g->players_wins[order[i]]);
+                strconcat(out, entry, outsz);
+                shown++;
+        }
+}
+
+/* Announces one round's outcome to the lobby: who won (or that it was a
+ * draw), their new win-count, the team and its roster on a team win, and
+ * the match's top scorers so far. Called once per round from the same 'F'
+ * sniff that already fires the Discord alert (process_msg_prio_ below),
+ * under the same g->result_posted guard -- this never doubles up with it,
+ * it just also happens to fire from the same trigger. winner_nick carries
+ * the same trust posture discordalert.h documents for that field: it is
+ * exactly what the reporting client's payload said, checked here only
+ * against the room's actual roster (find_player_slot_by_nick), never
+ * against is_nick_ok. A claim that matches no seated player still gets
+ * announced -- just without a win-count or team, since there is nothing
+ * real to attach one to. */
+static void report_round_result(struct game* g, const char* winner_nick)
+{
+        char headline[256];
+        char scorers[256];
+        int wslot = winner_nick ? find_player_slot_by_nick(g, winner_nick) : -1;
+
+        if (wslot >= 0)
+                g->players_wins[wslot]++;
+
+        if (!winner_nick) {
+                snprintf(headline, sizeof(headline), "Round over: a draw.");
+        } else {
+                int wteam = (wslot >= 0) ? g->players_team[wslot] : 0;
+                if (g->team_count > 0 && wteam > 0) {
+                        /* Name every player who shares the winner's team, not just
+                         * the reporting client -- "the team" means all of them.
+                         * Only slots 0-4 ever carry a team number (parse_teams()),
+                         * so a >5-player room's remaining seats are left out of the
+                         * roster the same way they are left out of team assignment
+                         * itself. */
+                        char teammates[256] = "";
+                        int i, first = 1;
+                        for (i = 0; i < g->players_number && i < 5; i++) {
+                                if (g->players_team[i] != wteam) continue;
+                                if (!first) strconcat(teammates, ", ", sizeof(teammates));
+                                strconcat(teammates, g->players_nick[i], sizeof(teammates));
+                                first = 0;
+                        }
+                        snprintf(headline, sizeof(headline),
+                                 "Round over: Team %d wins (%s)!", wteam, teammates);
+                } else if (wslot >= 0) {
+                        snprintf(headline, sizeof(headline),
+                                 "Round over: %s wins! (win #%d this match)",
+                                 winner_nick, g->players_wins[wslot]);
+                } else {
+                        snprintf(headline, sizeof(headline), "Round over: %s wins!", winner_nick);
+                }
+        }
+
+        broadcast_serverwide(headline);
+
+        top_scorers_line(g, scorers, sizeof(scorers));
+        if (scorers[0]) {
+                char line[300];
+                snprintf(line, sizeof(line), "Top scorers: %s", scorers);
+                broadcast_serverwide(line);
+        }
+}
+
 void process_msg_prio_(int fd, char* msg, ssize_t len, struct game* g)
 {
         GList * conn_to_terminate = NULL;
@@ -1270,6 +1438,7 @@ void process_msg_prio_(int fd, char* msg, ssize_t len, struct game* g)
                                 build_roster_csv(g, roster, sizeof(roster));
                                 discordalert_fire_result_event(g->game_id, roster, winner[0] ? winner : NULL, g->game_mode);
                         }
+                        report_round_result(g, winner[0] ? winner : NULL);
                         g->result_posted = 1;
                 } else if (len >= 2 && msg[1] == 'n') {
                         g->result_posted = 0;
@@ -1370,6 +1539,8 @@ void player_part_game_(int fd, char* reason)
                         g->players_nick[j] = g->players_nick[j + 1];
                         g->players_started[j] = g->players_started[j + 1];
                         g->players_id[j] = g->players_id[j + 1];
+                        g->players_wins[j] = g->players_wins[j + 1];
+                        g->players_team[j] = g->players_team[j + 1];
                 }
                 g->players_number--;
 

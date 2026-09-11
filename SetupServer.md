@@ -292,6 +292,14 @@ internal stats, but that inference is unreliable — there's no way to tell a
 rage-quit from a connection drop — and misattributing an outcome to a named
 player in public would be worse than just not posting one.
 
+**This is independent of the in-game lobby announcement.** Every server, not
+just one with a relay configured, also posts the same round's result as
+ordinary lobby chat — visible to anyone sitting in the lobby, not players off
+in another room — with the round's win-count and top-5 scorers, and (on a
+team win) the team and everyone on it. Nothing to configure: it fires from
+the same round-end regardless of whether `FB_SERVER_DISCORD_RELAY` is even
+set. See `CLAUDE.md`'s "Round-result lobby broadcast" for the details.
+
 > **One thread per room, not one message per round.** By default a busy
 > server's round-results are flat top-level messages, same as a join alert —
 > fine at first, but a long-lived room can clutter the channel with one

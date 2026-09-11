@@ -535,6 +535,12 @@ if(BUILD_TESTING AND NOT EMSCRIPTEN AND NOT ANDROID AND NOT IOS)
         # sidecar.
         add_test(NAME server-discordalert-test
             COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tests/server_discordalert_test.py $<TARGET_FILE:fb-server>)
+        # Same 'F' sniff as the Discord RESULT alert above, but announcing to
+        # the lobby (open_players) instead: win-count, top scorers, and a team
+        # win's roster, as the actual "TALK: Server: ..." text an idle lobby
+        # socket receives.
+        add_test(NAME server-round-result-lobby-test
+            COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tests/server_round_result_lobby_test.py $<TARGET_FILE:fb-server>)
         # Binds the hardcoded UDP discovery port, so it cannot run concurrently
         # with another fb-server; it skips when that port is already in use.
         add_test(NAME server-udp-probe-test
