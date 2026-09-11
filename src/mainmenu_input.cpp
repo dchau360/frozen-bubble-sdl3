@@ -2443,12 +2443,31 @@ void MainMenu::MenuEscapeKey() {
                                 lastListRequest = SDL_GetTicks();
                                 netClient->AddStatusMessage("*** Leaving game...");
                             } else {
-                                // Not in a game - disconnect from server
-                                showingNetPanel = false;
+                                // Not in a game -- disconnect from this server, but
+                                // land back on the server list (mode 10) rather than
+                                // closing the whole net panel out to the main menu:
+                                // backing out of "this server's lobby" means "let me
+                                // pick a different server", not "leave NET GAME
+                                // entirely". Mirrors mode 8/9's own ESC handling
+                                // above, which already treats mode 10 as the strictly
+                                // less-committed screen to fall back to.
                                 networkInLobby = false;
+                                networkInputMode = 10;
                                 if (netClient->IsConnected()) {
                                     netClient->Disconnect();
                                 }
+                                // Same refresh the list's own 'R' key does (below),
+                                // not mode 10's full from-main-menu setup (mainmenu.cpp
+                                // case 5) -- this is "show me other servers", not
+                                // "reset every hosting option back to its default".
+                                connectErrorMsg.clear();
+                                netMenuIndex = 0;
+#ifdef __WASM_PORT__
+                                publicServers = NetworkClient::FetchPublicServers();
+#else
+                                publicServers.clear();
+                                StartPublicServerFetch();
+#endif
                             }
                         } else {
                             showingNetPanel = false;
