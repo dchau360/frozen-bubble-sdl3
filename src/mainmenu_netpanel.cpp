@@ -789,14 +789,10 @@ void MainMenu::NetPanelLobbyActionsRender() {
             for (size_t i = 2; i < actions.size() && i < 18; i++) {
                 lobbyList.Row((int)i, actions[i], "");
             }
-            // Last row, after the rooms: same offer as the NET GAME list, for
-            // the player who got as far as the lobby without going through it.
-            // A plain row rather than the pinned section the server list uses
-            // -- there is no room to pin one here, with the persistent chat
-            // dock already taking everything below y=334.
-            const int lobbyDiscordIdx = LobbyDiscordIndex(actions.size() - 2);
-            if (lobbyDiscordIdx >= 0)
-                lobbyList.Row(lobbyDiscordIdx, "Join our Discord", "connect alerts");
+            // "Join our Discord" no longer rides along here -- it's pinned to
+            // the bottom of the Online sidebar instead (see the !currentGame
+            // branch below), since that box's own list can never push it
+            // offscreen the way a growing room list could here.
             lobbyList.End(roomRenderer, panelText, nullptr, menulistTap);
         }
 
@@ -1285,11 +1281,24 @@ void MainMenu::NetPanelLobbyActionsRender() {
             int sy = menulist::DrawSidebarHeader(roomRenderer, panelText, menulist::kSidebarDocked,
                                                   "Online", menulist::kMapFillAlpha);
             const SDL_Rect& sb = menulist::kSidebarDocked;
+
+            // "Join our Discord" pins to the bottom of this box, same idea as
+            // the NET GAME server list's own pinned "Community" section
+            // (ServerListPanelRender) -- a player list can grow past however
+            // many rows fit, and a player looking for company (what this row
+            // is actually for) is exactly who would otherwise scroll it out
+            // of view. Reserved here rather than appended after the loop
+            // below, so free-player rows never draw underneath it.
+            const int lobbyDiscordIdx = LobbyDiscordIndex(actions.size() - 2);
+            const bool showDiscordHere = lobbyDiscordIdx >= 0;
+            const int kDiscordRowH = 22;
+            const int rowsBottom = sb.y + sb.h - (showDiscordHere ? kDiscordRowH : 0);
+
             std::vector<NetworkPlayer> openPlayers = netClient->GetOpenPlayers();
             int shown = 0;
             for (const NetworkPlayer& player : openPlayers) {
                 if (player.nick == netClient->GetPlayerNick()) continue;
-                if (sy + shown * 20 + 14 > sb.y + sb.h) break;
+                if (sy + shown * 20 + 14 > rowsBottom) break;
                 SDL_SetRenderDrawColor(roomRenderer, 104, 220, 151, 255);
                 SDL_FRect dot = {(float)(sb.x + 10), (float)(sy + shown * 20 + 4), 7.0f, 7.0f};
                 SDL_RenderFillRect(roomRenderer, &dot);
@@ -1299,6 +1308,19 @@ void MainMenu::NetPanelLobbyActionsRender() {
                 shown++;
             }
             if (shown == 0) drawLabel("No free players", sb.x + 10, sy, textMuted);
+
+            if (showDiscordHere) {
+                SDL_Rect discordRect = {sb.x + 6, sb.y + sb.h - kDiscordRowH, sb.w - 12, kDiscordRowH - 4};
+                bool discordSel = selectedActionIndex == lobbyDiscordIdx;
+                SDL_SetRenderDrawBlendMode(roomRenderer, SDL_BLENDMODE_BLEND);
+                SDL_SetRenderDrawColor(roomRenderer, panelEdge.r, panelEdge.g, panelEdge.b, 90);
+                SDL_RenderLine(roomRenderer, (float)discordRect.x, (float)(discordRect.y - 3),
+                               (float)(discordRect.x + discordRect.w), (float)(discordRect.y - 3));
+                if (discordSel) drawSelection(discordRect);
+                AddPanelTapRow(lobbyDiscordIdx, discordRect);
+                drawLabel("Join Discord", discordRect.x + 4, discordRect.y + 3,
+                          discordSel ? textGold : textMain);
+            }
         }
 }
 
