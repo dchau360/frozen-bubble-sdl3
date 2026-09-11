@@ -37,14 +37,36 @@ PAGES = [
 ]
 
 # (source path, path within the site)
+#
+# docs/ is not published wholesale -- only what this list names -- so a new
+# screenshot on the landing page has to be added here or it renders as a
+# broken image. The store-assets copies are the same bytes as their
+# docs/screenshots counterparts where both exist; main-menu and local-2player
+# have no docs/screenshots copy, so they come from store-assets directly.
 ASSETS = [
     (os.path.join(ROOT, "docs", "screenshots", "game-room.png"),
      os.path.join("screenshots", "game-room.png")),
+    (os.path.join(ROOT, "docs", "store-assets", "screenshot-7-main-menu.png"),
+     os.path.join("screenshots", "main-menu.png")),
+    (os.path.join(ROOT, "docs", "store-assets", "screenshot-4-local-2player.png"),
+     os.path.join("screenshots", "local-2player.png")),
+    (os.path.join(ROOT, "docs", "screenshots", "round-stats.png"),
+     os.path.join("screenshots", "round-stats.png")),
 ]
 
 # Copied through verbatim. The Google verification token must keep its exact
 # bytes and filename or the site stops being verified.
-VERBATIM = ["google034c4b2cf8d147df.html"]
+#
+# app-ads.txt authorizes who may sell ad inventory for the Android build, and
+# AdMob's crawler looks for it at the ROOT of whatever developer website the
+# app declares. It is served at the apex of dchau360.github.io from a separate
+# repo (that domain's root, which this project's Pages site is only a
+# subdirectory of), and shipping a copy here puts it at the root of the
+# fb.servequake.com deployment too -- so naming either origin as the developer
+# website satisfies the check. The line is the AdMob publisher ID and changes
+# essentially never; if it ever does, the copy in the dchau360.github.io repo
+# has to change with it.
+VERBATIM = ["google034c4b2cf8d147df.html", "app-ads.txt"]
 
 
 def main():

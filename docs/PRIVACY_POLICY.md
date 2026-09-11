@@ -1,6 +1,6 @@
 # Privacy Policy — Frozen Bubble: SDL3
 
-**Effective date:** August 25, 2026
+**Effective date:** September 11, 2026
 
 Frozen Bubble: SDL3 ("the app") is a free, open-source game
 ([GPLv2 licensed](https://github.com/dchau360/frozen-bubble-sdl3/blob/main/COPYING), source at
@@ -167,6 +167,14 @@ platform or feature is added). Material changes will be noted in
 
 ## Contact
 
-This is an independent open-source project with no company behind it.
-Questions or data-removal requests: open an issue at
+The Android build on Google Play is published by **Solina AI LLC**, a Texas
+limited liability company, which is the data controller for the purposes of
+this policy. The game itself remains an independent open-source project:
+the code is GPLv2, the original game's artwork and music belong to the
+Frozen-Bubble Team, and the company claims no ownership over either.
+
+Questions, bug reports, and privacy or data-removal requests all go to the
+public issue tracker, which the maintainer reads:
 [github.com/dchau360/frozen-bubble-sdl3/issues](https://github.com/dchau360/frozen-bubble-sdl3/issues).
+There is no support email address; using the tracker keeps answers visible
+to the next player with the same question.
