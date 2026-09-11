@@ -636,12 +636,13 @@ bool NetworkClient::KickPlayer(const char* nick) {
     return SendCommand(cmd);
 }
 
-bool NetworkClient::SendOptions(bool chainReaction, bool continueWhenLeave, bool singleTarget, int victoriesLimit, const int playerColors[5], const bool noCompress[5], const bool aimGuide[5], bool mouseEnabled, GameMode gameMode, int raceTarget, int timedSeconds, AttackMode attackMode, const int playerTeams[5], int teamCount) {
-    // Send game options using SETOPTIONS command (original line 4468-4474)
-    // Format: SETOPTIONS CHAINREACTION:0/1,...,NUMCOLORS_P1:N,...,NUMCOLORS_P5:N
+std::string NetworkClient::BuildOptionsBlob(bool chainReaction, bool continueWhenLeave, bool singleTarget, int victoriesLimit, const int playerColors[5], const bool noCompress[5], const bool aimGuide[5], bool mouseEnabled, GameMode gameMode, int raceTarget, int timedSeconds, AttackMode attackMode, const int playerTeams[5], int teamCount) {
+    // Format: CHAINREACTION:0/1,...,NUMCOLORS_P1:N,...,NUMCOLORS_P5:N
+    // (SendOptions below prefixes this with "SETOPTIONS "; a caller sending
+    // it as a TOUR CREATE argument instead prefixes "CREATE ".)
     char cmd[768];
     snprintf(cmd, sizeof(cmd),
-             "SETOPTIONS CHAINREACTION:%d,CONTINUEGAMEWHENPLAYERSLEAVE:%d,SINGLEPLAYERTARGETTING:%d,VICTORIESLIMIT:%d"
+             "CHAINREACTION:%d,CONTINUEGAMEWHENPLAYERSLEAVE:%d,SINGLEPLAYERTARGETTING:%d,VICTORIESLIMIT:%d"
              ",NUMCOLORS_P1:%d,NUMCOLORS_P2:%d,NUMCOLORS_P3:%d,NUMCOLORS_P4:%d,NUMCOLORS_P5:%d"
              ",NOCOMPRESS_P1:%d,NOCOMPRESS_P2:%d,NOCOMPRESS_P3:%d,NOCOMPRESS_P4:%d,NOCOMPRESS_P5:%d"
              ",AIMGUIDE_P1:%d,AIMGUIDE_P2:%d,AIMGUIDE_P3:%d,AIMGUIDE_P4:%d,AIMGUIDE_P5:%d"
@@ -681,8 +682,17 @@ bool NetworkClient::SendOptions(bool chainReaction, bool continueWhenLeave, bool
              attackMode == AttackMode::Off ? 1 : 0,
              attackMode == AttackMode::Canceling ? 1 : 0,
              teamCount, playerTeams[0], playerTeams[1], playerTeams[2], playerTeams[3], playerTeams[4]);
-    SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION, "Sending game options: %s", cmd);
-    return SendCommand(cmd);
+    return cmd;
+}
+
+bool NetworkClient::SendOptions(bool chainReaction, bool continueWhenLeave, bool singleTarget, int victoriesLimit, const int playerColors[5], const bool noCompress[5], const bool aimGuide[5], bool mouseEnabled, GameMode gameMode, int raceTarget, int timedSeconds, AttackMode attackMode, const int playerTeams[5], int teamCount) {
+    // Send game options using SETOPTIONS command (original line 4468-4474)
+    std::string blob = BuildOptionsBlob(chainReaction, continueWhenLeave, singleTarget, victoriesLimit,
+        playerColors, noCompress, aimGuide, mouseEnabled, gameMode, raceTarget, timedSeconds,
+        attackMode, playerTeams, teamCount);
+    std::string cmd = "SETOPTIONS " + blob;
+    SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION, "Sending game options: %s", cmd.c_str());
+    return SendCommand(cmd.c_str());
 }
 
 #ifndef __WASM_PORT__

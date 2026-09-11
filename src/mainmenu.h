@@ -583,18 +583,42 @@ private:
     // in three places it would only take one of them missing a change to the
     // rows above for a tap on Discord to fire "Set name" instead.
     int ServerListDiscordIndex() const;
-    // Same idea for the online lobby's own action list, where the row sits
-    // one past the last game room (0 = Chat, 1 = Create, 2..n+1 = rooms).
-    // Takes the room count rather than reading it back off NetworkClient so
-    // every caller resolves it against the same list it is already drawing or
+    // Same idea for the online lobby's own action list: 0 = Chat, 1 = Create
+    // Game Room, then (2026-09-11) Tournaments sits at a fixed slot 2 right
+    // under Create Game Room -- the organizer-facing feature belongs next to
+    // the other room-management action, not buried in the right sidebar --
+    // so the room list starts at 3 when tournaments are supported (else 2,
+    // no gap). LobbyRoomListStart() is that offset; LobbyDiscordIndex takes
+    // the room count rather than reading it back off NetworkClient so every
+    // caller resolves it against the same list it is already drawing or
     // navigating this frame.
-    static int LobbyDiscordIndex(size_t roomCount);
-    int LobbyTournamentIndex(size_t roomCount) const;
+    int LobbyRoomListStart() const;
+    int LobbyDiscordIndex(size_t roomCount) const;
+    int LobbyTournamentIndex() const;
     void TournamentPanelRender();
     bool TournamentPanelKey(SDL_Event* e);
     bool showingTournament = false, tournamentConfirm = false;
+    // True while the organizer is picking a ruleset on the "Create
+    // tournament" pre-creation screen (see TournamentPanelRender's
+    // tournamentConfiguring branch) -- distinct from tournamentConfirm
+    // (the withdraw-confirmation popup) and from tournamentViewId being 0
+    // (the ordinary browse list, which this screen replaces while active).
+    bool tournamentConfiguring = false;
     int tournamentViewId = 0, tournamentSelection = 0, tournamentSection = 0;
     std::vector<TournamentAction> tournamentButtons;
+    // Local mirror of the ruleset being assembled on that screen, reusing
+    // the exact same types the live room panel's own settings use
+    // (chainReactionEnabled/netAttackMode/netGameMode/etc. below double as
+    // both this screen's working state and, unchanged, an ordinary room's --
+    // the two screens are never open at once, so sharing them is safe and
+    // means a player's last-chosen tournament ruleset is also what a room
+    // they create next defaults to, which is desirable, not just convenient).
+    // Colors and aim guide are one shared value here rather than per-player:
+    // a tournament match is always exactly two entrants, and letting them
+    // differ would make the "locked ruleset, no per-room drift" guarantee
+    // meaningless for the one setting most likely to matter.
+    int tournamentColors = 7;
+    bool tournamentAimGuide = false;
     void NetSetupPanelRender(); // Chain reaction prompt for network games
     void SavePreNick();         // Persist networkPreNick (localStorage on WASM, INI elsewhere)
     void StartLocalServer();

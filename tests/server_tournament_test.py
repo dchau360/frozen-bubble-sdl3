@@ -80,17 +80,20 @@ class TournamentTest(unittest.TestCase):
         p.command('NICK ' + name)
         return p
 
-    def register(self, count=8):
+    def register(self, count=8, options=''):
         players = [self.peer(f'p{i+1}') for i in range(count)]
-        players[0].command('TOUR CREATE')
+        players[0].command('TOUR CREATE' + (' ' + options if options else ''))
         for p in players[1:]:
             p.command('TOUR JOIN 1')
         self.viewer.command('TOUR WATCH 1')
         return players
 
     def start(self, players):
-        for p in players:
-            p.command('TOUR READY 1 0 0')
+        # No registration-phase READY here on purpose: the organizer alone
+        # decides when to start (dropped 2026-09-11, user request) -- START
+        # used to require every entrant to have sent TOUR READY <tid> 0 0
+        # first, and no longer does. See test_organizer_starts_without_ready
+        # for the regression coverage.
         players[0].command('TOUR START 1')
 
     def ready_matches(self, players, matches):
@@ -125,6 +128,47 @@ class TournamentTest(unittest.TestCase):
         self.assertEqual(self.viewer.state()['self'], 0)
         players[1].command('TOUR CANCEL 1')
         self.assertEqual(self.viewer.state()['status'], 'cancelled')
+
+    def test_organizer_starts_without_ready(self):
+        """The registration-phase READY gate on START was dropped 2026-09-11
+        (user request: the organizer decides when to start, not a unanimous
+        ready-up) -- START must now succeed with zero READY commands sent by
+        anyone, and must still be owner-only."""
+        players = self.register(4)
+        players[1].command('TOUR START 1', 'DENIED')
+        players[0].command('TOUR START 1')
+        self.assertEqual(self.viewer.state()['status'], 'running')
+
+    def test_organizer_chosen_ruleset_applies_to_every_match(self):
+        """TOUR CREATE's optional ruleset blob (the same comma-separated
+        KEY:value shape a room's own SETOPTIONS carries) is stored on the
+        tournament and pushed to both seats of every match exactly like a
+        live room's own SETOPTIONS would -- the organizer picks it once and
+        it's locked in for the whole bracket (2026-09-11, user request:
+        tournaments "should have most of the game options")."""
+        options = 'CHAINREACTION:1,NUMCOLORS_P1:5,NUMCOLORS_P2:5,DISABLEMALUS:1'
+        players = self.register(4, options=options)
+        players[0].command('TOUR START 1')
+        semis = [m for m in self.viewer.state()['matches'] if int(m[1]) == 0]
+        self.ready_matches(players, semis)
+        for p in players:
+            opts_lines = [l for l in p.lines if 'OPTIONS: ' in l]
+            self.assertTrue(opts_lines, f'no OPTIONS push seen for {p.lines}')
+            self.assertIn('CHAINREACTION:1', opts_lines[0])
+            self.assertIn('NUMCOLORS_P1:5', opts_lines[0])
+            self.assertIn('NUMCOLORS_P2:5', opts_lines[0])
+            self.assertIn('DISABLEMALUS:1', opts_lines[0])
+
+    def test_bare_create_still_produces_default_ruleset(self):
+        """No options given ("TOUR CREATE", no blob) must keep the
+        pre-existing behavior exactly: no OPTIONS push at all, and the
+        match's room simply keeps the server's zero-initialized defaults."""
+        players = self.register(4)
+        players[0].command('TOUR START 1')
+        semis = [m for m in self.viewer.state()['matches'] if int(m[1]) == 0]
+        self.ready_matches(players, semis)
+        for p in players:
+            self.assertFalse([l for l in p.lines if 'OPTIONS: ' in l])
 
     def test_eight_entrants_complete_best_of_three_stage_barriers(self):
         players = self.register()

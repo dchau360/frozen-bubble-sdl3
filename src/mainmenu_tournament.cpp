@@ -16,9 +16,18 @@ void MainMenu::OpenTournament(int id) {
     net->TournamentCommand(id ? "WATCH " + std::to_string(id) : "LIST");
 }
 
-int MainMenu::LobbyTournamentIndex(size_t rooms) const {
+int MainMenu::LobbyTournamentIndex() const {
+    // Fixed at slot 2, right under Create Game Room (2026-09-11 relayout --
+    // it used to trail the room list and Discord row in the right sidebar,
+    // but the organizer feature belongs beside the other room-management
+    // action, not sharing a scrolling list with the "Online" player sidebar
+    // that had nothing to do with it).
     auto* net = NetworkClient::Existing();
-    return net && net->tournaments.supported ? 2 + static_cast<int>(rooms) + (HasDiscordInvite() ? 1 : 0) : -1;
+    return net && net->tournaments.supported ? 2 : -1;
+}
+
+int MainMenu::LobbyRoomListStart() const {
+    return LobbyTournamentIndex() >= 0 ? 3 : 2;
 }
 
 void MainMenu::TournamentPanelRender() {
@@ -42,10 +51,25 @@ void MainMenu::TournamentPanelRender() {
         s = net->tournaments.Find(tournamentViewId);
     }
     tournamentButtons.clear();
-    text(s ? "TOURNAMENT #" + std::to_string(s->id) : "ONLINE TOURNAMENTS", 18, 14, menulist::kGold);
-    if (!s) {
+    text(tournamentConfiguring ? "CREATE TOURNAMENT" : s ? "TOURNAMENT #" + std::to_string(s->id) : "ONLINE TOURNAMENTS", 18, 14, menulist::kGold);
+    if (tournamentConfiguring) {
+        text("Choose a ruleset -- locked in for every match once created", 18, 45);
+        char modeText[48], malusText[48], chainText[48], aimText[48], colorsText[48];
+        snprintf(modeText, sizeof(modeText), "Game mode: %s", GameModeName(netGameMode));
+        snprintf(malusText, sizeof(malusText), "Attack bubbles: %s", AttackModeName(netAttackMode));
+        snprintf(chainText, sizeof(chainText), "Chain reaction: %s", chainReactionEnabled ? "ON" : "OFF");
+        snprintf(aimText, sizeof(aimText), "Aim guide: %s", tournamentAimGuide ? "ON" : "OFF");
+        snprintf(colorsText, sizeof(colorsText), "Colors: %d", tournamentColors);
+        tournamentButtons.push_back({modeText, "CFG_MODE"});
+        tournamentButtons.push_back({malusText, "CFG_ATTACK"});
+        tournamentButtons.push_back({chainText, "CFG_CHAIN"});
+        tournamentButtons.push_back({aimText, "CFG_AIM"});
+        tournamentButtons.push_back({colorsText, "CFG_COLORS"});
+        tournamentButtons.push_back({"Create tournament", "CFG_CONFIRM"});
+        tournamentButtons.push_back({"Back", "CFG_BACK"});
+    } else if (!s) {
         text("Single elimination · 4–16 players · First to 2 wins", 18, 45);
-        tournamentButtons.push_back({"Create tournament", "CREATE"});
+        tournamentButtons.push_back({"Create tournament", "CONFIGURE"});
         tournamentButtons.push_back({"Refresh", "LIST"});
         for (const auto& item : net->tournaments.list)
             tournamentButtons.push_back({item.owner + " · " + std::to_string(item.count) + " · " + item.state, "VIEW " + std::to_string(item.id)});
@@ -63,10 +87,10 @@ void MainMenu::TournamentPanelRender() {
         } else if (s->state == "running") status = "Following bracket · Waiting for this stage";
         text(status, 18, 45, menulist::kGold);
         if (s->state == "registration") {
-            text(std::to_string(s->entrants.size()) + " / 16 entrants · Minimum 4 · Everyone must ready", 18, 74);
+            text(std::to_string(s->entrants.size()) + " / 16 entrants · Minimum 4 · Organizer starts when ready", 18, 74);
             for (size_t i = 0; i < s->entrants.size(); ++i) {
                 const auto& e = s->entrants[i];
-                text(e.nick + (e.id == s->owner ? " (organizer)" : "") + (e.ready ? " · Ready" : " · Waiting"),
+                text(e.nick + (e.id == s->owner ? " (organizer)" : ""),
                      22 + static_cast<int>(i / 8) * 308, 105 + static_cast<int>(i % 8) * 27,
                      e.id == s->self ? menulist::kGold : menulist::kText);
             }
@@ -159,6 +183,7 @@ bool MainMenu::TournamentPanelKey(SDL_Event* e) {
     const int count = static_cast<int>(tournamentButtons.size());
     if (key == SDLK_ESCAPE) {
         if (tournamentConfirm) { tournamentConfirm = false; tournamentSelection = 0; }
+        else if (tournamentConfiguring) { tournamentConfiguring = false; tournamentSelection = 0; }
         else if (tournamentViewId) { tournamentViewId = 0; showingTournament = false; }
         else showingTournament = false;
         return true;
@@ -173,6 +198,43 @@ bool MainMenu::TournamentPanelKey(SDL_Event* e) {
         else if (command == "STAY") { tournamentConfirm = false; tournamentSelection = 0; }
         else if (command.compare(0, 9, "WITHDRAW ") == 0) { tournamentConfirm = true; tournamentSelection = 0; }
         else if (command.compare(0, 5, "VIEW ") == 0) OpenTournament(std::stoi(command.substr(5)));
+        // "Create tournament" on the browse list opens the ruleset screen
+        // instead of creating immediately -- CFG_CONFIRM below is what
+        // actually sends TOUR CREATE, once the organizer has had a chance
+        // to look at (and change) what they're locking in. Values start
+        // from whatever this device's own room settings currently hold
+        // (SyncRoomOptions'/mainmenu.cpp's usual "restore last-used
+        // settings" load already ran when the net panel opened), same as a
+        // freshly created room would.
+        else if (command == "CONFIGURE") {
+            tournamentConfiguring = true; tournamentSelection = 0;
+            tournamentColors = playerColorCounts[0];
+            tournamentAimGuide = playerAimGuide[0];
+        }
+        else if (command == "CFG_BACK") { tournamentConfiguring = false; tournamentSelection = 0; }
+        else if (command == "CFG_MODE") { StepNetGameMode(true); }
+        else if (command == "CFG_ATTACK") { netAttackMode = NextAttackMode(netAttackMode); }
+        else if (command == "CFG_CHAIN") { chainReactionEnabled = !chainReactionEnabled; }
+        else if (command == "CFG_AIM") { tournamentAimGuide = !tournamentAimGuide; }
+        else if (command == "CFG_COLORS") { if (++tournamentColors > 8) tournamentColors = 2; }
+        else if (command == "CFG_CONFIRM") {
+            // Every slot gets the same value: a tournament match is always
+            // exactly two entrants (P1/P2), and mirroring across all five
+            // keeps this one BuildOptionsBlob call identical to the one a
+            // live room's SyncRoomOptions() already makes, rather than a
+            // second, tournament-only encoding to keep in sync with it.
+            const int colors[5] = {tournamentColors, tournamentColors, tournamentColors, tournamentColors, tournamentColors};
+            const bool noCompress[5] = {false, false, false, false, false};
+            const bool aim[5] = {tournamentAimGuide, tournamentAimGuide, tournamentAimGuide, tournamentAimGuide, tournamentAimGuide};
+            const int teams[5] = {0, 0, 0, 0, 0};
+            std::string blob = NetworkClient::BuildOptionsBlob(chainReactionEnabled, /*continueWhenLeave=*/true,
+                /*singleTarget=*/false, /*victoriesLimit=*/5, colors, noCompress, aim, /*mouseEnabled=*/false,
+                netGameMode, RaceTargetAt(netRaceTargetIndex), TimedSecondsAt(netTimedSecondsIndex),
+                netAttackMode, teams, /*teamCount=*/2);
+            net->TournamentCommand("CREATE " + blob);
+            SaveHostDefaults();
+            tournamentConfiguring = false; tournamentSelection = 0;
+        }
         else {
             net->TournamentCommand(command);
             if (command.compare(0, 6, "LEAVE ") == 0) { tournamentConfirm = false; tournamentSelection = 0; }

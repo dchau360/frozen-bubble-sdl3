@@ -1651,7 +1651,7 @@ void player_part_game_(int fd, char* reason)
 
 int game_has_room(int fd) { return already_in_game(fd); }
 
-int game_tournament_start(int tid, int mid, int round, int a, int fd_a, int b, int fd_b) {
+int game_tournament_start(int tid, int mid, int round, int a, int fd_a, int b, int fd_b, const char *options) {
         if (already_in_game(fd_a) || already_in_game(fd_b) || !nick[fd_a] || !nick[fd_b]) return 0;
         create_game(fd_a, strdup(nick[fd_a]), 2);
         struct game *g = find_game_by_fd(fd_a);
@@ -1666,6 +1666,26 @@ int game_tournament_start(int tid, int mid, int round, int a, int fd_a, int b, i
         snprintf(line, sizeof(line), "TOUR_ASSIGN: %d %d %d %d %s %d %s", tid, mid, round, a, nick[fd_a], b, nick[fd_b]);
         send_line_log_push_binary(fd_a, line, line);
         send_line_log_push_binary(fd_b, line, line);
+        /* Apply the organizer's ruleset (TOUR CREATE's options blob, stored
+         * verbatim on the tournament) to this match's freshly created room,
+         * exactly as setoptions() above does for a live room's own
+         * SETOPTIONS -- same game_mode/team bookkeeping, same OPTIONS push
+         * to both seats, sent before real_start_game() so each side's own
+         * pendingOptions/GetAndClearPendingOptions() has already applied it
+         * (see src/mainmenu_netpanel.cpp) by the time gameplay begins. Every
+         * match in the bracket gets the identical ruleset this way, so
+         * nothing can drift partway through. A bare "TOUR CREATE" (no
+         * options) leaves this string empty and the room simply keeps the
+         * server's zero-initialized game defaults, same as before this
+         * feature existed. */
+        if (options && *options) {
+                g->game_mode = parse_game_mode(options);
+                parse_teams(g, options);
+                char *msg = asprintf_("OPTIONS: %s,PROTOCOLLEVEL:%d", options, min_protocol_level(g));
+                send_line_log_push(fd_a, msg);
+                send_line_log_push(fd_b, msg);
+                free(msg);
+        }
         real_start_game(g);
         calculate_list_games();
         return 1;

@@ -788,8 +788,20 @@ void MainMenu::NetPanelLobbyActionsRender() {
             char createValue[32];
             snprintf(createValue, sizeof(createValue), "%d players", kRoomSizes[netRoomSizeChoice]);
             lobbyList.Row(1, "Create Game Room", createValue, true, true, SDLK_RETURN);
+            // Tournaments sits right under Create Game Room (2026-09-11 --
+            // moved out of the right "Online" sidebar per user feedback: the
+            // organizer feature reads as another room-management action, not
+            // something that belongs alongside the free-player list). Fixed
+            // at LobbyTournamentIndex()==2 when supported, which is also why
+            // the room loop below starts from LobbyRoomListStart() instead
+            // of a hardcoded 2.
+            const int tourIdx = LobbyTournamentIndex();
+            if (tourIdx >= 0) {
+                lobbyList.Row(tourIdx, "Tournaments", "");
+            }
+            const int roomListStart = LobbyRoomListStart();
             for (size_t i = 2; i < actions.size() && i < 18; i++) {
-                lobbyList.Row((int)i, actions[i], "");
+                lobbyList.Row(roomListStart + (int)(i - 2), actions[i], "");
             }
             // "Join our Discord" no longer rides along here -- it's pinned to
             // the bottom of the Online sidebar instead (see the !currentGame
@@ -1291,17 +1303,13 @@ void MainMenu::NetPanelLobbyActionsRender() {
             // is actually for) is exactly who would otherwise scroll it out
             // of view. Reserved here rather than appended after the loop
             // below, so free-player rows never draw underneath it.
+            // Tournaments used to have a second reserved row right here too,
+            // but moved under Create Game Room in the left box (2026-09-11,
+            // user feedback) -- this sidebar is player-list-only now.
             const int lobbyDiscordIdx = LobbyDiscordIndex(actions.size() - 2);
             const bool showDiscordHere = lobbyDiscordIdx >= 0;
             const int kDiscordRowH = 22;
-            const int tourIdx = LobbyTournamentIndex(actions.size() - 2);
-            const int rowsBottom = sb.y + sb.h - (showDiscordHere ? kDiscordRowH : 0) - (tourIdx >= 0 ? kDiscordRowH : 0);
-            if (tourIdx >= 0) {
-                SDL_Rect tourRect{sb.x + 6, rowsBottom, sb.w - 12, kDiscordRowH - 2};
-                if (selectedActionIndex == tourIdx) drawSelection(tourRect);
-                drawLabel("Tournaments", tourRect.x + 5, tourRect.y + 2, selectedActionIndex == tourIdx ? textGold : textMain);
-                AddPanelTapRow(tourIdx, tourRect);
-            }
+            const int rowsBottom = sb.y + sb.h - (showDiscordHere ? kDiscordRowH : 0);
 
             std::vector<NetworkPlayer> openPlayers = netClient->GetOpenPlayers();
             int shown = 0;
@@ -1761,9 +1769,9 @@ void MainMenu::NetPanelConnectionScreensRender() {
     { SDL_FRect fr = ToFRect(*panelText.Coords()); SDL_RenderTexture(const_cast<SDL_Renderer*>(renderer), panelText.Texture(), nullptr, &fr); };
 }
 
-int MainMenu::LobbyDiscordIndex(size_t roomCount) {
+int MainMenu::LobbyDiscordIndex(size_t roomCount) const {
     if (!HasDiscordInvite()) return -1;
-    return 2 + (int)roomCount;
+    return LobbyRoomListStart() + (int)roomCount;
 }
 
 int MainMenu::ServerListDiscordIndex() const {

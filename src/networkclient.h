@@ -317,6 +317,15 @@ public:
     // Send game options to other players (host only)
     bool SendOptions(bool chainReaction, bool continueWhenLeave, bool singleTarget, int victoriesLimit, const int playerColors[5], const bool noCompress[5], const bool aimGuide[5], bool mouseEnabled, GameMode gameMode, int raceTarget, int timedSeconds, AttackMode attackMode, const int playerTeams[5], int teamCount);
 
+    // The same comma-separated KEY:value ruleset blob SendOptions() sends
+    // after "SETOPTIONS ", built standalone (no leading command word, no
+    // network I/O) so a caller that isn't editing a live room's options --
+    // MainMenu::CreateTournament(), which needs it as the argument to
+    // "TOUR CREATE " -- can reuse the exact same encoding instead of
+    // duplicating this format string. See server/tournament.c's
+    // tournament_create() and game_tournament_start() for what reads it.
+    static std::string BuildOptionsBlob(bool chainReaction, bool continueWhenLeave, bool singleTarget, int victoriesLimit, const int playerColors[5], const bool noCompress[5], const bool aimGuide[5], bool mouseEnabled, GameMode gameMode, int raceTarget, int timedSeconds, AttackMode attackMode, const int playerTeams[5], int teamCount);
+
     // Received options from host (updated when SETOPTIONS push arrives)
     bool pendingOptions = false;
     bool rcvChainReaction = true;

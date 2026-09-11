@@ -308,10 +308,11 @@ struct MainMenuTestAccess {
     // indices -- private so the row list and the keyboard-navigation wrap in
     // mainmenu_input.cpp can't drift apart from what's actually drawn (see
     // CLAUDE.md's input-parity section).
-    static int LobbyDiscordIndexOf(size_t roomCount) { return MainMenu::LobbyDiscordIndex(roomCount); }
-    static int LobbyTournamentIndexOf(const MainMenu& menu, size_t roomCount) {
-        return menu.LobbyTournamentIndex(roomCount);
+    static int LobbyDiscordIndexOf(const MainMenu& menu, size_t roomCount) {
+        return menu.LobbyDiscordIndex(roomCount);
     }
+    static int LobbyTournamentIndexOf(const MainMenu& menu) { return menu.LobbyTournamentIndex(); }
+    static int LobbyRoomListStartOf(const MainMenu& menu) { return menu.LobbyRoomListStart(); }
     static int ServerListDiscordIndexOf(const MainMenu& menu) { return menu.ServerListDiscordIndex(); }
     // Tournament bracket/browser panel (mainmenu_tournament.cpp).
     static void CallOpenTournament(MainMenu& menu, int id = 0) { menu.OpenTournament(id); }
@@ -1354,16 +1355,17 @@ int main() {
         NetworkClientTestAccess::SetCurrentGame(*nc, nullptr);
     }
 
-    // --- Online lobby sidebar: "Join Discord server" / "Tournaments" row
+    // --- Online lobby sidebar: "Tournaments" / "Join Discord server" row
     // indices, with and without each, must match what MenuUpKey/MenuDownKey's
     // maxActions count in mainmenu_input.cpp actually navigates to, and both
     // rows must be real tap targets -- the exact input-parity gap CLAUDE.md
     // calls out (a row rendered but never registered as a tap target, or
-    // reachable by only one of keyboard/tap). LobbyDiscordIndex(rooms) is
-    // always `2 + rooms` when present, and LobbyTournamentIndex(rooms) rides
-    // one further out when Discord is also showing -- so with both present,
-    // Discord comes first and Tournaments last; drop either one and the
-    // other closes the gap rather than leaving a hole. Runs the real
+    // reachable by only one of keyboard/tap). Tournaments moved under Create
+    // Game Room (2026-09-11, user feedback: it's a room-management action,
+    // not a sidebar row) -- it now sits at a FIXED slot 2 when supported,
+    // ahead of the room list, while Discord still trails the room list at
+    // LobbyRoomListStart()+rooms. So with both present: Chat(0), Create(1),
+    // Tournaments(2), rooms(3..), Discord(last). Runs the real
     // NetPanelLobbyActionsRender/MenuUpKey/MenuDownKey against all four
     // combinations, not just the one this build ships with.
     {
@@ -1388,52 +1390,59 @@ int main() {
                 MainMenuTestAccess::EnterNetRoom(*menu);
                 MainMenuTestAccess::RenderLobbyActions(*menu);
 
-                const int discordIdx = MainMenuTestAccess::LobbyDiscordIndexOf(roomCount);
-                const int tourIdx = MainMenuTestAccess::LobbyTournamentIndexOf(*menu, roomCount);
-                CHECK((discordIdx >= 0) == discordOn);
+                const int tourIdx = MainMenuTestAccess::LobbyTournamentIndexOf(*menu);
+                const int roomListStart = MainMenuTestAccess::LobbyRoomListStartOf(*menu);
+                const int discordIdx = MainMenuTestAccess::LobbyDiscordIndexOf(*menu, roomCount);
                 CHECK((tourIdx >= 0) == tournamentsOn);
-                if (discordOn && tournamentsOn) {
-                    // Discord (2 + rooms) must sit strictly before Tournaments
-                    // (2 + rooms + 1) -- the fixed ordering both
-                    // NetPanelLobbyActionsRender and the maxActions count
-                    // agree on.
-                    CHECK(tourIdx == discordIdx + 1);
+                CHECK((discordIdx >= 0) == discordOn);
+                // Tournaments is always the fixed slot 2 when present,
+                // regardless of Discord/room count.
+                if (tournamentsOn) CHECK(tourIdx == 2);
+                // Room list starts right after Tournaments' slot when
+                // present, else right after Create Game Room.
+                CHECK(roomListStart == (tournamentsOn ? 3 : 2));
+                if (discordOn) {
+                    // Discord trails the room list, wherever it starts.
+                    CHECK(discordIdx == roomListStart + (int)roomCount);
                 }
 
                 // Whichever rows are present must each be a real, separately
                 // tappable row -- not merged into, or missing from, the row
                 // list a keyboard would also see.
-                if (discordIdx >= 0)
-                    CHECK(!MainMenuTestAccess::RectsForIndex(*menu, discordIdx).empty());
                 if (tourIdx >= 0)
                     CHECK(!MainMenuTestAccess::RectsForIndex(*menu, tourIdx).empty());
+                if (discordIdx >= 0)
+                    CHECK(!MainMenuTestAccess::RectsForIndex(*menu, discordIdx).empty());
                 // And no stray row at the "other configuration"'s position:
-                // e.g. with Discord off, index 2+roomCount+1 (where
-                // Tournaments would sit if Discord were also on) must not
-                // silently have Tournaments' row squatting there instead.
+                // e.g. with Discord off, the slot it would occupy if it were
+                // on (right after the room list) must not silently have a
+                // leftover row squatting there instead.
                 if (!discordOn) {
-                    const int wouldBeIdxIfDiscordOn = 2 + (int)roomCount + 1;
-                    if (wouldBeIdxIfDiscordOn != tourIdx)
-                        CHECK(MainMenuTestAccess::RectsForIndex(*menu, wouldBeIdxIfDiscordOn).empty());
+                    const int wouldBeIdxIfDiscordOn = roomListStart + (int)roomCount;
+                    CHECK(MainMenuTestAccess::RectsForIndex(*menu, wouldBeIdxIfDiscordOn).empty());
                 }
 
                 // Keyboard reach: Up from the very first row (Chat, index 0)
-                // wraps all the way around to the last row. The last row is
-                // whichever of Tournaments/Discord/last-room-row is actually
-                // present, in that priority order.
-                const int expectedLast = tourIdx >= 0 ? tourIdx
-                                        : discordIdx >= 0 ? discordIdx
-                                        : 1 + (int)roomCount;
+                // wraps all the way around to the last row. Discord, when
+                // present, is always the last row (it trails the room
+                // list); otherwise it's the last room row.
+                const int expectedLast = discordIdx >= 0 ? discordIdx
+                                        : roomListStart + (int)roomCount - 1;
                 MainMenuTestAccess::SetSelectedActionIndex(*menu, 0);
                 MainMenuTestAccess::PressUp(*menu);
                 CHECK(MainMenuTestAccess::SelectedActionIndex(*menu) == expectedLast);
 
-                // With both rows present, one more Up steps from Tournaments
-                // back to Discord -- neither row is an island only reachable
-                // by wrapping past it, both are ordinary stops in the cycle.
-                if (discordOn && tournamentsOn) {
+                // Tournaments, when present, is an ordinary stop between
+                // Create Game Room and the room list -- not an island only
+                // reachable by wrapping past it. Up from the first room row
+                // steps to Tournaments (or to Create Game Room if it isn't
+                // shown), and Up from there steps to Create Game Room.
+                MainMenuTestAccess::SetSelectedActionIndex(*menu, roomListStart);
+                MainMenuTestAccess::PressUp(*menu);
+                CHECK(MainMenuTestAccess::SelectedActionIndex(*menu) == (tourIdx >= 0 ? tourIdx : 1));
+                if (tourIdx >= 0) {
                     MainMenuTestAccess::PressUp(*menu);
-                    CHECK(MainMenuTestAccess::SelectedActionIndex(*menu) == discordIdx);
+                    CHECK(MainMenuTestAccess::SelectedActionIndex(*menu) == 1);
                 }
 
                 // And Down from the last row wraps back to Chat, the same

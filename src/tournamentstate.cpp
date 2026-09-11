@@ -119,7 +119,12 @@ std::vector<TournamentAction> TournamentActions(const TournamentSnapshot* s, boo
     const auto* me = s->Entrant(s->self);
     if (s->state == "registration") {
         if (!me && !enteredElsewhere && s->entrants.size() < 16) actions.push_back({"Join tournament", "JOIN " + id});
-        if (me && !me->ready) actions.push_back({"Ready", "READY " + id + " 0 0"});
+        // No per-entrant "Ready" step here (dropped 2026-09-11, user request):
+        // the organizer decides when to start, not a unanimous ready-up.
+        // Per-match readiness below (running-state Ready) is unrelated and
+        // unchanged -- that one still exists because both seated players
+        // genuinely need to confirm they're at the board before a match's
+        // countdown begins.
         if (me && s->self == s->owner) actions.push_back({"Start tournament", "START " + id});
     }
     if (s->state == "running" && me && me->state == "alive") {

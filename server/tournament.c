@@ -37,6 +37,17 @@ struct tournament {
     int64_t expires;
     struct entrant entrants[ENTRANT_LIMIT];
     struct match bracket[MATCH_LIMIT];
+    /* The organizer's chosen ruleset, verbatim in the same comma-separated
+     * KEY:value shape a room's own SETOPTIONS command carries (see
+     * src/networkclient.cpp's SendOptions) -- set once at TOUR CREATE time
+     * and applied identically to every match's room as it's created
+     * (game_tournament_start(), server/game.c), so no per-room setting can
+     * drift the bracket partway through. Empty ("") when the organizer
+     * created with bare "TOUR CREATE": every match then just gets the
+     * server's zero-initialized game defaults, same as before this field
+     * existed. Sized to comfortably hold the full blob SendOptions can
+     * produce (its own "SETOPTIONS " + blob buffer is 768 bytes). */
+    char options[700];
 };
 static struct tournament tournaments[TOUR_LIMIT];
 static int next_tid = 1, watched[256], connected[256], command_count[256];
@@ -240,7 +251,7 @@ void tournament_tick(int64_t now) {
                 else {
                     m->state = PLAYING;
                     m->deadline = 0;
-                    m->room = game_tournament_start(t->id, m->id, m->round, m->a, entrant(t,m->a)->fd, m->b, entrant(t,m->b)->fd);
+                    m->room = game_tournament_start(t->id, m->id, m->round, m->a, entrant(t,m->a)->fd, m->b, entrant(t,m->b)->fd, t->options);
                     if (!m->room) { m->state = DISPUTED; }
                 }
                 changed = 1;
@@ -264,12 +275,40 @@ static int number(const char *text, int *out) {
     *out = (int)n;
     return 1;
 }
+/* CREATE optionally carries the organizer's chosen ruleset as a free-form,
+ * comma-separated KEY:value blob (the exact shape of a room's own SETOPTIONS
+ * argument, minus the "SETOPTIONS " keyword -- see src/networkclient.cpp's
+ * SendOptions) as everything after "CREATE ". That blob isn't numeric and
+ * can be longer than the generic op parser's tokens[]/copy[256] budget
+ * below (an options blob can run to several hundred bytes), so CREATE is
+ * handled here, ahead of and separately from that generic tokenizer, the
+ * same way SETOPTIONS itself is handled ahead of the generic per-room
+ * command dispatch in server/game.c. */
+static void tournament_create(int fd, const char *options) {
+    if (!nick[fd] || is_bot[fd]) { reply(fd,"HUMAN_REQUIRED"); return; }
+    if (tournament_active(fd)) { reply(fd,"ALREADY_ENTERED"); return; }
+    if (game_has_room(fd)) { reply(fd,"ALREADY_IN_GAME"); return; }
+    if (strlen(options) >= sizeof(((struct tournament*)0)->options)) { reply(fd,"BAD_ARGUMENTS"); return; }
+    struct tournament *t = NULL;
+    for (int i = 0; i < TOUR_LIMIT; ++i) if (!tournaments[i].id) { t = &tournaments[i]; break; }
+    if (!t || next_tid == INT_MAX) { reply(fd,"LIMIT_REACHED"); return; }
+    memset(t,0,sizeof(*t)); t->id = next_tid++; t->owner = t->next_pid = 1;
+    strcpy(t->options, options);
+    struct entrant *e = &t->entrants[t->count++];
+    e->id = t->next_pid++; e->fd = fd; strcpy(e->name,nick[fd]);
+    broadcast(t); reply(fd,"OK");
+}
 void tournament_command(int fd, const char *args) {
     char copy[256], *tokens[6], *save, *tok;
     int argc = 0, values[4] = {0};
     if (clock_now-rate_window[fd] >= 10) { rate_window[fd] = clock_now; command_count[fd] = 0; }
     if (++command_count[fd] > 100) { reply(fd, "RATE_LIMITED"); return; }
-    if (!args || strlen(args) >= sizeof(copy)) { reply(fd, "BAD_ARGUMENTS"); return; }
+    if (!args) { reply(fd, "BAD_ARGUMENTS"); return; }
+    if (!strncmp(args, "CREATE", 6) && (args[6] == '\0' || args[6] == ' ')) {
+        tournament_create(fd, args[6] == ' ' ? args+7 : "");
+        return;
+    }
+    if (strlen(args) >= sizeof(copy)) { reply(fd, "BAD_ARGUMENTS"); return; }
     strcpy(copy, args);
     for (tok = strtok_r(copy, " \r\t", &save); tok && argc < 6; tok = strtok_r(NULL, " \r\t", &save)) tokens[argc++] = tok;
     if (!argc || argc > 5) { reply(fd, "BAD_ARGUMENTS"); return; }
@@ -286,18 +325,8 @@ void tournament_command(int fd, const char *args) {
         push(fd,line); reply(fd,"OK"); return;
     }
     if (!strcmp(op,"WATCH") && argc == 2 && !values[0]) { watched[fd] = 0; reply(fd,"OK"); return; }
-    if (!strcmp(op,"CREATE") && argc == 1) {
-        if (!nick[fd] || is_bot[fd]) { reply(fd,"HUMAN_REQUIRED"); return; }
-        if (tournament_active(fd)) { reply(fd,"ALREADY_ENTERED"); return; }
-        if (game_has_room(fd)) { reply(fd,"ALREADY_IN_GAME"); return; }
-        struct tournament *t = NULL;
-        for (int i = 0; i < TOUR_LIMIT; ++i) if (!tournaments[i].id) { t = &tournaments[i]; break; }
-        if (!t || next_tid == INT_MAX) { reply(fd,"LIMIT_REACHED"); return; }
-        memset(t,0,sizeof(*t)); t->id = next_tid++; t->owner = t->next_pid = 1;
-        struct entrant *e = &t->entrants[t->count++];
-        e->id = t->next_pid++; e->fd = fd; strcpy(e->name,nick[fd]);
-        broadcast(t); reply(fd,"OK"); return;
-    }
+    /* CREATE (with or without an options blob) is handled above, ahead of
+     * this generic tokenizer -- see tournament_create(). */
     int expected = (!strcmp(op,"READY") || !strcmp(op,"RESOLVE")) ? 4 : !strcmp(op,"REPORT") ? 5 : 2;
     if (argc != expected) { reply(fd,"BAD_ARGUMENTS"); return; }
     struct tournament *t = find(values[0]);
@@ -326,7 +355,13 @@ void tournament_command(int fd, const char *args) {
         if (!e || e->id != t->owner) { reply(fd,"DENIED"); return; }
         if (t->state != REGISTRATION) { reply(fd,"NOT_REGISTERING"); return; }
         if (t->count < 4) { reply(fd,"MIN_PLAYERS"); return; }
-        for (int i = 0; i < t->count; ++i) if (!t->entrants[i].ready || !connected[t->entrants[i].fd]) { reply(fd,"NOT_READY"); return; }
+        /* The owner decides when to start -- entrants no longer have to
+         * individually ready up first (dropped by user request 2026-09-11;
+         * registration-phase READY used to gate this with a NOT_READY reply
+         * here). connected[] isn't rechecked either: leave()/tournament_
+         * withdraw() already prune a disconnected fd out of t->entrants[]
+         * during REGISTRATION (see leave()), so nothing left in this array
+         * can be stale by the time the owner presses Start. */
         int order[ENTRANT_LIMIT];
         for (int i = 0; i < t->count; ++i) { order[i] = t->entrants[i].id; t->entrants[i].state = ALIVE; }
         for (int i = t->count-1; i > 0; --i) { int j = g_random_int_range(0,i+1), tmp = order[i]; order[i] = order[j]; order[j] = tmp; }

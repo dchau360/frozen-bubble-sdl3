@@ -10,7 +10,7 @@ All IDs are positive decimal integers, except 0 means absent/draw. Entrant IDs s
 
 `LIST`: push `TOUR_LIST: <items>`; items are semicolon-separated `id,status,count,ownerNick`, or `-` for empty.
 
-`CREATE`: named human lobby client creates and joins a tournament; maximum 16 entrants. Name displayed by owner nickname. No custom title.
+`CREATE [options]`: named human lobby client creates and joins a tournament; maximum 16 entrants. Name displayed by owner nickname. No custom title. `options`, if present, is everything after `CREATE ` verbatim -- the same comma-separated `KEY:value` ruleset blob a room's own `SETOPTIONS` command carries (see `src/networkclient.cpp`'s `SendOptions`), chosen by the organizer before creating. Stored on the tournament and applied identically to every match's room as it is created (as an `OPTIONS:` push to both seats, exactly as a live room's `SETOPTIONS` would produce, sent before that match's `TOUR_ASSIGN` recipients see any start signal) so no per-room setting can drift the bracket partway through. Bare `CREATE` (no options) keeps the pre-existing behavior: every match gets the server's zero-initialized game defaults. Not editable after creation -- cancel and recreate to change it before anyone has registered.
 
 `JOIN <tid>`: join registration, human clients only, one active entry per connection, no ordinary room membership.
 
@@ -18,9 +18,9 @@ All IDs are positive decimal integers, except 0 means absent/draw. Entrant IDs s
 
 `STATE <tid>`: request full snapshot.
 
-`READY <tid> <mid> <round>`: registration uses 0 0; after start use the current match/round (round starts at 1). Readiness is idempotent and never automatic. All entrants must be ready to START. Match readiness expires after 60 seconds; one ready entrant wins by forfeit, neither ready yields no winner. Two ready entrants enter a 5-second countdown.
+`READY <tid> <mid> <round>`: `0 0` was previously also accepted during registration as a per-entrant readiness signal gating `START`; that registration-phase use was dropped 2026-09-11 (organizer request -- the organizer alone decides when to start, not a unanimous ready-up) and the server no longer requires or checks it there. After start, use the current match/round (round starts at 1) as before: readiness is idempotent and never automatic, match readiness expires after 60 seconds, one ready entrant wins by forfeit, neither ready yields no winner, and two ready entrants enter a 5-second countdown -- none of that changed.
 
-`START <tid>`: organizer only, registration only, 4–16 connected and ready entrants. Random shuffle once; pad to 4, 8, or 16 slots (smallest power of two that fits the entrant count) with distributed byes. Stage barrier; no next-stage games until all current-stage matches are terminal.
+`START <tid>`: organizer only, registration only, 4–16 connected entrants (registration-phase readiness is no longer required -- see `READY` above).
 
 `LEAVE <tid>`: registration removes entrant, transfers owner to earliest remaining entrant; after start eliminates entrant and forfeits their current/future match. Disconnected entrants behave the same. Explicit ordinary PART while assigned means withdrawal. Server-directed room retirement is not withdrawal.
 
