@@ -23,9 +23,9 @@ Aim, fire, pop -- 4 multiplayer modes, teams, and online play up to 20 strong.
 4 multiplayer modes, team play, and online rooms up to 20. Free & open source.
 ```
 
-**Full description** (max 4000 chars — this one is 2508, updated to lead with
+**Full description** (max 4000 chars — this one is 2600, updated to lead with
 the multiplayer modes, teams, and online play, per the game's v2.4.95 Race
-and Timed mode addition):
+and Timed mode addition, plus a mention of Discord join/result alerts):
 
 ```
 Frozen Bubble is a free, open-source arcade puzzle game: aim, fire, and pop
@@ -57,7 +57,8 @@ battle-royale layout showing your most relevant opponents, quick-target
 hotkeys, and a spectate mode once you're out. The host controls chain
 reactions, attack bubbles, per-player aim assist, mouse/touch aim, and
 more -- every joined player sees the rules update live. Follow a quiet
-server and get notified the moment someone joins it.
+server and get notified the moment someone joins it, or join our Discord
+for the same join alerts (plus round results) without the app even open.
 
 LOCAL MULTIPLAYER
 2-5 players, one device -- keyboard, controller, or a mix. Empty seats can

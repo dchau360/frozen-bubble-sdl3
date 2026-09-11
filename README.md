@@ -173,7 +173,7 @@ winner (or draw), and the full player roster — if you're looking for an
 opponent or just keeping an eye on how things are going.
 
 Running your own server? It can post its own join and round-result alerts to
-a Discord channel of your choosing — see [SetupServer.md](SetupServer.md#optional--discord-join-alerts).
+a Discord channel of your choosing — see [SetupServer.md](SetupServer.md#optional--discord-join--result-alerts).
 
 ---
 
