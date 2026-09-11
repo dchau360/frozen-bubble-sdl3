@@ -40,3 +40,7 @@ extern int remote_proto_minor[256];
 extern int admin_authorized[256];
 extern int is_bot[256];
 extern int bots_connected;
+
+int game_has_room(int fd);
+int game_tournament_start(int tid, int mid, int round, int a, int fd_a, int b, int fd_b);
+void game_tournament_retire(int tid, int mid, int round);
