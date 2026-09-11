@@ -692,6 +692,7 @@ void BubbleGame::CommitRoundWin(int winnerIdx,
     }
     Update2PText();
     UpdatePlayerNameWinText();
+    ReportTournamentResult(bubbleArrays[winnerIdx].playerNickname);
 
     UpdateDepartureMatchTermination();
     if (!abandonedRound && currentSettings.victoriesLimit > 0) {
@@ -920,7 +921,34 @@ void BubbleGame::FinishRoundAsDraw() {
     gameFinish = true;
     gameLost = true;
     roundWinnerIdx = -1;
+    ReportTournamentResult("");
     UpdateDepartureMatchTermination();
+}
+
+bool BubbleGame::IsTournamentRound() const {
+    return tournamentRound;
+}
+
+void BubbleGame::ReportTournamentResult(const std::string& winnerNick) {
+    if (tournamentResultReported || !IsTournamentRound()) return;
+    NetworkClient* net = NetworkClient::Instance();
+    const auto& assignment = net->tournaments.assignment;
+    if (assignment.returned) {
+        // Benign, not a bug: the coordinator can retire this room (both
+        // sides' reports already in, or an admin RESOLVE) before this
+        // client's own local outcome detection runs, so TOUR_RETURN can
+        // legitimately beat us here. Nothing to send against a room the
+        // server no longer has.
+        return;
+    }
+    const std::string command = TournamentReportCommand(assignment, winnerNick);
+    if (command.empty()) {
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
+                     "Tournament result does not match the assigned players: %s",
+                     winnerNick.c_str());
+        return;
+    }
+    if (net->TournamentCommand(command)) tournamentResultReported = true;
 }
 
 void BubbleGame::CheckGameState(BubbleArray &bArray, bool countForRoot) {

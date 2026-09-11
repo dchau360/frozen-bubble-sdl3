@@ -571,6 +571,7 @@ public:
 
     bool IsGameFinished() const { return gameFinish; }
     bool IsNetworkGame() const { return currentSettings.networkGame; }
+    bool IsTournamentRound() const;
     bool IsChatting() const { return chattingMode; }
     // Tap/click on the round-end screen in logical (640x480) coords.
     // Returns true when consumed by the CHAT button (so the caller must
@@ -629,6 +630,11 @@ private:
     bool wonByClearing = false;
     int roundWinnerIdx = -1;
     bool roundStatsFinalized = false; // Per-round stats rolled into match totals (and 'S' broadcast) once per round
+    // Captured when NewGame starts. TOUR_RETURN remains available so the
+    // bracket can be reopened after a round; consulting that retained
+    // assignment during a later ordinary room would misclassify the game.
+    bool tournamentRound = false;
+    bool tournamentResultReported = false;
     int roundsPlayed = 0;       // Completed rounds this match (gates the lobby summary)
     bool waitingForOpponentNewGame = false; // Waiting for opponents to press key for new game
     bool opponentReadyForNewGame = false; // Opponent sent 'n' ready signal
@@ -761,6 +767,7 @@ private:
     TTFText chatLineText[kMaxChatLines];      // Indexed by displayed line slot
     TTFText chatInputText;      // Input line ("Say: {text}_")
     SDL_Rect statsChatBtn = {0, 0, 0, 0}; // Tappable CHAT button on the round-end stats panel
+    SDL_Rect statsTournamentBtn = {0, 0, 0, 0};
 
     std::vector<std::array<std::vector<int>, 10>> loadedLevels;
     BubbleArray bubbleArrays[MAX_NET_PLAYERS]; //custom arrays wtih different players
@@ -817,6 +824,7 @@ private:
         bool sendNetworkFinish = false);
     void CommitRoundWin(int winnerIdx, RoundWinCause cause, bool sendNetworkFinish);
     void FinishRoundAsDraw();
+    void ReportTournamentResult(const std::string& winnerNick);
 
     // --- Race / Timed (gamemode.h) ---
     // Reset the per-round mode state. Called from both NewGame and ReloadGame

@@ -97,6 +97,12 @@ struct BubbleGameTestAccess {
         game.HandleInput(&event);
     }
     static void finishAsDraw(BubbleGame& game) { game.FinishRoundAsDraw(); }
+    static void setTournamentRound(BubbleGame& game, bool value) { game.tournamentRound = value; }
+    static bool tournamentReported(const BubbleGame& game) { return game.tournamentResultReported; }
+    static void setTournamentReported(BubbleGame& game, bool value) { game.tournamentResultReported = value; }
+    static void reportTournamentResult(BubbleGame& game, const std::string& winnerNick) {
+        game.ReportTournamentResult(winnerNick);
+    }
 
     // ---- Race / Timed (gamemode.h) ----
     static int leadingPopper(const BubbleGame& game) { return game.LeadingPopper(); }
@@ -143,6 +149,7 @@ struct BubbleGameTestAccess {
         game.gameMpDone = false;
         game.wonByClearing = false;
         game.roundWinnerIdx = -1;
+        game.tournamentRound = false;
         game.connectedPlayerCount = players;
         game.curLevel = 1;
         game.winsP1 = game.winsP2 = 0;
@@ -1487,6 +1494,74 @@ int main() {
             CHECK(!BubbleGameTestAccess::finished(game));
             CHECK(!BubbleGameTestAccess::awaitingVerdict(game));
         }
+    }
+
+    // ---- Tournament rounds: duplicate outcomes and pre-return navigation --
+    //
+    // ReportTournamentResult() is the single choke point CommitRoundWin and
+    // FinishRoundAsDraw both funnel through; each of those already guards
+    // its own call with `gameFinish`, but the guard that actually matters
+    // here -- the one this test is pinning -- lives inside
+    // ReportTournamentResult() itself, independent of gameFinish. A local
+    // outcome can be asserted more than once in principle (a stray repeat
+    // call, or a future caller that forgets its own gameFinish check), and
+    // once REPORT has already gone out for this round, ReportTournamentResult
+    // must treat every later call as a no-op rather than re-sending. Proven
+    // here by leaving NetworkClient::tournamentError set to a sentinel before
+    // the call: TournamentCommand() clears it unconditionally as its first
+    // line, so an unchanged sentinel after the call is direct evidence
+    // TournamentCommand() -- and therefore any network send -- never ran the
+    // second time.
+    {
+        BubbleGame game(renderer);
+        NetworkClient* nc = NetworkClient::Instance();
+        NetworkClientTestAccess::SetState(*nc, DISCONNECTED);
+        nc->tournaments.assignment = TournamentAssignment{};
+        nc->tournaments.assignment.tournament = 5;
+        nc->tournaments.assignment.match = 2;
+        nc->tournaments.assignment.round = 1;
+        nc->tournaments.assignment.a = 1;
+        nc->tournaments.assignment.b = 2;
+        nc->tournaments.assignment.nickA = "Ada";
+        nc->tournaments.assignment.nickB = "Bob";
+        BubbleGameTestAccess::setTournamentRound(game, true);
+
+        // Already reported (e.g. the round's real outcome already went out):
+        // a second local call, even naming the actual assigned winner, must
+        // not re-send.
+        BubbleGameTestAccess::setTournamentReported(game, true);
+        nc->tournamentError = "SENTINEL-UNCHANGED";
+        BubbleGameTestAccess::reportTournamentResult(game, "Ada");
+        CHECK(BubbleGameTestAccess::tournamentReported(game));
+        CHECK(nc->tournamentError == "SENTINEL-UNCHANGED");
+
+        // Pre-return bracket navigation: the coordinator has already retired
+        // this match (assignment.returned) -- as happens once both sides'
+        // reports are in, which can beat this client's own TOUR_RETURN
+        // delivery if the player backs out to the bracket immediately after
+        // their round ends. TournamentReportCommand() refuses to build a
+        // REPORT for a returned assignment, so a late/duplicate local outcome
+        // reaching ReportTournamentResult() after that point is silently
+        // dropped rather than reported against a room the server no longer
+        // has.
+        BubbleGameTestAccess::setTournamentReported(game, false);
+        nc->tournaments.assignment.returned = true;
+        nc->tournamentError = "SENTINEL-UNCHANGED";
+        BubbleGameTestAccess::reportTournamentResult(game, "Ada");
+        CHECK(!BubbleGameTestAccess::tournamentReported(game));
+        CHECK(nc->tournamentError == "SENTINEL-UNCHANGED");
+
+        // A winner nick that matches neither assigned player (corrupted local
+        // state, or a stale assignment from a different match) is refused the
+        // same way: no command, no send, flag stays clear.
+        nc->tournaments.assignment.returned = false;
+        BubbleGameTestAccess::reportTournamentResult(game, "Mallory");
+        CHECK(!BubbleGameTestAccess::tournamentReported(game));
+        CHECK(nc->tournamentError == "SENTINEL-UNCHANGED");
+
+        // Don't leak this fake assignment into any test that runs after this one.
+        nc->tournaments.Reset();
+        nc->tournamentError.clear();
     }
 
     SDL_DestroyRenderer(renderer);
