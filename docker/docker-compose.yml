@@ -82,11 +82,24 @@ services:
       - DISCORD_BOT_TOKEN=${DISCORD_BOT_TOKEN:-}
       - DISCORD_CHANNEL_ID=${DISCORD_CHANNEL_ID:-}
 
-  # ── nginx TLS termination ───────────────────────────────────────────────────
+  # ── nginx TLS termination + website ─────────────────────────────────────────
   # Terminates SSL and proxies WebSocket connections to fb-server.
-  # Browser clients connect to wss://yourdomain.com:443
+  # Browser game clients connect to wss://yourdomain.com:443
+  #
+  # Also serves the public website on that same port to ordinary browsers --
+  # see nginx.conf for how the two are dispatched apart, and Dockerfile.site
+  # for where the pages come from. That's why this is a `build:` rather than
+  # the plain `image: nginx:alpine` it used to be: the site is generated from
+  # the repo's markdown at image build time, not hand-written and mounted.
+  #
+  # Consequence for deploys: the site only changes when this image is REBUILT,
+  # so a content change needs `docker compose up -d --build nginx` -- adding
+  # nginx to whatever build command the other services already use. A plain
+  # `up -d` will not pick up new page content.
   nginx:
-    image: nginx:alpine
+    build:
+      context: ..          # repo root — Dockerfile.site reads site/ and docs/
+      dockerfile: docker/Dockerfile.site
     restart: unless-stopped
     logging: *default-logging
     ports:

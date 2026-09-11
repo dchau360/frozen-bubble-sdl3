@@ -155,6 +155,37 @@ docker compose down
 
 ---
 
+## The Website on Port 443
+
+Port 443 does two jobs. A WebSocket handshake (`Upgrade: websocket`, which
+every browser game client sends) is proxied to `fb-server`; anything else is
+an ordinary browser, and gets served a website instead. Before this existed
+nginx answered those requests with an HTTP 426, so visiting your domain in a
+browser produced an error page rather than anything useful.
+
+The pages are generated from the repo's own markdown (`site/index.md` and
+`docs/PRIVACY_POLICY.md`) by `tools/build-site.py`, and baked into the nginx
+image by `docker/Dockerfile.site` at build time — the same generator and the
+same sources that produce the project's GitHub Pages site, so the two cannot
+drift apart.
+
+**Two consequences worth knowing if you host your own server:**
+
+1. Page content only changes when the image is **rebuilt**. `docker compose
+   up -d nginx` restarts the container but keeps the old pages; use
+   `docker compose up -d --build nginx`. (`nginx.conf` and the certificates
+   are bind-mounted, not baked in, so *those* still only need a restart.)
+2. The site you serve is **this project's** landing page — it describes the
+   game, links to its store listings, and names the Android build's
+   publisher. That's deliberate (it's the game's own GPL'd site, and it
+   links back to the upstream repo), but it is not *your* page. If you'd
+   rather your domain not serve it, either point the `nginx` service back at
+   `image: nginx:alpine` and restore the old 426 response in
+   `docker/nginx.conf`, or mount your own directory over
+   `/usr/share/nginx/html`.
+
+---
+
 ## Optional — Discord Join & Result Alerts
 
 Every time a player arrives on your server, it can post a message to a
@@ -438,10 +469,12 @@ chmod +x ~/update-server.sh
 sudo ~/update-server.sh yourdomain.com
 ```
 
-That single run pulls `main`, rebuilds and restarts `fb-server` and
-`discord-relay`, runs `certbot renew` (a no-op unless the cert is within 30
-days of expiry), and calls `tools/link-fb-certs.sh` to relink and serve
-whatever cert is currently live. Read the script's own header comment for
+That single run pulls `main`, rebuilds and restarts `fb-server`,
+`discord-relay` and `nginx`, runs `certbot renew` (a no-op unless the cert
+is within 30 days of expiry), and calls `tools/link-fb-certs.sh` to relink
+and serve whatever cert is currently live. `nginx` is in the rebuild list
+because the website it serves is generated into its image (see the section
+above) — a restart alone would keep serving the previous build's pages. Read the script's own header comment for
 the full flag list (`--no-pull`, `--no-renew`, `--if-due`) and for how to
 schedule it (e.g. daily via cron with `--if-due`, so it renews the cert
 automatically without ever double-renewing or drifting off a fixed
