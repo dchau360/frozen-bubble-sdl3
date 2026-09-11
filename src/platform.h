@@ -129,6 +129,15 @@ extern const char* const kDiscordInviteUrl;
 // button.
 bool HasDiscordInvite();
 
+#ifdef FROZEN_BUBBLE_TEST_ACCESS
+// kDiscordInviteUrl is a compile-time constant, so the "no Discord invite"
+// branch of every row/index that depends on HasDiscordInvite() (the lobby
+// sidebar, the NET GAME server list) is otherwise unreachable from a test
+// binary built with this game's own real invite baked in. Forces
+// HasDiscordInvite() false without needing a second build. Test-only.
+extern bool testForceDiscordInviteOff;
+#endif
+
 // Hands the invite to the platform's browser (SDL_OpenURL: Safari/Chrome on
 // desktop, an Intent on Android, Safari on iOS, window.open in the browser
 // build). Returns false when there is no invite configured or the platform

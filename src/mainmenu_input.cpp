@@ -53,6 +53,7 @@
 #include "textinput.h"
 
 void MainMenu::HandleInput(SDL_Event *e){
+    if (TournamentPanelKey(e)) return;
     switch(e->type) {
         case SDL_EVENT_TEXT_INPUT:
             MenuTextInputEvent(e);
@@ -1363,6 +1364,7 @@ void MainMenu::MenuUpKey() {
                                 // compiled in. Without this it renders but
                                 // arrow keys stop one short of it.
                                 if (LobbyDiscordIndex(games.size()) >= 0) maxActions++;
+                                if (LobbyTournamentIndex(games.size()) >= 0) maxActions++;
                             }
                             // The HELP box (kRoomHelpTapIndex) and the >5-cap
                             // roster's tap rows park selectedActionIndex on fake
@@ -1479,6 +1481,7 @@ void MainMenu::MenuDownKey() {
                                 // compiled in. Without this it renders but
                                 // arrow keys stop one short of it.
                                 if (LobbyDiscordIndex(games.size()) >= 0) maxActions++;
+                                if (LobbyTournamentIndex(games.size()) >= 0) maxActions++;
                             }
                             if (currentGame) {
                                 if (selectedActionIndex == kRoomSetTeamsTapIndex) {
@@ -2058,6 +2061,10 @@ void MainMenu::MenuReturnKey() {
                                     // room, so it would otherwise land in the
                                     // "gameIndex out of bounds" arm below and
                                     // silently do nothing.
+                                    if (selectedActionIndex == LobbyTournamentIndex(games.size())) {
+                                        OpenTournament();
+                                        return;
+                                    }
                                     if (selectedActionIndex == LobbyDiscordIndex(games.size())) {
                                         OpenDiscordInvite();
                                         AudioMixer::Instance()->PlaySFX("menu_selected");

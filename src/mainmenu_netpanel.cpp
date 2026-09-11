@@ -459,6 +459,8 @@ void MainMenu::NetPanelRender() {
         return;
     }
 
+    if (showingTournament) { TournamentPanelRender(); return; }
+
     // If in lobby, use world map background; otherwise use void panel for connection screens
 
     if (networkInLobby && netGameBackground && networkInputMode == 0) {
@@ -1292,7 +1294,14 @@ void MainMenu::NetPanelLobbyActionsRender() {
             const int lobbyDiscordIdx = LobbyDiscordIndex(actions.size() - 2);
             const bool showDiscordHere = lobbyDiscordIdx >= 0;
             const int kDiscordRowH = 22;
-            const int rowsBottom = sb.y + sb.h - (showDiscordHere ? kDiscordRowH : 0);
+            const int tourIdx = LobbyTournamentIndex(actions.size() - 2);
+            const int rowsBottom = sb.y + sb.h - (showDiscordHere ? kDiscordRowH : 0) - (tourIdx >= 0 ? kDiscordRowH : 0);
+            if (tourIdx >= 0) {
+                SDL_Rect tourRect{sb.x + 6, rowsBottom, sb.w - 12, kDiscordRowH - 2};
+                if (selectedActionIndex == tourIdx) drawSelection(tourRect);
+                drawLabel("Tournaments", tourRect.x + 5, tourRect.y + 2, selectedActionIndex == tourIdx ? textGold : textMain);
+                AddPanelTapRow(tourIdx, tourRect);
+            }
 
             std::vector<NetworkPlayer> openPlayers = netClient->GetOpenPlayers();
             int shown = 0;

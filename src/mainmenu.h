@@ -19,6 +19,7 @@
 
 #ifndef MAINMENU_H
 #define MAINMENU_H
+#include "tournamentstate.h"
 
 #include <SDL3/SDL.h>
 #include <vector>
@@ -102,6 +103,7 @@ public:
     }
     void SetupNewGame(int mode);
     void ShowPanel(int which);
+    void OpenTournament(int id = 0);
     void ReturnToMenu();
     void ReturnToNetLobby();  // Return to network lobby after quitting a network game
     // Drives one frame of network I/O. Called unconditionally from
@@ -587,6 +589,12 @@ private:
     // every caller resolves it against the same list it is already drawing or
     // navigating this frame.
     static int LobbyDiscordIndex(size_t roomCount);
+    int LobbyTournamentIndex(size_t roomCount) const;
+    void TournamentPanelRender();
+    bool TournamentPanelKey(SDL_Event* e);
+    bool showingTournament = false, tournamentConfirm = false;
+    int tournamentViewId = 0, tournamentSelection = 0, tournamentSection = 0;
+    std::vector<TournamentAction> tournamentButtons;
     void NetSetupPanelRender(); // Chain reaction prompt for network games
     void SavePreNick();         // Persist networkPreNick (localStorage on WASM, INI elsewhere)
     void StartLocalServer();

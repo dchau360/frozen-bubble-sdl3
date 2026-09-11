@@ -662,6 +662,19 @@ void MainMenu::SetupNewGame(int mode) {
                     // <=5-cap: unchanged grid path.
                     for (int i = 0; i < 5; i++) ns.playerTeams[i] = netPlayerTeams[i];
                 }
+                if (netClient && netClient->tournaments.assignment.tournament && !netClient->tournaments.assignment.returned) {
+                    ns.gameMode = GameMode::Classic;
+                    ns.chainReaction = false;
+                    // The tournament coordinator owns the first-to-two score.
+                    // Each reserved room contains exactly one game round.
+                    ns.victoriesLimit = 0;
+                    ns.mouseEnabled = true;
+                    netRoomMouseEnabled = true;
+                    for (int i = 0; i < 5; ++i) {
+                        ns.playerColors[i] = 8; ns.disableCompression[i] = false;
+                        ns.aimGuide[i] = false; ns.playerTeams[i] = 0;
+                    }
+                }
                 // Apply per-session mouse setting (off by default in multiplayer)
                 GameSettings::Instance()->mouseEnabled = netRoomMouseEnabled;
                 showingTeamsPanel = false;
@@ -741,6 +754,9 @@ void MainMenu::ReturnToMenu() {
 void MainMenu::ReturnToNetLobby() {
     SDL_Log("ReturnToNetLobby() called - returning to network lobby");
 
+    const bool returningFromTournament =
+        FrozenBubble::Instance()->bubbleGame()->IsTournamentRound();
+
     // Clear the current game room data so it doesn't show stale info
     // The room is torn down below, so the bots in it go too -- whether they
     // are still ours or the game has taken them over.
@@ -757,7 +773,7 @@ void MainMenu::ReturnToNetLobby() {
             currentGame->started = false;
         }
         // If somehow still IN_GAME (BubbleGame normally calls PartGame first), clean up
-        if (netClient->GetState() == IN_GAME) {
+        if (netClient->GetState() == IN_GAME && !returningFromTournament) {
             netClient->PartGame();
         }
     }
@@ -770,6 +786,9 @@ void MainMenu::ReturnToNetLobby() {
     syncWaitStart = 0;
     wasmBotWaitStart = 0;
     pendingLobbyConnect = false;
+    if (returningFromTournament && netClient &&
+        netClient->tournaments.assignment.tournament)
+        OpenTournament(netClient->tournaments.assignment.tournament);
     SDL_StopTextInput(SDL_GetKeyboardFocus());
 
     // Clear stale game list immediately so ESC-quitter can't see/join the in-progress game
