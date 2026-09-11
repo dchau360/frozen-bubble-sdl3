@@ -1,3 +1,18 @@
+# Docker's own default logging driver (json-file) has no size cap at all --
+# left alone, each container's stdout/stderr grows on disk forever. That's a
+# real problem here, not a theoretical one: fb-server runs with `-o CONNECT`
+# below, so it logs a line per player connection on top of every INFO/ERROR
+# line, and a long-lived public server accumulates that indefinitely with
+# nothing to stop it. Capped the same way for all three services via this
+# shared anchor: 10MB per file, 3 files kept (the current one plus 2 rotated
+# out), so each container's logs top out around 30MB rather than however
+# large `docker/*.log` happens to grow on a VM nobody is watching.
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
 services:
 
   # ── Frozen Bubble game server ───────────────────────────────────────────────
@@ -23,6 +38,7 @@ services:
     # Overrides the image's CMD, so every other flag has to be repeated here.
     command: ["/usr/local/bin/fb-server", "-d", "-q", "-l", "-z",
               "-o", "CONNECT", "-n", "${FB_SERVER_NAME:-frozenbubble}"]
+    logging: *default-logging
     ports:
       - "1511:1511"        # native TCP clients connect here directly
     environment:
@@ -43,6 +59,7 @@ services:
       context: ..
       dockerfile: docker/Dockerfile.discord-relay
     restart: unless-stopped
+    logging: *default-logging
     environment:
       - DISCORD_RELAY_BIND=0.0.0.0:9100
       # The one Discord channel join alerts post to; leave unset for stub mode.
@@ -71,6 +88,7 @@ services:
   nginx:
     image: nginx:alpine
     restart: unless-stopped
+    logging: *default-logging
     ports:
       - "80:80"            # redirects to HTTPS
       - "443:443"          # browser WebSocket clients connect here
