@@ -120,18 +120,22 @@ On first run certbot will:
 ## Step 6 — Link the Certificates into Place
 
 ```bash
-sudo ln -sf /etc/letsencrypt/live/yourdomain.com/fullchain.pem docker/ssl/fullchain.pem
-sudo ln -sf /etc/letsencrypt/live/yourdomain.com/privkey.pem   docker/ssl/privkey.pem
+sudo tools/link-fb-certs.sh yourdomain.com
 ```
 
-Symlink rather than copy: `/etc/letsencrypt/live/yourdomain.com/*.pem` is
-itself a symlink into `archive/`, and `certbot renew` repoints it to the
-freshly renewed file without ever changing that `live/` path. Linking
-`docker/ssl/*.pem` to it means renewal never needs a copy step again —
-restarting the stack (Step 7's `docker compose down` / `up`) re-resolves the
-symlink chain and picks up the renewed cert. A copy must be re-run after
-every renewal or the container keeps serving the old file, silently, since
-nothing checks the served cert's expiry.
+`tools/link-fb-certs.sh` (checked into the repo) symlinks `docker/ssl/*.pem`
+to `/etc/letsencrypt/live/yourdomain.com/*.pem` rather than copying them:
+that `live/` path is itself a symlink into `archive/`, and `certbot renew`
+repoints it to the freshly renewed file without ever changing the `live/`
+path itself. Symlinking `docker/ssl/*.pem` to it means renewal never needs a
+copy step again — the script also recreates the nginx container so the
+newly-linked cert actually gets served (Docker resolves a bind-mounted
+symlink once, at container creation, so a running nginx keeps serving
+whatever cert was live when *it* started even after the symlink is
+repointed). It's idempotent, so running it again later (e.g. after a
+renewal) is always safe — see the script's own header for details. Domain is
+a required argument; there's no default, since this script is shared across
+every hoster's own server.
 
 ---
 
@@ -413,38 +417,58 @@ read the report log.
 
 ## Updating the Server
 
-When a new version of fb-server is released, rebuild the Docker image to pick up the changes:
+A one-off update — pull the latest code, rebuild, and restart — is just:
 
 ```bash
 cd ~/frozen-bubble-sdl3 && git pull && cd docker && docker compose up --build -d
 ```
 
+But that alone doesn't touch your SSL certificate, which still needs
+renewing every ~60 days (see below) and re-linking after every renewal so
+nginx actually serves the new one. `tools/update-server.sh` (checked into
+the repo) does both jobs — code update *and* cert renewal/relink — in one
+script, safe to run by hand or on a schedule. It's a **template**: copy it
+outside your checkout before using it (the script explains why in its own
+header — in short, a script shouldn't `git pull` the repo it's currently
+running out of):
+
+```bash
+cp ~/frozen-bubble-sdl3/tools/update-server.sh ~/update-server.sh
+chmod +x ~/update-server.sh
+sudo ~/update-server.sh yourdomain.com
+```
+
+That single run pulls `main`, rebuilds and restarts `fb-server` and
+`discord-relay`, runs `certbot renew` (a no-op unless the cert is within 30
+days of expiry), and calls `tools/link-fb-certs.sh` to relink and serve
+whatever cert is currently live. Read the script's own header comment for
+the full flag list (`--no-pull`, `--no-renew`, `--if-due`) and for how to
+schedule it (e.g. daily via cron with `--if-due`, so it renews the cert
+automatically without ever double-renewing or drifting off a fixed
+interval) — it's all documented there rather than duplicated here.
+
 ---
 
 ## Renewing the Certificate
 
-Let's Encrypt certificates expire after 90 days. If `docker/ssl/*.pem` are the
-symlinks Step 6 set up, `certbot renew` updates what they point to in place —
-no copy step needed, just a restart to pick it up:
+Let's Encrypt certificates expire after 90 days; renew any time within the
+last 30 days of that window. If you're using `tools/update-server.sh` (see
+above) on a schedule, this already happens automatically and you can skip
+this section. To do it manually:
 
 ```bash
-cd ~/frozen-bubble-sdl3/docker
-docker compose down                  # free port 80
 sudo certbot renew
-./setup.sh -d
+sudo tools/link-fb-certs.sh yourdomain.com   # relinks + recreates nginx to serve it
 ```
 
-(Older deploys that copied the cert instead of symlinking it still need the
-two `sudo cp` commands from Step 6 re-run here, every time — easy to forget,
-and nothing catches it if you do: `setup.sh`'s validity check only confirms
-the file parses, not that it is still in date, so a stale copy runs silently
-until browser clients start failing to connect. Switching to a symlink once
-removes the step entirely.)
+`certbot renew` alone is not enough — see Step 6 above for why nginx keeps
+serving the old cert until the container is recreated, which is what
+`link-fb-certs.sh` handles.
 
 Verify the renewal actually took effect before trusting it:
 
 ```bash
-openssl x509 -in ssl/fullchain.pem -noout -enddate
+openssl x509 -in docker/ssl/fullchain.pem -noout -enddate
 ```
 
 ---
