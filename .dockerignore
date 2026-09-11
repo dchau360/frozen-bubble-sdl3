@@ -1,0 +1,48 @@
+# Keeps the Docker build context small. All three services in
+# docker/docker-compose.yml build with `context: ..` -- the repo root -- so
+# without this file every `docker compose build` hands the daemon the entire
+# checkout. On a full development clone that is ~22GB, the bulk of it the
+# Android SDL3 submodules, sanitizer/wasm build trees and git history, none of
+# which any Dockerfile copies. It is paid per build, and the site image is now
+# rebuilt on every content change (see docker/Dockerfile.site), so it stopped
+# being merely wasteful.
+#
+# Deliberately a denylist of the known-large, known-unneeded paths rather than
+# an allowlist (`*` plus `!` re-includes): a future Dockerfile that copies
+# something new keeps working, instead of failing on a missing file that is
+# silently absent from the context. Between the three Dockerfiles the context
+# needs only server/, CMakeLists.txt, site/, tools/build-site.py and
+# docs/{PRIVACY_POLICY.md,screenshots,store-assets} -- all left in.
+
+# Android port: SDL3/SDL3_image/SDL3_mixer submodules, Gradle caches. 15GB.
+android/
+
+# Git history. Nothing is built from it -- the fb-server image compiles from
+# the copied sources, not from a checkout.
+.git/
+.gitignore
+.gitattributes
+
+# Local build trees, including the sanitizer and wasm ones.
+build/
+build-*/
+dist-wasm/
+cmake-build-*/
+
+# Worktrees are full copies of the repo, so they would otherwise be sent
+# alongside it.
+.worktrees/
+.claude/
+
+# Editor/OS noise.
+.DS_Store
+*.swp
+.vscode/
+.idea/
+
+# Never belongs in an image, and docker/ssl holds real certificate material
+# on a deployed host. nginx.conf and the certs reach the container as
+# bind mounts declared in docker-compose.yml, not through the build context.
+docker/ssl/
+docker/.env
+docker/push-credentials/

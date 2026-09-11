@@ -31,10 +31,13 @@
 #      $FROZEN_BUBBLE_REPO, as the repo's actual owner (auto-detected, see
 #      "Repo owner" below) -- not root -- see the comment at that step for
 #      why the owner matters.
-#   2. Rebuilds the fb-server and discord-relay Docker images from that
-#      checkout and recreates both containers from them (`docker compose up
+#   2. Rebuilds the fb-server, discord-relay and nginx Docker images from that
+#      checkout and recreates the containers from them (`docker compose up
 #      -d --build`). This is what actually ships new game/relay code; step 1
-#      alone only updates the files on disk.
+#      alone only updates the files on disk. nginx is in that list because the
+#      website it serves is generated into its image at build time (see
+#      docker/Dockerfile.site) -- a recreate alone, which is all step 4 does,
+#      would keep serving the pages baked into the previous image.
 #   3. Runs `certbot renew --quiet`, which is a no-op unless the cert is
 #      within 30 days of expiry (Let's Encrypt's own renewal window) --
 #      calling it unconditionally on every run is what makes this script
@@ -217,8 +220,13 @@ else
     log "== skipping git pull (--no-pull) =="
 fi
 
-log "== rebuilding and restarting fb-server + discord-relay =="
-( cd "$COMPOSE_DIR" && docker compose up -d --build fb-server discord-relay )
+# nginx is rebuilt here, not just recreated by link-fb-certs.sh below: the
+# website is generated into its image by docker/Dockerfile.site, so new page
+# content ships on a --build and is invisible to a plain recreate. Its
+# nginx.conf and certs stay bind-mounted, so those still only need the restart
+# that the relink step already performs.
+log "== rebuilding and restarting fb-server + discord-relay + nginx =="
+( cd "$COMPOSE_DIR" && docker compose up -d --build fb-server discord-relay nginx )
 
 if [ "$DO_RENEW" -eq 1 ]; then
     log "== renewing certs (no-op unless within 30 days of expiry) =="

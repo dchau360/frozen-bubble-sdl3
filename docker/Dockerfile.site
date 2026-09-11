@@ -1,0 +1,35 @@
+# Builds the public website that nginx serves on this host alongside the
+# WebSocket proxy (see nginx.conf).
+#
+# The site is GENERATED from site/index.md + docs/PRIVACY_POLICY.md by
+# tools/build-site.py -- the same generator and the same sources GitHub Pages
+# publishes from, so the two origins cannot drift apart. Hand-writing a second
+# marketing page here was the obvious alternative and is exactly the mistake
+# this project already made once: the privacy policy lived as three hand-synced
+# copies, only one of which was served, and the served one silently fell behind
+# (see build-site.py's own docstring). One source, rendered at image build time.
+#
+# Build context is the REPO ROOT, not docker/ -- see docker-compose.yml's
+# `context: ..` for the nginx service, matching fb-server's own build.
+FROM python:3.12-alpine AS build
+
+# build-site.py's only third-party dependency.
+RUN pip install --no-cache-dir markdown
+
+WORKDIR /src
+COPY tools/build-site.py tools/build-site.py
+COPY site/ site/
+COPY docs/PRIVACY_POLICY.md docs/PRIVACY_POLICY.md
+# Whole directories rather than the individual files build-site.py's ASSETS
+# list names today, so adding a screenshot to the site needs an edit in one
+# place (that list) instead of two.
+COPY docs/screenshots/ docs/screenshots/
+COPY docs/store-assets/ docs/store-assets/
+
+RUN python3 tools/build-site.py /out
+
+# Only /out crosses into the final image, so the unpublished docs/ material the
+# builder stage pulled in (audit notes, the 4096x2304 store header) is not
+# shipped or served.
+FROM nginx:alpine
+COPY --from=build /out /usr/share/nginx/html

@@ -3,6 +3,25 @@
 ## Unreleased
 
 - **Online tournaments** — single-elimination brackets for 4–16 human entrants, byes for non-power-of-two counts up to 16, best of three per match. Create or join one from the online lobby's new **Tournaments** row; a locked ruleset (Classic, two players, 8 colors, chain reactions off) applies to every match so no per-room setting can drift the bracket partway through. Leaving or disconnecting mid-tournament forfeits the current and any future match. Conflicting result reports leave a match **disputed** until a server operator resolves it — see `SetupServer.md`'s "Online Tournaments" section.
+- **The privacy policy now names Solina AI LLC as the publisher and data
+  controller for the Google Play build** (effective date moved to
+  September 11, 2026). It previously said the project had "no company behind
+  it", which stopped being accurate once the app shipped under an
+  Organization Play Console account -- and a policy that contradicts the
+  publisher shown on the store listing is the kind of mismatch an ad or store
+  review reads. The substance of what the app collects has not changed; the
+  game remains GPLv2 and the company claims no ownership of the original
+  artwork or music. Contact stays the public issue tracker, deliberately:
+  there is no support email, and answers there are visible to the next player
+  with the same question.
+- **The production server's port 443 now serves the project website to
+  browsers** instead of answering them with an HTTP 426. WebSocket game
+  traffic is dispatched on the `Upgrade` header exactly as before. The pages
+  are generated from the same markdown sources GitHub Pages publishes, so the
+  two cannot drift apart, and they are baked into the nginx image -- which
+  means page changes ship on a `--build`, and `tools/update-server.sh` now
+  rebuilds `nginx` alongside `fb-server` and `discord-relay` rather than
+  relying on the cert relink's restart.
 
 ## v2.4.102
 
