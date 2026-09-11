@@ -490,11 +490,18 @@ void MainMenu::NetPanelWorldMapRender() {
     // left panelText set to yellow, which persists across frames.
     panelText.UpdateColor({255, 255, 255, 255}, {0, 0, 0, 255});
 
-        // Request LIST periodically (every 2 seconds)
+        // Request LIST periodically (every 500ms)
         Uint32 now = SDL_GetTicks();
         if (now - lastListRequest > 500) {
             netClient->RequestList();
             lastListRequest = now;
+            // Piggyback "TOUR LIST" on the same timer so a tournament that
+            // already exists shows up in the room list below without the
+            // player ever opening the (still separate) browse/create screen
+            // (2026-09-11, user feedback). Gated on capability support, same
+            // as the "Create Tournament" row itself, so a server without
+            // tournament support never gets asked.
+            if (netClient->tournaments.supported) netClient->TournamentCommand("LIST");
         }
 
         // Render world map background
@@ -788,16 +795,28 @@ void MainMenu::NetPanelLobbyActionsRender() {
             char createValue[32];
             snprintf(createValue, sizeof(createValue), "%d players", kRoomSizes[netRoomSizeChoice]);
             lobbyList.Row(1, "Create Game Room", createValue, true, true, SDLK_RETURN);
-            // Tournaments sits right under Create Game Room (2026-09-11 --
-            // moved out of the right "Online" sidebar per user feedback: the
-            // organizer feature reads as another room-management action, not
-            // something that belongs alongside the free-player list). Fixed
-            // at LobbyTournamentIndex()==2 when supported, which is also why
-            // the room loop below starts from LobbyRoomListStart() instead
-            // of a hardcoded 2.
+            // "Create Tournament" sits right under Create Game Room
+            // (2026-09-11 -- moved out of the right "Online" sidebar per user
+            // feedback: the organizer feature reads as another
+            // room-management action, not something that belongs alongside
+            // the free-player list). Fixed at LobbyTournamentIndex()==2 when
+            // supported. Renamed from "Tournaments" the same day, once it
+            // stopped being the only way to reach one: any tournament already
+            // in registration or running gets its own row directly below
+            // (same feedback -- an existing tournament is exactly as joinable
+            // as a game room and belongs in this list, not one more screen
+            // away). Those rows, if any, are what LobbyRoomListStart() adds
+            // its offset for, so the room loop below still just starts from
+            // that helper instead of a hardcoded 2 or 3.
             const int tourIdx = LobbyTournamentIndex();
             if (tourIdx >= 0) {
-                lobbyList.Row(tourIdx, "Tournaments", "");
+                lobbyList.Row(tourIdx, "Create Tournament", "");
+                const auto joinable = LobbyJoinableTournaments();
+                for (size_t i = 0; i < joinable.size(); i++) {
+                    const auto& t = joinable[i];
+                    std::string value = std::to_string(t.count) + " · " + t.state;
+                    lobbyList.Row(tourIdx + 1 + (int)i, t.owner + "'s tournament", value);
+                }
             }
             const int roomListStart = LobbyRoomListStart();
             for (size_t i = 2; i < actions.size() && i < 18; i++) {
@@ -1651,7 +1670,7 @@ void MainMenu::NetPanelConnectionScreensRender() {
         // Main lobby screen with game list
         const char* stateStr = "Disconnected";
         if (netClient->IsConnected()) {
-            // Request LIST periodically (every 2 seconds)
+            // Request LIST periodically (every 500ms)
             Uint32 now = SDL_GetTicks();
             Uint32 timeSinceLastRequest = now - lastListRequest;
             if (timeSinceLastRequest > 500) {

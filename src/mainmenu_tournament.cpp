@@ -26,8 +26,29 @@ int MainMenu::LobbyTournamentIndex() const {
     return net && net->tournaments.supported ? 2 : -1;
 }
 
+std::vector<TournamentListing> MainMenu::LobbyJoinableTournaments() const {
+    // Which tournaments get a "join this tournament" row between "Create
+    // Tournament" and the room list (2026-09-11, user feedback: a tournament
+    // that already exists should show up in the room list, not require a
+    // trip into a separate browse screen to discover). A tournament that has
+    // already finished or been cancelled is excluded -- it isn't joinable,
+    // and the coordinator drops it entirely once RETAIN_SECONDS passes
+    // (server/tournament.c), so a dead entry here would be a tap that does
+    // nothing useful.
+    std::vector<TournamentListing> out;
+    auto* net = NetworkClient::Existing();
+    if (!net || !net->tournaments.supported) return out;
+    for (const auto& item : net->tournaments.list)
+        if (item.state == "registration" || item.state == "running") out.push_back(item);
+    return out;
+}
+
+int MainMenu::LobbyTournamentListCount() const {
+    return (int)LobbyJoinableTournaments().size();
+}
+
 int MainMenu::LobbyRoomListStart() const {
-    return LobbyTournamentIndex() >= 0 ? 3 : 2;
+    return LobbyTournamentIndex() >= 0 ? 3 + LobbyTournamentListCount() : 2;
 }
 
 void MainMenu::TournamentPanelRender() {
@@ -227,8 +248,25 @@ bool MainMenu::TournamentPanelKey(SDL_Event* e) {
             const bool noCompress[5] = {false, false, false, false, false};
             const bool aim[5] = {tournamentAimGuide, tournamentAimGuide, tournamentAimGuide, tournamentAimGuide, tournamentAimGuide};
             const int teams[5] = {0, 0, 0, 0, 0};
+            // victoriesLimit=1: the server's tournament bracket (server/tournament.c)
+            // already implements its own best-of-three across up to 3 SEPARATE
+            // rooms per match -- commit_result() tears the room down
+            // (game_tournament_retire -> remove_prio) the instant both sides'
+            // "TOUR REPORT" land, whether or not the match itself is decided,
+            // then re-creates a fresh room for the next round once both sides
+            // ready up again. A per-room victoriesLimit > 1 told the CLIENT to
+            // keep playing additional rounds inside that same room after the
+            // server had already torn it down -- so the very next in-game byte
+            // (win-claim 'F', stats-sync 'S', ...) landed on a connection the
+            // server had just demoted out of prio/binary-protocol mode and got
+            // fatally rejected as garbage (MISSING_FB_PROTOCOL_TAG), which is
+            // what actually caused "players immediately leave" and "winning one
+            // round forces the loser to forfeit the rest of the tournament"
+            // (2026-09-11 -- see docs/ONLINE_TOURNAMENT_HANDOFF.md). One room
+            // must equal exactly one round to match the server's own unit of
+            // play.
             std::string blob = NetworkClient::BuildOptionsBlob(chainReactionEnabled, /*continueWhenLeave=*/true,
-                /*singleTarget=*/false, /*victoriesLimit=*/5, colors, noCompress, aim, /*mouseEnabled=*/false,
+                /*singleTarget=*/false, /*victoriesLimit=*/1, colors, noCompress, aim, /*mouseEnabled=*/false,
                 netGameMode, RaceTargetAt(netRaceTargetIndex), TimedSecondsAt(netTimedSecondsIndex),
                 netAttackMode, teams, /*teamCount=*/2);
             net->TournamentCommand("CREATE " + blob);

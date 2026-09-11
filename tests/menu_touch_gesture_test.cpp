@@ -312,6 +312,7 @@ struct MainMenuTestAccess {
         return menu.LobbyDiscordIndex(roomCount);
     }
     static int LobbyTournamentIndexOf(const MainMenu& menu) { return menu.LobbyTournamentIndex(); }
+    static int LobbyTournamentListCountOf(const MainMenu& menu) { return menu.LobbyTournamentListCount(); }
     static int LobbyRoomListStartOf(const MainMenu& menu) { return menu.LobbyRoomListStart(); }
     static int ServerListDiscordIndexOf(const MainMenu& menu) { return menu.ServerListDiscordIndex(); }
     // Tournament bracket/browser panel (mainmenu_tournament.cpp).
@@ -325,6 +326,7 @@ struct MainMenuTestAccess {
     static int TournamentSelection(const MainMenu& menu) { return menu.tournamentSelection; }
     static void SetTournamentSelection(MainMenu& menu, int index) { menu.tournamentSelection = index; }
     static void SetTournamentViewId(MainMenu& menu, int id) { menu.tournamentViewId = id; }
+    static int TournamentViewId(const MainMenu& menu) { return menu.tournamentViewId; }
     static const std::vector<TournamentAction>& TournamentButtons(const MainMenu& menu) {
         return menu.tournamentButtons;
     }
@@ -1458,6 +1460,84 @@ int main() {
         nc->tournaments.supported = false;
         NetworkClientTestAccess::SetGameList(*nc, {});
         NetworkClientTestAccess::SetState(*nc, DISCONNECTED);
+    }
+
+    // --- Online lobby: an already-existing tournament shows up as its own
+    // row in the room list (2026-09-11, user feedback) instead of only being
+    // reachable by opening the "Tournaments" row's browse screen. Renamed to
+    // "Create Tournament" the same day since it's no longer the only way in.
+    // Covers what the four-combination test above can't: it only ever runs
+    // with an empty net->tournaments.list, so LobbyTournamentListCount() is
+    // always 0 there and this whole code path goes untouched otherwise.
+    {
+        NetworkClient* nc = NetworkClient::Instance();
+        NetworkClientTestAccess::SetPlayerNick(*nc, "host");
+        NetworkClientTestAccess::SetState(*nc, IN_LOBBY);
+        NetworkClientTestAccess::SetCurrentGame(*nc, nullptr);
+        std::vector<GameRoom> games;
+        games.push_back(GameRoom{});
+        games[0].creator = "alice"; games[0].maxPlayers = 5;
+        NetworkClientTestAccess::SetGameList(*nc, games);
+
+        nc->tournaments.supported = true;
+        nc->tournaments.list.clear();
+        TournamentListing entered; entered.id = 5; entered.owner = "alice"; entered.count = 4; entered.state = "registration";
+        TournamentListing playing; playing.id = 6; playing.owner = "bob"; playing.count = 2; playing.state = "running";
+        TournamentListing done; done.id = 7; done.owner = "carol"; done.count = 2; done.state = "complete";
+        nc->tournaments.list = {entered, playing, done};
+
+        std::unique_ptr<MainMenu> menu = MainMenuTestAccess::Create(renderer);
+        MainMenuTestAccess::EnterNetRoom(*menu);
+        MainMenuTestAccess::RenderLobbyActions(*menu);
+
+        const int tourIdx = MainMenuTestAccess::LobbyTournamentIndexOf(*menu);
+        const int listCount = MainMenuTestAccess::LobbyTournamentListCountOf(*menu);
+        const int roomListStart = MainMenuTestAccess::LobbyRoomListStartOf(*menu);
+        CHECK(tourIdx == 2);
+        // "complete" is excluded -- only the registration and running entries
+        // get a row.
+        CHECK(listCount == 2);
+        CHECK(roomListStart == tourIdx + 1 + listCount);
+
+        // Both joinable tournaments are real, separately tappable rows, not
+        // just something the ENTER-dispatch below happens to accept.
+        CHECK(!MainMenuTestAccess::RectsForIndex(*menu, tourIdx + 1).empty());
+        CHECK(!MainMenuTestAccess::RectsForIndex(*menu, tourIdx + 2).empty());
+
+        // ENTER on "Create Tournament" itself still opens the general browse
+        // view (id 0), same as when no tournament exists yet.
+        MainMenuTestAccess::SetTournamentViewId(*menu, 99);
+        MainMenuTestAccess::SetShowingTournament(*menu, false);
+        MainMenuTestAccess::SetSelectedActionIndex(*menu, tourIdx);
+        MainMenuTestAccess::PressReturn(*menu);
+        CHECK(MainMenuTestAccess::ShowingTournament(*menu));
+        CHECK(MainMenuTestAccess::TournamentViewId(*menu) == 0);
+
+        // ENTER on the first listed row opens that exact tournament, not the
+        // browse view and not its neighbor.
+        MainMenuTestAccess::SetTournamentViewId(*menu, 0);
+        MainMenuTestAccess::SetShowingTournament(*menu, false);
+        MainMenuTestAccess::SetSelectedActionIndex(*menu, tourIdx + 1);
+        MainMenuTestAccess::PressReturn(*menu);
+        CHECK(MainMenuTestAccess::ShowingTournament(*menu));
+        CHECK(MainMenuTestAccess::TournamentViewId(*menu) == entered.id);
+
+        // ENTER on the second listed row opens THAT one -- the two rows
+        // resolve to different tournaments, not both to the first.
+        MainMenuTestAccess::SetTournamentViewId(*menu, 0);
+        MainMenuTestAccess::SetShowingTournament(*menu, false);
+        MainMenuTestAccess::SetSelectedActionIndex(*menu, tourIdx + 2);
+        MainMenuTestAccess::PressReturn(*menu);
+        CHECK(MainMenuTestAccess::ShowingTournament(*menu));
+        CHECK(MainMenuTestAccess::TournamentViewId(*menu) == playing.id);
+
+        // Restore defaults so no later test in this binary inherits them.
+        nc->tournaments.supported = false;
+        nc->tournaments.list.clear();
+        NetworkClientTestAccess::SetGameList(*nc, {});
+        NetworkClientTestAccess::SetState(*nc, DISCONNECTED);
+        MainMenuTestAccess::SetShowingTournament(*menu, false);
+        MainMenuTestAccess::SetTournamentViewId(*menu, 0);
     }
 
     // --- Tournament withdrawal confirmation: visible keyboard focus --------

@@ -403,14 +403,31 @@ void conn_terminated(int fd, char* reason)
 
 /* Has fd sent us anything within the last few seconds? Lobby clients poll
  * LIST every 500ms (see mainmenu_netpanel.cpp), so a genuinely live
- * connection always has very recent traffic; a connection that's gone
- * silent for longer than this is almost certainly a stale ghost from an
- * unclean disconnect rather than a still-open second session. Used by the
- * NICK handler to decide whether a same-nickname collision is a real
- * duplicate live client (reject the new one) or a ghost to evict. */
+ * connection has very recent traffic *once it reaches the lobby list
+ * screen*; a connection that's gone silent for longer than this is almost
+ * certainly a stale ghost from an unclean disconnect rather than a
+ * still-open second session. Used by the NICK handler to decide whether a
+ * same-nickname collision is a real duplicate live client (reject the new
+ * one) or a ghost to evict.
+ *
+ * 2026-09-11: widened from 2s to 10s after a report of "half the players in
+ * a local 4-instance tournament immediately left." Several app instances
+ * launched close together all default to the same nickname (one shared
+ * SDL_GetPrefPath() prefs file per machine) and race to send NICK before
+ * every instance's 500ms LIST polling has ramped up -- screen transitions,
+ * asset loading, or simply the user still clicking through menus on the
+ * other windows can leave a genuinely live connection quiet for longer than
+ * 2s before its first poll. A false "stale" verdict here doesn't reject the
+ * newcomer, it silently conn_terminated()s the real, still-connected
+ * player -- exactly what "immediately left" looks like from their side. 10s
+ * is a wide enough margin to absorb that startup jitter while still being
+ * far shorter than the many seconds a person actually takes to notice a
+ * real disconnect and relaunch, so genuine ghost cleanup on reconnect is
+ * unaffected. See tests/server_discordalert_test.py's
+ * test_reconnect_replacing_a_ghost_does_not_re_announce. */
 int conn_recently_active(int fd)
 {
-        return (current_time - last_data_in[fd]) < 2;
+        return (current_time - last_data_in[fd]) < 10;
 }
 
 static char * get_greets_msg(void);

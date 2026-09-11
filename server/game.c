@@ -859,8 +859,26 @@ int process_msg(int fd, char* msg)
         /* check for leading protocol tag */
         if (!str_begins_static_str(msg, "FB/")
             || strlen(msg) < 8) {  // 8 stands for "FB/M.m f"(oo)
-                send_line_log(fd, fl_line_unrecognized, msg);
-                return 1;
+                /* A tournament match's room is torn down (game_tournament_retire
+                 * -> remove_prio) the instant both sides' "TOUR REPORT" land,
+                 * which can race a player's own trailing in-game byte for that
+                 * same room (win-claim 'F', stats-sync 'S', ...) still in
+                 * flight -- it arrives after this fd is back in plain/non-prio
+                 * mode and lands here looking like garbage, tag and all,
+                 * because the binary GAMEMSG format never had one. That is a
+                 * structurally-expected side effect of one room per bracket
+                 * round, not a hostile or broken client, so only disconnect
+                 * over it while fd still belongs to a room; a stray non-FB/
+                 * line with no game to route to is silently dropped instead.
+                 * See mainmenu_tournament.cpp's victoriesLimit=1 comment for
+                 * the fix that makes this race rare, and
+                 * docs/ONLINE_TOURNAMENT_HANDOFF.md for the incident. */
+                if (find_game_by_fd(fd)) {
+                        send_line_log(fd, fl_line_unrecognized, msg);
+                        return 1;
+                }
+                l2(OUTPUT_TYPE_DEBUG, "[%d] dropping non-FB/ line with no current game (likely a stale in-game byte): %s", fd, msg);
+                return 0;
         }
     
         /* check if client protocol is compatible; for simplicity, we don't support client protocol more recent

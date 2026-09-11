@@ -584,17 +584,30 @@ private:
     // rows above for a tap on Discord to fire "Set name" instead.
     int ServerListDiscordIndex() const;
     // Same idea for the online lobby's own action list: 0 = Chat, 1 = Create
-    // Game Room, then (2026-09-11) Tournaments sits at a fixed slot 2 right
-    // under Create Game Room -- the organizer-facing feature belongs next to
-    // the other room-management action, not buried in the right sidebar --
-    // so the room list starts at 3 when tournaments are supported (else 2,
-    // no gap). LobbyRoomListStart() is that offset; LobbyDiscordIndex takes
-    // the room count rather than reading it back off NetworkClient so every
-    // caller resolves it against the same list it is already drawing or
-    // navigating this frame.
+    // Game Room, then (2026-09-11) "Create Tournament" sits at a fixed slot 2
+    // right under Create Game Room -- the organizer-facing feature belongs
+    // next to the other room-management action, not buried in the right
+    // sidebar. (2026-09-11, later same day) Renamed from "Tournaments" and
+    // joined by zero or more listed-tournament rows right after it -- a
+    // tournament already in registration/running is exactly as joinable as a
+    // game room and belongs in the same list, not one more screen away behind
+    // a browse view. LobbyTournamentListCount() is how many of those rows
+    // exist this frame; the room list starts after all of them
+    // (LobbyRoomListStart()), and LobbyDiscordIndex takes the room count
+    // rather than reading it back off NetworkClient so every caller resolves
+    // it against the same list it is already drawing or navigating this
+    // frame.
     int LobbyRoomListStart() const;
     int LobbyDiscordIndex(size_t roomCount) const;
     int LobbyTournamentIndex() const;
+    int LobbyTournamentListCount() const;
+    // The filtered, ordered list LobbyTournamentListCount() is counting --
+    // shared by the renderer and the input dispatcher so a row drawn at
+    // index LobbyTournamentIndex()+1+i and a tap/ENTER on that same index
+    // always resolve to the same tournament id (the exact drift this file's
+    // Lobby*Index() helpers all exist to prevent -- see the top of this
+    // section).
+    std::vector<TournamentListing> LobbyJoinableTournaments() const;
     void TournamentPanelRender();
     bool TournamentPanelKey(SDL_Event* e);
     bool showingTournament = false, tournamentConfirm = false;
