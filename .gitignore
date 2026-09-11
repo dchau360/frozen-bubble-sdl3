@@ -6,6 +6,9 @@ CMakeLists.txt.user
 # Packaged WASM output, produced by the workflow's packaging step and by
 # anyone reproducing the reload test locally.
 /dist-wasm
+# Packaged macOS .app output, produced by the workflow's packaging step and
+# by anyone reproducing it locally (see CI's build-macos job).
+/dist-macos
 /.vscode
 /.claude
 /.cache
