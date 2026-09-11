@@ -1,5 +1,18 @@
 # Changelog
 
+## v2.4.102
+
+- **The online lobby's "Join our Discord" row moved to the bottom of the
+  "Online" sidebar, and its label shortened to "Join Discord".** It used to
+  ride along at the end of the room-browser's "Game rooms" list, where a
+  growing room list could push it off screen -- exactly the player most
+  likely to want it (looking for company) is the one who'd scroll it out of
+  view. It now sits in a pinned section at the bottom of the sidebar that
+  already lists free/online players, the same idea as the NET GAME server
+  list's own pinned "Community" section: reserved space so player rows never
+  draw underneath it. Purely a lobby-screen change -- the separate NET GAME
+  server list's own "Join our Discord" row is untouched.
+
 ## v2.4.101
 
 - **Discord alerts for round results** — game mode, who won (or that it was
