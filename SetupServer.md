@@ -377,6 +377,38 @@ bot, which is exactly the case this flag is for.
 
 ---
 
+## Online Tournaments
+
+The bundled `fb-server` also coordinates online tournaments. There is nothing to enable and no extra port or flag — it's built into the same binary and the same ports (1511 / 443) already covered above. Players create and join brackets entirely from the client's own online lobby.
+
+### Resolving a disputed match
+
+Each tournament match is best of three, and both players report the result themselves. If they report different winners, the match goes **disputed** and stays that way — the server never guesses, and there is no way for either player to retry on their own. Settling it takes a `RESOLVE` command sent over a connection the server has already marked **admin-authorized**.
+
+Admin authorization here isn't a login or a password: `server/net.c` grants it automatically, once, at accept time, to any connection whose source address is exactly `127.0.0.1` (the only other command gated on it today is `ADMIN_REREAD`, an internal config-reload command — a room host's own `/kick` is a separate, unrelated permission and does not require this).
+
+Because of Docker's networking, connecting to your published port from the host machine's own `localhost` does **not** qualify — Docker's NAT rewrites the source address before it reaches the container, so it never arrives as literally `127.0.0.1` from `fb-server`'s point of view. The connection has to originate *inside* the `fb-server` container itself:
+
+```bash
+docker compose exec fb-server bash
+```
+
+The runtime image has no `nc` or `python3` installed, but bash's own `/dev/tcp` pseudo-device is enough to speak the server's raw line protocol directly:
+
+```bash
+exec 3<>/dev/tcp/127.0.0.1/1511
+head -1 <&3                                            # wait for SERVER_READY
+printf 'FB/1.3 TOUR RESOLVE <tid> <mid> <winnerPid>\n' >&3
+head -1 <&3                                            # read the reply
+exec 3<&- 3>&-
+```
+
+(Any TCP client works the same way — the only requirement is that it run inside the container. Adjust the exact commands for whatever shell/tools you have available.)
+
+`<tid>` and `<mid>` identify the tournament and the disputed match. A player will see both on their own bracket screen — `TOURNAMENT #<tid>` in the header, `#<mid>` on the disputed match's card, and "Awaiting operator" in their own match status — so ask whoever reported the dispute to pass them along, or connect the same way and send `TOUR STATE <tid>` to read the bracket yourself. `<winnerPid>` is either `0` — replay the disputed round without awarding anyone a win — or the numeric entrant ID of whichever of the two assigned players actually won, which commits that round's win to them. A malformed command, a winner ID that isn't one of the two assigned players, or the same command sent from a connection that isn't admin-authorized is simply denied; it also has no effect on a match that isn't currently disputed.
+
+---
+
 ## How Players Connect
 
 | Client | Host | Port |
