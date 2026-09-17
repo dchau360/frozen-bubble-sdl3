@@ -68,6 +68,18 @@ ASSETS = [
 # has to change with it.
 VERBATIM = ["google034c4b2cf8d147df.html", "app-ads.txt"]
 
+# This generator's output is deployed byte-for-byte identical to three
+# origins -- llmfinder.net and fb.servequake.com (both via docker/Dockerfile.site,
+# nginx's server_name _; catch-all) and dchau360.github.io/frozen-bubble-sdl3
+# (via .github/workflows/pages.yml) -- with no canonical signal between them.
+# Google Search Console folded llmfinder.net's copy into "Duplicate without
+# user-selected canonical" as a result. llmfinder.net is the domain actually
+# verified for Play/AdMob's website-ownership check (see the superseded note
+# on fb.servequake.com in tools/build-site.py's git history / project memory),
+# so every rendered copy -- including the GitHub Pages one -- declares it as
+# canonical, telling Google which origin to index.
+CANONICAL_BASE = "https://llmfinder.net"
+
 
 def main():
     if len(sys.argv) != 2:
@@ -85,9 +97,16 @@ def main():
         # Pages one level down need their relative links to the site root
         # rewritten; the template is shared and written from the root's view.
         depth = len(os.path.dirname(dest).split(os.sep)) if os.path.dirname(dest) else 0
+        # dest is "index.html" or "<subdir>/index.html"; strip the filename
+        # so "privacy/index.html" canonicalizes to ".../privacy/", not
+        # ".../privacy/index.html" (a distinct URL Google would treat as a
+        # second duplicate of the one just declared canonical).
+        canonical_path = dest[: -len("index.html")] if dest.endswith("index.html") else dest
+        canonical_url = CANONICAL_BASE + "/" + canonical_path
         html = (template
                 .replace("{{TITLE}}", title)
                 .replace("{{ROOT}}", "../" * depth if depth else "./")
+                .replace("{{CANONICAL}}", canonical_url)
                 .replace("{{CONTENT}}", body))
         dest_path = os.path.join(out, dest)
         os.makedirs(os.path.dirname(dest_path), exist_ok=True)
