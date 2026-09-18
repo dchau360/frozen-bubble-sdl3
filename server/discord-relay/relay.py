@@ -20,7 +20,7 @@ practice always empty, since the client sends GEOLOC after NICK and the
 lookup behind it can take up to ~16s. The field stays in the format anyway:
 it costs nothing, and this end discards it regardless.
 
-    RESULT|<game_id>|<round>|<mode>|<winner>|<roster>|<servername>
+    RESULT|<game_id>|<round>|<mode>|<winner>|<roster>|<wins>|<victories_limit>|<servername>
 
 One per round-end, sniffed from the 'F' opcode server-side (game.c). game_id
 is an opaque int identifying the room, monotonically assigned by fb-server at
@@ -34,7 +34,16 @@ winner is the reporting client's win claim, empty for a draw, and -- unlike
 everything else in either datagram -- is not validated against is_nick_ok()
 at all, so it gets no more trust here than servername does; roster is every
 current player's nick, comma-joined, each one already
-is_nick_ok()-constrained when its owner connected or joined.
+is_nick_ok()-constrained when its owner connected or joined. wins is each
+player's current win count this match, comma-joined in the same order as
+roster (build_wins_csv() in game.c, already incremented for this round's
+winner by the time it's sent) -- used to render a small text win-count bar
+chart under the round message (see build_result_message()/
+_build_win_chart()). victories_limit is the room's own win-count target
+(g->victories_limit, 0 meaning no limit was ever set) -- when positive, the
+chart scales its bars against it and labels each line "current/limit"
+("first to N"); when 0, the chart falls back to scaling against whoever
+currently leads, exactly as it did before this field existed.
 
     MATCH|<game_id>|<wins>|<mode>|<champion>|<servername>
 
@@ -172,8 +181,65 @@ def _sanitize_display(text):
 
 _GAME_MODE_NAMES = {0: "Classic", 1: "Clear", 2: "Race", 3: "Timed"}
 
+# Width, in block characters, of the longest bar _build_win_chart() draws.
+# When a room has a win-count target this is what "full" means; otherwise
+# every bar is scaled relative to the match's current leader instead, so
+# this is purely a display constant, not a cap on win count itself.
+_CHART_WIDTH = 10
 
-def build_result_message(round_number, mode, winner, roster_csv, servername):
+
+def _build_win_chart(roster_csv, wins_csv, victories_limit=0):
+    """A monospace win-count bar chart, one row per player, leader first.
+
+    roster_csv/wins_csv are index-aligned CSVs straight off the wire (see
+    the module docstring's RESULT entry) -- roster from build_roster_csv(),
+    wins from build_wins_csv(), both game.c. Returns "" (never posted) when
+    there is nothing worth charting yet: a mismatched/unparsable pair (a
+    stray older fb-server that never sends wins, or a malformed datagram),
+    fewer than two players, or a match where nobody has won a round yet --
+    an all-zero chart is a wall of empty bars with no information in it.
+
+    victories_limit is the room's own win-count target (g->victories_limit,
+    game.c), 0 meaning no limit was ever set -- by far the common case, most
+    rooms never configure one. When positive, bars scale against it (not the
+    leader) and each line is labelled "current/limit" under a "First to N"
+    header, so the chart answers "how many more wins does the leader need,"
+    not just "who's ahead right now." A count that ever exceeds the limit
+    (only possible if VICTORIESLIMIT is lowered mid-room) still clamps its
+    bar at full rather than overflowing it. When 0, the chart falls back to
+    the leader-relative scaling it used before this parameter existed, with
+    no "/limit" suffix and no header, since there is no target to show.
+    victories_limit itself is a plain int fb-server computed (no untrusted
+    text), so it needs no sanitization the way every name here does.
+    """
+    names = [n for n in roster_csv.split(",") if n] if roster_csv else []
+    try:
+        counts = [int(w) for w in wins_csv.split(",")] if wins_csv else []
+    except ValueError:
+        return ""
+    if len(names) != len(counts) or len(names) < 2:
+        return ""
+    if max(counts) <= 0:
+        return ""
+    try:
+        victories_limit = int(victories_limit)
+    except (TypeError, ValueError):
+        victories_limit = 0
+    limited = victories_limit > 0
+    peak = victories_limit if limited else max(counts)
+    rows = sorted(zip(names, counts), key=lambda pair: pair[1], reverse=True)
+    display_names = [_sanitize_display(n) for n, _ in rows]
+    name_width = max(len(n) for n in display_names)
+    lines = [f"First to {victories_limit}"] if limited else []
+    for name, (_, count) in zip(display_names, rows):
+        filled = min(_CHART_WIDTH, round(count * _CHART_WIDTH / peak))
+        bar = "█" * filled + "░" * (_CHART_WIDTH - filled)
+        label = f"{count}/{victories_limit}" if limited else str(count)
+        lines.append(f"{name:<{name_width}} {bar} {label}")
+    return "```\n" + "\n".join(lines) + "\n```"
+
+
+def build_result_message(round_number, mode, winner, roster_csv, wins_csv, victories_limit, servername):
     """Round over: which round, who won (or a draw), what mode, who was
     playing, where.
 
@@ -196,6 +262,12 @@ def build_result_message(round_number, mode, winner, roster_csv, servername):
     passed is_nick_ok() when its owner connected or joined, so it could not
     have been forged the same way -- only sanitized here as routine defense
     in depth, the same as every other field arriving over this datagram.
+
+    wins_csv and victories_limit both go straight to _build_win_chart() --
+    wins_csv index-aligned with roster_csv (build_wins_csv(), game.c),
+    victories_limit the room's win-count target (0 = none) -- see there for
+    when a chart is actually appended versus omitted, and how a positive
+    limit changes what the bars mean.
     """
     round_label = f"Round {round_number} — " if round_number and round_number > 0 else ""
     mode_label = _GAME_MODE_NAMES.get(mode, "")
@@ -207,6 +279,9 @@ def build_result_message(round_number, mode, winner, roster_csv, servername):
     else:
         headline = "🤝 Draw"
     content = f"{round_label}{headline}{mode_label} on **{servername}** — {roster}"
+    chart = _build_win_chart(roster_csv, wins_csv, victories_limit)
+    if chart:
+        content = f"{content}\n{chart}"
     return content[:MAX_DISCORD_CONTENT]
 
 
@@ -387,11 +462,12 @@ async def handle_datagram(data, webhook_url):
         game_id = None
 
     elif kind == "RESULT":
-        parts = rest.split("|", 5)
-        if len(parts) != 6:
+        parts = rest.split("|", 7)
+        if len(parts) != 8:
             log.warning("malformed datagram, dropped: %r", text[:120])
             return
-        game_id_s, round_s, mode_s, winner, roster_csv, servername = parts
+        (game_id_s, round_s, mode_s, winner, roster_csv, wins_csv,
+         victories_limit_s, servername) = parts
         try:
             game_id = int(game_id_s)
         except ValueError:
@@ -408,9 +484,14 @@ async def handle_datagram(data, webhook_url):
             mode = int(mode_s)
         except ValueError:
             mode = -1  # unrecognized -- build_result_message labels nothing
+        try:
+            victories_limit = int(victories_limit_s)
+        except ValueError:
+            victories_limit = 0  # unrecognized -- chart falls back to leader-relative
         if DISCORD_SERVER_NAME:
             servername = DISCORD_SERVER_NAME
-        content = build_result_message(round_number, mode, winner, roster_csv, servername)
+        content = build_result_message(round_number, mode, winner, roster_csv, wins_csv,
+                                        victories_limit, servername)
         log_label = f"result for {winner or 'a draw'}"
         # Best-effort label for the thread's title only, not the message
         # itself -- see build_roster_csv()/players_nick[0] in game.c for why

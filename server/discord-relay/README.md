@@ -42,7 +42,7 @@ the datagram is dropped and gameplay is unaffected.
 ## Wire format
 
     JOIN|<nick>|<ip>|<geoloc>|<servername>
-    RESULT|<game_id>|<round_number>|<game_mode>|<winner>|<roster>|<servername>
+    RESULT|<game_id>|<round_number>|<game_mode>|<winner>|<roster>|<wins>|<victories_limit>|<servername>
     MATCH|<game_id>|<wins>|<game_mode>|<champion>|<servername>
 
 `geoloc` is the arriving player's self-reported `lat:lon` or an empty string
@@ -67,11 +67,20 @@ unlike `winner`, every name in it already passed `fb-server`'s
 `is_nick_ok()`, so it can never itself contain a `|`; `winner` had any
 literal `|` stripped at the C-layer extraction point (`game.c`) for the same
 reason, since it is *not* validated against `is_nick_ok()` at all -- see
-Round results below. `wins` is the champion's win count at the moment the
-match ended (equal to or above the room's win-count limit); `champion`
-carries the same trust posture as `winner` -- see Match results below. Every
-message kind keeps `servername` last, since it is the only field with no
-length or charset cap.
+Round results below. `RESULT`'s own `wins` is each player's current win
+count this match, comma-joined index-for-index with `roster` (already
+incremented for this round's winner by the time it's sent) -- it drives the
+win-count chart under the round message, see Round results below.
+`RESULT`'s `victories_limit` is the room's own win-count target
+(`g->victories_limit` in `game.c`, `VICTORIESLIMIT` on `SETOPTIONS`), 0
+meaning no limit was ever set -- the chart scales its bars against it when
+positive, otherwise against whoever currently leads, see the Win-count
+chart subsection below. `MATCH`'s `wins` is a single int, the champion's
+win count at the moment the match ended (equal to or above the room's
+win-count limit); `champion` carries the same trust posture as `winner` --
+see Match results below. Every message kind keeps `servername` last, since
+it is the only field with no length or
+charset cap.
 
 ## Running
 
@@ -158,6 +167,48 @@ Discord-markdown escaping and `allowed_mentions` lockdown used for `JOIN`)
 applies to every name in the winner and roster fields too, since the roster
 comes from `nick`s that already satisfy `is_nick_ok()` but the winner field
 does not.
+
+### Win-count chart
+
+Every `RESULT` also carries each player's current win count (`wins`) and the
+room's win-count target (`victories_limit`, both above), and
+`_build_win_chart()` in `relay.py` renders them as a small monospace bar
+chart appended under the round message, one row per player, leader first.
+A room with no configured limit (`victories_limit` 0 -- by far the common
+case) gets bars scaled against whoever currently leads:
+
+    ```
+    alice ██████████ 5
+    bob   ██████░░░░ 3
+    ```
+
+A room that set `VICTORIESLIMIT` (best-of-N) instead gets bars scaled
+against that target, labelled `current/limit` under a `First to N` header --
+answering "how many more wins does the leader need," not just "who's
+ahead":
+
+    ```
+    First to 5
+    alice ██████████ 5/5
+    bob   ██████░░░░ 3/5
+    ```
+
+No image, no attachment, no extra dependency -- it's a fenced code block in
+the same plain-text `content` field everything else here already posts,
+which is why this needed no change to how messages get delivered (webhook
+JSON body or bot REST call, same as before). It's omitted, not posted as an
+empty wall of `░`, until someone has actually won a round -- round 1's
+all-zero tally has nothing to show yet -- and in a 1-player room, where a
+"leaderboard" is meaningless. A win count that ends up above the limit
+(only possible if `VICTORIESLIMIT` is lowered mid-room) still clamps its bar
+at full instead of overflowing it.
+
+This is deliberately just win counts, the one notion of "score" this server
+already tracks (`g->players_wins[]`) -- a full per-round bubble-stats chart
+(bubbles fired/popped/sent/received) would need fb-server to start parsing
+the `S` opcode it has so far only ever relayed blindly between clients,
+which the win-count/roster bookkeeping above and in `CLAUDE.md` deliberately
+avoids.
 
 The server never infers or posts a result from a player disconnecting
 mid-round (the stats bookkeeping that already exists for that, in

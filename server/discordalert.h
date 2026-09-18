@@ -73,12 +73,21 @@ void discordalert_fire_join_event(const char* nick, const char* ip, const char* 
 // stripping '|' at the call site. A modified client can claim a win it did
 // not earn; it cannot forge a false roster, since that comes from this
 // server's own bookkeeping, not the wire message. Pass NULL for winner_nick
-// on a draw. game_mode is the room's raw 0-3 GAMEMODE value (see
+// on a draw. wins_csv is g->players_wins[], comma-joined in the same order
+// as roster_csv (build_wins_csv() in game.c) -- already updated for this
+// round's winner by the time this fires, so the relay's win-count chart
+// never lags a round behind. victories_limit is the room's own win-count
+// target (g->victories_limit, see parse_victories_limit() in game.c), 0
+// meaning "no limit was ever set" -- the relay scales the win-count chart's
+// bars against it when positive ("first to N") and falls back to scaling
+// against whoever currently leads when it's 0, same as before this field
+// existed. game_mode is the room's raw 0-3 GAMEMODE value (see
 // src/gamemode.h) or 0 if the room never set one -- the relay maps it to a
 // display name, not this file, so a value this build doesn't recognize
-// degrades to "unlabelled" rather than needing a matching update here.
-// A no-op (and free) when the relay isn't configured.
+// degrades to "unlabelled" rather than needing a matching update here. A
+// no-op (and free) when the relay isn't configured.
 void discordalert_fire_result_event(int game_id, int round_number, const char* roster_csv,
+                                     const char* wins_csv, int victories_limit,
                                      const char* winner_nick, int game_mode);
 
 // Call once per match-end, immediately after the round-end alert above,

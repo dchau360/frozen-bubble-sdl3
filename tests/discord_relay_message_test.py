@@ -90,68 +90,178 @@ class BuildResultMessageTest(unittest.TestCase):
     process_msg_prio_'s sniff. roster, by contrast, is fb-server's own
     bookkeeping and could not have been forged the same way."""
 
+    # wins_csv is "" and victories_limit is 0 in every test below that isn't
+    # specifically about the win-count chart -- _build_win_chart() treats an
+    # empty/mismatched wins_csv as "nothing to chart yet" (see WinChartTest),
+    # so this keeps every exact-message assertion here unaffected by the
+    # chart feature.
+
     def test_win_reads_naturally(self):
-        msg = relay.build_result_message(1, 0, "alice", "alice,bob", "fb.example.org")
+        msg = relay.build_result_message(1, 0, "alice", "alice,bob", "", 0, "fb.example.org")
         self.assertEqual(
             msg,
             "Round 1 — 🏆 **alice** won (Classic) on **fb.example.org** — alice, bob")
 
     def test_draw_reads_naturally(self):
-        msg = relay.build_result_message(1, 3, "", "alice,bob", "fb.example.org")
+        msg = relay.build_result_message(1, 3, "", "alice,bob", "", 0, "fb.example.org")
         self.assertEqual(
             msg, "Round 1 — 🤝 Draw (Timed) on **fb.example.org** — alice, bob")
 
     def test_round_number_labels_the_right_round(self):
-        msg = relay.build_result_message(4, 0, "alice", "alice,bob", "s")
+        msg = relay.build_result_message(4, 0, "alice", "alice,bob", "", 0, "s")
         self.assertTrue(msg.startswith("Round 4 — "))
 
     def test_zero_round_number_omits_the_label(self):
         # handle_datagram falls back to 0 for an unparseable round field --
         # this must degrade to no label, not print "Round 0".
-        msg = relay.build_result_message(0, 0, "alice", "alice,bob", "s")
+        msg = relay.build_result_message(0, 0, "alice", "alice,bob", "", 0, "s")
         self.assertNotIn("Round", msg)
 
     def test_every_mode_number_maps_to_its_name(self):
         names = {0: "Classic", 1: "Clear", 2: "Race", 3: "Timed"}
         for mode, name in names.items():
-            msg = relay.build_result_message(1, mode, "alice", "alice", "s")
+            msg = relay.build_result_message(1, mode, "alice", "alice", "", 0, "s")
             self.assertIn(f"({name})", msg)
 
     def test_unrecognized_mode_number_labels_nothing(self):
         # A value this relay predates or simply garbage (int parse of a
         # malformed field falls back to -1) must not crash or guess.
-        msg = relay.build_result_message(1, -1, "alice", "alice", "s")
+        msg = relay.build_result_message(1, -1, "alice", "alice", "", 0, "s")
         self.assertNotIn("(", msg)
-        msg = relay.build_result_message(1, 99, "alice", "alice", "s")
+        msg = relay.build_result_message(1, 99, "alice", "alice", "", 0, "s")
         self.assertNotIn("(", msg)
 
     def test_hostile_winner_cannot_inject_a_link(self):
         # The field with no is_nick_ok() backing it at all on the server
         # side -- exactly the one a modified client would target.
         msg = relay.build_result_message(
-            1, 0, "[click here](https://evil.example)", "alice", "s")
+            1, 0, "[click here](https://evil.example)", "alice", "", 0, "s")
         self.assertNotIn("](https://evil.example)", msg)
 
     def test_hostile_roster_name_cannot_inject_a_link(self):
         msg = relay.build_result_message(
-            1, 0, "alice", "alice,[click here](https://evil.example)", "s")
+            1, 0, "alice", "alice,[click here](https://evil.example)", "", 0, "s")
         self.assertNotIn("](https://evil.example)", msg)
 
     def test_hostile_servername_cannot_inject_a_link(self):
         msg = relay.build_result_message(
-            1, 0, "alice", "alice,bob",
+            1, 0, "alice", "alice,bob", "", 0,
             "[totally fine](https://evil.example/steal)")
         self.assertNotIn("](https://evil.example/steal)", msg)
 
     def test_newline_cannot_forge_a_second_alert(self):
         msg = relay.build_result_message(
-            1, 0, "real\n🏆 **admin** won on **your-bank**", "alice", "s")
+            1, 0, "real\n🏆 **admin** won on **your-bank**", "alice", "", 0, "s")
         self.assertNotIn("\n", msg)
 
     def test_long_roster_cannot_blow_past_discords_own_limit(self):
         huge_roster = ",".join(f"p{i}" for i in range(500))
-        msg = relay.build_result_message(1, 0, "alice", huge_roster, "s")
+        msg = relay.build_result_message(1, 0, "alice", huge_roster, "", 0, "s")
         self.assertLessEqual(len(msg), relay.MAX_DISCORD_CONTENT)
+
+    def test_win_count_chart_is_appended_when_someone_has_won(self):
+        msg = relay.build_result_message(2, 0, "alice", "alice,bob", "3,1", 0, "s")
+        self.assertIn("```", msg)
+        self.assertIn("alice", msg)
+        self.assertIn("█", msg)
+
+    def test_no_chart_on_an_all_zero_tally(self):
+        # Round 1: nobody has won a round yet -- a wall of empty bars carries
+        # no information, so no chart block at all rather than one full of
+        # "░" and zeroes.
+        msg = relay.build_result_message(1, 0, "", "alice,bob", "0,0", 0, "s")
+        self.assertNotIn("```", msg)
+
+    def test_victories_limit_labels_the_chart_first_to_n(self):
+        msg = relay.build_result_message(3, 0, "alice", "alice,bob", "3,1", 5, "s")
+        self.assertIn("First to 5", msg)
+        self.assertIn("3/5", msg)
+        self.assertIn("1/5", msg)
+
+
+class WinChartTest(unittest.TestCase):
+    """_build_win_chart() in isolation -- the monospace bar chart appended
+    under a round-result message (see BuildResultMessageTest's own chart
+    tests for that integration point)."""
+
+    def test_leader_sorts_first_and_bars_scale_to_the_leader(self):
+        chart = relay._build_win_chart("alice,bob", "1,4")
+        lines = [l for l in chart.split("\n") if l and "`" not in l]
+        self.assertTrue(lines[0].startswith("bob"), "bob (4 wins) leads")
+        self.assertIn("█" * relay._CHART_WIDTH, lines[0], "the leader's bar is full")
+
+    def test_empty_wins_csv_yields_no_chart(self):
+        # The field a pre-upgrade fb-server (or a malformed datagram) would
+        # leave blank -- degrade to nothing rather than crash on int("").
+        self.assertEqual(relay._build_win_chart("alice,bob", ""), "")
+
+    def test_mismatched_roster_and_wins_length_yields_no_chart(self):
+        self.assertEqual(relay._build_win_chart("alice,bob,carol", "1,2"), "")
+
+    def test_unparsable_wins_entry_yields_no_chart(self):
+        self.assertEqual(relay._build_win_chart("alice,bob", "1,not-a-number"), "")
+
+    def test_all_zero_wins_yields_no_chart(self):
+        self.assertEqual(relay._build_win_chart("alice,bob", "0,0"), "")
+
+    def test_all_zero_wins_yields_no_chart_even_with_a_limit_set(self):
+        # A "First to 5" header with nothing but empty bars underneath is
+        # still a wall of empty bars -- the omission rule doesn't relax just
+        # because a target exists.
+        self.assertEqual(relay._build_win_chart("alice,bob", "0,0", victories_limit=5), "")
+
+    def test_single_player_yields_no_chart(self):
+        # A "leaderboard" of one name is not a chart.
+        self.assertEqual(relay._build_win_chart("alice", "3"), "")
+
+    def test_hostile_name_in_roster_is_escaped(self):
+        chart = relay._build_win_chart(
+            "alice,[click here](https://evil.example)", "1,2")
+        self.assertNotIn("](https://evil.example)", chart)
+
+    def test_tie_keeps_roster_order(self):
+        chart = relay._build_win_chart("alice,bob", "2,2")
+        lines = [l for l in chart.split("\n") if l and "`" not in l]
+        self.assertTrue(lines[0].startswith("alice"))
+        self.assertTrue(lines[1].startswith("bob"))
+
+    def test_victories_limit_scales_bars_against_the_target_not_the_leader(self):
+        # bob leads 1-0, but with a limit of 4 nobody's bar should read as
+        # "full" -- full means reaching the limit, not merely being ahead.
+        chart = relay._build_win_chart("alice,bob", "0,1", victories_limit=4)
+        lines = [l for l in chart.split("\n") if l and "`" not in l and "First to" not in l]
+        for line in lines:
+            self.assertNotIn("█" * relay._CHART_WIDTH, line)
+
+    def test_victories_limit_header_and_fraction_labels(self):
+        chart = relay._build_win_chart("alice,bob", "3,1", victories_limit=5)
+        self.assertIn("First to 5", chart)
+        self.assertIn("3/5", chart)
+        self.assertIn("1/5", chart)
+
+    def test_reaching_the_limit_fills_the_bar_exactly(self):
+        chart = relay._build_win_chart("alice,bob", "5,2", victories_limit=5)
+        lines = [l for l in chart.split("\n") if l.startswith("alice")]
+        self.assertIn("█" * relay._CHART_WIDTH, lines[0])
+        self.assertIn("5/5", lines[0])
+
+    def test_count_above_limit_clamps_the_bar_instead_of_overflowing(self):
+        # Only reachable if VICTORIESLIMIT is lowered mid-room, but the bar
+        # must still render sanely rather than exceeding _CHART_WIDTH.
+        chart = relay._build_win_chart("alice,bob", "7,1", victories_limit=5)
+        lines = [l for l in chart.split("\n") if l.startswith("alice")]
+        self.assertIn("█" * relay._CHART_WIDTH, lines[0])
+        self.assertNotIn("█" * (relay._CHART_WIDTH + 1), lines[0])
+        self.assertIn("7/5", lines[0])
+
+    def test_zero_victories_limit_is_the_same_as_unset(self):
+        with_zero = relay._build_win_chart("alice,bob", "3,1", victories_limit=0)
+        without = relay._build_win_chart("alice,bob", "3,1")
+        self.assertEqual(with_zero, without)
+
+    def test_unparsable_victories_limit_falls_back_to_leader_relative(self):
+        chart = relay._build_win_chart("alice,bob", "3,1", victories_limit="not-a-number")
+        self.assertNotIn("First to", chart)
 
 
 class BuildMatchMessageTest(unittest.TestCase):
@@ -209,16 +319,17 @@ class ResultDatagramDispatchTest(unittest.TestCase):
 
     def test_result_datagram_posts_the_result_message(self):
         captured = self._captured_line(
-            b"RESULT|42|3|0|alice|alice,bob|fb.example.org")
+            b"RESULT|42|3|0|alice|alice,bob|3,1|0|fb.example.org")
         self.assertEqual(len(captured), 1)
         self.assertIn("Round 3", captured[0])
         self.assertIn("**alice**", captured[0])
         self.assertIn("(Classic)", captured[0])
         self.assertIn("fb.example.org", captured[0])
+        self.assertIn("```", captured[0], "wins is non-empty, so the chart should append")
 
     def test_draw_datagram_posts_without_a_winner_field(self):
         captured = self._captured_line(
-            b"RESULT|42|5|1|" + b"|alice,bob|fb.example.org")
+            b"RESULT|42|5|1|" + b"|alice,bob|0,0|0|fb.example.org")
         self.assertEqual(len(captured), 1)
         self.assertIn("Draw", captured[0])
 
@@ -228,7 +339,7 @@ class ResultDatagramDispatchTest(unittest.TestCase):
         # itself, since that would silence a real round-end over a
         # threading key alone.
         captured = self._captured_line(
-            b"RESULT|not-a-number|3|0|alice|alice,bob|fb.example.org")
+            b"RESULT|not-a-number|3|0|alice|alice,bob|1,0|0|fb.example.org")
         self.assertEqual(len(captured), 1)
         self.assertIn("**alice**", captured[0])
 
@@ -236,7 +347,7 @@ class ResultDatagramDispatchTest(unittest.TestCase):
         # Same reasoning as game_id above: round is a display label only,
         # so a malformed one must not sink the alert itself.
         captured = self._captured_line(
-            b"RESULT|42|not-a-number|0|alice|alice,bob|fb.example.org")
+            b"RESULT|42|not-a-number|0|alice|alice,bob|1,0|0|fb.example.org")
         self.assertEqual(len(captured), 1)
         self.assertIn("**alice**", captured[0])
         self.assertNotIn("Round", captured[0])
@@ -269,6 +380,41 @@ class ResultDatagramDispatchTest(unittest.TestCase):
         try:
             asyncio.run(relay.handle_datagram(
                 b"RESULT|42|0|alice|alice,bob|fb.example.org", ""))
+        finally:
+            relay.log.warning = original
+        self.assertEqual(len(warned), 1)
+
+    def test_pre_wins_seven_field_format_is_now_malformed(self):
+        # Same pin as the two above, for the wins-csv wire-format change: a
+        # RESULT datagram from a fb-server built before wins existed
+        # (game_id, round, mode, winner, roster, servername -- no wins) must
+        # not be silently misparsed as roster swallowing the wins field, or
+        # wins swallowing servername.
+        import asyncio
+        warned = []
+        original = relay.log.warning
+        relay.log.warning = lambda fmt, *a: warned.append(fmt % a)
+        try:
+            asyncio.run(relay.handle_datagram(
+                b"RESULT|42|3|0|alice|alice,bob|fb.example.org", ""))
+        finally:
+            relay.log.warning = original
+        self.assertEqual(len(warned), 1)
+
+    def test_pre_victories_limit_eight_field_format_is_now_malformed(self):
+        # Same pin as the three above, for the victories_limit wire-format
+        # change: a RESULT datagram from a fb-server built before
+        # victories_limit existed (game_id, round, mode, winner, roster,
+        # wins, servername -- no limit) must not be silently misparsed as
+        # wins swallowing the limit field, or the limit swallowing
+        # servername.
+        import asyncio
+        warned = []
+        original = relay.log.warning
+        relay.log.warning = lambda fmt, *a: warned.append(fmt % a)
+        try:
+            asyncio.run(relay.handle_datagram(
+                b"RESULT|42|3|0|alice|alice,bob|3,1|fb.example.org", ""))
         finally:
             relay.log.warning = original
         self.assertEqual(len(warned), 1)
@@ -415,7 +561,7 @@ class ServerNameOverrideTest(unittest.TestCase):
         original = relay.DISCORD_SERVER_NAME
         relay.DISCORD_SERVER_NAME = "fb.servequake.com"
         try:
-            line = self._posted_line(b"RESULT|42|1|0|alice|alice,bob|servequake")
+            line = self._posted_line(b"RESULT|42|1|0|alice|alice,bob|1,0|0|servequake")
         finally:
             relay.DISCORD_SERVER_NAME = original
         self.assertIn("**fb.servequake.com**", line)
@@ -477,7 +623,7 @@ class ResultThreadingTest(unittest.TestCase):
         # Bot vars both unset (the default): unchanged from before this
         # feature existed. Stub mode here, but the same branch applies to a
         # real DISCORD_WEBHOOK_URL.
-        captured = self._captured_info(b"RESULT|1|1|0|alice|alice,bob|s")
+        captured = self._captured_info(b"RESULT|1|1|0|alice|alice,bob|1,0|0|s")
         self.assertEqual(len(captured), 1)
         self.assertIn("[stub] would post", captured[0])
         self.assertNotIn("threaded", captured[0])
@@ -485,7 +631,7 @@ class ResultThreadingTest(unittest.TestCase):
     def test_only_one_bot_variable_set_falls_back_to_flat(self):
         relay.DISCORD_BOT_TOKEN = "test-token"
         relay.DISCORD_CHANNEL_ID = ""
-        captured = self._captured_info(b"RESULT|1|1|0|alice|alice,bob|s")
+        captured = self._captured_info(b"RESULT|1|1|0|alice|alice,bob|1,0|0|s")
         self.assertIn("[stub] would post", captured[0])
 
     def test_first_result_for_a_room_creates_a_thread(self):
@@ -495,7 +641,7 @@ class ResultThreadingTest(unittest.TestCase):
         relay._bot_request_sync = self._fake_bot_request(
             calls, [{"id": "111"}, {"id": "222"}])
         try:
-            captured = self._captured_info(b"RESULT|7|1|0|alice|alice,bob|s")
+            captured = self._captured_info(b"RESULT|7|1|0|alice|alice,bob|1,0|0|s")
         finally:
             relay._bot_request_sync = original
 
@@ -518,7 +664,7 @@ class ResultThreadingTest(unittest.TestCase):
         original = relay._bot_request_sync
         relay._bot_request_sync = self._fake_bot_request(calls, [{}])
         try:
-            self._captured_info(b"RESULT|7|2|0|bob|alice,bob|s")
+            self._captured_info(b"RESULT|7|2|0|bob|alice,bob|1,1|0|s")
         finally:
             relay._bot_request_sync = original
 
@@ -533,7 +679,7 @@ class ResultThreadingTest(unittest.TestCase):
         relay._bot_request_sync = self._fake_bot_request(
             [], [{"id": "333"}, {"id": "444"}])
         try:
-            self._captured_info(b"RESULT|9|1|0|carol|carol,dave|s")
+            self._captured_info(b"RESULT|9|1|0|carol|carol,dave|1,0|0|s")
         finally:
             relay._bot_request_sync = original
 
@@ -550,7 +696,7 @@ class ResultThreadingTest(unittest.TestCase):
         original = relay._bot_request_sync
         relay._bot_request_sync = always_fails
         try:
-            self._captured_info(b"RESULT|7|1|0|alice|alice,bob|s")
+            self._captured_info(b"RESULT|7|1|0|alice|alice,bob|1,0|0|s")
         finally:
             relay._bot_request_sync = original
 
