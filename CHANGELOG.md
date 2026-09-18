@@ -1,5 +1,9 @@
 # Changelog
 
+## v2.4.104
+
+- **Discord round-result alerts now include a win-count bar chart.** Every round's Discord message gets a small monospace chart of each player's wins so far, leader first — scaled against the room's win-count limit ("First to 5", `current/limit`) when one is set, or against whoever currently leads otherwise. No image, no attachment — just plain text, so it costs no new dependency. Omitted on round 1 (nobody's won yet) and in 1-player rooms, where it would carry no information.
+
 ## v2.4.103
 
 - **Online tournaments** — single-elimination brackets for 4–16 human entrants, byes for non-power-of-two counts up to 16, best of three per match. Create one from the online lobby's **Create Tournament** row, or join one already in progress — open tournaments now list directly alongside game rooms instead of needing a separate browse screen. A "Configure ruleset" step lets the organizer set game mode, attack bubbles, chain reactions, aim guide, and colors for the whole bracket before creating it, applied identically to every match. Leaving or disconnecting mid-tournament forfeits the current and any future match. Conflicting result reports leave a match **disputed** until a server operator resolves it — see `SetupServer.md`'s "Online Tournaments" section.
