@@ -506,6 +506,13 @@ void BubbleGame::RenderRoundStats(SDL_Renderer *rend) {
     const int boxW = 544, boxX = (640 - boxW) / 2, boxY = 6;
     const int rowH = 16, headH = 22;
     const int hintH = currentSettings.networkGame ? rowH : 0;
+    // Discord round-result alerts are sniffed server-side off the 'F' opcode
+    // for every non-tournament room (see CLAUDE.md's "Discord round-result
+    // alerts" section and server/game.c's `!g->tournament_id` guard) --
+    // tournament matches never post, so this note would mislead if shown
+    // during one.
+    const bool discordAlertsApply = currentSettings.networkGame && !IsTournamentRound();
+    const int discordHintH = discordAlertsApply ? rowH : 0;
 
     // Distinct teams present, in ascending team-number order (team subtotal rows below).
     // Real teams only: a "TEAM 0" subtotal row would be a total across players
@@ -519,7 +526,7 @@ void BubbleGame::RenderRoundStats(SDL_Renderer *rend) {
     std::sort(teams.begin(), teams.end());
     const int teamRows = teams.empty() ? 0 : (int)teams.size() + 1;  // +1 separator/header row
 
-    const int boxH = headH + rowH * (n + 1 + teamRows) + hintH + 6;
+    const int boxH = headH + rowH * (n + 1 + teamRows) + hintH + discordHintH + 6;
 
     // Semi-transparent backing panel.
     SDL_SetRenderDrawBlendMode(rend, SDL_BLENDMODE_BLEND);
@@ -633,6 +640,10 @@ void BubbleGame::RenderRoundStats(SDL_Renderer *rend) {
                     ? "T / X: CHAT    ENTER: LOBBY"
                     : "T / X: CHAT    ENTER / FIRE: NEXT ROUND"));
         cell(hint, colName, y, hdr);
+        if (discordAlertsApply) {
+            cell("STATS POSTED TO DISCORD #now-playing CHANNEL",
+                 colName, y + rowH, normal);
+        }
 
         // Tappable CHAT button (touch devices have no T key). Anchored under
         // the panel's left edge; HandleFinishedTap() hit-tests this rect.

@@ -265,7 +265,7 @@ class ServerDiscordResultAlertTest(_FbServerTestBase):
     game.c's own comments do (e.g. "?p\\n", "?!\\n").
     """
 
-    def _start_two_player_game(self, room, guest_nick="guest1", mode=None):
+    def _start_two_player_game(self, room, guest_nick="guest1", mode=None, victories_limit=None):
         """Gets a 2-player room to GAME_STATUS_PLAYING with player A (the
         room's creator) in prio mode, so raw round-end bytes sent on A's own
         connection reach the sniff. Drains every datagram fired getting
@@ -297,8 +297,13 @@ class ServerDiscordResultAlertTest(_FbServerTestBase):
         b.sendall(f"FB/1.3 JOIN {room} {guest_nick}\n".encode())
         self.assertIn(b"JOIN: OK", recv_until(b, b"JOIN:"))
 
-        if mode is not None:
-            a.sendall(f"FB/1.3 SETOPTIONS GAMEMODE:{mode}\n".encode())
+        if mode is not None or victories_limit is not None:
+            options = []
+            if mode is not None:
+                options.append(f"GAMEMODE:{mode}")
+            if victories_limit is not None:
+                options.append(f"VICTORIESLIMIT:{victories_limit}")
+            a.sendall(f"FB/1.3 SETOPTIONS {','.join(options)}\n".encode())
             self.assertIn(b"SETOPTIONS: OK", recv_until(a, b"SETOPTIONS:"))
 
         a.sendall(b"FB/1.3 START\n")
@@ -321,22 +326,23 @@ class ServerDiscordResultAlertTest(_FbServerTestBase):
         a.sendall(b"?Fguest1\n")
         fired = self.drain_relay()
         self.assertEqual(len(fired), 1, f"expected exactly one RESULT datagram, got {fired!r}")
-        parts = fired[0].split("|", 5)
+        parts = fired[0].split("|", 6)
         self.assertEqual(parts[0], "RESULT")
         self.assertTrue(parts[1].isdigit(), "game_id must be a plain int")
-        self.assertEqual(parts[2], "2", "GAMEMODE:2 (Race) should flow through")
-        self.assertEqual(parts[3], "guest1")
-        self.assertEqual(set(parts[4].split(",")), {"winroom", "guest1"})
-        self.assertTrue(parts[5], "servername field must not be empty")
+        self.assertEqual(parts[2], "1", "first round in this room")
+        self.assertEqual(parts[3], "2", "GAMEMODE:2 (Race) should flow through")
+        self.assertEqual(parts[4], "guest1")
+        self.assertEqual(set(parts[5].split(",")), {"winroom", "guest1"})
+        self.assertTrue(parts[6], "servername field must not be empty")
 
     def test_draw_fires_with_an_empty_winner_field(self):
         a, b = self._start_two_player_game("drawroom")
         a.sendall(b"?F\n")  # bare F -- fb-server's own draw signal
         fired = self.drain_relay()
         self.assertEqual(len(fired), 1)
-        parts = fired[0].split("|", 5)
+        parts = fired[0].split("|", 6)
         self.assertEqual(parts[0], "RESULT")
-        self.assertEqual(parts[3], "", "a draw must post with no winner name")
+        self.assertEqual(parts[4], "", "a draw must post with no winner name")
 
     def test_second_f_before_any_n_does_not_re_fire(self):
         # Multiple clients can each send their own 'F' for the same round --
@@ -357,7 +363,7 @@ class ServerDiscordResultAlertTest(_FbServerTestBase):
         a.sendall(b"?Fwinner2\n")
         fired = self.drain_relay()
         self.assertEqual(len(fired), 1, "a new round's F after 'n' must post again")
-        self.assertEqual(fired[0].split("|", 5)[3], "winner2")
+        self.assertEqual(fired[0].split("|", 6)[4], "winner2")
 
     def test_pipe_in_winner_payload_cannot_corrupt_the_datagram_fields(self):
         # winner is lifted straight from a client's 'F' payload with none of
@@ -368,10 +374,10 @@ class ServerDiscordResultAlertTest(_FbServerTestBase):
         a.sendall(b"?Fevil|injected\n")
         fired = self.drain_relay()
         self.assertEqual(len(fired), 1)
-        parts = fired[0].split("|", 5)
+        parts = fired[0].split("|", 6)
         self.assertEqual(parts[0], "RESULT")
-        self.assertEqual(parts[3], "evil injected")
-        self.assertEqual(set(parts[4].split(",")), {"pipetest", "guest1"})
+        self.assertEqual(parts[4], "evil injected")
+        self.assertEqual(set(parts[5].split(",")), {"pipetest", "guest1"})
 
     def test_game_id_is_stable_across_rounds_of_the_same_room(self):
         # The whole point of carrying game_id at all: the relay groups every
@@ -381,13 +387,13 @@ class ServerDiscordResultAlertTest(_FbServerTestBase):
         a, b = self._start_two_player_game("stableroom")
 
         a.sendall(b"?Fwinner\n")
-        first_game_id = self.drain_relay()[0].split("|", 5)[1]
+        first_game_id = self.drain_relay()[0].split("|", 6)[1]
 
         a.sendall(b"?n\n")
         self.drain_relay()
 
         a.sendall(b"?Fwinner2\n")
-        second_game_id = self.drain_relay()[0].split("|", 5)[1]
+        second_game_id = self.drain_relay()[0].split("|", 6)[1]
 
         self.assertEqual(first_game_id, second_game_id)
 
@@ -396,12 +402,92 @@ class ServerDiscordResultAlertTest(_FbServerTestBase):
         a2, b2 = self._start_two_player_game("roomtwo", "guest2")
 
         a1.sendall(b"?Fwinner\n")
-        game_id_1 = self.drain_relay()[0].split("|", 5)[1]
+        game_id_1 = self.drain_relay()[0].split("|", 6)[1]
 
         a2.sendall(b"?Fwinner\n")
-        game_id_2 = self.drain_relay()[0].split("|", 5)[1]
+        game_id_2 = self.drain_relay()[0].split("|", 6)[1]
 
         self.assertNotEqual(game_id_1, game_id_2)
+
+    def test_round_number_increments_each_round_and_never_resets(self):
+        a, b = self._start_two_player_game("roundcnt")
+
+        a.sendall(b"?Fwinner\n")
+        self.assertEqual(self.drain_relay()[0].split("|", 6)[2], "1")
+
+        a.sendall(b"?n\n")
+        self.drain_relay()
+        a.sendall(b"?Fwinner\n")
+        self.assertEqual(self.drain_relay()[0].split("|", 6)[2], "2")
+
+        a.sendall(b"?n\n")
+        self.drain_relay()
+        a.sendall(b"?F\n")  # a draw still counts as a round
+        self.assertEqual(self.drain_relay()[0].split("|", 6)[2], "3")
+
+    def test_match_win_fires_when_victories_limit_reached(self):
+        # "guest1" (the default guest_nick) is a real seated player -- only a
+        # winner claim that resolves to an actual seat accrues a win count
+        # (see report_round_result()'s find_player_slot_by_nick lookup), so
+        # an unrecognized name like "winner" would never reach the limit.
+        a, b = self._start_two_player_game("matchroom", victories_limit=2)
+
+        a.sendall(b"?Fguest1\n")
+        fired = self.drain_relay()
+        self.assertEqual(len(fired), 1, "below the limit: no MATCH alert yet")
+        self.assertEqual(fired[0].split("|", 1)[0], "RESULT")
+
+        a.sendall(b"?n\n")
+        self.drain_relay()
+        a.sendall(b"?Fguest1\n")
+        fired = self.drain_relay()
+        self.assertEqual(len(fired), 2,
+                         "the round reaching the limit fires RESULT then MATCH")
+        self.assertEqual(fired[0].split("|", 1)[0], "RESULT")
+        match_parts = fired[1].split("|", 4)
+        self.assertEqual(match_parts[0], "MATCH")
+        self.assertTrue(match_parts[1].isdigit(), "game_id must be a plain int")
+        self.assertEqual(match_parts[2], "2", "champion's win count == the limit")
+        self.assertEqual(match_parts[3], "0", "GAMEMODE defaults to Classic")
+        champion, _, servername = match_parts[4].partition("|")
+        self.assertEqual(champion, "guest1")
+        self.assertTrue(servername, "servername field must not be empty")
+
+    def test_match_event_shares_its_rounds_game_id(self):
+        a, b = self._start_two_player_game("matchid", victories_limit=1)
+
+        a.sendall(b"?Fguest1\n")
+        fired = self.drain_relay()
+        self.assertEqual(len(fired), 2)
+        result_game_id = fired[0].split("|", 6)[1]
+        match_game_id = fired[1].split("|", 4)[1]
+        self.assertEqual(result_game_id, match_game_id)
+
+    def test_no_victories_limit_set_never_fires_a_match_event(self):
+        a, b = self._start_two_player_game("nolimit")  # victories_limit unset
+
+        for _ in range(3):
+            a.sendall(b"?Fwinner\n")
+            fired = self.drain_relay()
+            self.assertEqual(len(fired), 1, "no VICTORIESLIMIT: only RESULT, never MATCH")
+            self.assertEqual(fired[0].split("|", 1)[0], "RESULT")
+            a.sendall(b"?n\n")
+            self.drain_relay()
+
+    def test_draw_never_fires_a_match_event(self):
+        a, b = self._start_two_player_game("drawlim", victories_limit=1)
+        a.sendall(b"?F\n")  # bare F -- draw, no winner to credit
+        fired = self.drain_relay()
+        self.assertEqual(len(fired), 1, "a draw can never reach a win-count limit")
+        self.assertEqual(fired[0].split("|", 1)[0], "RESULT")
+
+    def test_unrecognized_winner_claim_never_fires_a_match_event(self):
+        a, b = self._start_two_player_game("ghostlim", victories_limit=1)
+        a.sendall(b"?Fghost\n")  # no seated player named "ghost"
+        fired = self.drain_relay()
+        self.assertEqual(len(fired), 1,
+                         "an unrecognized winner gets no win-count, so no MATCH either")
+        self.assertEqual(fired[0].split("|", 1)[0], "RESULT")
 
 
 if __name__ == "__main__":

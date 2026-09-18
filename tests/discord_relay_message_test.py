@@ -91,56 +91,104 @@ class BuildResultMessageTest(unittest.TestCase):
     bookkeeping and could not have been forged the same way."""
 
     def test_win_reads_naturally(self):
-        msg = relay.build_result_message(0, "alice", "alice,bob", "fb.example.org")
+        msg = relay.build_result_message(1, 0, "alice", "alice,bob", "fb.example.org")
         self.assertEqual(
-            msg, "🏆 **alice** won (Classic) on **fb.example.org** — alice, bob")
+            msg,
+            "Round 1 — 🏆 **alice** won (Classic) on **fb.example.org** — alice, bob")
 
     def test_draw_reads_naturally(self):
-        msg = relay.build_result_message(3, "", "alice,bob", "fb.example.org")
+        msg = relay.build_result_message(1, 3, "", "alice,bob", "fb.example.org")
         self.assertEqual(
-            msg, "🤝 Draw (Timed) on **fb.example.org** — alice, bob")
+            msg, "Round 1 — 🤝 Draw (Timed) on **fb.example.org** — alice, bob")
+
+    def test_round_number_labels_the_right_round(self):
+        msg = relay.build_result_message(4, 0, "alice", "alice,bob", "s")
+        self.assertTrue(msg.startswith("Round 4 — "))
+
+    def test_zero_round_number_omits_the_label(self):
+        # handle_datagram falls back to 0 for an unparseable round field --
+        # this must degrade to no label, not print "Round 0".
+        msg = relay.build_result_message(0, 0, "alice", "alice,bob", "s")
+        self.assertNotIn("Round", msg)
 
     def test_every_mode_number_maps_to_its_name(self):
         names = {0: "Classic", 1: "Clear", 2: "Race", 3: "Timed"}
         for mode, name in names.items():
-            msg = relay.build_result_message(mode, "alice", "alice", "s")
+            msg = relay.build_result_message(1, mode, "alice", "alice", "s")
             self.assertIn(f"({name})", msg)
 
     def test_unrecognized_mode_number_labels_nothing(self):
         # A value this relay predates or simply garbage (int parse of a
         # malformed field falls back to -1) must not crash or guess.
-        msg = relay.build_result_message(-1, "alice", "alice", "s")
+        msg = relay.build_result_message(1, -1, "alice", "alice", "s")
         self.assertNotIn("(", msg)
-        msg = relay.build_result_message(99, "alice", "alice", "s")
+        msg = relay.build_result_message(1, 99, "alice", "alice", "s")
         self.assertNotIn("(", msg)
 
     def test_hostile_winner_cannot_inject_a_link(self):
         # The field with no is_nick_ok() backing it at all on the server
         # side -- exactly the one a modified client would target.
         msg = relay.build_result_message(
-            0, "[click here](https://evil.example)", "alice", "s")
+            1, 0, "[click here](https://evil.example)", "alice", "s")
         self.assertNotIn("](https://evil.example)", msg)
 
     def test_hostile_roster_name_cannot_inject_a_link(self):
         msg = relay.build_result_message(
-            0, "alice", "alice,[click here](https://evil.example)", "s")
+            1, 0, "alice", "alice,[click here](https://evil.example)", "s")
         self.assertNotIn("](https://evil.example)", msg)
 
     def test_hostile_servername_cannot_inject_a_link(self):
         msg = relay.build_result_message(
-            0, "alice", "alice,bob",
+            1, 0, "alice", "alice,bob",
             "[totally fine](https://evil.example/steal)")
         self.assertNotIn("](https://evil.example/steal)", msg)
 
     def test_newline_cannot_forge_a_second_alert(self):
         msg = relay.build_result_message(
-            0, "real\n🏆 **admin** won on **your-bank**", "alice", "s")
+            1, 0, "real\n🏆 **admin** won on **your-bank**", "alice", "s")
         self.assertNotIn("\n", msg)
 
     def test_long_roster_cannot_blow_past_discords_own_limit(self):
         huge_roster = ",".join(f"p{i}" for i in range(500))
-        msg = relay.build_result_message(0, "alice", huge_roster, "s")
+        msg = relay.build_result_message(1, 0, "alice", huge_roster, "s")
         self.assertLessEqual(len(msg), relay.MAX_DISCORD_CONTENT)
+
+
+class BuildMatchMessageTest(unittest.TestCase):
+    """Match-over alerts: the champion who just reached the room's
+    VICTORIESLIMIT. Same trust boundary as BuildResultMessageTest's winner
+    field -- champion is lifted straight from a client's 'F' payload too."""
+
+    def test_win_reads_naturally(self):
+        msg = relay.build_match_message(2, 0, "alice", "fb.example.org")
+        self.assertEqual(
+            msg,
+            "🏁 **alice** wins the match with 2 round wins (Classic) "
+            "on **fb.example.org**!")
+
+    def test_singular_win_is_not_pluralized(self):
+        msg = relay.build_match_message(1, 0, "alice", "s")
+        self.assertIn("1 round win ", msg)
+        self.assertNotIn("1 round wins", msg)
+
+    def test_unrecognized_mode_number_labels_nothing(self):
+        msg = relay.build_match_message(2, -1, "alice", "s")
+        self.assertNotIn("(", msg)
+
+    def test_hostile_champion_cannot_inject_a_link(self):
+        msg = relay.build_match_message(
+            2, 0, "[click here](https://evil.example)", "s")
+        self.assertNotIn("](https://evil.example)", msg)
+
+    def test_hostile_servername_cannot_inject_a_link(self):
+        msg = relay.build_match_message(
+            2, 0, "alice", "[totally fine](https://evil.example/steal)")
+        self.assertNotIn("](https://evil.example/steal)", msg)
+
+    def test_newline_cannot_forge_a_second_alert(self):
+        msg = relay.build_match_message(
+            2, 0, "real\n🏁 **admin** wins the match", "s")
+        self.assertNotIn("\n", msg)
 
 
 class ResultDatagramDispatchTest(unittest.TestCase):
@@ -161,15 +209,16 @@ class ResultDatagramDispatchTest(unittest.TestCase):
 
     def test_result_datagram_posts_the_result_message(self):
         captured = self._captured_line(
-            b"RESULT|42|0|alice|alice,bob|fb.example.org")
+            b"RESULT|42|3|0|alice|alice,bob|fb.example.org")
         self.assertEqual(len(captured), 1)
+        self.assertIn("Round 3", captured[0])
         self.assertIn("**alice**", captured[0])
         self.assertIn("(Classic)", captured[0])
         self.assertIn("fb.example.org", captured[0])
 
     def test_draw_datagram_posts_without_a_winner_field(self):
         captured = self._captured_line(
-            b"RESULT|42|1|" + b"|alice,bob|fb.example.org")
+            b"RESULT|42|5|1|" + b"|alice,bob|fb.example.org")
         self.assertEqual(len(captured), 1)
         self.assertIn("Draw", captured[0])
 
@@ -179,15 +228,24 @@ class ResultDatagramDispatchTest(unittest.TestCase):
         # itself, since that would silence a real round-end over a
         # threading key alone.
         captured = self._captured_line(
-            b"RESULT|not-a-number|0|alice|alice,bob|fb.example.org")
+            b"RESULT|not-a-number|3|0|alice|alice,bob|fb.example.org")
         self.assertEqual(len(captured), 1)
         self.assertIn("**alice**", captured[0])
 
+    def test_non_integer_round_number_still_posts_flat(self):
+        # Same reasoning as game_id above: round is a display label only,
+        # so a malformed one must not sink the alert itself.
+        captured = self._captured_line(
+            b"RESULT|42|not-a-number|0|alice|alice,bob|fb.example.org")
+        self.assertEqual(len(captured), 1)
+        self.assertIn("**alice**", captured[0])
+        self.assertNotIn("Round", captured[0])
+
     def test_old_five_field_format_is_now_malformed(self):
-        # Pins the wire-format change itself: a RESULT datagram from a
-        # fb-server built before game_id existed must not be silently
-        # misparsed (e.g. reading roster as game_id) -- it should be
-        # dropped and logged, same as any other malformed datagram.
+        # Pins the original game_id wire-format change: a RESULT datagram
+        # from a fb-server built before game_id existed must not be
+        # silently misparsed (e.g. reading roster as game_id) -- it should
+        # be dropped and logged, same as any other malformed datagram.
         import asyncio
         warned = []
         original = relay.log.warning
@@ -199,6 +257,22 @@ class ResultDatagramDispatchTest(unittest.TestCase):
             relay.log.warning = original
         self.assertEqual(len(warned), 1)
 
+    def test_pre_round_number_six_field_format_is_now_malformed(self):
+        # Same pin as above, for the round_number wire-format change: a
+        # RESULT datagram from a fb-server built before round_number
+        # existed (game_id, mode, winner, roster, servername -- no round)
+        # must not be silently misparsed either.
+        import asyncio
+        warned = []
+        original = relay.log.warning
+        relay.log.warning = lambda fmt, *a: warned.append(fmt % a)
+        try:
+            asyncio.run(relay.handle_datagram(
+                b"RESULT|42|0|alice|alice,bob|fb.example.org", ""))
+        finally:
+            relay.log.warning = original
+        self.assertEqual(len(warned), 1)
+
     def test_unknown_type_name_is_dropped_not_guessed_at(self):
         import asyncio
         warned = []
@@ -206,6 +280,47 @@ class ResultDatagramDispatchTest(unittest.TestCase):
         relay.log.warning = lambda fmt, *a: warned.append(fmt % a)
         try:
             asyncio.run(relay.handle_datagram(b"DEPARTED|alice|s", ""))
+        finally:
+            relay.log.warning = original
+        self.assertEqual(len(warned), 1)
+
+
+class MatchDatagramDispatchTest(unittest.TestCase):
+    """handle_datagram() routing for MATCH, mirroring
+    ResultDatagramDispatchTest above."""
+
+    def _captured_line(self, datagram):
+        import asyncio
+        captured = []
+        original = relay.log.info
+        relay.log.info = lambda fmt, *a: captured.append(fmt % a)
+        try:
+            asyncio.run(relay.handle_datagram(datagram, ""))
+        finally:
+            relay.log.info = original
+        return captured
+
+    def test_match_datagram_posts_the_match_message(self):
+        captured = self._captured_line(b"MATCH|42|2|0|alice|fb.example.org")
+        self.assertEqual(len(captured), 1)
+        self.assertIn("**alice**", captured[0])
+        self.assertIn("wins the match", captured[0])
+        self.assertIn("(Classic)", captured[0])
+        self.assertIn("fb.example.org", captured[0])
+
+    def test_non_integer_game_id_still_posts_flat(self):
+        captured = self._captured_line(
+            b"MATCH|not-a-number|2|0|alice|fb.example.org")
+        self.assertEqual(len(captured), 1)
+        self.assertIn("**alice**", captured[0])
+
+    def test_malformed_match_datagram_is_dropped(self):
+        import asyncio
+        warned = []
+        original = relay.log.warning
+        relay.log.warning = lambda fmt, *a: warned.append(fmt % a)
+        try:
+            asyncio.run(relay.handle_datagram(b"MATCH|42|2|alice", ""))
         finally:
             relay.log.warning = original
         self.assertEqual(len(warned), 1)
@@ -300,7 +415,16 @@ class ServerNameOverrideTest(unittest.TestCase):
         original = relay.DISCORD_SERVER_NAME
         relay.DISCORD_SERVER_NAME = "fb.servequake.com"
         try:
-            line = self._posted_line(b"RESULT|42|0|alice|alice,bob|servequake")
+            line = self._posted_line(b"RESULT|42|1|0|alice|alice,bob|servequake")
+        finally:
+            relay.DISCORD_SERVER_NAME = original
+        self.assertIn("**fb.servequake.com**", line)
+
+    def test_applies_to_match_alerts_too(self):
+        original = relay.DISCORD_SERVER_NAME
+        relay.DISCORD_SERVER_NAME = "fb.servequake.com"
+        try:
+            line = self._posted_line(b"MATCH|42|2|0|alice|servequake")
         finally:
             relay.DISCORD_SERVER_NAME = original
         self.assertIn("**fb.servequake.com**", line)
@@ -353,7 +477,7 @@ class ResultThreadingTest(unittest.TestCase):
         # Bot vars both unset (the default): unchanged from before this
         # feature existed. Stub mode here, but the same branch applies to a
         # real DISCORD_WEBHOOK_URL.
-        captured = self._captured_info(b"RESULT|1|0|alice|alice,bob|s")
+        captured = self._captured_info(b"RESULT|1|1|0|alice|alice,bob|s")
         self.assertEqual(len(captured), 1)
         self.assertIn("[stub] would post", captured[0])
         self.assertNotIn("threaded", captured[0])
@@ -361,7 +485,7 @@ class ResultThreadingTest(unittest.TestCase):
     def test_only_one_bot_variable_set_falls_back_to_flat(self):
         relay.DISCORD_BOT_TOKEN = "test-token"
         relay.DISCORD_CHANNEL_ID = ""
-        captured = self._captured_info(b"RESULT|1|0|alice|alice,bob|s")
+        captured = self._captured_info(b"RESULT|1|1|0|alice|alice,bob|s")
         self.assertIn("[stub] would post", captured[0])
 
     def test_first_result_for_a_room_creates_a_thread(self):
@@ -371,7 +495,7 @@ class ResultThreadingTest(unittest.TestCase):
         relay._bot_request_sync = self._fake_bot_request(
             calls, [{"id": "111"}, {"id": "222"}])
         try:
-            captured = self._captured_info(b"RESULT|7|0|alice|alice,bob|s")
+            captured = self._captured_info(b"RESULT|7|1|0|alice|alice,bob|s")
         finally:
             relay._bot_request_sync = original
 
@@ -394,7 +518,7 @@ class ResultThreadingTest(unittest.TestCase):
         original = relay._bot_request_sync
         relay._bot_request_sync = self._fake_bot_request(calls, [{}])
         try:
-            self._captured_info(b"RESULT|7|0|bob|alice,bob|s")
+            self._captured_info(b"RESULT|7|2|0|bob|alice,bob|s")
         finally:
             relay._bot_request_sync = original
 
@@ -409,7 +533,7 @@ class ResultThreadingTest(unittest.TestCase):
         relay._bot_request_sync = self._fake_bot_request(
             [], [{"id": "333"}, {"id": "444"}])
         try:
-            self._captured_info(b"RESULT|9|0|carol|carol,dave|s")
+            self._captured_info(b"RESULT|9|1|0|carol|carol,dave|s")
         finally:
             relay._bot_request_sync = original
 
@@ -426,12 +550,34 @@ class ResultThreadingTest(unittest.TestCase):
         original = relay._bot_request_sync
         relay._bot_request_sync = always_fails
         try:
-            self._captured_info(b"RESULT|7|0|alice|alice,bob|s")
+            self._captured_info(b"RESULT|7|1|0|alice|alice,bob|s")
         finally:
             relay._bot_request_sync = original
 
         self.assertNotIn(7, relay._room_threads,
                          "a dead thread must not wedge this room forever")
+
+    def test_match_alert_posts_into_the_same_room_thread_as_its_round(self):
+        # The whole point of MATCH carrying the same game_id as RESULT: the
+        # champion announcement lands as a reply in the identical thread
+        # the round that decided the match just posted into, not a fresh
+        # thread of its own.
+        self._enable_bot_mode()
+        relay._room_threads[7] = "222"
+        calls = []
+        original = relay._bot_request_sync
+        relay._bot_request_sync = self._fake_bot_request(calls, [{}])
+        try:
+            captured = self._captured_info(b"MATCH|7|2|0|alice|s")
+        finally:
+            relay._bot_request_sync = original
+
+        self.assertIn("threaded", captured[0])
+        self.assertEqual(len(calls), 1, "must reuse the room's existing thread")
+        method, path, body = calls[0]
+        self.assertEqual(method, "POST")
+        self.assertEqual(path, "/channels/222/messages")
+        self.assertIn("alice", body["content"])
 
 
 class PayloadTest(unittest.TestCase):

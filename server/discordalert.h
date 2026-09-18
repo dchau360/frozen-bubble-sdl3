@@ -63,7 +63,8 @@ void discordalert_fire_join_event(const char* nick, const char* ip, const char* 
 // relay can group every round from the same room into one Discord thread.
 // It means nothing to this file or to fb-server generally -- it is not a
 // player-facing id and never touches the client wire protocol, only this
-// UDP datagram.
+// UDP datagram. round_number is g->round_number, 1-based and incremented
+// once per posted result -- purely a display label, same as game_mode.
 //
 // roster_csv is every current player's nick, comma-joined -- each one
 // already passed is_nick_ok() when its owner connected or joined, unlike
@@ -77,7 +78,24 @@ void discordalert_fire_join_event(const char* nick, const char* ip, const char* 
 // display name, not this file, so a value this build doesn't recognize
 // degrades to "unlabelled" rather than needing a matching update here.
 // A no-op (and free) when the relay isn't configured.
-void discordalert_fire_result_event(int game_id, const char* roster_csv, const char* winner_nick, int game_mode);
+void discordalert_fire_result_event(int game_id, int round_number, const char* roster_csv,
+                                     const char* winner_nick, int game_mode);
+
+// Call once per match-end, immediately after the round-end alert above,
+// when that round's winner has just reached the room's own VICTORIESLIMIT
+// (see game.c's parse_victories_limit()/g->victories_limit) -- i.e. the
+// same call site, at most once per round, and only on a round that also
+// decides the whole best-of-N match. game_id is the same room key the round
+// alert above uses, so the relay threads this into the identical Discord
+// thread as every round before it -- it always lands as a reply, never a
+// fresh top-level message, since the round that triggered it already
+// created (or reused) that thread a moment earlier. champion_nick carries
+// the same trust posture as winner_nick above: exactly what the reporting
+// client said, not validated against is_nick_ok. wins is the champion's
+// final win count (>= the room's victories_limit); game_mode is the same
+// raw 0-3 value as the round alert. A no-op (and free) when the relay isn't
+// configured.
+void discordalert_fire_match_event(int game_id, const char* champion_nick, int wins, int game_mode);
 
 // Close the UDP socket. Call once at shutdown, next to stats_cleanup().
 void discordalert_cleanup(void);
