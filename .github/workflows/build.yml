@@ -24,6 +24,69 @@ env:
 
 jobs:
   # ────────────────────────────────────────────────────────────────
+  # Detect changed paths — lets macOS/Windows/Android/WASM skip when a push
+  # or PR only touches the discord-relay sidecar or its Python tests, so a
+  # commit in that scope doesn't rebuild four platforms that could not
+  # possibly be affected by it. Deliberately narrow and conservative: any
+  # file outside the safe list (including server/*.c, server/*.h and
+  # server/CMakeLists.txt, which Windows' installer and the Linux AppImage
+  # both bundle a compiled fb-server from) falls through to "build
+  # everything", the same as before this job existed. Tags always build
+  # everything outright, without even inspecting the diff — a release must
+  # never silently ship without a platform because of this filter, and
+  # paths/paths-ignore are already ignored on tags for the same reason (see
+  # the comment on `on:` above).
+  # ────────────────────────────────────────────────────────────────
+  changes:
+    name: Detect changed paths
+    runs-on: ubuntu-22.04
+    outputs:
+      client_unaffected: ${{ steps.filter.outputs.client_unaffected }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Classify this push/PR's changed files
+        id: filter
+        run: |
+          if [ "${{ github.ref_type }}" = "tag" ]; then
+            echo "client_unaffected=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            base="${{ github.event.pull_request.base.sha }}"
+          else
+            base="${{ github.event.before }}"
+          fi
+
+          # No usable base to diff against (new branch, force-push, first
+          # commit) -- build everything rather than guess.
+          if [ -z "$base" ] || [ "$base" = "0000000000000000000000000000000000000000" ] \
+             || ! git cat-file -e "$base" 2>/dev/null; then
+            echo "client_unaffected=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          changed="$(git diff --name-only "$base" "${{ github.sha }}")"
+          echo "Changed files:"
+          echo "$changed"
+
+          unaffected=true
+          while IFS= read -r f; do
+            [ -z "$f" ] && continue
+            case "$f" in
+              server/discord-relay/*) ;;
+              tests/server_*.py) ;;
+              tests/discord_relay_message_test.py) ;;
+              *) unaffected=false ;;
+            esac
+          done <<< "$changed"
+
+          echo "client_unaffected=$unaffected" >> "$GITHUB_OUTPUT"
+
+  # ────────────────────────────────────────────────────────────────
   # Linux → AppImage
   # ────────────────────────────────────────────────────────────────
   build-linux:
@@ -238,6 +301,8 @@ jobs:
   # ────────────────────────────────────────────────────────────────
   build-macos:
     name: macOS (DMG)
+    needs: changes
+    if: needs.changes.outputs.client_unaffected != 'true'
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
@@ -368,6 +433,8 @@ jobs:
   # ────────────────────────────────────────────────────────────────
   build-windows:
     name: Windows (installer)
+    needs: changes
+    if: needs.changes.outputs.client_unaffected != 'true'
     runs-on: windows-latest
     defaults:
       run:
@@ -531,6 +598,8 @@ jobs:
   # ────────────────────────────────────────────────────────────────
   build-android:
     name: Android TV (APK)
+    needs: changes
+    if: needs.changes.outputs.client_unaffected != 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -726,6 +795,8 @@ jobs:
   # ────────────────────────────────────────────────────────────────
   build-wasm:
     name: WebAssembly (WASM)
+    needs: changes
+    if: needs.changes.outputs.client_unaffected != 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
