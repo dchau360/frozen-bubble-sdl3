@@ -326,23 +326,30 @@ class ServerDiscordResultAlertTest(_FbServerTestBase):
         a.sendall(b"?Fguest1\n")
         fired = self.drain_relay()
         self.assertEqual(len(fired), 1, f"expected exactly one RESULT datagram, got {fired!r}")
-        parts = fired[0].split("|", 6)
+        parts = fired[0].split("|", 8)
         self.assertEqual(parts[0], "RESULT")
         self.assertTrue(parts[1].isdigit(), "game_id must be a plain int")
         self.assertEqual(parts[2], "1", "first round in this room")
         self.assertEqual(parts[3], "2", "GAMEMODE:2 (Race) should flow through")
         self.assertEqual(parts[4], "guest1")
-        self.assertEqual(set(parts[5].split(",")), {"winroom", "guest1"})
-        self.assertTrue(parts[6], "servername field must not be empty")
+        roster = parts[5].split(",")
+        wins = parts[6].split(",")
+        self.assertEqual(set(roster), {"winroom", "guest1"})
+        self.assertEqual(dict(zip(roster, wins)), {"winroom": "0", "guest1": "1"},
+                         "wins is index-aligned with roster and already reflects "
+                         "this round's winner")
+        self.assertEqual(parts[7], "0", "no VICTORIESLIMIT was set for this room")
+        self.assertTrue(parts[8], "servername field must not be empty")
 
     def test_draw_fires_with_an_empty_winner_field(self):
         a, b = self._start_two_player_game("drawroom")
         a.sendall(b"?F\n")  # bare F -- fb-server's own draw signal
         fired = self.drain_relay()
         self.assertEqual(len(fired), 1)
-        parts = fired[0].split("|", 6)
+        parts = fired[0].split("|", 8)
         self.assertEqual(parts[0], "RESULT")
         self.assertEqual(parts[4], "", "a draw must post with no winner name")
+        self.assertEqual(set(parts[6].split(",")), {"0"}, "a draw credits nobody a win")
 
     def test_second_f_before_any_n_does_not_re_fire(self):
         # Multiple clients can each send their own 'F' for the same round --
@@ -363,7 +370,7 @@ class ServerDiscordResultAlertTest(_FbServerTestBase):
         a.sendall(b"?Fwinner2\n")
         fired = self.drain_relay()
         self.assertEqual(len(fired), 1, "a new round's F after 'n' must post again")
-        self.assertEqual(fired[0].split("|", 6)[4], "winner2")
+        self.assertEqual(fired[0].split("|", 8)[4], "winner2")
 
     def test_pipe_in_winner_payload_cannot_corrupt_the_datagram_fields(self):
         # winner is lifted straight from a client's 'F' payload with none of
@@ -374,7 +381,7 @@ class ServerDiscordResultAlertTest(_FbServerTestBase):
         a.sendall(b"?Fevil|injected\n")
         fired = self.drain_relay()
         self.assertEqual(len(fired), 1)
-        parts = fired[0].split("|", 6)
+        parts = fired[0].split("|", 8)
         self.assertEqual(parts[0], "RESULT")
         self.assertEqual(parts[4], "evil injected")
         self.assertEqual(set(parts[5].split(",")), {"pipetest", "guest1"})
@@ -387,13 +394,13 @@ class ServerDiscordResultAlertTest(_FbServerTestBase):
         a, b = self._start_two_player_game("stableroom")
 
         a.sendall(b"?Fwinner\n")
-        first_game_id = self.drain_relay()[0].split("|", 6)[1]
+        first_game_id = self.drain_relay()[0].split("|", 8)[1]
 
         a.sendall(b"?n\n")
         self.drain_relay()
 
         a.sendall(b"?Fwinner2\n")
-        second_game_id = self.drain_relay()[0].split("|", 6)[1]
+        second_game_id = self.drain_relay()[0].split("|", 8)[1]
 
         self.assertEqual(first_game_id, second_game_id)
 
@@ -402,10 +409,10 @@ class ServerDiscordResultAlertTest(_FbServerTestBase):
         a2, b2 = self._start_two_player_game("roomtwo", "guest2")
 
         a1.sendall(b"?Fwinner\n")
-        game_id_1 = self.drain_relay()[0].split("|", 6)[1]
+        game_id_1 = self.drain_relay()[0].split("|", 8)[1]
 
         a2.sendall(b"?Fwinner\n")
-        game_id_2 = self.drain_relay()[0].split("|", 6)[1]
+        game_id_2 = self.drain_relay()[0].split("|", 8)[1]
 
         self.assertNotEqual(game_id_1, game_id_2)
 
@@ -413,17 +420,53 @@ class ServerDiscordResultAlertTest(_FbServerTestBase):
         a, b = self._start_two_player_game("roundcnt")
 
         a.sendall(b"?Fwinner\n")
-        self.assertEqual(self.drain_relay()[0].split("|", 6)[2], "1")
+        self.assertEqual(self.drain_relay()[0].split("|", 8)[2], "1")
 
         a.sendall(b"?n\n")
         self.drain_relay()
         a.sendall(b"?Fwinner\n")
-        self.assertEqual(self.drain_relay()[0].split("|", 6)[2], "2")
+        self.assertEqual(self.drain_relay()[0].split("|", 8)[2], "2")
 
         a.sendall(b"?n\n")
         self.drain_relay()
         a.sendall(b"?F\n")  # a draw still counts as a round
-        self.assertEqual(self.drain_relay()[0].split("|", 6)[2], "3")
+        self.assertEqual(self.drain_relay()[0].split("|", 8)[2], "3")
+
+    def test_wins_csv_accumulates_across_rounds_index_aligned_with_roster(self):
+        # "guest1" is a real seated player (see the docstring on
+        # _start_two_player_game) -- report_round_result() only credits a
+        # win to a name that resolves to an actual seat, so this is the one
+        # nick in these tests whose repeated wins are meant to show up here.
+        a, b = self._start_two_player_game("winstally")
+
+        a.sendall(b"?Fguest1\n")
+        parts = self.drain_relay()[0].split("|", 8)
+        roster, wins = parts[5].split(","), parts[6].split(",")
+        self.assertEqual(dict(zip(roster, wins)), {"winstally": "0", "guest1": "1"})
+
+        a.sendall(b"?n\n")
+        self.drain_relay()
+        a.sendall(b"?Fguest1\n")
+        parts = self.drain_relay()[0].split("|", 8)
+        roster, wins = parts[5].split(","), parts[6].split(",")
+        self.assertEqual(dict(zip(roster, wins)), {"winstally": "0", "guest1": "2"},
+                         "a second win for the same player accumulates, not resets")
+
+    def test_result_carries_the_rooms_victories_limit(self):
+        # VICTORIESLIMIT flows into every RESULT for the room (not just the
+        # MATCH alert that fires once it's reached) so the relay's win-count
+        # chart can scale its bars against the real target -- see
+        # discordalert_fire_result_event()'s own doc comment.
+        a, b = self._start_two_player_game("vlimroom", victories_limit=7)
+        a.sendall(b"?Fguest1\n")
+        parts = self.drain_relay()[0].split("|", 8)
+        self.assertEqual(parts[7], "7")
+
+    def test_no_victories_limit_reports_zero_in_result(self):
+        a, b = self._start_two_player_game("novlim")  # victories_limit unset
+        a.sendall(b"?Fguest1\n")
+        parts = self.drain_relay()[0].split("|", 8)
+        self.assertEqual(parts[7], "0")
 
     def test_match_win_fires_when_victories_limit_reached(self):
         # "guest1" (the default guest_nick) is a real seated player -- only a
@@ -459,7 +502,7 @@ class ServerDiscordResultAlertTest(_FbServerTestBase):
         a.sendall(b"?Fguest1\n")
         fired = self.drain_relay()
         self.assertEqual(len(fired), 2)
-        result_game_id = fired[0].split("|", 6)[1]
+        result_game_id = fired[0].split("|", 8)[1]
         match_game_id = fired[1].split("|", 4)[1]
         self.assertEqual(result_game_id, match_game_id)
 

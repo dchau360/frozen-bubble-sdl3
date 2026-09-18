@@ -80,11 +80,18 @@ class TournamentTest(unittest.TestCase):
         # both add real overhead SIGTERM-to-exit that a debug/no-sanitizer
         # build never pays -- CI log showed a bare subprocess.TimeoutExpired
         # in this wait(), no sanitizer report of any kind, so this was pure
-        # shutdown-time margin, not a caught bug. 20s comfortably covers that
-        # overhead without meaningfully slowing a normal run, where the
-        # server exits almost immediately and wait() returns as soon as it
-        # does.
-        self.server.wait(timeout=20)
+        # shutdown-time margin, not a caught bug. 20s stopped being enough in
+        # turn (2026-09-18: three straight bare-TimeoutExpired failures on
+        # this same test, same signature, no sanitizer report, on a PR whose
+        # diff never executes during a tournament game at all -- see
+        # process_msg_prio_()'s `!g->tournament_id` guard in game.c -- and
+        # main's own recent CI history shows no standing failure rate on this
+        # job, so this reads as this runner generation simply being slower
+        # than when 20s was set, not a regression). 40s is the same kind of
+        # comfortable-margin bump as the 5s -> 20s one above, not a sign
+        # something is actually hanging -- a normal run still returns almost
+        # immediately, well under either number.
+        self.server.wait(timeout=40)
 
     def peer(self, name):
         p = Peer(self.port)

@@ -510,6 +510,27 @@ static void build_roster_csv(struct game* g, char* out, size_t outsz)
         }
 }
 
+/* Comma-joined win counts, index-aligned with build_roster_csv() above --
+ * out[i] is g->players_wins[i], the same win count top_scorers_line() and
+ * report_round_result() already maintain from the 'F' opcode. Lets the
+ * Discord relay render a per-round win-count chart without fb-server
+ * needing to know anything about charts, Discord, or markdown -- it just
+ * hands over the numbers it already tracks, same division of labor as
+ * every other discordalert field. Plain small ints, so no sanitization is
+ * needed the way nicks/servername get. */
+static void build_wins_csv(struct game* g, char* out, size_t outsz)
+{
+        int i;
+        out[0] = '\0';
+        for (i = 0; i < g->players_number; i++) {
+                char n[16];
+                if (i > 0)
+                        strconcat(out, ",", outsz);
+                snprintf(n, sizeof(n), "%d", g->players_wins[i]);
+                strconcat(out, n, outsz);
+        }
+}
+
 static void real_start_game(struct game* g)
 {
         int i;
@@ -1512,7 +1533,13 @@ void process_msg_prio_(int fd, char* msg, ssize_t len, struct game* g)
                  * champion, into the same per-room Discord thread as every
                  * round before it. A draw or an unrecognized winner claim
                  * returns 0 and can never trip this, same as an unlimited
-                 * (0) victories_limit never can either. */
+                 * (0) victories_limit never can either.
+                 *
+                 * report_round_result() runs first now (it didn't always --
+                 * see its git history) so that the roster/wins pair handed
+                 * to discordalert_fire_result_event() reflects *this*
+                 * round's win, not the previous one's: the relay's win-count
+                 * chart would otherwise always be one round stale. */
                 if (!g->tournament_id && len >= 3 && msg[1] == 'F' && !g->result_posted) {
                         char winner[32] = "";
                         size_t wlen = (size_t)len - 3;  /* id + 'F' + '\n' */
@@ -1524,13 +1551,15 @@ void process_msg_prio_(int fd, char* msg, ssize_t len, struct game* g)
                         }
                         g->round_number++;
                         {
-                                char roster[512];
-                                build_roster_csv(g, roster, sizeof(roster));
-                                discordalert_fire_result_event(g->game_id, g->round_number, roster,
-                                                                winner[0] ? winner : NULL, g->game_mode);
-                        }
-                        {
                                 int wins = report_round_result(g, winner[0] ? winner : NULL);
+                                char roster[512];
+                                char win_counts[256];
+                                build_roster_csv(g, roster, sizeof(roster));
+                                build_wins_csv(g, win_counts, sizeof(win_counts));
+                                discordalert_fire_result_event(g->game_id, g->round_number, roster,
+                                                                win_counts, g->victories_limit,
+                                                                winner[0] ? winner : NULL,
+                                                                g->game_mode);
                                 if (winner[0] && g->victories_limit > 0 && wins >= g->victories_limit)
                                         discordalert_fire_match_event(g->game_id, winner, wins, g->game_mode);
                         }
