@@ -20,23 +20,38 @@ practice always empty, since the client sends GEOLOC after NICK and the
 lookup behind it can take up to ~16s. The field stays in the format anyway:
 it costs nothing, and this end discards it regardless.
 
-    RESULT|<game_id>|<mode>|<winner>|<roster>|<servername>
+    RESULT|<game_id>|<round>|<mode>|<winner>|<roster>|<servername>
 
 One per round-end, sniffed from the 'F' opcode server-side (game.c). game_id
 is an opaque int identifying the room, monotonically assigned by fb-server at
 CREATE and stable for the room's whole lifetime (see g->game_id's comment in
 server/game.c) -- used here only to group every round from the same room
 into one Discord thread (see "Round-result threading" below), never
-displayed. mode is fb-server's raw 0-3 GAMEMODE value (src/gamemode.h);
+displayed. round is g->round_number, a 1-based per-room counter incremented
+once per posted result -- purely a display label ("Round 3"), no gameplay
+meaning. mode is fb-server's raw 0-3 GAMEMODE value (src/gamemode.h);
 winner is the reporting client's win claim, empty for a draw, and -- unlike
 everything else in either datagram -- is not validated against is_nick_ok()
 at all, so it gets no more trust here than servername does; roster is every
 current player's nick, comma-joined, each one already
 is_nick_ok()-constrained when its owner connected or joined.
 
-servername is everything remaining after the last "|" in both formats (it
-can itself contain spaces or, in principle, "|") -- see build_message() and
-build_result_message() for what actually reaches Discord from each.
+    MATCH|<game_id>|<wins>|<mode>|<champion>|<servername>
+
+At most one per round-end -- fired immediately after (never instead of) the
+RESULT above for the same round, and only when that round's winner has just
+reached the room's own VICTORIESLIMIT (see g->victories_limit in game.c).
+game_id is the same room key as RESULT, so this always threads into the
+identical Discord thread as every round before it (the RESULT that
+triggered it already created or reused that thread moments earlier -- see
+"Round-result threading" below). wins is the champion's final win count,
+mode is the same raw 0-3 GAMEMODE value, and champion carries the same
+trust posture as RESULT's winner field.
+
+servername is everything remaining after the last "|" in every format above
+(it can itself contain spaces or, in principle, "|") -- see build_message(),
+build_result_message() and build_match_message() for what actually reaches
+Discord from each.
 
 ip and geoloc are parsed but never posted to Discord -- see build_message(),
 which explains why the location came out. Both ride along in the datagram
@@ -158,8 +173,14 @@ def _sanitize_display(text):
 _GAME_MODE_NAMES = {0: "Classic", 1: "Clear", 2: "Race", 3: "Timed"}
 
 
-def build_result_message(mode, winner, roster_csv, servername):
-    """Round over: who won (or a draw), what mode, who was playing, where.
+def build_result_message(round_number, mode, winner, roster_csv, servername):
+    """Round over: which round, who won (or a draw), what mode, who was
+    playing, where.
+
+    round_number is g->round_number, a 1-based per-room counter with no
+    gameplay meaning -- purely a display label. A non-positive or otherwise
+    unusable value (see handle_datagram's own parsing) degrades to omitting
+    the label entirely rather than printing "Round 0" or similar.
 
     mode is the raw 0-3 value from fb-server's SETOPTIONS GAMEMODE field
     (src/gamemode.h). A value this relay doesn't recognize -- a future mode
@@ -176,6 +197,7 @@ def build_result_message(mode, winner, roster_csv, servername):
     have been forged the same way -- only sanitized here as routine defense
     in depth, the same as every other field arriving over this datagram.
     """
+    round_label = f"Round {round_number} — " if round_number and round_number > 0 else ""
     mode_label = _GAME_MODE_NAMES.get(mode, "")
     mode_label = f" ({mode_label})" if mode_label else ""
     servername = _sanitize_display(servername)
@@ -184,7 +206,27 @@ def build_result_message(mode, winner, roster_csv, servername):
         headline = f"🏆 **{_sanitize_display(winner)}** won"
     else:
         headline = "🤝 Draw"
-    content = f"{headline}{mode_label} on **{servername}** — {roster}"
+    content = f"{round_label}{headline}{mode_label} on **{servername}** — {roster}"
+    return content[:MAX_DISCORD_CONTENT]
+
+
+def build_match_message(wins, mode, champion, servername):
+    """Match over: the champion who just reached the room's VICTORIESLIMIT.
+
+    Posted as a second, separate message right after the RESULT alert for
+    the same round -- see MATCH's own doc in the module docstring for why
+    this is additive, not a replacement. wins and champion carry the same
+    trust/sanitization posture as build_result_message()'s winner field
+    (game_mode too); there is no roster here, since the champion is the
+    whole point and the room's roster was already shown in the RESULT
+    message moments earlier.
+    """
+    mode_label = _GAME_MODE_NAMES.get(mode, "")
+    mode_label = f" ({mode_label})" if mode_label else ""
+    servername = _sanitize_display(servername)
+    content = (f"🏁 **{_sanitize_display(champion)}** wins the match "
+               f"with {wins} round win{'s' if wins != 1 else ''}{mode_label} "
+               f"on **{servername}**!")
     return content[:MAX_DISCORD_CONTENT]
 
 
@@ -345,11 +387,11 @@ async def handle_datagram(data, webhook_url):
         game_id = None
 
     elif kind == "RESULT":
-        parts = rest.split("|", 4)
-        if len(parts) != 5:
+        parts = rest.split("|", 5)
+        if len(parts) != 6:
             log.warning("malformed datagram, dropped: %r", text[:120])
             return
-        game_id_s, mode_s, winner, roster_csv, servername = parts
+        game_id_s, round_s, mode_s, winner, roster_csv, servername = parts
         try:
             game_id = int(game_id_s)
         except ValueError:
@@ -359,12 +401,16 @@ async def handle_datagram(data, webhook_url):
             # just cannot be grouped into a thread without one.
             game_id = None
         try:
+            round_number = int(round_s)
+        except ValueError:
+            round_number = 0  # unrecognized -- build_result_message omits the label
+        try:
             mode = int(mode_s)
         except ValueError:
             mode = -1  # unrecognized -- build_result_message labels nothing
         if DISCORD_SERVER_NAME:
             servername = DISCORD_SERVER_NAME
-        content = build_result_message(mode, winner, roster_csv, servername)
+        content = build_result_message(round_number, mode, winner, roster_csv, servername)
         log_label = f"result for {winner or 'a draw'}"
         # Best-effort label for the thread's title only, not the message
         # itself -- see build_roster_csv()/players_nick[0] in game.c for why
@@ -372,11 +418,40 @@ async def handle_datagram(data, webhook_url):
         # room's life, and why that is an acceptable, cosmetic-only cost.
         room_label = _sanitize_display(roster_csv.split(",")[0] if roster_csv else servername)
 
+    elif kind == "MATCH":
+        parts = rest.split("|", 4)
+        if len(parts) != 5:
+            log.warning("malformed datagram, dropped: %r", text[:120])
+            return
+        game_id_s, wins_s, mode_s, champion, servername = parts
+        try:
+            game_id = int(game_id_s)
+        except ValueError:
+            # Same reasoning as RESULT above: post anyway, just ungrouped.
+            game_id = None
+        try:
+            wins = int(wins_s)
+        except ValueError:
+            wins = 0
+        try:
+            mode = int(mode_s)
+        except ValueError:
+            mode = -1
+        if DISCORD_SERVER_NAME:
+            servername = DISCORD_SERVER_NAME
+        content = build_match_message(wins, mode, champion, servername)
+        log_label = f"match win for {champion}"
+        # Only used if this ever had to create a fresh thread -- in practice
+        # it never does, since the RESULT for the same round already created
+        # or reused one moments earlier (see the module docstring's MATCH
+        # entry). Still a reasonable label on its own if that ever changes.
+        room_label = _sanitize_display(champion or servername)
+
     else:
         log.warning("malformed datagram, dropped: %r", text[:120])
         return
 
-    if kind == "RESULT" and game_id is not None and _bot_mode_enabled():
+    if kind in ("RESULT", "MATCH") and game_id is not None and _bot_mode_enabled():
         try:
             await asyncio.to_thread(_post_result_via_bot_sync, game_id, content, room_label)
             log.info("posted %s (threaded)", log_label)

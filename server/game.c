@@ -74,6 +74,22 @@ struct game
                               * setoptions() below. */
         int result_posted;  /* guards against posting the same round twice;
                               * reset on 'n' (ready for next round). */
+        int round_number;   /* how many rounds this room has completed,
+                              * incremented once per posted result (see the
+                              * 'F' sniff in process_msg_prio_) -- purely for
+                              * labelling the Discord alert with "Round N",
+                              * same read-only relationship to gameplay as
+                              * game_mode/result_posted above. */
+        int victories_limit; /* raw VICTORIESLIMIT:%d from the room's last
+                              * SETOPTIONS (src/networkclient.cpp's
+                              * SendOptions always sends it), or 0 if none
+                              * was ever set -- 0 means "no limit" (see
+                              * currentSettings.victoriesLimit's own 0 =
+                              * unlimited sentinel client-side), in which
+                              * case no round is ever treated as ending the
+                              * match. Used only to detect a match-over
+                              * champion for the Discord alert below; the
+                              * server never enforces it against gameplay. */
 
         /* Rounds won so far this room, and each seat's team -- both indexed
          * the same as players_nick[]/players_id[] and shifted the same way
@@ -335,6 +351,8 @@ static void create_game(int fd, char* nick, int max_players)
         g->max_players = max_players;
         g->game_mode = 0;      /* Classic, until/unless SETOPTIONS says otherwise */
         g->result_posted = 0;
+        g->round_number = 0;
+        g->victories_limit = 0;
         {
                 int k;
                 for (k = 0; k < MAX_PLAYERS_PER_GAME; k++) {
@@ -608,6 +626,21 @@ static void parse_teams(struct game* g, const char* options)
         }
 }
 
+/* Pulls VICTORIESLIMIT:%d out of a SETOPTIONS string, the same way
+ * parse_game_mode() above pulls out GAMEMODE -- this key has always ridden
+ * along too (src/networkclient.cpp's SendOptions), only ever relayed
+ * opaquely until now. Missing key or an out-of-range value both fall back
+ * to 0 ("no limit"/unlimited, matching the client's own vLimits[0]/
+ * kVictoriesLimits[0] sentinel): a value this server doesn't recognize
+ * should degrade to "never treat a round as ending the match", not guess. */
+static int parse_victories_limit(const char* options)
+{
+        const char* key = strstr(options, "VICTORIESLIMIT:");
+        if (!key) return 0;
+        int limit = atoi(key + strlen("VICTORIESLIMIT:"));
+        return (limit >= 0 && limit <= 100) ? limit : 0;
+}
+
 static void setoptions(int fd, char* options)
 {
         struct game * g = find_game_by_fd(fd);
@@ -617,6 +650,7 @@ static void setoptions(int fd, char* options)
                         char* msg;
                         g->game_mode = parse_game_mode(options);
                         parse_teams(g, options);
+                        g->victories_limit = parse_victories_limit(options);
                         send_ok(fd, "SETOPTIONS");
                         msg = asprintf_("OPTIONS: %s,PROTOCOLLEVEL:%d", options, min_protocol_level(g));
                         for (i = 0; i < g->players_number; i++)
@@ -1366,8 +1400,13 @@ static void top_scorers_line(const struct game* g, char* out, size_t outsz)
  * against the room's actual roster (find_player_slot_by_nick), never
  * against is_nick_ok. A claim that matches no seated player still gets
  * announced -- just without a win-count or team, since there is nothing
- * real to attach one to. */
-static void report_round_result(struct game* g, const char* winner_nick)
+ * real to attach one to.
+ *
+ * Returns the reporting winner's new win count (post-increment), or 0 for
+ * a draw or an unrecognized claim -- process_msg_prio_ below uses this to
+ * decide whether the round it just posted also ends the whole match,
+ * without re-deriving the same wslot lookup a second time. */
+static int report_round_result(struct game* g, const char* winner_nick)
 {
         char headline[256];
         char scorers[256];
@@ -1414,6 +1453,8 @@ static void report_round_result(struct game* g, const char* winner_nick)
                 snprintf(line, sizeof(line), "Top scorers: %s", scorers);
                 broadcast_serverwide(line);
         }
+
+        return (wslot >= 0) ? g->players_wins[wslot] : 0;
 }
 
 void process_msg_prio_(int fd, char* msg, ssize_t len, struct game* g)
@@ -1458,7 +1499,20 @@ void process_msg_prio_(int fd, char* msg, ssize_t len, struct game* g)
                  * something adversarial. Stripping '|' below only protects
                  * this datagram's own field boundaries; discord-relay applies
                  * its usual markdown/mention escaping on top of that, same
-                 * distrust as the join alert's nick and servername fields. */
+                 * distrust as the join alert's nick and servername fields.
+                 *
+                 * round_number counts every posted result for this room,
+                 * 1-based, purely for labelling the Discord alert -- it has
+                 * no gameplay meaning and is never reset mid-match, unlike
+                 * result_posted. victories_limit (from the room's last
+                 * SETOPTIONS, see parse_victories_limit() above) lets this
+                 * also detect the match's own end -- report_round_result()'s
+                 * return value is the reporting winner's new win count, and
+                 * reaching the limit fires a second, separate alert for the
+                 * champion, into the same per-room Discord thread as every
+                 * round before it. A draw or an unrecognized winner claim
+                 * returns 0 and can never trip this, same as an unlimited
+                 * (0) victories_limit never can either. */
                 if (!g->tournament_id && len >= 3 && msg[1] == 'F' && !g->result_posted) {
                         char winner[32] = "";
                         size_t wlen = (size_t)len - 3;  /* id + 'F' + '\n' */
@@ -1468,12 +1522,18 @@ void process_msg_prio_(int fd, char* msg, ssize_t len, struct game* g)
                                         winner[w++] = (msg[2 + j] == '|') ? ' ' : msg[2 + j];
                                 winner[w] = '\0';
                         }
+                        g->round_number++;
                         {
                                 char roster[512];
                                 build_roster_csv(g, roster, sizeof(roster));
-                                discordalert_fire_result_event(g->game_id, roster, winner[0] ? winner : NULL, g->game_mode);
+                                discordalert_fire_result_event(g->game_id, g->round_number, roster,
+                                                                winner[0] ? winner : NULL, g->game_mode);
                         }
-                        report_round_result(g, winner[0] ? winner : NULL);
+                        {
+                                int wins = report_round_result(g, winner[0] ? winner : NULL);
+                                if (winner[0] && g->victories_limit > 0 && wins >= g->victories_limit)
+                                        discordalert_fire_match_event(g->game_id, winner, wins, g->game_mode);
+                        }
                         g->result_posted = 1;
                 } else if (!g->tournament_id && len >= 2 && msg[1] == 'n') {
                         g->result_posted = 0;

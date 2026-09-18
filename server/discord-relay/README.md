@@ -2,10 +2,12 @@
 
 Posts a Discord message whenever a player arrives on `fb-server`, carrying
 their nick and the server's name -- and nothing else. It also posts one at
-the end of every round, carrying the game mode, the winner (or that it was a
-draw), and the full player roster -- see [Round results](#round-results)
-below. Same webhook, same stub/live modes, same `DISCORD_SERVER_NAME`
-override; nothing extra to configure for one versus the other.
+the end of every round, carrying the round number, the game mode, the winner
+(or that it was a draw), and the full player roster -- see
+[Round results](#round-results) below -- and, when that round also reaches a
+room's own win-count limit, a second alert naming the match champion -- see
+[Match results](#match-results). Same webhook, same stub/live modes, same
+`DISCORD_SERVER_NAME` override; nothing extra to configure for any of these.
 
 "Arrives" means joining the *server* (their first accepted `NICK`, the point
 at which the lobby can see them), not joining a game room. A player sitting
@@ -40,7 +42,8 @@ the datagram is dropped and gameplay is unaffected.
 ## Wire format
 
     JOIN|<nick>|<ip>|<geoloc>|<servername>
-    RESULT|<game_id>|<game_mode>|<winner>|<roster>|<servername>
+    RESULT|<game_id>|<round_number>|<game_mode>|<winner>|<roster>|<servername>
+    MATCH|<game_id>|<wins>|<game_mode>|<champion>|<servername>
 
 `geoloc` is the arriving player's self-reported `lat:lon` or an empty string
 -- in practice always empty, since the client sends `GEOLOC` after `NICK`
@@ -53,16 +56,22 @@ same either way.
 `game_id` is an opaque int identifying the room -- `fb-server` assigns it
 once, monotonically, when the room is created (`g->game_id` in
 `server/game.c`), and it never changes for that room's whole lifetime. It's
-never displayed; the relay uses it only to group a room's rounds into one
-Discord thread (see Round results below). `game_mode` is `fb-server`'s raw
-0-3 `GAMEMODE` value (0 Classic, 1 Clear, 2 Race, 3 Timed), or 0 if the room
-never set one. `winner` is empty on a draw. `roster` is every player
-currently in the room, comma-joined -- unlike `winner`, every name in it
-already passed `fb-server`'s `is_nick_ok()`, so it can never itself contain
-a `|`; `winner` had any literal `|` stripped at the C-layer extraction point
-(`game.c`) for the same reason, since it is *not* validated against
-`is_nick_ok()` at all -- see Round results below. Both message kinds keep
-`servername` last, since it is the only field with no length or charset cap.
+never displayed; the relay uses it only to group a room's rounds (and its
+eventual match result) into one Discord thread (see Round results below).
+`round_number` is 1-based and counts every posted result for that room,
+purely a display label with no gameplay meaning -- it never resets
+mid-match. `game_mode` is `fb-server`'s raw 0-3 `GAMEMODE` value (0 Classic,
+1 Clear, 2 Race, 3 Timed), or 0 if the room never set one. `winner` is empty
+on a draw. `roster` is every player currently in the room, comma-joined --
+unlike `winner`, every name in it already passed `fb-server`'s
+`is_nick_ok()`, so it can never itself contain a `|`; `winner` had any
+literal `|` stripped at the C-layer extraction point (`game.c`) for the same
+reason, since it is *not* validated against `is_nick_ok()` at all -- see
+Round results below. `wins` is the champion's win count at the moment the
+match ended (equal to or above the room's win-count limit); `champion`
+carries the same trust posture as `winner` -- see Match results below. Every
+message kind keeps `servername` last, since it is the only field with no
+length or charset cap.
 
 ## Running
 
@@ -156,11 +165,36 @@ mid-round (the stats bookkeeping that already exists for that, in
 a rage-quit are indistinguishable there, and publicly misattributing an
 outcome to a named player would be worse than not posting one.
 
+## Match results
+
+Rooms can carry a win-count limit (best-of-N, `VICTORIESLIMIT` on
+`SETOPTIONS`, `g->victories_limit` in `server/game.c`) -- 0 means no limit
+was ever set, in which case a match is never detected as over. When a round's
+winner reaches that limit, the same `F`-opcode sniff that posts the round's
+own `RESULT` also fires one `MATCH` alert immediately after it, into the
+identical Discord thread (same `game_id`) -- it always lands as a reply,
+never a fresh top-level message, since the round that triggered it already
+created or reused that thread a moment earlier.
+
+This detection is a deliberate simplification, consistent with `roster`'s
+own win-count bookkeeping above: only the *reporting* winner's own win count
+is compared against the limit, not "any teammate's count reaches it" the way
+the client-side match-over check works for team games. `champion_nick`
+carries the same trust posture as `winner` in a round result -- exactly what
+the reporting client's `F` payload said, not checked against `is_nick_ok()`.
+A draw or a winner claim that matches no seated player returns a win count of
+0 and can never trip this, the same way an unset (0) `victories_limit` never
+can either.
+
+`build_match_message()` in `relay.py` reuses `_GAME_MODE_NAMES` and the same
+`_sanitize_display()` escaping as round results.
+
 ### Threading rounds per room
 
 With `DISCORD_BOT_TOKEN` and `DISCORD_CHANNEL_ID` both set, every room's
 first result opens a Discord thread (named after the room), and every later
-result for the same room (same `game_id`) posts into that thread instead of
+result for the same room (same `game_id`) -- including its eventual `MATCH`
+alert, if the room has a win-count limit -- posts into that thread instead of
 a fresh top-level message. Leaving either unset (the default) keeps posting
 flat via `DISCORD_WEBHOOK_URL`, exactly as before this existed -- join
 alerts are entirely unaffected by this setting either way, since a join

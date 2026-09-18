@@ -114,7 +114,8 @@ void discordalert_fire_join_event(const char* nick, const char* ip, const char* 
     }
 }
 
-void discordalert_fire_result_event(int game_id, const char* roster_csv, const char* winner_nick, int game_mode)
+void discordalert_fire_result_event(int game_id, int round_number, const char* roster_csv,
+                                     const char* winner_nick, int game_mode)
 {
     if (!relay_configured) return;
 
@@ -124,13 +125,35 @@ void discordalert_fire_result_event(int game_id, const char* roster_csv, const c
     // (game.c) for the same reason, since it is not validated against
     // is_nick_ok at all. Only net_servername() is genuinely unbounded, same
     // as for JOIN, which is why it stays last rather than split further.
-    // game_id is a plain int (see the doc comment in discordalert.h), so it
-    // needs no such treatment -- it goes right after RESULT rather than at
-    // the end, since it is the one field every consumer needs before it can
-    // even start parsing the rest.
+    // game_id and round_number are both plain ints (see the doc comments in
+    // discordalert.h), so neither needs such treatment -- they go right
+    // after RESULT rather than at the end, since they are the fields every
+    // consumer needs before it can even start parsing the rest.
     char datagram[1024];
-    snprintf(datagram, sizeof(datagram), "RESULT|%d|%d|%s|%s|%s",
-             game_id, game_mode, winner_nick ? winner_nick : "", roster_csv ? roster_csv : "", net_servername());
+    snprintf(datagram, sizeof(datagram), "RESULT|%d|%d|%d|%s|%s|%s",
+             game_id, round_number, game_mode, winner_nick ? winner_nick : "",
+             roster_csv ? roster_csv : "", net_servername());
+
+    if (sendto(relay_socket, datagram, strlen(datagram), 0,
+               (struct sockaddr*)&relay_addr, sizeof(relay_addr)) < 0) {
+        // Best-effort by design: log and move on, never block or retry on
+        // the main event loop.
+        l1(OUTPUT_TYPE_ERROR, "discordalert: sendto relay failed: %s", strerror(errno));
+    }
+}
+
+void discordalert_fire_match_event(int game_id, const char* champion_nick, int wins, int game_mode)
+{
+    if (!relay_configured) return;
+
+    // Same trust/escaping posture as discordalert_fire_result_event above:
+    // champion_nick is untrusted free text (see discordalert.h), so it goes
+    // last, before only the also-unbounded servername. wins is a plain int
+    // fb-server computed itself (game.c's report_round_result() return
+    // value), needing no such treatment.
+    char datagram[1024];
+    snprintf(datagram, sizeof(datagram), "MATCH|%d|%d|%d|%s|%s",
+             game_id, wins, game_mode, champion_nick ? champion_nick : "", net_servername());
 
     if (sendto(relay_socket, datagram, strlen(datagram), 0,
                (struct sockaddr*)&relay_addr, sizeof(relay_addr)) < 0) {
