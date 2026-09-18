@@ -641,7 +641,7 @@ void BubbleGame::RenderRoundStats(SDL_Renderer *rend) {
                     : "T / X: CHAT    ENTER / FIRE: NEXT ROUND"));
         cell(hint, colName, y, hdr);
         if (discordAlertsApply) {
-            cell("STATS ALSO POSTED TO DISCORD #now-playing",
+            cell("STATS POSTED TO DISCORD #now-playing CHANNEL",
                  colName, y + rowH, normal);
         }
 
