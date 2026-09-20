@@ -775,5 +775,194 @@ class PayloadTest(unittest.TestCase):
         self.assertNotIn("urllib", ua.lower())
 
 
+class BadgeTest(unittest.TestCase):
+    """Platform and input badges: which tags render, and what a room that
+    mixes client versions looks like.
+
+    Both tag sets are closed and already validated server-side, so the
+    interesting cases here are all the absent ones -- a client too old to send
+    a tag, a player who has not fired yet this round, a tag from a client
+    newer than this relay. Every one of them has to come out as *no badge*,
+    because the alternative (guessing, or dropping the whole line) is how a
+    mixed room starts telling people the wrong thing about each other.
+    """
+
+    def test_each_platform_tag_renders_its_own_badge(self):
+        seen = set()
+        for tag in "WMLAIB":
+            msg = relay.build_message("alice", "fb.example", platform=tag)
+            badge = msg.split("**alice**")[1].split(" joined")[0].strip()
+            self.assertTrue(badge, f"tag {tag} rendered nothing")
+            seen.add(badge)
+        self.assertEqual(len(seen), 6, "every platform must be distinguishable")
+
+    def test_unknown_and_missing_platform_render_no_badge(self):
+        plain = relay.build_message("alice", "fb.example")
+        for tag in ("", "Z", "WW", "🙂"):
+            self.assertEqual(relay.build_message("alice", "fb.example", platform=tag), plain,
+                             f"{tag!r} must be indistinguishable from no tag at all")
+
+    def test_roster_badges_follow_their_own_player(self):
+        msg = relay.build_result_message(1, 0, "alice", "alice,bob", "1,0", 0, "fb.example",
+                                          platforms_csv="W,L", inputs_csv="M,K")
+        # The headline itself contains an em dash ("Round 1 — ..."), so take
+        # the last one on the first line: the roster is always what trails it.
+        roster = msg.split("\n")[0].split(" — ")[-1]
+        alice, bob = roster.split(", ")
+        self.assertIn(relay._PLATFORM_BADGES["W"], alice)
+        self.assertIn(relay._INPUT_BADGES["M"], alice)
+        self.assertIn(relay._PLATFORM_BADGES["L"], bob)
+        self.assertIn(relay._INPUT_BADGES["K"], bob)
+
+    def test_a_mixed_room_badges_only_who_reported(self):
+        # The room that matters: this build beside the previous release.
+        msg = relay.build_result_message(1, 0, "alice", "alice,bob", "1,0", 0, "fb.example",
+                                          platforms_csv="W,", inputs_csv=",K")
+        # The headline itself contains an em dash ("Round 1 — ..."), so take
+        # the last one on the first line: the roster is always what trails it.
+        roster = msg.split("\n")[0].split(" — ")[-1]
+        alice, bob = roster.split(", ")
+        self.assertIn(relay._PLATFORM_BADGES["W"], alice)
+        self.assertNotIn(relay._INPUT_BADGES["K"], alice)
+        self.assertIn(relay._INPUT_BADGES["K"], bob)
+        self.assertNotIn(relay._PLATFORM_BADGES["W"], bob)
+
+    def test_no_tags_at_all_leaves_the_roster_exactly_as_before(self):
+        before = relay.build_result_message(1, 0, "alice", "alice,bob", "1,0", 0, "fb.example")
+        after = relay.build_result_message(1, 0, "alice", "alice,bob", "1,0", 0, "fb.example",
+                                            platforms_csv=",", inputs_csv=",")
+        self.assertEqual(before, after)
+
+    def test_misaligned_tag_csv_is_dropped_rather_than_misattributed(self):
+        # Attributing the wrong platform to a named player is worse than
+        # showing none, so a length mismatch takes the whole column out.
+        plain = relay.build_result_message(1, 0, "alice", "alice,bob", "1,0", 0, "fb.example")
+        skewed = relay.build_result_message(1, 0, "alice", "alice,bob", "1,0", 0, "fb.example",
+                                             platforms_csv="W", inputs_csv="M,K,T")
+        self.assertEqual(skewed, plain)
+
+
+class CountryFlagTest(unittest.TestCase):
+    """Country codes render as flags; nothing finer than a country gets out.
+
+    The second half of that is the point. This channel deliberately stopped
+    carrying a joining player's coordinates when the game began advertising it
+    to players (see NoLocationLeakTest and build_message), and a country is a
+    different thing at a different granularity -- roughly what a server list
+    shows -- not a reopening of that. These pin the distinction so it cannot
+    erode into "location is fine again".
+    """
+
+    def test_a_code_renders_as_its_flag(self):
+        self.assertEqual(relay._flag("US"), "\U0001F1FA\U0001F1F8")
+        self.assertEqual(relay._flag("JP"), "\U0001F1EF\U0001F1F5")
+
+    def test_malformed_codes_render_nothing(self):
+        for bad in ("", "U", "USA", "us", "U1", "🇺🇸", "  "):
+            self.assertEqual(relay._flag(bad), "", f"{bad!r} must not render")
+
+    def test_country_reaches_the_join_message(self):
+        msg = relay.build_message("alice", "fb.example", country="DE")
+        self.assertIn(relay._flag("DE"), msg)
+
+    def test_country_reaches_each_roster_entry(self):
+        msg = relay.build_result_message(1, 0, "alice", "alice,bob", "1,0", 0, "fb.example",
+                                          countries_csv="US,JP")
+        roster = msg.split("\n")[0].split(" — ")[-1]
+        alice, bob = roster.split(", ")
+        self.assertIn(relay._flag("US"), alice)
+        self.assertIn(relay._flag("JP"), bob)
+
+    def test_a_coordinate_pair_can_never_render_as_a_country(self):
+        # The one shape that must never come out as anything: whatever ends up
+        # in the country field, it is two letters or it is nothing, so a
+        # lat/lon misrouted into it renders empty rather than leaking.
+        for coords in ("37.7:-122.4", "37.7", "-122.4", "37,-122"):
+            self.assertEqual(relay._flag(coords), "")
+            self.assertNotIn(coords, relay.build_message("alice", "fb.example",
+                                                          country=coords))
+
+    def test_the_datagram_geoloc_field_still_never_reaches_the_message(self):
+        # End to end with both fields populated: the country posts, the
+        # coordinates beside it do not.
+        captured = []
+        original = relay.log.info
+        relay.log.info = lambda fmt, *a: captured.append(fmt % a)
+        try:
+            import asyncio
+            asyncio.run(relay.handle_datagram(
+                b"JOIN|alice|203.0.113.4|37.77:-122.42|W|US|fb.example", ""))
+        finally:
+            relay.log.info = original
+        self.assertEqual(len(captured), 1)
+        self.assertIn(relay._flag("US"), captured[0])
+        self.assertNotIn("37.77", captured[0])
+        self.assertNotIn("122.42", captured[0])
+        self.assertNotIn("203.0.113", captured[0])
+
+
+class DatagramCompatTest(unittest.TestCase):
+    """Both datagram kinds are accepted in their pre-1.4 shapes too.
+
+    fb-server and this relay ship in the same compose stack, so a version skew
+    should not happen -- but "should not" is not "cannot" for an operator who
+    pins one image, and the failure mode without this is every alert being
+    dropped as malformed rather than posting with one field missing.
+    """
+
+    def _handled(self, datagram):
+        # Same capture ResultDatagramDispatchTest uses: with no webhook
+        # configured the relay logs what it would have posted, which is the
+        # message content verbatim.
+        import asyncio
+        captured = []
+        original = relay.log.info
+        relay.log.info = lambda fmt, *a: captured.append(fmt % a)
+        try:
+            asyncio.run(relay.handle_datagram(datagram, ""))
+        finally:
+            relay.log.info = original
+        return captured
+
+    def test_join_with_a_platform_but_no_country_still_posts(self):
+        posted = self._handled(b"JOIN|alice|203.0.113.4||W|fb.example")
+        self.assertEqual(len(posted), 1)
+        self.assertIn(relay._PLATFORM_BADGES["W"], posted[0])
+        self.assertIn("fb.example", posted[0])
+
+    def test_result_with_tags_but_no_country_column_still_posts(self):
+        posted = self._handled(
+            b"RESULT|7|2|0|alice|alice,bob|1,0|0|W,L|M,K|fb.example")
+        self.assertEqual(len(posted), 1)
+        self.assertIn(relay._PLATFORM_BADGES["W"], posted[0])
+        self.assertIn(relay._INPUT_BADGES["K"], posted[0])
+
+    def test_old_join_without_a_platform_field_still_posts(self):
+        posted = self._handled(b"JOIN|alice|203.0.113.4||fb.example")
+        self.assertEqual(len(posted), 1)
+        self.assertIn("alice", posted[0])
+        self.assertIn("fb.example", posted[0])
+
+    def test_old_result_without_tag_fields_still_posts(self):
+        posted = self._handled(b"RESULT|7|2|0|alice|alice,bob|1,0|0|fb.example")
+        self.assertEqual(len(posted), 1)
+        self.assertIn("alice", posted[0])
+        self.assertIn("bob", posted[0])
+
+    def test_an_old_servername_containing_a_pipe_is_not_read_as_a_tag(self):
+        # The one genuinely ambiguous case, and why _tag_csv_ok exists: an
+        # old-format datagram with a '|' in its servername has the same field
+        # count as a new-format one. Only the shape of the candidate field
+        # tells them apart.
+        posted = self._handled(b"JOIN|alice|203.0.113.4||fb|example")
+        self.assertEqual(len(posted), 1)
+        # Escaped on the way out, as every display string here is -- what
+        # matters is that the whole "fb|example" reached the name field
+        # instead of "fb" being mistaken for a platform tag.
+        self.assertIn("fb\\|example", posted[0])
+        for badge in relay._PLATFORM_BADGES.values():
+            self.assertNotIn(badge, posted[0])
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

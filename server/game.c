@@ -132,6 +132,8 @@ static char ok_can_start[] = "GAME_CAN_START: %s";
 static char wn_unknown_command[] = "UNKNOWN_COMMAND";
 static char wn_missing_arguments[] = "MISSING_ARGUMENTS";
 static char wn_nick_invalid[] = "INVALID_NICK";
+static char wn_platform_invalid[] = "INVALID_PLATFORM";
+static char wn_country_invalid[] = "INVALID_COUNTRY";
 static char wn_nick_in_use[] = "NICK_IN_USE";
 static char wn_no_such_game[] = "NO_SUCH_GAME";
 static char wn_game_full[] = "GAME_FULL";
@@ -215,6 +217,45 @@ int admin_authorized[256];
 int is_bot[256];
 int bots_connected = 0;
 
+/* Which OS the client runs on (PLATFORM command) and which device its player
+ * is currently shooting with ('i' opcode, sniffed in process_msg_prio_).
+ * Both are self-reported and carry exactly BOT's trust posture -- a modified
+ * client can claim anything, so neither may ever gate anything; they exist to
+ * label a player in the lobby, on the in-game board, and in the operator's
+ * Discord channel. Cleared alongside nick[]/geoloc[]/IP[] in conn_terminated
+ * (net.c). 0 means "never reported", which every consumer renders as nothing
+ * at all rather than guessing. */
+char platform_tag[256];
+char input_tag[256];
+char country_tag[256][3];
+
+/* Two uppercase ASCII letters -- an ISO 3166-1 alpha-2 code as the client's
+ * own geolocation lookup reported it. Not validated against a list of real
+ * countries: this server has no business carrying one, the relay renders any
+ * well-formed pair as a flag emoji, and a code that is not a country just
+ * comes out as two letter glyphs. What the check is actually for is the same
+ * thing is_platform_tag_ok's is -- keeping ':' and '|' out of the LIST line
+ * and the relay datagrams. */
+static int is_country_tag_ok(const char* s)
+{
+    return s && s[0] >= 'A' && s[0] <= 'Z' && s[1] >= 'A' && s[1] <= 'Z' && !s[2];
+}
+
+/* W=Windows M=macOS L=Linux A=Android I=iOS B=Browser(WASM). Rejecting
+ * everything else is what lets these ride bare in the LIST line and in the
+ * relay datagrams without escaping: neither ':' (LIST's own field separator)
+ * nor '|' (the datagram's) can ever get in. */
+static int is_platform_tag_ok(const char* s)
+{
+        return s && s[0] && !s[1] && strchr("WMLAIB", s[0]) != NULL;
+}
+
+/* K=keyboard M=mouse T=touch G=gamepad. Same closed set, same reason. */
+static int is_input_tag_ok(char c)
+{
+        return c && strchr("KMTG", c) != NULL;
+}
+
 // calculate the list of players for a given game
 static char* list_game(const struct game * g)
 {
@@ -228,19 +269,46 @@ static char* list_game(const struct game * g)
         return memdup(list_game_str, strlen(list_game_str) + 1);
 }
 
+/* Appends a player's optional trailing LIST fields to an entry that already
+ * holds their nick: ":<geoloc>" as it always has, then ":<platform>" after it.
+ *
+ * The platform tag goes last, behind the two geoloc fields, because that is
+ * the one spot both existing parsers already walk past: this project's own
+ * client takes everything after the first ':' as the geoloc and sscanf's
+ * "%f:%f" out of it, stopping at the tag (src/networkclient.cpp), and the
+ * original Perl client's unanchored /([^:]+)(:([^:]+):([^:]+))?/ matches
+ * nick/lat/lon and ignores whatever follows. Same "extend where the parsers
+ * already skip" move the room-cap "[nick,nick]:20" suffix made.
+ *
+ * A player with a platform but no geoloc yet -- the common case, since
+ * PLATFORM is sent with NICK while GEOLOC's lookup takes ~16s -- emits the
+ * empty middle field as "NICK::W". Both parsers degrade correctly there too:
+ * "%f:%f" fails and draws no map dot, exactly as a geoloc-less player does
+ * today, and the Perl regex's optional group cannot match an empty [^:]+ so
+ * it comes back with the bare nick. */
+static void append_player_list_tags(char* out, size_t outsz, int fd)
+{
+        const char* geo = geoloc[fd];
+        char plat = platform_tag[fd];
+        if (geo == NULL && !plat)
+                return;
+        strconcat(out, ":", outsz);
+        if (geo != NULL)
+                strconcat(out, geo, outsz);
+        if (plat) {
+                char suffix[3] = { ':', plat, '\0' };
+                strconcat(out, suffix, outsz);
+        }
+}
+
 // calculate the list of players for a given game with geolocation
 static char* list_game_with_geolocation(const struct game * g)
 {
         char list_game_str[8192] = "";
         int i;
-        char* n;
         for (i = 0; i < g->players_number; i++) {
                 strconcat(list_game_str, g->players_nick[i], sizeof(list_game_str));
-                n = geoloc[g->players_conn[i]];
-                if (n != NULL) {
-                        strconcat(list_game_str, ":", sizeof(list_game_str));
-                        strconcat(list_game_str, n, sizeof(list_game_str));
-                }
+                append_player_list_tags(list_game_str, sizeof(list_game_str), g->players_conn[i]);
                 if (i < g->players_number - 1)
                         strconcat(list_game_str, ",", sizeof(list_game_str));
         }
@@ -266,11 +334,7 @@ static void list_open_nicks_aux(gpointer data, gpointer user_data)
         if (n == NULL)
                 return;
         strconcat(list_games_str, n, sizeof(list_games_str));
-        n = geoloc[GPOINTER_TO_INT(data)];
-        if (n != NULL) {
-                strconcat(list_games_str, ":", sizeof(list_games_str));
-                strconcat(list_games_str, n, sizeof(list_games_str));
-        }
+        append_player_list_tags(list_games_str, sizeof(list_games_str), GPOINTER_TO_INT(data));
         strconcat(list_games_str, ",", sizeof(list_games_str));
 }
 static void list_games_aux(gpointer data, gpointer user_data)
@@ -309,6 +373,8 @@ static void list_games_aux(gpointer data, gpointer user_data)
         }
 }
 /* Game list is of the following scheme:
+ * 1.4 protocol:
+ * <list-of-open-players format="NICK|NICK:GEOLOC|NICK:GEOLOC:PLATFORM|NICK::PLATFORM"> [...] (as 1.1 otherwise; see append_player_list_tags)
  * 1.1 protocol:
  * <list-of-open-players format="NICK|NICK:GEOLOC"> [<list-of-open-games format=<list-of-players format="NICK">>] free:%d games:%d playing:%d at:<list-of-playing-geolocs>
  * 1.0 protocol:
@@ -528,6 +594,47 @@ static void build_wins_csv(struct game* g, char* out, size_t outsz)
                         strconcat(out, ",", outsz);
                 snprintf(n, sizeof(n), "%d", g->players_wins[i]);
                 strconcat(out, n, outsz);
+        }
+}
+
+/* Comma-joined per-player tags, index-aligned with build_roster_csv() the same
+ * way build_wins_csv() is -- one char per seat from platform_tag[]/input_tag[],
+ * or an empty field for a player whose client never reported one. Both sets are
+ * closed and checked on the way in (is_platform_tag_ok / is_input_tag_ok), so
+ * like the win counts these need no sanitizing before hitting the datagram.
+ *
+ * An empty field is the honest answer for an older client that has never heard
+ * of either feature, and the relay renders it as no badge rather than guessing
+ * -- which is also what keeps a mixed room (one player on this build, one on
+ * last release's) from silently mislabelling anyone. */
+static void build_tags_csv(struct game* g, const char* tags, char* out, size_t outsz)
+{
+        int i;
+        out[0] = '\0';
+        for (i = 0; i < g->players_number; i++) {
+                char t = tags[g->players_conn[i]];
+                char field[2] = { t, '\0' };
+                if (i > 0)
+                        strconcat(out, ",", outsz);
+                if (t)
+                        strconcat(out, field, outsz);
+        }
+}
+
+/* Same per-seat CSV as build_tags_csv(), for the two-char country codes.
+ * Separate function rather than a width parameter: country_tag is a [256][3]
+ * of strings where the other two are flat char arrays, so there is no single
+ * indexing expression that covers both. */
+static void build_country_csv(struct game* g, char* out, size_t outsz)
+{
+        int i;
+        out[0] = '\0';
+        for (i = 0; i < g->players_number; i++) {
+                const char* c = country_tag[g->players_conn[i]];
+                if (i > 0)
+                        strconcat(out, ",", outsz);
+                if (c[0])
+                        strconcat(out, c, outsz);
         }
 }
 
@@ -1088,8 +1195,75 @@ int process_msg(int fd, char* msg)
                                          * ~16s. It stays in the datagram because the wire format
                                          * has the field and the relay discards it either way. */
                                         if (first_nick && !replaced_ghost)
-                                                discordalert_fire_join_event(nick[fd], IP[fd], geoloc[fd]);
+                                                discordalert_fire_join_event(nick[fd], IP[fd], geoloc[fd],
+                                                                             platform_tag[fd],
+                                                                             country_tag[fd]);
                                 }
+                        }
+                }
+        } else if (streq(current_command, "PLATFORM")) {
+                /* Self-declared, exactly like BOT above: which OS the client
+                 * is running on, so the lobby and the in-game boards can put
+                 * a small badge next to a player's name and the operator's
+                 * Discord channel can say what a joiner showed up from. A
+                 * modified client can claim anything, so this must never gate
+                 * anything -- it is a label, not a capability.
+                 *
+                 * Unlike GEOLOC, whose lookup takes ~16s and so almost never
+                 * lands before the join alert fires, this is a compile-time
+                 * constant on the client, which sends it immediately *before*
+                 * NICK (src/networkclient.cpp's SendNick) -- deliberately, so
+                 * that platform_tag[fd] is already set when the first accepted
+                 * NICK fires the join alert. Nothing here requires a nick, so
+                 * arriving first is legal; a client that sends it after just
+                 * gets a badge from the next LIST instead of on arrival.
+                 *
+                 * Rejected rather than truncated on a bad tag, same as -n's
+                 * servername check: a tag outside the closed set could carry
+                 * a ':' or '|' into the LIST line or a relay datagram, and
+                 * silently keeping a broken one would hide a client bug. */
+                if (!args) {
+                        send_line_log(fd, wn_missing_arguments, msg_orig);
+                } else {
+                        if ((ptr = strchr(args, ' ')))
+                                *ptr = '\0';
+                        if (!is_platform_tag_ok(args)) {
+                                send_line_log(fd, wn_platform_invalid, msg_orig);
+                        } else {
+                                platform_tag[fd] = args[0];
+                                calculate_list_games();
+                                send_ok(fd, msg_orig);
+                        }
+                }
+        } else if (streq(current_command, "COUNTRY")) {
+                /* The country half of what the client's geolocation lookup
+                 * already found, as a bare ISO alpha-2 code.
+                 *
+                 * Deliberately a *separate* field from GEOLOC rather than
+                 * something derived from it here, and deliberately not put
+                 * into LIST beside the platform tag: this exists only for the
+                 * operator's Discord channel. The lat/lon in GEOLOC still
+                 * stops at this server and the lobby's world map, exactly as
+                 * before -- see relay.py's build_message() for the standing
+                 * decision that a channel the game recruits players into is
+                 * not a place for anyone's coordinates, which this does not
+                 * reopen.
+                 *
+                 * Arrives on the same ~16s-late path GEOLOC does (it comes
+                 * from the same lookup), so unlike PLATFORM it usually misses
+                 * its own join alert and first shows up on a round result. */
+                if (!args) {
+                        send_line_log(fd, wn_missing_arguments, msg_orig);
+                } else {
+                        if ((ptr = strchr(args, ' ')))
+                                *ptr = '\0';
+                        if (!is_country_tag_ok(args)) {
+                                send_line_log(fd, wn_country_invalid, msg_orig);
+                        } else {
+                                country_tag[fd][0] = args[0];
+                                country_tag[fd][1] = args[1];
+                                country_tag[fd][2] = '\0';
+                                send_ok(fd, msg_orig);
                         }
                 }
         } else if (streq(current_command, "GEOLOC")) {
@@ -1554,18 +1728,46 @@ void process_msg_prio_(int fd, char* msg, ssize_t len, struct game* g)
                                 int wins = report_round_result(g, winner[0] ? winner : NULL);
                                 char roster[512];
                                 char win_counts[256];
+                                char platforms[128];
+                                char inputs[128];
+                                char countries[256];
                                 build_roster_csv(g, roster, sizeof(roster));
                                 build_wins_csv(g, win_counts, sizeof(win_counts));
+                                build_tags_csv(g, platform_tag, platforms, sizeof(platforms));
+                                build_tags_csv(g, input_tag, inputs, sizeof(inputs));
+                                build_country_csv(g, countries, sizeof(countries));
                                 discordalert_fire_result_event(g->game_id, g->round_number, roster,
                                                                 win_counts, g->victories_limit,
                                                                 winner[0] ? winner : NULL,
-                                                                g->game_mode);
+                                                                g->game_mode, platforms, inputs,
+                                                                countries);
                                 if (winner[0] && g->victories_limit > 0 && wins >= g->victories_limit)
                                         discordalert_fire_match_event(g->game_id, winner, wins, g->game_mode);
                         }
                         g->result_posted = 1;
                 } else if (!g->tournament_id && len >= 2 && msg[1] == 'n') {
                         g->result_posted = 0;
+                } else if (len >= 4 && msg[1] == 'i' && is_input_tag_ok(msg[2])) {
+                        /* Which device this player is currently shooting with,
+                         * announced by their own client on the round's first
+                         * shot and again whenever they switch mid-round (see
+                         * BubbleGame::ReportRoundInput, src/bubblegame_shooter.cpp).
+                         *
+                         * Sniffed here for the same reason 'F' is, and with the
+                         * same read-only relationship to the relay loop below:
+                         * every peer still receives this message verbatim and
+                         * renders the badge from it directly, so the server's
+                         * copy exists purely so the round-result datagram can
+                         * carry a column the clients already have. Ungated on
+                         * tournament_id -- no Discord alert fires for those, but
+                         * the in-game badge should still work in one, and that
+                         * comes from the relay rather than from here.
+                         *
+                         * Per-fd rather than per-seat (the way players_wins[] is)
+                         * because it describes the person, not the seat: it
+                         * outlives a room and needs no shifting when someone
+                         * leaves mid-match. */
+                        input_tag[fd] = msg[2];
                 }
 
                 for (i = 0; i < g->players_number; i++) {

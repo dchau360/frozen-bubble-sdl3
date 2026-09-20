@@ -1060,6 +1060,27 @@ void BubbleGame::CheckGameState(BubbleArray &bArray, bool countForRoot) {
     }
 }
 
+char BubbleGame::ClassifyShotInput(const BubbleArray &bArray, bool firedByMouse) const {
+    if (firedByMouse)
+        return bArray.mouseFireWasTouch ? 'T' : 'M';
+    // A pad's buttons reach the shooter as virtual scancodes that IsKeyPressed()
+    // deliberately cannot distinguish from real keys (see gamesettings.h), so
+    // there is nothing in bArray itself to read here -- the event pump's record
+    // of what was last pressed is the only surviving evidence.
+    return lastPressWasGamepad ? 'G' : 'K';
+}
+
+void BubbleGame::ReportRoundInput(BubbleArray &bArray, char tag) {
+    if (!tag || bArray.roundInput == tag) return;
+    bArray.roundInput = tag;
+    if (!currentSettings.networkGame) return;
+    // Peers render their badge for this player straight from this message; the
+    // server sniffs it in passing for the Discord round-result alert but relays
+    // it either way, so an older server still carries the in-game badge fine.
+    char msg[4] = { 'i', tag, '\0', '\0' };
+    SendGameDataFor(bArray, msg);
+}
+
 void BubbleGame::FinalizeRoundStats() {
     // Called once per round when the round ends. Rolls each player's per-round stats
     // into their match totals, and (in network games) broadcasts the local player's

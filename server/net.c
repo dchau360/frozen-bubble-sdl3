@@ -62,7 +62,11 @@
 char* current_command;
 
 const int proto_major = 1;
-const int proto_minor = 3;
+/* 1.4 adds the PLATFORM command and the per-player platform tag it appends to
+ * each LIST entry (see append_player_list_tags, game.c). Clients gate the
+ * command on this minor so a new client talking to an older server stays
+ * silent instead of collecting an UNKNOWN_COMMAND warning. */
+const int proto_minor = 4;
 
 static char greets_msg_base[] = "SERVER_READY %s %s";
 static char* servername = NULL;
@@ -383,6 +387,9 @@ void conn_terminated(int fd, char* reason)
                         free(geoloc[fd]);
                         geoloc[fd] = NULL;
                 }
+                platform_tag[fd] = 0;
+                input_tag[fd] = 0;
+                country_tag[fd][0] = '\0';
                 free(IP[fd]);
                 IP[fd] = NULL;
                 if (is_bot[fd]) {
@@ -978,6 +985,9 @@ void connections_manager(void)
                         amount_talk_flood[fd] = 0;
                         nick[fd] = NULL;
                         geoloc[fd] = NULL;
+                        platform_tag[fd] = 0;
+                        input_tag[fd] = 0;
+                        country_tag[fd][0] = '\0';
                         IP[fd] = strdup_(inet_ntoa(client_addr.sin_addr));
                         prio[fd] = 0;
                         // Defensive: conn_terminated() already resets this when the

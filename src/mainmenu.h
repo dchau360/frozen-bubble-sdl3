@@ -447,8 +447,14 @@ private:
     // Kept outside the mutex-guarded pair above so a not-yet-connected frame
     // doesn't have to choose between consuming and losing the result.
     std::string geoLocToSend;
+    // The country half of the same lookup, queued and sent the same way but
+    // kept separate all the way through: it goes out as its own COUNTRY
+    // command and reaches only the operator's Discord channel, while the
+    // lat/lon above stays between this client, the server and the lobby map.
+    std::string countryFetchResult;  // guarded by geoLocFetchMutex, same as geoLocFetchResult
+    std::string countryToSend;
     void StartGeoLocFetch();         // kicks off geoLocFetchThread if not already requested
-    void PollGeoLocFetch();          // drains a finished fetch, sends GEOLOC once connected
+    void PollGeoLocFetch();          // drains a finished fetch, sends GEOLOC/COUNTRY once connected
 
     //Network panel render
     bool showingNetPanel = false;

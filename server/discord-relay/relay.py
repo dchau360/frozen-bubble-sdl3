@@ -10,7 +10,7 @@ never needs to reach fb-server at all.
 
 Two datagram kinds, both `|`-delimited with the type name first:
 
-    JOIN|<nick>|<ip>|<geoloc>|<servername>
+    JOIN|<nick>|<ip>|<geoloc>|<platform>|<country>|<servername>
 
 One per player arriving on the server (their first accepted NICK -- not a
 game-room join, which is a later and much less actionable moment). nick and
@@ -18,9 +18,15 @@ ip are always present. geoloc is the player's self-reported "lat:lon" (see
 the client's DetectGeoLocation()/GEOLOC command) or an empty string -- in
 practice always empty, since the client sends GEOLOC after NICK and the
 lookup behind it can take up to ~16s. The field stays in the format anyway:
-it costs nothing, and this end discards it regardless.
+it costs nothing, and this end discards it regardless. platform is a single
+char naming the client's OS (W/M/L/A/I/B -- see _PLATFORM_BADGES), or empty
+for a client too old to send the PLATFORM command; unlike geoloc it *is*
+posted, for the reasons in build_message(). country is an ISO 3166-1 alpha-2
+code from the COUNTRY command (empty when the client never sent one, which
+includes every client older than 1.4 and every browser build), posted as a
+flag emoji -- see _flag() for why a country goes where coordinates do not.
 
-    RESULT|<game_id>|<round>|<mode>|<winner>|<roster>|<wins>|<victories_limit>|<servername>
+    RESULT|<game_id>|<round>|<mode>|<winner>|<roster>|<wins>|<victories_limit>|<platforms>|<inputs>|<countries>|<servername>
 
 One per round-end, sniffed from the 'F' opcode server-side (game.c). game_id
 is an opaque int identifying the room, monotonically assigned by fb-server at
@@ -43,7 +49,19 @@ _build_win_chart()). victories_limit is the room's own win-count target
 (g->victories_limit, 0 meaning no limit was ever set) -- when positive, the
 chart scales its bars against it and labels each line "current/limit"
 ("first to N"); when 0, the chart falls back to scaling against whoever
-currently leads, exactly as it did before this field existed.
+currently leads, exactly as it did before this field existed. platforms and
+inputs are per-seat single-char tags, index-aligned with roster the same way
+wins is: the former is each player's OS (as JOIN's), the latter which device
+they actually shot with this round (K/M/T/G -- keyboard, mouse, touch,
+gamepad), from the 'i' opcode fb-server sniffs alongside 'F'. countries is
+the same again, two chars per seat, from the COUNTRY command. Every one of
+the three is empty per seat for a player whose client never reported it, so a
+room mixing client versions badges whoever it can and leaves the rest bare.
+
+Both datagram kinds are also accepted in their older shapes -- pre-1.4
+entirely, and 1.4-without-country -- see handle_datagram(), which tells them
+apart by field count plus a sanity check on the tag fields themselves, since
+a servername containing '|' can otherwise fake the higher count.
 
     MATCH|<game_id>|<wins>|<mode>|<champion>|<servername>
 
@@ -63,7 +81,8 @@ build_result_message() and build_match_message() for what actually reaches
 Discord from each.
 
 ip and geoloc are parsed but never posted to Discord -- see build_message(),
-which explains why the location came out. Both ride along in the datagram
+which explains why the precise location came out (the country field above is
+deliberately a different, far coarser thing; see _flag()). Both ride along in the datagram
 because fb-server already has them for free and it costs nothing to send,
 not because this relay does anything with them.
 
@@ -181,6 +200,77 @@ def _sanitize_display(text):
 
 _GAME_MODE_NAMES = {0: "Classic", 1: "Clear", 2: "Race", 3: "Timed"}
 
+# Single-char tags fb-server sends for a player's OS (the PLATFORM command)
+# and for the device they last actually shot with (the 'i' opcode), mapped to
+# the emoji that stands in for each in a Discord message. Both sets are closed
+# and validated server-side (is_platform_tag_ok / is_input_tag_ok, game.c), so
+# an unknown key here means either a future client this relay predates or a
+# forged datagram -- both render as no badge at all, never as a guess.
+#
+# Emoji rather than uploaded custom emoji or an attached image: a webhook can
+# post these into any channel with no setup, no asset hosting and no
+# permissions beyond the one it already has, and they survive an operator
+# forking this file. They are also why nothing here needs OS trademarks.
+_PLATFORM_BADGES = {"W": "🪟", "M": "🍎", "L": "🐧", "A": "🤖", "I": "📱", "B": "🌐"}
+_INPUT_BADGES = {"K": "⌨️", "M": "🖱️", "T": "👆", "G": "🎮"}
+
+
+def _flag(country_tag):
+    """An ISO 3166-1 alpha-2 code as its flag emoji, or "" if it is not one.
+
+    No lookup table: a flag emoji *is* its two letters written as regional
+    indicator symbols, so this works for every country without this file
+    knowing any of them, and a well-formed code for something that is not a
+    country degrades to two harmless letter glyphs rather than an error.
+
+    What reaches here is a country, never coordinates. The lat/lon in the same
+    datagram is still dropped unread -- see build_message() for the standing
+    decision behind that, which this does not reopen: a flag says which of ~200
+    countries somebody is in, which is the granularity a server list shows
+    anyway, while a map pin says where they are.
+    """
+    if not country_tag or len(country_tag) != 2 or not country_tag.isascii():
+        return ""
+    if not country_tag.isalpha() or not country_tag.isupper():
+        return ""
+    return "".join(chr(0x1F1E6 + ord(c) - ord("A")) for c in country_tag)
+
+
+def _badges(platform_tag, input_tag="", country_tag=""):
+    """The badge string for one player: flag, platform, then input device.
+
+    Any of the three may be absent -- an older client that never sends PLATFORM
+    or COUNTRY, a player who has not fired a shot yet this round, or any tag
+    this build does not recognize. Returns "" when there is nothing to show, so
+    callers can concatenate unconditionally without producing stray spaces.
+    """
+    return (_flag(country_tag)
+            + _PLATFORM_BADGES.get(platform_tag, "")
+            + _INPUT_BADGES.get(input_tag, ""))
+
+
+def _country_csv_ok(field):
+    """True when `field` could be one of fb-server's per-seat country CSVs.
+
+    Same disambiguation job _tag_csv_ok does, for the wider shape: every
+    element is an uppercase ASCII letter pair or empty. A server name is not.
+    """
+    return all(part == "" or (len(part) == 2 and part.isascii()
+                              and part.isalpha() and part.isupper())
+               for part in field.split(","))
+
+
+def _tag_csv_ok(field, valid):
+    """True when `field` could be one of fb-server's own per-seat tag CSVs.
+
+    Used to tell a new-format datagram from an old one whose trailing
+    servername happens to contain a '|' -- the one case where field *count*
+    alone is ambiguous (see handle_datagram). Every element is a single char
+    from the closed set or empty, which no realistic server name is.
+    """
+    return all(part == "" or (len(part) == 1 and part in valid)
+               for part in field.split(","))
+
 # Width, in block characters, of the longest bar _build_win_chart() draws.
 # When a room has a win-count target this is what "full" means; otherwise
 # every bar is scaled relative to the match's current leader instead, so
@@ -239,7 +329,9 @@ def _build_win_chart(roster_csv, wins_csv, victories_limit=0):
     return "```\n" + "\n".join(lines) + "\n```"
 
 
-def build_result_message(round_number, mode, winner, roster_csv, wins_csv, victories_limit, servername):
+def build_result_message(round_number, mode, winner, roster_csv, wins_csv, victories_limit,
+                          servername, *, platforms_csv="", inputs_csv="",
+                          countries_csv=""):
     """Round over: which round, who won (or a draw), what mode, who was
     playing, where.
 
@@ -268,12 +360,36 @@ def build_result_message(round_number, mode, winner, roster_csv, wins_csv, victo
     victories_limit the room's win-count target (0 = none) -- see there for
     when a chart is actually appended versus omitted, and how a positive
     limit changes what the bars mean.
+
+    platforms_csv, inputs_csv and countries_csv are index-aligned with
+    roster_csv the same way (build_tags_csv()/build_country_csv(), game.c) and
+    decorate each name in the roster line with a flag, an OS badge and a "what
+    they actually played this round with" badge.
+    Both are per-seat and independently optional: a room mixing this build
+    with an older one shows badges for the players who reported and nothing
+    for the rest, rather than dropping the feature for everyone or guessing
+    at the missing seats. A length that does not match the roster is treated
+    as no tags at all -- misaligning these would attribute the wrong platform
+    to a named player, which is worse than showing none.
     """
     round_label = f"Round {round_number} — " if round_number and round_number > 0 else ""
     mode_label = _GAME_MODE_NAMES.get(mode, "")
     mode_label = f" ({mode_label})" if mode_label else ""
     servername = _sanitize_display(servername)
-    roster = ", ".join(_sanitize_display(n) for n in roster_csv.split(",") if n)
+    names = [n for n in roster_csv.split(",") if n] if roster_csv else []
+    platforms = platforms_csv.split(",") if platforms_csv else []
+    inputs = inputs_csv.split(",") if inputs_csv else []
+    countries = countries_csv.split(",") if countries_csv else []
+    if len(platforms) != len(names):
+        platforms = [""] * len(names)
+    if len(inputs) != len(names):
+        inputs = [""] * len(names)
+    if len(countries) != len(names):
+        countries = [""] * len(names)
+    roster = ", ".join(
+        (_sanitize_display(n) + (f" {b}" if (b := _badges(p, i, c)) else ""))
+        for n, p, i, c in zip(names, platforms, inputs, countries)
+    )
     if winner:
         headline = f"🏆 **{_sanitize_display(winner)}** won"
     else:
@@ -305,8 +421,8 @@ def build_match_message(wins, mode, champion, servername):
     return content[:MAX_DISCORD_CONTENT]
 
 
-def build_message(nick, servername):
-    """The whole message: who joined, and where. Nothing else.
+def build_message(nick, servername, *, platform="", country=""):
+    """The whole message: who joined, from what, and where. Nothing else.
 
     Neither the joining player's IP nor their location appears here, and both
     arrive in the datagram -- see handle_datagram(), which drops them.
@@ -319,10 +435,30 @@ def build_message(nick, servername):
     show to everyone who took up the offer, which is not a thing a player
     agreed to by letting the client geolocate them for the lobby's world map.
     The map still works exactly as before -- that data simply stops here.
+
+    platform is the one field of that kind that does get posted. It is which
+    OS the player's client runs on, not where they are or who they are: it
+    says nothing about the person, it is the same for everyone using that
+    build, and it is exactly what someone reading the channel to decide
+    whether to go play wants to know. Empty (an older client, or one that
+    sent a tag this relay does not recognize) renders as no badge.
+
+    country is the same kind of thing one step coarser -- an ISO alpha-2 code,
+    rendered as a flag. It is posted for the same reason platform is and the
+    lat/lon beside it is not: which country somebody is playing from is what a
+    reader deciding whether to go play wants, and it locates nobody. See
+    _flag().
+
+    Keyword-only, deliberately: the arity of the positional part of this
+    signature is itself the guard that a location can never be handed to it
+    by accident, and tests/discord_relay_message_test.py pins that. A new
+    field earning its way in here does not get to weaken that check.
     """
     nick = _sanitize_display(nick)
     servername = _sanitize_display(servername)
-    content = f"🔔 **{nick}** joined **{servername}**"
+    badge = _badges(platform, country_tag=country)
+    badge = f" {badge}" if badge else ""
+    content = f"🔔 **{nick}**{badge} joined **{servername}**"
     return content[:MAX_DISCORD_CONTENT]
 
 
@@ -443,11 +579,28 @@ async def handle_datagram(data, webhook_url):
     kind, _, rest = text.partition("|")
 
     if kind == "JOIN":
-        parts = rest.split("|", 3)
-        if len(parts) != 4:
+        # maxsplit one higher than the old 4-field format needs, so the
+        # platform tag can be picked off when it's there. An fb-server old
+        # enough not to send one, whose servername itself contains '|', also
+        # yields 5 parts -- _tag_csv_ok settles which it is, since no
+        # realistic server name is a bare single char from that closed set.
+        parts = rest.split("|", 5)
+        platform = country = ""
+        if (len(parts) == 6 and _tag_csv_ok(parts[3], _PLATFORM_BADGES)
+                and _country_csv_ok(parts[4])):
+            nick, ip, geoloc, platform, country, servername = parts
+        elif len(parts) >= 5 and _tag_csv_ok(parts[3], _PLATFORM_BADGES):
+            # Protocol 1.4 without the country field, or a 1.4 servername
+            # containing '|'. Either way the platform tag is real and the rest
+            # is the name.
+            nick, ip, geoloc, platform = parts[0], parts[1], parts[2], parts[3]
+            servername = "|".join(parts[4:])
+        elif len(parts) >= 4:
+            nick, ip, geoloc = parts[0], parts[1], parts[2]
+            servername = "|".join(parts[3:])
+        else:
             log.warning("malformed datagram, dropped: %r", text[:120])
             return
-        nick, ip, geoloc, servername = parts
         # Both received, neither posted -- see build_message(). They stay in
         # the wire format because fb-server already has them and a datagram
         # costs the same either way; dropping them here rather than at the
@@ -457,17 +610,34 @@ async def handle_datagram(data, webhook_url):
         del ip, geoloc
         if DISCORD_SERVER_NAME:
             servername = DISCORD_SERVER_NAME
-        content = build_message(nick, servername)
+        content = build_message(nick, servername, platform=platform, country=country)
         log_label = f"join alert for {nick}"
         game_id = None
 
     elif kind == "RESULT":
-        parts = rest.split("|", 7)
-        if len(parts) != 8:
+        # Same shape as JOIN above: two extra fields on current fb-server,
+        # disambiguated from an old datagram with a '|' in its servername by
+        # checking that both candidates actually look like tag CSVs.
+        parts = rest.split("|", 10)
+        platforms_csv = inputs_csv = countries_csv = ""
+        tagged = (len(parts) >= 10 and _tag_csv_ok(parts[7], _PLATFORM_BADGES)
+                  and _tag_csv_ok(parts[8], _INPUT_BADGES))
+        if tagged and len(parts) == 11 and _country_csv_ok(parts[9]):
+            (game_id_s, round_s, mode_s, winner, roster_csv, wins_csv,
+             victories_limit_s, platforms_csv, inputs_csv, countries_csv,
+             servername) = parts
+        elif tagged:
+            # 1.4 without the country column, or a servername with a '|'.
+            (game_id_s, round_s, mode_s, winner, roster_csv, wins_csv,
+             victories_limit_s, platforms_csv, inputs_csv) = parts[:9]
+            servername = "|".join(parts[9:])
+        elif len(parts) >= 8:
+            (game_id_s, round_s, mode_s, winner, roster_csv, wins_csv,
+             victories_limit_s) = parts[:7]
+            servername = "|".join(parts[7:])
+        else:
             log.warning("malformed datagram, dropped: %r", text[:120])
             return
-        (game_id_s, round_s, mode_s, winner, roster_csv, wins_csv,
-         victories_limit_s, servername) = parts
         try:
             game_id = int(game_id_s)
         except ValueError:
@@ -491,7 +661,9 @@ async def handle_datagram(data, webhook_url):
         if DISCORD_SERVER_NAME:
             servername = DISCORD_SERVER_NAME
         content = build_result_message(round_number, mode, winner, roster_csv, wins_csv,
-                                        victories_limit, servername)
+                                        victories_limit, servername,
+                                        platforms_csv=platforms_csv, inputs_csv=inputs_csv,
+                                        countries_csv=countries_csv)
         log_label = f"result for {winner or 'a draw'}"
         # Best-effort label for the thread's title only, not the message
         # itself -- see build_roster_csv()/players_nick[0] in game.c for why

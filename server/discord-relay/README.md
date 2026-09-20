@@ -15,16 +15,25 @@ alone in a room they just opened is exactly who an alert should summon
 company for, and by the time somebody has joined their room the two have
 already found each other.
 
-The joining player's IP and their self-reported geolocation both arrive in
-the datagram from `fb-server` (see Wire format below); neither is ever
-included in the Discord message. The IP never was. The location was, as a
-Google Maps link, up until the game itself began advertising a community
-Discord to players from the NET GAME list and the online lobby: a channel
-the game recruits players into is one where every joining player's
-approximate whereabouts would be visible to anyone who took up the offer,
-which is not something a player agreed to by letting the client geolocate
-them for the lobby's world map. The map is unaffected -- that data simply
-stops here.
+The joining player's IP and their self-reported `lat:lon` both arrive in the
+datagram from `fb-server` (see Wire format below); neither is ever included
+in the Discord message. The IP never was. The coordinates were, as a Google
+Maps link, up until the game itself began advertising a community Discord to
+players from the NET GAME list and the online lobby: a channel the game
+recruits players into is one where every joining player's approximate
+whereabouts would be visible to anyone who took up the offer, which is not
+something a player agreed to by letting the client geolocate them for the
+lobby's world map. The map is unaffected -- that data simply stops here.
+
+What *is* posted is a separate, much coarser `country` field: an ISO 3166-1
+alpha-2 code the client reports with its own `COUNTRY` command, rendered as
+a flag emoji beside the player's name. That is roughly the granularity a
+public server list already shows, it identifies nobody, and it is what a
+reader deciding whether to go play actually wants to know -- which is why it
+goes where the coordinates do not. The two are deliberately different fields
+carried by different commands, so the distinction stays visible in the code
+rather than being something you have to remember. If you want no location
+signal in your channel at all, drop `country` in `build_message()`.
 
 If you are running a genuinely private, operators-only channel and want the
 location back, `build_message()` in `relay.py` is where it was, and
@@ -41,9 +50,28 @@ the datagram is dropped and gameplay is unaffected.
 
 ## Wire format
 
-    JOIN|<nick>|<ip>|<geoloc>|<servername>
-    RESULT|<game_id>|<round_number>|<game_mode>|<winner>|<roster>|<wins>|<victories_limit>|<servername>
+    JOIN|<nick>|<ip>|<geoloc>|<platform>|<country>|<servername>
+    RESULT|<game_id>|<round_number>|<game_mode>|<winner>|<roster>|<wins>|<victories_limit>|<platforms>|<inputs>|<countries>|<servername>
     MATCH|<game_id>|<wins>|<game_mode>|<champion>|<servername>
+
+`platform` is one char naming the client's OS -- `W`indows, `M`acOS,
+`L`inux, `A`ndroid, `I`OS, `B`rowser -- from the `PLATFORM` command, or
+empty for a client too old to send it. The client sends it *before* `NICK`
+precisely so a join alert can carry it. `country` is the ISO alpha-2 code
+from the `COUNTRY` command; unlike `platform` it rides the same slow lookup
+as `geoloc`, so it is usually empty on a join and first appears on a round
+result. `RESULT`'s `platforms`, `inputs` and `countries` are the per-seat
+versions of these, comma-joined and index-aligned with `roster` exactly as
+`wins` is, with an empty element for any player whose client never reported
+one. `inputs` is which device that player actually shot with during the
+round -- `K`eyboard, `M`ouse, `T`ouch, `G`amepad -- which `fb-server` sniffs
+off the in-game `i` opcode the same way it sniffs `F` for the result itself.
+
+Both datagram kinds are still accepted in their older shapes (pre-1.4
+entirely, and 1.4 without the country column), so a relay newer than the
+`fb-server` it is paired with keeps working. `handle_datagram()` tells them
+apart by field count plus a shape check on the tag fields, since a server
+name containing a `|` can otherwise fake the longer form.
 
 `geoloc` is the arriving player's self-reported `lat:lon` or an empty string
 -- in practice always empty, since the client sends `GEOLOC` after `NICK`

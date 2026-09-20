@@ -51,8 +51,24 @@ void discordalert_init(void);
 //
 // geoloc is almost always NULL here, since GEOLOC arrives after NICK and the
 // client-side lookup behind it can take ~16s. That costs nothing: the relay
-// discards the field. A no-op (and free) when the relay isn't configured.
-void discordalert_fire_join_event(const char* nick, const char* ip, const char* geoloc);
+// discards the field.
+//
+// platform is the opposite case: a single char from platform_tag[fd] (see
+// game.c's is_platform_tag_ok) that this client sent *before* its NICK
+// precisely so it would be set by the time this fires, and which the relay
+// does post -- an OS badge is not whereabouts, so it carries none of the
+// reason geoloc is dropped. 0 when the client never said, which the relay
+// renders as no badge. A no-op (and free) when the relay isn't configured.
+//
+// country is the ISO alpha-2 code from the COUNTRY command, or empty. It comes
+// from the same client-side lookup as geoloc and so arrives on the same ~16s
+// delay, which means it is usually empty here for exactly the reason geoloc
+// is -- a round-result alert is where it normally first appears. It is posted
+// where geoloc is not: a country is not a location fix on a person, and it is
+// what someone reading the channel to decide whether to go play actually wants
+// to know. The lat/lon still stops at this server.
+void discordalert_fire_join_event(const char* nick, const char* ip, const char* geoloc,
+                                  char platform, const char* country);
 
 // Call once per round-end, from the 'F' opcode sniffed in process_msg_prio_
 // (game.c) -- a bare "F" is a draw, "F<nick>" is a win claim, and the
@@ -84,11 +100,22 @@ void discordalert_fire_join_event(const char* nick, const char* ip, const char* 
 // existed. game_mode is the room's raw 0-3 GAMEMODE value (see
 // src/gamemode.h) or 0 if the room never set one -- the relay maps it to a
 // display name, not this file, so a value this build doesn't recognize
-// degrades to "unlabelled" rather than needing a matching update here. A
-// no-op (and free) when the relay isn't configured.
+// degrades to "unlabelled" rather than needing a matching update here.
+//
+// platforms_csv, inputs_csv and countries_csv are all index-aligned with
+// roster_csv the same way wins_csv is (build_tags_csv()/build_country_csv() in
+// game.c): one char per seat, or an empty
+// field for a player whose client never reported one. platforms_csv comes from
+// the PLATFORM command and so is fixed for a connection; inputs_csv comes from
+// the 'i' opcode and is whatever device that player last actually shot with,
+// so it can legitimately differ from one round to the next -- which is the
+// point of carrying it per round rather than per room. A no-op (and free)
+// when the relay isn't configured.
 void discordalert_fire_result_event(int game_id, int round_number, const char* roster_csv,
                                      const char* wins_csv, int victories_limit,
-                                     const char* winner_nick, int game_mode);
+                                     const char* winner_nick, int game_mode,
+                                     const char* platforms_csv, const char* inputs_csv,
+                                     const char* countries_csv);
 
 // Call once per match-end, immediately after the round-end alert above,
 // when that round's winner has just reached the room's own VICTORIESLIMIT

@@ -484,9 +484,13 @@ void FrozenBubble::RunOneFrame()
             // Removal was never routed here, which is why it was never handled:
             // the handle stayed open and the slot stayed occupied for good.
             e.type == SDL_EVENT_GAMEPAD_REMOVED || e.type == SDL_EVENT_JOYSTICK_REMOVED) {
+            // Button presses only: an axis that drifts past its threshold on an
+            // idle pad would otherwise relabel a keyboard player's next shot.
+            if (e.type == SDL_EVENT_GAMEPAD_BUTTON_DOWN) lastPressWasGamepad = true;
             HandleControllerEvent(&e);
             continue;
         }
+        if (e.type == SDL_EVENT_KEY_DOWN) lastPressWasGamepad = false;
         HandleInput(&e);
     }
 
@@ -1088,7 +1092,7 @@ void FrozenBubble::HandleInput(SDL_Event *e) {
                     injectKey(SDLK_RETURN); // tap to continue after round
             } else {
                 mainGame->HandleMouseAim(lx, ly);
-                mainGame->HandleMouseFire();
+                mainGame->HandleMouseFire(/*fromTouch=*/true);
             }
         }
 #endif

@@ -70,6 +70,18 @@ void RequestPersistentStorageFlush();
 bool ReplaceFileAtomically(const std::string& tempPath,
                            const std::string& finalPath);
 
+// One char naming the OS this build runs on, for the server's PLATFORM command
+// and the badge the lobby, the in-game boards and the operator's Discord
+// channel draw from it: 'W' Windows, 'M' macOS, 'L' Linux, 'A' Android,
+// 'I' iOS, 'B' browser (WASM). Compile-time, so it is known before the socket
+// is even open -- which is why PLATFORM can be sent ahead of NICK and land in
+// time for the join alert, unlike the geolocation lookup.
+//
+// The server validates this against the same closed set (is_platform_tag_ok,
+// server/game.c) and rejects anything else outright, so a port to a platform
+// with no letter here must add one on both sides rather than inventing one.
+char PlatformTag();
+
 // True when SDL has registered at least one touch device. This is how the game
 // tells an Android phone or tablet from an Android TV box: one APK serves both,
 // and several defaults are opposite between them (aim mode, screen

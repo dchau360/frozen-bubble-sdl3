@@ -26,6 +26,7 @@
 #include "networkclient.h"
 #include "platform.h"
 #include "bubblegame.h"
+#include "playerbadge.h"
 
 #include <SDL3_image/SDL_image.h>
 #include <cstring>
@@ -1339,8 +1340,24 @@ void MainMenu::NetPanelLobbyActionsRender() {
                 SDL_FRect dot = {(float)(sb.x + 10), (float)(sy + shown * 20 + 4), 7.0f, 7.0f};
                 SDL_RenderFillRect(roomRenderer, &dot);
                 char shortNick[24];
-                snprintf(shortNick, sizeof(shortNick), "%.18s", player.nick.c_str());
+                // Shorter than the 18 this used to allow, to leave the badge
+                // room in the sidebar's fixed width. A player whose client
+                // never reported a platform still gets the same truncation, so
+                // the column does not jump around between LIST responses.
+                snprintf(shortNick, sizeof(shortNick), "%.13s", player.nick.c_str());
                 drawLabel(shortNick, sb.x + 26, sy + shown * 20, textMain);
+                PlayerBadge badge;
+                if (GetPlatformBadge(player.platform, badge)) {
+                    // The chip is right-anchored to the sidebar, so its width
+                    // has to be known before anything is drawn. UpdateText
+                    // measures the label without painting it -- drawLabel below
+                    // repositions the same object and renders it on top.
+                    panelText.UpdateText(roomRenderer, badge.label, 0);
+                    const int bw = PlayerBadgeChipWidth(panelText.Coords()->w);
+                    SDL_Rect br = {sb.x + sb.w - bw - 8, sy + shown * 20 + 1, bw, 14};
+                    DrawPlayerBadgeChip(roomRenderer, br, badge);
+                    drawLabel(badge.label, br.x + kPlayerBadgePadX, br.y - 1, badge.text);
+                }
                 shown++;
             }
             if (shown == 0) drawLabel("No free players", sb.x + 10, sy, textMuted);

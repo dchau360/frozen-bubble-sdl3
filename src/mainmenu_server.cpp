@@ -282,15 +282,21 @@ void MainMenu::StartGeoLocFetch() {
     // DetectGeoLocation() is a fast no-op on WASM ("zz"); no thread needed.
     geoLocRequested = true;
     geoLocFetchResult = NetworkClient::DetectGeoLocation();
+    countryFetchResult = NetworkClient::DetectCountry();
     geoLocFetchDone = true;
 #else
     if (geoLocRequested) return;  // once per session -- DetectGeoLocation caches internally too
     geoLocRequested = true;
     geoLocFetchInProgress = true;
     geoLocFetchThread = std::thread([this]() {
+        // Both lookups on the one thread, so the country costs no extra wait
+        // anywhere: nothing blocks on either, and the map dot still appears
+        // the moment the first one lands.
         std::string result = NetworkClient::DetectGeoLocation();
+        std::string country = NetworkClient::DetectCountry();
         std::lock_guard<std::mutex> lock(geoLocFetchMutex);
         geoLocFetchResult = std::move(result);
+        countryFetchResult = std::move(country);
         geoLocFetchDone = true;
         geoLocFetchInProgress = false;
     });
@@ -304,6 +310,7 @@ void MainMenu::PollGeoLocFetch() {
             std::lock_guard<std::mutex> lock(geoLocFetchMutex);
             if (geoLocFetchDone) {
                 result = geoLocFetchResult;
+                countryToSend = countryFetchResult;
                 geoLocFetchDone = false;  // consumed into geoLocToSend below
             }
         }
@@ -332,5 +339,11 @@ void MainMenu::PollGeoLocFetch() {
     if (netClient && netClient->IsConnected() && !netClient->IsPendingNick()) {
         netClient->SendGeoLoc(geoLocToSend.c_str());
         geoLocToSend.clear();
+        // Sent from the same gate for the same reasons -- an unclaimed OK
+        // arriving mid-NICK-retry would be misattributed exactly the same way.
+        if (!countryToSend.empty()) {
+            netClient->SendCountry(countryToSend.c_str());
+            countryToSend.clear();
+        }
     }
 }

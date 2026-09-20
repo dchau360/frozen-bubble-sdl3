@@ -20,7 +20,7 @@ set(FB_LANGUAGES CXX C)
 if(CMAKE_SYSTEM_NAME STREQUAL "iOS")
     list(APPEND FB_LANGUAGES OBJCXX)
 endif()
-project(frozen-bubble-sdl3 VERSION 2.4.104 LANGUAGES ${FB_LANGUAGES})
+project(frozen-bubble-sdl3 VERSION 2.4.105 LANGUAGES ${FB_LANGUAGES})
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/cmake")
 
@@ -501,6 +501,18 @@ if(BUILD_TESTING AND NOT EMSCRIPTEN AND NOT ANDROID AND NOT IOS)
     add_test(NAME net-bots-test
         COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tests/net_bots_test.py)
 
+    # Client half of the protocol-1.4 platform tag: pulling it back out of a
+    # LIST entry without disturbing the geolocation sharing the same colons.
+    # The server half is covered against the real binary by
+    # server-platform-input-test.
+    add_executable(list-platform-parse-test
+        tests/list_platform_parse_test.cpp
+    )
+    set_property(TARGET list-platform-parse-test PROPERTY CXX_STANDARD 17)
+    set_property(TARGET list-platform-parse-test PROPERTY CXX_EXTENSIONS OFF)
+    target_link_libraries(list-platform-parse-test PRIVATE frozen-bubble-core-test)
+    add_test(NAME list-platform-parse-test COMMAND list-platform-parse-test)
+
     add_executable(roundstats-color-test
         tests/roundstats_color_test.cpp
         src/roundstats_color.cpp
@@ -550,6 +562,13 @@ if(BUILD_TESTING AND NOT EMSCRIPTEN AND NOT ANDROID AND NOT IOS)
         # socket receives.
         add_test(NAME server-round-result-lobby-test
             COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tests/server_round_result_lobby_test.py $<TARGET_FILE:fb-server>)
+        # Per-player platform (PLATFORM command) and input-device ('i' opcode)
+        # tags: how they reach LIST without breaking the entry format older
+        # clients parse, and how they reach the join/round-result datagrams.
+        # Most of it is the mixed-version cases -- a client or server that
+        # predates either tag has to stay indistinguishable from before.
+        add_test(NAME server-platform-input-test
+            COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tests/server_platform_input_test.py $<TARGET_FILE:fb-server>)
         # Binds the hardcoded UDP discovery port, so it cannot run concurrently
         # with another fb-server; it skips when that port is already in use.
         add_test(NAME server-udp-probe-test

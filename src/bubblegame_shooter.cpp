@@ -317,6 +317,15 @@ void BubbleGame::UpdatePenguin(BubbleArray &bArray) {
                          bArray.playerAssigned, angle);
         }
 
+        // Badge this player with whatever they just shot with. Same condition
+        // the highscore lock below uses for excluding mp_fire -- a remote
+        // player's shot arrives already decided and carries none of this
+        // client's input state -- but unlike that one this applies to every
+        // game type, since the badge is for the person watching the board, not
+        // for a scoring table.
+        if (!bArray.mpFirePending)
+            ReportRoundInput(bArray, ClassifyShotInput(bArray, firedByMouse));
+
         // Lock (or disqualify) which local highscore table this classic solo
         // run counts toward -- only meaningful there, so skip it entirely for
         // network play and local multiplayer. mp_fire shots are always a

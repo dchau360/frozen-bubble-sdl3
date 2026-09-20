@@ -97,7 +97,7 @@ bool BubbleGame::IsTouchBackSwipe(float startX, float startY,
     return fabsf(dy) < fabsf(dx) * 0.6f;
 }
 
-void BubbleGame::HandleMouseFire() {
+void BubbleGame::HandleMouseFire(bool fromTouch) {
     if (chattingMode) return;
     if (!currentSettings.mouseEnabled) return;
     if (currentSettings.playerCount < 1) return;
@@ -109,6 +109,10 @@ void BubbleGame::HandleMouseFire() {
     // would fire a bubble for a board that has already lost.
     if (bubbleArrays[0].playerState != BubbleArray::PlayerState::ALIVE) return;
     bubbleArrays[0].mouseFirePending = true;
+    // Recorded alongside the pending fire rather than read back at launch time:
+    // by then the event that caused it is long gone, and mouse and touch are the
+    // same code path from here on. Only the input badge distinguishes them.
+    bubbleArrays[0].mouseFireWasTouch = fromTouch;
 }
 
 void BubbleGame::StartInGameChat() {

@@ -1,6 +1,6 @@
 # Privacy Policy — Frozen Bubble: SDL3
 
-**Effective date:** September 11, 2026
+**Effective date:** September 20, 2026
 
 Frozen Bubble: SDL3 ("the app") is a free, open-source game
 ([GPLv2 licensed](https://github.com/dchau360/frozen-bubble-sdl3/blob/main/COPYING), source at
@@ -43,19 +43,33 @@ region accuracy rather than a precise address, and is shown as a pin on a
 world map in the network lobby so other online players can see approximately
 where players and servers are. It is not stored beyond the current session.
 
+**Platform, input device, and approximate country.** Your client
+self-reports which operating system it's running on (Windows, macOS, Linux,
+Android, iOS, or browser) and, once per round, whether you're playing with a
+keyboard, mouse, touchscreen, or gamepad. Both are shown as small badges
+next to your name to the other players in that match, and to a server's
+Discord relay if one is running (below) — never stored beyond the current
+session. Separately, the same third-party lookup behind "Approximate
+location" above is also asked for your country only (not the finer
+coordinates used for the map), and that country code is sent **only** to a
+server's Discord relay if one is running; it is never shown in-game or on
+the lobby's world map. None of these three is verified by the server — they
+are exactly what your own client claims.
+
 **Discord join alerts (server-operator feature, not controlled by the
 developer).** A server's operator can optionally run a relay that posts a
 message to a Discord channel of their choosing every time a player connects
-to their server. **That message contains your nickname and the server's
-name, and nothing else.** Neither your IP address nor your approximate
-location is included: both briefly reach the relay as part of the connect
-event (the same information the server already receives under
-"Network connection data" and "Approximate location" above), and the relay
-discards both rather than forwarding them anywhere. This is opt-in **per
-server operator**, not per player — there is no in-app setting to disable
-it, because the decision belongs to whichever server you choose to join.
-Whether a given server does this, and what channel it posts to, is outside
-the developer's control; see
+to their server. **That message contains your nickname, the server's name,
+and, if your client reported them, your platform badge and your
+country flag** (both described just above). Your IP address and the more
+precise coordinates behind the lobby's world map are never included: both
+briefly reach the relay as part of the connect event (the same information
+the server already receives under "Network connection data" and
+"Approximate location" above), and the relay discards both rather than
+forwarding them anywhere. This is opt-in **per server operator**, not per
+player — there is no in-app setting to disable it, because the decision
+belongs to whichever server you choose to join. Whether a given server does
+this, and what channel it posts to, is outside the developer's control; see
 [SetupServer.md](https://github.com/dchau360/frozen-bubble-sdl3/blob/main/SetupServer.md)
 for the mechanism, and ask a server's operator directly if you want to know
 whether they've enabled it. Note that the relay is ordinary source code an
@@ -66,11 +80,13 @@ this one. What is described here is what the shipped relay sends.
 **Discord round-result alerts (same server-operator feature, not controlled
 by the developer).** The same optional relay can also post a message at the
 end of every round: which game mode it was played in, who won or that it
-ended in a draw, and the nicknames of every player who was in that room.
-**Nothing beyond nicknames, the game mode, and the server's name is
-included** — no IP address, no location, same as the join alert above. The
-winner named is whatever the reporting player's own client claimed, the
-same claim already shown on every other player's screen for that round —
+ended in a draw, and the nicknames — plus, if reported, platform badge,
+input-device badge, and country flag — of every player who was in that
+room. **Nothing beyond nicknames, the game mode, those three badges, and the
+server's name is included** — no IP address, no precise location, same as
+the join alert above. The winner named is whatever the reporting player's
+own client claimed, the same claim already shown on every other player's
+screen for that round —
 the server does not verify it, with or without this alert enabled. This
 posts once per round, not once per full match, and only for players
 actually seated in that room; a player who disconnects mid-round is never
@@ -112,11 +128,16 @@ or analytics SDK, so none is collected by the developer.
 ## How information is used
 
 - Nickname and network data: to run the multiplayer match you're playing.
+- Platform and input-device badges: shown to other players in your current
+  match, and included in a server's Discord alerts if it runs one (see
+  above).
 - Nickname: also used, at a server operator's discretion, to post a Discord
   alert when you connect to that server, and again — alongside the game
-  mode and win/draw outcome — at the end of each round you play (see above).
-  Your IP and your approximate location both briefly reach the same relay
-  for the connect alert; neither is part of either posted message.
+  mode, win/draw outcome, and the badges above — at the end of each round
+  you play (see above). Your IP and your precise coordinates both briefly
+  reach the same relay for the connect alert; neither is part of either
+  posted message. Your country code reaches the relay too, and is part of
+  both messages.
 - Advertising identifiers: handled entirely within Google's AdMob SDK to
   select and measure ads; not accessed by the developer directly.
 - Purchase token: to keep the "ads removed" state accurate on your device.
@@ -127,13 +148,14 @@ or analytics SDK, so none is collected by the developer.
 - [Google Play Billing](https://policies.google.com/privacy) — in-app
   purchases (Android)
 - [ipinfo.io](https://ipinfo.io/privacy-policy) / [ip-api.com](https://ip-api.com/docs/legal) —
-  approximate location from your IP address, for the network lobby's world
-  map
+  approximate location and country from your IP address, for the network
+  lobby's world map and, for the country only, a server's Discord alerts
 - [Discord](https://discord.com/privacy) — some servers relay an alert when
   you connect, and another at the end of each round (nickname(s), server
-  name, and game mode/outcome only), to a channel the server's operator
-  chooses; not run or controlled by the developer. Discord's policy also
-  applies if you follow the game's "Join our Discord" link.
+  name, game mode/outcome, and platform/input/country badges only), to a
+  channel the server's operator chooses; not run or controlled by the
+  developer. Discord's policy also applies if you follow the game's "Join
+  our Discord" link.
 
 ## Data retention
 

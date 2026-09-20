@@ -459,6 +459,7 @@ void BubbleGame::NewGame(SetupSettings setup) {
         bubbleArrays[i].mFired = bubbleArrays[i].mPopped = bubbleArrays[i].mSent = bubbleArrays[i].mRecv = 0;
         bubbleArrays[i].rKills = bubbleArrays[i].mKills = 0;
         bubbleArrays[i].rBlk = bubbleArrays[i].mBlk = 0;
+        bubbleArrays[i].roundInput = 0;
         // Apply per-player color count (5-8); default 8 for single player
         int nc = (setup.playerCount >= 2) ? setup.playerColors[i] : 8;
         nc = (nc < 5) ? 5 : (nc > 8) ? 8 : nc;
@@ -1379,6 +1380,10 @@ void BubbleGame::ReloadGame(int level) {
         bubbleArrays[i].rSent = bubbleArrays[i].rRecv = 0;
         bubbleArrays[i].rKills = 0;
         bubbleArrays[i].rBlk = 0;
+        // Per-round like the stats above, and for the same reason: the badge
+        // reports this round. A player who does not fire at all shows none
+        // rather than inheriting the device they used last round.
+        bubbleArrays[i].roundInput = 0;
         bubbleArrays[i].malusAlerts.clear();
     }
     roundStatsFinalized = false;
