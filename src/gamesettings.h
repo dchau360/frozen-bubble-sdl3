@@ -50,6 +50,15 @@ struct ControllerInput {
 };
 extern ControllerInput controllerInputs[5];
 
+// True when the last press the event pump saw came from a gamepad rather than
+// a keyboard, written by frozenbubble.cpp alongside the two above. Read only to
+// label a shot for the per-round input badge (BubbleGame::ClassifyShotInput) --
+// the two paths are otherwise interchangeable by design, since a pad's buttons
+// arrive as virtual scancodes that IsKeyPressed() cannot tell from real keys,
+// which is exactly why the badge needs this and cannot recover it after the
+// fact.
+extern bool lastPressWasGamepad;
+
 inline bool IsVirtualScancode(SDL_Scancode sc) {
     return sc >= CTRL_SC_BASE && sc < (SDL_Scancode)(CTRL_SC_BASE + CTRL_SC_COUNT);
 }

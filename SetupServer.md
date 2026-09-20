@@ -189,18 +189,26 @@ drift apart.
 ## Optional — Discord Join & Result Alerts
 
 Every time a player arrives on your server, it can post a message to a
-Discord channel of your choosing — their nick and your server's name, and
-nothing else. The alert fires when they connect and appear in the lobby,
+Discord channel of your choosing — their nick, your server's name, and, if
+their client reported them, a platform badge (which OS they're on) and a
+country flag. The alert fires when they connect and appear in the lobby,
 not when they join a game room: someone waiting alone in a room they just
 opened is the person an alert should bring company to, and once a second
-player has joined them the notification has nothing left to offer. Neither the player's IP nor their
-self-reported location is included, deliberately: a Discord channel can
-have members well beyond whoever runs the server, and the game itself now
-invites players into a community Discord from its own UI, so an alert
-channel is a good deal more public than it used to be.
+player has joined them the notification has nothing left to offer. Neither
+the player's IP nor their precise self-reported coordinates are included,
+deliberately: a Discord channel can have members well beyond whoever runs
+the server, and the game itself now invites players into a community
+Discord from its own UI, so an alert channel is a good deal more public
+than it used to be. The country flag is the one location-adjacent signal
+that *is* included — it's roughly the granularity a public server list
+already shows, not the finer position behind the lobby's world map — see
+[server/discord-relay/README.md](server/discord-relay/README.md) if you'd
+rather drop it.
 
 The same relay also posts a message at the end of every round: the game
-mode, who won (or that it was a draw), and the full player roster. It uses
+mode, who won (or that it was a draw), and the full player roster — each
+name alongside their platform, input-device, and country badges where
+reported. It uses
 the same webhook, the same `DISCORD_SERVER_NAME` override, and the same
 stub/live modes below — there is nothing extra to configure. See
 [Round-result alerts](#round-result-alerts) further down for the details
@@ -311,7 +319,9 @@ is truly over, since that count only ever lives client-side and can differ
 room to room, so this posts at the same granularity already shown to
 players in the post-round stats table: one alert per round, saying who won,
 which game mode it was played in (Classic/Clear/Race/Timed — unlabelled if
-a room never set one), and every player who was in the room.
+a room never set one), and every player who was in the room, each with
+whatever platform, input-device, and country badges their own client
+reported (empty for one that reported none, e.g. a pre-1.4 client).
 
 **The winner name is not verified.** It's exactly what the reporting
 client's own message said, the same way the round-over notice every other

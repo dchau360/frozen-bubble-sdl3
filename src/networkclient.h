@@ -149,6 +149,18 @@ struct NetworkPlayer {
     std::string nick;
     std::string geoloc;
     bool ready;
+    // One char from PlatformTag()'s set (platform.h), or 0 when this player's
+    // client never sent PLATFORM -- an older build, or a server older than
+    // protocol 1.4 that drops the command and so never puts a tag in LIST.
+    // Everything that draws it treats 0 as "show nothing", never as a guess.
+    // Appended after `ready` rather than inserted above it: this struct is
+    // aggregate-initialized positionally at ~30 call sites across the test
+    // suite (`{"nick", "", false}`), and a field inserted in the middle
+    // silently reassigns what those trailing positional args mean instead of
+    // failing to compile -- caught only because every one of those call
+    // sites happened to pass `false` for `ready`, which stayed correct by
+    // coincidence once it started value-initializing `platform` instead.
+    char platform = 0;
 };
 
 struct GameRoom {
@@ -226,6 +238,14 @@ public:
     // Protocol commands
     bool SendNick(const char* nickname);
     bool SendGeoLoc(const char* location);
+    // Reports the player's country (ISO alpha-2) to the server, which passes
+    // it to the operator's Discord relay and nowhere else -- it is not put in
+    // LIST and no in-game UI reads it. Separate from SendGeoLoc on purpose:
+    // the lat/lon that one carries is for the lobby's world map and has never
+    // been posted to Discord, and keeping the two as different commands keeps
+    // that separation visible rather than implied. No-op against a server
+    // older than protocol 1.4.
+    bool SendCountry(const char* country);
     bool CreateGame(int maxPlayers = 5);
     bool JoinGame(const char* creator);
     bool StartGame();
@@ -369,6 +389,15 @@ public:
     // Get all player ID->nick mappings (populated from GAME_CAN_START)
     const std::map<int, std::string>& GetPlayerIdToNick() const { return playerIdToNick; }
 
+    // The platform tag last seen for `nick` in a LIST, or 0 if that player's
+    // client never reported one (or the server is older than protocol 1.4).
+    // Answers in-game too, where LIST itself has stopped arriving -- see
+    // platformByNick's comment.
+    char GetPlatformForNick(const std::string& nick) const {
+        auto it = platformByNick.find(nick);
+        return (it != platformByNick.end()) ? it->second : 0;
+    }
+
     static NetworkClient* Instance(const char* host = nullptr, int port = 0);
     // Like Instance(), but never constructs one. The per-frame pump in
     // FrozenBubble::RunOneFrame() runs on every frame of every mode, including
@@ -379,6 +408,13 @@ public:
     static std::vector<ServerInfo> DiscoverLANServers();
     static std::vector<ServerInfo> FetchPublicServers();
     static std::string DetectGeoLocation();  // Detect player's lat/lon via IP; returns "lat:lon" or "zz"
+    // Detect the player's country via IP; returns an ISO 3166-1 alpha-2 code
+    // or "" when the lookup fails or is unavailable (WASM). Blocking, like
+    // DetectGeoLocation -- both are called once per session from the same
+    // background thread. Feeds the COUNTRY command, which exists only for the
+    // operator's Discord channel; the lat/lon above still goes no further than
+    // the server and the lobby's world map.
+    static std::string DetectCountry();
     // Returns TCP connect latency in ms, or -1 if unreachable within timeoutMs
     static int MeasureLatency(const char* host, int port, int timeoutMs = 2000);
     static bool IsReachable(const char* host, int port, int timeoutMs = 2000);
@@ -502,6 +538,33 @@ private:
     std::string pendingNickOrig;
     std::string pendingNickTry;
     int pendingNickSuffix = 2;
+
+    // The server's own protocol minor, learned from the "FB/1.<m> " prefix on
+    // any line it sends (ParseMessage), -1 until the first one arrives. This
+    // client keeps advertising 1.3 in its own commands on purpose -- fb-server
+    // rejects a client claiming a minor above its own outright
+    // (INCOMPATIBLE_PROTOCOL, server/game.c), so bumping ours would cut this
+    // build off from every server not yet redeployed -- and gates newer
+    // commands on what the *server* says instead.
+    int serverProtoMinor = -1;
+    bool platformReported = false;
+
+    // nick -> platform tag, accumulated from every LIST and never pruned while
+    // the connection lasts. LIST is a lobby-only message -- it stops arriving
+    // the moment a room starts -- so the in-game boards would have nothing to
+    // draw a platform badge from if this were rebuilt per response instead of
+    // accumulated. Cleared in Disconnect() with the rest of the per-connection
+    // state; a nick reused by a different person on the same server is the one
+    // way a stale entry can be wrong, which costs a wrong badge and nothing
+    // else.
+    std::map<std::string, char> platformByNick;
+    void RememberPlatform(const NetworkPlayer& player);
+    // Sends PLATFORM once, as soon as the server is known to be new enough to
+    // understand it. Called both from SendNick (so it precedes NICK, and the
+    // server's join alert can carry the tag) and from ParseMessage the moment
+    // serverProtoMinor is first learned, in case the greeting lost that race --
+    // in which case the badge simply starts at the next LIST instead.
+    void MaybeSendPlatform();
 
 #ifdef FROZEN_BUBBLE_TEST_ACCESS
 public:

@@ -37,6 +37,24 @@
 #include "bubblegame_internal.h"
 #include "localmultiplayer_settings.h"
 #include "roundstats_color.h"
+#include "playerbadge.h"
+
+// Which platform badge belongs to a player array, if any.
+//
+// Everyone's tag -- including this client's own -- is looked up by nick in what
+// the lobby's LIST responses reported, so every board on every machine agrees
+// on what it is showing. PlatformTag() is only the fallback for an array this
+// client simulates, which covers the two cases where no LIST entry can exist:
+// a local (non-network) game, and a bot this client is hosting, which really is
+// playing from this machine.
+static char PlatformTagFor(const BubbleArray &arr, bool owned) {
+    if (!arr.playerNickname.empty()) {
+        if (char tag = NetworkClient::Instance()->GetPlatformForNick(arr.playerNickname))
+            return tag;
+    }
+    return owned ? PlatformTag() : 0;
+}
+
 
 // Positions are centered above/below each player's grid. One 5-slot table
 // covers 3/4/5-player fixed layouts and >5-player royale alike: slot 0 is
@@ -211,6 +229,34 @@ void BubbleGame::UpdatePoppedText(BubbleArray &bArray, int idx) {
     }
 }
 
+int BubbleGame::DrawLiveBadges(const BubbleArray &bArray, int x, int y, size_t &poolIdx) {
+    if (!currentSettings.networkGame) return 0;
+    SDL_Renderer *rend = const_cast<SDL_Renderer *>(renderer);
+    const char platformTag = PlatformTagFor(bArray, OwnsArray(bArray));
+    const int startX = x;
+    for (int pass = 0; pass < 2; ++pass) {
+        PlayerBadge b;
+        const bool ok = pass == 0 ? GetPlatformBadge(platformTag, b)
+                                  : GetInputBadge(bArray.roundInput, b);
+        if (!ok) continue;
+        // Label first, chip second, label's texture last: UpdateText is what
+        // gives the cell its width, and the chip has to be sized from that
+        // width but painted underneath the glyphs.
+        TTFText &t = StatsPanelCell(badgeCellPool, poolIdx++, 11);
+        t.UpdateColor(b.text, {0, 0, 0, 0});
+        t.UpdateText(rend, b.label, 0);
+        const int w = PlayerBadgeChipWidth(t.Coords()->w);
+        DrawPlayerBadgeChip(rend, {x, y, w, 14}, b);
+        t.UpdatePosition({x + kPlayerBadgePadX, y + 1});
+        if (t.Texture()) {
+            SDL_FRect fr = ToFRect(*t.Coords());
+            SDL_RenderTexture(rend, t.Texture(), nullptr, &fr);
+        }
+        x += w + 3;
+    }
+    return x - startX;
+}
+
 void BubbleGame::UpdateScoreText(BubbleArray &bArray, int slot) {
     char scoreStr[64];
     // For 2-player network games, show only player nickname (no score) in wooden banners
@@ -238,6 +284,14 @@ void BubbleGame::UpdateScoreText(BubbleArray &bArray, int slot) {
 
     // Render immediately (original: print_scores renders each player's score in the loop)
     { SDL_FRect fr = ToFRect(*scoreText[slot].Coords()); SDL_RenderTexture(const_cast<SDL_Renderer*>(renderer), scoreText[slot].Texture(), nullptr, &fr); }
+
+    // Badges trail the name on the same line here -- unlike the 3-5 player
+    // boards, a 2-player banner is left-anchored with room to its right.
+    // Two pool slots per player, indexed off the slot so the two banners never
+    // share a cached texture and re-render each other every frame.
+    size_t badgeIdx = (size_t)slot * 2;
+    const SDL_Rect *nameRect = scoreText[slot].Coords();
+    DrawLiveBadges(bArray, nameRect->x + nameRect->w + 6, nameRect->y + 2, badgeIdx);
 }
 
 
@@ -559,6 +613,42 @@ void BubbleGame::RenderRoundStats(SDL_Renderer *rend) {
         }
     };
 
+    // Platform chip then input chip, left to right from `x`. Either can be
+    // absent -- a player on an older client, a server older than protocol 1.4,
+    // or someone who never fired this round -- and the second chip simply
+    // moves left rather than leaving a gap, so a table where nobody reported
+    // anything looks exactly as it did before badges existed. Chip background
+    // first, label immediately after, so the label lands on top of its own
+    // chip and never under the next row's.
+    auto badges = [&](char platformTag, char inputTag, int x, int y) {
+        // Network games only, same gate DrawLiveBadges applies on the board
+        // itself: in a local game every row is a player sitting at this
+        // machine, so a platform column would print the same answer on every
+        // line and an input column would mostly say "KB" about all of them.
+        if (!currentSettings.networkGame) return;
+        for (int pass = 0; pass < 2; ++pass) {
+            PlayerBadge b;
+            const bool ok = pass == 0 ? GetPlatformBadge(platformTag, b)
+                                      : GetInputBadge(inputTag, b);
+            if (!ok) continue;
+            // Not cell(): the chip has to be sized from the label's measured
+            // width and drawn before it, so this drives the same pool by hand
+            // in the order chip-then-glyphs. One pool slot per badge either
+            // way, so the panel's cell accounting is unchanged.
+            TTFText &t = StatsPanelCell(statsCellPool, cellIdx++);
+            t.UpdateColor(b.text, {0, 0, 0, 0});
+            t.UpdateText(rend, b.label, 0);
+            const int w = PlayerBadgeChipWidth(t.Coords()->w);
+            DrawPlayerBadgeChip(rend, {x, y + 1, w, rowH - 4}, b);
+            t.UpdatePosition({x + kPlayerBadgePadX, y});
+            if (t.Texture()) {
+                SDL_FRect fr = ToFRect(*t.Coords());
+                SDL_RenderTexture(rend, t.Texture(), nullptr, &fr);
+            }
+            x += w + 3;
+        }
+    };
+
     const SDL_Color hdr = {255, 255, 100, 255};
     const SDL_Color win = {120, 255, 120, 255};
     const SDL_Color normal = {235, 235, 235, 255};
@@ -595,8 +685,12 @@ void BubbleGame::RenderRoundStats(SDL_Renderer *rend) {
             break;
         }
         std::string name = StatsPlayerName(p, i, currentSettings.networkGame);
-        if (name.size() > 14) name = name.substr(0, 14);
+        // Shorter than the 14 this used to allow: the two badges share the
+        // name column's 152px, and a full-width name would push them under
+        // the Win column rather than truncating itself.
+        if (name.size() > 9) name = name.substr(0, 9);
         cell(name.c_str(), colName, y, c);
+        badges(PlatformTagFor(p, OwnsArray(p)), p.roundInput, colName + 68, y);
         snprintf(buf, sizeof(buf), "%d", p.winCount); cell(buf, colWin, y, c);
         snprintf(buf, sizeof(buf), "%d", p.rFired);  cell(buf, colFired, y, c);
         snprintf(buf, sizeof(buf), "%d", p.rPopped); cell(buf, colPopped, y, c);
@@ -1306,10 +1400,17 @@ void BubbleGame::Render() {
             UpdatePlayerNameWinText();
 
             // 3-5 player mode: show player name and win count
+            size_t badgeIdx = 0;
             for (int i = 0; i < currentSettings.playerCount; i++) {
                 if (!bubbleArrays[i].boardVisible) continue;
                 if (playerNameWinText[i].Texture()) {
                     { SDL_FRect fr = ToFRect(*playerNameWinText[i].Coords()); SDL_RenderTexture(rend, playerNameWinText[i].Texture(), nullptr, &fr); }
+                    // Under the name rather than after it: these boards are
+                    // centred on a fixed slot position, so anything appended
+                    // horizontally would either overhang the board's edge or
+                    // shift the name off its own centre.
+                    const SDL_Rect *nameRect = playerNameWinText[i].Coords();
+                    DrawLiveBadges(bubbleArrays[i], nameRect->x, nameRect->y + nameRect->h + 1, badgeIdx);
                 }
             }
         }

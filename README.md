@@ -169,8 +169,11 @@ Building from source: [docs/BUILDING.md](docs/BUILDING.md).
 
 [Join the Discord](https://discord.gg/uE4dq8fqGW) for an alert whenever
 someone connects to a public server, plus a result alert at the end of every
-round — game mode, winner (or draw), and the full player roster — if you're
-looking for an opponent or just keeping an eye on how things are going.
+round — game mode, winner (or draw), and the full player roster, each name
+with a platform badge, an input-device badge, and a country flag where a
+player's client reported them — if you're looking for an opponent or just
+keeping an eye on how things are going. The same platform and input badges
+also show up next to opponents' names in-game.
 
 Running your own server? It can post its own join and round-result alerts to
 a Discord channel of your choosing — see [SetupServer.md](SetupServer.md#optional--discord-join--result-alerts).

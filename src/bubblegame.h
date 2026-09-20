@@ -335,6 +335,19 @@ struct BubbleArray {
     bool shooterLeft = false, shooterRight = false, shooterCenter = false, shooterAction = false, newShoot = true, mpWinner = false, mpDone = false;
     float mouseTargetAngle = -1.f;  // -1 = inactive; set from mouse/touch position
     bool mouseFirePending = false;   // set on mouse click / touch-up
+    bool mouseFireWasTouch = false;  // that pending fire came from a finger, not a mouse
+    // Which device this player has actually been shooting with this round:
+    // 'K' keyboard, 'M' mouse, 'T' touch, 'G' gamepad, or 0 before their first
+    // shot. Latched per shot rather than decided once, so a player who picks up
+    // a pad mid-round is shown holding a pad from their next bubble onward --
+    // the badge answers "what are they playing with right now", which is the
+    // only reading that stays true for a round somebody switches during.
+    //
+    // For an array this client owns, changes are broadcast with the 'i' opcode
+    // (ReportRoundInput); for everyone else's, this is set from the 'i' messages
+    // arriving from them. Reset for every array at the start of each round, so a
+    // player who sits out a round shows no badge for it rather than last round's.
+    char roundInput = 0;
 
     // Player state for multiplayer (original: $pdata{$player}{state} and {left})
     enum class PlayerState { ALIVE, LOST, LEFT };
@@ -487,7 +500,10 @@ public:
     void NewGame(SetupSettings setup);
     void HandleInput(SDL_Event *e);
     void HandleMouseAim(float mx, float my);  // logical canvas coords (0-640, 0-480)
-    void HandleMouseFire();
+    // fromTouch distinguishes a finger from a mouse for the input badge only;
+    // the two are the same shot everywhere else. Defaulted so the existing
+    // mouse call sites (and tests) read unchanged.
+    void HandleMouseFire(bool fromTouch = false);
 
     // True when a finger press/release pair is an unambiguous "go back" swipe
     // rather than an aim-and-fire. Touch is the only input with no way out of a
@@ -756,7 +772,18 @@ private:
     std::vector<TTFText> statsCellPool;
     std::vector<TTFText> royaleHudCellPool;
     std::vector<TTFText> malusAlertPool;
+    // Labels for the two live badges beside each player's name on the board.
+    // Its own pool rather than statsCellPool's: that one is addressed by call
+    // order within a single panel's render, and these are drawn from a
+    // different pass in the same frame.
+    std::vector<TTFText> badgeCellPool;
     TTFText &StatsPanelCell(std::vector<TTFText> &pool, size_t idx, int fontSize = 14);
+
+    // Draws the platform and input badges for `bArray` starting at (x, y), and
+    // returns the width consumed. Network games only -- in a local game every
+    // board is on this machine and on this keyboard, so the badges would say
+    // the same thing about everyone and tell the player nothing.
+    int DrawLiveBadges(const BubbleArray &bArray, int x, int y, size_t &poolIdx);
 
     // In-game chat (network games only)
     struct InGameChatMsg { std::string nick; std::string text; int framesLeft; };
@@ -808,6 +835,15 @@ private:
                        bool blocked = false);  // Queue an incoming-malus (or blocked-malus) toast
     void RenderMalusAlerts(SDL_Renderer *rend);  // Draw + age the incoming-malus toasts
     void FinalizeRoundStats();   // Roll per-round stats into match totals; broadcast 'S' in network games
+    // Which device fired the shot currently being launched from bArray. Only
+    // meaningful for an array this client simulates -- a remote player's shot
+    // arrives as an already-decided mpFirePending and carries no local input.
+    char ClassifyShotInput(const BubbleArray &bArray, bool firedByMouse) const;
+    // Latches `tag` into bArray.roundInput and, when it actually changed and
+    // this is a network game, broadcasts it as the 'i' opcode so the other
+    // clients can update their badge for this player mid-round. Sending only on
+    // change keeps this to a message or two per round instead of one per shot.
+    void ReportRoundInput(BubbleArray &bArray, char tag);
     void RenderRoundStats(SDL_Renderer *rend);  // Post-round per-player stats table overlay
     void RenderMultiplayerResultPanel(SDL_Renderer *rend);
     void UpdateMultiplayerCompletionState();

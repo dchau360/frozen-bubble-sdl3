@@ -28,6 +28,7 @@
 #include <climits>
 #elif defined(__APPLE__)
 #include <sys/stat.h>   // probing for an installed <prefix>/share/frozen-bubble
+#include <TargetConditionals.h>  // TARGET_OS_IPHONE, for PlatformTag()
 #endif
 
 std::string g_dataDir;
@@ -165,6 +166,29 @@ void InitDataDir() {
 // was previously invisible (audit finding REL-008).
 void LogDataDir() {
     SDL_Log("Asset data dir: %s", g_dataDir.c_str());
+}
+
+char PlatformTag() {
+    // Order matters twice over: __WASM_PORT__ first because an Emscripten
+    // build also defines __linux__ on a Linux host and would otherwise
+    // report itself as one, and the iOS check before the macOS fallback for
+    // the same reason -- TARGET_OS_IPHONE is true on a platform where
+    // __APPLE__ is true as well.
+#if defined(__WASM_PORT__)
+    return 'B';
+#elif defined(__ANDROID__) || defined(__ANDROID_PORT__)
+    return 'A';
+#elif defined(_WIN32) || defined(__MINGW32__)
+    return 'W';
+#elif defined(__APPLE__)
+#  if TARGET_OS_IPHONE
+    return 'I';
+#  else
+    return 'M';
+#  endif
+#else
+    return 'L';
+#endif
 }
 
 #ifdef __WASM_PORT__

@@ -1,5 +1,9 @@
 # Changelog
 
+## v2.4.105
+
+- **Per-player platform, input-device, and country badges.** Other players in a network match now see a small colored badge beside each name showing their OS (Windows/macOS/Linux/Android/iOS/browser) and, per round, whether they're shooting with keyboard, mouse, touchscreen, or gamepad — in the lobby sidebar, on the live boards, and in the post-round stats table. Chips, not OS logos: the recognisable marks are trademarks, and nothing recognisable survives at this UI's ~9px badge size anyway. Both also reach a server's Discord relay if one is running, alongside a new country flag derived from the same IP-geolocation lookup already used for the lobby's world map — country only, never the finer coordinates behind that map, and Discord-only: no in-game UI shows it. All three are self-declared by the client and never gate anything, the same trust posture the existing `BOT` flag already has. The client keeps advertising protocol `FB/1.3` in its own commands and gates the new `PLATFORM`/`COUNTRY` commands on the *server's* advertised minor instead, so a client running this update still works against a server that hasn't been redeployed yet. See `CLAUDE.md`'s "Per-player platform, input-device and country tags" and the updated privacy policy.
+
 ## v2.4.104
 
 - **Discord round-result alerts now include a win-count bar chart.** Every round's Discord message gets a small monospace chart of each player's wins so far, leader first — scaled against the room's win-count limit ("First to 5", `current/limit`) when one is set, or against whoever currently leads otherwise. No image, no attachment — just plain text, so it costs no new dependency. Omitted on round 1 (nobody's won yet) and in 1-player rooms, where it would carry no information.

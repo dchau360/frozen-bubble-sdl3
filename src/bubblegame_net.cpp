@@ -720,6 +720,27 @@ void BubbleGame::ProcessNetworkMessages() {
                         }
                         break;
                     }
+                    case 'i': {
+                        // Which device a remote player is shooting with, sent
+                        // by their own client on their round's first shot and
+                        // again whenever they switch (BubbleGame::ReportRoundInput).
+                        // One char: 'K' keyboard, 'M' mouse, 'T' touch, 'G' pad.
+                        //
+                        // Anything else is from a client newer than this build
+                        // and is dropped rather than stored, so the badge shows
+                        // nothing instead of a stray glyph. Purely cosmetic
+                        // either way -- nothing downstream of this affects play.
+                        const char tag = gameData[1];
+                        if (tag == 'K' || tag == 'M' || tag == 'T' || tag == 'G') {
+                            for (int i = 0; i < currentSettings.playerCount; i++) {
+                                if (bubbleArrays[i].lobbyPlayerId == senderId) {
+                                    bubbleArrays[i].roundInput = tag;
+                                    break;
+                                }
+                            }
+                        }
+                        break;
+                    }
                     case 't': {
                         // In-game chat from remote player
                         InGameChatMsg chatMsg;

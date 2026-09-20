@@ -40,6 +40,15 @@ extern int remote_proto_minor[256];
 extern int admin_authorized[256];
 extern int is_bot[256];
 extern int bots_connected;
+/* Single-char self-reported tags, 0 when the client never said. Plain chars
+ * rather than the char* nick[]/geoloc[] use, since both are one byte from a
+ * fixed set -- nothing to allocate, nothing to free. See the PLATFORM command
+ * handler and the 'i' opcode sniff (both game.c) for the accepted values. */
+extern char platform_tag[256];
+extern char input_tag[256];
+/* ISO 3166-1 alpha-2 from the COUNTRY command, empty when never sent. Two
+ * chars plus a terminator rather than the bare char the other two use. */
+extern char country_tag[256][3];
 
 int game_has_room(int fd);
 int game_tournament_start(int tid, int mid, int round, int a, int fd_a, int b, int fd_b, const char *options);

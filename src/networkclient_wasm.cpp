@@ -161,6 +161,11 @@ void NetworkClient::Disconnect() {
         s_handle = nullptr;
     }
     state = DISCONNECTED;
+    // Same reason as the native Disconnect(): this is per-connection state, and
+    // the next connection may be a different server on a different minor.
+    serverProtoMinor = -1;
+    platformReported = false;
+    platformByNick.clear();
     tournaments.Reset();
     tournamentReceivedAt.clear();
     tournamentError.clear();
@@ -304,6 +309,14 @@ std::vector<ServerInfo> NetworkClient::FetchPublicServers() {
 
 std::string NetworkClient::DetectGeoLocation() {
     return "zz";
+}
+
+std::string NetworkClient::DetectCountry() {
+    // No country lookup in the browser build, same as the "zz" above: the
+    // shared implementation shells out to curl, which a WASM page has no
+    // equivalent for here. Empty means "never reported", which every consumer
+    // already renders as nothing.
+    return "";
 }
 
 int NetworkClient::MeasureLatency(const char* /*host*/, int /*port*/, int /*timeoutMs*/) {

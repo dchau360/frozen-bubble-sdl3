@@ -368,6 +368,13 @@ void NetworkClient::Disconnect() {
         sockfd = -1;
     }
     state = DISCONNECTED;
+    // Re-learned from the next server's own lines: the next connection may be
+    // to a different server on a different protocol minor, and carrying this
+    // one's answer over would either suppress PLATFORM against a server that
+    // supports it or send it to one that does not.
+    serverProtoMinor = -1;
+    platformReported = false;
+    platformByNick.clear();
     tournaments.Reset();
     tournamentReceivedAt.clear();
     tournamentError.clear();
@@ -463,6 +470,12 @@ bool NetworkClient::SendNick(const char* nickname) {
     char cmd[128];
     snprintf(cmd, sizeof(cmd), "NICK %s", originalNick.c_str());
 
+    // Before NICK, not after: the server fires its Discord join alert from the
+    // first accepted NICK, and reads platform_tag[fd] while doing so. Sending
+    // this second would mean every alert reported no platform even though the
+    // tag arrived milliseconds later.
+    MaybeSendPlatform();
+
     // Pending state is set BEFORE SendCommand(), not after. This ordering
     // was load-bearing under stage 1b: native's SendCommand() used to do its
     // own inline 100ms select()+recv() and could synchronously drive the
@@ -506,6 +519,15 @@ bool NetworkClient::SendGeoLoc(const char* location) {
     playerGeoloc = location;
     char cmd[128];
     snprintf(cmd, sizeof(cmd), "GEOLOC %s", location);
+    return SendCommand(cmd);
+}
+
+bool NetworkClient::SendCountry(const char* country) {
+    // Protocol 1.4, same gate PLATFORM uses: an older server answers
+    // UNKNOWN_COMMAND, which is harmless but noisy at both ends.
+    if (serverProtoMinor < 4) return false;
+    char cmd[32];
+    snprintf(cmd, sizeof(cmd), "COUNTRY %s", country);
     return SendCommand(cmd);
 }
 
@@ -1060,10 +1082,32 @@ void NetworkClient::ConsumeIncomingLines() {
     }
 }
 
+void NetworkClient::MaybeSendPlatform() {
+    // PLATFORM is protocol 1.4. An older server answers UNKNOWN_COMMAND, which
+    // is harmless but noisy in both logs, so stay quiet until the server has
+    // identified itself as new enough.
+    if (platformReported || serverProtoMinor < 4) return;
+    platformReported = true;
+    char cmd[32];
+    snprintf(cmd, sizeof(cmd), "PLATFORM %c", PlatformTag());
+    SendCommand(cmd);
+}
+
 void NetworkClient::ParseMessage(const char* message) {
     if (strlen(message) == 0) return;
 
     SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION, "Received: %s", message);
+    // Every server line carries the server's own version in its "FB/1.<m> "
+    // prefix, so the greeting is not a special case -- whichever line arrives
+    // first tells us, and a reconnect to a different server re-learns it
+    // because Disconnect() resets both fields.
+    if (serverProtoMinor < 0) {
+        int major = 0, minor = 0;
+        if (sscanf(message, "FB/%d.%d", &major, &minor) == 2 && major == PROTO_MAJOR) {
+            serverProtoMinor = minor;
+            MaybeSendPlatform();
+        }
+    }
     // Don't add server protocol messages to queue - they're handled immediately
     // Only GAMEMSG messages from ProcessIncomingData() should be queued
     HandleServerResponse(std::string(message));
@@ -1639,6 +1683,44 @@ void NetworkClient::FinishGameStart() {
 }
 #endif
 
+// Splits one LIST roster entry into its parts. The entry is a nick followed by
+// up to two optional trailing pieces: the geolocation the player's own client
+// reported ("lat:lon", two colon-separated fields of its own) and, since
+// protocol 1.4, a one-char platform tag after it -- so "bob", "bob:37.7:-122.4",
+// "bob:37.7:-122.4:M" and "bob::M" (platform known, geolocation not yet, which
+// is the common case since GEOLOC's lookup takes ~16s) are all valid.
+//
+// The tag is recognised by shape rather than by counting colons: a trailing
+// ":<c>" whose <c> is a single char from PlatformTag()'s closed set. Nothing a
+// real geolocation ends with can collide -- its second field is a signed
+// decimal -- and an entry from a server that predates the tag simply has no
+// such suffix to find, which is what lets one parser read both formats without
+// knowing which server it is talking to.
+static void ParsePlayerListEntry(const std::string& entry, NetworkPlayer& out) {
+    size_t colonPos = entry.find(':');
+    if (colonPos == std::string::npos) {
+        out.nick = entry;
+        return;
+    }
+    out.nick = entry.substr(0, colonPos);
+    std::string rest = entry.substr(colonPos + 1);
+    if (rest.size() >= 2 && rest[rest.size() - 2] == ':' &&
+        std::strchr("WMLAIB", rest[rest.size() - 1]) != nullptr) {
+        out.platform = rest[rest.size() - 1];
+        rest.erase(rest.size() - 2);
+    }
+    out.geoloc = rest;
+}
+
+// Remembers a player's platform across LIST responses. Only ever records a tag
+// that was actually present: a LIST from a pre-1.4 server carries none, and
+// forgetting what an earlier one said would make the badge flicker off on any
+// server that got downgraded mid-session.
+void NetworkClient::RememberPlatform(const NetworkPlayer& player) {
+    if (player.platform && !player.nick.empty())
+        platformByNick[player.nick] = player.platform;
+}
+
 void NetworkClient::ParseListResponse(const char* listData) {
     // Clear current lists
     gameList.clear();
@@ -1664,15 +1746,8 @@ void NetworkClient::ParseListResponse(const char* listData) {
             std::string playerStr = openPlayersStr.substr(start, commaPos - start);
             if (!playerStr.empty()) {
                 NetworkPlayer player;
-
-                // Check for geoloc (format: NICK:GEOLOC)
-                size_t colonPos = playerStr.find(':');
-                if (colonPos != std::string::npos) {
-                    player.nick = playerStr.substr(0, colonPos);
-                    player.geoloc = playerStr.substr(colonPos + 1);
-                } else {
-                    player.nick = playerStr;
-                }
+                ParsePlayerListEntry(playerStr, player);
+                RememberPlatform(player);
                 player.ready = false;
                 openPlayers.push_back(player);
                 SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION, "Open player: %s%s%s", player.nick.c_str(),
@@ -1702,15 +1777,8 @@ void NetworkClient::ParseListResponse(const char* listData) {
             std::string playerStr = gameStr.substr(start, commaPos - start);
             if (!playerStr.empty()) {
                 NetworkPlayer player;
-
-                // Check for geoloc
-                size_t colonPos = playerStr.find(':');
-                if (colonPos != std::string::npos) {
-                    player.nick = playerStr.substr(0, colonPos);
-                    player.geoloc = playerStr.substr(colonPos + 1);
-                } else {
-                    player.nick = playerStr;
-                }
+                ParsePlayerListEntry(playerStr, player);
+                RememberPlatform(player);
                 player.ready = false;
 
                 // First player is the creator
@@ -1729,13 +1797,8 @@ void NetworkClient::ParseListResponse(const char* listData) {
             std::string playerStr = gameStr.substr(start);
             if (!playerStr.empty()) {
                 NetworkPlayer player;
-                size_t colonPos = playerStr.find(':');
-                if (colonPos != std::string::npos) {
-                    player.nick = playerStr.substr(0, colonPos);
-                    player.geoloc = playerStr.substr(colonPos + 1);
-                } else {
-                    player.nick = playerStr;
-                }
+                ParsePlayerListEntry(playerStr, player);
+                RememberPlatform(player);
                 player.ready = false;
 
                 if (first) {
@@ -2136,6 +2199,56 @@ std::string NetworkClient::DetectGeoLocation() {
 
     SDL_Log("Geolocation detection failed, using 'zz'");
     cached = "zz";
+    return cached;
+}
+
+std::string NetworkClient::DetectCountry() {
+    // A second request rather than widening DetectGeoLocation()'s: that one's
+    // two-endpoint fallback and dual "lat,lon"/"lat\nlon" parse feed the lobby
+    // world map, and reworking it to carry a third field risks the map for a
+    // field only the Discord alert reads. Both run once per session on the
+    // same background thread (MainMenu::StartGeoLocFetch), so the extra round
+    // trip costs nothing anybody waits on.
+    // This whole region is native-only (see the #endif below); WASM has its
+    // own stub in networkclient_wasm.cpp.
+    static std::string cached = "";
+    static bool tried = false;
+    if (tried) return cached;
+    tried = true;
+
+    const char* urls[] = {
+        "https://ipinfo.io/country",
+        "http://ip-api.com/line/?fields=countryCode"
+    };
+    for (const char* url : urls) {
+        std::string body;
+#if defined(__ANDROID__)
+        body = androidFetchUrl(url);
+#elif defined(__IOS_PORT__)
+        body = IosFetchUrl(url, 8);
+#else
+        char cmd[256];
+        snprintf(cmd, sizeof(cmd), "curl -s --connect-timeout 5 --max-time 8 '%s' 2>/dev/null", url);
+        FILE* fp = popen(cmd, "r");
+        if (fp) {
+            char buf[64];
+            while (fgets(buf, sizeof(buf), fp)) body += buf;
+            pclose(fp);
+        }
+#endif
+        // Both endpoints answer with the bare alpha-2 code and a newline.
+        // Anything else -- an error page, a rate-limit blurb, an empty body --
+        // fails this shape check and falls through to the next endpoint, then
+        // to no country at all, which every consumer renders as nothing.
+        if (body.size() >= 2 && body[0] >= 'A' && body[0] <= 'Z' &&
+            body[1] >= 'A' && body[1] <= 'Z' &&
+            (body.size() == 2 || body[2] == '\n' || body[2] == '\r')) {
+            cached = body.substr(0, 2);
+            SDL_Log("Detected country: %s", cached.c_str());
+            return cached;
+        }
+    }
+    SDL_Log("Country detection failed; no country will be reported");
     return cached;
 }
 
