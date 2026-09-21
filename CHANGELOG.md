@@ -1,5 +1,9 @@
 # Changelog
 
+## v2.4.108
+
+- **This is the release that actually ships what v2.4.107 attempted.** The `v2.4.107` tag's CI build failed on Linux and Windows before publishing anything (a missing `<cstddef>` include broke the GCC build, and a `std::filesystem::path` was passed where `const char*` was expected, breaking the MinGW build) — no GitHub Release or itch.io deploy went out under that tag. Both are fixed here; no functional changes beyond v2.4.107's own content below.
+
 ## v2.4.107
 
 - **Replay recording and playback.** Every finished round is now automatically captured and saved to a rolling on-device library (default: last 5, configurable 0–20 in Settings → Controls & Settings → Replays), with no measurable effect on live gameplay — capture runs off a deterministic step log of each seat's controls plus periodic state-hash checkpoints, and a bad or corrupted recording fails safely rather than crashing or drifting into nonsense. The new **Replays** page lists every saved round with mode, player count, duration and outcome, and plays it back full-screen with pause/resume, 0.5×–4× speed, restart, and shot-by-shot seeking (`,`/`.` or the on-screen skip buttons) — every control is reachable by keyboard, gamepad, and tap alike. Replays can be exported to a `.fbr` file and re-imported on desktop, WASM (browser download/file-picker) and Android (system document picker); a file recorded on an incompatible platform is flagged rather than silently mis-played. iOS stays a stub pending its App Store distribution blocker.
