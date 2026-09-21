@@ -323,6 +323,20 @@ if(BUILD_TESTING AND NOT EMSCRIPTEN AND NOT ANDROID AND NOT IOS)
         set_tests_properties(server-tournament-test PROPERTIES TIMEOUT 180)
     endif()
 
+    add_executable(gameplay-rng-test tests/gameplay_rng_test.cpp)
+    target_include_directories(gameplay-rng-test PRIVATE src)
+    target_compile_features(gameplay-rng-test PRIVATE cxx_std_17)
+    add_test(NAME gameplay-rng-test COMMAND gameplay-rng-test)
+
+    # Lightweight, SDL-free codec test -- same pattern as gameplay-rng-test
+    # above. Links only replay_format.cpp plus the test file itself, not the
+    # full frozen-bubble-core-test library, since the codec has zero engine
+    # dependency (see src/replay_format.h).
+    add_executable(replay-format-test tests/replay_format_test.cpp src/replay_format.cpp)
+    target_include_directories(replay-format-test PRIVATE src)
+    target_compile_features(replay-format-test PRIVATE cxx_std_17)
+    add_test(NAME replay-format-test COMMAND replay-format-test)
+
     add_executable(bubblegame-rules-test tests/bubblegame_rules_test.cpp)
     set_property(TARGET bubblegame-rules-test PROPERTY CXX_STANDARD 17)
     set_property(TARGET bubblegame-rules-test PROPERTY CXX_EXTENSIONS OFF)
@@ -432,6 +446,52 @@ if(BUILD_TESTING AND NOT EMSCRIPTEN AND NOT ANDROID AND NOT IOS)
     set_property(TARGET statspanelcell-cache-test PROPERTY CXX_EXTENSIONS OFF)
     target_link_libraries(statspanelcell-cache-test PRIVATE frozen-bubble-core-test)
     add_test(NAME statspanelcell-cache-test COMMAND statspanelcell-cache-test)
+
+    add_executable(replay-session-test tests/replay_session_test.cpp)
+    set_property(TARGET replay-session-test PROPERTY CXX_STANDARD 17)
+    set_property(TARGET replay-session-test PROPERTY CXX_EXTENSIONS OFF)
+    target_link_libraries(replay-session-test PRIVATE frozen-bubble-core-test)
+    add_test(NAME replay-session-test COMMAND replay-session-test)
+
+    # R3: real solo-Classic round captured live and replayed offline. Needs the
+    # full headless SDL/core library (it drives a real BubbleGame with a
+    # renderer), unlike the lightweight replay-format-test above.
+    add_executable(bubblegame-replay-test tests/bubblegame_replay_test.cpp)
+    set_property(TARGET bubblegame-replay-test PROPERTY CXX_STANDARD 17)
+    set_property(TARGET bubblegame-replay-test PROPERTY CXX_EXTENSIONS OFF)
+    target_link_libraries(bubblegame-replay-test PRIVATE frozen-bubble-core-test)
+    add_test(NAME bubblegame-replay-test COMMAND bubblegame-replay-test)
+
+    # R4a: the production recorder's hooks, driven by real rounds. Depends on
+    # the same real-renderer library as bubblegame-replay-test above.
+    add_executable(replay-recorder-test tests/replay_recorder_test.cpp)
+    set_property(TARGET replay-recorder-test PROPERTY CXX_STANDARD 17)
+    set_property(TARGET replay-recorder-test PROPERTY CXX_EXTENSIONS OFF)
+    target_link_libraries(replay-recorder-test PRIVATE frozen-bubble-core-test)
+    add_test(NAME replay-recorder-test COMMAND replay-recorder-test)
+
+    # R4b: the on-disk rolling library and the Replay:KeepCount setting.
+    add_executable(replay-library-test tests/replay_library_test.cpp)
+    set_property(TARGET replay-library-test PROPERTY CXX_STANDARD 17)
+    set_property(TARGET replay-library-test PROPERTY CXX_EXTENSIONS OFF)
+    target_link_libraries(replay-library-test PRIVATE frozen-bubble-core-test)
+    add_test(NAME replay-library-test COMMAND replay-library-test)
+
+    # R4c: the playback viewer (ReplayPlayer), driving real recordings.
+    add_executable(replay-player-test tests/replay_player_test.cpp)
+    set_property(TARGET replay-player-test PROPERTY CXX_STANDARD 17)
+    set_property(TARGET replay-player-test PROPERTY CXX_EXTENSIONS OFF)
+    target_link_libraries(replay-player-test PRIVATE frozen-bubble-core-test)
+    add_test(NAME replay-player-test COMMAND replay-player-test)
+
+    # R4e: the platform file export/import seam's byte-level helpers and the
+    # asynchronous Begin()/Poll() state machine, driven through the test-only
+    # dialog-result simulation hooks (no real OS dialog under ctest).
+    add_executable(platform-replay-file-test tests/platform_replay_file_test.cpp)
+    set_property(TARGET platform-replay-file-test PROPERTY CXX_STANDARD 17)
+    set_property(TARGET platform-replay-file-test PROPERTY CXX_EXTENSIONS OFF)
+    target_link_libraries(platform-replay-file-test PRIVATE frozen-bubble-core-test)
+    add_test(NAME platform-replay-file-test COMMAND platform-replay-file-test)
 
     add_executable(localmultiplayer-header-compile-test
         tests/localmultiplayer_header_compile_test.cpp

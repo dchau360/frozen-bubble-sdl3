@@ -40,6 +40,13 @@ public:
     void MuteAll(bool enable = false);
     bool IsHalted() { return haltedMixer; };
 
+#ifdef FROZEN_BUBBLE_TEST_ACCESS
+    // Test-only counters: how many SFX actually got past every early-return
+    // guard (i.e. would be audible). See audiomixer.cpp's PlaySFX().
+    static int TestSfxPlayCount() { return testSfxPlayCount; }
+    static void TestResetSfxPlayCount() { testSfxPlayCount = 0; }
+#endif
+
     AudioMixer(const AudioMixer& obj) = delete;
     void Dispose();
     static AudioMixer* Instance();
@@ -53,6 +60,9 @@ private:
     GameSettings* gameSettings;
 
     bool mixerEnabled = true, haltedMixer = false;
+#ifdef FROZEN_BUBBLE_TEST_ACCESS
+    static int testSfxPlayCount;
+#endif
     MIX_Mixer* mixer = nullptr;
     MIX_Track* musicTrack = nullptr;
     MIX_Audio* curMusicAudio = nullptr;

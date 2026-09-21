@@ -22,6 +22,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <cerrno>
+#include <cstdlib>
 #include <cstring>
 
 GameSettings *GameSettings::ptrInstance = nullptr;
@@ -133,6 +134,9 @@ void GameSettings::CreateDefaultSettings()
         EvalIniResult(rval, dict, "Sound:EnableMusic", "true");
         EvalIniResult(rval, dict, "Sound:EnableSFX", "true");
         EvalIniResult(rval, dict, "Sound:ClassicAF", "false");
+
+        EvalIniResult(rval, dict, "Replay", NULL);
+        EvalIniResult(rval, dict, "Replay:KeepCount", "5");
 
         EvalIniResult(rval, dict, "Keys", NULL);
         char defaultSpeedBuf[16];
@@ -295,6 +299,23 @@ void GameSettings::ReadSettings()
 
     mouseEnabled = iniparser_getboolean(optDict, "Keys:MouseEnabled",
                                         DefaultMouseEnabled());
+
+    // Replay library keep count. Parsed by hand rather than through
+    // iniparser_getint: that helper's strtol returns 0 for a non-numeric value,
+    // and 0 is a meaningful setting ("do not record"), so a typo would silently
+    // switch recording off instead of falling back. Anything that is not a
+    // plain in-range [0, kReplayKeepCountMax] integer becomes the default 5.
+    replayKeepCountValue = 5;
+    const char *replayKeepStr = iniparser_getstring(optDict, "Replay:KeepCount", nullptr);
+    if (replayKeepStr != nullptr) {
+        char *end = nullptr;
+        errno = 0;
+        const long parsed = std::strtol(replayKeepStr, &end, 10);
+        if (end != replayKeepStr && *end == '\0' && errno == 0 &&
+            parsed >= 0 && parsed <= kReplayKeepCountMax) {
+            replayKeepCountValue = static_cast<int>(parsed);
+        }
+    }
 
     hostChainReactions = iniparser_getboolean(optDict, "Host:ChainReactions", true);
     hostSinglePlayerTargetting =
@@ -540,6 +561,21 @@ void GameSettings::SaveSettings()
     if (!ReplaceFileAtomically(tempPath, setPath)) return;
     RequestPersistentStorageFlush();
     SDL_Log("Settings saved to %s", setPath);
+}
+
+void GameSettings::SetReplayKeepCount(int count)
+{
+    // Clamp rather than reject, matching the other numeric settings: a caller
+    // that overshoots gets the nearest legal value and the stored file can
+    // never carry something ReadSettings() would then have to repair.
+    if (count < 0) count = 0;
+    if (count > kReplayKeepCountMax) count = kReplayKeepCountMax;
+    replayKeepCountValue = count;
+
+    // Section header has to exist or iniparser_dump_ini drops every key under it.
+    iniparser_set(optDict, "Replay", NULL);
+    iniparser_set(optDict, "Replay:KeepCount", std::to_string(count).c_str());
+    SaveSettings();
 }
 
 void GameSettings::setSoundEnabled(bool on) {

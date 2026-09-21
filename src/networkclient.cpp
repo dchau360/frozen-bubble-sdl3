@@ -719,6 +719,9 @@ bool NetworkClient::SendOptions(bool chainReaction, bool continueWhenLeave, bool
 
 #ifndef __WASM_PORT__
 bool NetworkClient::SendGameData(const char* data) {
+#ifdef FROZEN_BUBBLE_TEST_ACCESS
+    ++testGameDataSendCount;
+#endif
     // Game messages use binary protocol: {myid byte}{data}\n
     // NOT the FB/1.2 prefix format!
     if (state != IN_GAME || sockfd < 0) {

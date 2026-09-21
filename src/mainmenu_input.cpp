@@ -93,6 +93,14 @@ void MainMenu::HandleInput(SDL_Event *e){
             // guide still wins if it is open over this page.
             if (TeamsPanelKey(e)) break;
 
+            // The replay viewer and the Replays list page (mainmenu_replays.cpp)
+            // are modal over the CONTROLS & SETTINGS panel they were opened
+            // from, so they take keys before every other panel. The viewer is
+            // checked first: a replay plays on top of the list page that
+            // launched it, and both flags can be set at once.
+            if (ReplayPlaybackKey(e)) break;
+            if (ReplaysPanelKey(e)) break;
+
             // F1 opens the guide from either screen that has a HELP box, and
             // is also the key those boxes' tap targets send (see
             // kRoomHelpTapIndex / kLocalMPHelpTapIndex) -- so touch and
@@ -483,6 +491,15 @@ void MainMenu::AddPanelTapRow(int index, const SDL_Rect& rect, int subIndex,
 }
 
 bool MainMenu::HandlePanelTap(float lx, float ly, float verticalDrift) {
+    // The replay viewer and the Replays list page (mainmenu_replays.cpp) are
+    // modal over the settings panel they were opened from, so they get first
+    // look at a tap. The viewer consumes every tap; the list page handles its
+    // own buttons (Done, per-row Play/Delete, confirm dialogs) and returns
+    // false only to let its registered rows below do the select-then-activate
+    // dance, so this must fall through rather than return outright.
+    if (playingReplay) return HandleReplayPlaybackTap(lx, ly);
+    if (showingReplaysPanel && HandleReplaysPanelTap(lx, ly)) return true;
+
     // "Tap here to cancel" on the connecting indicator. Checked before the
     // server list's own rows because it is drawn over them, and because a tap
     // landing on it means the player wants out of the connect -- not to start
@@ -988,6 +1005,12 @@ bool MainMenu::KeysPanelKey(SDL_Event *e) {
                                 AudioMixer::Instance()->PlaySFX("menu_selected");
                             }
 #endif
+                        } else if (keyConfigIndex == kKeyRowReplays) {
+                            // Open the full-screen Replays page
+                            // (mainmenu_replays.cpp). The CONTROLS & SETTINGS
+                            // panel stays open behind it; ESC/AC_BACK on the
+                            // page returns here.
+                            OpenReplaysPanel();
                         } else if (keyConfigIndex == kKeyRowResetAll) {
                             // Two presses: the first arms, the second commits.
                             // This discards every key binding the player has

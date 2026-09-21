@@ -65,6 +65,22 @@ static std::string ControllerScancodeName(SDL_Scancode sc) {
 // Returns true if something is already listening on localhost:port
 
 void MainMenu::Render(void) {
+    // Playback (R4d) is a full-bleed screen: ReplayPlayer::Draw() paints the
+    // restored board plus its own non-interactive HUD, and ReplayPlaybackRender
+    // layers R4d's controls on top. Nothing else of the menu is drawn -- the
+    // same "live gameplay owns the whole canvas" precedent -- and no new
+    // FrozenBubble::GameState was needed to get here. The stale tap rows are
+    // dropped first so a swipe cannot be classified against the list's
+    // stepped keep-count row while the viewer is up.
+    if (playingReplay && replayPlayer) {
+        panelTapRows.clear();
+        panelTapSelection = nullptr;
+        panelTapSubSelection = nullptr;
+        replayPlayer->AdvanceFrame();
+        ReplayPlaybackRender();
+        return;
+    }
+
     SDL_RenderTexture(const_cast<SDL_Renderer*>(renderer), background, nullptr, nullptr);
 
     // Drop last frame's tap targets before any panel republishes its own. A
@@ -85,6 +101,12 @@ void MainMenu::Render(void) {
     OptPanelRender();
     LevelPanelRender();
     KeysPanelRender();
+    // The Replays page (mainmenu_replays.cpp) is opened from the CONTROLS &
+    // SETTINGS panel and overlays it, so it draws immediately after that panel
+    // and republishes its own tap rows last among the two. It is drawn before
+    // the net panels, but only one panel is ever interactive and the page
+    // paints an opaque backdrop over whatever is behind it.
+    ReplaysPanelRender();
     NetSetupPanelRender();
     NetPanelRender();
     // After the room, before the guide: the team picker overlays the room it
@@ -950,6 +972,13 @@ void MainMenu::KeysPanelRender() {
         }
     }
 #endif
+
+    list.Header("Replays");
+    // Opens the full-screen Replays page (mainmenu_replays.cpp): the library
+    // of auto-saved rounds, playback, and the keep-count setting. A row here
+    // rather than a main-menu button because the title screen's 8 slots are
+    // physically full -- see the KeyConfigRow comment.
+    list.Row(kKeyRowReplays, "Replays", "play / manage", true);
 
     list.Header("Reset");
     bool resetAllSel = (keyConfigIndex == kKeyRowResetAll);

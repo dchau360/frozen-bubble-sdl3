@@ -33,9 +33,6 @@
 #include <utility>
 #include <vector>
 
-inline int ranrange(int a, int b) { return a + rand() % ((b - a ) + 1); }
-inline float ranrange(float b) { return rand() / (static_cast<float>(RAND_MAX) / b); }
-
 inline int LaunchSubstepCount(int bubbleSize, float deltaScale) {
     if (!std::isfinite(deltaScale) || deltaScale <= 0.0f) return 1;
     const float distance = static_cast<float>(BUBBLE_SPEED) * deltaScale;
@@ -99,9 +96,9 @@ struct SingleBubble {
         pos = (*prop).pos;
     }
 
-    void GenerateFreeFall(bool explode = false, int waitTime = 0) {
-        speedX = (ranrange(3) - 1.5) / (bubbleSize >= 32 ? 1 : 2);
-        speedY = (-ranrange(4) - 2) / (bubbleSize >= 32 ? 1 : 2);
+    void GenerateFreeFall(GameplayRng &rng, bool explode = false, int waitTime = 0) {
+        speedX = (rng.Range(3.0f) - 1.5) / (bubbleSize >= 32 ? 1 : 2);
+        speedY = (-rng.Range(4.0f) - 2) / (bubbleSize >= 32 ? 1 : 2);
         if (!explode) {
             falling = true;
             waitForFall = waitTime;

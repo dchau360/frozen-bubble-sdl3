@@ -575,6 +575,11 @@ public:
     // one minute terminates the connection) -- see
     // tests/menu_touch_gesture_test.cpp's Auto-balance flood regression.
     int testTalkSendCount = 0;
+    // Counts SendGameData calls regardless of whether the socket accepted
+    // them (the native impl no-ops when disconnected, which every headless
+    // test is). Lets a test pin that a live session reaches the socket path
+    // while a Playback session is stopped at BubbleGame::SendGameDataFor.
+    int testGameDataSendCount = 0;
 private:
 #endif
 

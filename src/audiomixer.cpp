@@ -32,6 +32,10 @@ const struct MusicFile
 
 AudioMixer *AudioMixer::ptrInstance = NULL;
 
+#ifdef FROZEN_BUBBLE_TEST_ACCESS
+int AudioMixer::testSfxPlayCount = 0;
+#endif
+
 AudioMixer *AudioMixer::Instance()
 {
     if(ptrInstance == NULL)
@@ -207,6 +211,10 @@ void AudioMixer::PlaySFX(const char *sfx)
 
     MIX_SetTrackAudio(track, audio);
     MIX_SetTrackLoops(track, 0);
+#ifdef FROZEN_BUBBLE_TEST_ACCESS
+    // Past every early-return guard: this sound would actually be audible.
+    ++testSfxPlayCount;
+#endif
     MIX_PlayTrack(track, 0);
 }
 

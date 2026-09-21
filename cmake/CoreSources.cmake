@@ -33,6 +33,7 @@ set(FROZEN_BUBBLE_CORE_SOURCES
     ${FB_SRC}/mainmenu_panels.cpp
     ${FB_SRC}/mainmenu_help.cpp
     ${FB_SRC}/mainmenu_teampanel.cpp
+    ${FB_SRC}/mainmenu_replays.cpp
     ${FB_SRC}/mainmenu_tournament.cpp
     ${FB_SRC}/mainmenu_server.cpp
     ${FB_SRC}/menulist.cpp
@@ -59,6 +60,11 @@ set(FROZEN_BUBBLE_CORE_SOURCES
     ${FB_SRC}/transitionmanager.cpp
     ${FB_SRC}/ttftext.cpp
     ${FB_SRC}/highscoremanager.cpp
+    ${FB_SRC}/replay_format.cpp
+    ${FB_SRC}/bubblegame_replay.cpp
+    ${FB_SRC}/replay_recorder.cpp
+    ${FB_SRC}/replay_library.cpp
+    ${FB_SRC}/replay_player.cpp
     ${NETWORK_CLIENT_SRC}
     ${FB_SRC}/logger.cpp
     ${FB_SRC}/platform.cpp

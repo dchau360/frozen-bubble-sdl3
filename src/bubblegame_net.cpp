@@ -55,7 +55,10 @@ bool BubbleGame::SendReadyForNextRound() {
 }
 
 bool BubbleGame::SendGameDataFor(const BubbleArray &bArray, const char *payload) {
-    if (!currentSettings.networkGame || payload == nullptr) return false;
+    // Playback suppresses every gameplay network send while keeping the
+    // in-memory state the recorded result displays from. See the SessionMode
+    // boundary in bubblegame.h / docs/REPLAY_PLAN.md.
+    if (!EffectsEnabled() || !currentSettings.networkGame || payload == nullptr) return false;
 
     if (bArray.isBot) {
         // A bot's move has to leave over the bot's own socket: the server
@@ -76,7 +79,12 @@ bool BubbleGame::SendGameDataFor(const BubbleArray &bArray, const char *payload)
 }
 
 void BubbleGame::SendNetworkBubbleShot(BubbleArray &bArray) {
-    if (!currentSettings.networkGame) return;
+    // Playback must never touch NetworkClient at all. LaunchBubble() calls
+    // this for a locally owned seat during a replayed shot, and the only
+    // other guards on this path (NetworkClient::Instance()->IsConnected())
+    // would construct/touch a client; stop before that. SendGameDataFor()
+    // already refuses in Playback, but by then NetworkClient has been read.
+    if (!EffectsEnabled() || !currentSettings.networkGame) return;
 
     NetworkClient* netClient = NetworkClient::Instance();
     if (!netClient->IsConnected() || netClient->GetState() != IN_GAME) {
@@ -226,6 +234,579 @@ void BubbleGame::PumpBotConnections() {
     }
 }
 
+void BubbleGame::ApplyInboundGameMessage(int senderId, const std::string &gameData) {
+    NetworkClient* netClient = NetworkClient::Instance();
+    // The first character is the message type; the rest is the payload.
+    // This body was moved verbatim out of ProcessNetworkMessages(); see
+    // that function for the ownership filter and the b/N/T sync-forwarding
+    // cases that deliberately stay there (R6b owns round-start sync).
+    char msgType = gameData[0];
+
+    switch (msgType) {
+        case 'f': {
+            // Fire: f{angle}:{nextcolor}
+            // The color in message is opponent's NEW next bubble (after their current shot)
+            // Create their shot with their CURRENT bubble, then update their next
+            // This matches original frozen-bubble line 1404: ($angle{$player}, $pdata{$player}{nextcolor}) = $params
+            float angle;
+            int opponentNewNextColor;
+            if (sscanf(gameData.c_str() + 1, "%f:%d", &angle, &opponentNewNextColor) == 2) {
+                // Find which player array this sender is using (original: $actions{$player}{mp_fire} = 1)
+                int opponentIdx = -1;
+                for (int i = 0; i < currentSettings.playerCount; i++) {
+                    if (bubbleArrays[i].lobbyPlayerId == senderId) {
+                        opponentIdx = i;
+                        break;
+                    }
+                }
+
+                // If not found, assign to next available remote slot
+                if (opponentIdx == -1) {
+                    NetworkClient* netClient = NetworkClient::Instance();
+                    for (int i = 1; i < currentSettings.playerCount; i++) {
+                        if (bubbleArrays[i].isBot) continue;  // a bot's board is never a free seat
+                        if (bubbleArrays[i].lobbyPlayerId == -1) {
+                            bubbleArrays[i].lobbyPlayerId = senderId;
+                            bubbleArrays[i].playerNickname = netClient->GetPlayerNickname(senderId);
+                            opponentIdx = i;
+                            SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION,
+                                    "'f' message: assigned lobbyId %d (nick='%s') to player array %d",
+                                    senderId, bubbleArrays[i].playerNickname.c_str(), i);
+                            break;
+                        }
+                    }
+                }
+
+                if (opponentIdx < 0) {
+                    SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Could not find/assign player for 'f' message from senderId %d", senderId);
+                    break;
+                }
+
+                BubbleArray &opponentArray = bubbleArrays[opponentIdx];
+
+                // Set flag to fire in the game loop (original line 1403: $actions{$player}{mp_fire} = 1)
+                // Store angle and update nextcolor (original line 1404)
+                opponentArray.mpFirePending = true;
+                opponentArray.pendingAngle = angle;
+                opponentArray.shooterSprite.angle = angle;  // Update shooter angle for visual display
+                opponentArray.nextBubble = opponentNewNextColor;  // Update their next bubble color
+
+                SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION,
+                        "Received fire command from player %d (array %d): angle=%.3f, nextColor=%d",
+                        senderId, opponentIdx, angle, opponentNewNextColor);
+            } else {
+                SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
+                            "Failed to parse fire message: %s", gameData.c_str());
+            }
+            break;
+        }
+        case 'p': {
+            // Ping - ignore (keepalive only)
+            break;
+        }
+        case 'P': {
+            // Live popped-bubble count from a remote player:
+            // P{popped}:{final}
+            //
+            // Sent whenever that player's total moves -- at most
+            // once per shot -- so the popped HUD can show a live
+            // number in every multiplayer mode instead of waiting
+            // for the end-of-round 'S'. {final} is 1 only on the
+            // count a player froze at when their own Timed clock
+            // ran out; the leader uses it to know it has heard
+            // from everyone and can rank the round (see
+            // UpdateTimedRound). Older peers never send this at
+            // all, which just leaves their HUD count at 0 until
+            // their 'S' arrives.
+            int rp = 0, isFinal = 0;
+            if (sscanf(gameData.c_str() + 1, "%d:%d", &rp, &isFinal) >= 1) {
+                int idx = -1;
+                for (int i = 0; i < currentSettings.playerCount; i++) {
+                    if (bubbleArrays[i].lobbyPlayerId == senderId) { idx = i; break; }
+                }
+                // Only remote seats: our own boards are counted as
+                // they pop and must never be overwritten by an echo.
+                if (idx >= 1 && !OwnsArrayIndex(idx)) {
+                    if (rp < 0) rp = 0;
+                    bubbleArrays[idx].rPopped = rp;
+                    if (isFinal) finalPoppedReported[idx] = true;
+                } else {
+                    SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION,
+                                 "Ignoring 'P' count from senderId %d", senderId);
+                }
+            }
+            break;
+        }
+        case 'n': {
+            // Newgame - an opponent is ready for next round
+            opponentsReadyCount++;
+            SDL_Log("Opponent ready for new game (received 'n'), count=%d/%d",
+                    opponentsReadyCount, connectedPlayerCount - 1);
+            if (opponentsReadyCount >= connectedPlayerCount - 1) {
+                opponentReadyForNewGame = true;
+            }
+
+            // Auto-respond for ALL player counts (original: receiving 'n' triggers mp_newgame->()
+            // which immediately sends our own 'n' without requiring local keypress).
+            // This means only ONE player needs to press a key; everyone else auto-responds.
+            if (!waitingForOpponentNewGame && gameFinish && !gameMatchOver) {
+                SDL_Log("Opponent pressed key first - auto-sending 'n' (%dP game)", currentSettings.playerCount);
+                if (SendReadyForNextRound()) waitingForOpponentNewGame = true;
+            }
+            break;
+        }
+        case 's': {
+            // Stick: s{cx}:{cy}:{bubbleColor}:{nc0} {nc1} ... {nc7}
+            // Perl format: "s$cx:$cy:$col:@{$pdata{$::p}{nextcolors}}" (space-sep 8 colors)
+            // Opponent's bubble has stuck - place it at exact transmitted position
+            // Format matches original: frozen-bubble line 1418-1425
+            int cx, cy, bubbleColor;
+            if (sscanf(gameData.c_str() + 1, "%d:%d:%d", &cx, &cy, &bubbleColor) == 3) {
+                // Parse nextColors: find the 3rd colon, then read space-separated ints
+                std::vector<int> recvNextColors;
+                const char* p = gameData.c_str() + 1;
+                int colons = 0;
+                while (*p && colons < 3) { if (*p == ':') colons++; p++; }
+                while (*p) {
+                    int c; int consumed = 0;
+                    if (sscanf(p, "%d%n", &c, &consumed) == 1) {
+                        recvNextColors.push_back(c);
+                        p += consumed;
+                        while (*p == ' ') p++;
+                    } else break;
+                }
+                int nextBubble = recvNextColors.empty() ? 0 : recvNextColors[0];
+                SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION,
+                        "Received stick: col=%d row=%d color=%d nextColors[%zu] from lobbyId=%d",
+                        cx, cy, bubbleColor, recvNextColors.size(), senderId);
+
+                // Find or assign this remote player's array
+                int opponentIdx = -1;
+                for (int i = 0; i < currentSettings.playerCount; i++) {
+                    if (bubbleArrays[i].lobbyPlayerId == senderId) {
+                        opponentIdx = i;
+                        break;
+                    }
+                }
+
+                // If not found, assign to next available remote slot
+                if (opponentIdx == -1) {
+                    NetworkClient* netClient = NetworkClient::Instance();
+                    for (int i = 1; i < currentSettings.playerCount; i++) {
+                        if (bubbleArrays[i].isBot) continue;  // a bot's board is never a free seat
+                        if (bubbleArrays[i].lobbyPlayerId == -1) {
+                            bubbleArrays[i].lobbyPlayerId = senderId;
+                            bubbleArrays[i].playerNickname = netClient->GetPlayerNickname(senderId);
+                            opponentIdx = i;
+                            SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION,
+                                    "'s' message: assigned lobbyId %d (nick='%s') to player array %d",
+                                    senderId, bubbleArrays[i].playerNickname.c_str(), i);
+                            break;
+                        }
+                    }
+                }
+
+                if (opponentIdx < 0) {
+                    SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Could not find/assign player for senderId %d", senderId);
+                    break;
+                }
+
+                BubbleArray &opponentArray = bubbleArrays[opponentIdx];
+
+                // Set flag for stick to be processed in game loop (original line 1422: $actions{$player}{mp_stick} = 1)
+                // Store stick data (original line 1423)
+                opponentArray.mpStickPending = true;
+                opponentArray.stickCx = cx;
+                opponentArray.stickCy = cy;
+                opponentArray.stickCol = bubbleColor;
+                opponentArray.nextBubble = nextBubble;  // Update their next bubble (front of nextColors)
+                // Sync full nextColors queue (Perl-compatible: used by ExpandNewLane for new root row)
+                if (!recvNextColors.empty()) {
+                    opponentArray.nextColors = recvNextColors;
+                }
+
+                SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION,
+                        "Set mp_stick for player %d (array %d): cx=%d cy=%d col=%d nextBubble=%d nextColors[%zu]",
+                        senderId, opponentIdx, cx, cy, bubbleColor, nextBubble, recvNextColors.size());
+            } else {
+                SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
+                            "Failed to parse stick message: %s", gameData.c_str());
+            }
+            break;
+        }
+        case 'g': {
+            // Receive malus attack from opponent
+            // Format: g{destPlayerNick}:{count}
+            // Original at line 1425-1432
+            char destNick[64];
+            int malusCount;
+            if (sscanf(gameData.c_str() + 1, "%63[^:]:%d", destNick, &malusCount) == 2) {
+                NetworkClient* netClient = NetworkClient::Instance();
+                SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION,
+                        "'g' message: dest='%s' count=%d senderId=%d myId=%d",
+                        destNick, malusCount, senderId,
+                        netClient ? netClient->GetMyPlayerId() : -1);
+
+                // Kill attribution: every client sees every 'g' message broadcast
+                // (not just the addressee), so each independently tracks who last
+                // attacked whom from the same messages -- resolve the sender's
+                // array index once here for both branches below.
+                int senderIdx = -1;
+                for (int i = 0; i < currentSettings.playerCount; i++) {
+                    if (bubbleArrays[i].lobbyPlayerId == senderId) { senderIdx = i; break; }
+                }
+
+                // The destination can be the local player OR a bot this
+                // client hosts -- a hosted bot's malus queue lives here
+                // too, and nothing else ever credits it. Match against
+                // every board we simulate, not just array 0.
+                int targetIdx = -1;
+                for (int i = 0; i < currentSettings.playerCount; i++) {
+                    if (!OwnsArrayIndex(i)) continue;
+                    if (bubbleArrays[i].playerNickname == destNick) { targetIdx = i; break; }
+                }
+
+                if (targetIdx >= 0) {
+                    SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION,
+                            "Malus is for array %d ('%s'); adding to its queue",
+                            targetIdx, destNick);
+                    for (int i = 0; i < malusCount; i++) {
+                        bubbleArrays[targetIdx].malusQueue.push_back(frameCount);
+                    }
+                    bubbleArrays[targetIdx].rRecv += malusCount;  // Stats: malus received
+                    if (senderIdx >= 0) bubbleArrays[targetIdx].lastAttackerIdx = senderIdx;
+                    if (netClient) {
+                        AddMalusAlert(bubbleArrays[targetIdx],
+                                       netClient->GetPlayerNickname(senderId), malusCount);
+                    }
+                } else {
+                    SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION,
+                                 "No owned board matches malus destination '%s'", destNick);
+                }
+            } else {
+                SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
+                            "Failed to parse malus message: %s", gameData.c_str());
+            }
+            break;
+        }
+        case 'm': {
+            // Receive malus bubble from opponent (they generated it, we display it)
+            // Format: m{bubbleId}:{cx}:{cy}:{stick_y}
+            // Original at line 1435-1451
+            // Skip our own 'm' messages echoed back by server (original: only process from others)
+            {
+                NetworkClient* netClientM = NetworkClient::Instance();
+                if (netClientM && (int)netClientM->GetMyPlayerId() == senderId) {
+                    SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION,
+                                 "Ignoring own 'm' echo from server");
+                    break;
+                }
+            }
+            int bubbleId, cx, cy, stickY;
+            if (sscanf(gameData.c_str() + 1, "%d:%d:%d:%d", &bubbleId, &cx, &cy, &stickY) == 4) {
+                SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION,
+                        "Received opponent malus from senderId=%d: color=%d cx=%d cy=%d stickY=%d",
+                        senderId, bubbleId, cx, cy, stickY);
+
+                // Find which array this opponent belongs to
+                int opponentIdx = -1;
+                for (int i = 0; i < currentSettings.playerCount; i++) {
+                    if (bubbleArrays[i].lobbyPlayerId == senderId) {
+                        opponentIdx = i;
+                        break;
+                    }
+                }
+
+                if (opponentIdx < 0) {
+                    SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
+                               "Received 'm' message from unknown senderId %d, ignoring", senderId);
+                    break;
+                }
+
+                // Ignore malus for a player whose board is already frozen (dead), instead
+                // of wrongly overlaying bubbles onto it (original ~line 1435).
+                if (bubbleArrays[opponentIdx].playerState != BubbleArray::PlayerState::ALIVE) break;
+
+                BubbleArray &opponentArray = bubbleArrays[opponentIdx];
+                // Mini players use half bubble size
+                bool isMini = (currentSettings.playerCount >= 3 && opponentIdx >= 1);
+                int bubbleSize = isMini ? 16 : 32;
+                int rowSize = bubbleSize * 7 / 8;  // 14 for mini, 28 for full
+                int smallerSep = (cy % 2 == 0) ? 0 : bubbleSize / 2;
+                float startX = (smallerSep + bubbleSize * cx) + opponentArray.bubbleOffset.x;
+                float startY = (rowSize * cy) + opponentArray.bubbleOffset.y;
+
+                MalusBubble malus = {
+                    opponentIdx,  // opponent's array index
+                    bubbleId,
+                    cx, cy,
+                    stickY,
+                    startX, startY,
+                    {(int)startX, (int)startY},
+                    false,
+                    false
+                };
+
+                malusBubbles.push_back(malus);
+            } else {
+                SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
+                            "Failed to parse malus bubble message: %s", gameData.c_str());
+            }
+            break;
+        }
+        case 'M': {
+            // Opponent's malus bubble stuck
+            // Format: M{cx}:{stick_y}
+            // Original at line 1453-1466
+            int cx, stickY;
+            if (sscanf(gameData.c_str() + 1, "%d:%d", &cx, &stickY) == 2) {
+                SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION,
+                        "Opponent malus stuck from senderId=%d: cx=%d stickY=%d",
+                        senderId, cx, stickY);
+
+                // Find which array this opponent belongs to
+                int opponentIdx = -1;
+                for (int i = 0; i < currentSettings.playerCount; i++) {
+                    if (bubbleArrays[i].lobbyPlayerId == senderId) {
+                        opponentIdx = i;
+                        break;
+                    }
+                }
+
+                if (opponentIdx < 0) {
+                    SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
+                               "Received 'M' message from unknown senderId %d, ignoring", senderId);
+                    break;
+                }
+
+                // Ignore malus for a player whose board is already frozen (dead), instead
+                // of wrongly overlaying bubbles onto it (original ~line 1453).
+                if (bubbleArrays[opponentIdx].playerState != BubbleArray::PlayerState::ALIVE) break;
+
+                // Find and stick the corresponding malus bubble on opponent's board
+                for (auto &malus : malusBubbles) {
+                    if (malus.assignedArray == opponentIdx && malus.cx == cx && malus.stickY == stickY && !malus.shouldClear) {
+                        SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION,
+                                     "Sticking opponent malus on array %d", opponentIdx);
+                        BubbleArray &opponentArray = bubbleArrays[opponentIdx];
+                        opponentArray.PlacePlayerBubble(malus.bubbleId, stickY, cx);
+                        opponentArray.newShoot = true;
+                        malus.shouldClear = true;
+                        CheckPossibleDestroy(opponentArray);
+                        // Don't check game state for opponent - they will send 'F' message if they win/lose
+                        break;
+                    }
+                }
+            } else {
+                SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
+                            "Failed to parse malus stick message: %s", gameData.c_str());
+            }
+            break;
+        }
+        case 'F': {
+            // Finish/Win notification from remote player
+            // Perl format: "F{winnerNick}" (no separator) - original line 1467-1470
+            // Also handle legacy C++ format "F:{idx}" for backward compat
+            std::string winnerNick = gameData.c_str() + 1;  // Everything after 'F'
+            SDL_Log("Received win notification: F'%s'", winnerNick.c_str());
+
+            // A bare 'F' names nobody, which is how the leader
+            // announces a Timed round that ended level: the top
+            // pop count was tied, so the round is a draw and
+            // credits nobody a win (see UpdateTimedRound). Every
+            // other 'F' carries a nickname.
+            if (winnerNick.empty()) {
+                if (!gameFinish) FinishRoundAsDraw();
+                break;
+            }
+
+            int winnerPlayer = -1;
+
+            // Try legacy format first: "F:{digit}"
+            if (winnerNick.size() >= 2 && winnerNick[0] == ':' && isdigit((unsigned char)winnerNick[1])) {
+                winnerPlayer = winnerNick[1] - '0';
+            } else {
+                // Perl format: match nick to player arrays
+                NetworkClient* netClient = NetworkClient::Instance();
+                for (int i = 0; i < currentSettings.playerCount; i++) {
+                    if (bubbleArrays[i].playerNickname == winnerNick) {
+                        winnerPlayer = i;
+                        break;
+                    }
+                }
+                // If nick matches our own nick, winner is local player (array 0)
+                if (winnerPlayer == -1 && netClient && netClient->GetPlayerNick() == winnerNick) {
+                    winnerPlayer = 0;
+                }
+            }
+
+            if (winnerPlayer >= 0 && winnerPlayer < currentSettings.playerCount) {
+                // Guard: only process the first 'F' per round (multiple clients may send it)
+                if (!gameFinish) {
+                    RoundWinCause cause =
+                        currentSettings.gameMode == GameMode::Clear && bubbleArrays[winnerPlayer].allClear()
+                            ? RoundWinCause::Clear
+                            : RoundWinCause::Remote;
+                    // Nothing here distinguishes a Race or Timed
+                    // win from any other remote one, and nothing
+                    // needs to: Remote already means "somebody
+                    // else's board ended this", and the mode is
+                    // what the banner reads to say how.
+                    ResolveRoundOutcome(winnerPlayer, cause, false);
+                }
+            } else {
+                SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
+                             "Could not identify winner from F message: '%s'", winnerNick.c_str());
+            }
+            break;
+        }
+        case 'S': {
+            // Round stats sync from a remote player:
+            // S{fired}:{popped}:{sent}:{recv}:{kills}:{blocked}
+            // Sent once per round by each client when its round ends. The
+            // trailing :{kills} and :{blocked} fields were each added after
+            // the first four; sscanf fills the earlier fields from the same
+            // call even if it stops short (kills/blocked stay at their 0
+            // defaults), so this stays compatible with any peer still on an
+            // older 4- or 5-field format.
+            int rf, rp, rs, rr, rk = 0, rb = 0;
+            if (sscanf(gameData.c_str() + 1, "%d:%d:%d:%d:%d:%d", &rf, &rp, &rs, &rr, &rk, &rb) >= 4) {
+                int idx = -1;
+                for (int i = 0; i < currentSettings.playerCount; i++) {
+                    if (bubbleArrays[i].lobbyPlayerId == senderId) { idx = i; break; }
+                }
+                if (idx >= 1) {
+                    BubbleArray &pa = bubbleArrays[idx];
+                    pa.rFired = rf; pa.rPopped = rp; pa.rSent = rs; pa.rRecv = rr; pa.rKills = rk; pa.rBlk = rb;
+                    pa.mFired += rf; pa.mPopped += rp; pa.mSent += rs; pa.mRecv += rr; pa.mKills += rk; pa.mBlk += rb;
+                    SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION,
+                            "Round stats from player %d (array %d): F%d P%d Sent%d Rcv%d K%d Blk%d",
+                            senderId, idx, rf, rp, rs, rr, rk, rb);
+                } else {
+                    SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION,
+                                 "Ignoring 'S' stats from unknown senderId %d", senderId);
+                }
+            }
+            break;
+        }
+        case 'i': {
+            // Which device a remote player is shooting with, sent
+            // by their own client on their round's first shot and
+            // again whenever they switch (BubbleGame::ReportRoundInput).
+            // One char: 'K' keyboard, 'M' mouse, 'T' touch, 'G' pad.
+            //
+            // Anything else is from a client newer than this build
+            // and is dropped rather than stored, so the badge shows
+            // nothing instead of a stray glyph. Purely cosmetic
+            // either way -- nothing downstream of this affects play.
+            const char tag = gameData[1];
+            if (tag == 'K' || tag == 'M' || tag == 'T' || tag == 'G') {
+                for (int i = 0; i < currentSettings.playerCount; i++) {
+                    if (bubbleArrays[i].lobbyPlayerId == senderId) {
+                        bubbleArrays[i].roundInput = tag;
+                        break;
+                    }
+                }
+            }
+            break;
+        }
+        case 't': {
+            // In-game chat from remote player
+            InGameChatMsg chatMsg;
+            chatMsg.nick = netClient->GetPlayerNickname(senderId);
+            if (chatMsg.nick.empty()) chatMsg.nick = "Player";
+            // Dropped here rather than filtered at render time, so a
+            // blocked player's message never shows *and* never plays
+            // the chat sound -- an audible ping for a message you
+            // cannot see would be worse than not blocking at all.
+            if (GameSettings::Instance()->IsPlayerBlocked(chatMsg.nick)) break;
+            chatMsg.text = gameData.c_str() + 1;
+            chatMsg.framesLeft = 300;  // 5 seconds at 60 fps
+            inGameChatMessages.push_back(chatMsg);
+            if (inGameChatMessages.size() > 10)
+                inGameChatMessages.erase(inGameChatMessages.begin());
+            PlaySFX("chatted");
+            break;
+        }
+        case 'l': {
+            // Player-left notification: a remote player disconnected mid-game
+            SDL_Log("Received player-left ('l') from lobby player ID %d", senderId);
+
+            // Find which player array this senderId corresponds to
+            int playerIdx = -1;
+            for (int i = 0; i < currentSettings.playerCount; i++) {
+                if (bubbleArrays[i].lobbyPlayerId == senderId) {
+                    playerIdx = i;
+                    break;
+                }
+            }
+
+            if (playerIdx >= 0) {
+                HandlePlayerDeparture(playerIdx);
+            } else {
+                SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
+                           "Received player-left from unknown player ID %d", senderId);
+            }
+
+            // If already waiting for new-game sync, check if the reduced threshold is now met
+            // (the disconnected player will never send 'n', so count them as ready)
+            if (waitingForOpponentNewGame && opponentsReadyCount >= connectedPlayerCount - 1) {
+                SDL_Log("All remaining connected opponents ready after disconnect - starting new game");
+                opponentReadyForNewGame = true;
+            }
+            break;
+        }
+        case 'A': {
+            // Opponent changed their targeting (original: command 'A' at line 1477)
+            // Format: A{targetNick} = opponent is targeting that player
+            //         A (empty)     = opponent cleared targeting
+            // Find which array the sender belongs to
+            int senderIdx = -1;
+            for (int i = 0; i < currentSettings.playerCount; i++) {
+                if (bubbleArrays[i].lobbyPlayerId == senderId) {
+                    senderIdx = i;
+                    break;
+                }
+            }
+            if (senderIdx < 0) break;
+
+            NetworkClient* netClient = NetworkClient::Instance();
+            std::string myNick = netClient ? netClient->GetPlayerNick() : "";
+            const char* targetNick = gameData.c_str() + 1;  // Skip 'A' prefix
+
+            if (strlen(targetNick) == 0 || myNick != targetNick) {
+                // Opponent cleared target or is targeting someone else - remove from attackingMe
+                attackingMe.erase(std::remove(attackingMe.begin(), attackingMe.end(), senderIdx),
+                                  attackingMe.end());
+            } else {
+                // Opponent is targeting us (targetNick == myNick)
+                if (std::find(attackingMe.begin(), attackingMe.end(), senderIdx) == attackingMe.end()) {
+                    attackingMe.push_back(senderIdx);
+                }
+            }
+            // Track all players' targets (not just who's targeting me)
+            if (strlen(targetNick) == 0) {
+                playerTargeting[senderIdx] = -1;  // cleared
+            } else {
+                // Find which array has targetNick
+                int targetIdx = -1;
+                for (int i = 0; i < currentSettings.playerCount; i++) {
+                    if (bubbleArrays[i].playerNickname == targetNick) { targetIdx = i; break; }
+                }
+                playerTargeting[senderIdx] = targetIdx;
+            }
+            SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION,
+                    "'A' message: sender=%d targetNick='%s' myNick='%s' attackingMe.size=%zu",
+                    senderIdx, targetNick, myNick.c_str(), attackingMe.size());
+            ReRankNetView();  // attacker set/cleared: auto view re-ranks
+            break;
+        }
+        default:
+            SDL_Log("Unknown game message type: %c", msgType);
+            break;
+        }
+}
+
 void BubbleGame::ProcessNetworkMessages() {
     NetworkClient* netClient = NetworkClient::Instance();
     if (!netClient->IsConnected()) {
@@ -273,579 +854,23 @@ void BubbleGame::ProcessNetworkMessages() {
                                  "Ignoring a message from a seat we own (ID=%d)", senderId);
                     continue;
                 }
-                switch (msgType) {
-                    case 'f': {
-                        // Fire: f{angle}:{nextcolor}
-                        // The color in message is opponent's NEW next bubble (after their current shot)
-                        // Create their shot with their CURRENT bubble, then update their next
-                        // This matches original frozen-bubble line 1404: ($angle{$player}, $pdata{$player}{nextcolor}) = $params
-                        float angle;
-                        int opponentNewNextColor;
-                        if (sscanf(gameData + 1, "%f:%d", &angle, &opponentNewNextColor) == 2) {
-                            // Find which player array this sender is using (original: $actions{$player}{mp_fire} = 1)
-                            int opponentIdx = -1;
-                            for (int i = 0; i < currentSettings.playerCount; i++) {
-                                if (bubbleArrays[i].lobbyPlayerId == senderId) {
-                                    opponentIdx = i;
-                                    break;
-                                }
-                            }
 
-                            // If not found, assign to next available remote slot
-                            if (opponentIdx == -1) {
-                                NetworkClient* netClient = NetworkClient::Instance();
-                                for (int i = 1; i < currentSettings.playerCount; i++) {
-                                    if (bubbleArrays[i].isBot) continue;  // a bot's board is never a free seat
-                                    if (bubbleArrays[i].lobbyPlayerId == -1) {
-                                        bubbleArrays[i].lobbyPlayerId = senderId;
-                                        bubbleArrays[i].playerNickname = netClient->GetPlayerNickname(senderId);
-                                        opponentIdx = i;
-                                        SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION,
-                                                "'f' message: assigned lobbyId %d (nick='%s') to player array %d",
-                                                senderId, bubbleArrays[i].playerNickname.c_str(), i);
-                                        break;
-                                    }
-                                }
-                            }
+                // Bubble-sync messages from the leader (SyncNetworkLevel) are
+                // not gameplay mutations: they are routed to syncQueue for the
+                // level-sync wait and are R6b's concern, so they stay here and are
+                // neither captured nor replayed. See docs/REPLAY_PROGRESS.md (R6a).
+                if (msgType == 'b' || msgType == 'N' || msgType == 'T') {
+                    SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION,
+                                 "Routing bubble-sync message '%c' to syncQueue", msgType);
+                    netClient->PushSyncMessage(msg);
+                    continue;
+                }
 
-                            if (opponentIdx < 0) {
-                                SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Could not find/assign player for 'f' message from senderId %d", senderId);
-                                break;
-                            }
-
-                            BubbleArray &opponentArray = bubbleArrays[opponentIdx];
-
-                            // Set flag to fire in the game loop (original line 1403: $actions{$player}{mp_fire} = 1)
-                            // Store angle and update nextcolor (original line 1404)
-                            opponentArray.mpFirePending = true;
-                            opponentArray.pendingAngle = angle;
-                            opponentArray.shooterSprite.angle = angle;  // Update shooter angle for visual display
-                            opponentArray.nextBubble = opponentNewNextColor;  // Update their next bubble color
-
-                            SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION,
-                                    "Received fire command from player %d (array %d): angle=%.3f, nextColor=%d",
-                                    senderId, opponentIdx, angle, opponentNewNextColor);
-                        } else {
-                            SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
-                                        "Failed to parse fire message: %s", gameData);
-                        }
-                        break;
-                    }
-                    case 'p': {
-                        // Ping - ignore (keepalive only)
-                        break;
-                    }
-                    case 'P': {
-                        // Live popped-bubble count from a remote player:
-                        // P{popped}:{final}
-                        //
-                        // Sent whenever that player's total moves -- at most
-                        // once per shot -- so the popped HUD can show a live
-                        // number in every multiplayer mode instead of waiting
-                        // for the end-of-round 'S'. {final} is 1 only on the
-                        // count a player froze at when their own Timed clock
-                        // ran out; the leader uses it to know it has heard
-                        // from everyone and can rank the round (see
-                        // UpdateTimedRound). Older peers never send this at
-                        // all, which just leaves their HUD count at 0 until
-                        // their 'S' arrives.
-                        int rp = 0, isFinal = 0;
-                        if (sscanf(gameData + 1, "%d:%d", &rp, &isFinal) >= 1) {
-                            int idx = -1;
-                            for (int i = 0; i < currentSettings.playerCount; i++) {
-                                if (bubbleArrays[i].lobbyPlayerId == senderId) { idx = i; break; }
-                            }
-                            // Only remote seats: our own boards are counted as
-                            // they pop and must never be overwritten by an echo.
-                            if (idx >= 1 && !OwnsArrayIndex(idx)) {
-                                if (rp < 0) rp = 0;
-                                bubbleArrays[idx].rPopped = rp;
-                                if (isFinal) finalPoppedReported[idx] = true;
-                            } else {
-                                SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION,
-                                             "Ignoring 'P' count from senderId %d", senderId);
-                            }
-                        }
-                        break;
-                    }
-                    case 'n': {
-                        // Newgame - an opponent is ready for next round
-                        opponentsReadyCount++;
-                        SDL_Log("Opponent ready for new game (received 'n'), count=%d/%d",
-                                opponentsReadyCount, connectedPlayerCount - 1);
-                        if (opponentsReadyCount >= connectedPlayerCount - 1) {
-                            opponentReadyForNewGame = true;
-                        }
-
-                        // Auto-respond for ALL player counts (original: receiving 'n' triggers mp_newgame->()
-                        // which immediately sends our own 'n' without requiring local keypress).
-                        // This means only ONE player needs to press a key; everyone else auto-responds.
-                        if (!waitingForOpponentNewGame && gameFinish && !gameMatchOver) {
-                            SDL_Log("Opponent pressed key first - auto-sending 'n' (%dP game)", currentSettings.playerCount);
-                            if (SendReadyForNextRound()) waitingForOpponentNewGame = true;
-                        }
-                        break;
-                    }
-                    case 's': {
-                        // Stick: s{cx}:{cy}:{bubbleColor}:{nc0} {nc1} ... {nc7}
-                        // Perl format: "s$cx:$cy:$col:@{$pdata{$::p}{nextcolors}}" (space-sep 8 colors)
-                        // Opponent's bubble has stuck - place it at exact transmitted position
-                        // Format matches original: frozen-bubble line 1418-1425
-                        int cx, cy, bubbleColor;
-                        if (sscanf(gameData + 1, "%d:%d:%d", &cx, &cy, &bubbleColor) == 3) {
-                            // Parse nextColors: find the 3rd colon, then read space-separated ints
-                            std::vector<int> recvNextColors;
-                            const char* p = gameData + 1;
-                            int colons = 0;
-                            while (*p && colons < 3) { if (*p == ':') colons++; p++; }
-                            while (*p) {
-                                int c; int consumed = 0;
-                                if (sscanf(p, "%d%n", &c, &consumed) == 1) {
-                                    recvNextColors.push_back(c);
-                                    p += consumed;
-                                    while (*p == ' ') p++;
-                                } else break;
-                            }
-                            int nextBubble = recvNextColors.empty() ? 0 : recvNextColors[0];
-                            SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION,
-                                    "Received stick: col=%d row=%d color=%d nextColors[%zu] from lobbyId=%d",
-                                    cx, cy, bubbleColor, recvNextColors.size(), senderId);
-
-                            // Find or assign this remote player's array
-                            int opponentIdx = -1;
-                            for (int i = 0; i < currentSettings.playerCount; i++) {
-                                if (bubbleArrays[i].lobbyPlayerId == senderId) {
-                                    opponentIdx = i;
-                                    break;
-                                }
-                            }
-
-                            // If not found, assign to next available remote slot
-                            if (opponentIdx == -1) {
-                                NetworkClient* netClient = NetworkClient::Instance();
-                                for (int i = 1; i < currentSettings.playerCount; i++) {
-                                    if (bubbleArrays[i].isBot) continue;  // a bot's board is never a free seat
-                                    if (bubbleArrays[i].lobbyPlayerId == -1) {
-                                        bubbleArrays[i].lobbyPlayerId = senderId;
-                                        bubbleArrays[i].playerNickname = netClient->GetPlayerNickname(senderId);
-                                        opponentIdx = i;
-                                        SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION,
-                                                "'s' message: assigned lobbyId %d (nick='%s') to player array %d",
-                                                senderId, bubbleArrays[i].playerNickname.c_str(), i);
-                                        break;
-                                    }
-                                }
-                            }
-
-                            if (opponentIdx < 0) {
-                                SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Could not find/assign player for senderId %d", senderId);
-                                break;
-                            }
-
-                            BubbleArray &opponentArray = bubbleArrays[opponentIdx];
-
-                            // Set flag for stick to be processed in game loop (original line 1422: $actions{$player}{mp_stick} = 1)
-                            // Store stick data (original line 1423)
-                            opponentArray.mpStickPending = true;
-                            opponentArray.stickCx = cx;
-                            opponentArray.stickCy = cy;
-                            opponentArray.stickCol = bubbleColor;
-                            opponentArray.nextBubble = nextBubble;  // Update their next bubble (front of nextColors)
-                            // Sync full nextColors queue (Perl-compatible: used by ExpandNewLane for new root row)
-                            if (!recvNextColors.empty()) {
-                                opponentArray.nextColors = recvNextColors;
-                            }
-
-                            SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION,
-                                    "Set mp_stick for player %d (array %d): cx=%d cy=%d col=%d nextBubble=%d nextColors[%zu]",
-                                    senderId, opponentIdx, cx, cy, bubbleColor, nextBubble, recvNextColors.size());
-                        } else {
-                            SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
-                                        "Failed to parse stick message: %s", gameData);
-                        }
-                        break;
-                    }
-                    case 'g': {
-                        // Receive malus attack from opponent
-                        // Format: g{destPlayerNick}:{count}
-                        // Original at line 1425-1432
-                        char destNick[64];
-                        int malusCount;
-                        if (sscanf(gameData + 1, "%63[^:]:%d", destNick, &malusCount) == 2) {
-                            NetworkClient* netClient = NetworkClient::Instance();
-                            SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION,
-                                    "'g' message: dest='%s' count=%d senderId=%d myId=%d",
-                                    destNick, malusCount, senderId,
-                                    netClient ? netClient->GetMyPlayerId() : -1);
-
-                            // Kill attribution: every client sees every 'g' message broadcast
-                            // (not just the addressee), so each independently tracks who last
-                            // attacked whom from the same messages -- resolve the sender's
-                            // array index once here for both branches below.
-                            int senderIdx = -1;
-                            for (int i = 0; i < currentSettings.playerCount; i++) {
-                                if (bubbleArrays[i].lobbyPlayerId == senderId) { senderIdx = i; break; }
-                            }
-
-                            // The destination can be the local player OR a bot this
-                            // client hosts -- a hosted bot's malus queue lives here
-                            // too, and nothing else ever credits it. Match against
-                            // every board we simulate, not just array 0.
-                            int targetIdx = -1;
-                            for (int i = 0; i < currentSettings.playerCount; i++) {
-                                if (!OwnsArrayIndex(i)) continue;
-                                if (bubbleArrays[i].playerNickname == destNick) { targetIdx = i; break; }
-                            }
-
-                            if (targetIdx >= 0) {
-                                SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION,
-                                        "Malus is for array %d ('%s'); adding to its queue",
-                                        targetIdx, destNick);
-                                for (int i = 0; i < malusCount; i++) {
-                                    bubbleArrays[targetIdx].malusQueue.push_back(frameCount);
-                                }
-                                bubbleArrays[targetIdx].rRecv += malusCount;  // Stats: malus received
-                                if (senderIdx >= 0) bubbleArrays[targetIdx].lastAttackerIdx = senderIdx;
-                                if (netClient) {
-                                    AddMalusAlert(bubbleArrays[targetIdx],
-                                                   netClient->GetPlayerNickname(senderId), malusCount);
-                                }
-                            } else {
-                                SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION,
-                                             "No owned board matches malus destination '%s'", destNick);
-                            }
-                        } else {
-                            SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
-                                        "Failed to parse malus message: %s", gameData);
-                        }
-                        break;
-                    }
-                    case 'm': {
-                        // Receive malus bubble from opponent (they generated it, we display it)
-                        // Format: m{bubbleId}:{cx}:{cy}:{stick_y}
-                        // Original at line 1435-1451
-                        // Skip our own 'm' messages echoed back by server (original: only process from others)
-                        {
-                            NetworkClient* netClientM = NetworkClient::Instance();
-                            if (netClientM && (int)netClientM->GetMyPlayerId() == senderId) {
-                                SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION,
-                                             "Ignoring own 'm' echo from server");
-                                break;
-                            }
-                        }
-                        int bubbleId, cx, cy, stickY;
-                        if (sscanf(gameData + 1, "%d:%d:%d:%d", &bubbleId, &cx, &cy, &stickY) == 4) {
-                            SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION,
-                                    "Received opponent malus from senderId=%d: color=%d cx=%d cy=%d stickY=%d",
-                                    senderId, bubbleId, cx, cy, stickY);
-
-                            // Find which array this opponent belongs to
-                            int opponentIdx = -1;
-                            for (int i = 0; i < currentSettings.playerCount; i++) {
-                                if (bubbleArrays[i].lobbyPlayerId == senderId) {
-                                    opponentIdx = i;
-                                    break;
-                                }
-                            }
-
-                            if (opponentIdx < 0) {
-                                SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
-                                           "Received 'm' message from unknown senderId %d, ignoring", senderId);
-                                break;
-                            }
-
-                            // Ignore malus for a player whose board is already frozen (dead), instead
-                            // of wrongly overlaying bubbles onto it (original ~line 1435).
-                            if (bubbleArrays[opponentIdx].playerState != BubbleArray::PlayerState::ALIVE) break;
-
-                            BubbleArray &opponentArray = bubbleArrays[opponentIdx];
-                            // Mini players use half bubble size
-                            bool isMini = (currentSettings.playerCount >= 3 && opponentIdx >= 1);
-                            int bubbleSize = isMini ? 16 : 32;
-                            int rowSize = bubbleSize * 7 / 8;  // 14 for mini, 28 for full
-                            int smallerSep = (cy % 2 == 0) ? 0 : bubbleSize / 2;
-                            float startX = (smallerSep + bubbleSize * cx) + opponentArray.bubbleOffset.x;
-                            float startY = (rowSize * cy) + opponentArray.bubbleOffset.y;
-
-                            MalusBubble malus = {
-                                opponentIdx,  // opponent's array index
-                                bubbleId,
-                                cx, cy,
-                                stickY,
-                                startX, startY,
-                                {(int)startX, (int)startY},
-                                false,
-                                false
-                            };
-
-                            malusBubbles.push_back(malus);
-                        } else {
-                            SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
-                                        "Failed to parse malus bubble message: %s", gameData);
-                        }
-                        break;
-                    }
-                    case 'M': {
-                        // Opponent's malus bubble stuck
-                        // Format: M{cx}:{stick_y}
-                        // Original at line 1453-1466
-                        int cx, stickY;
-                        if (sscanf(gameData + 1, "%d:%d", &cx, &stickY) == 2) {
-                            SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION,
-                                    "Opponent malus stuck from senderId=%d: cx=%d stickY=%d",
-                                    senderId, cx, stickY);
-
-                            // Find which array this opponent belongs to
-                            int opponentIdx = -1;
-                            for (int i = 0; i < currentSettings.playerCount; i++) {
-                                if (bubbleArrays[i].lobbyPlayerId == senderId) {
-                                    opponentIdx = i;
-                                    break;
-                                }
-                            }
-
-                            if (opponentIdx < 0) {
-                                SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
-                                           "Received 'M' message from unknown senderId %d, ignoring", senderId);
-                                break;
-                            }
-
-                            // Ignore malus for a player whose board is already frozen (dead), instead
-                            // of wrongly overlaying bubbles onto it (original ~line 1453).
-                            if (bubbleArrays[opponentIdx].playerState != BubbleArray::PlayerState::ALIVE) break;
-
-                            // Find and stick the corresponding malus bubble on opponent's board
-                            for (auto &malus : malusBubbles) {
-                                if (malus.assignedArray == opponentIdx && malus.cx == cx && malus.stickY == stickY && !malus.shouldClear) {
-                                    SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION,
-                                                 "Sticking opponent malus on array %d", opponentIdx);
-                                    BubbleArray &opponentArray = bubbleArrays[opponentIdx];
-                                    opponentArray.PlacePlayerBubble(malus.bubbleId, stickY, cx);
-                                    opponentArray.newShoot = true;
-                                    malus.shouldClear = true;
-                                    CheckPossibleDestroy(opponentArray);
-                                    // Don't check game state for opponent - they will send 'F' message if they win/lose
-                                    break;
-                                }
-                            }
-                        } else {
-                            SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
-                                        "Failed to parse malus stick message: %s", gameData);
-                        }
-                        break;
-                    }
-                    case 'F': {
-                        // Finish/Win notification from remote player
-                        // Perl format: "F{winnerNick}" (no separator) - original line 1467-1470
-                        // Also handle legacy C++ format "F:{idx}" for backward compat
-                        std::string winnerNick = gameData + 1;  // Everything after 'F'
-                        SDL_Log("Received win notification: F'%s'", winnerNick.c_str());
-
-                        // A bare 'F' names nobody, which is how the leader
-                        // announces a Timed round that ended level: the top
-                        // pop count was tied, so the round is a draw and
-                        // credits nobody a win (see UpdateTimedRound). Every
-                        // other 'F' carries a nickname.
-                        if (winnerNick.empty()) {
-                            if (!gameFinish) FinishRoundAsDraw();
-                            break;
-                        }
-
-                        int winnerPlayer = -1;
-
-                        // Try legacy format first: "F:{digit}"
-                        if (winnerNick.size() >= 2 && winnerNick[0] == ':' && isdigit((unsigned char)winnerNick[1])) {
-                            winnerPlayer = winnerNick[1] - '0';
-                        } else {
-                            // Perl format: match nick to player arrays
-                            NetworkClient* netClient = NetworkClient::Instance();
-                            for (int i = 0; i < currentSettings.playerCount; i++) {
-                                if (bubbleArrays[i].playerNickname == winnerNick) {
-                                    winnerPlayer = i;
-                                    break;
-                                }
-                            }
-                            // If nick matches our own nick, winner is local player (array 0)
-                            if (winnerPlayer == -1 && netClient && netClient->GetPlayerNick() == winnerNick) {
-                                winnerPlayer = 0;
-                            }
-                        }
-
-                        if (winnerPlayer >= 0 && winnerPlayer < currentSettings.playerCount) {
-                            // Guard: only process the first 'F' per round (multiple clients may send it)
-                            if (!gameFinish) {
-                                RoundWinCause cause =
-                                    currentSettings.gameMode == GameMode::Clear && bubbleArrays[winnerPlayer].allClear()
-                                        ? RoundWinCause::Clear
-                                        : RoundWinCause::Remote;
-                                // Nothing here distinguishes a Race or Timed
-                                // win from any other remote one, and nothing
-                                // needs to: Remote already means "somebody
-                                // else's board ended this", and the mode is
-                                // what the banner reads to say how.
-                                ResolveRoundOutcome(winnerPlayer, cause, false);
-                            }
-                        } else {
-                            SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
-                                         "Could not identify winner from F message: '%s'", winnerNick.c_str());
-                        }
-                        break;
-                    }
-                    case 'S': {
-                        // Round stats sync from a remote player:
-                        // S{fired}:{popped}:{sent}:{recv}:{kills}:{blocked}
-                        // Sent once per round by each client when its round ends. The
-                        // trailing :{kills} and :{blocked} fields were each added after
-                        // the first four; sscanf fills the earlier fields from the same
-                        // call even if it stops short (kills/blocked stay at their 0
-                        // defaults), so this stays compatible with any peer still on an
-                        // older 4- or 5-field format.
-                        int rf, rp, rs, rr, rk = 0, rb = 0;
-                        if (sscanf(gameData + 1, "%d:%d:%d:%d:%d:%d", &rf, &rp, &rs, &rr, &rk, &rb) >= 4) {
-                            int idx = -1;
-                            for (int i = 0; i < currentSettings.playerCount; i++) {
-                                if (bubbleArrays[i].lobbyPlayerId == senderId) { idx = i; break; }
-                            }
-                            if (idx >= 1) {
-                                BubbleArray &pa = bubbleArrays[idx];
-                                pa.rFired = rf; pa.rPopped = rp; pa.rSent = rs; pa.rRecv = rr; pa.rKills = rk; pa.rBlk = rb;
-                                pa.mFired += rf; pa.mPopped += rp; pa.mSent += rs; pa.mRecv += rr; pa.mKills += rk; pa.mBlk += rb;
-                                SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION,
-                                        "Round stats from player %d (array %d): F%d P%d Sent%d Rcv%d K%d Blk%d",
-                                        senderId, idx, rf, rp, rs, rr, rk, rb);
-                            } else {
-                                SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION,
-                                             "Ignoring 'S' stats from unknown senderId %d", senderId);
-                            }
-                        }
-                        break;
-                    }
-                    case 'i': {
-                        // Which device a remote player is shooting with, sent
-                        // by their own client on their round's first shot and
-                        // again whenever they switch (BubbleGame::ReportRoundInput).
-                        // One char: 'K' keyboard, 'M' mouse, 'T' touch, 'G' pad.
-                        //
-                        // Anything else is from a client newer than this build
-                        // and is dropped rather than stored, so the badge shows
-                        // nothing instead of a stray glyph. Purely cosmetic
-                        // either way -- nothing downstream of this affects play.
-                        const char tag = gameData[1];
-                        if (tag == 'K' || tag == 'M' || tag == 'T' || tag == 'G') {
-                            for (int i = 0; i < currentSettings.playerCount; i++) {
-                                if (bubbleArrays[i].lobbyPlayerId == senderId) {
-                                    bubbleArrays[i].roundInput = tag;
-                                    break;
-                                }
-                            }
-                        }
-                        break;
-                    }
-                    case 't': {
-                        // In-game chat from remote player
-                        InGameChatMsg chatMsg;
-                        chatMsg.nick = netClient->GetPlayerNickname(senderId);
-                        if (chatMsg.nick.empty()) chatMsg.nick = "Player";
-                        // Dropped here rather than filtered at render time, so a
-                        // blocked player's message never shows *and* never plays
-                        // the chat sound -- an audible ping for a message you
-                        // cannot see would be worse than not blocking at all.
-                        if (GameSettings::Instance()->IsPlayerBlocked(chatMsg.nick)) break;
-                        chatMsg.text = gameData + 1;
-                        chatMsg.framesLeft = 300;  // 5 seconds at 60 fps
-                        inGameChatMessages.push_back(chatMsg);
-                        if (inGameChatMessages.size() > 10)
-                            inGameChatMessages.erase(inGameChatMessages.begin());
-                        PlaySFX("chatted");
-                        break;
-                    }
-                    case 'l': {
-                        // Player-left notification: a remote player disconnected mid-game
-                        SDL_Log("Received player-left ('l') from lobby player ID %d", senderId);
-
-                        // Find which player array this senderId corresponds to
-                        int playerIdx = -1;
-                        for (int i = 0; i < currentSettings.playerCount; i++) {
-                            if (bubbleArrays[i].lobbyPlayerId == senderId) {
-                                playerIdx = i;
-                                break;
-                            }
-                        }
-
-                        if (playerIdx >= 0) {
-                            HandlePlayerDeparture(playerIdx);
-                        } else {
-                            SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
-                                       "Received player-left from unknown player ID %d", senderId);
-                        }
-
-                        // If already waiting for new-game sync, check if the reduced threshold is now met
-                        // (the disconnected player will never send 'n', so count them as ready)
-                        if (waitingForOpponentNewGame && opponentsReadyCount >= connectedPlayerCount - 1) {
-                            SDL_Log("All remaining connected opponents ready after disconnect - starting new game");
-                            opponentReadyForNewGame = true;
-                        }
-                        break;
-                    }
-                    case 'A': {
-                        // Opponent changed their targeting (original: command 'A' at line 1477)
-                        // Format: A{targetNick} = opponent is targeting that player
-                        //         A (empty)     = opponent cleared targeting
-                        // Find which array the sender belongs to
-                        int senderIdx = -1;
-                        for (int i = 0; i < currentSettings.playerCount; i++) {
-                            if (bubbleArrays[i].lobbyPlayerId == senderId) {
-                                senderIdx = i;
-                                break;
-                            }
-                        }
-                        if (senderIdx < 0) break;
-
-                        NetworkClient* netClient = NetworkClient::Instance();
-                        std::string myNick = netClient ? netClient->GetPlayerNick() : "";
-                        const char* targetNick = gameData + 1;  // Skip 'A' prefix
-
-                        if (strlen(targetNick) == 0 || myNick != targetNick) {
-                            // Opponent cleared target or is targeting someone else - remove from attackingMe
-                            attackingMe.erase(std::remove(attackingMe.begin(), attackingMe.end(), senderIdx),
-                                              attackingMe.end());
-                        } else {
-                            // Opponent is targeting us (targetNick == myNick)
-                            if (std::find(attackingMe.begin(), attackingMe.end(), senderIdx) == attackingMe.end()) {
-                                attackingMe.push_back(senderIdx);
-                            }
-                        }
-                        // Track all players' targets (not just who's targeting me)
-                        if (strlen(targetNick) == 0) {
-                            playerTargeting[senderIdx] = -1;  // cleared
-                        } else {
-                            // Find which array has targetNick
-                            int targetIdx = -1;
-                            for (int i = 0; i < currentSettings.playerCount; i++) {
-                                if (bubbleArrays[i].playerNickname == targetNick) { targetIdx = i; break; }
-                            }
-                            playerTargeting[senderIdx] = targetIdx;
-                        }
-                        SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION,
-                                "'A' message: sender=%d targetNick='%s' myNick='%s' attackingMe.size=%zu",
-                                senderIdx, targetNick, myNick.c_str(), attackingMe.size());
-                        ReRankNetView();  // attacker set/cleared: auto view re-ranks
-                        break;
-                    }
-                    case 'b':
-                    case 'N':
-                    case 'T':
-                        // Bubble sync messages from leader (SyncNetworkLevel).
-                        // Route to syncQueue so WaitForBubble/WaitForNextBubble/WaitForTobeBubble
-                        // can pick them up even if they arrived before ReloadGame was called.
-                        SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION,
-                                     "Routing bubble-sync message '%c' to syncQueue", msgType);
-                        netClient->PushSyncMessage(msg);
-                        break;
-                    default:
-                        SDL_Log("Unknown game message type: %c", msgType);
-                        break;
-                    }
+                // Everything that reaches ApplyInboundGameMessage() was actually
+                // applied this step; recording it here means replay never has to
+                // reproduce the ownership filter or the socket read.
+                stepInboundEvents.push_back({senderId, std::string(gameData)});
+                ApplyInboundGameMessage(senderId, std::string(gameData));
             }
         } else if (msg.find("GAME_START") == 0) {
             SDL_Log("Network game starting!");

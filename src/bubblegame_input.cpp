@@ -144,7 +144,7 @@ void BubbleGame::StartInGameChat() {
 void BubbleGame::FinishInGameChat(bool sendMessage) {
     if (!chattingMode) return;
 
-    if (sendMessage && chatInputBuf[0] != '\0') {
+    if (EffectsEnabled() && sendMessage && chatInputBuf[0] != '\0') {
         NetworkClient* netClient = NetworkClient::Instance();
         if (netClient && netClient->IsConnected() && netClient->GetState() == IN_GAME) {
             char talkMsg[258];
@@ -272,7 +272,12 @@ void BubbleGame::HandleInput(SDL_Event *e) {
                     {
                         GameSettings *settings = GameSettings::Instance();
                         bool currentMode = settings->colorBlind();
-                        settings->SetValue("GFX:ColorblindBubbles", currentMode ? "false" : "true");
+                        // Playback must not write settings.ini mid-round (the
+                        // SessionMode boundary); the toggle simply does nothing
+                        // there rather than persisting a presentation choice.
+                        if (EffectsEnabled()) {
+                            settings->SetValue("GFX:ColorblindBubbles", currentMode ? "false" : "true");
+                        }
                         SDL_Log("Colorblind mode: %s", currentMode ? "OFF" : "ON");
                     }
                     break;

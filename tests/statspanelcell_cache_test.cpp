@@ -28,6 +28,7 @@
 #include "platform.h"
 
 #include <cstdio>
+#include <cstring>
 
 static int failures = 0;
 #define CHECK(expression) do { \
@@ -49,6 +50,11 @@ struct BubbleGameTestAccess {
     static void renderRoundStats(BubbleGame& game, SDL_Renderer* r) { game.RenderRoundStats(r); }
     static void renderRoyaleHud(BubbleGame& game, SDL_Renderer* r) { game.RenderRoyaleHud(r); }
     static void renderMalusAlerts(BubbleGame& game, SDL_Renderer* r) { game.RenderMalusAlerts(r); }
+    static void ageMalusAlerts(BubbleGame& game) { game.AgeMalusAlerts(); }
+    static void updateRoundStatsHitRects(BubbleGame& game) { game.UpdateRoundStatsHitRects(); }
+    static SDL_Rect& statsChatBtn(BubbleGame& game) { return game.statsChatBtn; }
+    static SDL_Rect& statsTournamentBtn(BubbleGame& game) { return game.statsTournamentBtn; }
+    static bool& tournamentRound(BubbleGame& game) { return game.tournamentRound; }
     static SetupSettings& settings(BubbleGame& game) { return game.currentSettings; }
     static BubbleArray& player(BubbleGame& game, int idx) { return game.bubbleArrays[idx]; }
     static int& roundsPlayed(BubbleGame& game) { return game.roundsPlayed; }
@@ -56,6 +62,14 @@ struct BubbleGameTestAccess {
     static void updatePlayerNames(BubbleGame& game) { game.UpdatePlayerNameWinText(); }
     static TTFText& playerName(BubbleGame& game, int idx) { return game.playerNameWinText[idx]; }
     static TTFText& targetingLabel(BubbleGame& game, int idx) { return game.targetingText[idx]; }
+    // R1d-iv (first sub-slice): score/pop-count HUD recompute-vs-blit split.
+    static void updateScoreText(BubbleGame& game, BubbleArray& p, int slot) { game.UpdateScoreText(p, slot); }
+    static void drawScoreText(BubbleGame& game, int slot) { game.DrawScoreText(slot); }
+    static TTFText& scoreLabel(BubbleGame& game, int slot) { return game.scoreText[slot]; }
+    static void updatePoppedText(BubbleGame& game, BubbleArray& p, int idx) { game.UpdatePoppedText(p, idx); }
+    static void drawPoppedText(BubbleGame& game, int idx) { game.DrawPoppedText(idx); }
+    static TTFText& poppedLabel(BubbleGame& game, int idx) { return game.poppedText[idx]; }
+    static TTFText& modeTimerLabel(BubbleGame& game) { return game.modeTimerText; }
 };
 
 struct TTFTextTestAccess {
@@ -284,6 +298,11 @@ int main() {
     // End-to-end: RenderMalusAlerts. An alert's displayed text depends only
     // on its sender/count/blocked flag, not on framesLeft -- so it should
     // stay cached across frames while it merely ages toward expiry.
+    //
+    // RenderMalusAlerts() is a pure draw (R1d-ii): repeated calls must not
+    // age or prune anything by themselves. AgeMalusAlerts() is the separate
+    // mutator that actually ages/prunes; asserted here too so this test still
+    // exercises the aging path it used to cover implicitly before the split.
     {
         BubbleGame game(renderer);
         BubbleGameTestAccess::settings(game).playerCount = 2;
@@ -299,7 +318,188 @@ int main() {
 
         BubbleGameTestAccess::renderMalusAlerts(game, renderer);
         CHECK(HasMarker(pool[0], marker));
-        CHECK(p0.malusAlerts.size() == 1);  // framesLeft aged by 1, not yet pruned
+        CHECK(p0.malusAlerts.size() == 1);
+        CHECK(p0.malusAlerts[0].framesLeft == 50);  // pure draw: two renders leave it unchanged
+
+        BubbleGameTestAccess::ageMalusAlerts(game);
+        CHECK(p0.malusAlerts.size() == 1);
+        CHECK(p0.malusAlerts[0].framesLeft == 49);  // AgeMalusAlerts is the real mutator
+    }
+
+    // R1d-iii: the round-stats tap-target rects (statsChatBtn/
+    // statsTournamentBtn) are computed by UpdateRoundStatsHitRects(), not by
+    // the RenderRoundStats() draw. A standalone call must produce the same
+    // geometry the draw path would, with RenderRoundStats() never invoked.
+    {
+        BubbleGame game(renderer);
+        SetupSettings& settings = BubbleGameTestAccess::settings(game);
+        settings.playerCount = 2;
+        settings.networkGame = true;
+
+        // Hand-computed from ComputeRoundStatsLayout's geometry: boxX=48,
+        // boxY=6, rowH=16, headH=22. No teams assigned, non-tournament, so
+        // teamRows=0 and both the network hint row and the Discord hint row
+        // are present (16+16).
+        //   boxH = 22 + 16*(2+1) + 16 + 16 + 6 = 108
+        //   statsChatBtn = {48, 6 + 108 + 4, 88, 24} = {48, 118, 88, 24}
+        BubbleGameTestAccess::updateRoundStatsHitRects(game);
+        const SDL_Rect& chat = BubbleGameTestAccess::statsChatBtn(game);
+        CHECK(chat.x == 48);
+        CHECK(chat.y == 118);
+        CHECK(chat.w == 88);
+        CHECK(chat.h == 24);
+        CHECK(BubbleGameTestAccess::statsTournamentBtn(game).w == 0);  // not a tournament round
+
+        // And the draw itself no longer sets hit-test state: a separate
+        // network instance that only ever renders leaves the rects zeroed.
+        BubbleGame drawOnly(renderer);
+        SetupSettings& drawOnlySettings = BubbleGameTestAccess::settings(drawOnly);
+        drawOnlySettings.playerCount = 2;
+        drawOnlySettings.networkGame = true;
+        BubbleGameTestAccess::renderRoundStats(drawOnly, renderer);
+        CHECK(BubbleGameTestAccess::statsChatBtn(drawOnly).w == 0);
+        CHECK(BubbleGameTestAccess::statsTournamentBtn(drawOnly).w == 0);
+    }
+
+    // A tournament round additionally exposes the BRACKET button, and the
+    // Discord hint row (which only non-tournament rooms get) is suppressed.
+    // tournamentRound is private state with no public setter;
+    // BubbleGameTestAccess reaches it directly.
+    {
+        BubbleGame game(renderer);
+        SetupSettings& settings = BubbleGameTestAccess::settings(game);
+        settings.playerCount = 2;
+        settings.networkGame = true;
+        BubbleGameTestAccess::tournamentRound(game) = true;
+
+        // boxH = 22 + 48 + 16 + 0 + 6 = 92; chat y = 6 + 92 + 4 = 102;
+        // BRACKET x = 48 + 88 + 8 = 144.
+        BubbleGameTestAccess::updateRoundStatsHitRects(game);
+        const SDL_Rect& chat = BubbleGameTestAccess::statsChatBtn(game);
+        CHECK(chat.x == 48);
+        CHECK(chat.y == 102);
+        CHECK(chat.w == 88);
+        CHECK(chat.h == 24);
+        const SDL_Rect& bracket = BubbleGameTestAccess::statsTournamentBtn(game);
+        CHECK(bracket.x == 144);
+        CHECK(bracket.y == 102);
+        CHECK(bracket.w == 112);
+        CHECK(bracket.h == 24);
+    }
+
+    // A local (non-network) game zeroes both rects, so HandleFinishedTap()
+    // -- a no-op there anyway -- can never see a stale tap target.
+    {
+        BubbleGame game(renderer);
+        SetupSettings& settings = BubbleGameTestAccess::settings(game);
+        settings.playerCount = 2;
+        settings.networkGame = false;
+        BubbleGameTestAccess::statsChatBtn(game) = {7, 7, 7, 7};  // poison
+        BubbleGameTestAccess::statsTournamentBtn(game) = {8, 8, 8, 8};
+        BubbleGameTestAccess::updateRoundStatsHitRects(game);
+        CHECK(BubbleGameTestAccess::statsChatBtn(game).w == 0);
+        CHECK(BubbleGameTestAccess::statsTournamentBtn(game).w == 0);
+    }
+
+    // The playerCount < 2 early return is preserved exactly: it leaves
+    // whatever the rects held untouched rather than zeroing them.
+    {
+        BubbleGame game(renderer);
+        SetupSettings& settings = BubbleGameTestAccess::settings(game);
+        settings.playerCount = 1;
+        settings.networkGame = true;
+        BubbleGameTestAccess::tournamentRound(game) = true;
+        BubbleGameTestAccess::statsChatBtn(game) = {7, 7, 7, 7};  // poison
+        BubbleGameTestAccess::statsTournamentBtn(game) = {8, 8, 8, 8};
+        BubbleGameTestAccess::updateRoundStatsHitRects(game);
+        CHECK(BubbleGameTestAccess::statsChatBtn(game).x == 7);
+        CHECK(BubbleGameTestAccess::statsTournamentBtn(game).x == 8);
+    }
+
+    // R1d-iv (first sub-slice): UpdateScoreText recomputes the score string
+    // only; DrawScoreText is the pure blit. Proves the split directly -- a
+    // repeated recompute with unchanged state keeps the cached texture, and
+    // the draw alone never invalidates it.
+    {
+        BubbleGame game(renderer);
+        SetupSettings& settings = BubbleGameTestAccess::settings(game);
+        settings.playerCount = 1;
+        settings.networkGame = false;
+        BubbleArray& p = BubbleGameTestAccess::player(game, 0);
+        p.score = 42;
+        p.scorePos = {10, 20};
+        TTFText& score = BubbleGameTestAccess::scoreLabel(game, 0);
+        const char* marker = "statspanelcell-cache-test.scoretext";
+
+        BubbleGameTestAccess::updateScoreText(game, p, 0);
+        CHECK(score.Texture() != nullptr);
+        CHECK(std::strcmp(score.Text(), "Score: 42") == 0);
+        CHECK(score.Coords()->x == 10 && score.Coords()->y == 20);
+        SDL_SetBooleanProperty(SDL_GetTextureProperties(score.Texture()), marker, true);
+
+        // Recompute twice with the same state: the texture stays cached.
+        BubbleGameTestAccess::updateScoreText(game, p, 0);
+        CHECK(HasMarker(score, marker));
+
+        // Draw alone (no preceding recompute) must not invalidate or
+        // regenerate the cached texture or move it.
+        BubbleGameTestAccess::drawScoreText(game, 0);
+        CHECK(HasMarker(score, marker));
+        CHECK(score.Coords()->x == 10 && score.Coords()->y == 20);
+
+        // A real state change does regenerate on the next recompute.
+        p.score = 43;
+        BubbleGameTestAccess::updateScoreText(game, p, 0);
+        CHECK(!HasMarker(score, marker));
+        CHECK(std::strcmp(score.Text(), "Score: 43") == 0);
+    }
+
+    // R1d-iv (first sub-slice): UpdatePoppedText recomputes both the pop-count
+    // line and, in Timed mode, the shared countdown; DrawPoppedText is the
+    // pure blit of both. Same separation property as the score test above.
+    {
+        BubbleGame game(renderer);
+        SetupSettings& settings = BubbleGameTestAccess::settings(game);
+        settings.playerCount = 2;
+        settings.gameMode = GameMode::Timed;
+        BubbleArray& p = BubbleGameTestAccess::player(game, 0);
+        p.rPopped = 3;
+        TTFText& popped = BubbleGameTestAccess::poppedLabel(game, 0);
+        TTFText& timer = BubbleGameTestAccess::modeTimerLabel(game);
+        const char* poppedMarker = "statspanelcell-cache-test.poptext";
+        const char* timerMarker = "statspanelcell-cache-test.modetimer";
+
+        BubbleGameTestAccess::updatePoppedText(game, p, 0);
+        CHECK(popped.Texture() != nullptr);
+        CHECK(timer.Texture() != nullptr);
+        CHECK(std::strcmp(popped.Text(), "Pop 3") == 0);
+        SDL_SetBooleanProperty(SDL_GetTextureProperties(popped.Texture()), poppedMarker, true);
+        SDL_SetBooleanProperty(SDL_GetTextureProperties(timer.Texture()), timerMarker, true);
+
+        // Second recompute with unchanged state: neither texture is rebuilt.
+        BubbleGameTestAccess::updatePoppedText(game, p, 0);
+        CHECK(HasMarker(popped, poppedMarker));
+        CHECK(HasMarker(timer, timerMarker));
+
+        // Draw alone (no preceding recompute) blits the cached pair without
+        // invalidating either -- including the Timed-mode timer blit.
+        BubbleGameTestAccess::drawPoppedText(game, 0);
+        CHECK(HasMarker(popped, poppedMarker));
+        CHECK(HasMarker(timer, timerMarker));
+
+        // DrawPoppedText keeps UpdatePoppedText's playerCount guard: a solo
+        // game's pure draw is a no-op, never a stale blit.
+        settings.playerCount = 1;
+        BubbleGameTestAccess::drawPoppedText(game, 0);
+        CHECK(HasMarker(popped, poppedMarker));
+        CHECK(HasMarker(timer, timerMarker));
+
+        // A changed pop count regenerates on the next recompute.
+        settings.playerCount = 2;
+        p.rPopped = 4;
+        BubbleGameTestAccess::updatePoppedText(game, p, 0);
+        CHECK(!HasMarker(popped, poppedMarker));
+        CHECK(std::strcmp(popped.Text(), "Pop 4") == 0);
     }
 
     SDL_DestroyRenderer(renderer);

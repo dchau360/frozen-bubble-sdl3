@@ -59,6 +59,13 @@ extern ControllerInput controllerInputs[5];
 // fact.
 extern bool lastPressWasGamepad;
 
+// Defined in gamesettings.cpp. Ensures `path` exists as a directory, creating
+// it (mode 0755) when missing, and returns false when the path exists but is
+// not a directory or the mkdir fails -- logging the reason either way. Exposed
+// so the replay library can own its own replays/ child directory through the
+// same helper the settings directory uses, instead of a second implementation.
+bool EnsureDirectoryExists(const char* path);
+
 inline bool IsVirtualScancode(SDL_Scancode sc) {
     return sc >= CTRL_SC_BASE && sc < (SDL_Scancode)(CTRL_SC_BASE + CTRL_SC_COUNT);
 }
@@ -208,6 +215,17 @@ public:
     // mainmenu_panels.cpp's SPPanelRender.
     bool arcadeModeEnabled() { return arcadeMode; }
 
+    // Replay library keep count: how many completed rounds the on-disk rolling
+    // library retains, 0 meaning "do not record" (default 5). ReadSettings()
+    // clamps the persisted value to [0, kReplayKeepCountMax]; the dedicated
+    // SetReplayKeepCount() is the only writer, because SetValue()'s generic
+    // string fall-through updates the ini dictionary without touching an
+    // in-memory member and would leave this getter stale. R4b installs no UI --
+    // the Replays page (R4d) will be the first caller.
+    static constexpr int kReplayKeepCountMax = 20;
+    int replayKeepCount() const { return replayKeepCountValue; }
+    void SetReplayKeepCount(int count);
+
     PlayerKeys player1Keys, player2Keys, player3Keys, player4Keys, player5Keys;
     void LoadDefaultKeys();
     void SaveKeys();
@@ -340,6 +358,11 @@ private:
     bool showFps = false;
     bool uploadHighscoreStats = false;
     bool arcadeMode = false;
+    // Replay library keep count. In-class default so a harness or a failed load
+    // that never reached ReadSettings() still reads a valid count -- same reason
+    // as gfxQuality above. Named ...Value because the getter takes the obvious
+    // replayKeepCount() name.
+    int replayKeepCountValue = 5;
 
     GameSettings(){};
     ~GameSettings();

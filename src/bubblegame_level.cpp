@@ -166,7 +166,7 @@ void BubbleGame::RandomLevel(BubbleArray &bArray){
         bubbleMap[i].clear();
     }
 
-    int r = ranrange(0,1);
+    int r = rng.Range(0,1);
     int untilend = (13 / 2) - 1;
     for (size_t i = 0; i < bArray.bubbleMap.size(); i++)
     {
@@ -174,7 +174,7 @@ void BubbleGame::RandomLevel(BubbleArray &bArray){
         int smallerSep = (i + r) % 2 == 0 ? 0 : bubbleSize / 2;
         for (int j = 0; j < size; j++)
         {
-            bubbleMap[i].push_back(Bubble{(int)i < untilend ? ranrange(0, bArray.numColors - 1) : -1, {(smallerSep + bubbleSize * ((int)j)) + offset.x, (rowSize * ((int)i)) + offset.y}});
+            bubbleMap[i].push_back(Bubble{(int)i < untilend ? rng.Range(0, bArray.numColors - 1) : -1, {(smallerSep + bubbleSize * ((int)j)) + offset.x, (rowSize * ((int)i)) + offset.y}});
         }
     }
 
@@ -222,7 +222,7 @@ bool BubbleGame::SyncNetworkLevel() {
 
             if (isLeader) {
                 // Leader generates and sends
-                bubbleId = ranrange(0, bubbleArrays[0].numColors - 1);  // Random bubble color
+                bubbleId = rng.Range(0, bubbleArrays[0].numColors - 1);  // Random bubble color
                 SDL_Log("Leader sending bubble: cx=%d cy=%d id=%d", cx, cy, bubbleId);
                 netClient->SendBubble(cx, cy, bubbleId);
             } else {
@@ -297,8 +297,8 @@ bool BubbleGame::SyncNetworkLevel() {
 
     if (isLeader) {
         // Leader generates and sends
-        nextBubbleId = ranrange(0, bubbleArrays[0].numColors - 1);
-        tobeBubbleId = ranrange(0, bubbleArrays[0].numColors - 1);
+        nextBubbleId = rng.Range(0, bubbleArrays[0].numColors - 1);
+        tobeBubbleId = rng.Range(0, bubbleArrays[0].numColors - 1);
         SDL_Log("Leader sending next=%d tobe=%d", nextBubbleId, tobeBubbleId);
         netClient->SendNextBubble(nextBubbleId);
         netClient->SendTobeBubble(tobeBubbleId);
@@ -325,7 +325,7 @@ bool BubbleGame::SyncNetworkLevel() {
         // Initialize nextColors queue (Perl: $pdata{$player}{nextcolors})
         // 8 upcoming colors, pre-generated for use when new root row is added
         bubbleArrays[i].nextColors.clear();
-        for (int k = 0; k < 8; k++) bubbleArrays[i].nextColors.push_back(ranrange(0, bubbleArrays[i].numColors - 1));
+        for (int k = 0; k < 8; k++) bubbleArrays[i].nextColors.push_back(rng.Range(0, bubbleArrays[i].numColors - 1));
     }
 
     SDL_Log("SyncNetworkLevel: Complete! next=%d tobe=%d", nextBubbleId, tobeBubbleId);

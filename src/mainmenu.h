@@ -40,6 +40,8 @@
 #include "bubblegame.h"
 #include "netbot.h"
 #include "ttftext.h"
+#include "replay_library.h"
+#include "replay_player.h"
 
 #pragma region "banner_defines"
 #define BANNER_START 1000
@@ -760,6 +762,100 @@ private:
     struct TeamAutoBalanceTap { SDL_Rect rect; int teamCount; };
     std::vector<TeamAutoBalanceTap> teamAutoBalanceTaps;
     SDL_Rect teamsDoneRect{};
+
+    // ---- Replays page (mainmenu_replays.cpp) ------------------------------
+    // A full-screen sub-page opened from the CONTROLS & SETTINGS panel's
+    // REPLAYS row (kKeyRowReplays). Same modal shape as the team picker: a
+    // bool flag, a render that early-returns, a key handler checked ahead of
+    // the parent panel's, and a tap handler checked first in HandlePanelTap.
+    // It lists the on-disk rolling library ReplayLibrary::List() reports,
+    // plays an entry through ReplayPlayer, and edits Replay:KeepCount.
+    //
+    // The list is cached once on open (replaysEntries) instead of re-read
+    // every frame -- List() walks and decodes every file's metadata. Delete
+    // and eviction refresh it so what is drawn matches what is on disk.
+    bool showingReplaysPanel = false;
+    // Playback is a second state inside the same page: MainMenu::Render()
+    // takes a full-bleed branch that calls ReplayPlayer::Draw() and nothing
+    // else, mirroring live gameplay's "nothing behind it is drawn" and
+    // keeping the viewer out of FrozenBubble's GameState machine entirely.
+    bool playingReplay = false;
+    // The R4c viewer, owned only while playing so a finished recording does
+    // not keep a whole BubbleGame alive behind the menu.
+    std::unique_ptr<ReplayPlayer> replayPlayer;
+    // Flat selection over the page: 0..entryCount-1 are library entries, then
+    // the three library-level rows (export/import/keep count). One value
+    // shared by keyboard and tap rows, as every panel here does.
+    int replaysSelection = 0;
+    // Focused action within the selected entry row: 0 = Play, 1 = Delete.
+    // Drawn highlighted so the choice is visible, not inferred from the key.
+    int replaysActionIndex = 0;
+    std::vector<ReplayLibrary::ReplayEntry> replaysEntries;
+    // Library-level row indices. Named functions rather than bare +N
+    // expressions so the renderer and the key handler cannot disagree.
+    int replaysExportRow() const;
+    int replaysImportRow() const;
+    int replaysKeepCountRow() const;
+    // Keep count is edited as a pending value and committed only by the row's
+    // Apply action, so arrowing across a lower value and back deletes nothing.
+    int replaysKeepCountPending = 5;
+    // Transient one-line status ("Export not yet available on this build"),
+    // the same non-interactive status-line pattern R4a established for
+    // "Saved to Replays": not focusable, so no tap target or footer hint of
+    // its own is needed.
+    std::string replaysStatus;
+    Uint32 replaysStatusUntilMs = 0;
+    void SetReplaysStatus(const std::string &text);
+    // Two-button confirm dialogs. At most one shows at a time and both share
+    // confirmDialogFocusNo, the panel family's documented single focus flag.
+    bool showingReplayDeleteConfirm = false;
+    std::string replayPendingDeleteFilename;
+    std::string replayPendingDeleteLabel;
+    bool showingReplayKeepCountConfirm = false;
+    int replaysKeepCountConfirmTarget = 0;
+    // A platform export/import dialog is asynchronous, so an in-flight
+    // operation is tracked across frames and resolved by PollReplayFileOps()
+    // (called at the top of ReplaysPanelRender). At most one is ever set: the
+    // row activation refuses to start a second while either is in flight.
+    bool replayExportPending = false;
+    bool replayImportPending = false;
+    SDL_Rect replayConfirmYesRect{}, replayConfirmNoRect{};
+    SDL_Rect replaysDoneRect{};
+    // Per-row Play/Delete buttons, rebuilt each render while the page is open
+    // and walked before the generic row hit-testing -- the same
+    // struct-of-rects-plus-payload shape the team picker's swatch taps use for
+    // "more than one tap target per visual row".
+    struct ReplayActionTap { SDL_Rect rect; int entry; int action; };
+    std::vector<ReplayActionTap> replayActionTaps;
+
+    void OpenReplaysPanel();
+    void RefreshReplaysEntries();
+    void ClampReplaysSelection();
+    void CloseReplaysPanel();
+    void ActivateReplayRow();
+    void BeginReplayDeleteConfirm(int entry);
+    void ApplyReplaysKeepCount(int target);
+    void CommitReplaysKeepCount();
+    void ExportSelectedReplay();
+    void ImportReplay();
+    // Polls the platform's export/import seam once per open frame and turns a
+    // terminal result into a status line (and, for import, a library write).
+    void PollReplayFileOps();
+    void BeginReplayPlayback(int entry);
+    void ExitReplayPlayback();
+    void ReplaysPanelRender();
+    bool ReplaysPanelKey(SDL_Event *e);
+    bool HandleReplaysPanelTap(float lx, float ly);
+    void ReplayPlaybackRender();
+    bool ReplayPlaybackKey(SDL_Event *e);
+    bool HandleReplayPlaybackTap(float lx, float ly);
+    void DrawReplayConfirmDialog(SDL_Renderer *rend, const char *title,
+                                 const char *body, const char *yesLabel,
+                                 bool danger);
+    // Playback buttons' on-screen rects, rebuilt every playback frame and
+    // read by HandleReplayPlaybackTap.
+    SDL_Rect replayPauseRect{}, replaySpeedRect{}, replayRestartRect{},
+               replayExitRect{}, replayPrevShotRect{}, replayNextShotRect{};
 };
 
 #endif // MAINMENU_H

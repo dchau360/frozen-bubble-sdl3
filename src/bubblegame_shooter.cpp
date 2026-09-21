@@ -72,7 +72,7 @@ void BubbleGame::LaunchBubble(BubbleArray &bArray) {
 // board. It picks a shot once per turn, when the board is settled and its
 // next bubble is known, then spends a few frames swinging onto that angle --
 // which is also what makes it look like someone is playing.
-void BubbleGame::DriveBot(BubbleArray &bArray) {
+void BubbleGame::DriveBot(BubbleArray &bArray, float deltaScale) {
     bArray.shooterLeft = bArray.shooterRight = bArray.shooterCenter = false;
     bArray.shooterAction = false;
 
@@ -118,7 +118,7 @@ void BubbleGame::DriveBot(BubbleArray &bArray) {
         return;
     }
 
-    const float step = (float)LAUNCHER_SPEED * FrozenBubble::Instance()->deltaScale;
+    const float step = (float)LAUNCHER_SPEED * deltaScale;
     const float delta = bArray.botTargetAngle - bArray.shooterSprite.angle;
     if (delta > step) {
         bArray.shooterLeft = true;        // larger angle is further left
@@ -132,15 +132,23 @@ void BubbleGame::DriveBot(BubbleArray &bArray) {
     }
 }
 
-void BubbleGame::UpdatePenguin(BubbleArray &bArray) {
-    if (gameFinish) return;
-
+// Resolve this frame's keyboard/gamepad/mouse/touch/bot intent into an
+// explicit PlayerControls value -- collapses every input source to one small
+// record so ApplyPlayerControls() can be driven by a recorded value during a
+// future replay instead of live devices/AI. See docs/REPLAY_PLAN.md /
+// docs/REPLAY_PROGRESS.md.
+PlayerControls BubbleGame::ResolvePlayerControls(BubbleArray &bArray, float deltaScale) {
     // In network games, only process keyboard input for local player (array 0)
     // Remote player's actions (array 1) come from network messages (mpFirePending flag)
     // But we still need to process the fire logic for all players (original: iter_players at line 2105)
     // Original checks mp_fire for ALL players, not just local (line 2141)
     // In local multiplayer, ALL players are local (each uses their own controller)
     bool isLocalPlayer = OwnsArray(bArray);
+
+    // Default to not-visible every call; only the hurry-timer block below (for a local,
+    // ALIVE, not-awaiting-verdict player) sets this true. Read by DrawHurryWarning() in
+    // bubblegame_render.cpp. See docs/REPLAY_PROGRESS.md's R1d entry.
+    bArray.hurryWarnVisible = false;
 
     // Process keyboard input only for local players (original: is_local_player($::p))
     if (isLocalPlayer) {
@@ -170,7 +178,7 @@ void BubbleGame::UpdatePenguin(BubbleArray &bArray) {
         PlayerKeys& keys = *allPlayerKeys[pIdx];
 
         if (acceptInput && bArray.isBot) {
-            DriveBot(bArray);
+            DriveBot(bArray, deltaScale);
         } else if (acceptInput) {
             if (currentSettings.localMultiplayer && bArray.playerAssigned >= 0 && bArray.playerAssigned < 5) {
                 // Local multiplayer: keyboard first (always works, matches 1P path),
@@ -240,12 +248,18 @@ void BubbleGame::UpdatePenguin(BubbleArray &bArray) {
         // same as multiplayer (original ~line 3300-3302).
         bool isClassicCampaign = currentSettings.playerCount < 2 && !currentSettings.randomLevels
             && !currentSettings.mpTraining;
+        // hurryWarnVisible is read by BubbleGame::DrawHurryWarning() (bubblegame_render.cpp),
+        // a pure draw call the Render() loop makes right after UpdatePenguin() -- moved there
+        // in R1d so this function stays a pure mutator (see docs/REPLAY_PLAN.md's
+        // AdvanceSimulation boundary). PlaySFX("hurry") deliberately stays here rather than
+        // moving with the texture draw: it is a one-shot event fired exactly once per
+        // warnTimer cycle on a real simulation step, not an idempotent per-frame redraw --
+        // an extra/repeated render call must not replay the sound. See docs/REPLAY_PROGRESS.md's
+        // R1d entry.
         if (isClassicCampaign) {
             if (bArray.hurryTimer >= TIME_HURRY_WARN) {
-                if (bArray.warnTimer <= HURRY_WARN_FC / 2){
-                    if(bArray.warnTimer == 0) PlaySFX("hurry");
-                    { SDL_FRect fr = ToFRect(bArray.hurryRct); SDL_RenderTexture(const_cast<SDL_Renderer*>(renderer), bArray.hurryTexture, nullptr, &fr); }
-                }
+                bArray.hurryWarnVisible = (bArray.warnTimer <= HURRY_WARN_FC / 2);
+                if (bArray.hurryWarnVisible && bArray.warnTimer == 0) PlaySFX("hurry");
                 bArray.warnTimer++;
                 if (bArray.warnTimer > HURRY_WARN_FC) {
                     bArray.warnTimer = 0;
@@ -257,10 +271,8 @@ void BubbleGame::UpdatePenguin(BubbleArray &bArray) {
         }
         else {
             if (bArray.hurryTimer >= TIME_HURRY_WARN_MP) {
-                if (bArray.warnTimer <= HURRY_WARN_MP_FC / 2){
-                    if(bArray.warnTimer == 0) PlaySFX("hurry");
-                    { SDL_FRect fr = ToFRect(bArray.hurryRct); SDL_RenderTexture(const_cast<SDL_Renderer*>(renderer), bArray.hurryTexture, nullptr, &fr); }
-                }
+                bArray.hurryWarnVisible = (bArray.warnTimer <= HURRY_WARN_MP_FC / 2);
+                if (bArray.hurryWarnVisible && bArray.warnTimer == 0) PlaySFX("hurry");
                 bArray.warnTimer++;
                 if (bArray.warnTimer > HURRY_WARN_MP_FC) {
                     bArray.warnTimer = 0;
@@ -273,6 +285,50 @@ void BubbleGame::UpdatePenguin(BubbleArray &bArray) {
         bArray.hurryTimer++;
     }
 
+    // Mouse/touch fire: inject as shooterAction before the fire check.
+    // Captured before mouseFirePending is cleared, so ApplyPlayerControls()
+    // can tell a mouse/touch shot from a keyboard/gamepad one for the
+    // dual-track local highscore lock (see BubbleGame::ScoringInputMethod).
+    // The angle itself is NOT snapped here -- that used to happen right in
+    // this spot, but a replay only ever calls ApplyPlayerControls() (never
+    // this function again), so the snap has to be driven by the captured
+    // mouseAngle there instead, or a replayed mouse-aimed shot would turn
+    // via keyboard-style stepping and land somewhere the live shot never
+    // did. See docs/REPLAY_PROGRESS.md's R1c entry.
+    bool firedByMouse = bArray.mouseFirePending;
+    if (bArray.mouseFirePending) {
+        bArray.shooterAction = true;
+        bArray.mouseFirePending = false;
+    }
+
+    PlayerControls controls{bArray.shooterLeft, bArray.shooterRight, bArray.shooterCenter,
+                           bArray.shooterAction, firedByMouse, bArray.mouseTargetAngle};
+    // Bots aim by writing shooterSprite.angle directly (DriveBot's final snap
+    // onto botTargetAngle), which left/right/fire cannot reproduce: a replay
+    // that turned via left/right would fire one turn-step short of the live
+    // shot, because ApplyPlayerControls() only advances the angle while a
+    // turn flag is set. Carry the resolved angle in mouseAngle -- the field
+    // ApplyPlayerControls() already snaps to -- so a bot's exact aim survives
+    // capture. Bots never use the mouse, so this cannot be read as one (and
+    // firedByMouse stays false). See docs/REPLAY_PROGRESS.md (R5a).
+    if (bArray.isBot) {
+        controls.mouseAngle = bArray.shooterSprite.angle;
+    }
+    return controls;
+}
+
+// Act on a resolved PlayerControls: aim (including the mouse/touch snap),
+// fire, and turn. Reads nothing input-shaped beyond `controls` and
+// deltaScale, so live play and a future replay share this exact code path --
+// see ResolvePlayerControls() above and docs/REPLAY_PROGRESS.md's R1c entry.
+void BubbleGame::ApplyPlayerControls(BubbleArray &bArray, const PlayerControls &controls, float deltaScale) {
+    bArray.shooterLeft = controls.left;
+    bArray.shooterRight = controls.right;
+    bArray.shooterCenter = controls.center;
+    bArray.shooterAction = controls.fire;
+    bArray.mouseTargetAngle = controls.mouseAngle;
+    bool firedByMouse = controls.firedByMouse;
+
     float &angle = bArray.shooterSprite.angle;
     Penguin &penguin = bArray.penguinSprite;
 
@@ -281,15 +337,6 @@ void BubbleGame::UpdatePenguin(BubbleArray &bArray) {
         angle = bArray.mouseTargetAngle;
         if (angle < 0.1f) angle = 0.1f;
         if (angle > (float)PI - 0.1f) angle = (float)PI - 0.1f;
-    }
-    // Mouse/touch fire: inject as shooterAction before the fire check.
-    // Captured before mouseFirePending is cleared, so the actual-fire block
-    // below can tell a mouse/touch shot from a keyboard/gamepad one for the
-    // dual-track local highscore lock (see BubbleGame::ScoringInputMethod).
-    bool firedByMouse = bArray.mouseFirePending;
-    if (bArray.mouseFirePending) {
-        bArray.shooterAction = true;
-        bArray.mouseFirePending = false;
     }
 
     // Check if we should fire: either local player action or remote player mp_fire flag (original line 2141)
@@ -367,8 +414,7 @@ void BubbleGame::UpdatePenguin(BubbleArray &bArray) {
         // mouse-move event (HandleMouseAim). Without this, once the mouse set mouseTargetAngle
         // the keyboard could never move the aim again until the game was reloaded.
         bArray.mouseTargetAngle = -1.f;
-        float ds = FrozenBubble::Instance()->deltaScale;
-        float launchStep = (float)LAUNCHER_SPEED * ds;
+        float launchStep = (float)LAUNCHER_SPEED * deltaScale;
         if (bArray.shooterLeft) {
             angle += launchStep;  // Move LEFT = increase angle (toward π)
             if(penguin.curAnimation != 1 && (penguin.curAnimation > 7 || penguin.curAnimation < 2)) penguin.PlayAnimation(2);
@@ -393,16 +439,32 @@ void BubbleGame::UpdatePenguin(BubbleArray &bArray) {
     if (!bArray.shooterRight && penguin.curAnimation == 6) penguin.PlayAnimation(7);
 }
 
+void BubbleGame::UpdatePenguin(BubbleArray &bArray, float deltaScale) {
+    if (gameFinish) return;
+    if (sessionMode == SessionMode::Playback) {
+        // Playback never polls devices or AI. The replay driver has already
+        // placed this step's resolved input in bArray.lastControls (captured
+        // live by ResolvePlayerControls, PlayerControls R1c), so apply it
+        // directly through the exact same code path live play uses. See
+        // docs/REPLAY_PLAN.md / docs/REPLAY_PROGRESS.md (R3).
+        ApplyPlayerControls(bArray, bArray.lastControls, deltaScale);
+        return;
+    }
+    PlayerControls controls = ResolvePlayerControls(bArray, deltaScale);
+    bArray.lastControls = controls;
+    ApplyPlayerControls(bArray, controls, deltaScale);
+}
+
 // only called for a new game.
 void BubbleGame::ChooseFirstBubble(BubbleArray *bArray) {
     // Original lines 3431-3456: next_num and tobe_num picked once from player 0's colors,
     // then ALL players get the same values.
     std::vector<int> p0Bubbles = bArray[0].remainingBubbles();
     // Defensive: a freshly loaded level should never have an empty board, but
-    // an empty p0Bubbles would otherwise index it at [-1] (ranrange(1, 0) - 1)
+    // an empty p0Bubbles would otherwise index it at [-1] (rng.Range(1, 0) - 1)
     // -- the same guard bubblegame_board.cpp's re-validation already uses.
-    int firstColor = p0Bubbles.empty() ? 0 : p0Bubbles[ranrange(1, p0Bubbles.size()) - 1];
-    int nextColor  = p0Bubbles.empty() ? 0 : p0Bubbles[ranrange(1, p0Bubbles.size()) - 1];
+    int firstColor = p0Bubbles.empty() ? 0 : p0Bubbles[rng.Range(1, p0Bubbles.size()) - 1];
+    int nextColor  = p0Bubbles.empty() ? 0 : p0Bubbles[rng.Range(1, p0Bubbles.size()) - 1];
     for (int i = 0; i < currentSettings.playerCount; i++) {
         bArray[i].curLaunch  = firstColor;
         bArray[i].nextBubble = nextColor;
@@ -414,16 +476,16 @@ void BubbleGame::PickNextBubble(BubbleArray &bArray) {
     std::vector<int> currentBubbles = bArray.remainingBubbles();
     // The board can be empty for an instant between the last pop and the
     // round-end check noticing it (e.g. a bot's queued shot firing on the
-    // same frame the board clears) -- ranrange(1, 0) would divide by zero.
+    // same frame the board clears) -- rng.Range(1, 0) would divide by zero.
     // Same guard as bubblegame_board.cpp's nextBubble re-validation; leaving
     // nextBubble unchanged here is harmless since the round is about to end.
     if (!currentBubbles.empty()) {
-        bArray.nextBubble = currentBubbles[ranrange(1, currentBubbles.size()) - 1];
+        bArray.nextBubble = currentBubbles[rng.Range(1, currentBubbles.size()) - 1];
     }
     // Rotate nextColors queue: remove first (just used), append new random
     // Matches Perl: nextcolors is updated after each shot so all clients can compute future root rows
     if (!bArray.nextColors.empty()) bArray.nextColors.erase(bArray.nextColors.begin());
-    bArray.nextColors.push_back(ranrange(0, bArray.numColors - 1));
+    bArray.nextColors.push_back(rng.Range(0, bArray.numColors - 1));
 }
 
 // Build the space-separated nextcolors string for 's' messages (Perl: "@{$pdata{$::p}{nextcolors}}")
@@ -572,10 +634,6 @@ void GetClosestFreeCell(SingleBubble &sBubble, BubbleArray &bArray, int *row, in
 
     *row = cy;
     *col = cx;
-}
-
-void BubbleGame::UpdateSingleBubbles(int /*id*/) {
-    UpdateSingleBubblesAtScale(FrozenBubble::Instance()->deltaScale);
 }
 
 void BubbleGame::UpdateSingleBubblesAtScale(float deltaScale) {

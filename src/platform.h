@@ -29,7 +29,9 @@
 #endif
 
 #include <SDL3/SDL.h>
+#include <cstdint>
 #include <string>
+#include <vector>
 
 // Runtime data directory - set at startup via InitDataDir()
 // On desktop: set from DATA_DIR compile-time define
@@ -177,6 +179,75 @@ bool AdsRemoved();
 // one figure while charging another is its own problem in several
 // jurisdictions.
 std::string AdsPrice(int productIndex);
+#endif
+
+// ── Replay file export/import seam (R4d, filled in by R4e) ────────────────────
+//
+// R4d's Replays page owns the Export/Import rows; R4e owns the platform file
+// dialogs behind them. This is the seam between the two, kept deliberately
+// narrow so each platform can fill it in (SDL_ShowSaveFileDialog /
+// SDL_ShowOpenFileDialog on desktop, a Blob-download / file-input bridge on
+// WASM, and a stub on Android/iOS until a document-picker bridge lands) without
+// touching the menu code.
+//
+// The interface is two-phase because a native dialog is asynchronous: Begin()
+// starts an operation and Poll() reports its outcome one frame at a time. The
+// Replays page keeps showing while a dialog is up, so it cannot block waiting
+// on one. These declarations are not #ifdef-gated -- one signature every
+// platform implements, with the per-platform bodies selected in platform.cpp.
+enum class PlatformFileOpStatus { Idle, Pending, Succeeded, Cancelled, Failed };
+
+// Kicks off an export: hand `bytes` to the user as a file named (or suggested as)
+// `suggestedName`. Returns true if the platform accepted the request and a
+// dialog/download is now in flight (or, on WASM, already complete by the time this
+// returns). False means this platform has no mechanism at all, or an operation is
+// already in flight (callers must not re-enter -- check PlatformExportReplayFilePoll()
+// first). `renderer` is used on desktop only, to resolve the window a native file
+// dialog attaches to (via SDL_GetRenderWindow); pass null where no renderer is
+// available and the platform will fall back as best it can.
+//
+// Callers must call PlatformExportReplayFilePoll() once per frame afterward until it
+// returns a terminal status.
+bool PlatformExportReplayFileBegin(SDL_Renderer *renderer,
+                                   const std::string &suggestedName,
+                                   const std::vector<uint8_t> &bytes);
+
+// Call once per frame while an export is in flight. Idle if nothing was begun (or a
+// terminal result was already consumed). Pending while unresolved. A terminal status
+// (Succeeded/Cancelled/Failed) is returned exactly once, then the seam resets itself
+// to Idle so a stale terminal result can never be read twice.
+PlatformFileOpStatus PlatformExportReplayFilePoll();
+
+// Same shape for import. Succeeded status also fills outBytes/outSuggestedName with
+// the user's chosen file when read back by Poll(). See PlatformExportReplayFileBegin
+// for the meaning of `renderer` and the false/true return.
+bool PlatformImportReplayFileBegin(SDL_Renderer *renderer);
+PlatformFileOpStatus PlatformImportReplayFilePoll(std::vector<uint8_t> &outBytes,
+                                                   std::string &outSuggestedName);
+
+#ifdef FROZEN_BUBBLE_TEST_ACCESS
+// Test-only access to the byte-level I/O helpers the desktop export/import dialog
+// callbacks use, and to a size cap constant, and to hooks that simulate a real
+// SDL_ShowSaveFileDialog/SDL_ShowOpenFileDialog callback firing without a real
+// dialog (so the Begin()/Poll() state machine is testable headlessly).
+inline constexpr size_t kPlatformReplayImportMaxBytes = 16u * 1024u * 1024u; // 16 MiB
+bool WriteReplayBytesToPath(const std::string &path, const std::vector<uint8_t> &bytes);
+bool ReadReplayBytesFromPath(const std::string &path, std::vector<uint8_t> &outBytes,
+                             size_t maxBytes);
+
+// Simulates the SDL dialog callback firing with the given filelist (nullptr = error,
+// {nullptr} = cancel, {"path", nullptr} = chosen file), exactly as the real desktop
+// callback would process it. Test-only; desktop builds only (WASM/stub builds leave
+// these unimplemented -- tests are only built on desktop, see CMakeLists.txt).
+void TestSimulateExportDialogResult(const char * const *filelist);
+void TestSimulateImportDialogResult(const char * const *filelist);
+// Resets both pending-op structs to a fresh Idle/not-in-flight state between test
+// cases, without a process restart.
+void TestResetPlatformReplayFileState();
+// When true, Begin() arms the pending state but skips the real SDL dialog, so
+// TestSimulate*DialogResult() can drive the callback path in a headless test. The
+// test binary sets this once at startup; production never touches it.
+extern bool testReplayFileOpsHeadless;
 #endif
 
 #endif // PLATFORM_H

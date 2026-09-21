@@ -20,7 +20,11 @@
 #include "frozenbubble.h"
 #include "logger.h"
 #include "platform.h"
+#include "replay_library.h"
+#include "replay_recorder.h"
 #include <sys/stat.h>
+#include <utility>
+#include <vector>
 
 FrozenBubble *FrozenBubble::ptrInstance = NULL;
 
@@ -265,6 +269,24 @@ FrozenBubble::FrozenBubble() {
 
     audMixer = AudioMixer::Instance();
     hiscoreManager = HighscoreManager::Instance(renderer);
+
+    // R4b: give ReplayRecorder a real sink backed by the on-disk rolling
+    // library, and seed it with the persisted keep count. This is the one place
+    // R4a's capture hooks stop being inert. The count is read here and only
+    // re-read when a future UI calls SetKeepCount directly -- never per round.
+    //
+    // Production-only: unit tests construct a real FrozenBubble too (BubbleGame::
+    // NewGame() reads FrozenBubble::Instance() for its start time), and R4a's
+    // recorder tests install their own capturing sink immediately before driving
+    // a round. Installing the disk sink here in a test build would silently
+    // replace that sink mid-test, so the block is compiled out wherever the test
+    // access macro is defined. The shipping target does not define it.
+#ifndef FROZEN_BUBBLE_TEST_ACCESS
+    ReplayRecorder::Instance()->SetSink([](std::vector<uint8_t> bytes) {
+        ReplayLibrary::Instance()->Write(std::move(bytes));
+    });
+    ReplayRecorder::Instance()->SetKeepCount(GameSettings::Instance()->replayKeepCount());
+#endif
     init_effects((char*)g_dataDir.c_str());
     mainMenu = new MainMenu(renderer);
     mainGame = new BubbleGame(renderer);
@@ -1004,6 +1026,20 @@ void FrozenBubble::HandleInput(SDL_Event *e) {
         // to two separate branches of this same if/else chain instead.
         static float wasmGameTouchStartX = 0.f, wasmGameTouchStartY = 0.f;
         static bool wasmGameTouchStarted = false;
+        // Set by a real FINGER_DOWN, consumed by the very next
+        // MOUSE_BUTTON_DOWN. WASM fires exclusively off MOUSE_BUTTON_DOWN
+        // (see the comment on that branch below for why FINGER_UP itself is
+        // not used for firing), so this is the only surviving signal that a
+        // given "mouse" press was actually a finger tap's synthesized echo
+        // rather than a real mouse click -- without it, HandleMouseFire()
+        // always reported fromTouch=false on WASM, so the input-device badge
+        // (ReportRoundInput/ClassifyShotInput) misreported every touchscreen
+        // shot as mouse. Mirrors WasmMouseEchoGuard's finger-then-echo
+        // tracking (frozenbubble.h), applied here to the input-device badge
+        // instead of tap deduplication -- it does not affect fire/aim/swipe
+        // dispatch at all, which still runs exclusively off
+        // MOUSE_BUTTON_DOWN/UP/MOTION exactly as before.
+        static bool wasmLastPressWasTouch = false;
 #endif
         if (e->type == SDL_EVENT_MOUSE_MOTION) {
             float lx, ly;
@@ -1035,8 +1071,21 @@ void FrozenBubble::HandleInput(SDL_Event *e) {
                 SDL_RenderCoordinatesFromWindow(renderer, e->button.x, e->button.y, &lx, &ly);
                 if (!mainGame->HandleFinishedTap(lx, ly))
                     injectKey(SDLK_RETURN);
-            } else
+#ifdef __WASM_PORT__
+                // No fire happened, but the touchdown moment has passed
+                // either way -- do not let it leak forward onto a later,
+                // unrelated click.
+                wasmLastPressWasTouch = false;
+#endif
+            } else {
+#ifdef __WASM_PORT__
+                const bool fromTouch = wasmLastPressWasTouch;
+                wasmLastPressWasTouch = false;
+                mainGame->HandleMouseFire(fromTouch);
+#else
                 mainGame->HandleMouseFire();
+#endif
+            }
         } else if (e->type == SDL_EVENT_MOUSE_BUTTON_DOWN && e->button.button == SDL_BUTTON_RIGHT) {
 #ifndef __WASM_PORT__
             if (e->button.which == SDL_TOUCH_MOUSEID) return;
@@ -1058,6 +1107,11 @@ void FrozenBubble::HandleInput(SDL_Event *e) {
                         mainGame->IsTouchBackSwipe(wasmGameTouchStartX, wasmGameTouchStartY, lx, ly);
             wasmGameTouchStarted = false;
             if (back) injectKey(SDLK_ESCAPE);
+        } else if (e->type == SDL_EVENT_FINGER_DOWN) {
+            // Bookkeeping only, for wasmLastPressWasTouch above -- fire/aim/
+            // swipe dispatch is untouched by this branch and still runs
+            // exclusively off the MOUSE_BUTTON_DOWN/UP/MOTION handlers.
+            wasmLastPressWasTouch = true;
         }
 #endif
         // Touch aim+fire via FINGER events (native only).

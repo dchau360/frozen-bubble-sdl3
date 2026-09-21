@@ -25,6 +25,7 @@
 #include "gamesettings.h"
 #include "platform.h"
 #include "netview.h"
+#include "replay_recorder.h"
 
 #include <fstream>
 #include <sstream>
@@ -438,6 +439,15 @@ void BubbleGame::NewGame(SetupSettings setup) {
     curLevel = setup.startLevel;
     connectedPlayerCount = setup.playerCount;  // Reset connected count for new game
     gameStartTime = SDL_GetTicks();
+    // One gameplay RNG stream for the whole match; seeded here and left
+    // alone by ReloadGame() so it carries forward round to round, same as
+    // the per-slot botRng seeding just below. Skipped if a caller already
+    // seeded rng explicitly (tests) -- level generation below consumes it
+    // before this function returns, so seeding after NewGame() would be too
+    // late, and reseeding here unconditionally would silently discard that.
+    if (!rngExplicitlySeeded) {
+        rng.Seed(static_cast<uint32_t>(SDL_GetTicks()) * 747796405u + 2891336453u);
+    }
     scoringInputMethod = ScoringInputMethod::Unset;
     scoringDisqualified = false;
 
@@ -1103,27 +1113,47 @@ void BubbleGame::NewGame(SetupSettings setup) {
         }
     }
 
-    FrozenBubble::Instance()->startTime = SDL_GetTicks();
-    FrozenBubble::Instance()->currentState = MainGame;
+    // R4d bug fix (2026-09-21): a Playback instance -- ReplayPlayer's own
+    // throwaway BubbleGame, mid-RestoreRoundStart() -- is never
+    // FrozenBubble::mainGame and must not touch the app's top-level state
+    // machine or the real SDL input queue. Before this guard, opening any
+    // replay from the Replays page flipped FrozenBubble::currentState to
+    // MainGame, so the very next frame rendered the real (untouched, empty)
+    // mainGame singleton instead of MainMenu's replay viewer -- "no bubbles
+    // on screen" was that empty singleton's board, not the restored one.
+    // RestoreRoundStart() sets sessionMode to Playback before calling
+    // NewGame(), so this is exactly the same signal EffectsEnabled() already
+    // uses to gate other Live-only side effects (network sends, etc.).
+    if (sessionMode == SessionMode::Live) {
+        FrozenBubble::Instance()->startTime = SDL_GetTicks();
+        FrozenBubble::Instance()->currentState = MainGame;
 
-    // Discard any pointer input still sitting in the queue from before this
-    // transition. A tap/click already delivered to SDL but not yet drained
-    // by this frame's event pump would otherwise be processed on the very
-    // first MainGame frame, where SDL_EVENT_MOUSE_BUTTON_DOWN/FINGER_UP mean
-    // "fire" (see HandleMouseFire) -- an unintended shot the instant the
-    // round begins. Harmless for a local game, which reaches here the same
-    // frame Start was pressed, but a network game waits on a server
-    // round-trip between the tap and this call -- long enough that an
-    // impatient extra tap on Start lands right in this window.
-    SDL_PumpEvents();
-    SDL_FlushEvents(SDL_EVENT_MOUSE_MOTION, SDL_EVENT_MOUSE_REMOVED);
-    SDL_FlushEvents(SDL_EVENT_FINGER_DOWN, SDL_EVENT_FINGER_CANCELED);
+        // Discard any pointer input still sitting in the queue from before this
+        // transition. A tap/click already delivered to SDL but not yet drained
+        // by this frame's event pump would otherwise be processed on the very
+        // first MainGame frame, where SDL_EVENT_MOUSE_BUTTON_DOWN/FINGER_UP mean
+        // "fire" (see HandleMouseFire) -- an unintended shot the instant the
+        // round begins. Harmless for a local game, which reaches here the same
+        // frame Start was pressed, but a network game waits on a server
+        // round-trip between the tap and this call -- long enough that an
+        // impatient extra tap on Start lands right in this window.
+        SDL_PumpEvents();
+        SDL_FlushEvents(SDL_EVENT_MOUSE_MOTION, SDL_EVENT_MOUSE_REMOVED);
+        SDL_FlushEvents(SDL_EVENT_FINGER_DOWN, SDL_EVENT_FINGER_CANCELED);
+    }
 
     // Only choose random bubbles if not synced via network
     // Network games with randomLevels call SyncNetworkLevel() which already sets curLaunch and nextBubble
     if (!(currentSettings.networkGame && currentSettings.randomLevels)) {
         ChooseFirstBubble(bubbleArrays);
     }
+
+    // R4a: round start. The hook runs at the very end so it captures the board
+    // exactly as SyncNetworkLevel()/LoadLevel()/RandomLevel() left it, and
+    // before the first AdvanceSimulationAtScale() can mutate it. It seals any
+    // recording still open from a previous round first. No-op unless a
+    // recorder exists and is capturing.
+    if (ReplayRecorder *recorder = ReplayRecorder::Existing()) recorder->OnRoundStart(*this);
 }
 
 void RemoveArray(BubbleArray *bArray, int playerCount) {
@@ -1447,6 +1477,11 @@ void BubbleGame::ReloadGame(int level) {
         }
     }
 
+    // R4a: round start for every round after the first, including a
+    // peer-triggered transition. Same placement as NewGame()'s hook: after the
+    // board is resolved, before the first step. This is the "next round
+    // boundary" that seals a still-open network result tail.
+    if (ReplayRecorder *recorder = ReplayRecorder::Existing()) recorder->OnRoundStart(*this);
 }
 
 
@@ -1528,8 +1563,10 @@ void BubbleGame::QuitToTitle() {
     }
     RemoveArray(bubbleArrays, currentSettings.playerCount);
 
-    // For network games, send PART and return to lobby instead of main menu
-    if (currentSettings.networkGame) {
+    // For network games, send PART and return to lobby instead of main menu.
+    // Playback suppresses both the PART and the lobby summary, and an offline
+    // viewer returns to the menu rather than a network lobby.
+    if (currentSettings.networkGame && EffectsEnabled()) {
         NetworkClient* netClient = NetworkClient::Instance();
         if (netClient && netClient->IsConnected()) {
             if (!IsTournamentRound()) {

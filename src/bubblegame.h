@@ -21,7 +21,10 @@
 #define BUBBLEGAME_H
 
 #include "audiomixer.h"
+#include "gameplay_rng.h"
 #include "platform.h"
+#include "player_controls.h"
+#include "playerbadge.h"
 #define PI 3.1415926535897932384626433832795028841972
 #include "netbot.h"
 
@@ -333,6 +336,11 @@ struct BubbleArray {
         frozenWait = FROZEN_FRAMEWAIT, waitPrelight = PRELIGHT_SLOW, prelightTime = waitPrelight, framePrelight = PRELIGHT_FRAMEWAIT, hurryTimer = 0, warnTimer = 0, alertColumn = 0;
     int score = 0, chainLevel = 0;  // Score tracking and chain reaction multiplier
     bool shooterLeft = false, shooterRight = false, shooterCenter = false, shooterAction = false, newShoot = true, mpWinner = false, mpDone = false;
+    // Snapshot of shooterLeft/Right/Center/Action (+ mouse aim) taken each
+    // frame by ResolvePlayerControls(), before ApplyPlayerControls() acts on
+    // them. Unused by live play; the anchor a future replay recorder hooks
+    // into. See docs/REPLAY_PLAN.md / docs/REPLAY_PROGRESS.md.
+    PlayerControls lastControls;
     float mouseTargetAngle = -1.f;  // -1 = inactive; set from mouse/touch position
     bool mouseFirePending = false;   // set on mouse click / touch-up
     bool mouseFireWasTouch = false;  // that pending fire came from a finger, not a mouse
@@ -403,6 +411,7 @@ struct BubbleArray {
 
     SDL_Rect compressorRct = {}, lGfxShooterRct = {}, curLaunchRct = {}, nextBubbleRct = {}, onTopRct = {}, frozenBottomRct = {}, hurryRct = {};
     SDL_Texture *hurryTexture = nullptr;
+    bool hurryWarnVisible = false;  // Set by ResolvePlayerControls(); read by DrawHurryWarning() (pure draw, R1d).
     SDL_Point scorePos = {10, 10};  // Score display position (original: $POS{scores})
 
     // Malus/attack system for multiplayer
@@ -495,6 +504,46 @@ public:
     BubbleGame(const BubbleGame&) = delete;
     ~BubbleGame();
 
+    // Whether this instance is running a live game or a local replay.
+    // Playback suppresses every external effect -- highscore/campaign
+    // persistence, tournament reporting, stats/network sends, the lobby
+    // summary, opt-in telemetry, chat and gameplay network traffic, and the
+    // mid-round settings write -- while keeping the in-memory scores/stats
+    // needed to display the recorded result. Live is the default and behaves
+    // exactly as before. See docs/REPLAY_PLAN.md's SessionMode boundary.
+    enum class SessionMode { Live, Playback };
+    SessionMode GetSessionMode() const { return sessionMode; }
+    void SetSessionMode(SessionMode mode) { sessionMode = mode; }
+    bool EffectsEnabled() const { return sessionMode == SessionMode::Live; }
+
+    // One inbound gameplay payload already parsed out of the wire envelope
+    // ("GAMEMSG:{senderId}:{data}"), carrying the sending lobby player id and
+    // the raw data bytes (whose first char is the opcode). R6a records the
+    // ordered list of these that ProcessNetworkMessages() actually applied in
+    // one step and replays it through the same handler; see
+    // docs/REPLAY_PROGRESS.md (R6a).
+    struct InboundGameEvent {
+        int senderId = 0;
+        std::string gameData;
+    };
+
+    // One frame of simulation: input, physics, timers, animations, RNG,
+    // networking and transient text aging. Returns false only when the frame
+    // must not be drawn (the tournament-return and round-sync-wait early
+    // returns that used to live inside Render()). Call once per step.
+    bool AdvanceSimulation();
+    // One simulation step driven by a recorded deltaScale and game clock
+    // instead of the live wall-clock singleton. Identical to
+    // AdvanceSimulation() in every other respect: it is the same shared inner
+    // step body. A replay driver sets bubbleArrays[seat].lastControls for this
+    // step, then calls this. See docs/REPLAY_PLAN.md / docs/REPLAY_PROGRESS.md
+    // (R3, R5b).
+    bool AdvancePlaybackStep(float recordedDeltaScale, Uint32 recordedGameClockMs);
+    // Pure presentation: draws the current state. Safe to call any number of
+    // times for the same simulation step -- it advances no gameplay state,
+    // consumes no gameplay RNG and sends no traffic.
+    void Draw();
+
     void Render(void);
     void RenderPaused(void);
     void NewGame(SetupSettings setup);
@@ -516,8 +565,10 @@ public:
     // an accidental match here would quit a game in progress, not merely
     // misfire a bubble. All coordinates are logical canvas coords.
     bool IsTouchBackSwipe(float startX, float startY, float endX, float endY) const;
-    void UpdatePenguin(BubbleArray &bArray);
-    void DriveBot(BubbleArray &bArray);
+    void UpdatePenguin(BubbleArray &bArray, float deltaScale);
+    PlayerControls ResolvePlayerControls(BubbleArray &bArray, float deltaScale);
+    void ApplyPlayerControls(BubbleArray &bArray, const PlayerControls &controls, float deltaScale);
+    void DriveBot(BubbleArray &bArray, float deltaScale);
 
     // True when this client simulates the array's physics and is the
     // authority for what happens on it: every array in a local game, the
@@ -586,6 +637,11 @@ public:
     bool scoringDisqualified = false;
 
     bool IsGameFinished() const { return gameFinish; }
+    // The inbound gameplay payloads applied during the most recent step, in
+    // application order (empty for a local step). R4a's replay recorder reads
+    // this to recognise a peer's end-of-round 'S' stats sync while a network
+    // result tail is open. See stepInboundEvents below.
+    const std::vector<InboundGameEvent> &AppliedInboundEvents() const { return stepInboundEvents; }
     bool IsNetworkGame() const { return currentSettings.networkGame; }
     bool IsTournamentRound() const;
     bool IsChatting() const { return chattingMode; }
@@ -594,6 +650,20 @@ public:
     // not treat the tap as "next round").
     bool HandleFinishedTap(float lx, float ly);
 private:
+    // Apply one already-parsed in-game payload to the simulation. This is the
+    // whole opcode switch that used to live inside ProcessNetworkMessages():
+    // live transport and offline replay feed the exact same handler so a
+    // recording reproduces the mutations, not the socket reads. Does not touch
+    // the socket or the live message queue itself. See docs/REPLAY_PROGRESS.md
+    // (R6a). Private because it is an internal handler; the replay module
+    // reaches it through the SessionMode/stepInboundEvents path below.
+    void ApplyInboundGameMessage(int senderId, const std::string &gameData);
+
+    // Replay capture/restore (R3, src/bubblegame_replay.cpp) needs access to
+    // private simulation state (bubbleArrays, rng, simStep, stepDeltaScale,
+    // result flags). Defined in bubblegame_replay.cpp so this header keeps no
+    // dependency on the replay headers.
+    friend struct BubbleGameReplayAccess;
 #ifdef FROZEN_BUBBLE_TEST_ACCESS
     friend struct BubbleGameTestAccess;
 
@@ -636,7 +706,13 @@ private:
 
     SDL_Rect panelRct;
 
+    // Shared inner body of AdvanceSimulation()/AdvancePlaybackStep(): both
+    // read their deltaScale and game clock from a different source, then run
+    // this exact code.
+    bool AdvanceSimulationAtScale(float deltaScale, Uint32 gameClockMs);
+
     bool lowGfx = false, gameWon = false, gameLost = false, gameFinish = false, firstRenderDone = false, gameMpDone = false;
+    SessionMode sessionMode = SessionMode::Live;
     bool gameMatchOver = false; // Victories limit reached - match is over, return to lobby
     enum class RoundWinCause { Elimination, Clear, Departure, Remote, Target, Timeout };
 
@@ -652,6 +728,14 @@ private:
     bool tournamentRound = false;
     bool tournamentResultReported = false;
     int roundsPlayed = 0;       // Completed rounds this match (gates the lobby summary)
+    // Ordered inbound gameplay payloads applied this step (network support).
+    // Live: ProcessNetworkMessages() fills it as it dispatches. Playback:
+    // bubblegame_replay.cpp's SetPlaybackInboundEvents() fills it from the
+    // recording and the network branch of AdvanceSimulationAtScale() drains it
+    // through ApplyInboundGameMessage() in capture order before simulating.
+    // Cleared at the start of every step so it never carries across steps.
+    std::vector<InboundGameEvent> stepInboundEvents;
+
     bool waitingForOpponentNewGame = false; // Waiting for opponents to press key for new game
     bool opponentReadyForNewGame = false; // Opponent sent 'n' ready signal
     int opponentsReadyCount = 0; // Number of opponents who sent 'n' (for 3+ player)
@@ -670,6 +754,47 @@ private:
     int frameCount = 0;  // Global frame counter for malus timing
     int networkFrameCounter = 0; // Frame counter for network ping timing
 
+    // Isolated gameplay RNG (levels, next colors, malus, free-fall), kept
+    // off the global rand() stream that cosmetic code (menus, highscore
+    // pictures, transitions) also draws from. One stream per match, seeded
+    // in NewGame() and left alone across ReloadGame() so it carries forward
+    // round to round. See docs/REPLAY_PLAN.md / docs/REPLAY_PROGRESS.md.
+    GameplayRng rng;
+    // NewGame() calls level generation -- which consumes rng -- before
+    // returning, so a caller that wants a deterministic level (tests) must
+    // seed rng *before* NewGame() runs, not after. This flag lets NewGame()
+    // tell "a caller already seeded rng for this instance" apart from "seed
+    // it fresh from the wall clock", without a sentinel seed value.
+    bool rngExplicitlySeeded = false;
+
+    // Monotonic step index, separate from frameCount above. frameCount is
+    // round-relative (reset every ReloadGame()) and only advances in
+    // network/local-multiplayer/mp_train modes, because that's all its one
+    // consumer (malus fall timing) needs -- touching that is a multiplayer
+    // sync risk, not a refactor, so it stays exactly as it is. simStep exists
+    // for the future replay recorder, which needs a uniform per-frame index
+    // in every mode including solo: incremented once per Render() call,
+    // unconditionally, reset only in NewGame() (not ReloadGame()) so it stays
+    // monotonic across a whole match, mirroring how rng is left alone across
+    // ReloadGame() above. See docs/REPLAY_PLAN.md / docs/REPLAY_PROGRESS.md.
+    int simStep = 0;
+
+    // deltaScale for the current step, captured once by AdvanceSimulation()
+    // from the live wall-clock singleton and read by Draw() (the aim guide's
+    // preview re-simulates movement at this scale). Playback will later set
+    // this from the recorded step instead of the live singleton.
+    float stepDeltaScale = 1.0f;
+
+    // Round-relative game clock for the current step, captured once by
+    // AdvanceSimulation() from the same SDL_GetTicks() call that supplies the
+    // step, and by AdvancePlaybackStep from StepRecord::gameClockMs. Training
+    // (mpTrainStartTime) and Timed mode (modeTimerStart/Deadline) read this
+    // instead of calling SDL_GetTicks() directly, so a replay reproduces the
+    // recorded clock and its end condition exactly. Wall time still governs
+    // UI scheduling, network transport and file timestamps. See
+    // docs/REPLAY_PLAN.md / docs/REPLAY_PROGRESS.md (R5b).
+    Uint32 stepGameClockMs = 0;
+
     // Race/Timed state. All of it is per-round and reset by NewGame/ReloadGame.
     //
     // The Timed round is resolved by the leader, not by each client for
@@ -682,9 +807,17 @@ private:
     // then announces the winner with the ordinary 'F'. Without the wait the
     // leader would rank players on counts that lag what those players just
     // watched their own HUD show.
-    Uint32 modeTimerStart = 0;      // SDL_GetTicks() when the Timed round's clock started
+    Uint32 modeTimerStart = 0;      // stepGameClockMs when the Timed round's clock started
     bool modeTimerExpired = false;  // our own clock ran out; board frozen, awaiting the verdict
-    Uint32 modeTimerDeadline = 0;   // leader only: stop waiting for stragglers at this tick
+    Uint32 modeTimerDeadline = 0;   // leader only: stop waiting for stragglers at this step clock
+    // Recorded "was this client the network leader when the round started".
+    // CaptureRoundStart() writes the live NetworkClient::Instance()->IsLeader()
+    // result into the round-start rules blob and RestoreRoundStart() writes it
+    // back here; UpdateTimedRound() reads it during Playback instead of
+    // querying the live singleton, which has no room configured on the
+    // playback side. Live play ignores this field and queries the singleton
+    // exactly as before. See docs/REPLAY_PROGRESS.md (R6b).
+    bool wasNetworkLeader = false;
     // Last popped total broadcast for each seat we own, so the live 'P' sync
     // sends only on change -- at most once per shot, and nothing at all during
     // the frames between shots.
@@ -693,7 +826,7 @@ private:
     bool finalPoppedReported[MAX_NET_PLAYERS] = {};
 
     // Multiplayer training state
-    Uint32 mpTrainStartTime = 0;  // SDL_GetTicks() when mp_train round started
+    Uint32 mpTrainStartTime = 0;  // stepGameClockMs when mp_train round started
     int mpTrainScore = 0;         // Accumulated score (malus destroyed)
     bool mpTrainDone = false;     // 2-minute timer expired
 
@@ -777,13 +910,38 @@ private:
     // order within a single panel's render, and these are drawn from a
     // different pass in the same frame.
     std::vector<TTFText> badgeCellPool;
+    // R1d-iv split caches: recompute passes fill these; the pure draw passes
+    // read them, so a redundant draw re-blits cached state without
+    // recomputing (or advancing) anything.
+    struct LiveBadgeCell { PlayerBadge badge{}; int chipWidth = 0; size_t poolIdx = 0; };
+    std::array<LiveBadgeCell, 2> liveBadgeCells;
+    int liveBadgeCellCount = 0;
+    bool comboTextVisible = false;  // set by AdvanceSimulation() from comboDisplayTimer, read by Draw()
+    int royaleHudCellCount = 0;
+    struct MalusAlertDrawOp { size_t poolIdx = 0; SDL_Rect rect{}; Uint8 alpha = 255; };
+    std::vector<MalusAlertDrawOp> malusAlertDrawOps;
+    enum class RoundStatsOpKind { Text, Chip, ChatBtn, BracketBtn };
+    struct RoundStatsOp {
+        RoundStatsOpKind kind = RoundStatsOpKind::Text;
+        size_t poolIdx = 0;
+        SDL_Rect rect{};
+        PlayerBadge badge{};
+    };
+    std::vector<RoundStatsOp> roundStatsOps;
+    SDL_Rect statsPanelBox = {};
     TTFText &StatsPanelCell(std::vector<TTFText> &pool, size_t idx, int fontSize = 14);
 
-    // Draws the platform and input badges for `bArray` starting at (x, y), and
-    // returns the width consumed. Network games only -- in a local game every
-    // board is on this machine and on this keyboard, so the badges would say
-    // the same thing about everyone and tell the player nothing.
-    int DrawLiveBadges(const BubbleArray &bArray, int x, int y, size_t &poolIdx);
+    // Recompute/measure the platform and input badge labels for `bArray` into
+    // liveBadgeCells (one badgeCellPool cell per badge). Network games only;
+    // in a local game every board is on this machine and on this keyboard, so
+    // the badges would say the same thing about everyone. `poolIdx` is
+    // advanced for each allocated cell, exactly as the old fused
+    // DrawLiveBadges did. Pure draw companion below reads the measured cells.
+    void MeasureLiveBadges(const BubbleArray &bArray, size_t &poolIdx);
+    // Pure draw: blits the badge chips/labels measured by the immediately
+    // preceding MeasureLiveBadges() call, starting at (x, y), returning the
+    // width consumed. No recompute, no pool growth.
+    int DrawLiveBadges(int x, int y);
 
     // In-game chat (network games only)
     struct InGameChatMsg { std::string nick; std::string text; int framesLeft; };
@@ -802,13 +960,13 @@ private:
     void ChooseFirstBubble(BubbleArray *bArray);
     void PickNextBubble(BubbleArray &bArray);
     void LaunchBubble(BubbleArray &bArray);
-    void UpdateSingleBubbles(int id);
     void UpdateSingleBubblesAtScale(float deltaScale);
 
     void ExpandNewLane(BubbleArray &bArray);
     void Update2PText();
     void UpdatePlayerNameWinText();  // Update "PlayerName: WinCount" for 3-5 player mode
     void UpdateScoreText(BubbleArray &bArray, int slot);
+    void DrawScoreText(int slot);  // Pure draw: blits scoreText[slot] + its live badges
     SDL_Texture** GetBubbleTextures(bool mini = false); // Returns appropriate bubble textures based on colorblind mode and size
 
     void CheckPossibleDestroy(BubbleArray &bArray);
@@ -833,7 +991,14 @@ private:
     void CheckGameState(BubbleArray &bArray, bool countForRoot = true);
     void AddMalusAlert(BubbleArray &target, const std::string &fromNick, int count,
                        bool blocked = false);  // Queue an incoming-malus (or blocked-malus) toast
-    void RenderMalusAlerts(SDL_Renderer *rend);  // Draw + age the incoming-malus toasts
+    void RenderMalusAlerts(SDL_Renderer *rend);  // Combined wrapper: UpdateMalusAlerts() + DrawMalusAlerts() (kept for tests/back-compat)
+    void UpdateMalusAlerts();  // Recompute: malus-toast text/positions into malusAlertDrawOps
+    void DrawMalusAlerts(SDL_Renderer *rend);  // Pure draw: blits the recomputed toasts
+    void AgeMalusAlerts();  // Mutator: ages/prunes p.malusAlerts for every player
+    void DrawHurryWarning(SDL_Renderer *rend, BubbleArray &bArray);  // Pure draw: hurry-warning texture; bArray.hurryWarnVisible set by ResolvePlayerControls()
+    void AgeChatMessages();  // Mutator: ages/prunes inGameChatMessages
+    void DrawAttackFlash(SDL_Renderer *rend, BubbleArray &bArray, bool useMini);  // Pure draw: per-board attack-flash blinking border
+    void AgeAttackFlash(BubbleArray &bArray, bool useMini);  // Mutator: decrements bArray.attackFlashFramesLeft
     void FinalizeRoundStats();   // Roll per-round stats into match totals; broadcast 'S' in network games
     // Which device fired the shot currently being launched from bArray. Only
     // meaningful for an array this client simulates -- a remote player's shot
@@ -844,7 +1009,14 @@ private:
     // clients can update their badge for this player mid-round. Sending only on
     // change keeps this to a message or two per round instead of one per shot.
     void ReportRoundInput(BubbleArray &bArray, char tag);
-    void RenderRoundStats(SDL_Renderer *rend);  // Post-round per-player stats table overlay
+    void RenderRoundStats(SDL_Renderer *rend);  // Combined wrapper: UpdateRoundStats() + DrawRoundStats() (kept for tests/back-compat)
+    void UpdateRoundStats();  // Recompute: stats-table text/cells/badges into roundStatsOps
+    void DrawRoundStats(SDL_Renderer *rend);  // Pure draw: panel + recorded cells/chips/buttons
+    // Computes statsChatBtn/statsTournamentBtn for the round-stats panel from
+    // pure settings state, independent of whether RenderRoundStats() actually
+    // draws this frame (HandleFinishedTap() later reads the rects). Shares its
+    // geometry with RenderRoundStats() through ComputeRoundStatsLayout().
+    void UpdateRoundStatsHitRects();
     void RenderMultiplayerResultPanel(SDL_Renderer *rend);
     void UpdateMultiplayerCompletionState();
     void SendLobbyMatchSummary();  // Leader posts the match summary to the lobby chatroom
@@ -892,6 +1064,7 @@ private:
     // countdown stacked right under it, anchored beside that board's own
     // "next bubble" preview. No-op outside multiplayer.
     void UpdatePoppedText(BubbleArray &bArray, int idx);
+    void DrawPoppedText(int idx);  // Pure draw: blits poppedText[idx] (+ modeTimerText in Timed)
     void UpdateDepartureMatchTermination();
     void HandlePlayerDeparture(int playerIdx);
     bool HasDepartedPlayers() const;
@@ -914,7 +1087,9 @@ private:
     void ApplyNetViewAuto();  // auto mode: rank boards and assign boardVisible per slot class
     void ReRankNetView();     // event hook: re-run auto ranking (no-op when manual/<=5/local)
 
-    void RenderRoyaleHud(SDL_Renderer *rend);  // >5-player-only: alive count + page indicator
+    void RenderRoyaleHud(SDL_Renderer *rend);  // Combined wrapper: UpdateRoyaleHud() + DrawRoyaleHud() (kept for tests/back-compat)
+    void UpdateRoyaleHud();  // Recompute: royale HUD text/cells
+    void DrawRoyaleHud(SDL_Renderer *rend);  // Pure draw: blits the recomputed HUD cells
 
     void QuitToTitle();
 

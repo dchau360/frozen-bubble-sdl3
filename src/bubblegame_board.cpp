@@ -443,7 +443,7 @@ void BubbleGame::CheckPossibleDestroy(BubbleArray &bArray){
                         float startY = (float)bubble->pos.y;
                         SingleBubble bubs = {bArray.playerAssigned, bArray.curLaunch, startX, startY, startX, startY, bubble->pos, {}, bArray.shooterSprite.angle, false, false, bArray.leftLimit, bArray.rightLimit, bArray.topLimit, lowGfx, isMiniPop ? 16 : 32};
                         bubs.CopyBubbleProperties(bubble);
-                        bubs.GenerateFreeFall(true);
+                        bubs.GenerateFreeFall(rng, true);
                         singleBubbles.push_back(bubs);
                         bubble->bubbleId = -1;
                         bubble->playerBubble = false;
@@ -493,7 +493,7 @@ void BubbleGame::CheckPossibleDestroy(BubbleArray &bArray){
             std::vector<int> remaining = bArray.remainingBubbles();
             if (!remaining.empty() &&
                 std::find(remaining.begin(), remaining.end(), bArray.nextBubble) == remaining.end()) {
-                bArray.nextBubble = remaining[ranrange(1, remaining.size()) - 1];
+                bArray.nextBubble = remaining[rng.Range(1, remaining.size()) - 1];
             }
         }
     }
@@ -576,7 +576,7 @@ void BubbleGame::CheckPossibleDestroy(BubbleArray &bArray){
     }
 }
 
-void DoFalling(std::vector<SDL_Point> &map, std::vector<SingleBubble> &bubbles, bool &lowGfx) {
+void DoFalling(std::vector<SDL_Point> &map, std::vector<SingleBubble> &bubbles, bool &lowGfx, GameplayRng &rng) {
     if (map.size() < 1 || bubbles.size() < 1) return;
     SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION, "DoFalling called: %d bubbles to fall, lowGfx=%d", (int)bubbles.size(), lowGfx);
     int maxy = map[map.size() - 1].y;
@@ -588,7 +588,7 @@ void DoFalling(std::vector<SDL_Point> &map, std::vector<SingleBubble> &bubbles, 
         // Use falling=true (not explode) so AssignChainReactions can find these bubbles.
         // Only the directly-matched group in CheckPossibleDestroy gets exploding=true.
         // Original: disconnected bubbles go into @falling_bubble (falling), not @exploding_bubble.
-        bubbles[i - 1].GenerateFreeFall(false, (maxy - y) * 5 + shiftSameLine);
+        bubbles[i - 1].GenerateFreeFall(rng, false, (maxy - y) * 5 + shiftSameLine);
         singleBubbles.push_back(bubbles[i - 1]);
         shiftSameLine++;
     }
@@ -680,7 +680,7 @@ int BubbleGame::CheckAirBubbles(BubbleArray &bArray) {
                      "DoFalling: %d bubbles falling after match clear (chainReaction=%d)",
                 (int)singlesFalling.size(), currentSettings.chainReaction);
     }
-    DoFalling(fallingLocs, singlesFalling, lowGfx);
+    DoFalling(fallingLocs, singlesFalling, lowGfx, rng);
 
     return fallingCount;  // Return count for malus calculation
 }
@@ -717,7 +717,7 @@ void BubbleGame::DoWinAnimation(BubbleArray &bArray, int &waitTime){
                     float startY = (float)bArray.bubbleMap[i][j].pos.y;
                     SingleBubble bubbly = {bArray.playerAssigned, bArray.curLaunch, startX, startY, startX, startY, bArray.bubbleMap[i][j].pos, {}, bArray.shooterSprite.angle, false, false, bArray.leftLimit, bArray.rightLimit, bArray.topLimit, lowGfx, isMiniWin ? 16 : 32};
                     bubbly.CopyBubbleProperties(&bArray.bubbleMap[i][j]);
-                    bubbly.GenerateFreeFall(true, 0);
+                    bubbly.GenerateFreeFall(rng, true, 0);
                     singleBubbles.push_back(bubbly);
                     bArray.bubbleMap[i][j].bubbleId = -1;
                     bArray.bubbleMap[i][j].playerBubble = false;
@@ -792,9 +792,9 @@ void BubbleGame::ExpandNewLane(BubbleArray &bArray) {
         if (!bArray.nextColors.empty()) {
             colorId = bArray.nextColors.front();
             bArray.nextColors.erase(bArray.nextColors.begin());
-            bArray.nextColors.push_back(ranrange(0, bArray.numColors - 1));  // Replenish queue
+            bArray.nextColors.push_back(rng.Range(0, bArray.numColors - 1));  // Replenish queue
         } else {
-            colorId = ranrange(0, bArray.numColors - 1);
+            colorId = rng.Range(0, bArray.numColors - 1);
         }
         bArray.bubbleMap[0].push_back(Bubble{colorId, {(smallerSep + bubbleSize * ((int)j)) + offset.x, offset.y}});
     }

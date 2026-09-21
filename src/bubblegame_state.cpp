@@ -69,7 +69,16 @@ void BubbleGame::SendMalusToOpponent(int malusCount, const BubbleArray &attacker
     const int kAttackFlashDurationFrames = 40;
 
     NetworkClient* netClient = NetworkClient::Instance();
-    if (!netClient || !netClient->IsConnected() || netClient->GetState() != IN_GAME) {
+    // Live play needs a real connection to send over. Playback performs the
+    // exact same bookkeeping (rSent, lastAttackerIdx, the attack-flash timer)
+    // without one: the sends themselves are suppressed by
+    // SendGameDataFor()'s EffectsEnabled() gate, and the target nicknames come
+    // from the recorded boards (any lobby-id fallback is only a last resort for
+    // a nickname that was never captured). Requiring IsConnected() here would
+    // silently drop the local side of every attack during a replay, desyncing
+    // rSent/lastAttackerIdx from the live run. See docs/REPLAY_PROGRESS.md (R6a).
+    if (EffectsEnabled() &&
+        (!netClient || !netClient->IsConnected() || netClient->GetState() != IN_GAME)) {
         return;
     }
 
@@ -109,7 +118,7 @@ void BubbleGame::SendMalusToOpponent(int malusCount, const BubbleArray &attacker
                 // Manual target is stale (died or otherwise invalid) -- re-roll like the random case.
                 randomPick = true;
             }
-            int target = randomPick ? livingOpponents[rand() % livingOpponents.size()]
+            int target = randomPick ? livingOpponents[rng.Range(0, (int)livingOpponents.size() - 1)]
                                      : sendMalusToOne;
 
             std::string targetNick = bubbleArrays[target].playerNickname;
@@ -280,7 +289,7 @@ void BubbleGame::SetSendMalusToOne(int opponentIdx) {
     playerTargeting[0] = opponentIdx;
 
     NetworkClient* netClient = NetworkClient::Instance();
-    if (!netClient || !netClient->IsConnected()) return;
+    if (!netClient || !netClient->IsConnected() || !EffectsEnabled()) return;
 
     if (opponentIdx == -1) {
         // Clear targeting - broadcast to all so they remove the "attacking me" indicator
@@ -336,10 +345,10 @@ void BubbleGame::ProcessMalusQueue(BubbleArray &bArray, int currentFrame) {
         bArray.malusQueue.erase(bArray.malusQueue.begin());
 
         // Generate random bubble color (original: int(rand(@bubbles_images)) = 0..7)
-        int bubbleId = ranrange(0, bArray.numColors - 1);
+        int bubbleId = rng.Range(0, bArray.numColors - 1);
 
         // Choose column (original line 2231-2240): int(rand(7)) = 0..6
-        int cx = ranrange(0, 6);
+        int cx = rng.Range(0, 6);
 
         // If column is full (stickY would exceed row 12), try adjacent columns
         // (original's noinstantdeath logic avoids placing on full columns)
@@ -396,7 +405,7 @@ void BubbleGame::ProcessMalusQueue(BubbleArray &bArray, int currentFrame) {
     int shifting = 0;
     for (auto &malus : newMalusBubbles) {
         shifting += 7;
-        int randomShift = ranrange(0, 20);
+        int randomShift = rng.Range(0, 20);
         malus.posY += shifting + randomShift;
         malus.pos.y = (int)malus.posY;
     }
@@ -407,8 +416,8 @@ void BubbleGame::ProcessMalusQueue(BubbleArray &bArray, int currentFrame) {
     }
 
     // Send ALL 'm' messages (original line 2255-2256)
-    // Only local player (array 0) sends messages
-    if (bArray.playerAssigned == 0) {
+    // Only local player (array 0) sends messages, and only in a live session.
+    if (bArray.playerAssigned == 0 && EffectsEnabled()) {
         NetworkClient* netClient = NetworkClient::Instance();
         if (netClient && netClient->IsConnected()) {
             for (const auto &malus : newMalusBubbles) {
@@ -426,6 +435,9 @@ void BubbleGame::ProcessMalusQueue(BubbleArray &bArray, int currentFrame) {
 }
 
 void BubbleGame::SubmitScore(BubbleArray &bArray) {
+    // Playback keeps the in-memory score but never writes the highscore table
+    // or campaign progress. See the SessionMode boundary in bubblegame.h.
+    if (!EffectsEnabled()) return;
     SDL_Log("Level %d completed with score: %d", curLevel, bArray.score);
     if (currentSettings.networkGame || currentSettings.playerCount > 1) return;  // Only track 1P levelset scores
 
@@ -779,7 +791,7 @@ int BubbleGame::TimedSecondsRemaining() const {
     if (currentSettings.gameMode != GameMode::Timed) return 0;
     if (modeTimerStart == 0) return currentSettings.timedSeconds;
     const Uint32 limit = (Uint32)currentSettings.timedSeconds * 1000u;
-    const Uint32 elapsed = SDL_GetTicks() - modeTimerStart;
+    const Uint32 elapsed = stepGameClockMs - modeTimerStart;
     if (elapsed >= limit) return 0;
     return (int)((limit - elapsed + 999u) / 1000u);
 }
@@ -844,9 +856,9 @@ void BubbleGame::UpdateTimedRound() {
     const Uint32 kReportWaitMs  = 1500;
     const Uint32 kVerdictGraceMs = 2000;
 
-    if (modeTimerStart == 0) modeTimerStart = SDL_GetTicks();
+    if (modeTimerStart == 0) modeTimerStart = stepGameClockMs;
     const Uint32 limit = (Uint32)currentSettings.timedSeconds * 1000u;
-    const Uint32 now = SDL_GetTicks();
+    const Uint32 now = stepGameClockMs;
 
     if (!modeTimerExpired) {
         if (now - modeTimerStart < limit) return;
@@ -881,7 +893,13 @@ void BubbleGame::UpdateTimedRound() {
     }
 
     NetworkClient *netClient = NetworkClient::Instance();
-    const bool leader = netClient && netClient->IsLeader();
+    // Live: query the singleton exactly as before. Playback: NetworkClient has
+    // no room configured, so IsLeader() would always read false and a round
+    // captured live as the leader would replay with the longer non-leader wait
+    // branch in this function and run out of recorded steps before resolving.
+    // Read the leader flag captured at round start instead (R6b).
+    const bool leader = EffectsEnabled() ? (netClient && netClient->IsLeader())
+                                         : wasNetworkLeader;
     if (!leader && now < modeTimerDeadline + kVerdictGraceMs) return;
 
     if (now < modeTimerDeadline) {
@@ -930,7 +948,7 @@ bool BubbleGame::IsTournamentRound() const {
 }
 
 void BubbleGame::ReportTournamentResult(const std::string& winnerNick) {
-    if (tournamentResultReported || !IsTournamentRound()) return;
+    if (!EffectsEnabled() || tournamentResultReported || !IsTournamentRound()) return;
     NetworkClient* net = NetworkClient::Instance();
     const auto& assignment = net->tournaments.assignment;
     if (assignment.returned) {
@@ -1051,7 +1069,7 @@ void BubbleGame::CheckGameState(BubbleArray &bArray, bool countForRoot) {
             bool isDefaultClassic = !currentSettings.networkGame &&
                                      currentSettings.playerCount == 1 &&
                                      !currentSettings.randomLevels;
-            if (isDefaultClassic && GameSettings::Instance()->uploadHighscoreStatsEnabled()) {
+            if (EffectsEnabled() && isDefaultClassic && GameSettings::Instance()->uploadHighscoreStatsEnabled()) {
                 const std::string playerName = GameSettings::Instance()->savedNickname;
                 const int playTimeSeconds = (int)((SDL_GetTicks() - gameStartTime) / 1000);
                 sendGameStats(bArray.score, curLevel, playTimeSeconds, playerName);
@@ -1143,6 +1161,8 @@ void BubbleGame::AddMalusAlert(BubbleArray &target, const std::string &fromNick,
 }
 
 void BubbleGame::SendLobbyMatchSummary() {
+    // Playback never posts to the lobby. See the SessionMode boundary.
+    if (!EffectsEnabled()) return;
     // Leader posts a match summary to the lobby chatroom. Called from QuitToTitle AFTER
     // PartGame() has returned us to IN_LOBBY (so TALK uses the lobby text protocol).
     NetworkClient* netClient = NetworkClient::Instance();

@@ -112,6 +112,13 @@ struct BubbleGameTestAccess {
     static int timedRemaining(const BubbleGame& game) { return game.TimedSecondsRemaining(); }
     static void startTimedClock(BubbleGame& game, Uint32 startedAt) {
         game.modeTimerStart = startedAt;
+        // UpdateTimedRound()/TimedSecondsRemaining() read the per-step game
+        // clock (R5b's stepGameClockMs seam) instead of calling SDL_GetTicks()
+        // directly. These callers drive UpdateTimedRound() without a full
+        // AdvanceSimulation() step, so pin the step clock to the real current
+        // time -- exactly what the production AdvanceSimulation() would have
+        // supplied for "now".
+        game.stepGameClockMs = SDL_GetTicks();
     }
     static bool timerExpired(const BubbleGame& game) { return game.modeTimerExpired; }
     static int winner(const BubbleGame& game) { return game.roundWinnerIdx; }

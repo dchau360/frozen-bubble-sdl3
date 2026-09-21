@@ -52,6 +52,12 @@ enum KeyConfigRow {
     // alongside Arcade Mode -- both are about how a solo campaign run plays
     // out, not general app settings. Rows below were renumbered down by one
     // to fill the gap.
+    //
+    // R4d put the Replays page here (kKeyRowReplays) for the same reason:
+    // the title screen's 8 button slots are physically full, so its entry
+    // point is a row on this panel. Inserted directly above kKeyRowResetAll
+    // so the destructive "reset all" stays the panel's last row; every row
+    // from there down was renumbered by one.
 #ifndef __WASM_PORT__
     // The browser build has no fullscreen row: an SDL fullscreen flag blacks out
     // the canvas there, so the CSS shell does the scaling instead.
@@ -64,12 +70,15 @@ enum KeyConfigRow {
     kKeyRowRemoveAdsMonth   = 9,
     kKeyRowRemoveAdsYear    = 10,
     kKeyRowRemoveAdsForever = 11,
-    kKeyRowResetAll   = 12,
+    kKeyRowReplays    = 12,
+    kKeyRowResetAll   = 13,
 # else
-    kKeyRowResetAll   = 9,
+    kKeyRowReplays    = 9,
+    kKeyRowResetAll   = 10,
 # endif
 #else
-    kKeyRowResetAll   = 8,
+    kKeyRowReplays    = 8,
+    kKeyRowResetAll   = 9,
 #endif
     kKeyRowLast = kKeyRowResetAll
 };
