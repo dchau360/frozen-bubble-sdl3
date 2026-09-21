@@ -2059,6 +2059,26 @@ static std::string androidFetchUrl(const char* url) {
 }
 #endif
 
+// Builds the shell command line curlFetch()/DetectGeoLocation()/
+// DetectCountry() hand to popen(). popen() always runs its command through
+// cmd.exe on Windows, never a POSIX shell -- the single-quoted URL and
+// '2>/dev/null' redirection those three call sites used unconditionally are
+// both Unix-shell syntax cmd.exe does not understand (cmd.exe quotes with "
+// not ', and has no /dev/null), so curl either received the URL wrapped in
+// literal stray quote characters or the whole command line failed at the
+// redirection before curl ever ran. Either way FetchPublicServers() silently
+// returned zero servers on Windows -- this is why the Windows client never
+// saw fb.servequake.com or any other listed server. cmd.exe's null device is
+// NUL, and its own quoting is double quotes; these URLs are compile-time
+// constants with no shell metacharacters, so plain double-quoting is safe.
+static void buildCurlCommand(char* cmd, size_t cmdSize, const char* url) {
+#ifdef _WIN32
+    snprintf(cmd, cmdSize, "curl -s --connect-timeout 5 --max-time 8 \"%s\" 2>NUL", url);
+#else
+    snprintf(cmd, cmdSize, "curl -s --connect-timeout 5 --max-time 8 '%s' 2>/dev/null", url);
+#endif
+}
+
 static void curlFetch(const char* url, std::vector<ServerInfo>& out, bool originalFormat) {
 #if defined(__ANDROID__) || defined(__IOS_PORT__)
 #ifdef __ANDROID__
@@ -2099,8 +2119,7 @@ static void curlFetch(const char* url, std::vector<ServerInfo>& out, bool origin
     return;
 #endif
     char cmd[512];
-    snprintf(cmd, sizeof(cmd),
-             "curl -s --connect-timeout 5 --max-time 8 '%s' 2>/dev/null", url);
+    buildCurlCommand(cmd, sizeof(cmd), url);
     FILE* fp = popen(cmd, "r");
     if (!fp) return;
 
@@ -2173,7 +2192,7 @@ std::string NetworkClient::DetectGeoLocation() {
         body = IosFetchUrl(url, 8);
 #else
         char cmd[256];
-        snprintf(cmd, sizeof(cmd), "curl -s --connect-timeout 5 --max-time 8 '%s' 2>/dev/null", url);
+        buildCurlCommand(cmd, sizeof(cmd), url);
         FILE* fp = popen(cmd, "r");
         if (fp) {
             char buf[64];
@@ -2228,7 +2247,7 @@ std::string NetworkClient::DetectCountry() {
         body = IosFetchUrl(url, 8);
 #else
         char cmd[256];
-        snprintf(cmd, sizeof(cmd), "curl -s --connect-timeout 5 --max-time 8 '%s' 2>/dev/null", url);
+        buildCurlCommand(cmd, sizeof(cmd), url);
         FILE* fp = popen(cmd, "r");
         if (fp) {
             char buf[64];
