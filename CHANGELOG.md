@@ -1,5 +1,9 @@
 # Changelog
 
+## v2.4.106
+
+- **Fixed the Windows client never seeing the public server list.** `NetworkClient::FetchPublicServers()`/`DetectGeoLocation()`/`DetectCountry()` fetched their URLs by shelling out to `curl` via `popen()`, using POSIX shell syntax (a single-quoted URL, `2>/dev/null` for stderr). `popen()` on Windows always runs its command through `cmd.exe`, which understands neither — so the fetch silently returned zero servers, and fb.servequake.com (or any other listed server) never showed up in the NET GAME list. Fixed with a small platform-aware helper that uses `cmd.exe`-correct quoting on Windows; no behavior change on Linux/macOS.
+
 ## v2.4.105
 
 - **Per-player platform, input-device, and country badges.** Other players in a network match now see a small colored badge beside each name showing their OS (Windows/macOS/Linux/Android/iOS/browser) and, per round, whether they're shooting with keyboard, mouse, touchscreen, or gamepad — in the lobby sidebar, on the live boards, and in the post-round stats table. Chips, not OS logos: the recognisable marks are trademarks, and nothing recognisable survives at this UI's ~9px badge size anyway. Both also reach a server's Discord relay if one is running, alongside a new country flag derived from the same IP-geolocation lookup already used for the lobby's world map — country only, never the finer coordinates behind that map, and Discord-only: no in-game UI shows it. All three are self-declared by the client and never gate anything, the same trust posture the existing `BOT` flag already has. The client keeps advertising protocol `FB/1.3` in its own commands and gates the new `PLATFORM`/`COUNTRY` commands on the *server's* advertised minor instead, so a client running this update still works against a server that hasn't been redeployed yet. See `CLAUDE.md`'s "Per-player platform, input-device and country tags" and the updated privacy policy.
