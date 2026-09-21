@@ -41,6 +41,7 @@
 //    or hostile length prefix is rejected before any read/allocate is
 //    attempted from it.
 
+#include <cstddef>
 #include <cstdint>
 #include <vector>
 

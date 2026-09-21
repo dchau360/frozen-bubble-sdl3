@@ -1164,7 +1164,7 @@ int main() {
         CapturedRecording rec = RunLiveRound(
             renderer, setup, 13579u,
             [&](BubbleGame& g) {
-                g.LoadLevelset(customLevelPath.c_str());
+                g.LoadLevelset(customLevelPath.string().c_str());
                 g.LoadLevel(1);
                 BubbleArray& p = BubbleGameTestAccess::player(g, 0);
                 p.curLaunch = 1;
