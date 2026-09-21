@@ -1,5 +1,9 @@
 # Changelog
 
+## v2.4.109
+
+- **Fixed replay desync on network rounds that auto-advance mid-frame.** When a network round transitions to the next round automatically (e.g. a hosted bot's own server connection sending the final "ready" signal while a simulation step is already executing), the round restart was happening *inside* an in-flight simulation frame rather than at the start of a fresh one. That made the recorded round's starting step number collide with its own first recorded step, so a replay of such a round would immediately report a desync on the very first frame of playback. Fixed by ending that transition frame immediately after starting the new round, matching every other round-start path. Recordings captured before this fix already have the bad data baked in and will still show as desynced; anything recorded from this version on is unaffected.
+
 ## v2.4.108
 
 - **This is the release that actually ships what v2.4.107 attempted.** The `v2.4.107` tag's CI build failed on Linux and Windows before publishing anything (a missing `<cstddef>` include broke the GCC build, and a `std::filesystem::path` was passed where `const char*` was expected, breaking the MinGW build) — no GitHub Release or itch.io deploy went out under that tag. Both are fixed here; no functional changes beyond v2.4.107's own content below.

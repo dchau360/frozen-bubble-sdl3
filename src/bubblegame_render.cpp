@@ -1143,6 +1143,12 @@ bool BubbleGame::AdvanceSimulationAtScale(float deltaScale, Uint32 gameClockMs) 
                     // Opponent won or we lost - replay same level
                     ReloadGame(curLevel);
                 }
+                // TEMP-FIX-TEST: bail out of this frame immediately after an
+                // in-frame round transition, so this frame produces only a
+                // RoundStart record and the new round's first real step (and
+                // its StepRecord/Assertion) happens on the NEXT call instead
+                // of the same already-incremented simStep.
+                return true;
             }
         }  // end live-only network I/O
 
