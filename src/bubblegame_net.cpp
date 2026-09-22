@@ -214,22 +214,28 @@ void BubbleGame::PumpBotConnections() {
         while (entry.second->TakeGameMessage(&senderId, &payload)) {
             if (senderId != myId || payload.empty() || payload[0] != 'g') continue;
             if (botIdx < 0 || botIdx >= currentSettings.playerCount) continue;
-            char destNick[64];
-            int malusCount;
-            if (sscanf(payload.c_str() + 1, "%63[^:]:%d", destNick, &malusCount) != 2) continue;
+            // Route through the exact same capture-and-apply path
+            // ProcessNetworkMessages()'s main loop uses for every other
+            // inbound message (stepInboundEvents.push_back() then
+            // ApplyInboundGameMessage()) instead of crediting malusQueue
+            // here directly. This 'g' arrives nowhere else -- the server
+            // never echoes a sender's own message back to their own
+            // connection, so it only surfaces here, off the bot's private
+            // socket. Applying it inline (as this used to) left it out of
+            // stepInboundEvents, and replay only ever replays
+            // stepInboundEvents: a hosted bot's malusQueue (part of the
+            // hashed board state) would silently diverge from the live
+            // recording the instant the local player attacked their own
+            // bot, then cascade into a shared-RNG desync once
+            // ProcessMalusQueue() later drained the queue live but found it
+            // empty on replay. ApplyInboundGameMessage()'s own 'g' handler
+            // already resolves the destination array by nickname across
+            // every owned board, so it doesn't need botIdx at all.
             SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION,
-                         "PumpBotConnections: 'g' from local player on bot socket %d: dest='%s' count=%d botNick='%s'",
-                    botIdx, destNick, malusCount, bubbleArrays[botIdx].playerNickname.c_str());
-            if (bubbleArrays[botIdx].playerNickname != destNick) continue;
-            for (int i = 0; i < malusCount; i++) {
-                bubbleArrays[botIdx].malusQueue.push_back(frameCount);
-            }
-            bubbleArrays[botIdx].rRecv += malusCount;
-            bubbleArrays[botIdx].lastAttackerIdx = 0;  // only the local player's own connection reaches here
-            AddMalusAlert(bubbleArrays[botIdx], netClient->GetPlayerNick(), malusCount);
-            SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION,
-                         "PumpBotConnections: credited %d malus to bot array %d, queue size now %zu",
-                    malusCount, botIdx, bubbleArrays[botIdx].malusQueue.size());
+                         "PumpBotConnections: 'g' from local player on bot socket %d: %s",
+                    botIdx, payload.c_str());
+            stepInboundEvents.push_back({senderId, payload});
+            ApplyInboundGameMessage(senderId, payload);
         }
     }
 }
