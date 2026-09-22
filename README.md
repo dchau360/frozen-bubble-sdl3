@@ -77,7 +77,7 @@ Mouse and touch aiming are enabled per-room by the host, and change the in-game 
 
 **Controllers** (Android TV and desktop): D-pad left/right aims, **A** or D-pad up fires and selects, **B** goes back, **Start** pauses. Rebind anything under Settings → Keys, per player — navigate with up/down, press Enter, then press the button you want. **Reset ctrl defaults** restores that player's defaults, and **Reset all settings** at the bottom of the same panel restores everything — key bindings, speed, sound, mouse aim. It asks for a second press before it does anything.
 
-Mouse/touch aim is on by default where there is no keyboard — in the browser, on iOS, and on Android phones and tablets — and off on desktop and Android TV. Either way it is a per-device setting you can change, and keyboard or controller aiming keeps working alongside it: whichever you used last takes over.
+Mouse/touch aim is on by default everywhere except Android TV, which has neither a mouse nor a touchscreen. Either way it is a per-device setting you can change, and keyboard or controller aiming keeps working alongside it: whichever you used last takes over.
 
 ---
 
