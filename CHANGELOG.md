@@ -1,5 +1,10 @@
 # Changelog
 
+## v2.4.110
+
+- **Fixed replay desync when a hosted bot's own owner attacked it.** `PumpBotConnections()` credited a hosted bot's malus queue inline the moment its human host sent it an attack (the only place that message ever arrives, since the server never echoes a sender's own message back to their own connection) — bypassing the step log every other inbound network effect goes through for replay. Since the malus queue is part of the hashed board state, a replay of such a round would silently diverge the instant the attack landed, then desync outright once the queue was drained a few frames later. Fixed by routing that credit through the same step log as everything else.
+- **Added keyboard/gamepad focus navigation to the replay playback screen's control bar.** Pause, speed, restart, exit and shot-navigation previously only had direct hotkeys (SPACE, LEFT/RIGHT, R, comma/period) with no way to reach them by moving a visible cursor, unlike every other screen in the menu. LEFT/RIGHT now moves a gold-highlighted focus cursor along the six buttons and ENTER activates whichever one is focused; UP/DOWN adjusts the focused control's own value where one exists (speed). The existing direct hotkeys are unchanged.
+
 ## v2.4.109
 
 - **Fixed replay desync on network rounds that auto-advance mid-frame.** When a network round transitions to the next round automatically (e.g. a hosted bot's own server connection sending the final "ready" signal while a simulation step is already executing), the round restart was happening *inside* an in-flight simulation frame rather than at the start of a fresh one. That made the recorded round's starting step number collide with its own first recorded step, so a replay of such a round would immediately report a desync on the very first frame of playback. Fixed by ending that transition frame immediately after starting the new round, matching every other round-start path. Recordings captured before this fix already have the bad data baked in and will still show as desynced; anything recorded from this version on is unaffected.
