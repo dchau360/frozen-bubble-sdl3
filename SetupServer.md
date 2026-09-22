@@ -334,7 +334,12 @@ players in the post-round stats table: one alert per round, saying who won,
 which game mode it was played in (Classic/Clear/Race/Timed — unlabelled if
 a room never set one), and every player who was in the room, each with
 whatever platform, input-device, and country badges their own client
-reported (empty for one that reported none, e.g. a pre-1.4 client).
+reported (empty for one that reported none, e.g. a pre-1.4 client), plus a
+win-count chart and a bubbles-popped chart underneath.
+
+<p align="center">
+  <img src="docs/screenshots/discord-round-stats.jpg" alt="Discord round-result message: winner, roster with platform/input badges, a win-count chart, and a bubbles-popped chart" width="480">
+</p>
 
 **The winner name is not verified.** It's exactly what the reporting
 client's own message said, the same way the round-over notice every other
