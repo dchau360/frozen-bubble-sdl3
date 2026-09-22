@@ -1,5 +1,10 @@
 # Changelog
 
+## v2.4.111
+
+- **Mouse/touch aim now defaults to on for desktop clients.** Previously only the browser (WASM), iOS, and touchscreen Android devices got a `true` default; Linux/macOS/Windows started with it off. A player's own saved preference always wins — this only changes what a fresh install starts with.
+- **Fixed the title-screen theme reverting to Slate on every restart.** Cycling the MENU STYLE row updated the setting in memory and wrote it into the in-memory settings dictionary, but never ensured the `[Menu]` section header existed first. For anyone whose `settings.ini` predated the Menu Style feature (no `[Menu]` section yet), the ini writer silently drops any key under a section it can't enumerate — so a newly chosen theme applied for that session but reverted on the next launch. Fixed by creating the section header before writing the key, matching how other settings already guard against this.
+
 ## v2.4.110
 
 - **Fixed replay desync when a hosted bot's own owner attacked it.** `PumpBotConnections()` credited a hosted bot's malus queue inline the moment its human host sent it an attack (the only place that message ever arrives, since the server never echoes a sender's own message back to their own connection) — bypassing the step log every other inbound network effect goes through for replay. Since the malus queue is part of the hashed board state, a replay of such a round would silently diverge the instant the attack landed, then desync outright once the queue was drained a few frames later. Fixed by routing that credit through the same step log as everything else.
