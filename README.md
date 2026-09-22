@@ -171,9 +171,14 @@ Building from source: [docs/BUILDING.md](docs/BUILDING.md).
 someone connects to a public server, plus a result alert at the end of every
 round — game mode, winner (or draw), and the full player roster, each name
 with a platform badge, an input-device badge, and a country flag where a
-player's client reported them — if you're looking for an opponent or just
-keeping an eye on how things are going. The same platform and input badges
-also show up next to opponents' names in-game.
+player's client reported them, a win-count chart, and a bubbles-popped chart
+— if you're looking for an opponent or just keeping an eye on how things are
+going. The same platform and input badges also show up next to opponents'
+names in-game.
+
+<p align="center">
+  <img src="docs/screenshots/discord-round-stats.jpg" alt="Discord round-result message: winner, roster with platform/input badges, a win-count chart, and a bubbles-popped chart" width="480">
+</p>
 
 Running your own server? It can post its own join and round-result alerts to
 a Discord channel of your choosing — see [SetupServer.md](SetupServer.md#optional--discord-join--result-alerts).
