@@ -199,7 +199,11 @@ bool GameSettings::DefaultMouseEnabled()
     // settings are read, so the answer is already available here.
     return DeviceHasTouchscreen();
 #else
-    return false;
+    // Desktop (Linux/macOS/Windows): every desktop machine has a mouse, and
+    // mouse aim+fire is a strictly additive input path -- keyboard and
+    // controller aiming keep working exactly the same whether this is on or
+    // off. Only the *default* changes here; a stored preference still wins.
+    return true;
 #endif
 }
 
@@ -641,6 +645,16 @@ void GameSettings::SetValue(const char* option, const char* value)
         // is spelled out rather than including menutheme.h, which would drag
         // SDL_ttf into every translation unit that reads a setting.
         menuThemeId = (menuThemeId + 1) % 5;
+        // Section header has to exist or iniparser_dump_ini drops every key
+        // under it (see SetReplayKeepCount/SaveHostSettings for the same
+        // guard). CreateDefaultSettings() writes this on a fresh install, but
+        // a settings.ini carried over from a build that predates the Menu
+        // Style feature never has it -- for those players this SaveSettings()
+        // call silently wrote the new theme into an in-memory dictionary
+        // entry that iniparser_dump_ini() then dropped on the floor, so the
+        // theme applied for the rest of the session but reverted to Slate on
+        // every restart.
+        iniparser_set(optDict, "Menu", NULL);
         iniparser_set(optDict, option, std::to_string(menuThemeId).c_str());
         SaveSettings();
         return;

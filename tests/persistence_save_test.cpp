@@ -183,6 +183,36 @@ int main() {
     settings->ReadSettings();
     CHECK(settings->menuTheme() == 3);   // survives a restart
 
+    // Regression: a settings.ini carried over from a build that predates the
+    // Menu Style feature has no [menu] section at all. SetValue("Menu:Theme",
+    // "") used to update the in-memory dictionary without first creating the
+    // bare "Menu" section key, and iniparser_dump_ini() only ever dumps keys
+    // under a section it can enumerate -- so the new theme silently vanished
+    // from every SaveSettings() call and reverted to Slate (2) on the next
+    // restart, even though the title screen itself showed the newly chosen
+    // theme for the rest of that session. Simulate that pre-feature file by
+    // stripping the [menu] section out of what this test has built up so far.
+    {
+        std::ifstream in(settingsPath);
+        std::string ini((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+        in.close();
+        const size_t secStart = ini.find("[menu]");
+        CHECK(secStart != std::string::npos);
+        size_t secEnd = ini.find('[', secStart + 1);
+        if (secEnd == std::string::npos) secEnd = ini.size();
+        ini.erase(secStart, secEnd - secStart);
+        std::ofstream(settingsPath) << ini;
+    }
+    settings->ReadSettings();
+    CHECK(settings->menuTheme() == 2);            // no key at all -> falls back to default
+    CHECK(!iniHasKeyValue(settingsPath, "theme", "2"));  // confirms the section is really gone
+
+    settings->SetValue("Menu:Theme", "");
+    CHECK(settings->menuTheme() == 3);
+    settings->ReadSettings();
+    CHECK(settings->menuTheme() == 3);            // must survive: this is the actual bug
+    CHECK(iniHasKeyValue(settingsPath, "theme", "3"));
+
     // A file written by some other build, carrying a theme id this one has no
     // style entry for, must fall back to the same default (Slate) rather
     // than index past the end of the table -- MenuStyleFor() is indexed by
