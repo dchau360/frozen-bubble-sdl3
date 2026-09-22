@@ -433,6 +433,7 @@ void MainMenu::BeginReplayPlayback(int entry) {
     replayPlayer->SetPaused(false);
     replayPlayer->SetSpeed(1.0f);
     playingReplay = true;
+    replayPlaybackFocus = 1;  // Pause, the most likely first action
     PlayMenuSFX("menu_selected");
 }
 
@@ -910,18 +911,27 @@ void MainMenu::ReplayPlaybackRender() {
     replayNextShotRect = {rowX + shotBtnW + gap + 4 * (btnW + gap), y, shotBtnW, btnH};
 
     const bool paused = replayPlayer->IsPaused();
-    DrawOverlayButton(rend, panelText, replayPrevShotRect, "< Shot", false, true);
+    // Each button draws gold when it currently holds keyboard/gamepad focus
+    // (replayPlaybackFocus), same visual language confirmDialogFocusNo uses
+    // elsewhere in this panel family -- so UP/DOWN+ENTER navigation has a
+    // visible cursor, not just an inferred one.
+    DrawOverlayButton(rend, panelText, replayPrevShotRect, "< Shot",
+                      replayPlaybackFocus == 0, true);
     DrawOverlayButton(rend, panelText, replayPauseRect, paused ? "Play" : "Pause",
-                      false, true);
+                      replayPlaybackFocus == 1, true);
     char speedLabel[16];
     std::snprintf(speedLabel, sizeof(speedLabel), "Speed %gx",
                   static_cast<double>(replayPlayer->Speed()));
-    DrawOverlayButton(rend, panelText, replaySpeedRect, speedLabel, false, true);
-    DrawOverlayButton(rend, panelText, replayRestartRect, "Restart", false, true);
-    // Exit draws gold once the recording has ended, so the way back is the
-    // thing that stands out exactly when a player needs it.
-    DrawOverlayButton(rend, panelText, replayExitRect, "Exit", ended, true);
-    DrawOverlayButton(rend, panelText, replayNextShotRect, "Shot >", false, true);
+    DrawOverlayButton(rend, panelText, replaySpeedRect, speedLabel,
+                      replayPlaybackFocus == 2, true);
+    DrawOverlayButton(rend, panelText, replayRestartRect, "Restart",
+                      replayPlaybackFocus == 3, true);
+    // Exit also draws gold once the recording has ended, so the way back is
+    // the thing that stands out exactly when a player needs it.
+    DrawOverlayButton(rend, panelText, replayExitRect, "Exit",
+                      ended || replayPlaybackFocus == 4, true);
+    DrawOverlayButton(rend, panelText, replayNextShotRect, "Shot >",
+                      replayPlaybackFocus == 5, true);
 
     // A finished or desynced recording does not auto-exit -- the player needs
     // an explicit way back -- but it is labelled so they know ENTER works.
@@ -938,7 +948,48 @@ void MainMenu::ReplayPlaybackRender() {
     }
 
     menulist::DrawFooterHint(rend, panelText,
-        "SPACE pause   LEFT/RIGHT speed   R restart   ,/. shot   ESC exit");
+        "L/R+ENTER select   UP/DN speed   SPACE pause   R restart   ESC exit");
+}
+
+// Fires whichever control replayPlaybackFocus is currently on -- the same
+// action ENTER takes, and what a tap on that same button does. Shared so
+// keyboard/gamepad-focus activation and the direct hotkeys stay in sync.
+void MainMenu::ActivateReplayPlaybackFocus() {
+    switch (replayPlaybackFocus) {
+        case 0:
+            replayPlayer->SeekToPreviousShot();
+            PlayMenuSFX("menu_change");
+            break;
+        case 1:
+            replayPlayer->SetPaused(!replayPlayer->IsPaused());
+            PlayMenuSFX("menu_change");
+            break;
+        case 2: {
+            int index = 0;
+            for (int i = 0; i < (int)std::size(kReplaySpeeds); ++i) {
+                if (std::fabs(replayPlayer->Speed() - kReplaySpeeds[i]) < 0.001f) {
+                    index = i;
+                    break;
+                }
+            }
+            replayPlayer->SetSpeed(kReplaySpeeds[(index + 1) % (int)std::size(kReplaySpeeds)]);
+            PlayMenuSFX("menu_change");
+            break;
+        }
+        case 3:
+            replayPlayer->Restart();
+            PlayMenuSFX("menu_selected");
+            break;
+        case 4:
+            ExitReplayPlayback();
+            break;
+        case 5:
+            replayPlayer->SeekToNextShot();
+            PlayMenuSFX("menu_change");
+            break;
+        default:
+            break;
+    }
 }
 
 bool MainMenu::ReplayPlaybackKey(SDL_Event *e) {
@@ -949,12 +1000,29 @@ bool MainMenu::ReplayPlaybackKey(SDL_Event *e) {
         case SDLK_AC_BACK:
             ExitReplayPlayback();
             return true;
+        case SDLK_LEFT:
+        case SDLK_RIGHT: {
+            // Horizontal row of buttons -> horizontal keys move the cursor
+            // along it, matching the confirmDialogFocusNo convention this
+            // panel family already uses for LEFT/RIGHT-moves-focus.
+            const int count = 6;  // PrevShot, Pause, Speed, Restart, Exit, NextShot
+            replayPlaybackFocus = (e->key.key == SDLK_RIGHT)
+                ? (replayPlaybackFocus + 1) % count
+                : (replayPlaybackFocus + count - 1) % count;
+            PlayMenuSFX("menu_change");
+            return true;
+        }
         case SDLK_SPACE:
             replayPlayer->SetPaused(!replayPlayer->IsPaused());
             PlayMenuSFX("menu_change");
             return true;
-        case SDLK_LEFT:
-        case SDLK_RIGHT: {
+        case SDLK_UP:
+        case SDLK_DOWN: {
+            // UP/DOWN adjusts the currently-focused control's value -- today
+            // that's only the Speed button; on any other button this is a
+            // no-op, same as LEFT/RIGHT doing nothing on a non-adjustable
+            // row elsewhere in this menu family.
+            if (replayPlaybackFocus != 2) return true;
             int index = 0;
             for (int i = 0; i < (int)std::size(kReplaySpeeds); ++i) {
                 if (std::fabs(replayPlayer->Speed() - kReplaySpeeds[i]) < 0.001f) {
@@ -963,8 +1031,8 @@ bool MainMenu::ReplayPlaybackKey(SDL_Event *e) {
                 }
             }
             const int count = (int)std::size(kReplaySpeeds);
-            index = (e->key.key == SDLK_RIGHT) ? (index + 1) % count
-                                               : (index + count - 1) % count;
+            index = (e->key.key == SDLK_UP) ? (index + 1) % count
+                                            : (index + count - 1) % count;
             replayPlayer->SetSpeed(kReplaySpeeds[index]);
             PlayMenuSFX("menu_change");
             return true;
@@ -982,10 +1050,14 @@ bool MainMenu::ReplayPlaybackKey(SDL_Event *e) {
             PlayMenuSFX("menu_change");
             return true;
         case SDLK_RETURN:
-            // ENTER only leaves once the recording has actually ended; during
-            // playback it would be too easy to exit by accident.
+            // Once the recording has ended, ENTER always exits -- consistent
+            // with the on-screen note below, regardless of which button
+            // happens to have focus. Otherwise it activates whatever the
+            // UP/DOWN cursor is currently on.
             if (replayPlayer->IsFinished() || replayPlayer->IsDesynced()) {
                 ExitReplayPlayback();
+            } else {
+                ActivateReplayPlaybackFocus();
             }
             return true;
         default:
@@ -1002,42 +1074,16 @@ bool MainMenu::HandleReplayPlaybackTap(float lx, float ly) {
                ly >= r.y && ly < r.y + r.h;
     };
 
-    if (hit(replayPauseRect)) {
-        replayPlayer->SetPaused(!replayPlayer->IsPaused());
-        PlayMenuSFX("menu_change");
-        return true;
-    }
-    if (hit(replaySpeedRect)) {
-        int index = 0;
-        for (int i = 0; i < (int)std::size(kReplaySpeeds); ++i) {
-            if (std::fabs(replayPlayer->Speed() - kReplaySpeeds[i]) < 0.001f) {
-                index = i;
-                break;
-            }
-        }
-        replayPlayer->SetSpeed(kReplaySpeeds[(index + 1) % (int)std::size(kReplaySpeeds)]);
-        PlayMenuSFX("menu_change");
-        return true;
-    }
-    if (hit(replayRestartRect)) {
-        replayPlayer->Restart();
-        PlayMenuSFX("menu_selected");
-        return true;
-    }
-    if (hit(replayPrevShotRect)) {
-        replayPlayer->SeekToPreviousShot();
-        PlayMenuSFX("menu_change");
-        return true;
-    }
-    if (hit(replayNextShotRect)) {
-        replayPlayer->SeekToNextShot();
-        PlayMenuSFX("menu_change");
-        return true;
-    }
-    if (hit(replayExitRect)) {
-        ExitReplayPlayback();
-        return true;
-    }
+    // A tap also moves the keyboard/gamepad focus cursor onto the button it
+    // hit, so a mixed tap-then-keyboard session stays consistent with what's
+    // drawn highlighted (same ordering as ReplayPlaybackRender's rects: 0=
+    // PrevShot, 1=Pause, 2=Speed, 3=Restart, 4=Exit, 5=NextShot).
+    if (hit(replayPrevShotRect)) { replayPlaybackFocus = 0; ActivateReplayPlaybackFocus(); return true; }
+    if (hit(replayPauseRect))    { replayPlaybackFocus = 1; ActivateReplayPlaybackFocus(); return true; }
+    if (hit(replaySpeedRect))    { replayPlaybackFocus = 2; ActivateReplayPlaybackFocus(); return true; }
+    if (hit(replayRestartRect))  { replayPlaybackFocus = 3; ActivateReplayPlaybackFocus(); return true; }
+    if (hit(replayExitRect))     { replayPlaybackFocus = 4; ActivateReplayPlaybackFocus(); return true; }
+    if (hit(replayNextShotRect)) { replayPlaybackFocus = 5; ActivateReplayPlaybackFocus(); return true; }
 
     // Tap-anywhere-to-return only once the recording has ended: a stray tap
     // must not end a replay the player is still watching.

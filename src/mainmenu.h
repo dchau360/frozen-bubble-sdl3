@@ -849,6 +849,7 @@ private:
     void ReplayPlaybackRender();
     bool ReplayPlaybackKey(SDL_Event *e);
     bool HandleReplayPlaybackTap(float lx, float ly);
+    void ActivateReplayPlaybackFocus();
     void DrawReplayConfirmDialog(SDL_Renderer *rend, const char *title,
                                  const char *body, const char *yesLabel,
                                  bool danger);
@@ -856,6 +857,19 @@ private:
     // read by HandleReplayPlaybackTap.
     SDL_Rect replayPauseRect{}, replaySpeedRect{}, replayRestartRect{},
                replayExitRect{}, replayPrevShotRect{}, replayNextShotRect{};
+    // Keyboard/gamepad focus among the control bar's six buttons, in the
+    // same left-to-right order they're drawn: 0=PrevShot, 1=Pause, 2=Speed,
+    // 3=Restart, 4=Exit, 5=NextShot. LEFT/RIGHT moves it along the row and
+    // ENTER activates whichever it's on (matching confirmDialogFocusNo's own
+    // LEFT/RIGHT-moves-focus convention elsewhere in this panel family);
+    // UP/DOWN instead adjusts the focused control's own value where one
+    // exists (Speed only, today). It's drawn gold-highlighted -- every
+    // control on this screen already had a direct hotkey (SPACE/R/,/./ESC),
+    // but nothing let a player reach them by moving a visible cursor the way
+    // every other panel in this app works, which is exactly what tripped up
+    // the first real playthrough of this screen. Reset to 1 (Pause) whenever
+    // playback begins (BeginReplayPlayback).
+    int replayPlaybackFocus = 1;
 };
 
 #endif // MAINMENU_H
