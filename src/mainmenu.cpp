@@ -799,6 +799,15 @@ void MainMenu::ReturnToNetLobby() {
     networkInLobby = true;
     networkInputMode = 0;
     networkGameStarting = false;
+    // The round that just ended was started by a Start press that set this
+    // (mainmenu_input.cpp's kRoomStart handler) minutes ago, so leaving it
+    // set here means NetPanelRender()'s stale-timeout check -- state !=
+    // IN_GAME and more than 5s since that press -- fires on the very first
+    // frame back in the lobby, showing "Start request timed out" for a
+    // request that in fact succeeded. Every other way back to the lobby
+    // (fresh connect, ESC-leaving a game) already clears it; a round ending
+    // normally must too.
+    netStartRequested = false;
     syncWaitStart = 0;
     wasmBotWaitStart = 0;
     pendingLobbyConnect = false;
