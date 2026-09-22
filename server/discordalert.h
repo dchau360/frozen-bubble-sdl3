@@ -109,13 +109,29 @@ void discordalert_fire_join_event(const char* nick, const char* ip, const char* 
 // the PLATFORM command and so is fixed for a connection; inputs_csv comes from
 // the 'i' opcode and is whatever device that player last actually shot with,
 // so it can legitimately differ from one round to the next -- which is the
-// point of carrying it per round rather than per room. A no-op (and free)
-// when the relay isn't configured.
+// point of carrying it per round rather than per room.
+//
+// popped_csv is index-aligned with roster_csv the same way, from
+// build_popped_csv() (game.c): each seat's bubbles-popped count for the
+// round, or an empty field if that seat's own 'S' opcode hadn't arrived by
+// the time this fired -- unlike every field above, this one did NOT come
+// from this server's own bookkeeping; it is self-reported by each client
+// (the 'S' opcode) and only reaches this datagram after game.c clamps it
+// against that seat's server-observed shot count (see MAX_POPS_PER_SHOT/
+// POP_CEILING_GRACE, game.c), same reasoning as the winner_nick trust
+// caveat above but with an actual ceiling behind it. A clamped field
+// carries a trailing '!'. This is also *why* this whole event now fires up
+// to PENDING_STATS_TIMEOUT_SECS (game.c) after the round's own 'F' instead
+// of synchronously with it -- most seats' 'S' hasn't arrived yet at 'F'
+// time, so the caller (process_msg_prio_'s maybe_fire_pending_result())
+// waits for either every seat to report or that timeout, whichever comes
+// first, before calling this. A no-op (and free) when the relay isn't
+// configured, same as every fire function here.
 void discordalert_fire_result_event(int game_id, int round_number, const char* roster_csv,
                                      const char* wins_csv, int victories_limit,
                                      const char* winner_nick, int game_mode,
                                      const char* platforms_csv, const char* inputs_csv,
-                                     const char* countries_csv);
+                                     const char* countries_csv, const char* popped_csv);
 
 // Call once per match-end, immediately after the round-end alert above,
 // when that round's winner has just reached the room's own VICTORIESLIMIT

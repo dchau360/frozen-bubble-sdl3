@@ -811,6 +811,7 @@ void connections_manager(void)
                 fd_set write_set;  // fds with a non-empty output queue (BUG-007)
 
                 tournament_tick(g_get_monotonic_time() / G_USEC_PER_SEC);
+                game_tick(g_get_monotonic_time() / G_USEC_PER_SEC);
                 reregister_server_if_needed();
 
                 if (recalculate_list_games)
@@ -855,7 +856,8 @@ void connections_manager(void)
                          * classification, use a short timeout so native clients
                          * receive the server greeting promptly instead of waiting
                          * for the full gracetime interval. */
-                        if (ws_pending_count > 0 || tournament_has_running()) {
+                        if (ws_pending_count > 0 || tournament_has_running() ||
+                            games_have_pending_stats()) {
                                 tv.tv_sec = 0;
                                 tv.tv_usec = 200000;
                         } else {

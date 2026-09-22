@@ -49,6 +49,21 @@
 enum game_status { GAME_STATUS_OPEN, GAME_STATUS_CLOSED, GAME_STATUS_PLAYING };
 
 #define MAX_PLAYERS_PER_GAME 20
+
+/* Deferred Discord round-result post (see struct game's stats_pending and
+ * process_msg_prio_'s 'F'/'S' handling below). PENDING_STATS_TIMEOUT_SECS
+ * matches the 2s precedent already used for the client's own replay
+ * result-tail (docs/REPLAY_PLAN.md's R4a design). MAX_POPS_PER_SHOT is the
+ * whole board's capacity -- 13 rows, up to 8 wide (src/bubblegame_level.cpp:173,
+ * 218, 272; src/bubblegame.h:331) -- i.e. the most any single shot's
+ * cluster-pop-plus-cascade could ever clear, deliberately the theoretical
+ * max rather than a tuned "typical" number, so the plausibility ceiling it
+ * feeds only ever catches obviously-impossible claims. POP_CEILING_GRACE is
+ * a flat allowance on top of that for round-boundary/timing slop. */
+#define PENDING_STATS_TIMEOUT_SECS 2
+#define MAX_POPS_PER_SHOT 104
+#define POP_CEILING_GRACE 10
+
 struct game
 {
         enum game_status status;
@@ -104,6 +119,33 @@ struct game
                                         * SETOPTIONS has no PLAYERTEAM_Pn field past
                                         * P5, same cap NUMCOLORS_Pn/AIMGUIDE_Pn already
                                         * have (src/mainmenu_teampanel.cpp). */
+
+        /* Bubbles-popped stat for the Discord round-result alert, and the
+         * plausibility check that guards it -- see build_popped_csv() and
+         * the 'f'/'S' sniffs in process_msg_prio_. All four are per-seat,
+         * indexed and shifted exactly like players_wins[]/players_team[]
+         * above, and are reset together (not on 'n' -- see
+         * maybe_fire_pending_result()) once this round's deferred Discord
+         * post actually fires, since a slow-to-report 'S' can still be
+         * arriving after 'n' already reset other per-round bookkeeping. */
+        int players_fire_count[MAX_PLAYERS_PER_GAME];      /* server-observed 'f' tally, this round */
+        int players_popped[MAX_PLAYERS_PER_GAME];          /* clamped self-reported 'S' popped count */
+        int players_popped_reported[MAX_PLAYERS_PER_GAME]; /* has this seat's 'S' arrived yet? */
+        int players_popped_flagged[MAX_PLAYERS_PER_GAME];  /* was the report clamped? */
+
+        /* The Discord round-result post for the round that just ended
+         * (msg[1]=='F') is deferred until every currently-seated player has
+         * reported its own popped-bubbles stat, or PENDING_STATS_TIMEOUT_SECS
+         * passes -- whichever comes first (maybe_fire_pending_result()).
+         * Everything else 'F' does (round_number, report_round_result(), the
+         * lobby's own instant broadcast, result_posted) stays synchronous;
+         * only the Discord datagram itself waits, so it can carry every
+         * seat's popped count instead of firing before most have arrived. */
+        int stats_pending;       /* a round's 'F' arrived; Discord post is deferred */
+        int64_t stats_deadline;  /* g_get_monotonic_time()/G_USEC_PER_SEC deadline */
+        char pending_winner[32]; /* snapshot of the 'F' payload for the deferred post */
+        int pending_match_fire;  /* does this round's deferred post also need a MATCH event? */
+        int pending_match_wins;
 
         int game_id;        /* opaque, monotonically-assigned key identifying
                               * this room to the relay across every round it
@@ -424,9 +466,18 @@ static void create_game(int fd, char* nick, int max_players)
                 for (k = 0; k < MAX_PLAYERS_PER_GAME; k++) {
                         g->players_wins[k] = 0;
                         g->players_team[k] = 0;
+                        g->players_fire_count[k] = 0;
+                        g->players_popped[k] = 0;
+                        g->players_popped_reported[k] = 0;
+                        g->players_popped_flagged[k] = 0;
                 }
         }
         g->team_count = 0;
+        g->stats_pending = 0;
+        g->stats_deadline = 0;
+        g->pending_winner[0] = '\0';
+        g->pending_match_fire = 0;
+        g->pending_match_wins = 0;
         g->game_id = next_game_id++;
         games = g_list_append(games, g);
         open_players = g_list_remove(open_players, GINT_TO_POINTER(fd));
@@ -635,6 +686,37 @@ static void build_country_csv(struct game* g, char* out, size_t outsz)
                         strconcat(out, ",", outsz);
                 if (c[0])
                         strconcat(out, c, outsz);
+        }
+}
+
+/* Comma-joined per-player popped-bubble counts, index-aligned with
+ * build_roster_csv() the same way build_wins_csv() is. Unlike every other
+ * per-round CSV here, this one is NOT purely fb-server's own bookkeeping --
+ * it originates entirely from each client's self-reported 'S' opcode
+ * (src/bubblegame_net.cpp), the same trust posture as the 'F' winner claim
+ * (see the big comment on the 'F' sniff in process_msg_prio_): a modified
+ * client could lie about its own popped count. What this server CAN verify
+ * independently is how many actual shots ('f' opcodes) it relayed for that
+ * seat this round (players_fire_count[], tallied in process_msg_prio_) --
+ * so a reported count is clamped to MAX_POPS_PER_SHOT times that tally,
+ * plus POP_CEILING_GRACE, before it ever reaches this CSV. A clamped field
+ * carries a trailing '!'; a seat whose 'S' never arrived before this
+ * round's deferred post fired is an empty field, not a "0" -- an honest
+ * "we don't know," matching the empty-field convention build_tags_csv()
+ * already uses for the same reason. */
+static void build_popped_csv(struct game* g, char* out, size_t outsz)
+{
+        int i;
+        out[0] = '\0';
+        for (i = 0; i < g->players_number; i++) {
+                char n[24];
+                if (i > 0)
+                        strconcat(out, ",", outsz);
+                if (!g->players_popped_reported[i])
+                        continue;
+                snprintf(n, sizeof(n), "%d%s", g->players_popped[i],
+                         g->players_popped_flagged[i] ? "!" : "");
+                strconcat(out, n, outsz);
         }
 }
 
@@ -1652,6 +1734,92 @@ static int report_round_result(struct game* g, const char* winner_nick)
         return (wslot >= 0) ? g->players_wins[wslot] : 0;
 }
 
+/* Fires the deferred Discord RESULT (and, if applicable, MATCH) event for
+ * `g`'s currently-pending round, once either every currently-seated player
+ * has reported an 'S' for it or PENDING_STATS_TIMEOUT_SECS has elapsed
+ * since the round's 'F' -- whichever comes first. A no-op when nothing is
+ * pending. Called from two places: the 'S' sniff in process_msg_prio_, the
+ * instant the last expected report arrives (the common case -- usually well
+ * under a second after 'F'), and game_tick() every server loop iteration,
+ * to catch a report that never arrives (a player who disconnects
+ * mid-report, or an older client that never sends 'S' at all).
+ *
+ * Deliberately re-reads live g-> state (players_number, players_nick[], ...)
+ * rather than a snapshot taken at 'F' time, since a player can leave during
+ * the wait -- same reasoning build_roster_csv()/build_wins_csv() already
+ * apply to every other round-result field, just now also true of the
+ * window between 'F' and this firing. */
+static void maybe_fire_pending_result(struct game* g, int64_t now)
+{
+        int all_reported, i;
+        char roster[512], win_counts[256], platforms[128], inputs[128];
+        char countries[256], popped_csv[256];
+
+        if (!g->stats_pending) return;
+
+        all_reported = 1;
+        for (i = 0; i < g->players_number; i++) {
+                if (!g->players_popped_reported[i]) { all_reported = 0; break; }
+        }
+        if (!all_reported && now < g->stats_deadline) return;
+
+        build_roster_csv(g, roster, sizeof(roster));
+        build_wins_csv(g, win_counts, sizeof(win_counts));
+        build_tags_csv(g, platform_tag, platforms, sizeof(platforms));
+        build_tags_csv(g, input_tag, inputs, sizeof(inputs));
+        build_country_csv(g, countries, sizeof(countries));
+        build_popped_csv(g, popped_csv, sizeof(popped_csv));
+
+        discordalert_fire_result_event(g->game_id, g->round_number, roster, win_counts,
+                                        g->victories_limit,
+                                        g->pending_winner[0] ? g->pending_winner : NULL,
+                                        g->game_mode, platforms, inputs, countries, popped_csv);
+        if (g->pending_match_fire)
+                discordalert_fire_match_event(g->game_id, g->pending_winner,
+                                               g->pending_match_wins, g->game_mode);
+
+        g->stats_pending = 0;
+        g->stats_deadline = 0;
+        g->pending_match_fire = 0;
+        g->pending_winner[0] = '\0';
+        for (i = 0; i < MAX_PLAYERS_PER_GAME; i++) {
+                g->players_fire_count[i] = 0;
+                g->players_popped[i] = 0;
+                g->players_popped_reported[i] = 0;
+                g->players_popped_flagged[i] = 0;
+        }
+}
+
+/* Called once per server loop iteration (connections_manager(), net.c),
+ * unconditionally, the same way tournament_tick() already is -- see
+ * games_have_pending_stats() below for how the loop is also made to wake
+ * up often enough (every ~200ms rather than up to 30s) while any of this
+ * has work to do. */
+void game_tick(int64_t now)
+{
+        GList* item;
+        for (item = games; item; item = item->next) {
+                struct game* g = item->data;
+                if (g->stats_pending)
+                        maybe_fire_pending_result(g, now);
+        }
+}
+
+/* Cheap scan mirroring tournament_has_running()'s own role: lets
+ * connections_manager() (net.c) drop its select() timeout to 200ms while
+ * any room has a Discord post waiting on stragglers, the same way it
+ * already does for a running tournament -- otherwise an idle server's
+ * default 30s timeout would make PENDING_STATS_TIMEOUT_SECS meaningless. */
+int games_have_pending_stats(void)
+{
+        GList* item;
+        for (item = games; item; item = item->next) {
+                if (((struct game*)item->data)->stats_pending)
+                        return 1;
+        }
+        return 0;
+}
+
 void process_msg_prio_(int fd, char* msg, ssize_t len, struct game* g)
 {
         GList * conn_to_terminate = NULL;
@@ -1660,6 +1828,13 @@ void process_msg_prio_(int fd, char* msg, ssize_t len, struct game* g)
         if (g) {
                 if (g->tournament_id && len >= 2 && msg[1] == 'n') return;
                 int i;
+                /* Hoisted out of the stamping block below so the 'f'/'S' sniffs
+                   further down can also use it -- a negative slot (the departure
+                   relay's synthesized message, see the comment below) simply
+                   leaves those sniffs as no-ops, the same way it already leaves
+                   the stamp itself alone. */
+                int sender_slot = find_player_slot(g, fd);
+
                 /* Stamp the sender byte with the seat this server assigned, so a
                    client cannot claim to be another player. Peers read msg[0] as
                    the originating seat and act on it, and everything below this
@@ -1669,11 +1844,8 @@ void process_msg_prio_(int fd, char* msg, ssize_t len, struct game* g)
                    departure relay announces a player the caller has already
                    removed from the game, and supplies the correct id itself.
                    Leave that message alone. */
-                {
-                        int sender_slot = find_player_slot(g, fd);
-                        if (sender_slot >= 0 && len > 0)
-                                msg[0] = g->players_id[sender_slot];
-                }
+                if (sender_slot >= 0 && len > 0)
+                        msg[0] = g->players_id[sender_slot];
 
                 /* Sniff round-end ('F') and ready-for-next-round ('n') for the
                  * Discord match-result alert. Read-only with respect to
@@ -1713,7 +1885,15 @@ void process_msg_prio_(int fd, char* msg, ssize_t len, struct game* g)
                  * see its git history) so that the roster/wins pair handed
                  * to discordalert_fire_result_event() reflects *this*
                  * round's win, not the previous one's: the relay's win-count
-                 * chart would otherwise always be one round stale. */
+                 * chart would otherwise always be one round stale.
+                 *
+                 * The Discord datagram itself is no longer fired right here --
+                 * see maybe_fire_pending_result() above. Everything else in
+                 * this block (round_number, report_round_result()'s own
+                 * instant lobby broadcast, result_posted) stays exactly as
+                 * synchronous as before; only arming the pending state and
+                 * possibly firing it (if every seat's 'S' already happened to
+                 * be in by now) happens here instead of an immediate post. */
                 if (!g->tournament_id && len >= 3 && msg[1] == 'F' && !g->result_posted) {
                         char winner[32] = "";
                         size_t wlen = (size_t)len - 3;  /* id + 'F' + '\n' */
@@ -1726,23 +1906,14 @@ void process_msg_prio_(int fd, char* msg, ssize_t len, struct game* g)
                         g->round_number++;
                         {
                                 int wins = report_round_result(g, winner[0] ? winner : NULL);
-                                char roster[512];
-                                char win_counts[256];
-                                char platforms[128];
-                                char inputs[128];
-                                char countries[256];
-                                build_roster_csv(g, roster, sizeof(roster));
-                                build_wins_csv(g, win_counts, sizeof(win_counts));
-                                build_tags_csv(g, platform_tag, platforms, sizeof(platforms));
-                                build_tags_csv(g, input_tag, inputs, sizeof(inputs));
-                                build_country_csv(g, countries, sizeof(countries));
-                                discordalert_fire_result_event(g->game_id, g->round_number, roster,
-                                                                win_counts, g->victories_limit,
-                                                                winner[0] ? winner : NULL,
-                                                                g->game_mode, platforms, inputs,
-                                                                countries);
-                                if (winner[0] && g->victories_limit > 0 && wins >= g->victories_limit)
-                                        discordalert_fire_match_event(g->game_id, winner, wins, g->game_mode);
+                                int64_t now = g_get_monotonic_time() / G_USEC_PER_SEC;
+                                snprintf(g->pending_winner, sizeof(g->pending_winner), "%s", winner);
+                                g->pending_match_fire = (winner[0] && g->victories_limit > 0 &&
+                                                          wins >= g->victories_limit) ? 1 : 0;
+                                g->pending_match_wins = wins;
+                                g->stats_pending = 1;
+                                g->stats_deadline = now + PENDING_STATS_TIMEOUT_SECS;
+                                maybe_fire_pending_result(g, now);
                         }
                         g->result_posted = 1;
                 } else if (!g->tournament_id && len >= 2 && msg[1] == 'n') {
@@ -1768,6 +1939,41 @@ void process_msg_prio_(int fd, char* msg, ssize_t len, struct game* g)
                          * outlives a room and needs no shifting when someone
                          * leaves mid-match. */
                         input_tag[fd] = msg[2];
+                } else if (!g->tournament_id && len >= 2 && msg[1] == 'f' && sender_slot >= 0) {
+                        /* Not a new opcode -- 'f' is the existing, high-frequency
+                         * per-shot fire message (f{angle}:{color},
+                         * src/bubblegame_net.cpp), sent once per real shot. This
+                         * just tallies it per seat for the round, independent of
+                         * anything the client later claims in its own 'S' --
+                         * build_popped_csv()'s comment explains why that needs to
+                         * be something the server observed itself. Reset when the
+                         * round's deferred Discord post fires
+                         * (maybe_fire_pending_result()), not on 'n' -- see the
+                         * comment on players_fire_count[] in struct game. */
+                        g->players_fire_count[sender_slot]++;
+                } else if (!g->tournament_id && len >= 4 && msg[1] == 'S' && sender_slot >= 0) {
+                        /* Round stats from this seat: S{fired}:{popped}:{sent}:
+                         * {recv}:{kills}:{blocked} (src/bubblegame_net.cpp). Only
+                         * 'popped' (the 2nd field) is used here -- see
+                         * build_popped_csv()'s comment for the trust posture and
+                         * the clamp below. Bounds-copied into a small stack buffer
+                         * first rather than sscanf'd straight out of msg, mirroring
+                         * the 'F' arm's own manual wlen-bounded walk above, since
+                         * msg is a raw socket buffer with no guarantee of being
+                         * null-terminated at exactly this payload's end. */
+                        char payload[64];
+                        size_t plen = (size_t)len - 3;  /* id + 'S' + '\n' */
+                        int popped = 0, cap;
+                        if (plen >= sizeof(payload)) plen = sizeof(payload) - 1;
+                        memcpy(payload, msg + 2, plen);
+                        payload[plen] = '\0';
+                        sscanf(payload, "%*d:%d", &popped);
+                        if (popped < 0) popped = 0;
+                        cap = g->players_fire_count[sender_slot] * MAX_POPS_PER_SHOT + POP_CEILING_GRACE;
+                        g->players_popped_flagged[sender_slot] = (popped > cap) ? 1 : 0;
+                        g->players_popped[sender_slot] = (popped > cap) ? cap : popped;
+                        g->players_popped_reported[sender_slot] = 1;
+                        maybe_fire_pending_result(g, g_get_monotonic_time() / G_USEC_PER_SEC);
                 }
 
                 for (i = 0; i < g->players_number; i++) {
@@ -1873,6 +2079,10 @@ void player_part_game_(int fd, char* reason)
                         g->players_id[j] = g->players_id[j + 1];
                         g->players_wins[j] = g->players_wins[j + 1];
                         g->players_team[j] = g->players_team[j + 1];
+                        g->players_fire_count[j] = g->players_fire_count[j + 1];
+                        g->players_popped[j] = g->players_popped[j + 1];
+                        g->players_popped_reported[j] = g->players_popped_reported[j + 1];
+                        g->players_popped_flagged[j] = g->players_popped_flagged[j + 1];
                 }
                 g->players_number--;
 

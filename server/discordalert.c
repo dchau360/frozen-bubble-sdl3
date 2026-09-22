@@ -125,7 +125,7 @@ void discordalert_fire_result_event(int game_id, int round_number, const char* r
                                      const char* wins_csv, int victories_limit,
                                      const char* winner_nick, int game_mode,
                                      const char* platforms_csv, const char* inputs_csv,
-                                     const char* countries_csv)
+                                     const char* countries_csv, const char* popped_csv)
 {
     if (!relay_configured) return;
 
@@ -149,13 +149,18 @@ void discordalert_fire_result_event(int game_id, int round_number, const char* r
     // letter pairs and commas (is_country_tag_ok, game.c), so none of the
     // three needs more escaping than wins_csv does; they sit just before the
     // servername for the same reason every other field does -- that one is
-    // the unbounded remainder.
+    // the unbounded remainder. popped_csv (build_popped_csv(), game.c) is
+    // digits, commas and an occasional trailing '!' -- see this function's
+    // header comment for its very different trust posture from every field
+    // before it -- and needs no more escaping than wins_csv either, so it
+    // sits right before the servername too.
     char datagram[1024];
-    snprintf(datagram, sizeof(datagram), "RESULT|%d|%d|%d|%s|%s|%s|%d|%s|%s|%s|%s",
+    snprintf(datagram, sizeof(datagram), "RESULT|%d|%d|%d|%s|%s|%s|%d|%s|%s|%s|%s|%s",
              game_id, round_number, game_mode, winner_nick ? winner_nick : "",
              roster_csv ? roster_csv : "", wins_csv ? wins_csv : "", victories_limit,
              platforms_csv ? platforms_csv : "", inputs_csv ? inputs_csv : "",
-             countries_csv ? countries_csv : "", net_servername());
+             countries_csv ? countries_csv : "", popped_csv ? popped_csv : "",
+             net_servername());
 
     if (sendto(relay_socket, datagram, strlen(datagram), 0,
                (struct sockaddr*)&relay_addr, sizeof(relay_addr)) < 0) {

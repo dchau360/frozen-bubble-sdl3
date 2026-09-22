@@ -264,6 +264,106 @@ class WinChartTest(unittest.TestCase):
         self.assertNotIn("First to", chart)
 
 
+class PoppedCsvOkTest(unittest.TestCase):
+    """_popped_csv_ok() in isolation -- the shape check handle_datagram uses
+    to tell a new-format RESULT datagram's popped field from an old-format
+    datagram's servername landing in the same column (see _tag_csv_ok's own
+    docstring for why this disambiguation is needed at all)."""
+
+    def test_empty_field_is_ok(self):
+        self.assertTrue(relay._popped_csv_ok(""))
+
+    def test_plain_digit_elements_are_ok(self):
+        self.assertTrue(relay._popped_csv_ok("12,0,104"))
+
+    def test_a_mix_of_empty_and_digit_elements_is_ok(self):
+        self.assertTrue(relay._popped_csv_ok("12,,5"))
+
+    def test_a_flagged_element_is_ok(self):
+        self.assertTrue(relay._popped_csv_ok("120!"))
+        self.assertTrue(relay._popped_csv_ok("12,120!,0"))
+
+    def test_a_bare_exclamation_point_is_not_ok(self):
+        self.assertFalse(relay._popped_csv_ok("!"))
+
+    def test_a_non_digit_element_is_not_ok(self):
+        self.assertFalse(relay._popped_csv_ok("alice"))
+
+    def test_a_server_name_shaped_field_is_not_ok(self):
+        # The actual disambiguation case: an old-format datagram's servername
+        # landing in this column must not pass as a popped CSV.
+        self.assertFalse(relay._popped_csv_ok("fb.example.org"))
+
+    def test_a_negative_number_is_not_ok(self):
+        # game.c clamps to >= 0 before this ever reaches the wire, so a '-'
+        # here is not a shape _popped_csv_ok should recognize.
+        self.assertFalse(relay._popped_csv_ok("-5"))
+
+    def test_a_decimal_is_not_ok(self):
+        self.assertFalse(relay._popped_csv_ok("1.5"))
+
+    def test_double_flag_is_not_ok(self):
+        self.assertFalse(relay._popped_csv_ok("12!!"))
+
+
+class PopChartTest(unittest.TestCase):
+    """_build_pop_chart() in isolation -- the monospace bubbles-popped bar
+    chart appended under a round-result message (see BadgeTest/CountryFlagTest
+    for the equivalent roster-badge integration points, and WinChartTest for
+    the sibling chart this one is modeled on)."""
+
+    def test_most_popped_sorts_first_and_bar_scales_to_the_peak(self):
+        chart = relay._build_pop_chart("alice,bob", "10,25")
+        lines = [l for l in chart.split("\n") if l and "`" not in l]
+        self.assertTrue(lines[0].startswith("bob"), "bob (25 popped) leads")
+        self.assertIn("█" * relay._CHART_WIDTH, lines[0], "the leader's bar is full")
+
+    def test_flagged_value_gets_a_star_label_and_a_footnote(self):
+        chart = relay._build_pop_chart("alice,bob", "10,50!")
+        self.assertIn("50*", chart)
+        self.assertIn("capped", chart)
+
+    def test_unflagged_values_get_no_footnote(self):
+        chart = relay._build_pop_chart("alice,bob", "10,25")
+        self.assertNotIn("capped", chart)
+        self.assertNotIn("*", chart)
+
+    def test_unreported_seat_renders_as_a_dash_not_a_zero_bar(self):
+        chart = relay._build_pop_chart("alice,bob", "10,")
+        lines = [l for l in chart.split("\n") if l and "`" not in l]
+        bob_line = [l for l in lines if l.startswith("bob")][0]
+        self.assertIn("--", bob_line)
+        self.assertNotIn("0", bob_line)
+
+    def test_mismatched_roster_and_popped_length_yields_no_chart(self):
+        self.assertEqual(relay._build_pop_chart("alice,bob,carol", "10,5"), "")
+
+    def test_unparsable_popped_entry_yields_no_chart(self):
+        self.assertEqual(relay._build_pop_chart("alice,bob", "10,not-a-number"), "")
+
+    def test_all_unreported_yields_no_chart(self):
+        self.assertEqual(relay._build_pop_chart("alice,bob", ","), "")
+
+    def test_empty_popped_csv_yields_no_chart(self):
+        # The field a pre-1.6 fb-server would leave off entirely.
+        self.assertEqual(relay._build_pop_chart("alice,bob", ""), "")
+
+    def test_all_zero_popped_yields_no_chart(self):
+        self.assertEqual(relay._build_pop_chart("alice,bob", "0,0"), "")
+
+    def test_single_player_can_still_chart(self):
+        # Unlike win charts (a "leaderboard" of one is meaningless), a solo
+        # round's own pop count is still worth showing.
+        chart = relay._build_pop_chart("alice", "12")
+        self.assertNotEqual(chart, "")
+        self.assertIn("alice", chart)
+
+    def test_hostile_name_in_roster_is_escaped(self):
+        chart = relay._build_pop_chart(
+            "alice,[click here](https://evil.example)", "10,25")
+        self.assertNotIn("](https://evil.example)", chart)
+
+
 class BuildMatchMessageTest(unittest.TestCase):
     """Match-over alerts: the champion who just reached the room's
     VICTORIESLIMIT. Same trust boundary as BuildResultMessageTest's winner
@@ -429,6 +529,24 @@ class ResultDatagramDispatchTest(unittest.TestCase):
         finally:
             relay.log.warning = original
         self.assertEqual(len(warned), 1)
+
+    def test_full_datagram_threads_popped_csv_through_to_the_pop_chart(self):
+        # The newest, full-width RESULT shape: game_id, round, mode, winner,
+        # roster, wins, victories_limit, platforms, inputs, countries,
+        # popped, servername -- 12 fields after "RESULT|".
+        captured = self._captured_line(
+            b"RESULT|7|2|0|alice|alice,bob|3,1|0|W,L|M,K|US,JP|50,20|fb.example.org")
+        self.assertEqual(len(captured), 1)
+        self.assertIn("Bubbles popped", captured[0])
+        self.assertIn("50", captured[0])
+        self.assertIn("20", captured[0])
+
+    def test_clamped_popped_field_shows_the_asterisk_and_footnote(self):
+        captured = self._captured_line(
+            b"RESULT|7|2|0|alice|alice,bob|3,1|0|W,L|M,K|US,JP|50!,20|fb.example.org")
+        self.assertEqual(len(captured), 1)
+        self.assertIn("50*", captured[0])
+        self.assertIn("capped", captured[0])
 
 
 class MatchDatagramDispatchTest(unittest.TestCase):
@@ -948,6 +1066,17 @@ class DatagramCompatTest(unittest.TestCase):
         self.assertEqual(len(posted), 1)
         self.assertIn("alice", posted[0])
         self.assertIn("bob", posted[0])
+
+    def test_result_with_country_but_no_popped_column_still_posts(self):
+        # A server built for the country tag (1.5) but before this feature
+        # (1.6) added popped stats: 11 fields, no popped column. Must still
+        # post, just with no bubbles-popped chart.
+        posted = self._handled(
+            b"RESULT|7|2|0|alice|alice,bob|1,0|0|W,L|M,K|US,JP|fb.example")
+        self.assertEqual(len(posted), 1)
+        self.assertIn(relay._PLATFORM_BADGES["W"], posted[0])
+        self.assertIn(relay._flag("US"), posted[0])
+        self.assertNotIn("Bubbles popped", posted[0])
 
     def test_an_old_servername_containing_a_pipe_is_not_read_as_a_tag(self):
         # The one genuinely ambiguous case, and why _tag_csv_ok exists: an

@@ -123,9 +123,9 @@ class ServerPlatformInputTest(unittest.TestCase):
                 return entry
         self.fail(f"{nick} not found in LIST open players {open_players!r}")
 
-    def drain_relay(self):
+    def drain_relay(self, timeout=0.8):
         out = []
-        deadline = time.monotonic() + 0.8
+        deadline = time.monotonic() + timeout
         while time.monotonic() < deadline:
             try:
                 data, _ = self.relay.recvfrom(2048)
@@ -161,13 +161,20 @@ class ServerPlatformInputTest(unittest.TestCase):
         return a, b
 
     def result_datagram(self):
-        fired = [d for d in self.drain_relay() if d.startswith("RESULT|")]
+        # RESULT now posts up to PENDING_STATS_TIMEOUT_SECS (game.c, 2s)
+        # after 'F' rather than synchronously with it -- fb-server holds the
+        # whole alert until every seat's own end-of-round 'S' report arrives
+        # or that deadline passes. Nothing in this file drives 'S' (it is
+        # not testing bubbles-popped stats), so every call here rides out
+        # the timeout path; the generous margin absorbs that plus the event
+        # loop's own ~200ms poll cadence while a post is pending.
+        fired = [d for d in self.drain_relay(timeout=3.0) if d.startswith("RESULT|")]
         self.assertEqual(len(fired), 1, f"expected one RESULT, got {fired!r}")
         # Field order is documented in discordalert.c; servername is the
         # unbounded remainder, so it stays last and is split off by count.
-        parts = fired[0].split("|", 11)
-        self.assertEqual(len(parts), 12, f"unexpected RESULT shape: {fired[0]!r}")
-        self.assertTrue(parts[11], "servername must remain the trailing field")
+        parts = fired[0].split("|", 12)
+        self.assertEqual(len(parts), 13, f"unexpected RESULT shape: {fired[0]!r}")
+        self.assertTrue(parts[12], "servername must remain the trailing field")
         return {
             "winner": parts[4],
             # players_nick[0] is CREATE's argument -- the room name, not the
@@ -177,6 +184,7 @@ class ServerPlatformInputTest(unittest.TestCase):
             "platforms": parts[8],
             "inputs": parts[9],
             "countries": parts[10],
+            "popped": parts[11],
         }
 
     # -- PLATFORM in LIST -------------------------------------------------

@@ -1,5 +1,9 @@
 # Changelog
 
+## v2.4.112
+
+- **Discord round-result alerts now include each player's bubbles popped.** A new bar chart under the round message shows who popped the most, alongside the existing win-count chart. Unlike every other field in that message, this one is self-reported by each client rather than the server's own bookkeeping — the server now cross-checks it against how many shots that player actually fired this round and clamps (flagging with `*`) anything wildly implausible, rather than trusting it outright. Getting every player's count in also means the alert now waits up to ~2 seconds after a round ends (for stragglers) rather than posting the instant the round's winner is known; the in-game "X wins!" lobby message is unaffected. See `CLAUDE.md`'s "Discord popped-stats" section and `server/discord-relay/README.md`'s "Bubbles popped chart" section for server operators running their own relay.
+
 ## v2.4.111
 
 - **Mouse/touch aim now defaults to on for desktop clients.** Previously only the browser (WASM), iOS, and touchscreen Android devices got a `true` default; Linux/macOS/Windows started with it off. A player's own saved preference always wins — this only changes what a fresh install starts with.

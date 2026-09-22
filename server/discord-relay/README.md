@@ -51,7 +51,7 @@ the datagram is dropped and gameplay is unaffected.
 ## Wire format
 
     JOIN|<nick>|<ip>|<geoloc>|<platform>|<country>|<servername>
-    RESULT|<game_id>|<round_number>|<game_mode>|<winner>|<roster>|<wins>|<victories_limit>|<platforms>|<inputs>|<countries>|<servername>
+    RESULT|<game_id>|<round_number>|<game_mode>|<winner>|<roster>|<wins>|<victories_limit>|<platforms>|<inputs>|<countries>|<popped>|<servername>
     MATCH|<game_id>|<wins>|<game_mode>|<champion>|<servername>
 
 `platform` is one char naming the client's OS -- `W`indows, `M`acOS,
@@ -67,11 +67,20 @@ one. `inputs` is which device that player actually shot with during the
 round -- `K`eyboard, `M`ouse, `T`ouch, `G`amepad -- which `fb-server` sniffs
 off the in-game `i` opcode the same way it sniffs `F` for the result itself.
 
+`popped` is the per-seat bubbles-popped count for the round, comma-joined and
+index-aligned with `roster` the same way `platforms`/`inputs`/`countries`
+are, with an empty element for a seat whose own `S` report hadn't arrived
+when `fb-server` gave up waiting -- see [Bubbles popped
+chart](#bubbles-popped-chart) below for the trust posture behind it and why
+`RESULT` itself now fires a moment after `F` rather than synchronously with
+it.
+
 Both datagram kinds are still accepted in their older shapes (pre-1.4
-entirely, and 1.4 without the country column), so a relay newer than the
-`fb-server` it is paired with keeps working. `handle_datagram()` tells them
-apart by field count plus a shape check on the tag fields, since a server
-name containing a `|` can otherwise fake the longer form.
+entirely, 1.4 without the country column, and pre-1.6 without the popped
+column), so a relay newer than the `fb-server` it is paired with keeps
+working. `handle_datagram()` tells them apart by field count plus a shape
+check on the tag fields, since a server name containing a `|` can otherwise
+fake a longer form.
 
 `geoloc` is the arriving player's self-reported `lat:lon` or an empty string
 -- in practice always empty, since the client sends `GEOLOC` after `NICK`
@@ -231,18 +240,64 @@ all-zero tally has nothing to show yet -- and in a 1-player room, where a
 (only possible if `VICTORIESLIMIT` is lowered mid-room) still clamps its bar
 at full instead of overflowing it.
 
-This is deliberately just win counts, the one notion of "score" this server
-already tracks (`g->players_wins[]`) -- a full per-round bubble-stats chart
-(bubbles fired/popped/sent/received) would need fb-server to start parsing
-the `S` opcode it has so far only ever relayed blindly between clients,
-which the win-count/roster bookkeeping above and in `CLAUDE.md` deliberately
-avoids.
+This chart is win counts only, the one notion of "score" this server's own
+bookkeeping tracks (`g->players_wins[]`) without trusting anything a client
+claims about gameplay. Bubbles popped is a separate chart, described next,
+built from a client-self-reported field the server can only bound, not
+verify -- see [Bubbles popped chart](#bubbles-popped-chart).
 
 The server never infers or posts a result from a player disconnecting
 mid-round (the stats bookkeeping that already exists for that, in
 `player_part_game_()`, stays local to the server) -- a dropped connection and
 a rage-quit are indistinguishable there, and publicly misattributing an
 outcome to a named player would be worse than not posting one.
+
+### Bubbles popped chart
+
+`RESULT` also carries each player's `popped` count (above) and
+`_build_pop_chart()` in `relay.py` renders it the same way
+`_build_win_chart()` renders win counts -- a monospace bar chart under the
+round message, most-popped first:
+
+    ```
+    bob   ██████████ 25
+    alice ████░░░░░░ 10
+    ```
+
+A seat whose `S` never arrived in time renders as `--` rather than a zero
+bar, since a missing report and a genuine zero are different things. Omitted
+entirely on a length mismatch or when nobody popped anything above zero,
+same "no chart beats a meaningless one" rule the win-count chart follows.
+
+**This field is self-reported and only bounded, not verified.** Unlike
+every other field in this datagram -- `roster`, `wins`, `platforms`,
+`inputs`, `countries` -- `popped` does not come from `fb-server`'s own
+bookkeeping; it is each client's own end-of-round `S` opcode
+(`S{fired}:{popped}:...`, previously only ever relayed blindly between
+peers, exactly as `CLAUDE.md`'s own history of this decision describes).
+`fb-server` now sniffs that opcode server-side (`server/game.c`) and clamps
+the claimed `popped` value against a plausibility ceiling: the number of
+real `f` (fire) opcodes that seat actually sent this round times the
+board's whole-capacity constant (`MAX_POPS_PER_SHOT`, 13 rows × up to 8
+columns), plus a small flat allowance (`POP_CEILING_GRACE`) for
+round-boundary slop. A report over that ceiling is clamped down to it and
+marked with a trailing `!` in the wire field, which `_build_pop_chart()`
+renders as a `*` on that row plus a one-line footnote. This makes the stat
+much harder to fake than editing one invisible field -- inflating it means
+visibly spamming fake shots in front of every other player in the room --
+but it is still not the same trust level as the roster or win counts, which
+come from the server's own authoritative bookkeeping.
+
+**This is also why `RESULT` no longer posts synchronously with `F`.** Each
+seat's own `S` typically arrives a little after the round's first `F`, as
+other players' boards finish settling asynchronously. `fb-server` now holds
+the whole `RESULT` (and any `MATCH` immediately following it) until either
+every currently-seated player has reported or `PENDING_STATS_TIMEOUT_SECS`
+(2s, `server/game.c`) passes, whichever comes first -- a real, deliberate
+delay of up to ~2s versus this alert's previous synchronous timing. The
+lobby's own instant "X wins!" broadcast (`report_round_result()`, driven by
+the same `F`) is untouched and still fires immediately; only the Discord
+post waits.
 
 ## Match results
 

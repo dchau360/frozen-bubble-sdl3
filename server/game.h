@@ -19,11 +19,18 @@
 
 #include <stdlib.h>
 #include <stdarg.h>
+#include <stdint.h>
 
 void player_connects(int fd);
 void player_disconnects(int fd);
 
 void calculate_list_games(void);
+
+/* Deferred Discord round-result posts (see struct game's stats_pending,
+ * game.c). The event loop supplies monotonic seconds, same contract as
+ * tournament_tick(). */
+void game_tick(int64_t now);
+int games_have_pending_stats(void);
 
 void player_part_game(int fd);
 void player_part_game_(int fd, char* reason);

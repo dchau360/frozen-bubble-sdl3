@@ -26,9 +26,16 @@ code from the COUNTRY command (empty when the client never sent one, which
 includes every client older than 1.4 and every browser build), posted as a
 flag emoji -- see _flag() for why a country goes where coordinates do not.
 
-    RESULT|<game_id>|<round>|<mode>|<winner>|<roster>|<wins>|<victories_limit>|<platforms>|<inputs>|<countries>|<servername>
+    RESULT|<game_id>|<round>|<mode>|<winner>|<roster>|<wins>|<victories_limit>|<platforms>|<inputs>|<countries>|<popped>|<servername>
 
-One per round-end, sniffed from the 'F' opcode server-side (game.c). game_id
+One per round-end, sniffed from the 'F' opcode server-side (game.c) -- but
+not fired synchronously with it: fb-server now defers this datagram until
+every currently-seated player has reported its own popped-bubbles stat (see
+<popped> below) or PENDING_STATS_TIMEOUT_SECS (2s, game.c) passes, whichever
+comes first, so it can arrive up to that long after the round actually
+ended. The in-game lobby's own "X wins!" broadcast is a separate,
+independent feature (report_round_result(), game.c) and is not delayed by
+any of this. game_id
 is an opaque int identifying the room, monotonically assigned by fb-server at
 CREATE and stable for the room's whole lifetime (see g->game_id's comment in
 server/game.c) -- used here only to group every round from the same room
@@ -58,10 +65,23 @@ the same again, two chars per seat, from the COUNTRY command. Every one of
 the three is empty per seat for a player whose client never reported it, so a
 room mixing client versions badges whoever it can and leaves the rest bare.
 
+popped is index-aligned with roster the same way, one field per seat: that
+player's bubbles-popped count for the round, from fb-server's own sniff of
+their 'S' opcode (build_popped_csv(), game.c). Unlike every field above,
+this one is NOT fb-server's own bookkeeping -- it is entirely self-reported
+by that client, the same trust posture as the winner field, except
+fb-server clamps it first against how many actual shots ('f' opcodes) it
+independently observed that seat fire this round; a clamped field carries a
+trailing '!'. A seat whose own 'S' had not arrived by the time this
+datagram fired (see the deferred-firing note above) is an empty field, not
+a "0" -- an honest "unknown," same convention platforms/inputs/countries
+already use for an unreported seat.
+
 Both datagram kinds are also accepted in their older shapes -- pre-1.4
-entirely, and 1.4-without-country -- see handle_datagram(), which tells them
-apart by field count plus a sanity check on the tag fields themselves, since
-a servername containing '|' can otherwise fake the higher count.
+entirely, 1.4-without-country, and pre-this-feature-without-popped -- see
+handle_datagram(), which tells them apart by field count plus a sanity
+check on the tag fields themselves, since a servername containing '|' can
+otherwise fake the higher count.
 
     MATCH|<game_id>|<wins>|<mode>|<champion>|<servername>
 
@@ -271,6 +291,25 @@ def _tag_csv_ok(field, valid):
     return all(part == "" or (len(part) == 1 and part in valid)
                for part in field.split(","))
 
+
+def _popped_csv_ok(field):
+    """True when `field` could be fb-server's own popped-stats CSV.
+
+    Same disambiguation role as _tag_csv_ok/_country_csv_ok: tells a new
+    datagram's popped field from an old datagram's servername when the
+    latter happens to contain a '|'. Every element is empty, plain digits,
+    or digits with one trailing '!' (see build_popped_csv(), game.c) -- no
+    realistic server name matches that shape for every comma-separated
+    piece of itself.
+    """
+    def _elem_ok(part):
+        if part == "":
+            return True
+        if part.endswith("!"):
+            part = part[:-1]
+        return part.isdigit()
+    return all(_elem_ok(part) for part in field.split(","))
+
 # Width, in block characters, of the longest bar _build_win_chart() draws.
 # When a room has a win-count target this is what "full" means; otherwise
 # every bar is scaled relative to the match's current leader instead, so
@@ -329,9 +368,68 @@ def _build_win_chart(roster_csv, wins_csv, victories_limit=0):
     return "```\n" + "\n".join(lines) + "\n```"
 
 
+def _build_pop_chart(roster_csv, popped_csv):
+    """Bubbles-popped bar chart, one row per player, most first.
+
+    popped_csv is build_popped_csv()'s per-seat field (game.c), index-aligned
+    with roster_csv the same way wins_csv/platforms_csv/etc. all are: an
+    empty field means that seat's own 'S' hadn't arrived yet when fb-server
+    gave up waiting (see the module docstring's deferred-firing note) --
+    shown as "--" rather than a bar, since a missing report is not the same
+    as a genuine zero. A trailing '!' on a field means fb-server clamped
+    that seat's self-reported count against its own server-observed shot
+    tally (game.c's plausibility ceiling) -- shown with a "*" and a one-line
+    footnote, since the number shown is a ceiling, not necessarily what the
+    client actually claimed.
+
+    Entirely self-reported by each client underneath that clamp (nothing
+    here has the roster's own is_nick_ok-backed trust level) -- see
+    build_popped_csv()'s own comment in game.c for the ceiling this already
+    went through before reaching here. Returns "" (never posted) on a
+    length mismatch against roster_csv, a malformed field, or when nobody
+    reported anything above zero -- same "no chart beats a meaningless one"
+    rule _build_win_chart() already applies.
+    """
+    names = [n for n in roster_csv.split(",") if n] if roster_csv else []
+    fields = popped_csv.split(",") if popped_csv else []
+    if len(fields) != len(names):
+        return ""
+    parsed = []  # (name, value_or_None, flagged)
+    for name, field in zip(names, fields):
+        if field == "":
+            parsed.append((name, None, False))
+            continue
+        flagged = field.endswith("!")
+        digits = field[:-1] if flagged else field
+        try:
+            parsed.append((name, int(digits), flagged))
+        except ValueError:
+            return ""
+    reported = [v for _, v, _ in parsed if v is not None]
+    if not reported or max(reported) <= 0:
+        return ""
+    peak = max(reported)
+    rows = sorted(parsed, key=lambda row: row[1] if row[1] is not None else -1, reverse=True)
+    display_names = [_sanitize_display(n) for n, _, _ in rows]
+    name_width = max(len(n) for n in display_names)
+    any_flagged = any(f for _, _, f in rows)
+    lines = []
+    for name, (_, value, flagged) in zip(display_names, rows):
+        if value is None:
+            lines.append(f"{name:<{name_width}} {'░' * _CHART_WIDTH} --")
+            continue
+        filled = min(_CHART_WIDTH, round(value * _CHART_WIDTH / peak))
+        bar = "█" * filled + "░" * (_CHART_WIDTH - filled)
+        label = f"{value}*" if flagged else str(value)
+        lines.append(f"{name:<{name_width}} {bar} {label}")
+    if any_flagged:
+        lines.append("* capped: implausible for shots fired this round")
+    return "```\n" + "\n".join(lines) + "\n```"
+
+
 def build_result_message(round_number, mode, winner, roster_csv, wins_csv, victories_limit,
                           servername, *, platforms_csv="", inputs_csv="",
-                          countries_csv=""):
+                          countries_csv="", popped_csv=""):
     """Round over: which round, who won (or a draw), what mode, who was
     playing, where.
 
@@ -371,6 +469,10 @@ def build_result_message(round_number, mode, winner, roster_csv, wins_csv, victo
     at the missing seats. A length that does not match the roster is treated
     as no tags at all -- misaligning these would attribute the wrong platform
     to a named player, which is worse than showing none.
+
+    popped_csv goes to _build_pop_chart() the same way wins_csv goes to
+    _build_win_chart() -- see there for the empty/flagged-field handling and
+    when the chart is omitted entirely.
     """
     round_label = f"Round {round_number} — " if round_number and round_number > 0 else ""
     mode_label = _GAME_MODE_NAMES.get(mode, "")
@@ -398,6 +500,9 @@ def build_result_message(round_number, mode, winner, roster_csv, wins_csv, victo
     chart = _build_win_chart(roster_csv, wins_csv, victories_limit)
     if chart:
         content = f"{content}\n{chart}"
+    pop_chart = _build_pop_chart(roster_csv, popped_csv)
+    if pop_chart:
+        content = f"{content}\n💥 Bubbles popped\n{pop_chart}"
     return content[:MAX_DISCORD_CONTENT]
 
 
@@ -615,17 +720,26 @@ async def handle_datagram(data, webhook_url):
         game_id = None
 
     elif kind == "RESULT":
-        # Same shape as JOIN above: two extra fields on current fb-server,
+        # Same shape as JOIN above: extra fields on current fb-server,
         # disambiguated from an old datagram with a '|' in its servername by
-        # checking that both candidates actually look like tag CSVs.
-        parts = rest.split("|", 10)
-        platforms_csv = inputs_csv = countries_csv = ""
+        # checking that each candidate actually looks like its own kind of
+        # CSV. One more rung than before, for the newest (popped) field.
+        parts = rest.split("|", 11)
+        platforms_csv = inputs_csv = countries_csv = popped_csv = ""
         tagged = (len(parts) >= 10 and _tag_csv_ok(parts[7], _PLATFORM_BADGES)
                   and _tag_csv_ok(parts[8], _INPUT_BADGES))
-        if tagged and len(parts) == 11 and _country_csv_ok(parts[9]):
+        if (tagged and len(parts) == 12 and _country_csv_ok(parts[9])
+                and _popped_csv_ok(parts[10])):
             (game_id_s, round_s, mode_s, winner, roster_csv, wins_csv,
              victories_limit_s, platforms_csv, inputs_csv, countries_csv,
-             servername) = parts
+             popped_csv, servername) = parts
+        elif tagged and len(parts) >= 11 and _country_csv_ok(parts[9]):
+            # 1.5 with country but not yet popped stats, or a servername
+            # with a '|' that also happens to look like nothing in
+            # particular past the country column.
+            (game_id_s, round_s, mode_s, winner, roster_csv, wins_csv,
+             victories_limit_s, platforms_csv, inputs_csv, countries_csv) = parts[:10]
+            servername = "|".join(parts[10:])
         elif tagged:
             # 1.4 without the country column, or a servername with a '|'.
             (game_id_s, round_s, mode_s, winner, roster_csv, wins_csv,
@@ -663,7 +777,7 @@ async def handle_datagram(data, webhook_url):
         content = build_result_message(round_number, mode, winner, roster_csv, wins_csv,
                                         victories_limit, servername,
                                         platforms_csv=platforms_csv, inputs_csv=inputs_csv,
-                                        countries_csv=countries_csv)
+                                        countries_csv=countries_csv, popped_csv=popped_csv)
         log_label = f"result for {winner or 'a draw'}"
         # Best-effort label for the thread's title only, not the message
         # itself -- see build_roster_csv()/players_nick[0] in game.c for why
