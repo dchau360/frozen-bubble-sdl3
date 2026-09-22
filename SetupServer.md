@@ -294,6 +294,19 @@ setup — see
 [server/discord-relay/README.md](server/discord-relay/README.md) if you are
 on the issuing end.
 
+> **Don't want to stand up your own Discord for this?** If you're running a
+> public Frozen Bubble server and would rather your join and round-result
+> alerts (including the bubbles-popped stats below) show up in the
+> project's own community Discord instead, open a
+> [GitHub issue](https://github.com/dchau360/frozen-bubble-sdl3/issues) or
+> ask in [the Discord](https://discord.gg/uE4dq8fqGW) itself and we'll issue
+> your server its own webhook into the shared round-stats channel — set it
+> as `DISCORD_WEBHOOK_URL` above and nothing else about your setup changes.
+> Each server gets its own webhook, not a shared credential, so one server's
+> access can be revoked later without touching anyone else's — see
+> [Collecting joins from servers you don't run](server/discord-relay/README.md#collecting-joins-from-servers-you-dont-run)
+> for exactly what that does and doesn't grant.
+
 A burst of joins can hit Discord's per-webhook rate limit; a request that
 gets rate-limited is logged and dropped rather than queued or retried.
 
