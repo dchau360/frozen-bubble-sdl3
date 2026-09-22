@@ -1,0 +1,61 @@
+name: Sync SetupServer.md to frozen-bubble-servers
+
+# SetupServer.md is authored here, but a copy has always also lived in
+# dchau360/frozen-bubble-servers (the public server-list repo), for anyone
+# who lands there looking for how to stand up a server rather than how to
+# build the game. That copy used to be maintained by hand and drifted badly
+# -- the last manual sync (2026-03-30) predates Docker, Discord alerts,
+# bots, and tournaments entirely. This keeps it current automatically
+# instead, the same "one source, published elsewhere" principle
+# pages.yml already uses for the privacy policy.
+#
+# Cross-repo push needs a real token: the default GITHUB_TOKEN this
+# workflow gets is scoped to THIS repo only and cannot write to
+# frozen-bubble-servers. SERVERS_REPO_SYNC_TOKEN is a PAT (classic, `repo`
+# scope, or fine-grained with Contents: Read and write on
+# dchau360/frozen-bubble-servers) stored as a secret on this repo -- see
+# SetupServer.md's own "Updating the Server" section for the parallel
+# (a token this project's own server pulls updates with) if you're looking
+# for how that one's scoped.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'SetupServer.md'
+      - '.github/workflows/sync-setup-server.yml'
+  workflow_dispatch:
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout frozen-bubble-sdl3 (source)
+        uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            SetupServer.md
+          sparse-checkout-cone-mode: false
+
+      - name: Checkout frozen-bubble-servers (destination)
+        uses: actions/checkout@v4
+        with:
+          repository: dchau360/frozen-bubble-servers
+          token: ${{ secrets.SERVERS_REPO_SYNC_TOKEN }}
+          path: frozen-bubble-servers
+
+      - name: Copy SetupServer.md across
+        run: cp SetupServer.md frozen-bubble-servers/SetupServer.md
+
+      - name: Commit and push if changed
+        working-directory: frozen-bubble-servers
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if git diff --quiet -- SetupServer.md; then
+            echo "SetupServer.md unchanged; nothing to sync."
+            exit 0
+          fi
+          git add SetupServer.md
+          git commit -m "docs: sync SetupServer.md from frozen-bubble-sdl3@${{ github.sha }}"
+          git push
