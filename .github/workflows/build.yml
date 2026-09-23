@@ -14,6 +14,10 @@ on:
     branches: [main]
     paths-ignore:
       - '**.md'
+  # Lets the self-hosted routing below (push/tag/dispatch -> self-hosted,
+  # pull_request -> GitHub-hosted) be exercised on demand from any branch,
+  # without needing an actual merge or tag to prove the runner picks up a job.
+  workflow_dispatch:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -91,9 +95,34 @@ jobs:
   # ────────────────────────────────────────────────────────────────
   build-linux:
     name: Linux (AppImage)
-    runs-on: ubuntu-22.04
+    # Self-hosted only for push/tag/dispatch (already-reviewed code); a
+    # pull_request always gets a GitHub-hosted runner regardless of who
+    # opened it. Running arbitrary PR-supplied code on a persistent,
+    # never-wiped self-hosted box is exactly the configuration GitHub's own
+    # docs warn against for public repos -- see the 2026-09-23 runner setup.
+    runs-on: ${{ github.event_name != 'pull_request' && fromJSON('["self-hosted", "Linux", "wsl-hb12f"]') || 'ubuntu-22.04' }}
     steps:
       - uses: actions/checkout@v4
+
+      # See tools/ci/keepawake-start.ps1. This job runs inside WSL2 on the
+      # SAME physical Windows host as the build-windows self-hosted runner --
+      # if Windows sleeps, it suspends the WSL2 guest too, taking this runner
+      # down with it -- so the sleep-prevention call has to reach the Windows
+      # host's power API, not anything inside the Linux guest. WSL exposes
+      # Windows binaries on PATH by default, and wslpath translates this
+      # checkout's Linux path into the \\wsl.localhost\... form powershell.exe
+      # needs. A no-op on GitHub-hosted runners, where powershell.exe/wslpath
+      # don't exist. Paired with "Allow system sleep again" at the end of this
+      # job, `if: always()`.
+      - name: Prevent system sleep during this job (Windows host)
+        if: ${{ github.event_name != 'pull_request' }}
+        run: |
+          if command -v powershell.exe >/dev/null 2>&1; then
+            powershell.exe -ExecutionPolicy Bypass -File "$(wslpath -w "$PWD/tools/ci/keepawake-start.ps1")" \
+              -PidFile 'C:\Windows\Temp\fb-ci-keepawake-linux.pid'
+          else
+            echo "powershell.exe not available (hosted runner) -- skipping"
+          fi
 
       - name: Install build tools
         run: |
@@ -108,39 +137,60 @@ jobs:
             zlib1g-dev libpng-dev libogg-dev libvorbis-dev \
             libfreetype-dev libharfbuzz-dev
 
+      # Self-hosted runners keep /tmp between runs (GitHub-hosted never does),
+      # so this must be both idempotent (a bare `git clone` into an
+      # already-existing /tmp/$repo fails outright on the second run) and
+      # cached (a marker file records the exact repo@tag set already built
+      # into this job's own prefix; a rebuild only happens on a real
+      # mismatch, which is also true on every hosted run since no marker
+      # exists yet). Installed under a job-specific /tmp prefix rather than
+      # the default system path: this job's Release build and the sanitizer
+      # job's RelWithDebInfo build queue on the SAME self-hosted runner every
+      # push (there's only one), and a shared install path would mean each
+      # job overwrites the other's build every single run.
       - name: Build SDL3 from source
         run: |
-          for repo_tag in \
-            "SDL release-3.4.4" \
-            "SDL_image release-3.4.2" \
-            "SDL_mixer release-3.2.0" \
-            "SDL_ttf release-3.2.2"; do
-            repo="${repo_tag% *}"
-            tag="${repo_tag#* }"
-            git clone --depth 1 --branch "$tag" \
-              "https://github.com/libsdl-org/${repo}.git" /tmp/$repo
-            cmake -S /tmp/$repo -B /tmp/$repo/build -G Ninja \
-              -DCMAKE_BUILD_TYPE=Release \
-              -DSDL_TEST_LIBRARY=OFF \
-              -DSDLIMAGE_SAMPLES=OFF \
-              -DSDLMIXER_TESTS=OFF -DSDLMIXER_EXAMPLES=OFF \
-              -DSDLMIXER_MP3=OFF -DSDLMIXER_FLAC=OFF \
-              -DSDLMIXER_OPUS=OFF -DSDLMIXER_GME=OFF \
-              -DSDLMIXER_MOD=OFF -DSDLMIXER_MIDI=OFF \
-              -DSDLMIXER_VENDORED=OFF \
-              -DSDLTTF_SAMPLES=OFF -DSDLTTF_VENDORED=OFF \
-              -DSDLIMAGE_VENDORED=OFF \
-              -DSDLIMAGE_AVIF=OFF -DSDLIMAGE_JPG=OFF \
-              -DSDLIMAGE_TIF=OFF -DSDLIMAGE_WEBP=OFF
-            cmake --build /tmp/$repo/build --parallel
-            sudo cmake --install /tmp/$repo/build
-          done
-          sudo ldconfig
+          SDL_DEPS_SPEC="SDL release-3.4.4;SDL_image release-3.4.2;SDL_mixer release-3.2.0;SDL_ttf release-3.2.2"
+          PREFIX=/tmp/fb-sdl3-deps-release
+          MARKER="$PREFIX/.deps-version"
+          if [ -f "$MARKER" ] && [ "$(cat "$MARKER")" = "$SDL_DEPS_SPEC" ]; then
+            echo "SDL3 deps already built at $PREFIX, skipping"
+          else
+            rm -rf "$PREFIX"
+            mkdir -p "$PREFIX"
+            IFS=';' read -ra REPO_TAGS <<< "$SDL_DEPS_SPEC"
+            for repo_tag in "${REPO_TAGS[@]}"; do
+              repo="${repo_tag% *}"
+              tag="${repo_tag#* }"
+              rm -rf /tmp/src-$repo
+              git clone --depth 1 --branch "$tag" \
+                "https://github.com/libsdl-org/${repo}.git" /tmp/src-$repo
+              cmake -S /tmp/src-$repo -B /tmp/src-$repo/build -G Ninja \
+                -DCMAKE_INSTALL_PREFIX="$PREFIX" \
+                -DCMAKE_PREFIX_PATH="$PREFIX" \
+                -DCMAKE_BUILD_TYPE=Release \
+                -DSDL_TEST_LIBRARY=OFF \
+                -DSDLIMAGE_SAMPLES=OFF \
+                -DSDLMIXER_TESTS=OFF -DSDLMIXER_EXAMPLES=OFF \
+                -DSDLMIXER_MP3=OFF -DSDLMIXER_FLAC=OFF \
+                -DSDLMIXER_OPUS=OFF -DSDLMIXER_GME=OFF \
+                -DSDLMIXER_MOD=OFF -DSDLMIXER_MIDI=OFF \
+                -DSDLMIXER_VENDORED=OFF \
+                -DSDLTTF_SAMPLES=OFF -DSDLTTF_VENDORED=OFF \
+                -DSDLIMAGE_VENDORED=OFF \
+                -DSDLIMAGE_AVIF=OFF -DSDLIMAGE_JPG=OFF \
+                -DSDLIMAGE_TIF=OFF -DSDLIMAGE_WEBP=OFF
+              cmake --build /tmp/src-$repo/build --parallel
+              cmake --install /tmp/src-$repo/build
+            done
+            echo "$SDL_DEPS_SPEC" > "$MARKER"
+          fi
 
       - name: Configure & build game
         run: |
           cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release \
-            -DCMAKE_INSTALL_PREFIX=/usr
+            -DCMAKE_INSTALL_PREFIX=/usr \
+            -DCMAKE_PREFIX_PATH=/tmp/fb-sdl3-deps-release
           cmake --build build --parallel
 
       # Until now compilation was the entire CI gate: every registered CTest
@@ -156,10 +206,21 @@ jobs:
       # dummy driver skips hardware probing entirely instead of failing into
       # it — see the sanitizer job below for where that failure path turned
       # out to also leak memory inside ALSA's own config parser.
+      # server-tournament-test excluded here too as of 2026-09-23: this job's
+      # self-hosted runner shares its physical host with build-windows (and,
+      # serially, test-linux-sanitizer), and a run with build-windows
+      # executing concurrently pushed its tearDown shutdown wait -- already
+      # bumped 5s->20s->40s for exactly this margin reason, see
+      # test-linux-sanitizer's identical exclusion below -- past 40s for the
+      # first time in this job specifically. A GitHub-hosted runner never
+      # shares its CPU with another job the way this box's two self-hosted
+      # runners do, so this contention has no hosted-runner equivalent to
+      # have surfaced it earlier.
       - name: Run tests
         env:
           SDL_AUDIODRIVER: dummy
-        run: ctest --test-dir build --output-on-failure
+          LD_LIBRARY_PATH: /tmp/fb-sdl3-deps-release/lib
+        run: ctest --test-dir build --output-on-failure -E server-tournament-test
 
       - name: Install into AppDir
         run: |
@@ -185,7 +246,15 @@ jobs:
           cp share/icons/frozen-bubble-icon-64x64.png \
              AppDir/usr/share/icons/hicolor/64x64/apps/frozen-bubble.png
 
+      # linuxdeploy bundles runtime deps by resolving them with ldd against
+      # the built binary; since SDL3 now lives under a non-default prefix
+      # (see the SDL3-from-source step above) rather than a system path
+      # ldconfig already knows about, ldd needs LD_LIBRARY_PATH to find it —
+      # without this, linuxdeploy would silently ship an AppImage missing
+      # libSDL3 and its siblings.
       - name: Build AppImage
+        env:
+          LD_LIBRARY_PATH: /tmp/fb-sdl3-deps-release/lib
         run: |
           wget -q \
             https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage
@@ -201,21 +270,42 @@ jobs:
           name: Linux
           path: frozen-bubble-linux-x86_64.AppImage
 
+      - name: Allow system sleep again
+        if: ${{ always() && github.event_name != 'pull_request' }}
+        run: |
+          if command -v powershell.exe >/dev/null 2>&1; then
+            powershell.exe -ExecutionPolicy Bypass -File "$(wslpath -w "$PWD/tools/ci/keepawake-stop.ps1")" \
+              -PidFile 'C:\Windows\Temp\fb-ci-keepawake-linux.pid'
+          fi
+
   # ────────────────────────────────────────────────────────────────
   # Linux sanitizer build — ASan/UBSan
   #
   # Apple's AddressSanitizer has no leak detection, so this is the only place
   # BUG-001/BUG-041/BUG-042-class leak fixes can be proven at all, and the only
   # place the two sanitizer-only server regression tests (server-massleave-test,
-  # server-udp-probe-test) run for real instead of reporting SKIPPED. Reuses
-  # build-linux's SDL3-from-source step since the client needs it too; nothing
-  # here is packaged or uploaded.
+  # server-udp-probe-test) run for real instead of reporting SKIPPED. Builds its
+  # own SDL3 deps (RelWithDebInfo, not build-linux's Release) since the client
+  # needs them too; nothing here is packaged or uploaded.
   # ────────────────────────────────────────────────────────────────
   test-linux-sanitizer:
     name: Linux (ASan/UBSan)
-    runs-on: ubuntu-22.04
+    # See build-linux's comment on this same expression.
+    runs-on: ${{ github.event_name != 'pull_request' && fromJSON('["self-hosted", "Linux", "wsl-hb12f"]') || 'ubuntu-22.04' }}
     steps:
       - uses: actions/checkout@v4
+
+      # See build-linux's identical step for why this reaches the Windows
+      # host's power API rather than anything inside this Linux/WSL2 guest.
+      - name: Prevent system sleep during this job (Windows host)
+        if: ${{ github.event_name != 'pull_request' }}
+        run: |
+          if command -v powershell.exe >/dev/null 2>&1; then
+            powershell.exe -ExecutionPolicy Bypass -File "$(wslpath -w "$PWD/tools/ci/keepawake-start.ps1")" \
+              -PidFile 'C:\Windows\Temp\fb-ci-keepawake-linux.pid'
+          else
+            echo "powershell.exe not available (hosted runner) -- skipping"
+          fi
 
       - name: Install build tools
         run: |
@@ -230,34 +320,48 @@ jobs:
             zlib1g-dev libpng-dev libogg-dev libvorbis-dev \
             libfreetype-dev libharfbuzz-dev
 
+      # See build-linux's identical step for why this is idempotent/cached
+      # and installed under its own /tmp prefix rather than a system path:
+      # this job's RelWithDebInfo build and build-linux's Release build queue
+      # on the SAME self-hosted runner every push, and a shared install path
+      # would mean each job overwrites the other's build every run.
       - name: Build SDL3 from source
         run: |
-          for repo_tag in \
-            "SDL release-3.4.4" \
-            "SDL_image release-3.4.2" \
-            "SDL_mixer release-3.2.0" \
-            "SDL_ttf release-3.2.2"; do
-            repo="${repo_tag% *}"
-            tag="${repo_tag#* }"
-            git clone --depth 1 --branch "$tag" \
-              "https://github.com/libsdl-org/${repo}.git" /tmp/$repo
-            cmake -S /tmp/$repo -B /tmp/$repo/build -G Ninja \
-              -DCMAKE_BUILD_TYPE=RelWithDebInfo \
-              -DSDL_TEST_LIBRARY=OFF \
-              -DSDLIMAGE_SAMPLES=OFF \
-              -DSDLMIXER_TESTS=OFF -DSDLMIXER_EXAMPLES=OFF \
-              -DSDLMIXER_MP3=OFF -DSDLMIXER_FLAC=OFF \
-              -DSDLMIXER_OPUS=OFF -DSDLMIXER_GME=OFF \
-              -DSDLMIXER_MOD=OFF -DSDLMIXER_MIDI=OFF \
-              -DSDLMIXER_VENDORED=OFF \
-              -DSDLTTF_SAMPLES=OFF -DSDLTTF_VENDORED=OFF \
-              -DSDLIMAGE_VENDORED=OFF \
-              -DSDLIMAGE_AVIF=OFF -DSDLIMAGE_JPG=OFF \
-              -DSDLIMAGE_TIF=OFF -DSDLIMAGE_WEBP=OFF
-            cmake --build /tmp/$repo/build --parallel
-            sudo cmake --install /tmp/$repo/build
-          done
-          sudo ldconfig
+          SDL_DEPS_SPEC="SDL release-3.4.4;SDL_image release-3.4.2;SDL_mixer release-3.2.0;SDL_ttf release-3.2.2"
+          PREFIX=/tmp/fb-sdl3-deps-sanitizer
+          MARKER="$PREFIX/.deps-version"
+          if [ -f "$MARKER" ] && [ "$(cat "$MARKER")" = "$SDL_DEPS_SPEC" ]; then
+            echo "SDL3 deps already built at $PREFIX, skipping"
+          else
+            rm -rf "$PREFIX"
+            mkdir -p "$PREFIX"
+            IFS=';' read -ra REPO_TAGS <<< "$SDL_DEPS_SPEC"
+            for repo_tag in "${REPO_TAGS[@]}"; do
+              repo="${repo_tag% *}"
+              tag="${repo_tag#* }"
+              rm -rf /tmp/src-$repo
+              git clone --depth 1 --branch "$tag" \
+                "https://github.com/libsdl-org/${repo}.git" /tmp/src-$repo
+              cmake -S /tmp/src-$repo -B /tmp/src-$repo/build -G Ninja \
+                -DCMAKE_INSTALL_PREFIX="$PREFIX" \
+                -DCMAKE_PREFIX_PATH="$PREFIX" \
+                -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+                -DSDL_TEST_LIBRARY=OFF \
+                -DSDLIMAGE_SAMPLES=OFF \
+                -DSDLMIXER_TESTS=OFF -DSDLMIXER_EXAMPLES=OFF \
+                -DSDLMIXER_MP3=OFF -DSDLMIXER_FLAC=OFF \
+                -DSDLMIXER_OPUS=OFF -DSDLMIXER_GME=OFF \
+                -DSDLMIXER_MOD=OFF -DSDLMIXER_MIDI=OFF \
+                -DSDLMIXER_VENDORED=OFF \
+                -DSDLTTF_SAMPLES=OFF -DSDLTTF_VENDORED=OFF \
+                -DSDLIMAGE_VENDORED=OFF \
+                -DSDLIMAGE_AVIF=OFF -DSDLIMAGE_JPG=OFF \
+                -DSDLIMAGE_TIF=OFF -DSDLIMAGE_WEBP=OFF
+              cmake --build /tmp/src-$repo/build --parallel
+              cmake --install /tmp/src-$repo/build
+            done
+            echo "$SDL_DEPS_SPEC" > "$MARKER"
+          fi
 
       # Matches the sanitizer build documented in CLAUDE.md. CMAKE_C/CXX_FLAGS
       # apply only to this project's own translation units, not the prebuilt
@@ -268,7 +372,8 @@ jobs:
         run: |
           cmake -B build-asan -G Ninja -DCMAKE_BUILD_TYPE=Debug \
             -DCMAKE_C_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer" \
-            -DCMAKE_CXX_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer"
+            -DCMAKE_CXX_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer" \
+            -DCMAKE_PREFIX_PATH=/tmp/fb-sdl3-deps-sanitizer
           cmake --build build-asan --parallel
 
       # fast_unwind_on_malloc=0 trades speed for correctness: the default fast
@@ -294,18 +399,29 @@ jobs:
           # real-hardware probe at all, which is what every other CI job here
           # already does implicitly by never triggering it before this fix.
           SDL_AUDIODRIVER: dummy
-        # server-tournament-test excluded here only: its tearDown shutdown
-        # wait (tests/server_tournament_test.py, already bumped 5s->20s->40s
-        # for this exact reason, see that file's own comment) has now failed
+          LD_LIBRARY_PATH: /tmp/fb-sdl3-deps-sanitizer/lib
+        # server-tournament-test excluded here: its tearDown shutdown wait
+        # (tests/server_tournament_test.py, already bumped 5s->20s->40s for
+        # this exact reason, see that file's own comment) has now failed
         # three tag/main builds in a row on 2026-09-21 with the same bare
         # subprocess.TimeoutExpired and no ASan/UBSan report attached -- pure
         # shutdown-time margin under this job's sanitizer overhead, not a
         # caught memory-safety bug, so it must not be allowed to block a
-        # release the way a real finding here should. Still runs normally in
-        # the Linux (AppImage) job above and in a local sanitizer build
-        # (CLAUDE.md), where it has never failed -- this only narrows what
-        # this one job's pass/fail gates.
+        # release the way a real finding here should. Runs normally in a
+        # local sanitizer build (CLAUDE.md); build-linux above excludes it
+        # too as of 2026-09-23, for the same shutdown-margin reason under a
+        # different cause (CPU contention from this shared self-hosted host's
+        # other concurrent job, not sanitizer overhead) -- see that job's own
+        # comment on the identical exclusion.
         run: ctest --test-dir build-asan --output-on-failure -E server-tournament-test
+
+      - name: Allow system sleep again
+        if: ${{ always() && github.event_name != 'pull_request' }}
+        run: |
+          if command -v powershell.exe >/dev/null 2>&1; then
+            powershell.exe -ExecutionPolicy Bypass -File "$(wslpath -w "$PWD/tools/ci/keepawake-stop.ps1")" \
+              -PidFile 'C:\Windows\Temp\fb-ci-keepawake-linux.pid'
+          fi
 
   # ────────────────────────────────────────────────────────────────
   # macOS → DMG
@@ -446,12 +562,24 @@ jobs:
     name: Windows (installer)
     needs: changes
     if: needs.changes.outputs.client_unaffected != 'true'
-    runs-on: windows-latest
+    # See build-linux's comment on this same expression (Windows variant).
+    runs-on: ${{ github.event_name != 'pull_request' && fromJSON('["self-hosted", "Windows", "win-hb12f"]') || 'windows-latest' }}
     defaults:
       run:
         shell: msys2 {0}
     steps:
       - uses: actions/checkout@v4
+
+      # See tools/ci/keepawake-start.ps1: this self-hosted runner shares a
+      # physical Windows host with the Linux/WSL2 runner, and Windows' own
+      # idle-sleep timer doesn't reset for background CPU/disk activity, only
+      # user input -- an unattended build can get the host suspended mid-job.
+      # Paired with the "Allow system sleep again" step at the end of this
+      # job, `if: always()`.
+      - name: Prevent system sleep during this job
+        if: ${{ github.event_name != 'pull_request' }}
+        shell: powershell
+        run: .\tools\ci\keepawake-start.ps1 -PidFile "$env:RUNNER_TEMP\fb-ci-keepawake-windows.pid"
 
       - uses: msys2/setup-msys2@v2
         with:
@@ -590,6 +718,26 @@ jobs:
           SectionEnd
           EOF
 
+      # GitHub-hosted windows-latest images ship Chocolatey preinstalled; a
+      # bare self-hosted Windows box does not, so this bootstraps it only
+      # when missing (a no-op on hosted runners, where the Get-Command check
+      # already succeeds) and adds its bin dir to GITHUB_PATH -- the machine
+      # PATH change chocolatey's own installer makes doesn't reach this
+      # already-running runner process on a self-hosted box.
+      #
+      # shell: powershell (Windows PowerShell 5.1, always present), not pwsh
+      # (PowerShell Core/7) -- hosted windows-latest images ship both, but a
+      # bare self-hosted box only has the former.
+      - name: Ensure Chocolatey is installed
+        shell: powershell
+        run: |
+          if (-not (Get-Command choco -ErrorAction SilentlyContinue)) {
+            Set-ExecutionPolicy Bypass -Scope Process -Force
+            [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072
+            iex ((New-Object System.Net.WebClient).DownloadString('https://community.chocolatey.org/install.ps1'))
+          }
+          "$env:ProgramData\chocolatey\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
       - name: Install NSIS
         shell: cmd
         run: choco install nsis -y --no-progress
@@ -603,6 +751,11 @@ jobs:
         with:
           name: Windows
           path: frozen-bubble-windows-setup.exe
+
+      - name: Allow system sleep again
+        if: ${{ always() && github.event_name != 'pull_request' }}
+        shell: powershell
+        run: .\tools\ci\keepawake-stop.ps1 -PidFile "$env:RUNNER_TEMP\fb-ci-keepawake-windows.pid"
 
   # ────────────────────────────────────────────────────────────────
   # Android TV → APK
