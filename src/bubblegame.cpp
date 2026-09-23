@@ -1405,6 +1405,17 @@ void BubbleGame::ReloadGame(int level) {
         bubbleArrays[i].frozenWait = FROZEN_FRAMEWAIT;
         bubbleArrays[i].prelightTime = PRELIGHT_SLOW;
         bubbleArrays[i].waitPrelight = PRELIGHT_SLOW;
+        // DoPrelightAnimation() (bubblegame_board.cpp) advances these two every
+        // frame once turnsToCompress <= 2, independent of player input. Leaving
+        // them unreset here carried the previous round's mid-cycle values into
+        // the new round live, while RestoreRoundStart() always rebuilds through
+        // NewGame() on a freshly-constructed BubbleGame -- whose default member
+        // initializers put them back at their round-1 values regardless. That
+        // mismatch was silent until the round's very first simulated frame,
+        // where the canonical state hash already differs with no shot fired by
+        // either seat (see docs/REPLAY_PROGRESS.md's 2026-09-23 entry).
+        bubbleArrays[i].framePrelight = PRELIGHT_FRAMEWAIT;
+        bubbleArrays[i].alertColumn = 0;
         // Reset per-round stats; match totals (m*) persist across rounds.
         bubbleArrays[i].rFired = bubbleArrays[i].rPopped = 0;
         bubbleArrays[i].rSent = bubbleArrays[i].rRecv = 0;

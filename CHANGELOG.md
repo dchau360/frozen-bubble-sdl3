@@ -1,5 +1,9 @@
 # Changelog
 
+## v2.4.115
+
+- **Fixed replay desync on a network round transition that inherited a stale danger-blink animation state.** The board's "about to need compression" blink animation advances two counters every frame once it's close to that point, independent of anything the player does. Neither a new match nor a new round within an ongoing match ever reset them — a new match got away with it because a fresh game object starts them at their defaults anyway, but a round transition mid-match (`ReloadGame()`) kept whichever mid-blink values the previous round happened to leave behind. Replaying such a round always rebuilds through the fresh-object path, so it silently disagreed with what live play actually had, producing a mismatch on the replayed round's very first frame with no player action involved. Fixed by resetting both counters on every round transition, matching the sibling timers already reset there. Recordings captured before this fix already have the mismatch baked in and will still show as desynced; anything recorded from this version on is unaffected.
+
 ## v2.4.114
 
 - **Fixed the Replays page's Export control never actually exporting anything.** The page uses one shared cursor for both "which replay is highlighted" and "which of Export/Import/Keep-count is focused." Reaching Export necessarily moved that cursor off the replay you'd picked, so by the time Export activated it always found itself sitting on its own row instead of a real entry and silently refused with "Select a replay to export first" — on every input method (tap, keyboard, gamepad), not just touch. Fixed by remembering the last entry the cursor was actually on and exporting that.
