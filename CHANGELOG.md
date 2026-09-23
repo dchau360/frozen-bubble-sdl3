@@ -1,5 +1,9 @@
 # Changelog
 
+## v2.4.113
+
+- **Fixed replay platform-compatibility tests failing on non-x86_64 Linux.** `ComputeCurrentPlatformFloatProfile()` only recognized `linux` + `x86_64`, so any other Linux architecture (e.g. aarch64, the arch behind Fedora COPR builds) fell back to profile 0 and tripped `replay-format-test`/`replay-library-test`'s `!= 0` assertions. Added a real `kPlatformProfileLinuxArm64` bucket, matching the arm64/x86_64 split macOS and Android already have. Reported in issue #125.
+
 ## v2.4.112
 
 - **Discord round-result alerts now include each player's bubbles popped.** A new bar chart under the round message shows who popped the most, alongside the existing win-count chart. Unlike every other field in that message, this one is self-reported by each client rather than the server's own bookkeeping — the server now cross-checks it against how many shots that player actually fired this round and clamps (flagging with `*`) anything wildly implausible, rather than trusting it outright. Getting every player's count in also means the alert now waits up to ~2 seconds after a round ends (for stragglers) rather than posting the instant the round's winner is known; the in-game "X wins!" lobby message is unaffected. See `CLAUDE.md`'s "Discord popped-stats" section and `server/discord-relay/README.md`'s "Bubbles popped chart" section for server operators running their own relay.

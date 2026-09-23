@@ -36,6 +36,7 @@ constexpr uint32_t kPlatformProfileAndroidArm64 = 5;
 constexpr uint32_t kPlatformProfileAndroidArmv7 = 6;
 constexpr uint32_t kPlatformProfileAndroidX86_64 = 7;
 constexpr uint32_t kPlatformProfileWasm = 8;
+constexpr uint32_t kPlatformProfileLinuxArm64 = 9;
 
 bool IsValidRecordType(uint8_t v) {
     switch (static_cast<RecordType>(v)) {
@@ -178,13 +179,17 @@ DecodeResult ReadBytes(const uint8_t *data, size_t size, size_t &pos, std::vecto
 // Platform/float compatibility gate
 // ---------------------------------------------------------------------------
 
-// Known tradeoff: an exotic or unrecognized platform/arch (a cross-compiled
-// or embedded target these preprocessor checks don't name) falls back to 0 and
-// is therefore treated as compatible, so that platform's real floating-point
-// differences would not be caught by this gate. That is deliberate -- refusing
-// playback on a platform whose actual risk is unknown would be a false
-// positive, the same reasoning that exempts legacy profile == 0 files -- and
-// no recognized-but-exotic platform currently ships this game.
+// Known tradeoff: an exotic or unrecognized platform/arch (armv7/ppc64le/
+// s390x Linux, a cross-compiled or embedded target -- anything these
+// preprocessor checks don't name) falls back to 0 and is therefore treated
+// as compatible, so that platform's real floating-point differences would
+// not be caught by this gate. That is deliberate -- refusing playback on a
+// platform whose actual risk is unknown would be a false positive, the same
+// reasoning that exempts legacy profile == 0 files -- and no such exotic
+// platform is known to ship this game today. Linux x86_64 and arm64 (the
+// arches third-party distro packagers such as Fedora COPR actually build
+// for) are both recognized; see issue #125 for the aarch64 gap this used to
+// have.
 uint32_t ComputeCurrentPlatformFloatProfile() {
 #if defined(__EMSCRIPTEN__)
     // Emscripten also defines __linux__/__unix__, so this must come first.
@@ -216,6 +221,8 @@ uint32_t ComputeCurrentPlatformFloatProfile() {
 #elif defined(__linux__)
   #if defined(__x86_64__)
     return kPlatformProfileLinuxX86_64;
+  #elif defined(__aarch64__)
+    return kPlatformProfileLinuxArm64;
   #else
     return 0;
   #endif
