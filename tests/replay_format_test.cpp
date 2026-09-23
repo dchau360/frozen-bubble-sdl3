@@ -602,9 +602,9 @@ static void TestPlatformFloatProfile() {
     const uint32_t current = ComputeCurrentPlatformFloatProfile();
     // Stability: two calls agree.
     CHECK(ComputeCurrentPlatformFloatProfile() == current);
-    // This test binary always builds for a desktop platform (Linux/macOS/
-    // Windows x86_64/arm64), all of which the gate's preprocessor checks
-    // recognize; 0 would mean it recognized nothing.
+    // This test binary always builds for a desktop platform (Linux x86_64/
+    // arm64, macOS x86_64/arm64, or Windows x86_64), all of which the gate's
+    // preprocessor checks recognize; 0 would mean it recognized nothing.
     CHECK(current != 0);
     // The current profile and the legacy sentinel are always compatible.
     CHECK(IsReplayPlatformCompatible(current));
