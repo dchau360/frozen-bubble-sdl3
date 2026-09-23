@@ -653,8 +653,12 @@ jobs:
       # already succeeds) and adds its bin dir to GITHUB_PATH -- the machine
       # PATH change chocolatey's own installer makes doesn't reach this
       # already-running runner process on a self-hosted box.
+      #
+      # shell: powershell (Windows PowerShell 5.1, always present), not pwsh
+      # (PowerShell Core/7) -- hosted windows-latest images ship both, but a
+      # bare self-hosted box only has the former.
       - name: Ensure Chocolatey is installed
-        shell: pwsh
+        shell: powershell
         run: |
           if (-not (Get-Command choco -ErrorAction SilentlyContinue)) {
             Set-ExecutionPolicy Bypass -Scope Process -Force
