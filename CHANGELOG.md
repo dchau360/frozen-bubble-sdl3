@@ -1,5 +1,9 @@
 # Changelog
 
+## v2.4.114
+
+- **Fixed the Replays page's Export control never actually exporting anything.** The page uses one shared cursor for both "which replay is highlighted" and "which of Export/Import/Keep-count is focused." Reaching Export necessarily moved that cursor off the replay you'd picked, so by the time Export activated it always found itself sitting on its own row instead of a real entry and silently refused with "Select a replay to export first" — on every input method (tap, keyboard, gamepad), not just touch. Fixed by remembering the last entry the cursor was actually on and exporting that.
+
 ## v2.4.113
 
 - **Fixed replay platform-compatibility tests failing on non-x86_64 Linux.** `ComputeCurrentPlatformFloatProfile()` only recognized `linux` + `x86_64`, so any other Linux architecture (e.g. aarch64, the arch behind Fedora COPR builds) fell back to profile 0 and tripped `replay-format-test`/`replay-library-test`'s `!= 0` assertions. Added a real `kPlatformProfileLinuxArm64` bucket, matching the arm64/x86_64 split macOS and Android already have. Reported in issue #125.

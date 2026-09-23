@@ -787,6 +787,11 @@ private:
     // the three library-level rows (export/import/keep count). One value
     // shared by keyboard and tap rows, as every panel here does.
     int replaysSelection = 0;
+    // Last entry index replaysSelection pointed at before the cursor moved
+    // onto Export/Import/keep-count. Export acts on "the replay you had
+    // selected", but reaching its row necessarily moves the one shared
+    // cursor off that entry -- see ExportSelectedReplay().
+    int replaysLastEntrySelection = -1;
     // Focused action within the selected entry row: 0 = Play, 1 = Delete.
     // Drawn highlighted so the choice is visible, not inferred from the key.
     int replaysActionIndex = 0;
