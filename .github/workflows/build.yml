@@ -14,6 +14,10 @@ on:
     branches: [main]
     paths-ignore:
       - '**.md'
+  # Lets the self-hosted routing below (push/tag/dispatch -> self-hosted,
+  # pull_request -> GitHub-hosted) be exercised on demand from any branch,
+  # without needing an actual merge or tag to prove the runner picks up a job.
+  workflow_dispatch:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -91,7 +95,12 @@ jobs:
   # ────────────────────────────────────────────────────────────────
   build-linux:
     name: Linux (AppImage)
-    runs-on: ubuntu-22.04
+    # Self-hosted only for push/tag/dispatch (already-reviewed code); a
+    # pull_request always gets a GitHub-hosted runner regardless of who
+    # opened it. Running arbitrary PR-supplied code on a persistent,
+    # never-wiped self-hosted box is exactly the configuration GitHub's own
+    # docs warn against for public repos -- see the 2026-09-23 runner setup.
+    runs-on: ${{ github.event_name != 'pull_request' && fromJSON('["self-hosted", "Linux", "wsl-hb12f"]') || 'ubuntu-22.04' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -213,7 +222,8 @@ jobs:
   # ────────────────────────────────────────────────────────────────
   test-linux-sanitizer:
     name: Linux (ASan/UBSan)
-    runs-on: ubuntu-22.04
+    # See build-linux's comment on this same expression.
+    runs-on: ${{ github.event_name != 'pull_request' && fromJSON('["self-hosted", "Linux", "wsl-hb12f"]') || 'ubuntu-22.04' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -446,7 +456,8 @@ jobs:
     name: Windows (installer)
     needs: changes
     if: needs.changes.outputs.client_unaffected != 'true'
-    runs-on: windows-latest
+    # See build-linux's comment on this same expression (Windows variant).
+    runs-on: ${{ github.event_name != 'pull_request' && fromJSON('["self-hosted", "Windows", "win-hb12f"]') || 'windows-latest' }}
     defaults:
       run:
         shell: msys2 {0}
