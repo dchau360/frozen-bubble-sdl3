@@ -221,6 +221,13 @@ void MainMenu::RefreshReplaysEntries() {
 void MainMenu::ClampReplaysSelection() {
     const int last = replaysKeepCountRow();
     replaysSelection = std::clamp(replaysSelection, 0, last);
+    const int entryCount = static_cast<int>(replaysEntries.size());
+    if (replaysSelection >= 0 && replaysSelection < entryCount) {
+        replaysLastEntrySelection = replaysSelection;
+    } else if (replaysLastEntrySelection >= entryCount) {
+        // The library shrank (a delete) past the entry this used to name.
+        replaysLastEntrySelection = -1;
+    }
     if (replaysActionIndex < 0 || replaysActionIndex > 1) replaysActionIndex = 0;
     // A platform-incompatible entry's Play action is dead, so keyboard/gamepad
     // focus must never rest on it: force it to Delete (a real, working action).
@@ -293,12 +300,16 @@ void MainMenu::CommitReplaysKeepCount() {
 }
 
 void MainMenu::ExportSelectedReplay() {
+    // Not replaysSelection: activating this row means the cursor is currently
+    // parked ON Export, not on an entry, so replaysSelection ==
+    // replaysExportRow() every time this runs. The entry the player actually
+    // picked survives separately in replaysLastEntrySelection.
     const int entryCount = static_cast<int>(replaysEntries.size());
-    if (replaysSelection < 0 || replaysSelection >= entryCount) {
+    if (replaysLastEntrySelection < 0 || replaysLastEntrySelection >= entryCount) {
         SetReplaysStatus("Select a replay to export first.");
         return;
     }
-    const ReplayLibrary::ReplayEntry &entry = replaysEntries[replaysSelection];
+    const ReplayLibrary::ReplayEntry &entry = replaysEntries[replaysLastEntrySelection];
     std::vector<uint8_t> bytes;
     if (!ReplayLibrary::Instance()->ReadBytes(entry.filename, bytes) || bytes.empty()) {
         SetReplaysStatus("Could not read that replay.");
