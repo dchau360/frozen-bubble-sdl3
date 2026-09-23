@@ -678,6 +678,7 @@ jobs:
       # the 192x192 xxxhdpi mipmap this loop generates.
       - name: Generate app icons from source PNG
         run: |
+          sudo apt-get update
           sudo apt-get install -y imagemagick
           SRC="share/icons/frozen-bubble-icon-512x512.png"
           RES="android/app/src/main/res"
