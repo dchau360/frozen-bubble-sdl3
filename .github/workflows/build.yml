@@ -104,6 +104,26 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # See tools/ci/keepawake-start.ps1. This job runs inside WSL2 on the
+      # SAME physical Windows host as the build-windows self-hosted runner --
+      # if Windows sleeps, it suspends the WSL2 guest too, taking this runner
+      # down with it -- so the sleep-prevention call has to reach the Windows
+      # host's power API, not anything inside the Linux guest. WSL exposes
+      # Windows binaries on PATH by default, and wslpath translates this
+      # checkout's Linux path into the \\wsl.localhost\... form powershell.exe
+      # needs. A no-op on GitHub-hosted runners, where powershell.exe/wslpath
+      # don't exist. Paired with "Allow system sleep again" at the end of this
+      # job, `if: always()`.
+      - name: Prevent system sleep during this job (Windows host)
+        if: ${{ github.event_name != 'pull_request' }}
+        run: |
+          if command -v powershell.exe >/dev/null 2>&1; then
+            powershell.exe -File "$(wslpath -w "$PWD/tools/ci/keepawake-start.ps1")" \
+              -PidFile 'C:\Windows\Temp\fb-ci-keepawake-linux.pid'
+          else
+            echo "powershell.exe not available (hosted runner) -- skipping"
+          fi
+
       - name: Install build tools
         run: |
           sudo apt-get update
@@ -240,6 +260,14 @@ jobs:
           name: Linux
           path: frozen-bubble-linux-x86_64.AppImage
 
+      - name: Allow system sleep again
+        if: ${{ always() && github.event_name != 'pull_request' }}
+        run: |
+          if command -v powershell.exe >/dev/null 2>&1; then
+            powershell.exe -File "$(wslpath -w "$PWD/tools/ci/keepawake-stop.ps1")" \
+              -PidFile 'C:\Windows\Temp\fb-ci-keepawake-linux.pid'
+          fi
+
   # ────────────────────────────────────────────────────────────────
   # Linux sanitizer build — ASan/UBSan
   #
@@ -256,6 +284,18 @@ jobs:
     runs-on: ${{ github.event_name != 'pull_request' && fromJSON('["self-hosted", "Linux", "wsl-hb12f"]') || 'ubuntu-22.04' }}
     steps:
       - uses: actions/checkout@v4
+
+      # See build-linux's identical step for why this reaches the Windows
+      # host's power API rather than anything inside this Linux/WSL2 guest.
+      - name: Prevent system sleep during this job (Windows host)
+        if: ${{ github.event_name != 'pull_request' }}
+        run: |
+          if command -v powershell.exe >/dev/null 2>&1; then
+            powershell.exe -File "$(wslpath -w "$PWD/tools/ci/keepawake-start.ps1")" \
+              -PidFile 'C:\Windows\Temp\fb-ci-keepawake-linux.pid'
+          else
+            echo "powershell.exe not available (hosted runner) -- skipping"
+          fi
 
       - name: Install build tools
         run: |
@@ -362,6 +402,14 @@ jobs:
         # (CLAUDE.md), where it has never failed -- this only narrows what
         # this one job's pass/fail gates.
         run: ctest --test-dir build-asan --output-on-failure -E server-tournament-test
+
+      - name: Allow system sleep again
+        if: ${{ always() && github.event_name != 'pull_request' }}
+        run: |
+          if command -v powershell.exe >/dev/null 2>&1; then
+            powershell.exe -File "$(wslpath -w "$PWD/tools/ci/keepawake-stop.ps1")" \
+              -PidFile 'C:\Windows\Temp\fb-ci-keepawake-linux.pid'
+          fi
 
   # ────────────────────────────────────────────────────────────────
   # macOS → DMG
@@ -509,6 +557,17 @@ jobs:
         shell: msys2 {0}
     steps:
       - uses: actions/checkout@v4
+
+      # See tools/ci/keepawake-start.ps1: this self-hosted runner shares a
+      # physical Windows host with the Linux/WSL2 runner, and Windows' own
+      # idle-sleep timer doesn't reset for background CPU/disk activity, only
+      # user input -- an unattended build can get the host suspended mid-job.
+      # Paired with the "Allow system sleep again" step at the end of this
+      # job, `if: always()`.
+      - name: Prevent system sleep during this job
+        if: ${{ github.event_name != 'pull_request' }}
+        shell: powershell
+        run: .\tools\ci\keepawake-start.ps1 -PidFile "$env:RUNNER_TEMP\fb-ci-keepawake-windows.pid"
 
       - uses: msys2/setup-msys2@v2
         with:
@@ -680,6 +739,11 @@ jobs:
         with:
           name: Windows
           path: frozen-bubble-windows-setup.exe
+
+      - name: Allow system sleep again
+        if: ${{ always() && github.event_name != 'pull_request' }}
+        shell: powershell
+        run: .\tools\ci\keepawake-stop.ps1 -PidFile "$env:RUNNER_TEMP\fb-ci-keepawake-windows.pid"
 
   # ────────────────────────────────────────────────────────────────
   # Android TV → APK
