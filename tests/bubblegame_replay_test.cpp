@@ -1223,6 +1223,76 @@ int main() {
         RunAndCompare(renderer, "reloadgame", rec);
     }
 
+    // --- Regression: ReloadGame() must reset the prelight-blink counters -----
+    // DoPrelightAnimation() (bubblegame_board.cpp) advances framePrelight/
+    // alertColumn every frame once turnsToCompress <= 2, independent of player
+    // input, and both are part of the canonical state hash. Neither NewGame()
+    // nor (until this fix) ReloadGame() reset them, so a round-2+ transition
+    // mid-match carried round 1's mid-cycle values forward live, while
+    // RestoreRoundStart() always rebuilds through NewGame() on a *freshly
+    // constructed* BubbleGame, whose default member initializers put them back
+    // at round-1's values regardless of what the real match had reached. The
+    // mismatch was invisible until the restored round's very first simulated
+    // frame -- exactly the desync a user reported from a real 9-round network
+    // match's replay, reproduced here without any network plumbing.
+    {
+        singleBubbles.clear();
+        malusBubbles.clear();
+
+        LocalMultiplayerOptions options;
+        options.playerCount = 2;
+        options.botCount = 0;
+        options.chainReaction = false;
+        options.gameMode = GameMode::Race;
+        options.raceTargetIndex = 0;
+        SetupSettings setup = BuildLocalMultiplayerSettings(options);
+        setup.raceTarget = 1;  // the first popped bubble wins the round
+
+        BubbleGame live(renderer);
+        BubbleGameTestAccess::seedRng(live, 424242u);
+        live.SetSessionMode(BubbleGame::SessionMode::Live);
+        live.NewGame(setup);
+        SetupAttackBoard(live, false);
+
+        // Round 1: seat 0 reaches the race target, accumulating a win.
+        for (int i = 0; i < 300 && !BubbleGameTestAccess::gameFinish(live); ++i) {
+            FrozenBubble::Instance()->deltaScale = 1.0f;
+            for (int s = 0; s < 2; ++s)
+                controllerInputs[s] = ControllerInput{};
+            BubbleArray& p0 = BubbleGameTestAccess::player(live, 0);
+            p0.mouseTargetAngle = (i == 0) ? PI / 2.0f : -1.0f;
+            p0.mouseFirePending = (i == 0);
+            live.AdvanceSimulation();
+        }
+        CHECK(BubbleGameTestAccess::gameFinish(live) == true);
+        CHECK(BubbleGameTestAccess::player(live, 0).winCount == 1);
+
+        // Simulate round 1 having left the danger-blink animation mid-cycle --
+        // exactly what DoPrelightAnimation() does whenever turnsToCompress <= 2
+        // was reached before the round ended -- by forcing both seats' counters
+        // away from their round-1 defaults right before the transition.
+        for (int seat = 0; seat < 2; ++seat) {
+            BubbleArray& p = BubbleGameTestAccess::player(live, seat);
+            p.alertColumn = 5;
+            p.framePrelight = 1;
+        }
+
+        BubbleGameTestAccess::reloadGame(live, 1);
+
+        // The fix: round 2 must start with the blink counters back at their
+        // round-1 defaults, matching what RestoreRoundStart()'s NewGame() call
+        // on a fresh instance always produces.
+        for (int seat = 0; seat < 2; ++seat) {
+            BubbleArray& p = BubbleGameTestAccess::player(live, seat);
+            CHECK(p.alertColumn == 0);
+            CHECK(p.framePrelight == PRELIGHT_FRAMEWAIT);
+        }
+
+        CapturedRecording rec;
+        CaptureLiveSteps(live, 2, FireThenIdle(PI / 2.0f, 150), rec);
+        RunAndCompare(renderer, "reloadgame-prelight-carryover", rec);
+    }
+
     // --- R5b: training round (mpTraining), recorded clock crosses 120s -------
     {
         // Round-1-only by design: NewGame() resets mpTrainStartTime and this

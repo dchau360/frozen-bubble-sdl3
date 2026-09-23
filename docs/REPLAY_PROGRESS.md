@@ -3817,6 +3817,50 @@ For subsequent sessions, replace R6 with the next incomplete package and
 retain the requirement to update this log. A package can span sessions; record
 partial completion explicitly rather than skipping to the next package.
 
+## 2026-09-23: replay-desync bug fix -- danger-blink counters not reset on ReloadGame()
+
+A user reported "the last 2 rounds" of a 9-round network match desyncing on
+itch.io/iOS. Diagnosed with the same throwaway-diagnostic method the earlier
+`platformFloatProfile` fix used (build `tests/replay_diagnose.cpp`, decode the
+user's `.fbr`, step it under `ReplayPlayer` and report the first divergent
+group). The header confirmed the file was captured under this build's own
+platform bucket, so the divergence was a genuine logic bug rather than
+cross-platform float drift.
+
+The tool was extended to re-capture a `RoundStartRecord` from the just-restored
+game and diff it byte-for-byte against the original -- `EncodeBoardBlob()`
+matched exactly (board/queues/geometry all round-trip correctly), which ruled
+out the whole board-reconstruction path and narrowed the search to fields the
+canonical hash covers but the blob does not.
+
+Root cause: `DoPrelightAnimation()` (`src/bubblegame_board.cpp`) advances
+`framePrelight`/`alertColumn` every simulated frame whenever
+`turnsToCompress <= 2`, independent of player input, and both fields are part
+of `AppendBoardState()`'s canonical hash. Neither `NewGame()` nor
+`ReloadGame()` reset them (unlike their four sibling timing fields --
+`explodeWait`/`frozenWait`/`prelightTime`/`waitPrelight` -- which `ReloadGame()`
+already resets at every round transition). Live play carries a round's
+mid-cycle values into the next round via `ReloadGame()`; `RestoreRoundStart()`
+always rebuilds through `NewGame()` on a *freshly constructed* `BubbleGame`,
+whose default member initializers silently put both fields back at their
+round-1 values. The two paths only disagree when a round actually reached
+`turnsToCompress <= 2` before ending -- consistent with only 2 of 9 rounds
+desyncing rather than all of them.
+
+Fix: `ReloadGame()` now resets `framePrelight`/`alertColumn` alongside their
+four siblings (`src/bubblegame.cpp`). Regression test added to
+`tests/bubblegame_replay_test.cpp` ("reloadgame-prelight-carryover"): forces
+both counters away from their defaults before a mid-match `ReloadGame()`
+transition and asserts (a) they read back reset and (b) the existing live-vs-
+restored per-step hash comparison harness still matches. Verified the test
+fails at step 0 without the fix (reproducing the exact "first frame, no shot
+fired" desync signature) and passes with it.
+
+The diagnostic tool and its CMake targets (native and a WASM/Node variant
+added to test a WASM-captured file under its own `platformFloatProfile`
+bucket) were throwaway, per the same pattern as the earlier fix, and have been
+deleted.
+
 ## Handoff entry template
 
 ```text
