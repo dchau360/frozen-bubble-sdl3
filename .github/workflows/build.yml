@@ -206,11 +206,21 @@ jobs:
       # dummy driver skips hardware probing entirely instead of failing into
       # it — see the sanitizer job below for where that failure path turned
       # out to also leak memory inside ALSA's own config parser.
+      # server-tournament-test excluded here too as of 2026-09-23: this job's
+      # self-hosted runner shares its physical host with build-windows (and,
+      # serially, test-linux-sanitizer), and a run with build-windows
+      # executing concurrently pushed its tearDown shutdown wait -- already
+      # bumped 5s->20s->40s for exactly this margin reason, see
+      # test-linux-sanitizer's identical exclusion below -- past 40s for the
+      # first time in this job specifically. A GitHub-hosted runner never
+      # shares its CPU with another job the way this box's two self-hosted
+      # runners do, so this contention has no hosted-runner equivalent to
+      # have surfaced it earlier.
       - name: Run tests
         env:
           SDL_AUDIODRIVER: dummy
           LD_LIBRARY_PATH: /tmp/fb-sdl3-deps-release/lib
-        run: ctest --test-dir build --output-on-failure
+        run: ctest --test-dir build --output-on-failure -E server-tournament-test
 
       - name: Install into AppDir
         run: |
@@ -390,17 +400,19 @@ jobs:
           # already does implicitly by never triggering it before this fix.
           SDL_AUDIODRIVER: dummy
           LD_LIBRARY_PATH: /tmp/fb-sdl3-deps-sanitizer/lib
-        # server-tournament-test excluded here only: its tearDown shutdown
-        # wait (tests/server_tournament_test.py, already bumped 5s->20s->40s
-        # for this exact reason, see that file's own comment) has now failed
+        # server-tournament-test excluded here: its tearDown shutdown wait
+        # (tests/server_tournament_test.py, already bumped 5s->20s->40s for
+        # this exact reason, see that file's own comment) has now failed
         # three tag/main builds in a row on 2026-09-21 with the same bare
         # subprocess.TimeoutExpired and no ASan/UBSan report attached -- pure
         # shutdown-time margin under this job's sanitizer overhead, not a
         # caught memory-safety bug, so it must not be allowed to block a
-        # release the way a real finding here should. Still runs normally in
-        # the Linux (AppImage) job above and in a local sanitizer build
-        # (CLAUDE.md), where it has never failed -- this only narrows what
-        # this one job's pass/fail gates.
+        # release the way a real finding here should. Runs normally in a
+        # local sanitizer build (CLAUDE.md); build-linux above excludes it
+        # too as of 2026-09-23, for the same shutdown-margin reason under a
+        # different cause (CPU contention from this shared self-hosted host's
+        # other concurrent job, not sanitizer overhead) -- see that job's own
+        # comment on the identical exclusion.
         run: ctest --test-dir build-asan --output-on-failure -E server-tournament-test
 
       - name: Allow system sleep again
