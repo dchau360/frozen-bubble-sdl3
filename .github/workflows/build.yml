@@ -118,7 +118,7 @@ jobs:
         if: ${{ github.event_name != 'pull_request' }}
         run: |
           if command -v powershell.exe >/dev/null 2>&1; then
-            powershell.exe -File "$(wslpath -w "$PWD/tools/ci/keepawake-start.ps1")" \
+            powershell.exe -ExecutionPolicy Bypass -File "$(wslpath -w "$PWD/tools/ci/keepawake-start.ps1")" \
               -PidFile 'C:\Windows\Temp\fb-ci-keepawake-linux.pid'
           else
             echo "powershell.exe not available (hosted runner) -- skipping"
@@ -264,7 +264,7 @@ jobs:
         if: ${{ always() && github.event_name != 'pull_request' }}
         run: |
           if command -v powershell.exe >/dev/null 2>&1; then
-            powershell.exe -File "$(wslpath -w "$PWD/tools/ci/keepawake-stop.ps1")" \
+            powershell.exe -ExecutionPolicy Bypass -File "$(wslpath -w "$PWD/tools/ci/keepawake-stop.ps1")" \
               -PidFile 'C:\Windows\Temp\fb-ci-keepawake-linux.pid'
           fi
 
@@ -291,7 +291,7 @@ jobs:
         if: ${{ github.event_name != 'pull_request' }}
         run: |
           if command -v powershell.exe >/dev/null 2>&1; then
-            powershell.exe -File "$(wslpath -w "$PWD/tools/ci/keepawake-start.ps1")" \
+            powershell.exe -ExecutionPolicy Bypass -File "$(wslpath -w "$PWD/tools/ci/keepawake-start.ps1")" \
               -PidFile 'C:\Windows\Temp\fb-ci-keepawake-linux.pid'
           else
             echo "powershell.exe not available (hosted runner) -- skipping"
@@ -407,7 +407,7 @@ jobs:
         if: ${{ always() && github.event_name != 'pull_request' }}
         run: |
           if command -v powershell.exe >/dev/null 2>&1; then
-            powershell.exe -File "$(wslpath -w "$PWD/tools/ci/keepawake-stop.ps1")" \
+            powershell.exe -ExecutionPolicy Bypass -File "$(wslpath -w "$PWD/tools/ci/keepawake-stop.ps1")" \
               -PidFile 'C:\Windows\Temp\fb-ci-keepawake-linux.pid'
           fi
 
