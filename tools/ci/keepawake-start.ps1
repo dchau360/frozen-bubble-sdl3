@@ -19,8 +19,16 @@ public static extern uint SetThreadExecutionState(uint esFlags);
 "@
 # ES_CONTINUOUS (0x80000000) | ES_SYSTEM_REQUIRED (0x00000001): keeps the
 # system (not just the display) from sleeping for as long as this process's
-# calling thread stays alive to hold it.
-[Native.Power]::SetThreadExecutionState(0x80000001) | Out-Null
+# calling thread stays alive to hold it. Built via Convert.ToUInt32 from a
+# hex string, not the 0x80000001 literal directly -- PowerShell parses that
+# literal as a signed Int32 (it exceeds Int32.MaxValue, so the literal comes
+# out negative), and a plain [uint32] cast on a negative Int32 is a checked
+# numeric conversion that throws (out of UInt32's range) rather than
+# reinterpreting the bits the way an unchecked C-style cast would. Left
+# broken, this line threw every time, but Start-Process doesn't wait for the
+# child it launches, so the caller (keepawake-start.ps1 itself) always
+# reported success regardless -- the helper was silently dying on launch.
+[Native.Power]::SetThreadExecutionState([Convert]::ToUInt32('80000001', 16)) | Out-Null
 while ($true) { Start-Sleep -Seconds 30 }
 '@
 
