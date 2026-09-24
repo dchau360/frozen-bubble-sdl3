@@ -91,16 +91,100 @@ jobs:
           echo "client_unaffected=$unaffected" >> "$GITHUB_OUTPUT"
 
   # ────────────────────────────────────────────────────────────────
+  # Runner availability check — the self-hosted Windows/WSL2 box is a
+  # personal machine that sleeps, reboots, or loses network on its own
+  # schedule (see the 2026-09-23 runner setup and its keepawake/WOL
+  # follow-ups). Without this, the static push/tag->self-hosted routing below
+  # would leave a build queued indefinitely the moment the box is offline --
+  # no runner is ever going to claim it, and GitHub Actions has no built-in
+  # "waiting for a runner" timeout to fall back on. Every self-hosted-eligible
+  # job below routes to a GitHub-hosted runner automatically whenever the
+  # matching self-hosted runner isn't online -- the "cloud runner as backup"
+  # behavior originally asked for, which the initial routing never actually
+  # implemented (it only ever varied by event type, never by live status).
+  #
+  # Primary signal is tools/ci/heartbeat.{sh,ps1}: each runner writes its own
+  # Unix timestamp to a repo variable every minute, read here via the `vars`
+  # context (no token needed for that read). GitHub's own runner-status API
+  # was tried first and kept as a fallback for whichever runner hasn't been
+  # wired up with a heartbeat yet, but proved too slow to rely on alone --
+  # confirmed live on 2026-09-23: the box was fully asleep, and the API still
+  # reported the Linux runner "online" well after the fact, which is exactly
+  # the failure mode this job exists to prevent. A heartbeat older than 150s
+  # (2.5x the 1-minute write interval, allowing for one missed cycle) is
+  # treated as stale/offline regardless of what the API says.
+  #
+  # Always runs, PRs included, and never fails outright: any missing secret,
+  # unset heartbeat variable, or API error just leaves that signal blank,
+  # which resolves to "offline" (hosted fallback) below -- set +e guards the
+  # whole script so a broken secret or dead heartbeat degrades to slower CI,
+  # never to build jobs skipping outright because a `needs:` job "failed".
+  # ────────────────────────────────────────────────────────────────
+  runner-status:
+    name: Check self-hosted runner availability
+    runs-on: ubuntu-22.04
+    outputs:
+      linux_online: ${{ steps.check.outputs.linux_online }}
+      windows_online: ${{ steps.check.outputs.windows_online }}
+    steps:
+      - name: Query runner status
+        id: check
+        env:
+          GH_TOKEN: ${{ secrets.RUNNER_STATUS_PAT }}
+          HEARTBEAT_LINUX: ${{ vars.FB_CI_HEARTBEAT_LINUX }}
+          HEARTBEAT_WINDOWS: ${{ vars.FB_CI_HEARTBEAT_WINDOWS }}
+        run: |
+          set +e
+          now=$(date +%s)
+          max_age=150
+
+          is_fresh() {
+            local ts="$1"
+            [ -n "$ts" ] && [ $(( now - ts )) -le "$max_age" ]
+          }
+
+          linux_status=""
+          windows_status=""
+          if [ -n "$GH_TOKEN" ]; then
+            runners=$(gh api "repos/${{ github.repository }}/actions/runners" --jq '.runners' 2>/dev/null)
+            linux_status=$(echo "$runners" | jq -r '.[] | select(.name=="wsl-hb12f-linux") | .status' 2>/dev/null)
+            windows_status=$(echo "$runners" | jq -r '.[] | select(.name=="win-hb12f-windows") | .status' 2>/dev/null)
+          else
+            echo "::warning::RUNNER_STATUS_PAT not set -- API check unavailable, relying on heartbeat only"
+          fi
+          echo "wsl-hb12f-linux: API says ${linux_status:-unknown}, heartbeat age $(( now - ${HEARTBEAT_LINUX:-0} ))s"
+          echo "win-hb12f-windows: API says ${windows_status:-unknown}, heartbeat age $(( now - ${HEARTBEAT_WINDOWS:-0} ))s"
+
+          if [ -n "$HEARTBEAT_LINUX" ]; then
+            is_fresh "$HEARTBEAT_LINUX" && linux_online=true || linux_online=false
+          else
+            [ "$linux_status" = "online" ] && linux_online=true || linux_online=false
+          fi
+          if [ -n "$HEARTBEAT_WINDOWS" ]; then
+            is_fresh "$HEARTBEAT_WINDOWS" && windows_online=true || windows_online=false
+          else
+            [ "$windows_status" = "online" ] && windows_online=true || windows_online=false
+          fi
+
+          echo "linux_online=$linux_online" >> "$GITHUB_OUTPUT"
+          echo "windows_online=$windows_online" >> "$GITHUB_OUTPUT"
+
+          [ "$linux_status" = "online" ] && echo "linux_online=true" >> "$GITHUB_OUTPUT" || echo "linux_online=false" >> "$GITHUB_OUTPUT"
+          [ "$windows_status" = "online" ] && echo "windows_online=true" >> "$GITHUB_OUTPUT" || echo "windows_online=false" >> "$GITHUB_OUTPUT"
+
+  # ────────────────────────────────────────────────────────────────
   # Linux → AppImage
   # ────────────────────────────────────────────────────────────────
   build-linux:
     name: Linux (AppImage)
-    # Self-hosted only for push/tag/dispatch (already-reviewed code); a
+    needs: runner-status
+    # Self-hosted only for push/tag/dispatch (already-reviewed code) AND only
+    # when runner-status confirmed the self-hosted Linux runner is online; a
     # pull_request always gets a GitHub-hosted runner regardless of who
     # opened it. Running arbitrary PR-supplied code on a persistent,
     # never-wiped self-hosted box is exactly the configuration GitHub's own
     # docs warn against for public repos -- see the 2026-09-23 runner setup.
-    runs-on: ${{ github.event_name != 'pull_request' && fromJSON('["self-hosted", "Linux", "wsl-hb12f"]') || 'ubuntu-22.04' }}
+    runs-on: ${{ github.event_name != 'pull_request' && needs.runner-status.outputs.linux_online == 'true' && fromJSON('["self-hosted", "Linux", "wsl-hb12f"]') || 'ubuntu-22.04' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -290,8 +374,9 @@ jobs:
   # ────────────────────────────────────────────────────────────────
   test-linux-sanitizer:
     name: Linux (ASan/UBSan)
+    needs: runner-status
     # See build-linux's comment on this same expression.
-    runs-on: ${{ github.event_name != 'pull_request' && fromJSON('["self-hosted", "Linux", "wsl-hb12f"]') || 'ubuntu-22.04' }}
+    runs-on: ${{ github.event_name != 'pull_request' && needs.runner-status.outputs.linux_online == 'true' && fromJSON('["self-hosted", "Linux", "wsl-hb12f"]') || 'ubuntu-22.04' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -560,10 +645,10 @@ jobs:
   # ────────────────────────────────────────────────────────────────
   build-windows:
     name: Windows (installer)
-    needs: changes
+    needs: [changes, runner-status]
     if: needs.changes.outputs.client_unaffected != 'true'
     # See build-linux's comment on this same expression (Windows variant).
-    runs-on: ${{ github.event_name != 'pull_request' && fromJSON('["self-hosted", "Windows", "win-hb12f"]') || 'windows-latest' }}
+    runs-on: ${{ github.event_name != 'pull_request' && needs.runner-status.outputs.windows_online == 'true' && fromJSON('["self-hosted", "Windows", "win-hb12f"]') || 'windows-latest' }}
     defaults:
       run:
         shell: msys2 {0}
