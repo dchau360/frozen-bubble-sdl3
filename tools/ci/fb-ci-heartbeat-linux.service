@@ -1,0 +1,7 @@
+[Unit]
+Description=Write FB_CI_HEARTBEAT_LINUX repo variable
+
+[Service]
+Type=oneshot
+User=ubuntu
+ExecStart=/home/ubuntu/fb-ci-heartbeat/heartbeat.sh
