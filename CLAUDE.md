@@ -77,7 +77,7 @@ Entry point is `main()` in `src/main.cpp` which calls `FrozenBubble::Instance()-
 - WASM uses `RunOneFrame()` via Emscripten's main loop; native uses `RunForEver()` with SDL event pump
 
 **`BubbleGame`** (`src/bubblegame.h/.cpp`) — all gameplay logic:
-- Owns `BubbleArray bubbleArrays[5]` — one per player (1–5 players)
+- Owns `BubbleArray bubbleArrays[MAX_NET_PLAYERS]` — one per player (`MAX_NET_PLAYERS` = 20: online rooms hold 2–20 players, local multiplayer 2–5)
 - `NewGame(SetupSettings)` initializes the round; `SetupSettings` carries all per-game config (chain reactions, network game flag, player count, color counts, aim guide flags, etc.)
 - Drives bubble launching, collision, chain reactions, malus, win/loss detection, and network message processing each frame via `ProcessNetworkMessages()`
 
