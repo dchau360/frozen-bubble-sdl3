@@ -147,6 +147,19 @@ struct game
         int pending_match_fire;  /* does this round's deferred post also need a MATCH event? */
         int pending_match_wins;
 
+        /* Round length for the Discord round-result alert ("Round 3 · 1:01").
+         * round_started_us is stamped when the round begins -- real_start_game()
+         * for a match's first round, and the first 'n' ("ready for next round")
+         * after an 'F' for every round after it, since the other seats
+         * auto-answer that first 'n' immediately (src/bubblegame_net.cpp) and
+         * the next round starts right behind it. pending_duration_secs is the
+         * elapsed time captured at 'F', not at the deferred post, so the up-to-
+         * PENDING_STATS_TIMEOUT_SECS wait for 'S' reports never inflates it.
+         * Measured by the server's own clock, so unlike popped it needs no
+         * trust caveat; read back only, never affects gameplay. 0 = unknown. */
+        int64_t round_started_us;
+        int pending_duration_secs;
+
         int game_id;        /* opaque, monotonically-assigned key identifying
                               * this room to the relay across every round it
                               * plays -- see next_game_id() below. Lets the
@@ -478,6 +491,8 @@ static void create_game(int fd, char* nick, int max_players)
         g->pending_winner[0] = '\0';
         g->pending_match_fire = 0;
         g->pending_match_wins = 0;
+        g->round_started_us = 0;
+        g->pending_duration_secs = 0;
         g->game_id = next_game_id++;
         games = g_list_append(games, g);
         open_players = g_list_remove(open_players, GINT_TO_POINTER(fd));
@@ -741,6 +756,7 @@ static void real_start_game(struct game* g)
                 g->players_started[i] = 0;
         }
         g->status = GAME_STATUS_PLAYING;
+        g->round_started_us = g_get_monotonic_time();
 }
 
 static void start_game(int fd)
@@ -1773,7 +1789,8 @@ static void maybe_fire_pending_result(struct game* g, int64_t now)
         discordalert_fire_result_event(g->game_id, g->round_number, roster, win_counts,
                                         g->victories_limit,
                                         g->pending_winner[0] ? g->pending_winner : NULL,
-                                        g->game_mode, platforms, inputs, countries, popped_csv);
+                                        g->game_mode, platforms, inputs, countries, popped_csv,
+                                        g->pending_duration_secs);
         if (g->pending_match_fire)
                 discordalert_fire_match_event(g->game_id, g->pending_winner,
                                                g->pending_match_wins, g->game_mode);
@@ -1782,6 +1799,7 @@ static void maybe_fire_pending_result(struct game* g, int64_t now)
         g->stats_deadline = 0;
         g->pending_match_fire = 0;
         g->pending_winner[0] = '\0';
+        g->pending_duration_secs = 0;
         for (i = 0; i < MAX_PLAYERS_PER_GAME; i++) {
                 g->players_fire_count[i] = 0;
                 g->players_popped[i] = 0;
@@ -1911,12 +1929,20 @@ void process_msg_prio_(int fd, char* msg, ssize_t len, struct game* g)
                                 g->pending_match_fire = (winner[0] && g->victories_limit > 0 &&
                                                           wins >= g->victories_limit) ? 1 : 0;
                                 g->pending_match_wins = wins;
+                                g->pending_duration_secs = g->round_started_us > 0
+                                        ? (int)((g_get_monotonic_time() - g->round_started_us) / G_USEC_PER_SEC)
+                                        : 0;
                                 g->stats_pending = 1;
                                 g->stats_deadline = now + PENDING_STATS_TIMEOUT_SECS;
                                 maybe_fire_pending_result(g, now);
                         }
                         g->result_posted = 1;
                 } else if (!g->tournament_id && len >= 2 && msg[1] == 'n') {
+                        /* Only the first 'n' after an 'F' starts the next
+                         * round's clock -- the rest are the other seats'
+                         * auto-replies to it. */
+                        if (g->result_posted)
+                                g->round_started_us = g_get_monotonic_time();
                         g->result_posted = 0;
                 } else if (len >= 4 && msg[1] == 'i' && is_input_tag_ok(msg[2])) {
                         /* Which device this player is currently shooting with,

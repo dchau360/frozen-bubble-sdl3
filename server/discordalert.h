@@ -127,11 +127,17 @@ void discordalert_fire_join_event(const char* nick, const char* ip, const char* 
 // waits for either every seat to report or that timeout, whichever comes
 // first, before calling this. A no-op (and free) when the relay isn't
 // configured, same as every fire function here.
+//
+// duration_secs is how long the round lasted by this server's own clock
+// (g->pending_duration_secs, game.c) -- from the round's start to its 'F',
+// shown as "Round N · m:ss" by the relay. 0 means unknown (a room whose
+// round start was never observed) and makes the relay omit it.
 void discordalert_fire_result_event(int game_id, int round_number, const char* roster_csv,
                                      const char* wins_csv, int victories_limit,
                                      const char* winner_nick, int game_mode,
                                      const char* platforms_csv, const char* inputs_csv,
-                                     const char* countries_csv, const char* popped_csv);
+                                     const char* countries_csv, const char* popped_csv,
+                                     int duration_secs);
 
 // Call once per match-end, immediately after the round-end alert above,
 // when that round's winner has just reached the room's own VICTORIESLIMIT

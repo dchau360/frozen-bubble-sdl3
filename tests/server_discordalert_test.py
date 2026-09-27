@@ -381,7 +381,30 @@ class ServerDiscordResultAlertTest(_FbServerTestBase):
         self.assertEqual(popped, {"winroom": "3", "guest1": "7"},
                          "popped is index-aligned with roster too, and both "
                          "seats reported in time for the fast path")
-        self.assertTrue(parts[12], "servername field must not be empty")
+        self.assertTrue(parts[12].split("|", 1)[1], "servername field must not be empty")
+
+    def test_round_duration_is_timed_by_the_server_from_round_start_to_f(self):
+        # Round 1's clock starts at START; round 2's at the first 'n' after
+        # round 1's 'F' -- so round 2's duration must not include round 1's
+        # time or the gap spent on the between-rounds stats screen. Bounds
+        # rather than exact values: whole-second truncation plus socket round
+        # trips in the setup can each shift a reading by a second.
+        a, b = self._start_two_player_game("timedroom")
+        time.sleep(2.5)
+        parts = self._finish_round(a, b, "winner")[0].split("|", 13)
+        round1 = int(parts[12])
+        self.assertGreaterEqual(round1, 2, "round 1 lasted at least 2.5s")
+        self.assertLessEqual(round1, 5)
+
+        time.sleep(3)  # sitting on the round-stats screen: not part of round 2
+        a.sendall(b"?n\n")
+        time.sleep(0.5)
+        b.sendall(b"?n\n")  # the other seat's auto-reply, as a real client sends
+        parts = self._finish_round(a, b, "winner")[0].split("|", 13)
+        self.assertEqual(parts[2], "2")
+        self.assertLessEqual(int(parts[12]), 2,
+                             "round 2 is timed from its own start, not round 1's "
+                             "or the stats-screen gap before it")
 
     def test_draw_fires_with_an_empty_winner_field(self):
         a, b = self._start_two_player_game("drawroom")

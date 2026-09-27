@@ -26,7 +26,7 @@ code from the COUNTRY command (empty when the client never sent one, which
 includes every client older than 1.4 and every browser build), posted as a
 flag emoji -- see _flag() for why a country goes where coordinates do not.
 
-    RESULT|<game_id>|<round>|<mode>|<winner>|<roster>|<wins>|<victories_limit>|<platforms>|<inputs>|<countries>|<popped>|<servername>
+    RESULT|<game_id>|<round>|<mode>|<winner>|<roster>|<wins>|<victories_limit>|<platforms>|<inputs>|<countries>|<popped>|<duration>|<servername>
 
 One per round-end, sniffed from the 'F' opcode server-side (game.c) -- but
 not fired synchronously with it: fb-server now defers this datagram until
@@ -77,8 +77,13 @@ datagram fired (see the deferred-firing note above) is an empty field, not
 a "0" -- an honest "unknown," same convention platforms/inputs/countries
 already use for an unreported seat.
 
+duration is how long the round lasted in whole seconds, by fb-server's own
+clock (round start to 'F' -- see g->round_started_us in game.c), rendered
+right after the round label as "Round 3 · 1:01". 0 means fb-server never saw
+the round start, and omits it.
+
 Both datagram kinds are also accepted in their older shapes -- pre-1.4
-entirely, 1.4-without-country, and pre-this-feature-without-popped -- see
+entirely, 1.4-without-country, pre-popped, and pre-duration -- see
 handle_datagram(), which tells them apart by field count plus a sanity
 check on the tag fields themselves, since a servername containing '|' can
 otherwise fake the higher count.
@@ -292,6 +297,13 @@ def _tag_csv_ok(field, valid):
                for part in field.split(","))
 
 
+def _format_duration(secs):
+    """Whole seconds -> "m:ss", or "h:mm:ss" past an hour."""
+    h, rem = divmod(secs, 3600)
+    m, s = divmod(rem, 60)
+    return f"{h}:{m:02d}:{s:02d}" if h else f"{m}:{s:02d}"
+
+
 def _popped_csv_ok(field):
     """True when `field` could be fb-server's own popped-stats CSV.
 
@@ -429,7 +441,7 @@ def _build_pop_chart(roster_csv, popped_csv):
 
 def build_result_message(round_number, mode, winner, roster_csv, wins_csv, victories_limit,
                           servername, *, platforms_csv="", inputs_csv="",
-                          countries_csv="", popped_csv=""):
+                          countries_csv="", popped_csv="", duration_secs=0):
     """Round over: which round, who won (or a draw), what mode, who was
     playing, where.
 
@@ -473,8 +485,17 @@ def build_result_message(round_number, mode, winner, roster_csv, wins_csv, victo
     popped_csv goes to _build_pop_chart() the same way wins_csv goes to
     _build_win_chart() -- see there for the empty/flagged-field handling and
     when the chart is omitted entirely.
+
+    duration_secs is the round's length by fb-server's clock, shown right
+    after the round number ("Round 3 · 1:01"); non-positive omits it.
     """
-    round_label = f"Round {round_number} — " if round_number and round_number > 0 else ""
+    duration_label = f" · {_format_duration(duration_secs)}" if duration_secs and duration_secs > 0 else ""
+    if round_number and round_number > 0:
+        round_label = f"Round {round_number}{duration_label} — "
+    elif duration_label:
+        round_label = f"{duration_label[3:]} — "
+    else:
+        round_label = ""
     mode_label = _GAME_MODE_NAMES.get(mode, "")
     mode_label = f" ({mode_label})" if mode_label else ""
     servername = _sanitize_display(servername)
@@ -723,16 +744,24 @@ async def handle_datagram(data, webhook_url):
         # Same shape as JOIN above: extra fields on current fb-server,
         # disambiguated from an old datagram with a '|' in its servername by
         # checking that each candidate actually looks like its own kind of
-        # CSV. One more rung than before, for the newest (popped) field.
-        parts = rest.split("|", 11)
+        # CSV. One more rung than before, for the newest (duration) field.
+        parts = rest.split("|", 12)
         platforms_csv = inputs_csv = countries_csv = popped_csv = ""
+        duration_s = "0"
         tagged = (len(parts) >= 10 and _tag_csv_ok(parts[7], _PLATFORM_BADGES)
                   and _tag_csv_ok(parts[8], _INPUT_BADGES))
-        if (tagged and len(parts) == 12 and _country_csv_ok(parts[9])
-                and _popped_csv_ok(parts[10])):
+        if (tagged and len(parts) == 13 and _country_csv_ok(parts[9])
+                and _popped_csv_ok(parts[10]) and parts[11].isdigit()):
             (game_id_s, round_s, mode_s, winner, roster_csv, wins_csv,
              victories_limit_s, platforms_csv, inputs_csv, countries_csv,
-             popped_csv, servername) = parts
+             popped_csv, duration_s, servername) = parts
+        elif (tagged and len(parts) >= 12 and _country_csv_ok(parts[9])
+                and _popped_csv_ok(parts[10])):
+            # Pre-duration, or a servername containing '|'.
+            (game_id_s, round_s, mode_s, winner, roster_csv, wins_csv,
+             victories_limit_s, platforms_csv, inputs_csv, countries_csv,
+             popped_csv) = parts[:11]
+            servername = "|".join(parts[11:])
         elif tagged and len(parts) >= 11 and _country_csv_ok(parts[9]):
             # 1.5 with country but not yet popped stats, or a servername
             # with a '|' that also happens to look like nothing in
@@ -772,12 +801,17 @@ async def handle_datagram(data, webhook_url):
             victories_limit = int(victories_limit_s)
         except ValueError:
             victories_limit = 0  # unrecognized -- chart falls back to leader-relative
+        try:
+            duration_secs = int(duration_s)
+        except ValueError:
+            duration_secs = 0  # unrecognized -- build_result_message omits it
         if DISCORD_SERVER_NAME:
             servername = DISCORD_SERVER_NAME
         content = build_result_message(round_number, mode, winner, roster_csv, wins_csv,
                                         victories_limit, servername,
                                         platforms_csv=platforms_csv, inputs_csv=inputs_csv,
-                                        countries_csv=countries_csv, popped_csv=popped_csv)
+                                        countries_csv=countries_csv, popped_csv=popped_csv,
+                                        duration_secs=duration_secs)
         log_label = f"result for {winner or 'a draw'}"
         # Best-effort label for the thread's title only, not the message
         # itself -- see build_roster_csv()/players_nick[0] in game.c for why
