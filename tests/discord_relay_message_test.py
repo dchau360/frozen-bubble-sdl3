@@ -541,6 +541,31 @@ class ResultDatagramDispatchTest(unittest.TestCase):
         self.assertIn("50", captured[0])
         self.assertIn("20", captured[0])
 
+    def test_duration_field_shows_right_after_the_round_number(self):
+        captured = self._captured_line(
+            b"RESULT|7|2|0|alice|alice,bob|3,1|0|W,L|M,K|US,JP|50,20|61|fb.example.org")
+        self.assertEqual(len(captured), 1)
+        self.assertIn("Round 2 · 1:01 — ", captured[0])
+        self.assertIn("fb.example.org", captured[0])
+        self.assertIn("Bubbles popped", captured[0])
+
+    def test_zero_duration_omits_the_time(self):
+        captured = self._captured_line(
+            b"RESULT|7|2|0|alice|alice,bob|3,1|0|W,L|M,K|US,JP|50,20|0|fb.example.org")
+        self.assertIn("Round 2 — ", captured[0])
+        self.assertNotIn("0:00", captured[0])
+
+    def test_pre_duration_datagram_still_parses_without_a_time(self):
+        captured = self._captured_line(
+            b"RESULT|7|2|0|alice|alice,bob|3,1|0|W,L|M,K|US,JP|50,20|fb.example.org")
+        self.assertIn("Round 2 — ", captured[0])
+        self.assertIn("fb.example.org", captured[0])
+
+    def test_duration_formatting(self):
+        self.assertEqual(relay._format_duration(5), "0:05")
+        self.assertEqual(relay._format_duration(61), "1:01")
+        self.assertEqual(relay._format_duration(3725), "1:02:05")
+
     def test_clamped_popped_field_shows_the_asterisk_and_footnote(self):
         captured = self._captured_line(
             b"RESULT|7|2|0|alice|alice,bob|3,1|0|W,L|M,K|US,JP|50!,20|fb.example.org")

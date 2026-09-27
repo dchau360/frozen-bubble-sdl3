@@ -51,7 +51,7 @@ the datagram is dropped and gameplay is unaffected.
 ## Wire format
 
     JOIN|<nick>|<ip>|<geoloc>|<platform>|<country>|<servername>
-    RESULT|<game_id>|<round_number>|<game_mode>|<winner>|<roster>|<wins>|<victories_limit>|<platforms>|<inputs>|<countries>|<popped>|<servername>
+    RESULT|<game_id>|<round_number>|<game_mode>|<winner>|<roster>|<wins>|<victories_limit>|<platforms>|<inputs>|<countries>|<popped>|<duration>|<servername>
     MATCH|<game_id>|<wins>|<game_mode>|<champion>|<servername>
 
 `platform` is one char naming the client's OS -- `W`indows, `M`acOS,
@@ -66,6 +66,13 @@ versions of these, comma-joined and index-aligned with `roster` exactly as
 one. `inputs` is which device that player actually shot with during the
 round -- `K`eyboard, `M`ouse, `T`ouch, `G`amepad -- which `fb-server` sniffs
 off the in-game `i` opcode the same way it sniffs `F` for the result itself.
+
+`duration` is how long the round lasted in whole seconds, timed by
+`fb-server`'s own clock from the round's start (`START` for the first round,
+the first `n` after an `F` for every later one) to its `F`. It is shown right
+after the round number -- "Round 3 · 1:01" -- and omitted when 0 (unknown).
+A relay older than this field still parses the datagram, just without the
+time, and this relay still accepts datagrams from an older `fb-server`.
 
 `popped` is the per-seat bubbles-popped count for the round, comma-joined and
 index-aligned with `roster` the same way `platforms`/`inputs`/`countries`
