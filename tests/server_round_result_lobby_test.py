@@ -16,6 +16,7 @@ server_discordalert_test.py, because the point is the wire text an idler's
 socket actually receives, not a formatting function in isolation.
 """
 
+import os
 import socket
 import subprocess
 import sys
@@ -51,10 +52,16 @@ class ServerRoundResultLobbyTest(unittest.TestCase):
         self.tmpdir = tempfile.TemporaryDirectory()
         self.port = 15519
 
+        # Rounds finished here would otherwise land in the developer's real
+        # ~/.fb-server stats and weekly-rankings files.
+        env = dict(os.environ)
+        env["FB_SERVER_STATS_FILE"] = str(Path(self.tmpdir.name) / "stats.dat")
+        env["FB_SERVER_WEEKLY_FILE"] = str(Path(self.tmpdir.name) / "weekly.dat")
         self.server = subprocess.Popen(
             [str(self.server_path), "-p", str(self.port), "-q", "-z", "-d"],
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
+            env=env,
         )
         deadline = time.monotonic() + 5.0
         while time.monotonic() < deadline:

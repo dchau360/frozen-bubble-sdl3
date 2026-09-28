@@ -405,6 +405,19 @@ set. See `CLAUDE.md`'s "Round-result lobby broadcast" for the details.
 See [server/discord-relay/README.md](server/discord-relay/README.md) for the
 protocol and internals.
 
+### Weekly rankings
+
+With the relay running, each join alert also shows that player's week so far
+(round wins, round losses, bubbles popped and their rank in each), and once a
+day the relay posts the week's top 5 in each category. The week resets Monday
+00:00 UTC, with a final-standings post. Bots are never counted. Players see
+the same board in the online lobby under **Weekly rankings**.
+
+The numbers are stored on the `fb-data` Docker volume
+(`/var/lib/fb-server/weekly.dat` inside the container), so they survive
+`docker compose up -d --build`. `docker compose down -v` deletes the volume
+and resets them.
+
 ---
 
 ## Optional — Limit Concurrent Bots

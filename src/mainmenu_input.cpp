@@ -54,6 +54,7 @@
 
 void MainMenu::HandleInput(SDL_Event *e){
     if (TournamentPanelKey(e)) return;
+    if (WeeklyPanelKey(e)) return;
     switch(e->type) {
         case SDL_EVENT_TEXT_INPUT:
             MenuTextInputEvent(e);
@@ -1387,6 +1388,7 @@ void MainMenu::MenuUpKey() {
                                 // compiled in. Without this it renders but
                                 // arrow keys stop one short of it.
                                 if (LobbyDiscordIndex(games.size()) >= 0) maxActions++;
+                                maxActions++;  // "Weekly rankings", always present
                                 // "Create Tournament" plus one row per
                                 // already-existing joinable tournament
                                 // (2026-09-11 -- see LobbyJoinableTournaments).
@@ -1507,6 +1509,7 @@ void MainMenu::MenuDownKey() {
                                 // compiled in. Without this it renders but
                                 // arrow keys stop one short of it.
                                 if (LobbyDiscordIndex(games.size()) >= 0) maxActions++;
+                                maxActions++;  // "Weekly rankings", always present
                                 // "Create Tournament" plus one row per
                                 // already-existing joinable tournament
                                 // (2026-09-11 -- see LobbyJoinableTournaments).
@@ -2111,6 +2114,11 @@ void MainMenu::MenuReturnKey() {
                                             OpenTournament(joinable[idx].id);
                                             AudioMixer::Instance()->PlaySFX("menu_selected");
                                         }
+                                        return;
+                                    }
+                                    if (selectedActionIndex == LobbyWeeklyIndex(games.size())) {
+                                        OpenWeekly();
+                                        AudioMixer::Instance()->PlaySFX("menu_selected");
                                         return;
                                     }
                                     if (selectedActionIndex == LobbyDiscordIndex(games.size())) {

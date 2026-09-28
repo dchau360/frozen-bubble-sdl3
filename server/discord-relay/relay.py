@@ -8,9 +8,9 @@ every connected player. Instead it fires a best-effort UDP datagram at this
 process, which owns the actual HTTPS call -- and the webhook URL, which
 never needs to reach fb-server at all.
 
-Two datagram kinds, both `|`-delimited with the type name first:
+Four datagram kinds, all `|`-delimited with the type name first:
 
-    JOIN|<nick>|<ip>|<geoloc>|<platform>|<country>|<servername>
+    JOIN|<nick>|<ip>|<geoloc>|<platform>|<country>|<weekly>|<servername>
 
 One per player arriving on the server (their first accepted NICK -- not a
 game-room join, which is a later and much less actionable moment). nick and
@@ -88,6 +88,18 @@ handle_datagram(), which tells them apart by field count plus a sanity
 check on the tag fields themselves, since a servername containing '|' can
 otherwise fake the higher count.
 
+    LEADERBOARD|<final>|<week_start>|<wins>|<losses>|<popped>|<servername>
+
+Weekly rankings (server/weeklystats.c). Once per UTC day fb-server posts the
+current week's top 5 in each category; final=1 instead marks the closing
+standings of the week that just ended, posted at the Monday 00:00 UTC reset.
+week_start is that week's Monday as a Unix time, and each list is
+"nick=count,..." highest first. Posted flat to the channel, like JOIN. JOIN's
+<weekly> is the joining player's own "W,L,P,rankW,rankL,rankP" (empty before
+their first round of the week), rendered as a second line on the join alert.
+Bots are never counted. A JOIN without the field (older fb-server) still
+parses, as does one whose servername contains '|'.
+
     MATCH|<game_id>|<wins>|<mode>|<champion>|<servername>
 
 At most one per round-end -- fired immediately after (never instead of) the
@@ -145,6 +157,7 @@ Environment:
 """
 
 import asyncio
+import datetime
 import json
 import logging
 import os
@@ -547,7 +560,7 @@ def build_match_message(wins, mode, champion, servername):
     return content[:MAX_DISCORD_CONTENT]
 
 
-def build_message(nick, servername, *, platform="", country=""):
+def build_message(nick, servername, *, platform="", country="", weekly=""):
     """The whole message: who joined, from what, and where. Nothing else.
 
     Neither the joining player's IP nor their location appears here, and both
@@ -579,13 +592,92 @@ def build_message(nick, servername, *, platform="", country=""):
     signature is itself the guard that a location can never be handed to it
     by accident, and tests/discord_relay_message_test.py pins that. A new
     field earning its way in here does not get to weaken that check.
+
+    weekly is the player's own line from fb-server's weekly rankings
+    ("W,L,P,rankW,rankL,rankP", see _weekly_line()), added as a second line
+    when they have played this week.
     """
     nick = _sanitize_display(nick)
     servername = _sanitize_display(servername)
     badge = _badges(platform, country_tag=country)
     badge = f" {badge}" if badge else ""
     content = f"🔔 **{nick}**{badge} joined **{servername}**"
+    line = _weekly_line(weekly)
+    if line:
+        content = f"{content}\n{line}"
     return content[:MAX_DISCORD_CONTENT]
+
+
+def _weekly_player_ok(field):
+    """True when `field` is empty or fb-server's six-int weekly line."""
+    if field == "":
+        return True
+    parts = field.split(",")
+    return len(parts) == 6 and all(p.isdigit() for p in parts)
+
+
+def _rank(r):
+    return f"#{r}" if r > 0 else "–"
+
+
+def _weekly_line(weekly):
+    """"W,L,P,rankW,rankL,rankP" -> the join alert's second line, or "" for
+    a player with no rounds this week (or anything malformed)."""
+    if not weekly or not _weekly_player_ok(weekly):
+        return ""
+    w, l, p, rw, rl, rp = (int(x) for x in weekly.split(","))
+    return (f"📊 This week: {w} W · {l} L · {p} popped "
+            f"(rank {_rank(rw)} wins · {_rank(rl)} losses · {_rank(rp)} popped)")
+
+
+def _leaderboard_csv_ok(field):
+    """True when `field` is empty or fb-server's "nick=count,..." list."""
+    if field == "":
+        return True
+    for item in field.split(","):
+        nick, eq, count = item.partition("=")
+        # is_nick_ok()'s own charset, re-checked here because these nicks go
+        # into a code block unescaped (see _leaderboard_block()).
+        if (not eq or not count.isdigit() or not 1 <= len(nick) <= 10
+                or not all(c.isascii() and (c.isalnum() or c in "_-") for c in nick)):
+            return False
+    return True
+
+
+def _leaderboard_block(title, csv):
+    """One ranked category as a monospace block, or "" when empty. Ties share
+    a rank, matching fb-server's own competition ranking."""
+    if not csv:
+        return ""
+    entries = [(n, int(c)) for n, _, c in (item.partition("=") for item in csv.split(","))]
+    width = max(len(n) for n, _ in entries)
+    lines, prev, rank = [], None, 0
+    for i, (n, c) in enumerate(entries, start=1):
+        if c != prev:
+            rank, prev = i, c
+        # Inside a code block Markdown escaping would print literally, so
+        # use the raw nick -- is_nick_ok() already limits it to
+        # [A-Za-z0-9_-] and a code fence cannot be broken out of with those.
+        lines.append(f"{rank:>2}. {n:<{width}} {c}")
+    return f"{title}\n```\n" + "\n".join(lines) + "\n```"
+
+
+def build_leaderboard_message(final, week_start, wins_csv, losses_csv, popped_csv, servername):
+    """The daily weekly-rankings post (or, final=True, the closing standings
+    posted at the Monday 00:00 UTC reset). week_start is that week's Monday
+    as a Unix time."""
+    servername = _sanitize_display(servername)
+    week = datetime.datetime.fromtimestamp(week_start, datetime.timezone.utc)
+    week_label = f"{week:%b} {week.day}"
+    if final:
+        head = f"🏁 **Final weekly standings** on **{servername}** — week of {week_label}"
+    else:
+        head = (f"📊 **Weekly rankings** on **{servername}** — week of {week_label} "
+                f"(resets Monday 00:00 UTC)")
+    blocks = [b for b in (_leaderboard_block("🏆 Most round wins", wins_csv),
+                          _leaderboard_block("💀 Most round losses", losses_csv),
+                          _leaderboard_block("💥 Most bubbles popped", popped_csv)) if b]
+    return "\n".join([head] + blocks)[:MAX_DISCORD_CONTENT]
 
 
 def _post_sync(webhook_url, content):
@@ -710,11 +802,16 @@ async def handle_datagram(data, webhook_url):
         # enough not to send one, whose servername itself contains '|', also
         # yields 5 parts -- _tag_csv_ok settles which it is, since no
         # realistic server name is a bare single char from that closed set.
-        parts = rest.split("|", 5)
-        platform = country = ""
-        if (len(parts) == 6 and _tag_csv_ok(parts[3], _PLATFORM_BADGES)
+        parts = rest.split("|", 6)
+        platform = country = weekly = ""
+        if (len(parts) == 7 and _tag_csv_ok(parts[3], _PLATFORM_BADGES)
+                and _country_csv_ok(parts[4]) and _weekly_player_ok(parts[5])):
+            nick, ip, geoloc, platform, country, weekly, servername = parts
+        elif (len(parts) >= 6 and _tag_csv_ok(parts[3], _PLATFORM_BADGES)
                 and _country_csv_ok(parts[4])):
-            nick, ip, geoloc, platform, country, servername = parts
+            # Pre-weekly, or a servername containing '|'.
+            nick, ip, geoloc, platform, country = parts[:5]
+            servername = "|".join(parts[5:])
         elif len(parts) >= 5 and _tag_csv_ok(parts[3], _PLATFORM_BADGES):
             # Protocol 1.4 without the country field, or a 1.4 servername
             # containing '|'. Either way the platform tag is real and the rest
@@ -736,7 +833,8 @@ async def handle_datagram(data, webhook_url):
         del ip, geoloc
         if DISCORD_SERVER_NAME:
             servername = DISCORD_SERVER_NAME
-        content = build_message(nick, servername, platform=platform, country=country)
+        content = build_message(nick, servername, platform=platform, country=country,
+                                weekly=weekly)
         log_label = f"join alert for {nick}"
         game_id = None
 
@@ -847,6 +945,20 @@ async def handle_datagram(data, webhook_url):
         # or reused one moments earlier (see the module docstring's MATCH
         # entry). Still a reasonable label on its own if that ever changes.
         room_label = _sanitize_display(champion or servername)
+
+    elif kind == "LEADERBOARD":
+        parts = rest.split("|", 5)
+        if (len(parts) != 6 or parts[0] not in ("0", "1") or not parts[1].isdigit()
+                or not all(_leaderboard_csv_ok(p) for p in parts[2:5])):
+            log.warning("malformed datagram, dropped: %r", text[:120])
+            return
+        final_s, week_s, wins_csv, losses_csv, popped_csv, servername = parts
+        if DISCORD_SERVER_NAME:
+            servername = DISCORD_SERVER_NAME
+        content = build_leaderboard_message(final_s == "1", int(week_s), wins_csv,
+                                            losses_csv, popped_csv, servername)
+        log_label = "final weekly standings" if final_s == "1" else "weekly rankings"
+        game_id = None
 
     else:
         log.warning("malformed datagram, dropped: %r", text[:120])

@@ -378,6 +378,8 @@ void NetworkClient::Disconnect() {
     tournaments.Reset();
     tournamentReceivedAt.clear();
     tournamentError.clear();
+    weekly = WeeklyBoard();
+    weeklyLoaded = false;
     delete currentGame;
     currentGame = nullptr;
     gameList.clear();
@@ -1063,6 +1065,11 @@ bool NetworkClient::TournamentCommand(const std::string& operation) {
     return SendCommand(("TOUR " + operation).c_str());
 }
 
+bool NetworkClient::RequestWeekly() {
+    if (!WeeklySupported()) return false;
+    return SendCommand("WEEKLY");
+}
+
 void NetworkClient::ConsumeIncomingLines() {
     int consumed = 0;
     while (consumed < recvBufferLen) {
@@ -1122,6 +1129,16 @@ void NetworkClient::HandleServerResponse(const std::string& response) {
         size_t pushPos = response.find("PUSH:") + 6; // Skip "PUSH: "
         std::string pushMsg = response.substr(pushPos);
         HandlePushMessage(pushMsg);
+        return;
+    }
+
+    // Before LIST's find("LIST:") below, which matches anywhere in a line:
+    // a nick in this payload can't contain ':', so it can't collide, but
+    // checking the command name exactly costs nothing.
+    if (IsResponseForCommand(response, "WEEKLY")) {
+        const auto colon = response.find(": ");
+        if (colon != std::string::npos && weekly.Parse(response.substr(colon + 2)))
+            weeklyLoaded = true;
         return;
     }
 

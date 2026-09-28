@@ -73,6 +73,7 @@ class _FbServerTestBase(unittest.TestCase):
         env["FB_SERVER_DISCORD_RELAY"] = f"127.0.0.1:{self.relay_port}"
         # Keep stats out of the developer's real home directory.
         env["FB_SERVER_STATS_FILE"] = str(Path(self.tmpdir.name) / "stats.dat")
+        env["FB_SERVER_WEEKLY_FILE"] = str(Path(self.tmpdir.name) / "weekly.dat")
 
         self.port = 15518
         # -d keeps the server in the foreground. Without it fb-server forks and

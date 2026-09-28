@@ -62,6 +62,7 @@ class ServerPlatformInputTest(unittest.TestCase):
         env = dict(os.environ)
         env["FB_SERVER_DISCORD_RELAY"] = f"127.0.0.1:{self.relay_port}"
         env["FB_SERVER_STATS_FILE"] = str(Path(self.tmpdir.name) / "stats.dat")
+        env["FB_SERVER_WEEKLY_FILE"] = str(Path(self.tmpdir.name) / "weekly.dat")
 
         self.port = 15521
         self.server = subprocess.Popen(

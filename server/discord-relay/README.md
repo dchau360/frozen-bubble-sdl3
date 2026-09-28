@@ -50,9 +50,10 @@ the datagram is dropped and gameplay is unaffected.
 
 ## Wire format
 
-    JOIN|<nick>|<ip>|<geoloc>|<platform>|<country>|<servername>
+    JOIN|<nick>|<ip>|<geoloc>|<platform>|<country>|<weekly>|<servername>
     RESULT|<game_id>|<round_number>|<game_mode>|<winner>|<roster>|<wins>|<victories_limit>|<platforms>|<inputs>|<countries>|<popped>|<duration>|<servername>
     MATCH|<game_id>|<wins>|<game_mode>|<champion>|<servername>
+    LEADERBOARD|<final>|<week_start>|<wins>|<losses>|<popped>|<servername>
 
 `platform` is one char naming the client's OS -- `W`indows, `M`acOS,
 `L`inux, `A`ndroid, `I`OS, `B`rowser -- from the `PLATFORM` command, or
@@ -305,6 +306,31 @@ delay of up to ~2s versus this alert's previous synchronous timing. The
 lobby's own instant "X wins!" broadcast (`report_round_result()`, driven by
 the same `F`) is untouched and still fires immediately; only the Discord
 post waits.
+
+## Weekly rankings
+
+`fb-server` keeps per-nick round wins, round losses and bubbles popped for the
+current week, Monday 00:00 UTC to the next (`server/weeklystats.c`), fed from
+the same round-end handling as `RESULT` above. Bots are never counted; humans
+count whether or not bots were in the round. A draw, or a win claim naming
+nobody in the room, records no wins or losses -- only popped. Keyed by nick,
+which is not an account, so anyone using the same nick shares its line.
+
+Two things reach Discord:
+
+- **On every join**, `JOIN`'s `<weekly>` field carries the player's own
+  `W,L,P,rankW,rankL,rankP`, posted as a second line:
+  `📊 This week: 12 W · 5 L · 830 popped (rank #2 wins · #4 losses · #1 popped)`.
+  Empty (no second line) before their first round of the week.
+- **Once a day**, `LEADERBOARD` posts the top 5 in each category. At the
+  Monday reset it posts that week's *final* standings instead, then the new
+  week starts empty. An empty week posts nothing. The last day posted is
+  saved with the stats, so restarts and redeploys never post twice.
+
+Stats are saved in `FB_SERVER_WEEKLY_FILE` (the compose file puts it on the
+`fb-data` volume so it survives rebuilds). Players see the same board in the
+online lobby's **Weekly rankings** screen, via the protocol-1.5 `WEEKLY`
+command.
 
 ## Match results
 

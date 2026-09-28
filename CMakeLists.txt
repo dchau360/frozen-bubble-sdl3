@@ -318,6 +318,11 @@ if(BUILD_TESTING AND NOT EMSCRIPTEN AND NOT ANDROID AND NOT IOS)
     target_include_directories(tournamentstate-test PRIVATE src)
     target_compile_features(tournamentstate-test PRIVATE cxx_std_17)
     add_test(NAME tournamentstate-test COMMAND tournamentstate-test)
+
+    add_executable(weeklyboard-parse-test tests/weeklyboard_parse_test.cpp src/weeklyboard.cpp)
+    target_include_directories(weeklyboard-parse-test PRIVATE src)
+    target_compile_features(weeklyboard-parse-test PRIVATE cxx_std_17)
+    add_test(NAME weeklyboard-parse-test COMMAND weeklyboard-parse-test)
     if(TARGET fb-server)
         add_test(NAME server-tournament-test COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tests/server_tournament_test.py $<TARGET_FILE:fb-server>)
         set_tests_properties(server-tournament-test PROPERTIES TIMEOUT 180)
@@ -629,6 +634,11 @@ if(BUILD_TESTING AND NOT EMSCRIPTEN AND NOT ANDROID AND NOT IOS)
         # predates either tag has to stay indistinguishable from before.
         add_test(NAME server-platform-input-test
             COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tests/server_platform_input_test.py $<TARGET_FILE:fb-server>)
+        # Weekly rankings (server/weeklystats.c): what a round records, bots
+        # excluded; the WEEKLY lobby command; the weekly line on the Discord
+        # JOIN datagram; and the daily / Monday-rollover LEADERBOARD post.
+        add_test(NAME server-weekly-test
+            COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tests/server_weekly_test.py $<TARGET_FILE:fb-server>)
         # Binds the hardcoded UDP discovery port, so it cannot run concurrently
         # with another fb-server; it skips when that port is already in use.
         add_test(NAME server-udp-probe-test

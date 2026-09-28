@@ -311,6 +311,11 @@ struct MainMenuTestAccess {
     static int LobbyDiscordIndexOf(const MainMenu& menu, size_t roomCount) {
         return menu.LobbyDiscordIndex(roomCount);
     }
+    static int LobbyWeeklyIndexOf(const MainMenu& menu, size_t roomCount) {
+        return menu.LobbyWeeklyIndex(roomCount);
+    }
+    static bool ShowingWeekly(const MainMenu& menu) { return menu.showingWeekly; }
+    static void CloseWeekly(MainMenu& menu) { menu.showingWeekly = false; }
     static int LobbyTournamentIndexOf(const MainMenu& menu) { return menu.LobbyTournamentIndex(); }
     static int LobbyTournamentListCountOf(const MainMenu& menu) { return menu.LobbyTournamentListCount(); }
     static int LobbyRoomListStartOf(const MainMenu& menu) { return menu.LobbyRoomListStart(); }
@@ -1395,6 +1400,7 @@ int main() {
                 const int tourIdx = MainMenuTestAccess::LobbyTournamentIndexOf(*menu);
                 const int roomListStart = MainMenuTestAccess::LobbyRoomListStartOf(*menu);
                 const int discordIdx = MainMenuTestAccess::LobbyDiscordIndexOf(*menu, roomCount);
+                const int weeklyIdx = MainMenuTestAccess::LobbyWeeklyIndexOf(*menu, roomCount);
                 CHECK((tourIdx >= 0) == tournamentsOn);
                 CHECK((discordIdx >= 0) == discordOn);
                 // Tournaments is always the fixed slot 2 when present,
@@ -1403,16 +1409,17 @@ int main() {
                 // Room list starts right after Tournaments' slot when
                 // present, else right after Create Game Room.
                 CHECK(roomListStart == (tournamentsOn ? 3 : 2));
-                if (discordOn) {
-                    // Discord trails the room list, wherever it starts.
-                    CHECK(discordIdx == roomListStart + (int)roomCount);
-                }
+                // "Weekly rankings" trails the room list, wherever it
+                // starts, and is always there; Discord follows it.
+                CHECK(weeklyIdx == roomListStart + (int)roomCount);
+                if (discordOn) CHECK(discordIdx == weeklyIdx + 1);
 
                 // Whichever rows are present must each be a real, separately
                 // tappable row -- not merged into, or missing from, the row
                 // list a keyboard would also see.
                 if (tourIdx >= 0)
                     CHECK(!MainMenuTestAccess::RectsForIndex(*menu, tourIdx).empty());
+                CHECK(!MainMenuTestAccess::RectsForIndex(*menu, weeklyIdx).empty());
                 if (discordIdx >= 0)
                     CHECK(!MainMenuTestAccess::RectsForIndex(*menu, discordIdx).empty());
                 // And no stray row at the "other configuration"'s position:
@@ -1420,16 +1427,14 @@ int main() {
                 // on (right after the room list) must not silently have a
                 // leftover row squatting there instead.
                 if (!discordOn) {
-                    const int wouldBeIdxIfDiscordOn = roomListStart + (int)roomCount;
+                    const int wouldBeIdxIfDiscordOn = weeklyIdx + 1;
                     CHECK(MainMenuTestAccess::RectsForIndex(*menu, wouldBeIdxIfDiscordOn).empty());
                 }
 
                 // Keyboard reach: Up from the very first row (Chat, index 0)
                 // wraps all the way around to the last row. Discord, when
-                // present, is always the last row (it trails the room
-                // list); otherwise it's the last room row.
-                const int expectedLast = discordIdx >= 0 ? discordIdx
-                                        : roomListStart + (int)roomCount - 1;
+                // present, is always the last row; otherwise Weekly is.
+                const int expectedLast = discordIdx >= 0 ? discordIdx : weeklyIdx;
                 MainMenuTestAccess::SetSelectedActionIndex(*menu, 0);
                 MainMenuTestAccess::PressUp(*menu);
                 CHECK(MainMenuTestAccess::SelectedActionIndex(*menu) == expectedLast);
@@ -1452,6 +1457,15 @@ int main() {
                 MainMenuTestAccess::SetSelectedActionIndex(*menu, expectedLast);
                 MainMenuTestAccess::PressDown(*menu);
                 CHECK(MainMenuTestAccess::SelectedActionIndex(*menu) == 0);
+
+                // Weekly is reachable by stepping Down off the last room, and
+                // ENTER on it opens the weekly-rankings view.
+                MainMenuTestAccess::SetSelectedActionIndex(*menu, roomListStart + (int)roomCount - 1);
+                MainMenuTestAccess::PressDown(*menu);
+                CHECK(MainMenuTestAccess::SelectedActionIndex(*menu) == weeklyIdx);
+                MainMenuTestAccess::PressReturn(*menu);
+                CHECK(MainMenuTestAccess::ShowingWeekly(*menu));
+                MainMenuTestAccess::CloseWeekly(*menu);
             }
         }
 

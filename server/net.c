@@ -65,8 +65,10 @@ const int proto_major = 1;
 /* 1.4 adds the PLATFORM command and the per-player platform tag it appends to
  * each LIST entry (see append_player_list_tags, game.c). Clients gate the
  * command on this minor so a new client talking to an older server stays
- * silent instead of collecting an UNKNOWN_COMMAND warning. */
-const int proto_minor = 4;
+ * silent instead of collecting an UNKNOWN_COMMAND warning.
+ * 1.5 adds the WEEKLY command (the lobby's weekly rankings, see
+ * weekly_command in game.c), gated client-side the same way. */
+const int proto_minor = 5;
 
 static char greets_msg_base[] = "SERVER_READY %s %s";
 static char* servername = NULL;

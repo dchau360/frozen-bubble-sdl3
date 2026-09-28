@@ -29,6 +29,7 @@ set(FROZEN_BUBBLE_CORE_SOURCES
     ${FB_SRC}/menutheme.cpp
     ${FB_SRC}/mainmenu.cpp
     ${FB_SRC}/mainmenu_input.cpp
+    ${FB_SRC}/mainmenu_weekly.cpp
     ${FB_SRC}/mainmenu_netpanel.cpp
     ${FB_SRC}/mainmenu_panels.cpp
     ${FB_SRC}/mainmenu_help.cpp
@@ -54,6 +55,7 @@ set(FROZEN_BUBBLE_CORE_SOURCES
     ${FB_SRC}/netbot.cpp
     ${FB_SRC}/netview.cpp
     ${FB_SRC}/tournamentstate.cpp
+    ${FB_SRC}/weeklyboard.cpp
     ${FB_SRC}/netteams.cpp
     ${FB_SRC}/roundstats_color.cpp
     ${FB_SRC}/playerbadge.cpp

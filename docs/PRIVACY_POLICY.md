@@ -1,6 +1,6 @@
 # Privacy Policy — Frozen Bubble: SDL3
 
-**Effective date:** September 20, 2026
+**Effective date:** September 28, 2026
 
 Frozen Bubble: SDL3 ("the app") is a free, open-source game
 ([GPLv2 licensed](https://github.com/dchau360/frozen-bubble-sdl3/blob/main/COPYING), source at
@@ -99,6 +99,16 @@ not per player, with no in-app setting to disable it, and what a given
 server actually posts is outside the developer's control — see
 [SetupServer.md](https://github.com/dchau360/frozen-bubble-sdl3/blob/main/SetupServer.md#round-result-alerts).
 
+**Weekly rankings.** The reference server keeps, per nickname, how many
+rounds you won and lost and how many bubbles you popped this week (Monday
+00:00 UTC to the next), and ranks players by each. The counts are cleared
+every Monday. Every player on that server can see the top 10 in the online
+lobby's "Weekly rankings" screen, and if the server runs the Discord relay
+above, your join alert also shows your own weekly counts and ranks, and a
+daily message lists the top 5 nicknames in each category. **Only nicknames
+and those counts are included** — nothing else about you. Computer-controlled
+bots are never counted.
+
 **Opening the community Discord.** The NET GAME server list and the online
 lobby each offer a "Join our Discord" row. It is a link and nothing more:
 selecting it hands a fixed invite URL to your browser, and no information
@@ -138,6 +148,9 @@ or analytics SDK, so none is collected by the developer.
   reach the same relay for the connect alert; neither is part of either
   posted message. Your country code reaches the relay too, and is part of
   both messages.
+- Nickname and round results: counted into the server's weekly rankings,
+  shown in the lobby and, if the server runs the relay, on Discord (see
+  above).
 - Advertising identifiers: handled entirely within Google's AdMob SDK to
   select and measure ads; not accessed by the developer directly.
 - Purchase token: to keep the "ads removed" state accurate on your device.
