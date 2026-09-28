@@ -76,7 +76,10 @@ everyone a way to remove anyone they liked.
 lobby opens in your browser. There's an alert whenever someone connects to
 a public server, plus a result alert at the end of every round — game
 mode, winner (or draw), and the full player roster — if you're looking for
-an opponent or just keeping an eye on how things are going.
+an opponent or just keeping an eye on how things are going. The server also
+posts its weekly rankings there once a day: round wins, round losses and
+bubbles popped, reset every Monday at 00:00 UTC, bots not counted. The same
+rankings are on the **Weekly rankings** screen in the online lobby.
 
 Running your own server? It can post its own join and round-result alerts
 to a Discord channel of your choosing — see

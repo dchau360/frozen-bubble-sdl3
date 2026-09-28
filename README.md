@@ -59,6 +59,12 @@ After each round a per-player stats table shows bubbles fired and popped, malus 
 
 **Dealing with abusive players.** If you host the room, `/kick p2` removes the player in that roster position (`/kick <nick>` works too). Type `/block <nick>` in chat to hide someone's messages — in the lobby and mid-match both, and it takes effect immediately without needing the server's cooperation. `/unblock <nick>` undoes it, `/blocked` lists who you have blocked, and the list is saved per device. `/report <nick> <what happened>` sends a report to that server's operator; each server is run by a different person, so what happens next is up to them — blocking is the part that is in your hands. Type `/help` in chat for the full list.
 
+**Weekly rankings.** Each server ranks its players by round wins, round losses and bubbles popped for the week, starting over every Monday at 00:00 UTC. Bots are never counted. Open **Weekly rankings** in the online lobby to see the top 10 in each category and your own line. The lobby's Online list shows each player's round-wins rank as a gold `#N` next to their name, with you listed first. This needs a server running v2.4.116 or later.
+
+<p align="center">
+  <img src="docs/screenshots/weekly-rankings.png" alt="Weekly rankings screen: top ten players by round wins, round losses and bubbles popped, with the viewer's own line highlighted" width="480">
+</p>
+
 <p align="center">
   <img src="docs/screenshots/round-stats.png" alt="Post-round stats table showing each player's wins, bubbles fired and popped, malus sent, received, and blocked, and kills" width="480">
 </p>
@@ -179,7 +185,9 @@ round — game mode, winner (or draw), and the full player roster, each name
 with a platform badge, an input-device badge, and a country flag where a
 player's client reported them, a win-count chart, and a bubbles-popped chart
 — if you're looking for an opponent or just keeping an eye on how things are
-going. The same platform and input badges also show up next to opponents'
+going. Round results go to the `#net-games` channel. Join alerts also show
+the player's weekly wins, losses and bubbles popped, and the server posts the
+weekly standings once a day, with the final standings when the week ends. The same platform and input badges also show up next to opponents'
 names in-game.
 
 <p align="center">
