@@ -1,5 +1,9 @@
 # Changelog
 
+## v2.4.117
+
+- **The lobby's Online list now shows you.** You're listed first, marked "(you)", with your weekly rank badge if you have one. Before, the list left you out, so a lobby with only you in it said "No free players", which read as if the server couldn't see you. When nobody else is free it now says "No one else in the lobby".
+
 ## v2.4.116
 
 - **Weekly rankings.** Servers now track each player's round wins, round losses and bubbles popped for the week (Monday 00:00 UTC to Monday), with a ranking for each. Bots are never counted, but a human's rounds still count when bots are seated. A new **Weekly rankings** row in the online lobby opens a screen with the top 10 in each category and your own line. Players in the lobby's Online list show their wins rank as a gold `#N` next to their name. This needs a server running this version (protocol 1.5). Against an older server, the screen says the server doesn't have rankings yet.
