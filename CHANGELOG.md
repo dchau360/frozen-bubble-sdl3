@@ -1,5 +1,13 @@
 # Changelog
 
+## v2.4.116
+
+- **Weekly rankings.** Servers now track each player's round wins, round losses and bubbles popped for the week (Monday 00:00 UTC to Monday), with a ranking for each. Bots are never counted, but a human's rounds still count when bots are seated. A new **Weekly rankings** row in the online lobby opens a screen with the top 10 in each category and your own line. Players in the lobby's Online list show their wins rank as a gold `#N` next to their name. This needs a server running this version (protocol 1.5). Against an older server, the screen says the server doesn't have rankings yet.
+- **Weekly stats on Discord.** A player's Discord join alert now includes their weekly line. The server posts the current standings once a day, and the final standings when the week rolls over. Operators running the Docker stack get a new `fb-data` volume, so weekly and all-time stats survive container rebuilds. See `SetupServer.md`'s "Weekly rankings" section.
+- **Discord round alerts show how long the round took**, right after the round number (for example "Round 3 · 1:01").
+- **The post-round stats note now points to the `#net-games` Discord channel**, which replaces `#now-playing`.
+- **Privacy policy updated** to describe the weekly rankings: nicknames and per-week round counts, kept for the current week only.
+
 ## v2.4.115
 
 - **Fixed replay desync on a network round transition that inherited a stale danger-blink animation state.** The board's "about to need compression" blink animation advances two counters every frame once it's close to that point, independent of anything the player does. Neither a new match nor a new round within an ongoing match ever reset them — a new match got away with it because a fresh game object starts them at their defaults anyway, but a round transition mid-match (`ReloadGame()`) kept whichever mid-blink values the previous round happened to leave behind. Replaying such a round always rebuilds through the fresh-object path, so it silently disagreed with what live play actually had, producing a mismatch on the replayed round's very first frame with no player action involved. Fixed by resetting both counters on every round transition, matching the sibling timers already reset there. Recordings captured before this fix already have the mismatch baked in and will still show as desynced; anything recorded from this version on is unaffected.
