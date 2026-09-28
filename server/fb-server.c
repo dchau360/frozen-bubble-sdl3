@@ -27,6 +27,7 @@
 #include "game.h"
 #include "tools.h"
 #include "stats.h"
+#include "weeklystats.h"
 #include "discordalert.h"
 
 static void cleanup_atexit(void)
@@ -52,6 +53,7 @@ int main(int argc, char **argv)
         win32_socket_init();  // No-op on POSIX
         // Initialize stats system
         stats_init();
+        weekly_init();
         setup_signal_handlers();
 
         create_server(argc, argv);

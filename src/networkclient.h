@@ -34,6 +34,7 @@
 #endif
 #include "attackmode.h"  // AttackMode is used below regardless of platform
 #include "tournamentstate.h"
+#include "weeklyboard.h"
 #include "gamemode.h"    // GameMode likewise -- see its header comment on the cycle
 
 #define PROTO_MAJOR 1
@@ -233,6 +234,19 @@ public:
     std::map<int, Uint64> tournamentReceivedAt;
     std::string tournamentError;
     bool TournamentCommand(const std::string& operation);
+
+    // Weekly rankings for the lobby's "Weekly rankings" screen (protocol 1.5,
+    // WEEKLY). RequestWeekly() asks for a fresh copy; weeklyLoaded flips once
+    // one has arrived. False without sending anything when the server is too
+    // old to know the command -- WeeklySupported() says which.
+    WeeklyBoard weekly;
+    bool weeklyLoaded = false;
+    bool WeeklySupported() const { return serverProtoMinor >= 5; }
+    bool RequestWeekly();
+    // Re-requests at most every 30s -- called each frame the lobby is drawn,
+    // so the Online sidebar's rank badges stay current as rounds finish.
+    void MaybeRefreshWeekly();
+    Uint64 weeklyRequestedAt = 0;
     void ConsumeIncomingLines();
 
     // Protocol commands

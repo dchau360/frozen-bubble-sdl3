@@ -1,0 +1,283 @@
+#!/usr/bin/env python3
+"""Weekly rankings in fb-server (server/weeklystats.c): what a finished round
+records, the WEEKLY lobby command, the player's weekly line on the Discord
+JOIN datagram, and the daily / Monday-rollover LEADERBOARD datagram.
+
+Runs a real fb-server with a UDP socket standing in for discord-relay, and a
+weekly-stats file in a temp directory -- seeded before startup where a test
+needs a particular week or last-posted day, since the server's clock can't be
+moved from outside.
+
+Usage: server_weekly_test.py <path-to-fb-server>
+"""
+
+import os
+import socket
+import subprocess
+import sys
+import tempfile
+import time
+import unittest
+from pathlib import Path
+
+
+def recv_until(sock, token, timeout=5.0):
+    sock.setblocking(False)
+    got = b""
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline and token not in got:
+        try:
+            d = sock.recv(4096)
+            if d:
+                got += d
+        except (BlockingIOError, socket.error):
+            pass
+        time.sleep(0.02)
+    return got
+
+
+def today():
+    return int(time.time() // 86400)
+
+
+def monday_of(day):
+    # 1970-01-01 (day 0) was a Thursday -- same arithmetic as weeklystats.c.
+    return day - ((day + 3) % 7)
+
+
+class WeeklyTestBase(unittest.TestCase):
+    PORT = 15521
+
+    def setUp(self):
+        if len(sys.argv) < 2:
+            self.skipTest("fb-server binary path not passed as argv[1]")
+        self.server_path = Path(sys.argv[1])
+        if not self.server_path.exists():
+            self.skipTest(f"fb-server binary not found at {self.server_path}")
+        self.tmpdir = tempfile.TemporaryDirectory()
+        self.weekly_file = Path(self.tmpdir.name) / "weekly.dat"
+        self.relay = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        self.relay.bind(("127.0.0.1", 0))
+        self.relay.settimeout(0.2)
+        self.socks = []
+        self.server = None
+
+    def start(self, seed=None):
+        """Boot the server, optionally after writing `seed` as weekly.dat."""
+        if seed is not None:
+            self.weekly_file.write_text(seed)
+        env = dict(os.environ)
+        env["FB_SERVER_DISCORD_RELAY"] = f"127.0.0.1:{self.relay.getsockname()[1]}"
+        env["FB_SERVER_STATS_FILE"] = str(Path(self.tmpdir.name) / "stats.dat")
+        env["FB_SERVER_WEEKLY_FILE"] = str(self.weekly_file)
+        self.server = subprocess.Popen(
+            [str(self.server_path), "-p", str(self.PORT), "-q", "-z", "-d"],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, env=env)
+        deadline = time.monotonic() + 5.0
+        while time.monotonic() < deadline:
+            try:
+                socket.create_connection(("127.0.0.1", self.PORT), timeout=0.2).close()
+                return
+            except OSError:
+                time.sleep(0.05)
+        self.fail("server never started listening")
+
+    def tearDown(self):
+        for s in self.socks:
+            s.close()
+        self.relay.close()
+        if self.server:
+            self.server.kill()
+            self.server.wait(timeout=5)
+        self.tmpdir.cleanup()
+
+    def connect(self, nick, bot=False):
+        s = socket.create_connection(("127.0.0.1", self.PORT), timeout=3.0)
+        self.socks.append(s)
+        recv_until(s, b"SERVER_READY")
+        s.sendall(f"FB/1.3 NICK {nick}\n".encode())
+        self.assertIn(b"NICK: OK", recv_until(s, b"NICK:"))
+        if bot:
+            s.sendall(b"FB/1.3 BOT\n")
+            self.assertIn(b"BOT: OK", recv_until(s, b"BOT:"))
+        return s
+
+    def drain(self, timeout=0.8):
+        out = []
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            try:
+                data, _ = self.relay.recvfrom(2048)
+                out.append(data.decode())
+            except socket.timeout:
+                if out:
+                    break
+        return out
+
+    def weekly(self, sock):
+        """The WEEKLY reply's first five fields: week_start, wins, losses,
+        popped, me. The sixth (lobby ranks) is in self.last_lobby_ranks."""
+        # A player still seated in a room also has that room's relayed game
+        # messages queued ahead of the reply; skip past them.
+        sock.sendall(b"FB/1.3 WEEKLY\n")
+        got = recv_until(sock, b"WEEKLY: ").decode()
+        rest = got.split("WEEKLY: ", 1)[1] if "WEEKLY: " in got else ""
+        if "\n" not in rest:
+            rest += recv_until(sock, b"\n").decode()
+        self.assertIn("\n", rest, got + rest)
+        fields = rest.split("\n", 1)[0].strip().split(" ")
+        self.assertEqual(len(fields), 6, rest)
+        self.last_lobby_ranks = fields[5]
+        return fields[:5]
+
+    def play_round(self, seats, winner, popped):
+        """seats: [(nick, is_bot)], first is the room's creator. Starts a
+        room, sends the round's 'F' (winner "" = draw) and every seat's 'S'."""
+        socks = [self.connect(n, b) for n, b in seats]
+        host = socks[0]
+        host.sendall(f"FB/1.3 CREATE {seats[0][0]} 5\n".encode())
+        self.assertIn(b"CREATE: OK", recv_until(host, b"CREATE:"))
+        for (n, _), s in zip(seats[1:], socks[1:]):
+            s.sendall(f"FB/1.3 JOIN {seats[0][0]} {n}\n".encode())
+            self.assertIn(b"JOIN: OK", recv_until(s, b"JOIN:"))
+        host.sendall(b"FB/1.3 START\n")
+        self.assertIn(b"START: OK", recv_until(host, b"START:"))
+        for s in socks:
+            s.sendall(b"FB/1.3 OK_GAME_START\n")
+            self.assertIn(b"OK_GAME_START: OK", recv_until(s, b"OK_GAME_START:"))
+        self.drain()
+        host.sendall(f"?F{winner}\n".encode())
+        for s, p in zip(socks, popped):
+            s.sendall(f"?S0:{p}:0:0:0:0\n".encode())
+        self.drain()
+        return socks
+
+
+class RoundRecordingTest(WeeklyTestBase):
+    def test_round_records_wins_losses_popped_and_skips_bots(self):
+        self.start()
+        socks = self.play_round([("host", False), ("guest", False), ("robo", True)],
+                                winner="host", popped=[5, 3, 7])
+        spectator = self.connect("watcher")
+        week, wins, losses, popped, me = self.weekly(spectator)
+        self.assertEqual(int(week) % 86400, 0)
+        self.assertEqual(int(week) // 86400, monday_of(today()))
+        self.assertEqual(wins, "host=1")
+        self.assertEqual(losses, "guest=1", "the bot lost too, but bots are never recorded")
+        self.assertEqual(popped, "host=5,guest=3")
+        self.assertEqual(me, "-", "watcher has played nothing this week")
+
+        # The asking player's own line, ranks included.
+        _, _, _, _, me = self.weekly(socks[1])
+        self.assertEqual(me, "0,1,3,0,1,2")
+
+    def test_draw_records_popped_but_no_wins_or_losses(self):
+        self.start()
+        socks = self.play_round([("host", False), ("guest", False)], winner="", popped=[4, 6])
+        _, wins, losses, popped, _ = self.weekly(socks[0])
+        self.assertEqual((wins, losses), ("-", "-"))
+        self.assertEqual(popped, "guest=6,host=4")
+
+    def test_stats_survive_a_restart(self):
+        self.start()
+        self.play_round([("host", False), ("guest", False)], winner="guest", popped=[1, 2])
+        for s in self.socks:
+            s.close()
+        self.socks = []
+        self.server.kill()
+        self.server.wait(timeout=5)
+        self.start()
+        s = self.connect("host")
+        _, wins, losses, _, me = self.weekly(s)
+        self.assertEqual((wins, losses), ("guest=1", "host=1"))
+        self.assertEqual(me, "0,1,1,0,1,2")
+
+
+class LobbyRanksTest(WeeklyTestBase):
+    def test_weekly_reply_carries_lobby_players_wins_ranks(self):
+        wk = monday_of(today())
+        self.start(seed=f"v1 {wk} {today()}\nalice 3 1 50\nbob 5 0 20\ncarol 0 2 9\n")
+        alice = self.connect("alice")
+        self.connect("bob")
+        self.connect("carol")   # in the lobby, but no wins: no rank
+        self.connect("dave")    # in the lobby, no line at all
+        self.weekly(alice)
+        ranks = dict(item.split("=") for item in self.last_lobby_ranks.split(","))
+        self.assertEqual(ranks, {"alice": "2", "bob": "1"})
+
+    def test_players_seated_in_a_room_are_not_in_the_lobby_list(self):
+        wk = monday_of(today())
+        self.start(seed=f"v1 {wk} {today()}\nalice 3 1 50\n")
+        alice = self.connect("alice")
+        alice.sendall(b"FB/1.3 CREATE alice 5\n")
+        self.assertIn(b"CREATE: OK", recv_until(alice, b"CREATE:"))
+        watcher = self.connect("watcher")
+        self.weekly(watcher)
+        self.assertEqual(self.last_lobby_ranks, "-")
+
+
+class JoinAlertTest(WeeklyTestBase):
+    def test_join_datagram_carries_the_players_weekly_line(self):
+        wk = monday_of(today())
+        self.start(seed=f"v1 {wk} {today()}\nalice 3 1 50\nbob 5 0 20\n")
+        self.connect("alice")
+        joins = [d for d in self.drain() if d.startswith("JOIN|")]
+        self.assertEqual(len(joins), 1)
+        parts = joins[0].split("|")
+        # JOIN|nick|ip|geoloc|platform|country|weekly|servername
+        self.assertEqual(len(parts), 8, joins[0])
+        self.assertEqual(parts[1], "alice")
+        self.assertEqual(parts[6], "3,1,50,2,1,1")
+
+    def test_new_player_has_an_empty_weekly_field(self):
+        self.start()
+        self.connect("newbie")
+        joins = [d for d in self.drain() if d.startswith("JOIN|")]
+        self.assertEqual(joins[0].split("|")[6], "")
+
+
+class LeaderboardPostTest(WeeklyTestBase):
+    def leaderboards(self, timeout=2.0):
+        return [d for d in self.drain(timeout) if d.startswith("LEADERBOARD|")]
+
+    def test_fresh_file_posts_nothing(self):
+        self.start()
+        self.assertEqual(self.leaderboards(), [])
+
+    def test_same_day_restart_posts_nothing(self):
+        wk = monday_of(today())
+        self.start(seed=f"v1 {wk} {today()}\nalice 3 1 50\n")
+        self.assertEqual(self.leaderboards(), [])
+
+    def test_new_day_posts_current_standings_once(self):
+        wk = monday_of(today())
+        self.start(seed=f"v1 {wk} {today() - 1}\nalice 3 1 50\nbob 5 0 20\n")
+        posts = self.leaderboards()
+        self.assertEqual(len(posts), 1)
+        self.assertEqual(posts[0].split("|")[:6],
+                         ["LEADERBOARD", "0", str(wk * 86400), "bob=5,alice=3", "alice=1",
+                          "alice=50,bob=20"])
+        self.assertEqual(self.leaderboards(timeout=1.0), [], "one post per day, not per tick")
+
+    def test_monday_rollover_posts_final_standings_and_starts_empty(self):
+        old = monday_of(today()) - 7
+        self.start(seed=f"v1 {old} {today() - 1}\nalice 3 1 50\n")
+        posts = self.leaderboards()
+        self.assertEqual(len(posts), 1)
+        parts = posts[0].split("|")
+        self.assertEqual(parts[1:3], ["1", str(old * 86400)],
+                         "final standings, labelled with the finished week")
+        self.assertEqual(parts[3], "alice=3")
+        s = self.connect("alice")
+        week, wins, losses, popped, me = self.weekly(s)
+        self.assertEqual(int(week) // 86400, monday_of(today()))
+        self.assertEqual((wins, losses, popped, me), ("-", "-", "-", "-"))
+
+    def test_empty_week_is_never_posted(self):
+        wk = monday_of(today())
+        self.start(seed=f"v1 {wk} {today() - 1}\n")
+        self.assertEqual(self.leaderboards(), [])
+
+
+if __name__ == "__main__":
+    unittest.main(argv=[sys.argv[0]] + sys.argv[2:])

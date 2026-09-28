@@ -43,6 +43,7 @@
 #include "log.h"
 #include "game.h"
 #include "stats.h"
+#include "weeklystats.h"
 #include "discordalert.h"
 #include "tournament.h"
 
@@ -427,6 +428,55 @@ static void list_games_aux(gpointer data, gpointer user_data)
                 return;
         }
 }
+/* WEEKLY (protocol 1.5): this week's rankings, for the online lobby's
+ * weekly board. One line:
+ *
+ *   WEEKLY: <week_start> <wins> <losses> <popped> <me> <lobby>
+ *
+ * week_start is the week's Monday 00:00 UTC as a Unix time. Each list is
+ * weekly_top_csv()'s "nick=count,..." top WEEKLY_LOBBY_TOP_N, or "-" when
+ * empty. me is the asking connection's own "W,L,P,rankW,rankL,rankP", or "-"
+ * with no nick or no rounds yet. lobby is "nick=rank,..." -- the round-wins
+ * rank of every player currently in the lobby (open_players) who has one,
+ * for the rank badge beside each name in the lobby's Online sidebar -- or
+ * "-". Deliberately no ':' after the "WEEKLY:"
+ * prefix -- the client's response dispatch searches for "PUSH:"/"LIST:"
+ * anywhere in a line, and a nick ending in either word followed by ':'
+ * would otherwise be misread as that message. */
+#define WEEKLY_LOBBY_TOP_N 10
+static void weekly_command(int fd, char* msg_orig)
+{
+        char wins[512], losses[512], popped[512], me[96], lobby[2048] = "";
+        char* line;
+        GList* it;
+        size_t used = 0;
+        weekly_top_csv(WEEKLY_WINS, WEEKLY_LOBBY_TOP_N, wins, sizeof(wins));
+        weekly_top_csv(WEEKLY_LOSSES, WEEKLY_LOBBY_TOP_N, losses, sizeof(losses));
+        weekly_top_csv(WEEKLY_POPPED, WEEKLY_LOBBY_TOP_N, popped, sizeof(popped));
+        me[0] = '\0';
+        if (nick[fd])
+                weekly_player_csv(nick[fd], me, sizeof(me));
+        for (it = open_players; it; it = it->next) {
+                int ofd = GPOINTER_TO_INT(it->data);
+                int r = nick[ofd] ? weekly_rank(nick[ofd], WEEKLY_WINS) : 0;
+                int w;
+                if (r <= 0) continue;
+                w = snprintf(lobby + used, sizeof(lobby) - used, "%s%s=%d",
+                             used ? "," : "", nick[ofd], r);
+                if (w < 0 || (size_t)w >= sizeof(lobby) - used) {
+                        lobby[used] = '\0';  /* out of room: keep whole entries only */
+                        break;
+                }
+                used += (size_t)w;
+        }
+        line = asprintf_("%ld %s %s %s %s %s", (long)weekly_week_start(),
+                         wins[0] ? wins : "-", losses[0] ? losses : "-",
+                         popped[0] ? popped : "-", me[0] ? me : "-",
+                         lobby[0] ? lobby : "-");
+        send_line_log(fd, line, msg_orig);
+        free(line);
+}
+
 /* Game list is of the following scheme:
  * 1.4 protocol:
  * <list-of-open-players format="NICK|NICK:GEOLOC|NICK:GEOLOC:PLATFORM|NICK::PLATFORM"> [...] (as 1.1 otherwise; see append_player_list_tags)
@@ -1292,10 +1342,13 @@ int process_msg(int fd, char* msg)
                                          * arrives after NICK, and the lookup behind it can take
                                          * ~16s. It stays in the datagram because the wire format
                                          * has the field and the relay discards it either way. */
-                                        if (first_nick && !replaced_ghost)
+                                        if (first_nick && !replaced_ghost) {
+                                                char weekly[96];
+                                                weekly_player_csv(nick[fd], weekly, sizeof(weekly));
                                                 discordalert_fire_join_event(nick[fd], IP[fd], geoloc[fd],
                                                                              platform_tag[fd],
-                                                                             country_tag[fd]);
+                                                                             country_tag[fd], weekly);
+                                        }
                                 }
                         }
                 }
@@ -1536,6 +1589,8 @@ int process_msg(int fd, char* msg)
                 }
         } else if (streq(current_command, "LIST")) {
                 send_line_log(fd, list_games_str, msg_orig);
+        } else if (streq(current_command, "WEEKLY")) {
+                weekly_command(fd, msg_orig);
         } else if (streq(current_command, "STATUS")) {  // 1.0 command
                 if (!already_in_game(fd)) {
                         send_line_log(fd, wn_not_in_game, msg_orig);
@@ -1765,6 +1820,39 @@ static int report_round_result(struct game* g, const char* winner_nick)
  * the wait -- same reasoning build_roster_csv()/build_wins_csv() already
  * apply to every other round-result field, just now also true of the
  * window between 'F' and this firing. */
+/* Adds this round to the weekly rankings (weeklystats.c). Runs at the same
+ * deferred moment as the Discord RESULT post, so every seat's popped count
+ * that is going to arrive has arrived. Bots are skipped entirely; humans
+ * count whether or not bots were in the round.
+ *
+ * Wins and losses only when the winner claim names a seated player: that
+ * player -- or, in a team game, everyone on their team -- gets a win and
+ * every other seated human a loss. A draw, or a claim naming nobody here,
+ * records neither, since there is no one real to credit. Popped is the
+ * clamped 'S' figure, for every human seat that reported one. */
+static void record_weekly_round(struct game* g)
+{
+        int i;
+        int wslot = g->pending_winner[0] ? find_player_slot_by_nick(g, g->pending_winner) : -1;
+        int wteam = (wslot >= 0 && g->team_count > 0) ? g->players_team[wslot] : 0;
+
+        for (i = 0; i < g->players_number; i++) {
+                const char* n = g->players_nick[i];
+                if (is_bot[g->players_conn[i]])
+                        continue;
+                if (wslot >= 0) {
+                        int won = (i == wslot) || (wteam > 0 && g->players_team[i] == wteam);
+                        if (won)
+                                weekly_record_win(n);
+                        else
+                                weekly_record_loss(n);
+                }
+                if (g->players_popped_reported[i])
+                        weekly_record_popped(n, g->players_popped[i]);
+        }
+        weekly_save();
+}
+
 static void maybe_fire_pending_result(struct game* g, int64_t now)
 {
         int all_reported, i;
@@ -1778,6 +1866,8 @@ static void maybe_fire_pending_result(struct game* g, int64_t now)
                 if (!g->players_popped_reported[i]) { all_reported = 0; break; }
         }
         if (!all_reported && now < g->stats_deadline) return;
+
+        record_weekly_round(g);
 
         build_roster_csv(g, roster, sizeof(roster));
         build_wins_csv(g, win_counts, sizeof(win_counts));
@@ -1816,6 +1906,7 @@ static void maybe_fire_pending_result(struct game* g, int64_t now)
 void game_tick(int64_t now)
 {
         GList* item;
+        weekly_tick(time(NULL));
         for (item = games; item; item = item->next) {
                 struct game* g = item->data;
                 if (g->stats_pending)

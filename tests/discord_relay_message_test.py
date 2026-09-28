@@ -1118,5 +1118,75 @@ class DatagramCompatTest(unittest.TestCase):
             self.assertNotIn(badge, posted[0])
 
 
+class WeeklyRankingsTest(unittest.TestCase):
+    """The player's weekly line on JOIN, and the daily LEADERBOARD post
+    (fb-server's server/weeklystats.c)."""
+
+    def _handled(self, datagram):
+        import asyncio
+        captured = []
+        original = relay.log.info
+        relay.log.info = lambda fmt, *a: captured.append(fmt % a)
+        try:
+            asyncio.run(relay.handle_datagram(datagram, ""))
+        finally:
+            relay.log.info = original
+        return captured
+
+    def test_join_with_weekly_stats_adds_the_players_line(self):
+        posted = self._handled(b"JOIN|alice|203.0.113.4||W|US|12,5,830,2,4,1|fb.example")
+        self.assertEqual(len(posted), 1)
+        self.assertIn("alice", posted[0])
+        self.assertIn("fb.example", posted[0])
+        self.assertIn("This week: 12 W · 5 L · 830 popped", posted[0])
+        self.assertIn("#2 wins · #4 losses · #1 popped", posted[0])
+        self.assertNotIn("203.0.113", posted[0])
+
+    def test_unranked_category_shows_a_dash(self):
+        line = relay._weekly_line("0,3,40,0,1,2")
+        self.assertIn("0 W · 3 L · 40 popped", line)
+        self.assertIn("– wins", line)
+
+    def test_join_with_no_weekly_stats_has_no_second_line(self):
+        posted = self._handled(b"JOIN|newbie|203.0.113.4||W|US||fb.example")
+        self.assertEqual(len(posted), 1)
+        self.assertNotIn("This week", posted[0])
+        self.assertIn("fb.example", posted[0])
+
+    def test_pre_weekly_join_still_posts(self):
+        posted = self._handled(b"JOIN|alice|203.0.113.4||W|US|fb.example")
+        self.assertEqual(len(posted), 1)
+        self.assertIn("fb.example", posted[0])
+        self.assertNotIn("This week", posted[0])
+
+    def test_daily_leaderboard(self):
+        posted = self._handled(
+            b"LEADERBOARD|0|1790553600|bob=5,alice=5,carol=2|alice=1|alice=50|fb.example")
+        self.assertEqual(len(posted), 1)
+        msg = posted[0]
+        self.assertIn("Weekly rankings", msg)
+        self.assertIn("week of Sep 28", msg)
+        self.assertIn("resets Monday 00:00 UTC", msg)
+        self.assertIn(" 1. bob   5", msg)
+        self.assertIn(" 1. alice 5", msg, "a tie shares the rank")
+        self.assertIn(" 3. carol 2", msg)
+        self.assertIn("Most round losses", msg)
+        self.assertIn("Most bubbles popped", msg)
+
+    def test_final_standings(self):
+        posted = self._handled(b"LEADERBOARD|1|1790553600|alice=3|||fb.example")
+        self.assertEqual(len(posted), 1)
+        self.assertIn("Final weekly standings", posted[0])
+        self.assertNotIn("Most round losses", posted[0], "empty categories are left out")
+
+    def test_malformed_leaderboard_is_dropped(self):
+        for bad in (b"LEADERBOARD|0|x|a=1|||s",           # bad week
+                    b"LEADERBOARD|2|1790553600|a=1|||s",  # bad final flag
+                    b"LEADERBOARD|0|1790553600|a|||s",    # no count
+                    b"LEADERBOARD|0|1790553600|a`b=1|||s",  # not a nick
+                    b"LEADERBOARD|0|1790553600|a=1"):     # too few fields
+            self.assertEqual(self._handled(bad), [], bad)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

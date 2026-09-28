@@ -67,8 +67,12 @@ void discordalert_init(void);
 // where geoloc is not: a country is not a location fix on a person, and it is
 // what someone reading the channel to decide whether to go play actually wants
 // to know. The lat/lon still stops at this server.
+//
+// weekly is the player's line for this week from weekly_player_csv()
+// (weeklystats.h): "W,L,P,rankW,rankL,rankP", or empty for a player with no
+// rounds yet this week. Plain digits and commas.
 void discordalert_fire_join_event(const char* nick, const char* ip, const char* geoloc,
-                                  char platform, const char* country);
+                                  char platform, const char* country, const char* weekly);
 
 // Call once per round-end, from the 'F' opcode sniffed in process_msg_prio_
 // (game.c) -- a bare "F" is a draw, "F<nick>" is a win claim, and the
@@ -154,6 +158,15 @@ void discordalert_fire_result_event(int game_id, int round_number, const char* r
 // raw 0-3 value as the round alert. A no-op (and free) when the relay isn't
 // configured.
 void discordalert_fire_match_event(int game_id, const char* champion_nick, int wins, int game_mode);
+
+// Once per UTC day from weekly_tick() (weeklystats.c): this week's top
+// players in each category, or -- final=1 -- the finished week's closing
+// standings, posted at the Monday 00:00 UTC rollover instead of that day's
+// ordinary post. week_start is that week's Monday as a Unix time. Each
+// list is weekly_top_csv()'s "nick=count,..." -- nicks passed is_nick_ok(),
+// so no '|', '=' or ','. Never fired for an empty week.
+void discordalert_fire_leaderboard_event(int final, long week_start, const char* wins_csv,
+                                         const char* losses_csv, const char* popped_csv);
 
 // Close the UDP socket. Call once at shutdown, next to stats_cleanup().
 void discordalert_cleanup(void);

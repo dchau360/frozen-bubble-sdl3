@@ -618,6 +618,16 @@ private:
     std::vector<TournamentListing> LobbyJoinableTournaments() const;
     void TournamentPanelRender();
     bool TournamentPanelKey(SDL_Event* e);
+    // "Weekly rankings" (mainmenu_weekly.cpp): a row in the lobby's Online
+    // sidebar, pinned just above "Join Discord server", opening a full-screen
+    // view like the tournament one. LobbyWeeklyIndex sits right after the
+    // room list and LobbyDiscordIndex right after it.
+    int LobbyWeeklyIndex(size_t roomCount) const;
+    void OpenWeekly();
+    void WeeklyPanelRender();
+    bool WeeklyPanelKey(SDL_Event* e);
+    bool showingWeekly = false;
+    int weeklySelection = 0;
     bool showingTournament = false, tournamentConfirm = false;
     // True while the organizer is picking a ruleset on the "Create
     // tournament" pre-creation screen (see TournamentPanelRender's

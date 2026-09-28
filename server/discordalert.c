@@ -93,7 +93,7 @@ void discordalert_init(void)
 }
 
 void discordalert_fire_join_event(const char* nick, const char* ip, const char* geoloc,
-                                  char platform, const char* country)
+                                  char platform, const char* country, const char* weekly)
 {
     if (!relay_configured) return;
 
@@ -108,10 +108,10 @@ void discordalert_fire_join_event(const char* nick, const char* ip, const char* 
     // than appended.
     char platform_str[2] = { platform, '\0' };
     char datagram[1024];
-    snprintf(datagram, sizeof(datagram), "JOIN|%s|%s|%s|%s|%s|%s",
+    snprintf(datagram, sizeof(datagram), "JOIN|%s|%s|%s|%s|%s|%s|%s",
              nick ? nick : "", ip ? ip : "", geoloc ? geoloc : "",
              platform ? platform_str : "", country ? country : "",
-             net_servername());
+             weekly ? weekly : "", net_servername());
 
     if (sendto(relay_socket, datagram, strlen(datagram), 0,
                (struct sockaddr*)&relay_addr, sizeof(relay_addr)) < 0) {
@@ -189,6 +189,22 @@ void discordalert_fire_match_event(int game_id, const char* champion_nick, int w
                (struct sockaddr*)&relay_addr, sizeof(relay_addr)) < 0) {
         // Best-effort by design: log and move on, never block or retry on
         // the main event loop.
+        l1(OUTPUT_TYPE_ERROR, "discordalert: sendto relay failed: %s", strerror(errno));
+    }
+}
+
+void discordalert_fire_leaderboard_event(int final, long week_start, const char* wins_csv,
+                                         const char* losses_csv, const char* popped_csv)
+{
+    if (!relay_configured) return;
+
+    char datagram[1400];
+    snprintf(datagram, sizeof(datagram), "LEADERBOARD|%d|%ld|%s|%s|%s|%s",
+             final ? 1 : 0, week_start, wins_csv ? wins_csv : "",
+             losses_csv ? losses_csv : "", popped_csv ? popped_csv : "", net_servername());
+
+    if (sendto(relay_socket, datagram, strlen(datagram), 0,
+               (struct sockaddr*)&relay_addr, sizeof(relay_addr)) < 0) {
         l1(OUTPUT_TYPE_ERROR, "discordalert: sendto relay failed: %s", strerror(errno));
     }
 }

@@ -461,6 +461,7 @@ void MainMenu::NetPanelRender() {
     }
 
     if (showingTournament) { TournamentPanelRender(); return; }
+    if (showingWeekly) { WeeklyPanelRender(); return; }
 
     // If in lobby, use world map background; otherwise use void panel for connection screens
 
@@ -1326,12 +1327,22 @@ void MainMenu::NetPanelLobbyActionsRender() {
             // Tournaments used to have a second reserved row right here too,
             // but moved under Create Game Room in the left box (2026-09-11,
             // user feedback) -- this sidebar is player-list-only now.
+            //
+            // "Weekly rankings" is pinned the same way, directly above it,
+            // for the same reason: it is what a player idling here is most
+            // likely to want, and a long player list must not push it away.
             const int lobbyDiscordIdx = LobbyDiscordIndex(actions.size() - 2);
+            const int lobbyWeeklyIdx = LobbyWeeklyIndex(actions.size() - 2);
             const bool showDiscordHere = lobbyDiscordIdx >= 0;
             const int kDiscordRowH = 22;
-            const int rowsBottom = sb.y + sb.h - (showDiscordHere ? kDiscordRowH : 0);
+            const int pinnedRows = 1 + (showDiscordHere ? 1 : 0);
+            const int rowsBottom = sb.y + sb.h - pinnedRows * kDiscordRowH;
 
             std::vector<NetworkPlayer> openPlayers = netClient->GetOpenPlayers();
+            // Keeps the "#N" round-wins rank badges below current; a no-op
+            // against a server too old to have weekly rankings.
+            netClient->MaybeRefreshWeekly();
+            const auto& lobbyRanks = netClient->weekly.lobbyWinsRank;
             int shown = 0;
             for (const NetworkPlayer& player : openPlayers) {
                 if (player.nick == netClient->GetPlayerNick()) continue;
@@ -1346,6 +1357,15 @@ void MainMenu::NetPanelLobbyActionsRender() {
                 // the column does not jump around between LIST responses.
                 snprintf(shortNick, sizeof(shortNick), "%.13s", player.nick.c_str());
                 drawLabel(shortNick, sb.x + 26, sy + shown * 20, textMain);
+                // This week's round-wins rank, right after the name. Nicks
+                // are capped at 10 chars server-side, so there is always room
+                // for it before the platform chip.
+                auto rankIt = lobbyRanks.find(player.nick);
+                if (rankIt != lobbyRanks.end() && rankIt->second > 0) {
+                    const int nameRight = panelText.Coords()->x + panelText.Coords()->w;
+                    const std::string rankText = "#" + std::to_string(rankIt->second);
+                    drawLabel(rankText.c_str(), nameRight + 5, sy + shown * 20, textGold);
+                }
                 PlayerBadge badge;
                 if (GetPlatformBadge(player.platform, badge)) {
                     // The chip is right-anchored to the sidebar, so its width
@@ -1362,6 +1382,19 @@ void MainMenu::NetPanelLobbyActionsRender() {
             }
             if (shown == 0) drawLabel("No free players", sb.x + 10, sy, textMuted);
 
+            {
+                SDL_Rect weeklyRect = {sb.x + 6, sb.y + sb.h - pinnedRows * kDiscordRowH,
+                                       sb.w - 12, kDiscordRowH - 4};
+                bool weeklySel = selectedActionIndex == lobbyWeeklyIdx;
+                SDL_SetRenderDrawBlendMode(roomRenderer, SDL_BLENDMODE_BLEND);
+                SDL_SetRenderDrawColor(roomRenderer, panelEdge.r, panelEdge.g, panelEdge.b, 90);
+                SDL_RenderLine(roomRenderer, (float)weeklyRect.x, (float)(weeklyRect.y - 3),
+                               (float)(weeklyRect.x + weeklyRect.w), (float)(weeklyRect.y - 3));
+                if (weeklySel) drawSelection(weeklyRect);
+                AddPanelTapRow(lobbyWeeklyIdx, weeklyRect);
+                drawLabel("Weekly rankings", weeklyRect.x + 4, weeklyRect.y + 3,
+                          weeklySel ? textGold : textMain);
+            }
             if (showDiscordHere) {
                 SDL_Rect discordRect = {sb.x + 6, sb.y + sb.h - kDiscordRowH, sb.w - 12, kDiscordRowH - 4};
                 bool discordSel = selectedActionIndex == lobbyDiscordIdx;
@@ -1807,7 +1840,7 @@ void MainMenu::NetPanelConnectionScreensRender() {
 
 int MainMenu::LobbyDiscordIndex(size_t roomCount) const {
     if (!HasDiscordInvite()) return -1;
-    return LobbyRoomListStart() + (int)roomCount;
+    return LobbyWeeklyIndex(roomCount) + 1;
 }
 
 int MainMenu::ServerListDiscordIndex() const {
