@@ -1311,7 +1311,7 @@ void MainMenu::NetPanelLobbyActionsRender() {
             // every other sidebar (LocalMP's Players, the room's own Players
             // list below) instead of a hand-rolled panel a few pixels off
             // from kSidebarDocked -- green status dot + nickname per free
-            // player, excluding self, capped by however many rows actually
+            // player, yourself first, capped by however many rows actually
             // fit above the chat dock.
             int sy = menulist::DrawSidebarHeader(roomRenderer, panelText, menulist::kSidebarDocked,
                                                   "Online", menulist::kMapFillAlpha);
@@ -1338,14 +1338,22 @@ void MainMenu::NetPanelLobbyActionsRender() {
             const int pinnedRows = 1 + (showDiscordHere ? 1 : 0);
             const int rowsBottom = sb.y + sb.h - pinnedRows * kDiscordRowH;
 
+            // You are listed first, marked "(you)", so the list is never
+            // empty while you are connected -- an empty list next to "No free
+            // players" read as if the server could not see you at all.
             std::vector<NetworkPlayer> openPlayers = netClient->GetOpenPlayers();
+            const std::string myNick = netClient->GetPlayerNick();
+            std::stable_partition(openPlayers.begin(), openPlayers.end(),
+                                  [&](const NetworkPlayer& p) { return p.nick == myNick; });
             // Keeps the "#N" round-wins rank badges below current; a no-op
             // against a server too old to have weekly rankings.
             netClient->MaybeRefreshWeekly();
             const auto& lobbyRanks = netClient->weekly.lobbyWinsRank;
             int shown = 0;
+            bool anyOther = false;
             for (const NetworkPlayer& player : openPlayers) {
-                if (player.nick == netClient->GetPlayerNick()) continue;
+                const bool isMe = player.nick == myNick;
+                if (!isMe) anyOther = true;
                 if (sy + shown * 20 + 14 > rowsBottom) break;
                 SDL_SetRenderDrawColor(roomRenderer, 104, 220, 151, 255);
                 SDL_FRect dot = {(float)(sb.x + 10), (float)(sy + shown * 20 + 4), 7.0f, 7.0f};
@@ -1357,12 +1365,16 @@ void MainMenu::NetPanelLobbyActionsRender() {
                 // the column does not jump around between LIST responses.
                 snprintf(shortNick, sizeof(shortNick), "%.13s", player.nick.c_str());
                 drawLabel(shortNick, sb.x + 26, sy + shown * 20, textMain);
+                int nameRight = panelText.Coords()->x + panelText.Coords()->w;
+                if (isMe) {
+                    drawLabel("(you)", nameRight + 4, sy + shown * 20, textMuted);
+                    nameRight = panelText.Coords()->x + panelText.Coords()->w;
+                }
                 // This week's round-wins rank, right after the name. Nicks
                 // are capped at 10 chars server-side, so there is always room
-                // for it before the platform chip.
+                // for it (and "(you)") before the platform chip.
                 auto rankIt = lobbyRanks.find(player.nick);
                 if (rankIt != lobbyRanks.end() && rankIt->second > 0) {
-                    const int nameRight = panelText.Coords()->x + panelText.Coords()->w;
                     const std::string rankText = "#" + std::to_string(rankIt->second);
                     drawLabel(rankText.c_str(), nameRight + 5, sy + shown * 20, textGold);
                 }
@@ -1380,7 +1392,8 @@ void MainMenu::NetPanelLobbyActionsRender() {
                 }
                 shown++;
             }
-            if (shown == 0) drawLabel("No free players", sb.x + 10, sy, textMuted);
+            if (!anyOther && sy + shown * 20 + 14 <= rowsBottom)
+                drawLabel("No one else in the lobby", sb.x + 10, sy + shown * 20, textMuted);
 
             {
                 SDL_Rect weeklyRect = {sb.x + 6, sb.y + sb.h - pinnedRows * kDiscordRowH,
