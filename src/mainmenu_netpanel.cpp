@@ -1339,6 +1339,10 @@ void MainMenu::NetPanelLobbyActionsRender() {
             const int rowsBottom = sb.y + sb.h - pinnedRows * kDiscordRowH;
 
             std::vector<NetworkPlayer> openPlayers = netClient->GetOpenPlayers();
+            // Keeps the "#N" round-wins rank badges below current; a no-op
+            // against a server too old to have weekly rankings.
+            netClient->MaybeRefreshWeekly();
+            const auto& lobbyRanks = netClient->weekly.lobbyWinsRank;
             int shown = 0;
             for (const NetworkPlayer& player : openPlayers) {
                 if (player.nick == netClient->GetPlayerNick()) continue;
@@ -1353,6 +1357,15 @@ void MainMenu::NetPanelLobbyActionsRender() {
                 // the column does not jump around between LIST responses.
                 snprintf(shortNick, sizeof(shortNick), "%.13s", player.nick.c_str());
                 drawLabel(shortNick, sb.x + 26, sy + shown * 20, textMain);
+                // This week's round-wins rank, right after the name. Nicks
+                // are capped at 10 chars server-side, so there is always room
+                // for it before the platform chip.
+                auto rankIt = lobbyRanks.find(player.nick);
+                if (rankIt != lobbyRanks.end() && rankIt->second > 0) {
+                    const int nameRight = panelText.Coords()->x + panelText.Coords()->w;
+                    const std::string rankText = "#" + std::to_string(rankIt->second);
+                    drawLabel(rankText.c_str(), nameRight + 5, sy + shown * 20, textGold);
+                }
                 PlayerBadge badge;
                 if (GetPlatformBadge(player.platform, badge)) {
                     // The chip is right-anchored to the sidebar, so its width

@@ -41,8 +41,9 @@ bool ParseList(const std::string& field, std::vector<std::pair<std::string, int>
 
 bool WeeklyBoard::Parse(const std::string& payload) {
     std::istringstream in(payload);
-    std::string week, w, l, p, me, extra;
-    if (!(in >> week >> w >> l >> p >> me) || (in >> extra)) return false;
+    std::string week, w, l, p, me, lobby = "-";
+    if (!(in >> week >> w >> l >> p >> me)) return false;
+    in >> lobby;  // optional sixth field; stays "-" if a server omits it
 
     WeeklyBoard b;
     if (!ParseInt(week, b.weekStart)) return false;
@@ -61,6 +62,9 @@ bool WeeklyBoard::Parse(const std::string& payload) {
         b.myLossesRank = static_cast<int>(v[4]);
         b.myPoppedRank = static_cast<int>(v[5]);
     }
+    std::vector<std::pair<std::string, int>> ranks;
+    if (!ParseList(lobby, ranks)) return false;
+    for (const auto& r : ranks) b.lobbyWinsRank[r.first] = r.second;
     *this = b;
     return true;
 }

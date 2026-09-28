@@ -380,6 +380,7 @@ void NetworkClient::Disconnect() {
     tournamentError.clear();
     weekly = WeeklyBoard();
     weeklyLoaded = false;
+    weeklyRequestedAt = 0;
     delete currentGame;
     currentGame = nullptr;
     gameList.clear();
@@ -1067,7 +1068,14 @@ bool NetworkClient::TournamentCommand(const std::string& operation) {
 
 bool NetworkClient::RequestWeekly() {
     if (!WeeklySupported()) return false;
+    weeklyRequestedAt = SDL_GetTicks();
     return SendCommand("WEEKLY");
+}
+
+void NetworkClient::MaybeRefreshWeekly() {
+    if (!WeeklySupported()) return;
+    if (weeklyRequestedAt == 0 || SDL_GetTicks() - weeklyRequestedAt >= 30000)
+        RequestWeekly();
 }
 
 void NetworkClient::ConsumeIncomingLines() {

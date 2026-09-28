@@ -115,7 +115,8 @@ class WeeklyTestBase(unittest.TestCase):
         return out
 
     def weekly(self, sock):
-        """The WEEKLY reply's five fields: week_start, wins, losses, popped, me."""
+        """The WEEKLY reply's first five fields: week_start, wins, losses,
+        popped, me. The sixth (lobby ranks) is in self.last_lobby_ranks."""
         # A player still seated in a room also has that room's relayed game
         # messages queued ahead of the reply; skip past them.
         sock.sendall(b"FB/1.3 WEEKLY\n")
@@ -125,8 +126,9 @@ class WeeklyTestBase(unittest.TestCase):
             rest += recv_until(sock, b"\n").decode()
         self.assertIn("\n", rest, got + rest)
         fields = rest.split("\n", 1)[0].strip().split(" ")
-        self.assertEqual(len(fields), 5, rest)
-        return fields
+        self.assertEqual(len(fields), 6, rest)
+        self.last_lobby_ranks = fields[5]
+        return fields[:5]
 
     def play_round(self, seats, winner, popped):
         """seats: [(nick, is_bot)], first is the room's creator. Starts a
@@ -189,6 +191,29 @@ class RoundRecordingTest(WeeklyTestBase):
         _, wins, losses, _, me = self.weekly(s)
         self.assertEqual((wins, losses), ("guest=1", "host=1"))
         self.assertEqual(me, "0,1,1,0,1,2")
+
+
+class LobbyRanksTest(WeeklyTestBase):
+    def test_weekly_reply_carries_lobby_players_wins_ranks(self):
+        wk = monday_of(today())
+        self.start(seed=f"v1 {wk} {today()}\nalice 3 1 50\nbob 5 0 20\ncarol 0 2 9\n")
+        alice = self.connect("alice")
+        self.connect("bob")
+        self.connect("carol")   # in the lobby, but no wins: no rank
+        self.connect("dave")    # in the lobby, no line at all
+        self.weekly(alice)
+        ranks = dict(item.split("=") for item in self.last_lobby_ranks.split(","))
+        self.assertEqual(ranks, {"alice": "2", "bob": "1"})
+
+    def test_players_seated_in_a_room_are_not_in_the_lobby_list(self):
+        wk = monday_of(today())
+        self.start(seed=f"v1 {wk} {today()}\nalice 3 1 50\n")
+        alice = self.connect("alice")
+        alice.sendall(b"FB/1.3 CREATE alice 5\n")
+        self.assertIn(b"CREATE: OK", recv_until(alice, b"CREATE:"))
+        watcher = self.connect("watcher")
+        self.weekly(watcher)
+        self.assertEqual(self.last_lobby_ranks, "-")
 
 
 class JoinAlertTest(WeeklyTestBase):

@@ -171,6 +171,7 @@ void NetworkClient::Disconnect() {
     tournamentError.clear();
     weekly = WeeklyBoard();
     weeklyLoaded = false;
+    weeklyRequestedAt = 0;
     delete currentGame;
     currentGame = nullptr;
     // pendingNick added alongside native's Disconnect() gaining the same

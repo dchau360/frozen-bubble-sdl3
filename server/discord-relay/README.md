@@ -330,7 +330,8 @@ Two things reach Discord:
 Stats are saved in `FB_SERVER_WEEKLY_FILE` (the compose file puts it on the
 `fb-data` volume so it survives rebuilds). Players see the same board in the
 online lobby's **Weekly rankings** screen, via the protocol-1.5 `WEEKLY`
-command.
+command, and each lobby player's round-wins rank appears as `#N` beside their
+name in the lobby's Online list.
 
 ## Match results
 

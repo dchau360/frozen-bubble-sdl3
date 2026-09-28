@@ -22,6 +22,13 @@ int main() {
     CHECK(WeeklyBoard::Rank(b.wins, 1) == 1);
     CHECK(WeeklyBoard::Rank(b.wins, 2) == 3);
 
+    // Lobby ranks (sixth field), and fields past it are ignored.
+    WeeklyBoard r;
+    CHECK(r.Parse("1790553600 bob=5 - - - bob=1,alice=3 future-field"));
+    CHECK(r.lobbyWinsRank.size() == 2 && r.lobbyWinsRank["bob"] == 1 && r.lobbyWinsRank["alice"] == 3);
+    CHECK(!r.Parse("1790553600 - - - - bob"));            // malformed lobby field
+    CHECK(r.lobbyWinsRank.size() == 2);                   // ...leaves the board intact
+
     // Empty lists and no line of your own.
     WeeklyBoard e;
     CHECK(e.Parse("1790553600 - - - -"));
@@ -30,7 +37,6 @@ int main() {
     // Malformed replies are rejected and leave the previous board intact.
     CHECK(!b.Parse(""));
     CHECK(!b.Parse("1790553600 - - -"));                  // missing field
-    CHECK(!b.Parse("1790553600 - - - - extra"));          // extra field
     CHECK(!b.Parse("x - - - -"));                         // bad week
     CHECK(!b.Parse("1790553600 bob - - -"));              // no '='
     CHECK(!b.Parse("1790553600 =3 - - -"));               // no nick

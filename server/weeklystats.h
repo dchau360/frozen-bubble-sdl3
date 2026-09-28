@@ -46,6 +46,10 @@ void weekly_save(void);
  * count is 0), or "" if nick has no line this week. */
 void weekly_player_csv(const char* nick, char* out, size_t outsz);
 
+/* nick's competition rank in `cat` this week, or 0 when their count there
+ * is 0 (or they have no line). */
+int weekly_rank(const char* nick, enum weekly_category cat);
+
 /* Up to n "nick=count" pairs, comma-joined, highest first (ties broken by
  * nick), or "" when nobody has a nonzero count in that category. */
 void weekly_top_csv(enum weekly_category cat, int n, char* out, size_t outsz);

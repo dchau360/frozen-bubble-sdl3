@@ -2,6 +2,7 @@
 #define WEEKLYBOARD_H
 
 #include <cstdint>
+#include <map>
 #include <string>
 #include <utility>
 #include <vector>
@@ -19,9 +20,13 @@ struct WeeklyBoard {
     bool hasMine = false;
     int myWins = 0, myLosses = 0, myPopped = 0;
     int myWinsRank = 0, myLossesRank = 0, myPoppedRank = 0;  // 0 = unranked
+    // Round-wins rank of each player currently in the lobby who has one --
+    // the "#2" badge beside names in the lobby's Online sidebar.
+    std::map<std::string, int> lobbyWinsRank;
 
     // Parses the payload after "WEEKLY: ". False (board left untouched) on
-    // anything malformed.
+    // anything malformed. Fields past the sixth are ignored, so a newer
+    // server can add more without breaking this client.
     bool Parse(const std::string& payload);
 
     // Competition rank ("1, 2, 2, 4") of list[i].

@@ -431,29 +431,48 @@ static void list_games_aux(gpointer data, gpointer user_data)
 /* WEEKLY (protocol 1.5): this week's rankings, for the online lobby's
  * weekly board. One line:
  *
- *   WEEKLY: <week_start> <wins> <losses> <popped> <me>
+ *   WEEKLY: <week_start> <wins> <losses> <popped> <me> <lobby>
  *
  * week_start is the week's Monday 00:00 UTC as a Unix time. Each list is
  * weekly_top_csv()'s "nick=count,..." top WEEKLY_LOBBY_TOP_N, or "-" when
  * empty. me is the asking connection's own "W,L,P,rankW,rankL,rankP", or "-"
- * with no nick or no rounds yet. Deliberately no ':' after the "WEEKLY:"
+ * with no nick or no rounds yet. lobby is "nick=rank,..." -- the round-wins
+ * rank of every player currently in the lobby (open_players) who has one,
+ * for the rank badge beside each name in the lobby's Online sidebar -- or
+ * "-". Deliberately no ':' after the "WEEKLY:"
  * prefix -- the client's response dispatch searches for "PUSH:"/"LIST:"
  * anywhere in a line, and a nick ending in either word followed by ':'
  * would otherwise be misread as that message. */
 #define WEEKLY_LOBBY_TOP_N 10
 static void weekly_command(int fd, char* msg_orig)
 {
-        char wins[512], losses[512], popped[512], me[96];
+        char wins[512], losses[512], popped[512], me[96], lobby[2048] = "";
         char* line;
+        GList* it;
+        size_t used = 0;
         weekly_top_csv(WEEKLY_WINS, WEEKLY_LOBBY_TOP_N, wins, sizeof(wins));
         weekly_top_csv(WEEKLY_LOSSES, WEEKLY_LOBBY_TOP_N, losses, sizeof(losses));
         weekly_top_csv(WEEKLY_POPPED, WEEKLY_LOBBY_TOP_N, popped, sizeof(popped));
         me[0] = '\0';
         if (nick[fd])
                 weekly_player_csv(nick[fd], me, sizeof(me));
-        line = asprintf_("%ld %s %s %s %s", (long)weekly_week_start(),
+        for (it = open_players; it; it = it->next) {
+                int ofd = GPOINTER_TO_INT(it->data);
+                int r = nick[ofd] ? weekly_rank(nick[ofd], WEEKLY_WINS) : 0;
+                int w;
+                if (r <= 0) continue;
+                w = snprintf(lobby + used, sizeof(lobby) - used, "%s%s=%d",
+                             used ? "," : "", nick[ofd], r);
+                if (w < 0 || (size_t)w >= sizeof(lobby) - used) {
+                        lobby[used] = '\0';  /* out of room: keep whole entries only */
+                        break;
+                }
+                used += (size_t)w;
+        }
+        line = asprintf_("%ld %s %s %s %s %s", (long)weekly_week_start(),
                          wins[0] ? wins : "-", losses[0] ? losses : "-",
-                         popped[0] ? popped : "-", me[0] ? me : "-");
+                         popped[0] ? popped : "-", me[0] ? me : "-",
+                         lobby[0] ? lobby : "-");
         send_line_log(fd, line, msg_orig);
         free(line);
 }

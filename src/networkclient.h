@@ -243,6 +243,10 @@ public:
     bool weeklyLoaded = false;
     bool WeeklySupported() const { return serverProtoMinor >= 5; }
     bool RequestWeekly();
+    // Re-requests at most every 30s -- called each frame the lobby is drawn,
+    // so the Online sidebar's rank badges stay current as rounds finish.
+    void MaybeRefreshWeekly();
+    Uint64 weeklyRequestedAt = 0;
     void ConsumeIncomingLines();
 
     // Protocol commands

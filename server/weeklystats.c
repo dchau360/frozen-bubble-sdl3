@@ -209,6 +209,15 @@ void weekly_player_csv(const char* nick, char* out, size_t outsz)
                  rank_of(WEEKLY_POPPED, wl->counts[WEEKLY_POPPED]));
 }
 
+int weekly_rank(const char* nick, enum weekly_category cat)
+{
+        WeeklyLine* wl;
+        if (!table || !nick) return 0;
+        rollover_if_needed();
+        wl = g_hash_table_lookup(table, nick);
+        return wl ? rank_of(cat, wl->counts[cat]) : 0;
+}
+
 typedef struct {
         const char* nick;
         int count;
