@@ -903,7 +903,7 @@ void BubbleGame::UpdateRoundStats() {
                     : "T / X: CHAT    ENTER / FIRE: NEXT ROUND"));
         cell(hint, colName, y, hdr);
         if (discordAlertsApply) {
-            cell("STATS POSTED TO DISCORD #now-playing CHANNEL",
+            cell("STATS POSTED TO DISCORD #net-games CHANNEL",
                  colName, y + rowH, normal);
         }
 
