@@ -165,6 +165,8 @@ void NetworkClient::Disconnect() {
     // the next connection may be a different server on a different minor.
     serverProtoMinor = -1;
     platformReported = false;
+    authSent = false;
+    accountId.clear();
     platformByNick.clear();
     tournaments.Reset();
     tournamentReceivedAt.clear();

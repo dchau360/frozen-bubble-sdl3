@@ -1173,6 +1173,14 @@ class WeeklyRankingsTest(unittest.TestCase):
         self.assertIn("Most round losses", msg)
         self.assertIn("Most bubbles popped", msg)
 
+    def test_leaderboard_with_account_tags(self):
+        # Protocol 1.6: two players both called bob, told apart by account.
+        posted = self._handled(
+            b"LEADERBOARD|0|1790553600|bob#7f3a=5,bob#c21e=2|||fb.example")
+        self.assertEqual(len(posted), 1)
+        self.assertIn(" 1. bob#7f3a 5", posted[0])
+        self.assertIn(" 2. bob#c21e 2", posted[0])
+
     def test_final_standings(self):
         posted = self._handled(b"LEADERBOARD|1|1790553600|alice=3|||fb.example")
         self.assertEqual(len(posted), 1)
@@ -1184,6 +1192,9 @@ class WeeklyRankingsTest(unittest.TestCase):
                     b"LEADERBOARD|2|1790553600|a=1|||s",  # bad final flag
                     b"LEADERBOARD|0|1790553600|a|||s",    # no count
                     b"LEADERBOARD|0|1790553600|a`b=1|||s",  # not a nick
+                    b"LEADERBOARD|0|1790553600|a#7F3A=1|||s",  # tag not lowercase hex
+                    b"LEADERBOARD|0|1790553600|a#7f3=1|||s",   # tag too short
+                    b"LEADERBOARD|0|1790553600|a#`x`y=1|||s",  # tag not hex
                     b"LEADERBOARD|0|1790553600|a=1"):     # too few fields
             self.assertEqual(self._handled(bad), [], bad)
 

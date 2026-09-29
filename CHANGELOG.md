@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- **Anonymous player accounts, so weekly rankings belong to you rather than to a name.** The first time you play online, the game creates a random recovery code on your device and uses it to sign in to servers automatically; there's nothing to register or type. Two players who both call themselves "bob" now get separate lines in the weekly rankings, shown as `bob#7f3a` and `bob#c21e`, and changing your nickname keeps your line. Only signed-in players are ranked, which needs this version of both the game and the server (protocol 1.6); older games still play normally but aren't ranked. The weekly stats kept by name before this start the week over.
+- **Fixed: the desktop game sent its platform badge after its nickname**, so a server's Discord join alert never showed which platform a desktop player joined from.
+- **Privacy policy updated** for the anonymous account: what the recovery code is, that it stays on your device, and that servers only see a public key and a short account tag.
+
 - **Default names no longer count in the weekly rankings.** "unnamed", "android_user" (shown as "android_us") and "web_user" are what the game fills in when a player never picks a name, so each one lumps many strangers together. The server now leaves them, and their numbered variants such as "unnamed2", out of the weekly stats, and drops any they already hold when it restarts.
 - **Choose a name before going online.** Picking a server without ever having set a name now asks for one first, prefilled with your computer's login name where there is one, and then connects. Before, the game silently used the login name or one of the defaults above.
 

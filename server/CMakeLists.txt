@@ -52,6 +52,7 @@ add_executable(fb-server
     tools.c
     stats.c
     weeklystats.c
+    account.c
     discordalert.c
     ws.c
 )
@@ -65,12 +66,19 @@ add_executable(fb-server
 # silently bake in "fb-server v" with no number.
 target_compile_definitions(fb-server PUBLIC VERSION="${FB_VERSION}")
 
+# Monocypher (BSD-2/CC0, vendored) verifies account signatures -- see
+# account.h. Shared with the game, which signs with it. Built as its own
+# library so -pedantic, meant for this server's own code, stays off it.
+add_library(monocypher STATIC ${CMAKE_CURRENT_LIST_DIR}/../third_party/monocypher/monocypher.c)
+target_include_directories(monocypher PUBLIC ${CMAKE_CURRENT_LIST_DIR}/../third_party/monocypher)
+
 target_include_directories(fb-server
     PRIVATE ${GLIB2_INCLUDE_DIRS}
 )
 
 target_link_libraries(fb-server
     PkgConfig::GLIB2
+    monocypher
 )
 
 if(WIN32 OR MINGW)

@@ -51,6 +51,7 @@
 #include <glib.h>
 
 #include "game.h"
+#include "account.h"
 #include "tournament.h"
 #include "tools.h"
 #include "log.h"
@@ -67,8 +68,10 @@ const int proto_major = 1;
  * command on this minor so a new client talking to an older server stays
  * silent instead of collecting an UNKNOWN_COMMAND warning.
  * 1.5 adds the WEEKLY command (the lobby's weekly rankings, see
- * weekly_command in game.c), gated client-side the same way. */
-const int proto_minor = 5;
+ * weekly_command in game.c), gated client-side the same way.
+ * 1.6 adds AUTH/AUTHSIG, account sign-in (see account.h); the weekly
+ * rankings count only signed-in connections from then on. */
+const int proto_minor = 6;
 
 static char greets_msg_base[] = "SERVER_READY %s %s";
 static char* servername = NULL;
@@ -392,6 +395,8 @@ void conn_terminated(int fd, char* reason)
                 platform_tag[fd] = 0;
                 input_tag[fd] = 0;
                 country_tag[fd][0] = '\0';
+                join_alert_deferred[fd] = 0;
+                account_reset(fd);
                 free(IP[fd]);
                 IP[fd] = NULL;
                 if (is_bot[fd]) {
@@ -992,6 +997,8 @@ void connections_manager(void)
                         platform_tag[fd] = 0;
                         input_tag[fd] = 0;
                         country_tag[fd][0] = '\0';
+                        join_alert_deferred[fd] = 0;
+                        account_reset(fd);
                         IP[fd] = strdup_(inet_ntoa(client_addr.sin_addr));
                         prio[fd] = 0;
                         // Defensive: conn_terminated() already resets this when the

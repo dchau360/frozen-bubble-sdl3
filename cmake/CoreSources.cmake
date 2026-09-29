@@ -56,6 +56,9 @@ set(FROZEN_BUBBLE_CORE_SOURCES
     ${FB_SRC}/netview.cpp
     ${FB_SRC}/tournamentstate.cpp
     ${FB_SRC}/weeklyboard.cpp
+    ${FB_SRC}/playeraccount.cpp
+    # Account signing (playeraccount.cpp); the server verifies with the same copy.
+    ${CMAKE_CURRENT_LIST_DIR}/../third_party/monocypher/monocypher.c
     ${FB_SRC}/netteams.cpp
     ${FB_SRC}/roundstats_color.cpp
     ${FB_SRC}/playerbadge.cpp

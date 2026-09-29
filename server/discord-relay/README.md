@@ -309,12 +309,16 @@ post waits.
 
 ## Weekly rankings
 
-`fb-server` keeps per-nick round wins, round losses and bubbles popped for the
-current week, Monday 00:00 UTC to the next (`server/weeklystats.c`), fed from
-the same round-end handling as `RESULT` above. Bots are never counted; humans
-count whether or not bots were in the round. A draw, or a win claim naming
-nobody in the room, records no wins or losses -- only popped. Keyed by nick,
-which is not an account, so anyone using the same nick shares its line.
+`fb-server` keeps per-account round wins, round losses and bubbles popped for
+the current week, Monday 00:00 UTC to the next (`server/weeklystats.c`), fed
+from the same round-end handling as `RESULT` above. Only players whose game
+signed in to its anonymous account (protocol 1.6, `server/account.h`) are
+counted, so two players using the same nick get separate lines, listed as
+`nick#tag` (the first 4 hex digits of the account id, e.g. `bob#7f3a`). Bots
+are never counted; humans count whether or not bots were in the round. A
+draw, or a win claim naming nobody in the room, records no wins or losses --
+only popped. `LEADERBOARD` lists accept the `#tag` as optional, so a
+pre-1.6 server's bare nicks still post.
 
 Two things reach Discord:
 

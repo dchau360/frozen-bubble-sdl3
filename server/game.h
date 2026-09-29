@@ -56,6 +56,7 @@ extern char input_tag[256];
 /* ISO 3166-1 alpha-2 from the COUNTRY command, empty when never sent. Two
  * chars plus a terminator rather than the bare char the other two use. */
 extern char country_tag[256][3];
+extern int join_alert_deferred[256];
 
 int game_has_room(int fd);
 int game_tournament_start(int tid, int mid, int round, int a, int fd_a, int b, int fd_b, const char *options);

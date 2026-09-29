@@ -38,6 +38,7 @@
 #include <glib.h>
 
 #include "net.h"
+#include "account.h"
 #include "ws.h"
 #include "tools.h"
 #include "log.h"
@@ -285,6 +286,20 @@ char platform_tag[256];
 char input_tag[256];
 char country_tag[256][3];
 
+/* Set when a connection's first NICK arrives while its AUTH challenge is still
+ * outstanding (the client sends AUTH, PLATFORM and NICK back to back), so the
+ * Discord join alert waits for AUTHSIG and can carry the account's weekly
+ * line. Cleared in conn_terminated (net.c). */
+int join_alert_deferred[256];
+
+static void fire_join_alert(int fd)
+{
+        char weekly[96];
+        weekly_player_csv(account_id(fd), weekly, sizeof(weekly));
+        discordalert_fire_join_event(nick[fd], IP[fd], geoloc[fd], platform_tag[fd],
+                                     country_tag[fd], weekly);
+}
+
 /* Two uppercase ASCII letters -- an ISO 3166-1 alpha-2 code as the client's
  * own geolocation lookup reported it. Not validated against a list of real
  * countries: this server has no business carrying one, the relay renders any
@@ -434,9 +449,10 @@ static void list_games_aux(gpointer data, gpointer user_data)
  *   WEEKLY: <week_start> <wins> <losses> <popped> <me> <lobby>
  *
  * week_start is the week's Monday 00:00 UTC as a Unix time. Each list is
- * weekly_top_csv()'s "nick=count,..." top WEEKLY_LOBBY_TOP_N, or "-" when
+ * weekly_top_csv()'s "nick#tag=count,..." top WEEKLY_LOBBY_TOP_N, or "-" when
  * empty. me is the asking connection's own "W,L,P,rankW,rankL,rankP", or "-"
- * with no nick or no rounds yet. lobby is "nick=rank,..." -- the round-wins
+ * with no account or no rounds yet. lobby is "nick=rank,..." (live nicks, no
+ * tag -- they are unique on this server already) -- the round-wins
  * rank of every player currently in the lobby (open_players) who has one,
  * for the rank badge beside each name in the lobby's Online sidebar -- or
  * "-". Deliberately no ':' after the "WEEKLY:"
@@ -453,12 +469,10 @@ static void weekly_command(int fd, char* msg_orig)
         weekly_top_csv(WEEKLY_WINS, WEEKLY_LOBBY_TOP_N, wins, sizeof(wins));
         weekly_top_csv(WEEKLY_LOSSES, WEEKLY_LOBBY_TOP_N, losses, sizeof(losses));
         weekly_top_csv(WEEKLY_POPPED, WEEKLY_LOBBY_TOP_N, popped, sizeof(popped));
-        me[0] = '\0';
-        if (nick[fd])
-                weekly_player_csv(nick[fd], me, sizeof(me));
+        weekly_player_csv(account_id(fd), me, sizeof(me));
         for (it = open_players; it; it = it->next) {
                 int ofd = GPOINTER_TO_INT(it->data);
-                int r = nick[ofd] ? weekly_rank(nick[ofd], WEEKLY_WINS) : 0;
+                int r = nick[ofd] ? weekly_rank(account_id(ofd), WEEKLY_WINS) : 0;
                 int w;
                 if (r <= 0) continue;
                 w = snprintf(lobby + used, sizeof(lobby) - used, "%s%s=%d",
@@ -1343,14 +1357,45 @@ int process_msg(int fd, char* msg)
                                          * ~16s. It stays in the datagram because the wire format
                                          * has the field and the relay discards it either way. */
                                         if (first_nick && !replaced_ghost) {
-                                                char weekly[96];
-                                                weekly_player_csv(nick[fd], weekly, sizeof(weekly));
-                                                discordalert_fire_join_event(nick[fd], IP[fd], geoloc[fd],
-                                                                             platform_tag[fd],
-                                                                             country_tag[fd], weekly);
+                                                if (account_pending(fd))
+                                                        join_alert_deferred[fd] = 1;
+                                                else
+                                                        fire_join_alert(fd);
                                         }
                                 }
                         }
+                }
+        } else if (streq(current_command, "AUTH")) {
+                /* Account sign-in, protocol 1.6 -- see account.h for the
+                 * exchange. Sent before NICK and PLATFORM by a client that
+                 * has an account; everything works without it, the
+                 * connection just isn't counted in the weekly rankings. */
+                char reply[96];
+                if (!args) {
+                        send_line_log(fd, wn_missing_arguments, msg_orig);
+                } else {
+                        if ((ptr = strchr(args, ' ')))
+                                *ptr = '\0';
+                        account_begin(fd, args, reply, sizeof(reply));
+                        send_line_log(fd, reply, msg_orig);
+                }
+        } else if (streq(current_command, "AUTHSIG")) {
+                char* line;
+                if (args && (ptr = strchr(args, ' ')))
+                        *ptr = '\0';
+                if (account_finish(fd, args)) {
+                        line = asprintf_("OK %s", account_id(fd));
+                        send_line_log(fd, line, msg_orig);
+                        free(line);
+                } else {
+                        send_line_log(fd, "INVALID_SIGNATURE", msg_orig);
+                }
+                /* Pass or fail, the join alert NICK held back for this can
+                 * go now -- with the weekly line only if it passed. */
+                if (join_alert_deferred[fd]) {
+                        join_alert_deferred[fd] = 0;
+                        if (nick[fd])
+                                fire_join_alert(fd);
                 }
         } else if (streq(current_command, "PLATFORM")) {
                 /* Self-declared, exactly like BOT above: which OS the client
@@ -1825,6 +1870,9 @@ static int report_round_result(struct game* g, const char* winner_nick)
  * that is going to arrive has arrived. Bots are skipped entirely; humans
  * count whether or not bots were in the round.
  *
+ * Only seats whose connection signed in to an account (AUTH) are recorded,
+ * under that account; weeklystats.c drops the rest.
+ *
  * Wins and losses only when the winner claim names a seated player: that
  * player -- or, in a team game, everyone on their team -- gets a win and
  * every other seated human a loss. A draw, or a claim naming nobody here,
@@ -1838,17 +1886,18 @@ static void record_weekly_round(struct game* g)
 
         for (i = 0; i < g->players_number; i++) {
                 const char* n = g->players_nick[i];
+                const char* id = account_id(g->players_conn[i]);
                 if (is_bot[g->players_conn[i]])
                         continue;
                 if (wslot >= 0) {
                         int won = (i == wslot) || (wteam > 0 && g->players_team[i] == wteam);
                         if (won)
-                                weekly_record_win(n);
+                                weekly_record_win(id, n);
                         else
-                                weekly_record_loss(n);
+                                weekly_record_loss(id, n);
                 }
                 if (g->players_popped_reported[i])
-                        weekly_record_popped(n, g->players_popped[i]);
+                        weekly_record_popped(id, n, g->players_popped[i]);
         }
         weekly_save();
 }

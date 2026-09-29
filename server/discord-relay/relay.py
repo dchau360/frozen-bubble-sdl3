@@ -631,15 +631,21 @@ def _weekly_line(weekly):
 
 
 def _leaderboard_csv_ok(field):
-    """True when `field` is empty or fb-server's "nick=count,..." list."""
+    """True when `field` is empty or fb-server's "nick#tag=count,..." list.
+    The "#tag" (4 lowercase hex digits of the player's account id, protocol
+    1.6) is optional so a pre-accounts server's bare "nick=count" still
+    posts."""
     if field == "":
         return True
     for item in field.split(","):
-        nick, eq, count = item.partition("=")
+        name, eq, count = item.partition("=")
+        nick, hash_, tag = name.partition("#")
         # is_nick_ok()'s own charset, re-checked here because these nicks go
         # into a code block unescaped (see _leaderboard_block()).
         if (not eq or not count.isdigit() or not 1 <= len(nick) <= 10
                 or not all(c.isascii() and (c.isalnum() or c in "_-") for c in nick)):
+            return False
+        if hash_ and not (len(tag) == 4 and all(c in "0123456789abcdef" for c in tag)):
             return False
     return True
 

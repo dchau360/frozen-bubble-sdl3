@@ -247,6 +247,12 @@ public:
     // so the Online sidebar's rank badges stay current as rounds finish.
     void MaybeRefreshWeekly();
     Uint64 weeklyRequestedAt = 0;
+
+    // This connection's account id (16 hex) once the server has accepted the
+    // AUTHSIG (protocol 1.6, see server/account.h), else empty. The weekly
+    // lists show accounts as "nick#<first 4 hex>".
+    std::string accountId;
+    std::string AccountTag() const { return accountId.substr(0, 4); }
     void ConsumeIncomingLines();
 
     // Protocol commands
@@ -562,6 +568,12 @@ private:
     // commands on what the *server* says instead.
     int serverProtoMinor = -1;
     bool platformReported = false;
+    bool authSent = false;
+    // Sends AUTH (the account's public key) once, when the server is 1.6+.
+    // Called from the same two places as MaybeSendPlatform, and first, so the
+    // challenge is on its way before NICK. The answer is sent from
+    // HandleServerResponse when the challenge arrives.
+    void MaybeSendAuth();
 
     // nick -> platform tag, accumulated from every LIST and never pruned while
     // the connection lasts. LIST is a lobby-only message -- it stops arriving

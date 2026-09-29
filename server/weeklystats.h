@@ -23,16 +23,22 @@
  * maybe_fire_pending_result()), so it inherits that path's trust posture: the
  * roster and bot flags are this server's own bookkeeping, the winner claim is
  * whatever the reporting client's 'F' said, and popped is the self-reported,
- * ceiling-clamped 'S' figure. Bots are never recorded. Keyed by nick, which is
- * not an account: anyone who takes the same nick shares its line. The names
- * the game fills in for a player who never chose one are never recorded
- * (weekly_is_default_nick()).
+ * ceiling-clamped 'S' figure. Bots are never recorded. Keyed by account id
+ * (the AUTH command, game.c): only a connection that proved an account is
+ * counted, so two players who both call themselves "bob" get separate lines,
+ * listed as "bob#7f3a" and "bob#c21e" (the first WEEKLY_TAG_LEN hex digits
+ * of the id). Each line keeps the nick its account last played a counted
+ * round under. The names the game fills in for a player who never chose one
+ * are never recorded (weekly_is_default_nick()).
  *
  * Separate from stats.c on purpose -- that one counts a mid-game departure as
  * a loss, which this project deliberately never publishes (see CLAUDE.md's
  * round-result section), and resets daily in server-local time. */
 
 enum weekly_category { WEEKLY_WINS = 0, WEEKLY_LOSSES = 1, WEEKLY_POPPED = 2 };
+
+/* How many hex digits of an account id follow the '#' in a listed name. */
+#define WEEKLY_TAG_LEN 4
 
 /* Load from FB_SERVER_WEEKLY_FILE, else $HOME/.fb-server/weekly.dat, else
  * /var/lib/fb-server/weekly.dat. Missing file = empty week, no error. */
@@ -43,22 +49,24 @@ void weekly_init(void);
  * skipped by every weekly_record_*() and dropped on load. */
 int weekly_is_default_nick(const char* nick);
 
-void weekly_record_win(const char* nick);
-void weekly_record_loss(const char* nick);
-void weekly_record_popped(const char* nick, int popped);
+/* id is the connection's verified account id; an empty or NULL id (no AUTH,
+ * or AUTH failed) records nothing. nick is shown beside it. */
+void weekly_record_win(const char* id, const char* nick);
+void weekly_record_loss(const char* id, const char* nick);
+void weekly_record_popped(const char* id, const char* nick, int popped);
 /* Write to disk; call once after a round's worth of record_* calls. */
 void weekly_save(void);
 
-/* nick's six numbers as "W,L,P,rankW,rankL,rankP" (a rank is 0 when that
- * count is 0), or "" if nick has no line this week. */
-void weekly_player_csv(const char* nick, char* out, size_t outsz);
+/* The account's six numbers as "W,L,P,rankW,rankL,rankP" (a rank is 0 when
+ * that count is 0), or "" if it has no line this week. */
+void weekly_player_csv(const char* id, char* out, size_t outsz);
 
-/* nick's competition rank in `cat` this week, or 0 when their count there
- * is 0 (or they have no line). */
-int weekly_rank(const char* nick, enum weekly_category cat);
+/* The account's competition rank in `cat` this week, or 0 when its count
+ * there is 0 (or it has no line). */
+int weekly_rank(const char* id, enum weekly_category cat);
 
-/* Up to n "nick=count" pairs, comma-joined, highest first (ties broken by
- * nick), or "" when nobody has a nonzero count in that category. */
+/* Up to n "nick#tag=count" pairs, comma-joined, highest first (ties broken
+ * by nick), or "" when nobody has a nonzero count in that category. */
 void weekly_top_csv(enum weekly_category cat, int n, char* out, size_t outsz);
 
 /* Monday 00:00 UTC that starts the current week, as a Unix time. */
