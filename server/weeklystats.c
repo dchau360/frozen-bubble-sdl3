@@ -60,6 +60,29 @@ static void ensure_parent_dir(const char* path)
         g_free(copy);
 }
 
+/* Names the game fills in when a player never chose one: "unnamed" (desktop
+ * with no $USER), "android_user" (cut to "android_us" by the 10-char nick
+ * limit) and "web_user" (the browser build's $USER). A default name is shared
+ * by everyone who never set one, so a line for it is many strangers added
+ * together, not a player. Also matches the client's NICK_IN_USE retries of
+ * them -- the first 9 chars plus a number, e.g. "unnamed2", "android_u3". */
+int weekly_is_default_nick(const char* nick)
+{
+        static const char* const exact[] = { "unnamed", "web_user", "android_us", "android_user" };
+        static const char* const stems[] = { "unnamed", "web_user", "android_u" };
+        size_t i;
+        if (!nick) return 0;
+        for (i = 0; i < sizeof(exact) / sizeof(exact[0]); i++)
+                if (!strcmp(nick, exact[i])) return 1;
+        for (i = 0; i < sizeof(stems) / sizeof(stems[0]); i++) {
+                size_t n = strlen(stems[i]);
+                const char* tail = nick + n;
+                if (strncmp(nick, stems[i], n) || !*tail || strlen(tail) > 2) continue;
+                if (strspn(tail, "0123456789") == strlen(tail)) return 1;
+        }
+        return 0;
+}
+
 static WeeklyLine* line_for(const char* nick)
 {
         WeeklyLine* wl = g_hash_table_lookup(table, nick);
@@ -108,7 +131,11 @@ void weekly_init(void)
         while (fgets(buf, sizeof(buf), f)) {
                 char nick[64];
                 int w, l, p;
-                if (sscanf(buf, "%63s %d %d %d", nick, &w, &l, &p) == 4) {
+                /* Drops default names a file written before they were
+                 * excluded still carries, so they leave this week's board
+                 * on the next restart rather than next Monday. */
+                if (sscanf(buf, "%63s %d %d %d", nick, &w, &l, &p) == 4 &&
+                    !weekly_is_default_nick(nick)) {
                         WeeklyLine* wl = line_for(nick);
                         wl->counts[WEEKLY_WINS] = w;
                         wl->counts[WEEKLY_LOSSES] = l;
@@ -159,21 +186,21 @@ static void rollover_if_needed(void)
 
 void weekly_record_win(const char* nick)
 {
-        if (!table || !nick || !*nick) return;
+        if (!table || !nick || !*nick || weekly_is_default_nick(nick)) return;
         rollover_if_needed();
         line_for(nick)->counts[WEEKLY_WINS]++;
 }
 
 void weekly_record_loss(const char* nick)
 {
-        if (!table || !nick || !*nick) return;
+        if (!table || !nick || !*nick || weekly_is_default_nick(nick)) return;
         rollover_if_needed();
         line_for(nick)->counts[WEEKLY_LOSSES]++;
 }
 
 void weekly_record_popped(const char* nick, int popped)
 {
-        if (!table || !nick || !*nick || popped <= 0) return;
+        if (!table || !nick || !*nick || popped <= 0 || weekly_is_default_nick(nick)) return;
         rollover_if_needed();
         line_for(nick)->counts[WEEKLY_POPPED] += popped;
 }

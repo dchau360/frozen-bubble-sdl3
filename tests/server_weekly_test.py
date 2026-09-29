@@ -193,6 +193,38 @@ class RoundRecordingTest(WeeklyTestBase):
         self.assertEqual(me, "0,1,1,0,1,2")
 
 
+class DefaultNickTest(WeeklyTestBase):
+    """Names the game fills in for a player who never chose one are shared by
+    strangers, so they never get a weekly line."""
+
+    def test_default_nicks_and_their_retries_are_not_recorded(self):
+        self.start()
+        socks = self.play_round([("unnamed", False), ("android_us", False),
+                                 ("web_user2", False), ("realname", False)],
+                                winner="unnamed", popped=[5, 3, 7, 2])
+        _, wins, losses, popped, me = self.weekly(socks[3])
+        self.assertEqual(wins, "-", "the winner was a default name")
+        self.assertEqual(losses, "realname=1")
+        self.assertEqual(popped, "realname=2")
+        _, _, _, _, me = self.weekly(socks[0])
+        self.assertEqual(me, "-")
+
+    def test_look_alike_chosen_names_are_still_recorded(self):
+        self.start()
+        self.play_round([("unnamedx", False), ("web_users", False)],
+                        winner="unnamedx", popped=[1, 1])
+        _, wins, losses, _, _ = self.weekly(self.connect("watcher"))
+        self.assertEqual((wins, losses), ("unnamedx=1", "web_users=1"))
+
+    def test_default_nicks_already_on_file_are_dropped_on_load(self):
+        day = today()
+        self.start(seed=f"v1 {monday_of(day)} {day}\n"
+                        "unnamed 9 0 50\nandroid_u3 4 1 20\nalice 2 1 10\n")
+        _, wins, _, popped, _ = self.weekly(self.connect("watcher"))
+        self.assertEqual(wins, "alice=2")
+        self.assertEqual(popped, "alice=10")
+
+
 class LobbyRanksTest(WeeklyTestBase):
     def test_weekly_reply_carries_lobby_players_wins_ranks(self):
         wk = monday_of(today())

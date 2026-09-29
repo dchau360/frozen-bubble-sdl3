@@ -1626,10 +1626,11 @@ void MainMenu::NetPanelConnectionScreensRender() {
         int y = (480/2) - 120;
         char lineBuf[128];
 
-        renderLine("Set Your Name\n", white, y);
+        renderLine(networkNameThenConnect ? "Choose a name for online play\n" : "Set Your Name\n", white, y);
         snprintf(lineBuf, sizeof(lineBuf), "[ %s_ ]", networkPreNick);
         renderLine(lineBuf, yellow, y);
-        renderLine("\nPress ENTER to confirm\nPress ESC to cancel", white, y);
+        renderLine(networkNameThenConnect ? "\nPress ENTER to connect\nPress ESC to cancel"
+                                          : "\nPress ENTER to confirm\nPress ESC to cancel", white, y);
         return;
     }
 

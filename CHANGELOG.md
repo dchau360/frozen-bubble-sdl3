@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- **Default names no longer count in the weekly rankings.** "unnamed", "android_user" (shown as "android_us") and "web_user" are what the game fills in when a player never picks a name, so each one lumps many strangers together. The server now leaves them, and their numbered variants such as "unnamed2", out of the weekly stats, and drops any they already hold when it restarts.
+- **Choose a name before going online.** Picking a server without ever having set a name now asks for one first, prefilled with your computer's login name where there is one, and then connects. Before, the game silently used the login name or one of the defaults above.
+
 ## v2.4.117
 
 - **The lobby's Online list now shows you.** You're listed first, marked "(you)", with your weekly rank badge if you have one. Before, the list left you out, so a lobby with only you in it said "No free players", which read as if the server couldn't see you. When nobody else is free it now says "No one else in the lobby".

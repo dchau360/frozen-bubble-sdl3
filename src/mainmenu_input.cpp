@@ -2194,10 +2194,17 @@ void MainMenu::MenuReturnKey() {
                         return;
                     } else if (showingNetPanel && !networkInLobby && networkInputMode == 11) {
                         // Confirm pre-lobby nickname
+                        if (networkNameThenConnect && networkPreNick[0] == '\0') return;
                         networkInputMode = networkPreNickReturnMode;
                         SDL_StopTextInput(SDL_GetKeyboardFocus());
                         AudioMixer::Instance()->PlaySFX("menu_selected");
                         SavePreNick();
+                        if (networkNameThenConnect) {
+                            // Opened from DO_CONNECT below; the server list's
+                            // selection still points at the server picked.
+                            networkNameThenConnect = false;
+                            goto DO_CONNECT;
+                        }
                         return;
                     } else if (showingNetPanel && !networkInLobby &&
                                (networkInputMode == 8 || networkInputMode == 9)) {
@@ -2352,6 +2359,38 @@ void MainMenu::MenuReturnKey() {
                             host = publicServers[serverIdx].host.c_str();
                             port = publicServers[serverIdx].port;
                         }
+                        if (networkPreNick[0] == '\0') {
+                            // Never chose a name: ask before going online
+                            // rather than silently using $USER or a shared
+                            // default ("unnamed", "android_user"), which the
+                            // server leaves out of the weekly rankings.
+                            // Prefilled with $USER so desktop players can
+                            // just press ENTER.
+                            const char* envUser = getenv("USER");
+                            if (envUser) snprintf(networkPreNick, sizeof(networkPreNick), "%.10s", envUser);
+#ifdef __WASM_PORT__
+                            if (WasmHasTouch()) {
+                                char nick[32];
+                                if (!WasmPromptText("Choose a name for online play (max 10 chars):",
+                                                    networkPreNick, nick, sizeof(nick)) || nick[0] == '\0') {
+                                    networkPreNick[0] = '\0';
+                                    return;
+                                }
+                                snprintf(networkPreNick, sizeof(networkPreNick), "%.15s", nick);
+                                SavePreNick();
+                            } else
+#endif
+                            {
+                                networkPreNickReturnMode = networkInputMode;
+                                networkNameThenConnect = true;
+                                networkInputMode = 11;
+                                SDL_StopTextInput(SDL_GetKeyboardFocus());
+                                SDL_StartTextInput(SDL_GetKeyboardFocus());
+                                SetTextInputAreaLogical(const_cast<SDL_Renderer*>(renderer), {160, 152, 320, 20});
+                                AudioMixer::Instance()->PlaySFX("menu_selected");
+                                return;
+                            }
+                        }
                         NetworkClient* netClient = NetworkClient::Instance(host, port);
                         // Worked out before the branch below, not inside its
                         // first arm: the "still connecting" arm needs the same
@@ -2450,6 +2489,7 @@ void MainMenu::MenuEscapeKey() {
                         if (networkInputMode == 11) {
                             // Cancel pre-lobby nickname editing
                             networkInputMode = networkPreNickReturnMode;
+                            networkNameThenConnect = false;
                             SDL_StopTextInput(SDL_GetKeyboardFocus());
                             return;
                         } else if (networkInputMode == 8 || networkInputMode == 9) {
