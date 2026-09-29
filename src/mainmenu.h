@@ -491,6 +491,9 @@ private:
     char networkUsername[32] = "";
     char networkPreNick[32] = "";   // Nickname set before connecting (on server selection screen)
     int networkPreNickReturnMode = 7; // Mode to return to after editing pre-lobby nickname
+    // The name editor was opened because the player picked a server without
+    // ever having chosen a name; confirming it carries on with that connect.
+    bool networkNameThenConnect = false;
     bool pendingLobbyConnect = false; // WASM: true while waiting for async WebSocket to open so we can send NICK+GEOLOC
     int selectedGameIndex = -1; // For game list selection
     int selectedActionIndex = 0; // Currently selected action in lobby (0=chat, 1=create, 2+=games)

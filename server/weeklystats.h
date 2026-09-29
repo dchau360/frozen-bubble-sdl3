@@ -24,7 +24,9 @@
  * roster and bot flags are this server's own bookkeeping, the winner claim is
  * whatever the reporting client's 'F' said, and popped is the self-reported,
  * ceiling-clamped 'S' figure. Bots are never recorded. Keyed by nick, which is
- * not an account: anyone who takes the same nick shares its line.
+ * not an account: anyone who takes the same nick shares its line. The names
+ * the game fills in for a player who never chose one are never recorded
+ * (weekly_is_default_nick()).
  *
  * Separate from stats.c on purpose -- that one counts a mid-game departure as
  * a loss, which this project deliberately never publishes (see CLAUDE.md's
@@ -35,6 +37,11 @@ enum weekly_category { WEEKLY_WINS = 0, WEEKLY_LOSSES = 1, WEEKLY_POPPED = 2 };
 /* Load from FB_SERVER_WEEKLY_FILE, else $HOME/.fb-server/weekly.dat, else
  * /var/lib/fb-server/weekly.dat. Missing file = empty week, no error. */
 void weekly_init(void);
+
+/* True for a name the game assigns by default ("unnamed", "web_user",
+ * "android_us"...) or a numbered NICK_IN_USE retry of one. Such names are
+ * skipped by every weekly_record_*() and dropped on load. */
+int weekly_is_default_nick(const char* nick);
 
 void weekly_record_win(const char* nick);
 void weekly_record_loss(const char* nick);
