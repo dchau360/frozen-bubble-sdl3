@@ -52,6 +52,10 @@ ASSETS = [
      os.path.join("screenshots", "local-2player.png")),
     (os.path.join(ROOT, "docs", "screenshots", "round-stats.png"),
      os.path.join("screenshots", "round-stats.png")),
+    # Google's official "Get it on Google Play" badge, served from here rather
+    # than hotlinked so opening the page makes no request to Google.
+    (os.path.join(SITE, "img", "google-play-badge.png"),
+     os.path.join("img", "google-play-badge.png")),
 ]
 
 # Copied through verbatim. The Google verification token must keep its exact
