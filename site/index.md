@@ -5,7 +5,8 @@ reimplementing its gameplay, network multiplayer and chain-reaction system.
 The original was Linux-only; this port runs on **Linux, macOS, Windows,
 Android, and in the browser**.
 
-[**Get it on Google Play**](https://play.google.com/store/apps/details?id=org.frozenbubble) ·
+<a href="https://play.google.com/store/apps/details?id=org.frozenbubble"><img src="img/google-play-badge.png" alt="Get it on Google Play" width="194" height="75" style="border-radius:0; margin-left:-12px"></a>
+
 [Play in your browser](https://dchau360.itch.io/frozenbubble2) ·
 [Downloads](https://github.com/dchau360/frozen-bubble-sdl3/releases/latest) ·
 [Source](https://github.com/dchau360/frozen-bubble-sdl3) ·
