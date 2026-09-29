@@ -319,6 +319,11 @@ if(BUILD_TESTING AND NOT EMSCRIPTEN AND NOT ANDROID AND NOT IOS)
     target_compile_features(tournamentstate-test PRIVATE cxx_std_17)
     add_test(NAME tournamentstate-test COMMAND tournamentstate-test)
 
+    add_executable(playeraccount-test tests/playeraccount_test.cpp)
+    target_link_libraries(playeraccount-test PRIVATE frozen-bubble-core-test)
+    target_compile_features(playeraccount-test PRIVATE cxx_std_17)
+    add_test(NAME playeraccount-test COMMAND playeraccount-test)
+
     add_executable(weeklyboard-parse-test tests/weeklyboard_parse_test.cpp src/weeklyboard.cpp)
     target_include_directories(weeklyboard-parse-test PRIVATE src)
     target_compile_features(weeklyboard-parse-test PRIVATE cxx_std_17)
@@ -637,8 +642,24 @@ if(BUILD_TESTING AND NOT EMSCRIPTEN AND NOT ANDROID AND NOT IOS)
         # Weekly rankings (server/weeklystats.c): what a round records, bots
         # excluded; the WEEKLY lobby command; the weekly line on the Discord
         # JOIN datagram; and the daily / Monday-rollover LEADERBOARD post.
+        add_executable(account-sign-tool tests/account_sign_tool.c)
+        target_include_directories(account-sign-tool PRIVATE server)
+        target_link_libraries(account-sign-tool PRIVATE monocypher)
         add_test(NAME server-weekly-test
-            COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tests/server_weekly_test.py $<TARGET_FILE:fb-server>)
+            COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tests/server_weekly_test.py $<TARGET_FILE:fb-server>
+                    $<TARGET_FILE:account-sign-tool>)
+        # The game's NetworkClient signing in against a live fb-server.
+        add_executable(account-signin-live-test tests/account_signin_live_test.cpp)
+        target_link_libraries(account-signin-live-test PRIVATE frozen-bubble-core-test)
+        target_compile_features(account-signin-live-test PRIVATE cxx_std_17)
+        add_test(NAME account-signin-live-test
+            COMMAND account-signin-live-test $<TARGET_FILE:fb-server>)
+        set_tests_properties(account-signin-live-test PROPERTIES SKIP_RETURN_CODE 77)
+        # Account sign-in (server/account.c): AUTH/AUTHSIG, a replayed or
+        # forged signature, and the Discord join alert waiting for AUTHSIG.
+        add_test(NAME server-account-test
+            COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tests/server_account_test.py $<TARGET_FILE:fb-server>
+                    $<TARGET_FILE:account-sign-tool>)
         # Binds the hardcoded UDP discovery port, so it cannot run concurrently
         # with another fb-server; it skips when that port is already in use.
         add_test(NAME server-udp-probe-test

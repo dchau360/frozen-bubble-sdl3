@@ -1,6 +1,6 @@
 # Privacy Policy — Frozen Bubble: SDL3
 
-**Effective date:** September 28, 2026
+**Effective date:** September 29, 2026
 
 Frozen Bubble: SDL3 ("the app") is a free, open-source game
 ([GPLv2 licensed](https://github.com/dchau360/frozen-bubble-sdl3/blob/main/COPYING), source at
@@ -9,9 +9,10 @@ This policy covers the Android build distributed on Google Play; the same
 practices apply to the other platform builds except where noted (ads and
 in-app purchases are Android-only).
 
-The app has no user accounts, no analytics SDK, and does not collect your
-name, email, or any other real-world identity. What it does handle is
-described below.
+The app has no sign-up, no analytics SDK, and does not collect your name,
+email, or any other real-world identity. Its only "account" is an anonymous
+random code created on your device (below). What it does handle is described
+below.
 
 ## Information collected
 
@@ -19,6 +20,17 @@ described below.
 on your device and sent to whichever multiplayer server you connect to, so
 other players in your game can see it. It is not tied to any account and
 isn't sent anywhere else.
+
+**Anonymous player account.** The first time you play online, the app
+creates a random 16-character recovery code and saves it only on your
+device. A cryptographic key derived from that code lets a server recognise
+you from one visit to the next, so your weekly ranking stays yours even if
+someone else uses the same nickname. Servers receive only the key's public
+half and a one-off signature, never the code itself, and each server works
+out the same short account ID from the public key (the first four
+characters are shown after your nickname in rankings, like `bob#7f3a`). The
+account is not linked to your name, email, device ID, or ad ID, and there is
+no central account database.
 
 **Network connection data.** Playing network multiplayer means connecting
 to a game server over TCP — your IP address is visible to that server the
@@ -99,14 +111,15 @@ not per player, with no in-app setting to disable it, and what a given
 server actually posts is outside the developer's control — see
 [SetupServer.md](https://github.com/dchau360/frozen-bubble-sdl3/blob/main/SetupServer.md#round-result-alerts).
 
-**Weekly rankings.** The reference server keeps, per nickname, how many
-rounds you won and lost and how many bubbles you popped this week (Monday
+**Weekly rankings.** The reference server keeps, per anonymous account ID
+(above) together with the nickname you last played under, how many rounds
+you won and lost and how many bubbles you popped this week (Monday
 00:00 UTC to the next), and ranks players by each. The counts are cleared
 every Monday. Every player on that server can see the top 10 in the online
 lobby's "Weekly rankings" screen, and if the server runs the Discord relay
 above, your join alert also shows your own weekly counts and ranks, and a
-daily message lists the top 5 nicknames in each category. **Only nicknames
-and those counts are included** — nothing else about you. Computer-controlled
+daily message lists the top 5 in each category. **Only nicknames, the short
+account tag, and those counts are included** — nothing else about you. Computer-controlled
 bots are never counted.
 
 **Opening the community Discord.** The NET GAME server list and the online
@@ -148,6 +161,8 @@ or analytics SDK, so none is collected by the developer.
   reach the same relay for the connect alert; neither is part of either
   posted message. Your country code reaches the relay too, and is part of
   both messages.
+- Account public key: to recognise the same player across visits, so that
+  weekly rankings belong to an account rather than to whoever uses a name.
 - Nickname and round results: counted into the server's weekly rankings,
   shown in the lobby and, if the server runs the relay, on Discord (see
   above).
@@ -172,8 +187,9 @@ or analytics SDK, so none is collected by the developer.
 
 ## Data retention
 
-- Nickname and settings live only in local app storage until you clear app
-  data or uninstall.
+- Nickname, settings and your account's recovery code live only in local
+  app storage until you clear app data or uninstall. Losing the code loses
+  the account; there is no way to recover it from a server.
 - Server-side connection logs, match statistics, and any Discord channel a
   server's join alerts are posted to are retained at the discretion of
   whoever operates that particular server.
@@ -192,7 +208,8 @@ avoid entering real names or other identifying information.
 - Play local single-player or local multiplayer to avoid any network data
   transmission entirely — this also means no location lookup happens, since
   it only runs before network play.
-- Uninstalling the app removes all locally stored settings and nicknames.
+- Uninstalling the app removes all locally stored settings, nicknames and
+  your account's recovery code.
 
 ## Changes to this policy
 

@@ -410,7 +410,9 @@ protocol and internals.
 With the relay running, each join alert also shows that player's week so far
 (round wins, round losses, bubbles popped and their rank in each), and once a
 day the relay posts the week's top 5 in each category. The week resets Monday
-00:00 UTC, with a final-standings post. Bots are never counted. Players see
+00:00 UTC, with a final-standings post. Bots are never counted, and neither
+are players on game versions from before v2.4.118, which can't sign in to the
+anonymous account rankings are kept by (names show as `bob#7f3a`). Players see
 the same board in the online lobby under **Weekly rankings**, and each
 player's round-wins rank shows as `#N` beside their name in the lobby list.
 

@@ -18,6 +18,7 @@
  */
 
 #include "networkclient.h"
+#include "playeraccount.h"
 #include "netteams.h"   // kNoTeam
 #include "platform.h"
 #include <algorithm>
@@ -353,10 +354,25 @@ void NetworkClient::PumpConnect() {
             recvBufferLen = (int)leftover.size();
         }
     }
+    // The banner never reaches ParseMessage, so learn the server's minor from
+    // it here. Without this, serverProtoMinor stayed unknown until the reply
+    // to the first command -- which is NICK -- so AUTH and PLATFORM, meant to
+    // precede NICK, only went out after it, and the server's join alert fired
+    // with neither the platform nor the account's weekly line.
+    const size_t readyAt = readyBanner.find("SERVER_READY");
+    const size_t tagAt = readyBanner.rfind("FB/", readyAt);
+    int major = 0, minor = 0;
+    const bool knowMinor = tagAt != std::string::npos &&
+        sscanf(readyBanner.c_str() + tagAt, "FB/%d.%d", &major, &minor) == 2 && major == PROTO_MAJOR;
     readyBanner.clear();
     connectPhaseDeadline = 0;
     state = CONNECTED;
     SDL_Log("Connected to server %s:%d", connectedHost.c_str(), connectedPort);
+    if (knowMinor && serverProtoMinor < 0) {
+        serverProtoMinor = minor;
+        MaybeSendAuth();
+        MaybeSendPlatform();
+    }
 }
 #endif // __WASM_PORT__ (Connect)
 
@@ -374,6 +390,8 @@ void NetworkClient::Disconnect() {
     // supports it or send it to one that does not.
     serverProtoMinor = -1;
     platformReported = false;
+    authSent = false;
+    accountId.clear();
     platformByNick.clear();
     tournaments.Reset();
     tournamentReceivedAt.clear();
@@ -477,6 +495,7 @@ bool NetworkClient::SendNick(const char* nickname) {
     // first accepted NICK, and reads platform_tag[fd] while doing so. Sending
     // this second would mean every alert reported no platform even though the
     // tag arrived milliseconds later.
+    MaybeSendAuth();
     MaybeSendPlatform();
 
     // Pending state is set BEFORE SendCommand(), not after. This ordering
@@ -1111,6 +1130,14 @@ void NetworkClient::MaybeSendPlatform() {
     SendCommand(cmd);
 }
 
+void NetworkClient::MaybeSendAuth() {
+    if (authSent || serverProtoMinor < 6) return;
+    authSent = true;
+    const std::string key = playeraccount::PublicKeyHex();
+    if (key.empty()) return;  // no randomness for a code: play signed out
+    SendCommand(("AUTH " + key).c_str());
+}
+
 void NetworkClient::ParseMessage(const char* message) {
     if (strlen(message) == 0) return;
 
@@ -1123,6 +1150,7 @@ void NetworkClient::ParseMessage(const char* message) {
         int major = 0, minor = 0;
         if (sscanf(message, "FB/%d.%d", &major, &minor) == 2 && major == PROTO_MAJOR) {
             serverProtoMinor = minor;
+            MaybeSendAuth();
             MaybeSendPlatform();
         }
     }
@@ -1147,6 +1175,29 @@ void NetworkClient::HandleServerResponse(const std::string& response) {
         const auto colon = response.find(": ");
         if (colon != std::string::npos && weekly.Parse(response.substr(colon + 2)))
             weeklyLoaded = true;
+        return;
+    }
+
+    // Account sign-in (protocol 1.6). Before the generic "OK" handling
+    // below, which would otherwise credit "AUTHSIG: OK" to a pending NICK.
+    if (IsResponseForCommand(response, "AUTH")) {
+        const auto at = response.find("CHALLENGE ");
+        if (at != std::string::npos) {
+            const std::string sig = playeraccount::SignChallenge(response.substr(at + 10, 64));
+            if (!sig.empty()) SendCommand(("AUTHSIG " + sig).c_str());
+        } else {
+            SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "AUTH refused: %s", response.c_str());
+        }
+        return;
+    }
+    if (IsResponseForCommand(response, "AUTHSIG")) {
+        const auto at = response.find("AUTHSIG: OK ");
+        if (at != std::string::npos) {
+            accountId = response.substr(at + 12, 16);
+            SDL_Log("Signed in to account %s", accountId.c_str());
+        } else {
+            SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "AUTHSIG refused: %s", response.c_str());
+        }
         return;
     }
 

@@ -29,9 +29,10 @@
 
 typedef struct {
         int counts[3];  /* indexed by enum weekly_category */
+        char nick[16];  /* the name this account last played a counted round as */
 } WeeklyLine;
 
-static GHashTable* table = NULL;   /* nick -> WeeklyLine* */
+static GHashTable* table = NULL;   /* account id -> WeeklyLine* */
 static char* file_path = NULL;
 static long week_start_day = 0;    /* UTC day index of this week's Monday */
 static long last_posted_day = -1;  /* UTC day index of the last LEADERBOARD */
@@ -83,14 +84,22 @@ int weekly_is_default_nick(const char* nick)
         return 0;
 }
 
-static WeeklyLine* line_for(const char* nick)
+static WeeklyLine* line_for(const char* id, const char* nick)
 {
-        WeeklyLine* wl = g_hash_table_lookup(table, nick);
+        WeeklyLine* wl = g_hash_table_lookup(table, id);
         if (!wl) {
                 wl = g_new0(WeeklyLine, 1);
-                g_hash_table_insert(table, g_strdup(nick), wl);
+                g_hash_table_insert(table, g_strdup(id), wl);
         }
+        snprintf(wl->nick, sizeof(wl->nick), "%s", nick);
         return wl;
+}
+
+/* A round is only counted for a connection that proved an account (AUTH,
+ * game.c) and did not play under one of the default names. */
+static int countable(const char* id, const char* nick)
+{
+        return table && id && *id && nick && *nick && !weekly_is_default_nick(nick);
 }
 
 void weekly_init(void)
@@ -118,25 +127,31 @@ void weekly_init(void)
         f = fopen(file_path, "r");
         if (!f)
                 return;
-        /* Header: "v1 <week_start_day> <last_posted_day>", then one
-         * "<nick> <wins> <losses> <popped>" per line. Nicks passed
-         * is_nick_ok() ([A-Za-z0-9_-]), so they never contain a space. */
+        /* Header: "v2 <week_start_day> <last_posted_day>", then one
+         * "<account_id> <nick> <wins> <losses> <popped>" per line. Ids are
+         * hex and nicks passed is_nick_ok() ([A-Za-z0-9_-]), so neither
+         * contains a space. A v1 file (keyed by nick, before accounts) keeps
+         * its week and last-posted day but not its lines: a nick-keyed line
+         * cannot be given to any one account. */
         if (fgets(buf, sizeof(buf), f)) {
                 long ws, lp;
-                if (sscanf(buf, "v1 %ld %ld", &ws, &lp) == 2) {
+                int ver = 0;
+                if (sscanf(buf, "v%d %ld %ld", &ver, &ws, &lp) == 3) {
                         week_start_day = ws;
                         last_posted_day = lp;
                 }
+                if (ver != 2) {
+                        fclose(f);
+                        l1(OUTPUT_TYPE_INFO, "Weekly stats file is v%d, pre-accounts; starting this week's lines empty", ver);
+                        return;
+                }
         }
         while (fgets(buf, sizeof(buf), f)) {
-                char nick[64];
+                char id[64], nick[64];
                 int w, l, p;
-                /* Drops default names a file written before they were
-                 * excluded still carries, so they leave this week's board
-                 * on the next restart rather than next Monday. */
-                if (sscanf(buf, "%63s %d %d %d", nick, &w, &l, &p) == 4 &&
-                    !weekly_is_default_nick(nick)) {
-                        WeeklyLine* wl = line_for(nick);
+                if (sscanf(buf, "%63s %63s %d %d %d", id, nick, &w, &l, &p) == 5 &&
+                    countable(id, nick)) {
+                        WeeklyLine* wl = line_for(id, nick);
                         wl->counts[WEEKLY_WINS] = w;
                         wl->counts[WEEKLY_LOSSES] = l;
                         wl->counts[WEEKLY_POPPED] = p;
@@ -164,11 +179,11 @@ void weekly_save(void)
                 g_free(tmp);
                 return;
         }
-        fprintf(f, "v1 %ld %ld\n", week_start_day, last_posted_day);
+        fprintf(f, "v2 %ld %ld\n", week_start_day, last_posted_day);
         g_hash_table_iter_init(&iter, table);
         while (g_hash_table_iter_next(&iter, &key, &value)) {
                 WeeklyLine* wl = value;
-                fprintf(f, "%s %d %d %d\n", (const char*)key, wl->counts[WEEKLY_WINS],
+                fprintf(f, "%s %s %d %d %d\n", (const char*)key, wl->nick, wl->counts[WEEKLY_WINS],
                         wl->counts[WEEKLY_LOSSES], wl->counts[WEEKLY_POPPED]);
         }
         if (fclose(f) != 0 || rename(tmp, file_path) != 0)
@@ -184,25 +199,25 @@ static void rollover_if_needed(void)
         weekly_tick(time(NULL));
 }
 
-void weekly_record_win(const char* nick)
+void weekly_record_win(const char* id, const char* nick)
 {
-        if (!table || !nick || !*nick || weekly_is_default_nick(nick)) return;
+        if (!countable(id, nick)) return;
         rollover_if_needed();
-        line_for(nick)->counts[WEEKLY_WINS]++;
+        line_for(id, nick)->counts[WEEKLY_WINS]++;
 }
 
-void weekly_record_loss(const char* nick)
+void weekly_record_loss(const char* id, const char* nick)
 {
-        if (!table || !nick || !*nick || weekly_is_default_nick(nick)) return;
+        if (!countable(id, nick)) return;
         rollover_if_needed();
-        line_for(nick)->counts[WEEKLY_LOSSES]++;
+        line_for(id, nick)->counts[WEEKLY_LOSSES]++;
 }
 
-void weekly_record_popped(const char* nick, int popped)
+void weekly_record_popped(const char* id, const char* nick, int popped)
 {
-        if (!table || !nick || !*nick || popped <= 0 || weekly_is_default_nick(nick)) return;
+        if (!countable(id, nick) || popped <= 0) return;
         rollover_if_needed();
-        line_for(nick)->counts[WEEKLY_POPPED] += popped;
+        line_for(id, nick)->counts[WEEKLY_POPPED] += popped;
 }
 
 /* Competition ranking ("1, 2, 2, 4"): 1 + how many players have strictly
@@ -221,13 +236,13 @@ static int rank_of(enum weekly_category cat, int count)
         return above + 1;
 }
 
-void weekly_player_csv(const char* nick, char* out, size_t outsz)
+void weekly_player_csv(const char* id, char* out, size_t outsz)
 {
         WeeklyLine* wl;
         out[0] = '\0';
-        if (!table || !nick) return;
+        if (!table || !id || !*id) return;
         rollover_if_needed();
-        wl = g_hash_table_lookup(table, nick);
+        wl = g_hash_table_lookup(table, id);
         if (!wl) return;
         snprintf(out, outsz, "%d,%d,%d,%d,%d,%d",
                  wl->counts[WEEKLY_WINS], wl->counts[WEEKLY_LOSSES], wl->counts[WEEKLY_POPPED],
@@ -236,16 +251,17 @@ void weekly_player_csv(const char* nick, char* out, size_t outsz)
                  rank_of(WEEKLY_POPPED, wl->counts[WEEKLY_POPPED]));
 }
 
-int weekly_rank(const char* nick, enum weekly_category cat)
+int weekly_rank(const char* id, enum weekly_category cat)
 {
         WeeklyLine* wl;
-        if (!table || !nick) return 0;
+        if (!table || !id || !*id) return 0;
         rollover_if_needed();
-        wl = g_hash_table_lookup(table, nick);
+        wl = g_hash_table_lookup(table, id);
         return wl ? rank_of(cat, wl->counts[cat]) : 0;
 }
 
 typedef struct {
+        const char* id;
         const char* nick;
         int count;
 } Entry;
@@ -254,8 +270,10 @@ static int entry_cmp(const void* a, const void* b)
 {
         const Entry* x = a;
         const Entry* y = b;
+        int c;
         if (x->count != y->count) return y->count - x->count;
-        return strcmp(x->nick, y->nick);
+        c = strcmp(x->nick, y->nick);
+        return c ? c : strcmp(x->id, y->id);
 }
 
 /* weekly_top_csv() without the rollover check, for weekly_tick()'s own
@@ -277,15 +295,17 @@ static void top_csv(enum weekly_category cat, int n, char* out, size_t outsz)
         while (g_hash_table_iter_next(&iter, &key, &value)) {
                 int c = ((WeeklyLine*)value)->counts[cat];
                 if (c > 0) {
-                        entries[used].nick = key;
+                        entries[used].id = key;
+                        entries[used].nick = ((WeeklyLine*)value)->nick;
                         entries[used].count = c;
                         used++;
                 }
         }
         qsort(entries, used, sizeof(Entry), entry_cmp);
         for (i = 0; i < used && (int)i < n; i++) {
-                int w = snprintf(out + len, outsz - len, "%s%s=%d",
-                                 i ? "," : "", entries[i].nick, entries[i].count);
+                int w = snprintf(out + len, outsz - len, "%s%s#%.*s=%d",
+                                 i ? "," : "", entries[i].nick,
+                                 WEEKLY_TAG_LEN, entries[i].id, entries[i].count);
                 if (w < 0 || (size_t)w >= outsz - len) {
                         /* Out of room: drop the partial entry rather than
                          * hand a truncated "nick=12" to anyone parsing it. */

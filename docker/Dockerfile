@@ -13,6 +13,9 @@ COPY server/ ./
 # ../CMakeLists.txt relative to /src — i.e. /CMakeLists.txt. Copy it in so the
 # binary gets the real version instead of the 0.0.0-unknown fallback.
 COPY CMakeLists.txt /CMakeLists.txt
+# Monocypher, for account signatures (server/account.c), is shared with the
+# game under third_party/ -- ../third_party relative to /src.
+COPY third_party/monocypher/ /third_party/monocypher/
 RUN cmake -B /build -G Ninja -DCMAKE_BUILD_TYPE=Release . \
     && cmake --build /build --parallel
 

@@ -70,7 +70,10 @@ void MainMenu::WeeklyPanelRender() {
         snprintf(sub, sizeof(sub), "Week of %s  ·  resets Monday 00:00 UTC  ·  bots not counted", day);
         text(sub, 18, 40, menulist::kMuted);
 
-        const std::string me = net->GetPlayerNick();
+        // A 1.6 server lists signed-in accounts as "nick#tag"; an older one,
+        // or a connection that isn't signed in, lists bare nicks.
+        const std::string me = net->accountId.empty()
+            ? net->GetPlayerNick() : net->GetPlayerNick() + "#" + net->AccountTag();
         struct Column { const char* title; const std::vector<std::pair<std::string, int>>* list; };
         const Column cols[3] = {{"Round wins", &b.wins}, {"Round losses", &b.losses},
                                 {"Bubbles popped", &b.popped}};
