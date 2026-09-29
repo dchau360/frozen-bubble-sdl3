@@ -7,7 +7,7 @@ A C++ / SDL3 port of the classic [Frozen Bubble 2](http://www.frozen-bubble.org/
 
 The original was written in Perl; this is a full rewrite in C++. Core gameplay and the network protocol are faithfully reproduced, but edge-case mechanics may still differ — bug reports are welcome via [GitHub Issues](https://github.com/dchau360/frozen-bubble-sdl3/issues).
 
-**▶ [Play in your browser](https://dchau360.itch.io/frozenbubble2)** (no install, works on phones) · **[Download](#download)** for Linux, macOS, Windows, Android · **[Join the Discord](https://discord.gg/uE4dq8fqGW)** to find opponents. Online rooms hold up to 20 players.
+**▶ [Play in your browser](https://dchau360.itch.io/frozenbubble2)** (no install, works on phones) · **[Get it on Google Play](https://play.google.com/store/apps/details?id=org.frozenbubble)** · **[Download](#download)** for Linux, macOS, Windows, Android · **[Join the Discord](https://discord.gg/uE4dq8fqGW)** to find opponents. Online rooms hold up to 20 players.
 
 <p align="center">
   <img src="docs/screenshots/net-5player.png" width="640" alt="A five-player online match: your board in the middle, four opponents around it">
@@ -132,7 +132,7 @@ The game fetches this list automatically on startup. Submit a PR there to add yo
 
 ## Android TV
 
-Sideload with the **Downloader** app from the Amazon Appstore: enter code **1308098** (or the URL `http://aftv.news/1308098`) and follow the prompts.
+On phones, tablets and Google TV, install from [Google Play](https://play.google.com/store/apps/details?id=org.frozenbubble). On a Fire TV, sideload with the **Downloader** app from the Amazon Appstore: enter code **1308098** (or the URL `http://aftv.news/1308098`) and follow the prompts.
 
 **Entering text** (IP address, nickname): when a field is active the on-screen keyboard appears. If **Delete/Clear** doesn't respond straight away, press any letter key first — the field is then active, and Delete will erase both it and the existing text.
 
@@ -158,14 +158,14 @@ Or right-click the app → **Open** → **Open** to bypass Gatekeeper once.
 
 ## Download
 
-Latest builds are on the [releases page](https://github.com/dchau360/frozen-bubble-sdl3/releases/latest). [itch.io](https://dchau360.itch.io/frozenbubble2) hosts the browser version.
+Latest builds are on the [releases page](https://github.com/dchau360/frozen-bubble-sdl3/releases/latest). Android is also on [Google Play](https://play.google.com/store/apps/details?id=org.frozenbubble). [itch.io](https://dchau360.itch.io/frozenbubble2) hosts the browser version.
 
 | Platform | Download | Notes |
 |---|---|---|
 | **Linux** | `frozen-bubble-linux-x86_64.AppImage` | `chmod +x` and run |
 | **macOS** | `frozen-bubble-macos-arm64.dmg` | **Apple Silicon only** — see [macOS notes](#macos-notes) |
 | **Windows** | `frozen-bubble-windows-setup.exe` | Unsigned; SmartScreen will warn |
-| **Android** | `frozen-bubble-android-tv.apk` | Same APK for TV boxes and phones/tablets — see [Android](#android-tv) |
+| **Android** | [Google Play](https://play.google.com/store/apps/details?id=org.frozenbubble), or `frozen-bubble-android-tv.apk` | Same APK for TV boxes and phones/tablets — see [Android](#android-tv) |
 | **Browser** | [Play on itch.io](https://dchau360.itch.io/frozenbubble2) | Works on desktop and mobile, including iPhone |
 
 **iOS** has no download: the build exists but is experimental and unsigned, so it
