@@ -390,35 +390,11 @@ void MainMenu::press() {
             localMPCR = true;
             runDelay = false;
         }
-        else if (activeSPIdx == kSPRowArcadeMode) {
-            GameSettings* gsArcade = GameSettings::Instance();
-            if (gsArcade->arcadeModeEnabled()) {
-                // Turning it OFF is always safe -- no confirmation needed.
-                gsArcade->SetValue("Game:ArcadeMode", "");
-                AudioMixer::Instance()->PlaySFX("menu_change");
-            } else {
-                // Turning it ON needs the player to see what that changes
-                // first -- SPPanelRender draws the popup, and KeysPanelKey
-                // (mainmenu_input.cpp) actually flips the setting once they
-                // confirm.
-                showingArcadeModeConfirm = true;
-                AudioMixer::Instance()->PlaySFX("menu_selected");
-            }
-        }
-        else if (activeSPIdx == kSPRowUploadStats) {
-            GameSettings* gsStats = GameSettings::Instance();
-            if (gsStats->uploadHighscoreStatsEnabled()) {
-                // Turning it OFF is always safe -- no confirmation needed.
-                gsStats->SetValue("Stats:UploadHighscore", "");
-                AudioMixer::Instance()->PlaySFX("menu_change");
-            } else {
-                // Turning it ON needs the player to see what that starts
-                // sending first -- SPPanelRender draws the popup, and
-                // KeysPanelKey (mainmenu_input.cpp) actually flips the
-                // setting once they confirm.
-                showingStatsUploadConfirm = true;
-                AudioMixer::Instance()->PlaySFX("menu_selected");
-            }
+        else if (activeSPIdx == kSPRowWorldScores) {
+            // Either direction is a plain flip: the setting only stops or
+            // resumes sending, and the privacy policy is where it is described.
+            GameSettings::Instance()->SetValue("Stats:WorldHighscores", "");
+            AudioMixer::Instance()->PlaySFX("menu_change");
         }
         return;
     }

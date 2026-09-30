@@ -222,6 +222,14 @@ std::string PublicKeyHex() {
     return keysReady ? ToHex(publicKey, sizeof(publicKey)) : "";
 }
 
+std::string AccountIdHex() {
+    DeriveKeys();
+    if (!keysReady) return "";
+    uint8_t id[8];
+    crypto_blake2b(id, sizeof(id), publicKey, sizeof(publicKey));
+    return ToHex(id, sizeof(id));
+}
+
 std::string SignChallenge(const std::string& nonceHex) {
     uint8_t nonce[32];
     if (!FromHex(nonceHex, nonce, sizeof(nonce))) return "";

@@ -198,14 +198,10 @@ public:
     bool colorBlind() { return colorblindBubbles; }
     bool showFpsOverlay() { return showFps; }
 
-    // Off by default: uploads a player's classic-solo-mode result (name/nick,
-    // a per-device random id, score, level, play time) to the community
-    // leaderboard at petitain.be whenever a classic single-player run ends in
-    // a loss. Nothing is sent unless this is explicitly turned on -- see the
-    // confirmation popup in mainmenu_panels.cpp's KeysPanelRender, which is
-    // the only place that is allowed to turn it on, and sendGameStats.cpp for
-    // exactly what goes out.
-    bool uploadHighscoreStatsEnabled() { return uploadHighscoreStats; }
+    // On by default: sends this device's best classic single-player runs to
+    // the world board (worldscores.h) under the player's anonymous account.
+    // Off, nothing is sent; the board can still be viewed.
+    bool worldHighscoresEnabled() { return worldHighscores; }
 
     // Off by default. When on, dying in classic 1-player play (default
     // levelset or a custom start level -- not random levels, training, or any
@@ -213,7 +209,6 @@ public:
     // of just resetting score and retrying the level just lost on. See the
     // gameLost branch in bubblegame_input.cpp and the SP-panel toggle in
     // mainmenu_panels.cpp's SPPanelRender.
-    bool arcadeModeEnabled() { return arcadeMode; }
 
     // Replay library keep count: how many completed rounds the on-disk rolling
     // library retains, 0 meaning "do not record" (default 5). ReadSettings()
@@ -356,8 +351,7 @@ private:
     bool useFullscreen = false, colorblindBubbles = false;
     bool playMusic = true, playSfx = true, classicSound = false;
     bool showFps = false;
-    bool uploadHighscoreStats = false;
-    bool arcadeMode = false;
+    bool worldHighscores = true;
     // Replay library keep count. In-class default so a harness or a failed load
     // that never reached ReadSettings() still reads a valid count -- same reason
     // as gfxQuality above. Named ...Value because the getter takes the obvious

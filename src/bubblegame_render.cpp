@@ -1434,6 +1434,7 @@ void BubbleGame::Draw() {
                 finalScoreText.UpdateText(renderer, finalScore, 0);
                 finalScoreText.UpdatePosition({SCREEN_CENTER_X - (finalScoreText.Coords()->w / 2), panelRct.y + panelRct.h - 40});
                 { SDL_FRect fr = ToFRect(*finalScoreText.Coords()); SDL_RenderTexture(rend, finalScoreText.Texture(), nullptr, &fr); }
+                if (continuePrompt) RenderContinuePrompt(rend);
             }
             else if (gameWon) {
                 { SDL_FRect fr = ToFRect(panelRct); SDL_RenderTexture(rend, soloStatePanels[1], nullptr, &fr); }

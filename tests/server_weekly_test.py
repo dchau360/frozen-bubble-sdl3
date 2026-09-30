@@ -122,6 +122,8 @@ class WeeklyTestBase(unittest.TestCase):
         env["FB_SERVER_DISCORD_RELAY"] = f"127.0.0.1:{self.relay.getsockname()[1]}"
         env["FB_SERVER_STATS_FILE"] = str(Path(self.tmpdir.name) / "stats.dat")
         env["FB_SERVER_WEEKLY_FILE"] = str(self.weekly_file)
+        # Never the real ~/.fb-server/hiscores.dat (server/hiscores.c).
+        env["FB_SERVER_HISCORE_FILE"] = str(Path(self.tmpdir.name) / "hiscores.dat")
         self.server = subprocess.Popen(
             [str(self.server_path), "-p", str(self.PORT), "-q", "-z", "-d"],
             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, env=env)

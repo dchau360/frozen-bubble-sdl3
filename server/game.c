@@ -45,6 +45,7 @@
 #include "game.h"
 #include "stats.h"
 #include "weeklystats.h"
+#include "hiscores.h"
 #include "discordalert.h"
 #include "tournament.h"
 
@@ -502,6 +503,63 @@ static void weekly_command(int fd, char* msg_orig)
                          wins[0] ? wins : "-", losses[0] ? losses : "-",
                          popped[0] ? popped : "-", me[0] ? me : "-",
                          lobby[0] ? lobby : "-");
+        send_line_log(fd, line, msg_orig);
+        free(line);
+}
+
+/* HISCORE / HISCORES (protocol 1.7): the world board for classic
+ * single-player runs -- see hiscores.h. The game opens its own short
+ * connection for these (AUTH, AUTHSIG, then these, then close), never NICKs,
+ * so it never shows up in the lobby or fires a join alert.
+ *
+ *   HISCORE <board> <level> <time_ms> <points> <nick>
+ *     -> HISCORE: OK <alltime_rank> <week_rank> | NOT_SIGNED_IN | INVALID
+ *   HISCORES <board>
+ *     -> HISCORES: <week_start> <alltime> <week> <me>
+ *
+ * board is 0/1 furthest level (keyboard-gamepad/mouse-touch), 2/3 most
+ * points (same tracks); points is 0 on 0/1. Each list is hiscore_top_csv()'s
+ * "nick#tag=level/time_ms/points,..." or "-"; me is hiscore_player_csv()'s
+ * "arank,alevel,atime,apoints,wrank,wlevel,wtime,wpoints" or "-".
+ * No ':' after the prefix, for the same reason as WEEKLY above. The nick is
+ * checked with is_nick_ok() like any other, since it is listed publicly. */
+#define HISCORE_TOP_N 10
+static int is_nick_ok(char* nick);
+static void hiscore_command(int fd, char* args, char* msg_orig)
+{
+        int board, level, time_ms, points;
+        char name[32];
+        char* line;
+        const char* id = account_id(fd);
+        if (!id || !*id) {
+                send_line_log(fd, "NOT_SIGNED_IN", msg_orig);
+                return;
+        }
+        if (!args || sscanf(args, "%d %d %d %d %31s", &board, &level, &time_ms, &points, name) != 5
+            || !is_nick_ok(name) || !hiscore_submit(id, name, board, level, time_ms, points)) {
+                send_line_log(fd, "INVALID", msg_orig);
+                return;
+        }
+        line = asprintf_("OK %d %d", hiscore_rank(id, board, HISCORE_ALLTIME),
+                         hiscore_rank(id, board, HISCORE_WEEK));
+        send_line_log(fd, line, msg_orig);
+        free(line);
+}
+
+static void hiscores_command(int fd, char* args, char* msg_orig)
+{
+        char alltime[1024], week[1024], me[128];
+        char* line;
+        int board;
+        if (!args || sscanf(args, "%d", &board) != 1 || board < 0 || board >= HISCORE_BOARDS) {
+                send_line_log(fd, "INVALID", msg_orig);
+                return;
+        }
+        hiscore_top_csv(board, HISCORE_ALLTIME, HISCORE_TOP_N, alltime, sizeof(alltime));
+        hiscore_top_csv(board, HISCORE_WEEK, HISCORE_TOP_N, week, sizeof(week));
+        hiscore_player_csv(account_id(fd), board, me, sizeof(me));
+        line = asprintf_("%ld %s %s %s", (long)hiscore_week_start(),
+                         alltime[0] ? alltime : "-", week[0] ? week : "-", me[0] ? me : "-");
         send_line_log(fd, line, msg_orig);
         free(line);
 }
@@ -1654,6 +1712,10 @@ int process_msg(int fd, char* msg)
                 send_line_log(fd, list_games_str, msg_orig);
         } else if (streq(current_command, "WEEKLY")) {
                 weekly_command(fd, msg_orig);
+        } else if (streq(current_command, "HISCORE")) {
+                hiscore_command(fd, args, msg_orig);
+        } else if (streq(current_command, "HISCORES")) {
+                hiscores_command(fd, args, msg_orig);
         } else if (streq(current_command, "STATUS")) {  // 1.0 command
                 if (!already_in_game(fd)) {
                         send_line_log(fd, wn_not_in_game, msg_orig);

@@ -47,10 +47,9 @@ enum KeyConfigRow {
     kKeyRowSpeed     = 5,
     kKeyRowSound     = 6,
     kKeyRowMouse     = 7,
-    // "Upload highscore stats" used to be row 8 here; it now lives in the
-    // 1-player submenu instead (see SPPanelRender/press() in mainmenu.cpp),
-    // alongside Arcade Mode -- both are about how a solo campaign run plays
-    // out, not general app settings. Rows below were renumbered down by one
+    // A highscore-upload toggle used to be row 8 here; its successor, World
+    // highscores, lives in the 1-player submenu instead (see SPPanelRender/press() in mainmenu.cpp),
+    // since it is about solo campaign runs, not general app settings. Rows below were renumbered down by one
     // to fill the gap.
     //
     // R4d put the Replays page here (kKeyRowReplays) for the same reason:

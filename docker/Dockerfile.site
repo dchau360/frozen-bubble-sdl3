@@ -25,6 +25,8 @@ COPY docs/PRIVACY_POLICY.md docs/PRIVACY_POLICY.md
 # place (that list) instead of two.
 COPY docs/screenshots/ docs/screenshots/
 COPY docs/store-assets/ docs/store-assets/
+# The one game asset the site serves (the world highscores page's font).
+COPY share/gfx/DroidSans.ttf share/gfx/DroidSans.ttf
 
 RUN python3 tools/build-site.py /out
 

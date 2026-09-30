@@ -42,7 +42,7 @@ class AccountTest(WeeklyTestBase):
         s = self.raw()
         nonce = self.challenge(s, "alice")
         got = self.ask(s, f"FB/1.3 AUTHSIG {self.acct.sign('alice', nonce)}", "AUTHSIG: ")
-        self.assertIn(f"FB/1.6 AUTHSIG: OK {self.acct.id('alice')}", got)
+        self.assertIn(f"FB/1.7 AUTHSIG: OK {self.acct.id('alice')}", got)
         got = self.ask(s, f"FB/1.3 AUTH {self.acct.pubkey('alice')}", "AUTH: ")
         self.assertIn("AUTH: ALREADY_AUTHENTICATED", got)
 

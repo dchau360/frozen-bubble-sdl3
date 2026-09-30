@@ -20,6 +20,11 @@ std::string Code();
 std::string PublicKeyHex();
 std::string SignChallenge(const std::string& nonceHex);
 
+// The account id a server reports after sign-in, worked out locally: the
+// first 8 bytes of BLAKE2b(public key) as 16 hex digits (server/account.c).
+// Lists show its first 4 digits after the nick, "bob#7f3a".
+std::string AccountIdHex();
+
 // Uppercases, drops spaces and dashes, and reads O as 0 and I/L as 1, the
 // usual Crockford leniency for a code someone types from a screen. Returns
 // "" unless the result is exactly 16 valid characters.

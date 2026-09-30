@@ -24,7 +24,8 @@
 #include "transitionmanager.h"
 #include "gamesettings.h"
 #include "platform.h"
-#include "sendGameStats.h"
+#include "worldscores.h"
+#include "menulist.h"
 
 #include <fstream>
 #include <sstream>
@@ -469,11 +470,100 @@ void BubbleGame::SubmitScore(BubbleArray &bArray) {
     HighscoreManager::InputMethod method =
         (scoringInputMethod == ScoringInputMethod::Mouse) ? HighscoreManager::InputMethod::Mouse
                                                             : HighscoreManager::InputMethod::Keyboard;
+    // The world board (worldscores.h) takes only runs from level 1 of the
+    // standard set -- a custom start level would put "level 60" on the board
+    // for a run that began at 50. Every level cleared updates the run's
+    // pending best; worldscores sends it once the player is out of the game.
+    if (runEligibleForWorld)
+        worldscores::RecordRun((int)method, curLevel, (int)(elapsedSeconds * 1000.0f));
+    RecordWorldLife(bArray);
+
     if (hm->CheckAndAddScore(curLevel, elapsedSeconds, method)) {
         pendingHighscore = true;
         SDL_Log("New high score! Level %d in %.1fs", curLevel, elapsedSeconds);
     }
     SDL_Log("SubmitScore: done");
+}
+
+bool BubbleGame::ArcadeContinueApplies() const {
+    // The classic solo campaign only (default levelset or a custom start
+    // level; not random levels, training or network): those other modes don't
+    // treat curLevel as campaign progress, so "start over" would not mean the
+    // same thing there.
+    return EffectsEnabled() && !currentSettings.networkGame && currentSettings.playerCount == 1 &&
+           !currentSettings.localMultiplayer && !currentSettings.randomLevels &&
+           !currentSettings.mpTraining;
+}
+
+void BubbleGame::ResolveContinuePrompt(bool startOver) {
+    continuePrompt = false;
+    bubbleArrays[0].score = 0;
+    PlaySFX("menu_selected");
+    if (startOver) {
+        // A new run from level 1: its own clock, and eligible for the world
+        // board even if the game was first started from a later level.
+        curLevel = 1;
+        FrozenBubble::Instance()->startTime = SDL_GetTicks();
+        runEligibleForWorld = true;
+    }
+    // Continue leaves startTime alone: the run's clock keeps counting.
+    ReloadGame(curLevel);
+}
+
+void BubbleGame::RenderContinuePrompt(SDL_Renderer *rend) {
+    // Under the game-over panel (panelRct), over the lower board.
+    const SDL_Rect box = {SCREEN_CENTER_X - 160, panelRct.y + panelRct.h + 8, 320, 104};
+    SDL_SetRenderDrawBlendMode(rend, SDL_BLENDMODE_BLEND);
+    SDL_SetRenderDrawColor(rend, menulist::kHeaderFill.r, menulist::kHeaderFill.g, menulist::kHeaderFill.b, 240);
+    { SDL_FRect fr = ToFRect(box); SDL_RenderFillRect(rend, &fr); }
+    SDL_SetRenderDrawColor(rend, menulist::kEdge.r, menulist::kEdge.g, menulist::kEdge.b, menulist::kEdge.a);
+    { SDL_FRect fr = ToFRect(box); SDL_RenderRect(rend, &fr); }
+
+    auto centered = [&](const char* str, int y, SDL_Color color, int size, int style) {
+        continueText.UpdateStyle(size, style);
+        continueText.UpdateColor(color, menulist::kTextShadow);
+        continueText.UpdateText(rend, str, 0);
+        continueText.UpdatePosition({box.x + box.w / 2 - continueText.Coords()->w / 2, y});
+        SDL_FRect fr = ToFRect(*continueText.Coords());
+        SDL_RenderTexture(rend, continueText.Texture(), nullptr, &fr);
+    };
+    centered("CONTINUE?", box.y + 8, menulist::kGold, 16, TTF_STYLE_BOLD);
+    centered("Score goes back to 0; the clock keeps running.", box.y + 32, menulist::kMuted, 12, TTF_STYLE_NORMAL);
+
+    continueBtnRect = {box.x + 16, box.y + box.h - 38, 136, 28};
+    startOverBtnRect = {box.x + box.w - 16 - 136, box.y + box.h - 38, 136, 28};
+    auto button = [&](const SDL_Rect& r, const char* label, bool focused) {
+        SDL_SetRenderDrawColor(rend, 10, 38, 48, 220);
+        { SDL_FRect fr = ToFRect(r); SDL_RenderFillRect(rend, &fr); }
+        const SDL_Color edge = focused ? menulist::kGold : menulist::kMuted;
+        SDL_SetRenderDrawColor(rend, edge.r, edge.g, edge.b, 255);
+        { SDL_FRect fr = ToFRect(r); SDL_RenderRect(rend, &fr); }
+        if (focused) {
+            SDL_Rect inner = {r.x + 1, r.y + 1, r.w - 2, r.h - 2};
+            SDL_FRect fr = ToFRect(inner);
+            SDL_RenderRect(rend, &fr);
+        }
+        continueText.UpdateStyle(14, TTF_STYLE_BOLD);
+        continueText.UpdateColor(focused ? menulist::kGold : menulist::kText, menulist::kTextShadow);
+        continueText.UpdateText(rend, label, 0);
+        continueText.UpdatePosition({r.x + r.w / 2 - continueText.Coords()->w / 2,
+                                     r.y + r.h / 2 - continueText.Coords()->h / 2});
+        SDL_FRect fr = ToFRect(*continueText.Coords());
+        SDL_RenderTexture(rend, continueText.Texture(), nullptr, &fr);
+    };
+    button(continueBtnRect, "CONTINUE", !continueFocusStartOver);
+    button(startOverBtnRect, "START OVER", continueFocusStartOver);
+}
+
+void BubbleGame::RecordWorldLife(const BubbleArray &bArray) {
+    // Same gates as SubmitScore()'s world-board run: live play, a classic run
+    // from level 1, one input method throughout.
+    if (!EffectsEnabled() || !runEligibleForWorld || scoringDisqualified) return;
+    const int track = scoringInputMethod == ScoringInputMethod::Mouse
+                          ? (int)HighscoreManager::InputMethod::Mouse
+                          : (int)HighscoreManager::InputMethod::Keyboard;
+    const Uint64 elapsedMs = SDL_GetTicks() - FrozenBubble::Instance()->startTime;
+    worldscores::RecordLife(track, bArray.score, curLevel, (int)elapsedMs);
 }
 
 // Count living players (original: sub living_players() at line 600)
@@ -1051,29 +1141,9 @@ void BubbleGame::CheckGameState(BubbleArray &bArray, bool countForRoot) {
             gameFinish = true;
             gameLost = true;
             roundWinnerIdx = -1;
-
-            // Opt-in highscore-stats upload -- off by default, see
-            // GameSettings::uploadHighscoreStatsEnabled() and the
-            // confirmation popup in mainmenu_panels.cpp that is the only way
-            // to turn it on. Classic solo campaign only (not network play,
-            // not local multiplayer, not the random-levels mode).
-            //
-            // Deliberately reads bArray.score/curLevel here and does not
-            // reset either: the render path still needs bArray.score to draw
-            // "Final Score: %d" on the game-over panel after this frame, and
-            // curLevel already means "the level just lost on" everywhere else
-            // that reads it (the ReloadGame(curLevel) retry call in
-            // bubblegame_input.cpp, in particular) -- zeroing it here would
-            // send every retry back to level 1 regardless of how far the
-            // player had actually gotten.
-            bool isDefaultClassic = !currentSettings.networkGame &&
-                                     currentSettings.playerCount == 1 &&
-                                     !currentSettings.randomLevels;
-            if (EffectsEnabled() && isDefaultClassic && GameSettings::Instance()->uploadHighscoreStatsEnabled()) {
-                const std::string playerName = GameSettings::Instance()->savedNickname;
-                const int playTimeSeconds = (int)((SDL_GetTicks() - gameStartTime) / 1000);
-                sendGameStats(bArray.score, curLevel, playTimeSeconds, playerName);
-            }
+            // The life ends here; its score is zeroed once the player moves
+            // on from the game-over panel (bubblegame_input.cpp).
+            RecordWorldLife(bArray);
         }
     }
 }

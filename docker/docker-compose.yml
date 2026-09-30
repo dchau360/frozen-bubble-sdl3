@@ -52,6 +52,12 @@ services:
       # the container and silently wiped on every `up --build`.
       - FB_SERVER_WEEKLY_FILE=/var/lib/fb-server/weekly.dat
       - FB_SERVER_STATS_FILE=/var/lib/fb-server/stats.dat
+      # World highscore board for single-player runs (protocol 1.7,
+      # server/hiscores.h): each account's best, all-time and this week.
+      # Only the server the game is built to send to (kWorldScoresHost in
+      # src/platform.cpp) ever receives runs; any other server just keeps an
+      # empty board.
+      - FB_SERVER_HISCORE_FILE=/var/lib/fb-server/hiscores.dat
     volumes:
       - fb-data:/var/lib/fb-server
     depends_on:

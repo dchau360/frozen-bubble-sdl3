@@ -635,6 +635,24 @@ public:
     enum class ScoringInputMethod { Unset, Keyboard, Mouse };
     ScoringInputMethod scoringInputMethod = ScoringInputMethod::Unset;
     bool scoringDisqualified = false;
+    // Whether this session's cleared levels go to the world board
+    // (worldscores.h): classic solo, standard levelset, started at level 1.
+    // Set once in NewGame(); a retry (ReloadGame) keeps the same run going.
+    bool runEligibleForWorld = false;
+
+    // The CONTINUE? prompt: after a death in a classic solo game, the first ENTER / tap
+    // on the game-over panel opens it instead of retrying straight away.
+    // Continue retries the level died on -- the score is already back to 0
+    // (a new life) and the run clock keeps going; Start over goes back to
+    // level 1 as a new run, clock and all. LEFT/RIGHT/TAB move focus between
+    // the two buttons, ENTER / A / fire activates the focused one, a tap on
+    // either button picks it (HandleFinishedTap), ESC still leaves the game.
+    bool continuePrompt = false;
+    bool continueFocusStartOver = false;
+    SDL_Rect continueBtnRect{}, startOverBtnRect{};
+    bool ArcadeContinueApplies() const;
+    void ResolveContinuePrompt(bool startOver);
+    void RenderContinuePrompt(SDL_Renderer *rend);
 
     bool IsGameFinished() const { return gameFinish; }
     // The inbound gameplay payloads applied during the most recent step, in
@@ -872,7 +890,7 @@ private:
     std::unique_ptr<TTF_Font, FontCloser> statsPanelFont14;
     std::unique_ptr<TTF_Font, FontCloser> statsPanelFont16;
 
-    TTFText inGameText, winsP1Text, winsP2Text, comboText, finalScoreText, mpTrainText;
+    TTFText inGameText, winsP1Text, winsP2Text, comboText, finalScoreText, mpTrainText, continueText;
     // Round-end winner banner, shown for every mode ("Board Cleared! <Name>
     // Wins!" / "First to Pop! <Name> Wins!" / "Time's Up! <Name> Wins!" /
     // plain "<Name> Wins!" for an ordinary elimination win).
@@ -1079,6 +1097,9 @@ private:
     bool SyncNetworkLevel();  // Synchronize level for network multiplayer; returns false on sync failure
     void ReloadGame(int level);
     void SubmitScore(BubbleArray &bArray);
+    // The world board's most-points entry for this life so far (see
+    // worldscores::RecordLife); called at every level cleared and at a death.
+    void RecordWorldLife(const BubbleArray &bArray);
 
     // >5-player battle royale view paging: assigns BubbleArray::boardVisible for the
     // current netViewPage. <=5-player games always show every board (page 0, all visible).

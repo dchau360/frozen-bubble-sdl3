@@ -34,6 +34,17 @@ PAGES = [
     (os.path.join(ROOT, "docs", "PRIVACY_POLICY.md"),
      os.path.join("privacy", "index.html"),
      "Privacy Policy — Frozen Bubble: SDL3"),
+    # The world highscore board. Static like everything else here: the page's
+    # own script asks the world-board server (fb.servequake.com) over a
+    # WebSocket (see site/scores.md), so nothing on this site has to know the
+    # scores and every origin that serves it shows the same live board. The
+    # game's "Open in browser" button points here (kWorldScoresUrl). It has
+    # its own template, dressed as the game's High Scores screen, rather than
+    # the plain document look the other two pages share.
+    (os.path.join(SITE, "scores.md"),
+     os.path.join("scores", "index.html"),
+     "World highscores — Frozen Bubble: SDL3",
+     "template-scores.html"),
 ]
 
 # (source path, path within the site)
@@ -56,6 +67,18 @@ ASSETS = [
     # than hotlinked so opening the page makes no request to Google.
     (os.path.join(SITE, "img", "google-play-badge.png"),
      os.path.join("img", "google-play-badge.png")),
+    # The world highscores page wears the game's own High Scores screen:
+    # pieces cut from share/gfx/back_hiscores.png (the logo on its wood
+    # strip, a plain stretch of that wood, and the artwork inside the frame)
+    # and the font that screen is drawn in, served from here like the badge.
+    (os.path.join(SITE, "img", "scores-header.png"),
+     os.path.join("img", "scores-header.png")),
+    (os.path.join(SITE, "img", "scores-wood.png"),
+     os.path.join("img", "scores-wood.png")),
+    (os.path.join(SITE, "img", "scores-back.jpg"),
+     os.path.join("img", "scores-back.jpg")),
+    (os.path.join(ROOT, "share", "gfx", "DroidSans.ttf"),
+     os.path.join("fonts", "DroidSans.ttf")),
 ]
 
 # Copied through verbatim. The Google verification token must keep its exact
@@ -91,9 +114,13 @@ def main():
     out = sys.argv[1]
     os.makedirs(out, exist_ok=True)
 
-    template = open(os.path.join(SITE, "template.html"), encoding="utf-8").read()
+    templates = {}
 
-    for src, dest, title in PAGES:
+    for src, dest, title, *rest in PAGES:
+        template_name = rest[0] if rest else "template.html"
+        if template_name not in templates:
+            templates[template_name] = open(os.path.join(SITE, template_name), encoding="utf-8").read()
+        template = templates[template_name]
         text = open(src, encoding="utf-8").read()
         # The first heading becomes the page's <h1>, which the template does
         # not supply -- so the markdown's own "# ..." line is kept, not stripped.

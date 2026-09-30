@@ -156,6 +156,7 @@ BubbleGame::BubbleGame(const SDL_Renderer *renderer)
     clearWinText.UpdateRing({0, 0, 0, 255}, 3); // Thick black ring: readable over any board
 
     finalScoreText.LoadFont(ASSET("/gfx/DroidSans.ttf").c_str(), 28);
+    continueText.LoadFont(ASSET("/gfx/DroidSans.ttf").c_str(), 14);
     finalScoreText.UpdateAlignment(TTF_HORIZONTAL_ALIGN_CENTER);
     finalScoreText.UpdateColor({255, 255, 255, 255}, {0, 0, 0, 255});
 
@@ -413,6 +414,7 @@ void BubbleGame::NewGame(SetupSettings setup) {
 
     // Reset game state flags
     gameFinish = gameWon = gameLost = gameMatchOver = false;
+    continuePrompt = false;
     wonByClearing = false;
     roundWinnerIdx = -1;
     gameMpDone = false;
@@ -437,6 +439,8 @@ void BubbleGame::NewGame(SetupSettings setup) {
     for (int i = 0; i < currentSettings.playerCount; i++) ResetRoundInputState(bubbleArrays[i]);
     pendingHighscore = false;
     curLevel = setup.startLevel;
+    runEligibleForWorld = !setup.networkGame && setup.playerCount == 1 && !setup.randomLevels &&
+                          !setup.mpTraining && !setup.localMultiplayer && setup.startLevel == 1;
     connectedPlayerCount = setup.playerCount;  // Reset connected count for new game
     gameStartTime = SDL_GetTicks();
     // One gameplay RNG stream for the whole match; seeded here and left

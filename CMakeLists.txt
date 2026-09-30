@@ -328,6 +328,10 @@ if(BUILD_TESTING AND NOT EMSCRIPTEN AND NOT ANDROID AND NOT IOS)
     target_include_directories(weeklyboard-parse-test PRIVATE src)
     target_compile_features(weeklyboard-parse-test PRIVATE cxx_std_17)
     add_test(NAME weeklyboard-parse-test COMMAND weeklyboard-parse-test)
+    add_executable(worldboard-parse-test tests/worldboard_parse_test.cpp src/worldboard.cpp)
+    target_include_directories(worldboard-parse-test PRIVATE src)
+    target_compile_features(worldboard-parse-test PRIVATE cxx_std_17)
+    add_test(NAME worldboard-parse-test COMMAND worldboard-parse-test)
     if(TARGET fb-server)
         add_test(NAME server-tournament-test COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tests/server_tournament_test.py $<TARGET_FILE:fb-server>)
         set_tests_properties(server-tournament-test PROPERTIES TIMEOUT 180)
@@ -655,10 +659,24 @@ if(BUILD_TESTING AND NOT EMSCRIPTEN AND NOT ANDROID AND NOT IOS)
         add_test(NAME account-signin-live-test
             COMMAND account-signin-live-test $<TARGET_FILE:fb-server>)
         set_tests_properties(account-signin-live-test PROPERTIES SKIP_RETURN_CODE 77)
+        # The game's worldscores module sending a run and reading the world
+        # board back from a live fb-server.
+        add_executable(worldscores-live-test tests/worldscores_live_test.cpp)
+        target_link_libraries(worldscores-live-test PRIVATE frozen-bubble-core-test)
+        target_compile_features(worldscores-live-test PRIVATE cxx_std_17)
+        add_test(NAME worldscores-live-test
+            COMMAND worldscores-live-test $<TARGET_FILE:fb-server>)
+        set_tests_properties(worldscores-live-test PROPERTIES SKIP_RETURN_CODE 77)
         # Account sign-in (server/account.c): AUTH/AUTHSIG, a replayed or
         # forged signature, and the Discord join alert waiting for AUTHSIG.
         add_test(NAME server-account-test
             COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tests/server_account_test.py $<TARGET_FILE:fb-server>
+                    $<TARGET_FILE:account-sign-tool>)
+        # World board for single-player runs (server/hiscores.c): HISCORE
+        # needs an account and range-checks, bests per track all-time and
+        # this week, HISCORES lists, restart and week rollover.
+        add_test(NAME server-hiscore-test
+            COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tests/server_hiscore_test.py $<TARGET_FILE:fb-server>
                     $<TARGET_FILE:account-sign-tool>)
         # Binds the hardcoded UDP discovery port, so it cannot run concurrently
         # with another fb-server; it skips when that port is already in use.

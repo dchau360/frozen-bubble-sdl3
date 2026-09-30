@@ -21,11 +21,11 @@ on your device and sent to whichever multiplayer server you connect to, so
 other players in your game can see it. It is not tied to any account and
 isn't sent anywhere else.
 
-**Anonymous player account.** The first time you play online, the app
-creates a random 16-character recovery code and saves it only on your
+**Anonymous player account.** The first time you play online, or use the
+world highscore board with World highscores on (below), the app creates a random 16-character recovery code and saves it only on your
 device. A cryptographic key derived from that code lets a server recognise
-you from one visit to the next, so your weekly ranking stays yours even if
-someone else uses the same nickname. Servers receive only the key's public
+you from one visit to the next, so your weekly ranking and world highscores
+stay yours even if someone else uses the same nickname. Servers receive only the key's public
 half and a one-off signature, never the code itself, and each server works
 out the same short account ID from the public key (the first four
 characters are shown after your nickname in rankings, like `bob#7f3a`). The
@@ -125,6 +125,23 @@ daily message lists the top 5 in each category. **Only nicknames, the short
 account tag, and those counts are included** — nothing else about you. Computer-controlled
 bots are never counted.
 
+**World highscores.** When you clear a level in a classic single-player
+game started from level 1, the app keeps your best run so far — the furthest
+level cleared, how long it took, and whether you played with
+keyboard/gamepad or mouse/touch — and your best score from a single life,
+with the level that life reached. Once you're back in a menu, it sends these
+with your nickname to fb.servequake.com, the server run by this port's
+developer, signed with your anonymous account. That server keeps each
+account's bests all-time and this week, and lists them publicly as
+`nickname#tag` in the game's High Scores → WORLD LEVEL and WORLD POINTS tabs
+and on the web page at [/scores/](../scores/). Nothing else is sent: not
+your levels or how you played them. This is **on by default**; turn off
+**World highscores** in the 1-player menu and nothing is sent at all (you
+can still view the board, which then asks the server without signing in).
+Weekly bests are cleared every Monday 00:00 UTC; all-time bests stay until
+you ask for them to be removed (see "Deleting your account").
+{: #world-highscores }
+
 **Opening the community Discord.** The NET GAME server list and the online
 lobby each offer a "Join our Discord" row. It is a link and nothing more:
 selecting it hands a fixed invite URL to your browser, and no information
@@ -169,6 +186,10 @@ or analytics SDK, so none is collected by the developer.
 - Nickname and round results: counted into the server's weekly rankings,
   shown in the lobby and, if the server runs the relay, on Discord (see
   above).
+- Nickname, best single-player run and best single-life score: listed on
+  the world highscore boards,
+  in the game and on the web (see "World highscores"). Not posted to
+  Discord.
 - Advertising identifiers: handled entirely within Google's AdMob SDK to
   select and measure ads; not accessed by the developer directly.
 - Purchase token: to keep the "ads removed" state accurate on your device.
@@ -197,18 +218,24 @@ device and replaces it with a new one, and without the old code nobody can
 sign in as that account again. Clearing the app's data or uninstalling the
 app does the same.
 
-Servers keep nothing about an account except its weekly ranking line: the
-short account tag, the nickname last played under, and that week's counts.
-That line is deleted automatically at the next Monday 00:00 UTC reset. To
-have it removed sooner from the official server, open an issue on the
-tracker under Contact below with your account tag (the `#xxxx` after your
-name in the rankings).
+Servers keep nothing about an account except its weekly ranking line (the
+short account tag, the nickname last played under, and that week's counts)
+and, on fb.servequake.com, its world highscore line (the same tag and
+nickname, with the account's best run all-time and this week). The weekly
+line and the week's best run are deleted automatically at the next Monday
+00:00 UTC reset. The all-time best is kept until you ask for it to be
+removed: open an issue on the tracker under Contact below with your account
+tag (the `#xxxx` after your name on the board), and it will be deleted along
+with anything else that server holds for that tag.
 
 ## Data retention
 
 - Nickname, settings and your account's recovery code live only in local
   app storage until you clear app data or uninstall. Losing the code loses
   the account; there is no way to recover it from a server.
+- World highscores on fb.servequake.com: the week's bests until the
+  Monday reset, the all-time bests until you ask for removal (see "Deleting
+  your account").
 - Server-side connection logs, match statistics, and any Discord channel a
   server's join alerts are posted to are retained at the discretion of
   whoever operates that particular server.
@@ -224,9 +251,10 @@ avoid entering real names or other identifying information.
 - Turn off ads for a year, or permanently, with an in-app purchase. The
   yearly one is an auto-renewing subscription you can cancel any time in the
   Play Store.
-- Play local single-player or local multiplayer to avoid any network data
-  transmission entirely — this also means no location lookup happens, since
-  it only runs before network play.
+- Play local single-player or local multiplayer to avoid multiplayer
+  network traffic entirely — this also means no location lookup happens,
+  since it only runs before network play. With **World highscores** turned
+  off in the 1-player menu, single-player sends nothing at all.
 - Uninstalling the app removes all locally stored settings, nicknames and
   your account's recovery code.
 - Start a new account, or move yours to another device, from **Account
