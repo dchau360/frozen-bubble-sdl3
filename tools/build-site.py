@@ -41,10 +41,24 @@ PAGES = [
     # game's "Open in browser" button points here (kWorldScoresUrl). It has
     # its own template, dressed as the game's High Scores screen, rather than
     # the plain document look the other two pages share.
+    #
+    # The weekly rankings page reads the server's WEEKLY board the same way
+    # and shares that template. The fifth field fills the template's
+    # per-page slots: BAR is what sits on the wood strip at the top (the
+    # High Scores logo is baked into the game's art, so only that page can
+    # use it), PAGE marks which of the two pages is current in the nav.
     (os.path.join(SITE, "scores.md"),
      os.path.join("scores", "index.html"),
      "World highscores — Frozen Bubble: SDL3",
-     "template-scores.html"),
+     "template-scores.html",
+     {"BAR": '<img src="{{ROOT}}img/scores-header.png" alt="High Scores" width="558" height="30">',
+      "PAGE": "scores"}),
+    (os.path.join(SITE, "weekly.md"),
+     os.path.join("weekly", "index.html"),
+     "Weekly rankings — Frozen Bubble: SDL3",
+     "template-scores.html",
+     {"BAR": '<span class="bar-title">Weekly Rankings</span>',
+      "PAGE": "weekly"}),
 ]
 
 # (source path, path within the site)
@@ -79,6 +93,8 @@ ASSETS = [
      os.path.join("img", "scores-back.jpg")),
     (os.path.join(ROOT, "share", "gfx", "DroidSans.ttf"),
      os.path.join("fonts", "DroidSans.ttf")),
+    (os.path.join(ROOT, "share", "gfx", "Baloo2-ExtraBold.ttf"),
+     os.path.join("fonts", "Baloo2-ExtraBold.ttf")),
 ]
 
 # Copied through verbatim. The Google verification token must keep its exact
@@ -121,6 +137,9 @@ def main():
         if template_name not in templates:
             templates[template_name] = open(os.path.join(SITE, template_name), encoding="utf-8").read()
         template = templates[template_name]
+        # Per-page slots first, so a slot's own {{ROOT}} is rewritten below.
+        for key, value in (rest[1] if len(rest) > 1 else {}).items():
+            template = template.replace("{{%s}}" % key, value)
         text = open(src, encoding="utf-8").read()
         # The first heading becomes the page's <h1>, which the template does
         # not supply -- so the markdown's own "# ..." line is kept, not stripped.
