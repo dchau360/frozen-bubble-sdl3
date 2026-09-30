@@ -148,22 +148,23 @@ reason most chat-enabled games rate Teen rather than Everyone).
 This maps directly from [PRIVACY_POLICY.md](../PRIVACY_POLICY.md). Play's
 categories change their exact wording occasionally, so treat this as a
 strong draft to check against the live form rather than a copy-paste-blind
-answer key.
+answer key. Last checked against the submitted form's CSV export on
+2026-09-29 (v2.4.119).
 
-| Play category | Collected? | Shared? | Purpose | Notes |
-|---|---|---|---|---|
-| **Location** | **Yes — approximate location** | **Yes, with other users** | App functionality (shown on a world map in the lobby) | Derived from IP address via ipinfo.io/ip-api.com, not GPS or a device location permission. Cached to one decimal place (~city/region accuracy). See the content-rating section above for detail |
-| **Personal info** — name, email, address, phone | No | — | — | Nickname is free-text, unverified, not linked to real identity — Google's own guidance treats this as not requiring declaration here |
-| **Personal info** — User IDs | **Yes** (when you play online) | **Yes — with other players, the server's operator, and its Discord channel** (the short `#xxxx` tag beside your name) | App functionality | The anonymous account (v2.4.118+): servers receive a public key derived from the on-device recovery code and store a 16-hex account id with that week's counts; the first 4 hex digits appear as `name#xxxx` in rankings and Discord posts. Not linked to name, email, device ID or ad ID. Declared under User IDs rather than Device IDs because the same code works on every device the player enters it on |
-| **Financial info** | No (by the app) | — | — | Google Play Billing handles the purchase; the app never receives payment details, only a purchase token |
-| **Health & fitness** | No | — | — | |
-| **Messages** (in-app messaging) | Yes | Yes — with other players in your match, and the server you're connected to | App functionality | Only while playing network multiplayer; not stored by the developer |
-| **Photos/videos/audio/files** | No | — | — | |
-| **Calendar / Contacts** | No | — | — | |
-| **App activity** (app interactions, in-app search history, etc.) | No | — | — | No analytics SDK; gameplay isn't reported anywhere |
-| **Web browsing** | No | — | — | |
-| **App info & performance** (crash logs, diagnostics) | No | — | — | No crash-reporting SDK |
-| **Device or other IDs** — advertising ID | Yes (Android, via AdMob SDK) | Yes — with Google/AdMob | Advertising or marketing | Not collected directly by the developer; handled inside Google's SDK. Optional in the sense that "Remove Ads" stops ads (but the identifier collection is AdMob SDK behavior, not something toggled off by that purchase) |
+| Play category | Collected? | Shared? | Ephemeral? | Required? | Purpose | Notes |
+|---|---|---|---|---|---|---|
+| **Location** | **Yes — approximate location** | **Yes, with other users** | **No** | Required | App functionality (shown on a world map in the lobby) | Derived from IP address via ipinfo.io/ip-api.com, not GPS or a device location permission. Cached to one decimal place (~city/region accuracy). See the content-rating section above for detail. Not ephemeral: the lobby map's coordinates are held only while connected, but the country code from the same lookup is posted to a server's Discord, which keeps it |
+| **Personal info** — name, email, address, phone | No | — | — | — | — | Nickname is free-text, unverified, not linked to real identity — Google's own guidance treats this as not requiring declaration here |
+| **Personal info** — User IDs | **Yes** (when you play online) | **Yes — with other players, the server's operator, and its Discord channel** (the short `#xxxx` tag beside your name) | **No** | Required | Collected: App functionality, Account management. Shared: App functionality | The anonymous account (v2.4.118+): servers receive a public key derived from the on-device recovery code and store a 16-hex account id with that week's counts; the first 4 hex digits appear as `name#xxxx` in rankings and Discord posts. Not linked to name, email, device ID or ad ID. Declared under User IDs rather than Device IDs because the same code works on every device the player enters it on |
+| **Financial info** | No (by the app) | — | — | — | — | Google Play Billing handles the purchase; the app never receives payment details, only a purchase token |
+| **Health & fitness** | No | — | — | — | — |  |
+| **Messages** (in-app messaging) | Yes | Yes — with other players in your match, and the server you're connected to | Yes | Required | App functionality | Only while playing network multiplayer; not stored by the developer |
+| **Photos/videos/audio/files** | No | — | — | — | — |  |
+| **Calendar / Contacts** | No | — | — | — | — |  |
+| **App activity** (app interactions, in-app search history, etc.) | No | — | — | — | — | No analytics SDK; gameplay isn't reported anywhere |
+| **Web browsing** | No | — | — | — | — |  |
+| **App info & performance** (crash logs, diagnostics) | No | — | — | — | — | No crash-reporting SDK |
+| **Device or other IDs** — advertising ID | Yes (Android, via AdMob SDK) | Yes — with Google/AdMob | **No** | Required | Collected and shared: Advertising or marketing, Analytics, Fraud prevention/security/compliance (the purposes Google lists for the Mobile Ads SDK) | Not collected directly by the developer; handled inside Google's SDK. Declared shared as well as collected to stay on the safe side. Required, not optional: "Remove Ads" is a purchase, not a data-collection toggle |
 
 **Data deletion:** The anonymous account counts as an account for Play's
 deletion policy (it follows the player across devices), so answer that
