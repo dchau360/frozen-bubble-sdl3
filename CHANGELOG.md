@@ -1,8 +1,10 @@
 # Changelog
 
-## Unreleased
+## v2.4.121
 
 - **Menu style with LEFT/RIGHT.** On the title screen's **STYLE** row, LEFT/RIGHT (or the D-pad) now step back and forth through the menu themes, and the row shows `< >` arrows while it is selected. ENTER and a tap still step forward.
+- **Weekly rankings on the web.** This port's server's weekly rankings (round wins, round losses, bubbles popped) are now also a web page at https://fb.servequake.com/weekly/, next to the world highscores at /scores/. Both are linked from the top of the site.
+- **Server:** a round's Discord result post, when it has to wait for a seat's stats, now waits the full 2 seconds instead of anywhere from 1 to 2.
 
 ## v2.4.120
 
