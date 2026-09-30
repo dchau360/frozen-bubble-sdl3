@@ -203,13 +203,14 @@ void HighscoreManager::LoadHighscoreLevels(const char *path) {
     }
 }
 
-// The MY SCORES / WORLD tabs, a row under the track tabs; and the world
-// view's one button. Shared by drawing and hit-testing, like
-// ScoreTrackTabRect.
-static SDL_Rect ScoreScopeTabRect(int world) {
+// The MY SCORES / WORLD LEVEL / WORLD POINTS tabs, a row under the track
+// tabs; and the world view's one button. Shared by drawing and hit-testing,
+// like ScoreTrackTabRect.
+constexpr int kScopeTabs = 3;
+static SDL_Rect ScoreScopeTabRect(int tab) {
     constexpr int w = 130, h = 22, gap = 10;
-    constexpr int x0 = 640 / 2 - (w * 2 + gap) / 2;
-    return { x0 + world * (w + gap), 40, w, h };
+    constexpr int x0 = 640 / 2 - (w * kScopeTabs + gap * (kScopeTabs - 1)) / 2;
+    return { x0 + tab * (w + gap), 40, w, h };
 }
 
 static SDL_Rect WorldButtonRect() {
@@ -556,9 +557,10 @@ void HighscoreManager::RenderScoreScreen() {
         }
 
         if (worldscores::Available()) {
-            for (int world = 0; world < 2; world++) {
-                SDL_Rect box = ScoreScopeTabRect(world);
-                bool active = (world == (int)viewWorld);
+            static const char* kScopeLabels[kScopeTabs] = {"MY SCORES", "WORLD LEVEL", "WORLD POINTS"};
+            for (int tab = 0; tab < kScopeTabs; tab++) {
+                SDL_Rect box = ScoreScopeTabRect(tab);
+                bool active = (tab == ScopeTab());
                 SDL_SetRenderDrawBlendMode(rend, SDL_BLENDMODE_BLEND);
                 if (active) SDL_SetRenderDrawColor(rend, 255, 196, 64, 90);
                 else        SDL_SetRenderDrawColor(rend, 20, 12, 32, 150);
@@ -568,7 +570,7 @@ void HighscoreManager::RenderScoreScreen() {
                 { SDL_FRect fr = ToFRect(box); SDL_RenderRect(rend, &fr); }
                 trackLabelText.UpdateStyle(12, active ? TTF_STYLE_BOLD : TTF_STYLE_NORMAL);
                 trackLabelText.UpdateColor(active ? menulist::kGold : menulist::kMuted, menulist::kTextShadow);
-                trackLabelText.UpdateText(rend, world ? "WORLD" : "MY SCORES", 0);
+                trackLabelText.UpdateText(rend, kScopeLabels[tab], 0);
                 trackLabelText.UpdatePosition({box.x + box.w/2 - trackLabelText.Coords()->w/2,
                                                box.y + box.h/2 - trackLabelText.Coords()->h/2});
                 { SDL_FRect fr = ToFRect(*trackLabelText.Coords()); SDL_RenderTexture(rend, trackLabelText.Texture(), nullptr, &fr); }
@@ -578,9 +580,9 @@ void HighscoreManager::RenderScoreScreen() {
             const char* hint = !worldscores::Available()
                 ? "LEFT/RIGHT: KEYBOARD / MOUSE   ANY OTHER KEY: BACK"
                 : viewWorld
-                    ? (worldscores::WebUrl()[0] ? "LEFT/RIGHT: INPUT   UP/DOWN: MY SCORES   ENTER / A: OPEN IN BROWSER   ESC / B: BACK"
-                                                : "LEFT/RIGHT: INPUT   UP/DOWN: MY SCORES   ESC / B: BACK")
-                    : "LEFT/RIGHT: INPUT   UP/DOWN: WORLD BOARD   ESC / B: BACK";
+                    ? (worldscores::WebUrl()[0] ? "LEFT/RIGHT: INPUT   UP/DOWN: BOARD   ENTER / A: OPEN IN BROWSER   ESC / B: BACK"
+                                                : "LEFT/RIGHT: INPUT   UP/DOWN: BOARD   ESC / B: BACK")
+                    : "LEFT/RIGHT: INPUT   UP/DOWN: WORLD BOARDS   ESC / B: BACK";
             menulist::DrawFooterHint(rend, trackLabelText, hint);
         }
     }
@@ -588,6 +590,15 @@ void HighscoreManager::RenderScoreScreen() {
     // Show name entry panel on top when awaiting input
     if (awaitKeyType) {
         RenderPanel();
+    }
+}
+
+void HighscoreManager::SetScopeTab(int tab) {
+    if (tab == 0) {
+        SetViewWorld(false);
+    } else if (worldscores::Available()) {
+        viewPoints = tab == 2;
+        SetViewWorld(true);
     }
 }
 
@@ -620,7 +631,7 @@ void HighscoreManager::RenderWorldBoard() {
         text(str, right - trackLabelText.Coords()->w, y, color);
     };
 
-    const WorldBoard& b = worldscores::Board(viewTrack);
+    const WorldBoard& b = worldscores::Board(worldscores::BoardIndex(viewPoints, viewTrack));
     const worldscores::Status st = worldscores::BoardStatus();
     const std::string me = worldscores::ShownName();
     SDL_SetRenderDrawBlendMode(rend, SDL_BLENDMODE_BLEND);
@@ -646,7 +657,8 @@ void HighscoreManager::RenderWorldBoard() {
             char left[48];
             snprintf(left, sizeof(left), "%2d. %s", WorldBoard::Rank(list, i), list[i].name.c_str());
             text(left, x + 10, y, col);
-            textRight(WorldBoard::LevelLabel(list[i].level) + "  " + WorldBoard::TimeLabel(list[i].timeMs),
+            textRight(viewPoints ? WorldBoard::PointsLabel(list[i].points) + "  " + WorldBoard::LevelLabel(list[i].level)
+                                 : WorldBoard::LevelLabel(list[i].level) + "  " + WorldBoard::TimeLabel(list[i].timeMs),
                       x + w - 10, y, col);
         }
     }
@@ -659,15 +671,18 @@ void HighscoreManager::RenderWorldBoard() {
     } else if (!worldscores::SendingEnabled()) {
         line = "Your runs aren't sent: World highscores is off in the 1-player menu.";
     } else if (b.hasMine && (b.myAlltime.rank || b.myWeek.rank)) {
-        auto part = [](const char* scope, const WorldBoard::Mine& m) {
-            return m.rank ? std::string("#") + std::to_string(m.rank) + " " + scope + " (" +
-                                WorldBoard::LevelLabel(m.level) + ", " + WorldBoard::TimeLabel(m.timeMs) + ")"
+        auto part = [&](const char* scope, const WorldBoard::Mine& m) {
+            const std::string detail = viewPoints
+                ? WorldBoard::PointsLabel(m.points) + ", " + WorldBoard::LevelLabel(m.level)
+                : WorldBoard::LevelLabel(m.level) + ", " + WorldBoard::TimeLabel(m.timeMs);
+            return m.rank ? std::string("#") + std::to_string(m.rank) + " " + scope + " (" + detail + ")"
                           : std::string("no run ") + scope;
         };
         line = "You, " + me + ": " + part("all-time", b.myAlltime) + "  ·  " + part("this week", b.myWeek);
         lineColor = menulist::kGold;
     } else if (st == worldscores::Status::Ready) {
-        line = "Clear a level in a classic game from level 1 to appear here as " + me + ".";
+        line = std::string(viewPoints ? "Score points" : "Clear a level") +
+               " in a classic game from level 1 to appear here as " + me + ".";
     }
     if (!line.empty()) {
         trackLabelText.UpdateStyle(13, TTF_STYLE_NORMAL);
@@ -694,13 +709,25 @@ void HighscoreManager::RenderWorldBoard() {
     }
 }
 
+void HighscoreManager::OpenWorldPage() {
+    // The page reads a "#points" / "#mouse" anchor (site/scores.md) and opens
+    // on the same board this screen is showing.
+    std::string url = worldscores::WebUrl();
+    std::string anchor;
+    if (viewPoints) anchor = "points";
+    if (viewTrack == (int)InputMethod::Mouse) anchor += anchor.empty() ? "mouse" : "-mouse";
+    if (!anchor.empty()) url += "#" + anchor;
+    if (!SDL_OpenURL(url.c_str()))
+        SDL_Log("World board: SDL_OpenURL failed: %s", SDL_GetError());
+}
+
 bool HighscoreManager::TapWorldControls(float lx, float ly) {
     auto hit = [&](const SDL_Rect& r) { return lx >= r.x && lx < r.x + r.w && ly >= r.y && ly < r.y + r.h; };
     if (worldscores::Available()) {
-        for (int world = 0; world < 2; world++) {
-            if (hit(ScoreScopeTabRect(world))) {
-                if (world != (int)viewWorld) {
-                    SetViewWorld(world != 0);
+        for (int tab = 0; tab < kScopeTabs; tab++) {
+            if (hit(ScoreScopeTabRect(tab))) {
+                if (tab != ScopeTab()) {
+                    SetScopeTab(tab);
                     AudioMixer::Instance()->PlaySFX("menu_change");
                 }
                 return true;
@@ -709,8 +736,7 @@ bool HighscoreManager::TapWorldControls(float lx, float ly) {
     }
     if (viewWorld && worldscores::WebUrl()[0] && hit(WorldButtonRect())) {
         AudioMixer::Instance()->PlaySFX("menu_selected");
-        if (!SDL_OpenURL(worldscores::WebUrl()))
-            SDL_Log("World board: SDL_OpenURL failed: %s", SDL_GetError());
+        OpenWorldPage();
         return true;
     }
     return false;
@@ -788,8 +814,7 @@ void HighscoreManager::HandleInput(SDL_Event *e){
                     // In the world view ENTER is the "Open in browser" button.
                     if (viewWorld && curMode == 0 && worldscores::WebUrl()[0]) {
                         AudioMixer::Instance()->PlaySFX("menu_selected");
-                        if (!SDL_OpenURL(worldscores::WebUrl()))
-                            SDL_Log("World board: SDL_OpenURL failed: %s", SDL_GetError());
+                        OpenWorldPage();
                         break;
                     }
                     FrozenBubble::Instance()->currentState = TitleScreen;
@@ -805,9 +830,11 @@ void HighscoreManager::HandleInput(SDL_Event *e){
                     break;
                 case SDLK_UP:
                 case SDLK_DOWN:
-                    // MY SCORES <-> WORLD. Browsing only, like LEFT/RIGHT.
+                    // MY SCORES -> WORLD LEVEL -> WORLD POINTS, round and
+                    // round (UP goes back). Browsing only, like LEFT/RIGHT.
                     if (!awaitKeyType && curMode == 0 && worldscores::Available()) {
-                        SetViewWorld(!viewWorld);
+                        const int step = e->key.key == SDLK_DOWN ? 1 : kScopeTabs - 1;
+                        SetScopeTab((ScopeTab() + step) % kScopeTabs);
                         AudioMixer::Instance()->PlaySFX("menu_change");
                     }
                     break;

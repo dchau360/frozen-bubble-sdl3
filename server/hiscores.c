@@ -26,10 +26,11 @@
 typedef struct {
         int level;    /* 0 = no run */
         int time_ms;
+        int points;   /* most-points boards only */
 } Run;
 
 typedef struct {
-        Run best[2][HISCORE_TRACKS];  /* [scope][track] */
+        Run best[2][HISCORE_BOARDS];  /* [scope][board] */
         char nick[16];                /* the name of this account's latest submission */
 } HiscoreLine;
 
@@ -49,8 +50,10 @@ static long monday_of(long day)
         return day - off;
 }
 
-static int better(const Run* a, const Run* b)
+static int better(int board, const Run* a, const Run* b)
 {
+        if (board >= HISCORE_BOARD_POINTS && a->points != b->points)
+                return a->points > b->points;
         if (a->level != b->level) return a->level > b->level;
         return a->time_ms < b->time_ms;
 }
@@ -61,7 +64,7 @@ static void save(void)
         gpointer key, value;
         char* tmp;
         FILE* f;
-        int s, t;
+        int s, b;
 
         if (!table || !file_path) return;
         /* Write-then-rename, like weekly_save(). */
@@ -72,14 +75,15 @@ static void save(void)
                 g_free(tmp);
                 return;
         }
-        fprintf(f, "v1 %ld\n", week_start_day);
+        fprintf(f, "v2 %ld\n", week_start_day);
         g_hash_table_iter_init(&iter, table);
         while (g_hash_table_iter_next(&iter, &key, &value)) {
                 HiscoreLine* hl = value;
                 fprintf(f, "%s %s", (const char*)key, hl->nick);
                 for (s = 0; s < 2; s++)
-                        for (t = 0; t < HISCORE_TRACKS; t++)
-                                fprintf(f, " %d %d", hl->best[s][t].level, hl->best[s][t].time_ms);
+                        for (b = 0; b < HISCORE_BOARDS; b++)
+                                fprintf(f, " %d %d %d", hl->best[s][b].level,
+                                        hl->best[s][b].time_ms, hl->best[s][b].points);
                 fputc('\n', f);
         }
         if (fclose(f) != 0 || rename(tmp, file_path) != 0)
@@ -110,8 +114,8 @@ void hiscore_init(void)
         const char* explicit_path = getenv("FB_SERVER_HISCORE_FILE");
         const char* home = getenv("HOME");
         FILE* f;
-        char buf[512];
-        int loaded = 0;
+        char buf[1024];
+        int loaded = 0, version = 2;
 
         table = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, g_free);
         if (explicit_path && *explicit_path)
@@ -131,26 +135,49 @@ void hiscore_init(void)
         f = fopen(file_path, "r");
         if (!f)
                 return;
-        /* Header "v1 <week_start_day>", then per account
-         * "<id> <nick> <level> <time_ms>" x (all-time kb, all-time mouse,
-         * week kb, week mouse). */
+        /* Header "v2 <week_start_day>", then per account "<id> <nick>" and
+         * "<level> <time_ms> <points>" for every board (0-3, see hiscores.h),
+         * all-time first, then this week. A "v1" file (furthest-level boards
+         * only, "<level> <time_ms>" for kb/mouse all-time then week) loads
+         * into boards 0 and 1. */
         if (fgets(buf, sizeof(buf), f)) {
                 long ws;
-                if (sscanf(buf, "v1 %ld", &ws) == 1)
+                if (sscanf(buf, "v2 %ld", &ws) == 1)
                         week_start_day = ws;
+                else if (sscanf(buf, "v1 %ld", &ws) == 1) {
+                        week_start_day = ws;
+                        version = 1;
+                }
         }
         while (fgets(buf, sizeof(buf), f)) {
                 char id[64], nick[64];
-                int v[8], i;
+                int v[2 * HISCORE_BOARDS * 3], i, used, n = 0;
+                const int want = version == 1 ? 8 : 2 * HISCORE_BOARDS * 3;
+                const char* p;
                 HiscoreLine* hl;
-                if (sscanf(buf, "%63s %63s %d %d %d %d %d %d %d %d", id, nick,
-                           &v[0], &v[1], &v[2], &v[3], &v[4], &v[5], &v[6], &v[7]) != 10)
+                if (sscanf(buf, "%63s %63s%n", id, nick, &used) != 2)
+                        continue;
+                p = buf + used;
+                while (n < want && sscanf(p, "%d%n", &v[n], &used) == 1) {
+                        p += used;
+                        n++;
+                }
+                if (n != want)
                         continue;
                 hl = g_new0(HiscoreLine, 1);
                 snprintf(hl->nick, sizeof(hl->nick), "%s", nick);
-                for (i = 0; i < 4; i++) {
-                        hl->best[i / 2][i % 2].level = v[i * 2];
-                        hl->best[i / 2][i % 2].time_ms = v[i * 2 + 1];
+                if (version == 1) {
+                        for (i = 0; i < 4; i++) {
+                                hl->best[i / 2][i % 2].level = v[i * 2];
+                                hl->best[i / 2][i % 2].time_ms = v[i * 2 + 1];
+                        }
+                } else {
+                        for (i = 0; i < 2 * HISCORE_BOARDS; i++) {
+                                Run* r = &hl->best[i / HISCORE_BOARDS][i % HISCORE_BOARDS];
+                                r->level = v[i * 3];
+                                r->time_ms = v[i * 3 + 1];
+                                r->points = v[i * 3 + 2];
+                        }
                 }
                 g_hash_table_replace(table, g_strdup(id), hl);
                 loaded++;
@@ -160,16 +187,18 @@ void hiscore_init(void)
         rollover_if_needed();
 }
 
-int hiscore_submit(const char* id, const char* nick, int track, int level, int time_ms)
+int hiscore_submit(const char* id, const char* nick, int board, int level, int time_ms, int points)
 {
         HiscoreLine* hl;
         Run run;
         int s, improved = 0;
 
         if (!table || !id || !*id || !nick || !*nick) return 0;
-        if (track < 0 || track >= HISCORE_TRACKS) return 0;
+        if (board < 0 || board >= HISCORE_BOARDS) return 0;
         if (level < 1 || level > HISCORE_MAX_LEVEL) return 0;
         if (time_ms <= 0 || time_ms > HISCORE_MAX_TIME_MS) return 0;
+        if (board >= HISCORE_BOARD_POINTS ? (points < 1 || points > HISCORE_MAX_POINTS) : points != 0)
+                return 0;
         rollover_if_needed();
 
         hl = g_hash_table_lookup(table, id);
@@ -183,9 +212,10 @@ int hiscore_submit(const char* id, const char* nick, int track, int level, int t
         }
         run.level = level;
         run.time_ms = time_ms;
+        run.points = points;
         for (s = 0; s < 2; s++) {
-                Run* cur = &hl->best[s][track];
-                if (cur->level == 0 || better(&run, cur)) {
+                Run* cur = &hl->best[s][board];
+                if (cur->level == 0 || better(board, &run, cur)) {
                         *cur = run;
                         improved = 1;
                 }
@@ -195,7 +225,7 @@ int hiscore_submit(const char* id, const char* nick, int track, int level, int t
         return 1;
 }
 
-int hiscore_rank(const char* id, int track, enum hiscore_scope scope)
+int hiscore_rank(const char* id, int board, enum hiscore_scope scope)
 {
         GHashTableIter iter;
         gpointer key, value;
@@ -203,15 +233,15 @@ int hiscore_rank(const char* id, int track, enum hiscore_scope scope)
         const Run* mine;
         int above = 0;
 
-        if (!table || !id || !*id || track < 0 || track >= HISCORE_TRACKS) return 0;
+        if (!table || !id || !*id || board < 0 || board >= HISCORE_BOARDS) return 0;
         rollover_if_needed();
         hl = g_hash_table_lookup(table, id);
-        if (!hl || hl->best[scope][track].level == 0) return 0;
-        mine = &hl->best[scope][track];
+        if (!hl || hl->best[scope][board].level == 0) return 0;
+        mine = &hl->best[scope][board];
         g_hash_table_iter_init(&iter, table);
         while (g_hash_table_iter_next(&iter, &key, &value)) {
-                const Run* r = &((HiscoreLine*)value)->best[scope][track];
-                if (r->level && better(r, mine))
+                const Run* r = &((HiscoreLine*)value)->best[scope][board];
+                if (r->level && better(board, r, mine))
                         above++;
         }
         return above + 1;
@@ -223,18 +253,21 @@ typedef struct {
         Run run;
 } Entry;
 
+/* qsort has no context argument; top_csv is not reentrant anyway. */
+static int sort_board = 0;
+
 static int entry_cmp(const void* a, const void* b)
 {
         const Entry* x = a;
         const Entry* y = b;
         int c;
-        if (better(&x->run, &y->run)) return -1;
-        if (better(&y->run, &x->run)) return 1;
+        if (better(sort_board, &x->run, &y->run)) return -1;
+        if (better(sort_board, &y->run, &x->run)) return 1;
         c = strcmp(x->line->nick, y->line->nick);
         return c ? c : strcmp(x->id, y->id);
 }
 
-void hiscore_top_csv(int track, enum hiscore_scope scope, int n, char* out, size_t outsz)
+void hiscore_top_csv(int board, enum hiscore_scope scope, int n, char* out, size_t outsz)
 {
         GHashTableIter iter;
         gpointer key, value;
@@ -244,7 +277,7 @@ void hiscore_top_csv(int track, enum hiscore_scope scope, int n, char* out, size
 
         if (outsz == 0) return;
         out[0] = '\0';
-        if (!table || n <= 0 || track < 0 || track >= HISCORE_TRACKS) return;
+        if (!table || n <= 0 || board < 0 || board >= HISCORE_BOARDS) return;
         rollover_if_needed();
         size = g_hash_table_size(table);
         if (size == 0) return;
@@ -252,18 +285,20 @@ void hiscore_top_csv(int track, enum hiscore_scope scope, int n, char* out, size
         g_hash_table_iter_init(&iter, table);
         while (g_hash_table_iter_next(&iter, &key, &value)) {
                 const HiscoreLine* hl = value;
-                if (hl->best[scope][track].level) {
+                if (hl->best[scope][board].level) {
                         entries[used].id = key;
                         entries[used].line = hl;
-                        entries[used].run = hl->best[scope][track];
+                        entries[used].run = hl->best[scope][board];
                         used++;
                 }
         }
+        sort_board = board;
         qsort(entries, used, sizeof(Entry), entry_cmp);
         for (i = 0; i < used && (int)i < n; i++) {
-                int w = snprintf(out + len, outsz - len, "%s%s#%.*s=%d/%d",
+                int w = snprintf(out + len, outsz - len, "%s%s#%.*s=%d/%d/%d",
                                  i ? "," : "", entries[i].line->nick, WEEKLY_TAG_LEN,
-                                 entries[i].id, entries[i].run.level, entries[i].run.time_ms);
+                                 entries[i].id, entries[i].run.level, entries[i].run.time_ms,
+                                 entries[i].run.points);
                 if (w < 0 || (size_t)w >= outsz - len) {
                         out[len] = '\0';  /* whole entries only */
                         break;
@@ -273,21 +308,24 @@ void hiscore_top_csv(int track, enum hiscore_scope scope, int n, char* out, size
         g_free(entries);
 }
 
-void hiscore_player_csv(const char* id, int track, char* out, size_t outsz)
+void hiscore_player_csv(const char* id, int board, char* out, size_t outsz)
 {
         HiscoreLine* hl;
+        const Run* a;
+        const Run* w;
         if (outsz == 0) return;
         out[0] = '\0';
-        if (!table || !id || !*id || track < 0 || track >= HISCORE_TRACKS) return;
+        if (!table || !id || !*id || board < 0 || board >= HISCORE_BOARDS) return;
         rollover_if_needed();
         hl = g_hash_table_lookup(table, id);
-        if (!hl || (!hl->best[HISCORE_ALLTIME][track].level && !hl->best[HISCORE_WEEK][track].level))
+        if (!hl) return;
+        a = &hl->best[HISCORE_ALLTIME][board];
+        w = &hl->best[HISCORE_WEEK][board];
+        if (!a->level && !w->level)
                 return;
-        snprintf(out, outsz, "%d,%d,%d,%d,%d,%d",
-                 hiscore_rank(id, track, HISCORE_ALLTIME),
-                 hl->best[HISCORE_ALLTIME][track].level, hl->best[HISCORE_ALLTIME][track].time_ms,
-                 hiscore_rank(id, track, HISCORE_WEEK),
-                 hl->best[HISCORE_WEEK][track].level, hl->best[HISCORE_WEEK][track].time_ms);
+        snprintf(out, outsz, "%d,%d,%d,%d,%d,%d,%d,%d",
+                 hiscore_rank(id, board, HISCORE_ALLTIME), a->level, a->time_ms, a->points,
+                 hiscore_rank(id, board, HISCORE_WEEK), w->level, w->time_ms, w->points);
 }
 
 time_t hiscore_week_start(void)

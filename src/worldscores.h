@@ -29,19 +29,30 @@ bool SendingEnabled();
 
 // Tracks mirror the local tables: 0 keyboard/gamepad, 1 mouse/touch.
 constexpr int kTracks = 2;
+// Two rankings per track: furthest level (boards 0/1) and most points in one
+// life (boards 2/3) -- the server's own numbering, see server/hiscores.h.
+constexpr int kBoards = 2 * kTracks;
+inline int BoardIndex(bool points, int track) { return (points ? kTracks : 0) + track; }
 
 // A classic run from level 1 reached `level` (101 = cleared the set) in
 // timeMs. Kept on disk until the server has it, so a run survives a crash or
-// no network; only the best pending run per track is kept, since the server
+// no network; only the best pending run per board is kept, since the server
 // only keeps bests. Sent the next time the game is out of a game (Pump()).
 void RecordRun(int track, int level, int timeMs);
 
-// Fetch both tracks' boards (and send anything pending on the way).
+// The same run's current life has scored `points` so far, on `level`, at
+// timeMs into the run. A life's score only grows until it ends (the game
+// zeroes it on death), so calling this at every level cleared and again at
+// the death keeps the life's final total -- and a life cut short by quitting
+// still counts up to its last cleared level.
+void RecordLife(int track, int points, int level, int timeMs);
+
+// Fetch every board (and send anything pending on the way).
 void RequestBoards();
 
 enum class Status { Idle, Loading, Ready, Failed };
 Status BoardStatus();
-const WorldBoard& Board(int track);
+const WorldBoard& Board(int board);
 // Why the last attempt failed, for the screen; empty otherwise.
 const std::string& LastError();
 

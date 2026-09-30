@@ -38,10 +38,13 @@ PAGES = [
     # own script asks the world-board server (fb.servequake.com) over a
     # WebSocket (see site/scores.md), so nothing on this site has to know the
     # scores and every origin that serves it shows the same live board. The
-    # game's "Open in browser" button points here (kWorldScoresUrl).
+    # game's "Open in browser" button points here (kWorldScoresUrl). It has
+    # its own template: a dark arcade scoreboard rather than the plain
+    # document look the other two pages share.
     (os.path.join(SITE, "scores.md"),
      os.path.join("scores", "index.html"),
-     "World highscores — Frozen Bubble: SDL3"),
+     "World highscores — Frozen Bubble: SDL3",
+     "template-scores.html"),
 ]
 
 # (source path, path within the site)
@@ -99,9 +102,13 @@ def main():
     out = sys.argv[1]
     os.makedirs(out, exist_ok=True)
 
-    template = open(os.path.join(SITE, "template.html"), encoding="utf-8").read()
+    templates = {}
 
-    for src, dest, title in PAGES:
+    for src, dest, title, *rest in PAGES:
+        template_name = rest[0] if rest else "template.html"
+        if template_name not in templates:
+            templates[template_name] = open(os.path.join(SITE, template_name), encoding="utf-8").read()
+        template = templates[template_name]
         text = open(src, encoding="utf-8").read()
         # The first heading becomes the page's <h1>, which the template does
         # not supply -- so the markdown's own "# ..." line is kept, not stripped.

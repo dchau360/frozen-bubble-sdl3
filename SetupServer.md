@@ -191,7 +191,8 @@ drift apart.
 
 ### World highscores
 
-The game sends each player's best classic single-player runs to one server
+The game sends each player's best classic single-player runs (furthest
+level, and most points in one life) to one server
 fixed at build time (`kWorldScoresHost` in `src/platform.cpp`, currently
 `fb.servequake.com`), not to whichever server they play online on, so there
 is a single world board rather than one per server. It opens its own short

@@ -1083,6 +1083,9 @@ private:
     bool SyncNetworkLevel();  // Synchronize level for network multiplayer; returns false on sync failure
     void ReloadGame(int level);
     void SubmitScore(BubbleArray &bArray);
+    // The world board's most-points entry for this life so far (see
+    // worldscores::RecordLife); called at every level cleared and at a death.
+    void RecordWorldLife(const BubbleArray &bArray);
 
     // >5-player battle royale view paging: assigns BubbleArray::boardVisible for the
     // current netViewPage. <=5-player games always show every board (page 0, all visible).

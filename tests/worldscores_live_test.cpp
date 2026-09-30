@@ -68,9 +68,15 @@ int main(int argc, char** argv) {
     worldscores::RecordRun(1, 11, 10000);
     worldscores::RecordRun(1, 12, 80000);
     CHECK(worldscores::PendingCountForTest() == 1);
+    // A life's points go to the most-points board for the same track; the
+    // life only ever grows, and the biggest total is what's kept.
+    worldscores::RecordLife(1, 3000, 5, 40000);
+    worldscores::RecordLife(1, 9000, 12, 80000);
+    worldscores::RecordLife(1, 0, 1, 1000);  // a life that scored nothing is ignored
+    CHECK(worldscores::PendingCountForTest() == 2);
     // Mid-run nothing is sent.
     for (int i = 0; i < 20; ++i) { worldscores::Pump(true); SDL_Delay(5); }
-    CHECK(worldscores::PendingCountForTest() == 1);
+    CHECK(worldscores::PendingCountForTest() == 2);
 
     // The server may still be starting; a failed attempt waits a minute
     // before retrying on its own, so ask for the board until it answers.
@@ -91,6 +97,12 @@ int main(int argc, char** argv) {
     }
     CHECK(mouse.hasMine && mouse.myAlltime.rank == 1 && mouse.myWeek.rank == 1);
     CHECK(worldscores::Board(0).alltime.empty());
+    const WorldBoard& mousePoints = worldscores::Board(worldscores::BoardIndex(true, 1));
+    CHECK(mousePoints.alltime.size() == 1);
+    if (!mousePoints.alltime.empty())
+        CHECK(mousePoints.alltime[0].points == 9000 && mousePoints.alltime[0].level == 12);
+    CHECK(mousePoints.hasMine && mousePoints.myAlltime.points == 9000);
+    CHECK(worldscores::Board(worldscores::BoardIndex(true, 0)).alltime.empty());
 
     // A run recorded later goes out from Pump() alone, outside a game.
     worldscores::RecordRun(0, 30, 400000);

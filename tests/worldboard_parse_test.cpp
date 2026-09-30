@@ -11,8 +11,8 @@ static int failures = 0;
 
 int main() {
     WorldBoard b;
-    CHECK(b.Parse("1790380800 bob#7f3a=101/5000000,al#c21e=40/300000,cy#0000=40/300000 "
-                  "al#c21e=40/300000 2,40,300000,1,40,300000"));
+    CHECK(b.Parse("1790380800 bob#7f3a=101/5000000/0,al#c21e=40/300000/0,cy#0000=40/300000/0 "
+                  "al#c21e=40/300000/0 2,40,300000,0,1,40,300000,0"));
     CHECK(b.weekStart == 1790380800LL);
     CHECK(b.alltime.size() == 3);
     CHECK(b.alltime[0].name == "bob#7f3a" && b.alltime[0].level == 101 && b.alltime[0].timeMs == 5000000);
@@ -25,15 +25,27 @@ int main() {
     CHECK(WorldBoard::Rank(b.alltime, 1) == 2);
     CHECK(WorldBoard::Rank(b.alltime, 2) == 2);
 
+    // A most-points board: points ride along, and a points tie at a
+    // different level is not a shared rank.
+    CHECK(b.Parse("1790380800 al#c21e=50/999999/25000,bob#7f3a=12/300000/25000 - "
+                  "1,50,999999,25000,0,0,0,0"));
+    CHECK(b.alltime[0].points == 25000 && b.alltime[1].level == 12);
+    CHECK(WorldBoard::Rank(b.alltime, 1) == 2);
+    CHECK(b.myAlltime.points == 25000 && b.myWeek.rank == 0);
+
     CHECK(b.Parse("1790380800 - - -"));
     CHECK(b.alltime.empty() && b.week.empty() && !b.hasMine);
 
     // Refused, and the board is left as it was.
-    b.Parse("1790380800 x#0000=5/1000 - -");
-    for (const char* bad : {"", "notanumber - - -", "1 x=5 - -", "1 x=0/5 - -", "1 - - 1,2,3", "1 - -"})
+    b.Parse("1790380800 x#0000=5/1000/0 - -");
+    for (const char* bad : {"", "notanumber - - -", "1 x=5 - -", "1 x=0/5/0 - -", "1 x=5/1000 - -",
+                            "1 - - 1,2,3", "1 - - 1,2,3,4,5,6", "1 - -"})
         CHECK(!b.Parse(bad));
     CHECK(b.alltime.size() == 1 && b.alltime[0].name == "x#0000");
 
+    CHECK(WorldBoard::PointsLabel(48210) == "48,210 pts");
+    CHECK(WorldBoard::PointsLabel(1234567) == "1,234,567 pts");
+    CHECK(WorldBoard::PointsLabel(999) == "999 pts");
     CHECK(WorldBoard::LevelLabel(101) == "won!");
     CHECK(WorldBoard::LevelLabel(57) == "level 57");
     CHECK(WorldBoard::TimeLabel(725000) == "12'05\"");

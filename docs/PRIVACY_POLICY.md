@@ -128,13 +128,14 @@ bots are never counted.
 **World highscores.** When you clear a level in a classic single-player
 game started from level 1, the app keeps your best run so far — the furthest
 level cleared, how long it took, and whether you played with
-keyboard/gamepad or mouse/touch — and, once you're back in a menu, sends it
+keyboard/gamepad or mouse/touch — and your best score from a single life,
+with the level that life reached. Once you're back in a menu, it sends these
 with your nickname to fb.servequake.com, the server run by this port's
 developer, signed with your anonymous account. That server keeps each
-account's best run all-time and this week, and lists them publicly as
-`nickname#tag` in the game's High Scores → WORLD tab and on the web page at
-[/scores/](../scores/). Nothing else is sent: not your score, your levels,
-or how you played them. This is **on by default**; turn off
+account's bests all-time and this week, and lists them publicly as
+`nickname#tag` in the game's High Scores → WORLD LEVEL and WORLD POINTS tabs
+and on the web page at [/scores/](../scores/). Nothing else is sent: not
+your levels or how you played them. This is **on by default**; turn off
 **World highscores** in the 1-player menu and nothing is sent at all (you
 can still view the board, which then asks the server without signing in).
 Weekly bests are cleared every Monday 00:00 UTC; all-time bests stay until
@@ -185,7 +186,8 @@ or analytics SDK, so none is collected by the developer.
 - Nickname and round results: counted into the server's weekly rankings,
   shown in the lobby and, if the server runs the relay, on Discord (see
   above).
-- Nickname and best single-player run: listed on the world highscore board,
+- Nickname, best single-player run and best single-life score: listed on
+  the world highscore boards,
   in the game and on the web (see "World highscores"). Not posted to
   Discord.
 - Advertising identifiers: handled entirely within Google's AdMob SDK to
@@ -231,8 +233,8 @@ with anything else that server holds for that tag.
 - Nickname, settings and your account's recovery code live only in local
   app storage until you clear app data or uninstall. Losing the code loses
   the account; there is no way to recover it from a server.
-- World highscores on fb.servequake.com: the week's best run until the
-  Monday reset, the all-time best until you ask for removal (see "Deleting
+- World highscores on fb.servequake.com: the week's bests until the
+  Monday reset, the all-time bests until you ask for removal (see "Deleting
   your account").
 - Server-side connection logs, match statistics, and any Discord channel a
   server's join alerts are posted to are retained at the discretion of

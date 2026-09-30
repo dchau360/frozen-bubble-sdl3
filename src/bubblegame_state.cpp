@@ -475,12 +475,24 @@ void BubbleGame::SubmitScore(BubbleArray &bArray) {
     // pending best; worldscores sends it once the player is out of the game.
     if (runEligibleForWorld)
         worldscores::RecordRun((int)method, curLevel, (int)(elapsedSeconds * 1000.0f));
+    RecordWorldLife(bArray);
 
     if (hm->CheckAndAddScore(curLevel, elapsedSeconds, method)) {
         pendingHighscore = true;
         SDL_Log("New high score! Level %d in %.1fs", curLevel, elapsedSeconds);
     }
     SDL_Log("SubmitScore: done");
+}
+
+void BubbleGame::RecordWorldLife(const BubbleArray &bArray) {
+    // Same gates as SubmitScore()'s world-board run: live play, a classic run
+    // from level 1, one input method throughout.
+    if (!EffectsEnabled() || !runEligibleForWorld || scoringDisqualified) return;
+    const int track = scoringInputMethod == ScoringInputMethod::Mouse
+                          ? (int)HighscoreManager::InputMethod::Mouse
+                          : (int)HighscoreManager::InputMethod::Keyboard;
+    const Uint64 elapsedMs = SDL_GetTicks() - FrozenBubble::Instance()->startTime;
+    worldscores::RecordLife(track, bArray.score, curLevel, (int)elapsedMs);
 }
 
 // Count living players (original: sub living_players() at line 600)
@@ -1058,6 +1070,9 @@ void BubbleGame::CheckGameState(BubbleArray &bArray, bool countForRoot) {
             gameFinish = true;
             gameLost = true;
             roundWinnerIdx = -1;
+            // The life ends here; its score is zeroed once the player moves
+            // on from the game-over panel (bubblegame_input.cpp).
+            RecordWorldLife(bArray);
         }
     }
 }

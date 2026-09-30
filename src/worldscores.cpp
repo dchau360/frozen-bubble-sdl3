@@ -38,9 +38,13 @@ constexpr int kMinProtoMinor = 7;
 struct Run {
     int level = 0;
     int timeMs = 0;
+    int points = 0;  // most-points boards only
 };
 
-bool Better(const Run& a, const Run& b) {
+// The server's order (hiscores.c better()): points first on a most-points
+// board, then level, then time.
+bool Better(int board, const Run& a, const Run& b) {
+    if (board >= kTracks && a.points != b.points) return a.points > b.points;
     if (a.level != b.level) return a.level > b.level;
     return a.timeMs < b.timeMs;
 }
@@ -49,10 +53,10 @@ std::string testHost;
 int testPort = 0;
 bool testMode = false;
 
-Run pending[kTracks];
+Run pending[kBoards];
 bool pendingLoaded = false;
 
-WorldBoard boards[kTracks];
+WorldBoard boards[kBoards];
 Status status = Status::Idle;
 std::string lastError;
 bool boardsWanted = false;
@@ -71,11 +75,16 @@ void LoadPending() {
     pendingLoaded = true;
 #ifndef FROZEN_BUBBLE_TEST_ACCESS
     if (testMode) return;
+    // "<board> <level> <timeMs> <points>" per line; a line without points
+    // (written before the most-points boards) is a furthest-level run.
     std::ifstream in(PendingPath());
-    int track, level, timeMs;
-    while (in >> track >> level >> timeMs) {
-        if (track >= 0 && track < kTracks && level > 0 && timeMs > 0)
-            pending[track] = {level, timeMs};
+    std::string line;
+    while (std::getline(in, line)) {
+        int board, level, timeMs, points = 0;
+        if (std::sscanf(line.c_str(), "%d %d %d %d", &board, &level, &timeMs, &points) < 3) continue;
+        if (board >= 0 && board < kBoards && level > 0 && timeMs > 0 &&
+            (board >= kTracks ? points > 0 : points == 0))
+            pending[board] = {level, timeMs, points};
     }
 #endif
 }
@@ -84,14 +93,15 @@ void SavePending() {
 #ifndef FROZEN_BUBBLE_TEST_ACCESS
     if (testMode) return;
     std::ofstream out(PendingPath(), std::ios::trunc);
-    for (int t = 0; t < kTracks; ++t)
-        if (pending[t].level > 0) out << t << ' ' << pending[t].level << ' ' << pending[t].timeMs << '\n';
+    for (int b = 0; b < kBoards; ++b)
+        if (pending[b].level > 0)
+            out << b << ' ' << pending[b].level << ' ' << pending[b].timeMs << ' ' << pending[b].points << '\n';
 #endif
 }
 
 bool HasPending() {
-    for (int t = 0; t < kTracks; ++t)
-        if (pending[t].level > 0) return true;
+    for (int b = 0; b < kBoards; ++b)
+        if (pending[b].level > 0) return true;
     return false;
 }
 
@@ -306,13 +316,13 @@ struct Session {
     Uint64 deadline = 0;
     bool signIn = false;       // send AUTH (and any pending runs)
     bool fetchBoards = false;
-    Run submitting[kTracks];
+    Run submitting[kBoards];
     int awaiting = 0;          // replies still owed
     bool sentRequests = false;
     bool failed = false;
     std::string error;
-    WorldBoard gotBoards[kTracks];
-    bool gotBoard[kTracks] = {false, false};
+    WorldBoard gotBoards[kBoards];
+    bool gotBoard[kBoards] = {};
     int boardOrder = 0;        // HISCORES replies arrive in the order asked
 };
 
@@ -333,17 +343,18 @@ void SendRequests(Session& s) {
     s.sentRequests = true;
     if (s.signIn) {
         const std::string nick = SubmitNick();
-        for (int t = 0; t < kTracks; ++t) {
-            if (s.submitting[t].level <= 0) continue;
-            s.transport->Send("FB/1.3 HISCORE " + std::to_string(t) + " " +
-                              std::to_string(s.submitting[t].level) + " " +
-                              std::to_string(s.submitting[t].timeMs) + " " + nick);
+        for (int b = 0; b < kBoards; ++b) {
+            const Run& r = s.submitting[b];
+            if (r.level <= 0) continue;
+            s.transport->Send("FB/1.3 HISCORE " + std::to_string(b) + " " + std::to_string(r.level) +
+                              " " + std::to_string(r.timeMs) + " " + std::to_string(r.points) +
+                              " " + nick);
             ++s.awaiting;
         }
     }
     if (s.fetchBoards) {
-        for (int t = 0; t < kTracks; ++t) {
-            s.transport->Send("FB/1.3 HISCORES " + std::to_string(t));
+        for (int b = 0; b < kBoards; ++b) {
+            s.transport->Send("FB/1.3 HISCORES " + std::to_string(b));
             ++s.awaiting;
         }
     }
@@ -379,17 +390,17 @@ void HandleLine(Session& s, const std::string& line) {
     } else if (ReplyTo(line, "HISCORE", payload)) {
         // OK, or INVALID (which a retry would only repeat): either way the
         // server has answered for the oldest submission still owed.
-        for (int t = 0; t < kTracks; ++t) {
-            if (s.submitting[t].level <= 0) continue;
-            if (!(Better(pending[t], s.submitting[t]))) pending[t] = Run{};
-            s.submitting[t] = Run{};
+        for (int b = 0; b < kBoards; ++b) {
+            if (s.submitting[b].level <= 0) continue;
+            if (!Better(b, pending[b], s.submitting[b])) pending[b] = Run{};
+            s.submitting[b] = Run{};
             break;
         }
         SavePending();
         --s.awaiting;
     } else if (ReplyTo(line, "HISCORES", payload)) {
-        const int t = s.boardOrder++;
-        if (t < kTracks && s.gotBoards[t].Parse(payload)) s.gotBoard[t] = true;
+        const int b = s.boardOrder++;
+        if (b < kBoards && s.gotBoards[b].Parse(payload)) s.gotBoard[b] = true;
         --s.awaiting;
     }
 }
@@ -401,7 +412,7 @@ void Start(bool withBoards) {
     s->signIn = SendingEnabled();
     s->fetchBoards = withBoards;
     if (s->signIn)
-        for (int t = 0; t < kTracks; ++t) s->submitting[t] = pending[t];
+        for (int b = 0; b < kBoards; ++b) s->submitting[b] = pending[b];
     const int port = testMode ? testPort : 0;
 #ifdef __WASM_PORT__
     s->transport = std::make_unique<WebSocketTransport>(host, port);
@@ -420,8 +431,8 @@ void Finish() {
     Session& s = *session;
     const bool complete = s.sentRequests && s.awaiting <= 0 && !s.failed;
     if (s.fetchBoards) {
-        for (int t = 0; t < kTracks; ++t)
-            if (s.gotBoard[t]) boards[t] = s.gotBoards[t];
+        for (int b = 0; b < kBoards; ++b)
+            if (s.gotBoard[b]) boards[b] = s.gotBoards[b];
         if (complete) {
             status = Status::Ready;
         } else {
@@ -447,9 +458,21 @@ void RecordRun(int track, int level, int timeMs) {
     if (track < 0 || track >= kTracks || level <= 0 || timeMs <= 0) return;
     if (!SendingEnabled()) return;
     LoadPending();
-    const Run run{level, timeMs};
-    if (pending[track].level <= 0 || Better(run, pending[track])) {
+    const Run run{level, timeMs, 0};
+    if (pending[track].level <= 0 || Better(track, run, pending[track])) {
         pending[track] = run;
+        SavePending();
+    }
+}
+
+void RecordLife(int track, int points, int level, int timeMs) {
+    if (track < 0 || track >= kTracks || points <= 0 || level <= 0 || timeMs <= 0) return;
+    if (!SendingEnabled()) return;
+    LoadPending();
+    const int b = BoardIndex(true, track);
+    const Run run{level, timeMs, points};
+    if (pending[b].level <= 0 || Better(b, run, pending[b])) {
+        pending[b] = run;
         SavePending();
     }
 }
@@ -466,7 +489,7 @@ void RequestBoards() {
 }
 
 Status BoardStatus() { return status; }
-const WorldBoard& Board(int track) { return boards[track < 0 || track >= kTracks ? 0 : track]; }
+const WorldBoard& Board(int board) { return boards[board < 0 || board >= kBoards ? 0 : board]; }
 const std::string& LastError() { return lastError; }
 
 std::string SubmitNick() {

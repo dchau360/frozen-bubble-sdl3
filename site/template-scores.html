@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{TITLE}}</title>
+<link rel="canonical" href="{{CANONICAL}}">
+<style>
+  /* The world highscores page only: a dark arcade scoreboard, the same in
+     light and dark mode on purpose. Fonts are the system's own rounded face
+     where there is one -- like the rest of this site, the page makes no
+     request to any other host except the score server itself. */
+  :root {
+    color-scheme: dark;
+    --bg1: #0a1a3a;
+    --bg2: #102a5c;
+    --panel: rgba(8, 20, 48, .72);
+    --line: rgba(120, 180, 255, .18);
+    --fg: #e8f1ff;
+    --muted: #8fa6cc;
+    --ice: #7fd4ff;
+    --ice-ink: #06214a;
+    --gold: #ffd24a;
+    --silver: #d6dde8;
+    --bronze: #e39a5a;
+    --round: ui-rounded, "SF Pro Rounded", "Nunito", "Arial Rounded MT Bold", system-ui, sans-serif;
+  }
+  html { background: var(--bg1); }
+  body {
+    margin: 0;
+    min-height: 100vh;
+    background: linear-gradient(170deg, var(--bg1) 0%, var(--bg2) 55%, var(--bg1) 100%) fixed;
+    color: var(--fg);
+    font-family: var(--round);
+    line-height: 1.5;
+    padding: 2rem 16px 3rem;
+  }
+  main { max-width: 760px; margin: 0 auto; }
+  nav { font-size: .85rem; margin-bottom: 1rem; }
+  nav a { color: var(--muted); text-decoration: none; }
+  nav a:hover { color: var(--ice); }
+  h1 {
+    font-weight: 800;
+    font-size: clamp(2rem, 7vw, 3.1rem);
+    letter-spacing: .06em;
+    text-align: center;
+    margin: 0;
+    color: var(--ice);
+    text-shadow: 0 0 6px rgba(127, 212, 255, .7), 0 0 22px rgba(80, 160, 255, .55), 0 2px 0 #0b3a7a;
+    text-wrap: balance;
+  }
+  .sub { text-align: center; color: var(--muted); margin: .3rem 0 1.4rem; letter-spacing: .14em; text-transform: uppercase; font-size: .8rem; }
+  .controls { display: flex; flex-wrap: wrap; justify-content: center; gap: .6rem 1rem; margin-bottom: 1rem; }
+  .pill { display: inline-flex; background: rgba(0, 0, 0, .3); border: 1px solid var(--line); border-radius: 999px; padding: 3px; }
+  .pill button { font: inherit; font-weight: 700; font-size: .85rem; border: 0; border-radius: 999px; background: transparent; color: var(--muted); padding: .35rem .9rem; cursor: pointer; }
+  .pill button:hover { color: var(--fg); }
+  .pill button[aria-pressed="true"] { background: var(--ice); color: var(--ice-ink); box-shadow: 0 0 12px rgba(127, 212, 255, .5); }
+  .pill button:focus-visible { outline: 2px solid var(--gold); outline-offset: 1px; }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; box-shadow: 0 10px 40px rgba(0, 0, 0, .35); overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+  th { text-align: left; font-size: .72rem; letter-spacing: .16em; text-transform: uppercase; color: var(--muted); padding: .8rem .9rem; border-bottom: 1px solid var(--line); }
+  td { padding: .65rem .9rem; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  tr:last-child td { border-bottom: 0; }
+  tbody tr:hover { background: rgba(127, 212, 255, .06); }
+  td.empty { text-align: center; color: var(--muted); padding: 2rem .9rem; white-space: normal; }
+  .rank { font-weight: 800; font-size: 1.05rem; width: 3rem; color: var(--muted); }
+  tr.r1 .rank, tr.r1 .name { color: var(--gold); text-shadow: 0 0 10px rgba(255, 210, 74, .45); }
+  tr.r2 .rank, tr.r2 .name { color: var(--silver); }
+  tr.r3 .rank, tr.r3 .name { color: var(--bronze); }
+  .name { font-weight: 700; }
+  .tag { color: var(--muted); font-weight: 400; }
+  .big { font-weight: 700; color: var(--ice); }
+  .dim { color: var(--muted); }
+  .status { text-align: center; color: var(--muted); font-size: .85rem; margin: .8rem 0 0; }
+  .about { max-width: 60ch; margin: 2.2rem auto 0; color: var(--muted); font-size: .9rem; }
+  .about p { margin: 0 0 .8rem; }
+  .about a { color: var(--ice); }
+  .about code { color: var(--fg); background: rgba(0, 0, 0, .3); padding: .1em .35em; border-radius: 4px; }
+  .about strong { color: var(--fg); }
+  /* Phones: tighter cells, and the time column goes -- rank, player and the
+     board's own figure are what matter at a glance. */
+  @media (max-width: 520px) {
+    th, td { padding: .6rem .5rem; }
+    th { letter-spacing: .06em; }
+    .rank { width: 2.2rem; }
+    .time { display: none; }
+    .pill button { padding: .35rem .7rem; }
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    .pill button { transition: background .15s, color .15s, box-shadow .15s; }
+  }
+</style>
+</head>
+<body>
+<main>
+<nav><a href="{{ROOT}}">← Frozen Bubble: SDL3</a></nav>
+{{CONTENT}}
+</main>
+</body>
+</html>
