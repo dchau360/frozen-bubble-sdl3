@@ -292,11 +292,26 @@ char country_tag[256][3];
  * line. Cleared in conn_terminated (net.c). */
 int join_alert_deferred[256];
 
+/* A player's name as the Discord posts show it: "bob#7f3a" when fd has
+ * signed in to an account (the same tag the weekly lists use), bare "bob"
+ * otherwise. The relay only displays these names, never matches them, so
+ * the tag can ride inside the existing name fields without a datagram
+ * format change. */
+static void discord_name(int fd, const char* n, char* out, size_t outsz)
+{
+        const char* id = account_id(fd);
+        if (id[0])
+                snprintf(out, outsz, "%s#%.*s", n, WEEKLY_TAG_LEN, id);
+        else
+                snprintf(out, outsz, "%s", n);
+}
+
 static void fire_join_alert(int fd)
 {
-        char weekly[96];
+        char weekly[96], name[32];
         weekly_player_csv(account_id(fd), weekly, sizeof(weekly));
-        discordalert_fire_join_event(nick[fd], IP[fd], geoloc[fd], platform_tag[fd],
+        discord_name(fd, nick[fd], name, sizeof(name));
+        discordalert_fire_join_event(name, IP[fd], geoloc[fd], platform_tag[fd],
                                      country_tag[fd], weekly);
 }
 
@@ -693,16 +708,19 @@ int find_player_number(struct game *g, int fd)
  * g->players_nick[] already passed through is_nick_ok() when its owner
  * connected or joined -- unlike the winner claim in a sniffed 'F' payload
  * (see process_msg_prio_), which is not validated at all. Bounded the same
- * way mapping_str is below: MAX_PLAYERS_PER_GAME nicks of at most 10 chars
- * each comfortably fit 512 bytes with room for the commas. */
+ * way mapping_str is below: MAX_PLAYERS_PER_GAME nicks of at most 10 chars,
+ * plus a 5-char "#tag" for signed-in players (discord_name()), comfortably
+ * fit 512 bytes with room for the commas. */
 static void build_roster_csv(struct game* g, char* out, size_t outsz)
 {
         int i;
+        char name[32];
         out[0] = '\0';
         for (i = 0; i < g->players_number; i++) {
                 if (i > 0)
                         strconcat(out, ",", outsz);
-                strconcat(out, g->players_nick[i], outsz);
+                discord_name(g->players_conn[i], g->players_nick[i], name, sizeof(name));
+                strconcat(out, name, outsz);
         }
 }
 
@@ -1906,7 +1924,7 @@ static void maybe_fire_pending_result(struct game* g, int64_t now)
 {
         int all_reported, i;
         char roster[512], win_counts[256], platforms[128], inputs[128];
-        char countries[256], popped_csv[256];
+        char countries[256], popped_csv[256], winner_name[sizeof(g->pending_winner) + 8];
 
         if (!g->stats_pending) return;
 
@@ -1919,6 +1937,16 @@ static void maybe_fire_pending_result(struct game* g, int64_t now)
         record_weekly_round(g);
 
         build_roster_csv(g, roster, sizeof(roster));
+        /* The winner claim gets the same tag when it names a seated player;
+         * a claim naming nobody here is posted exactly as it came. */
+        {
+                int wslot = g->pending_winner[0] ? find_player_slot_by_nick(g, g->pending_winner) : -1;
+                if (wslot >= 0)
+                        discord_name(g->players_conn[wslot], g->pending_winner,
+                                     winner_name, sizeof(winner_name));
+                else
+                        snprintf(winner_name, sizeof(winner_name), "%s", g->pending_winner);
+        }
         build_wins_csv(g, win_counts, sizeof(win_counts));
         build_tags_csv(g, platform_tag, platforms, sizeof(platforms));
         build_tags_csv(g, input_tag, inputs, sizeof(inputs));
@@ -1927,11 +1955,11 @@ static void maybe_fire_pending_result(struct game* g, int64_t now)
 
         discordalert_fire_result_event(g->game_id, g->round_number, roster, win_counts,
                                         g->victories_limit,
-                                        g->pending_winner[0] ? g->pending_winner : NULL,
+                                        winner_name[0] ? winner_name : NULL,
                                         g->game_mode, platforms, inputs, countries, popped_csv,
                                         g->pending_duration_secs);
         if (g->pending_match_fire)
-                discordalert_fire_match_event(g->game_id, g->pending_winner,
+                discordalert_fire_match_event(g->game_id, winner_name,
                                                g->pending_match_wins, g->game_mode);
 
         g->stats_pending = 0;

@@ -74,6 +74,7 @@
 #include "menulist.h"
 #include "networkclient.h"
 #include "platform.h"
+#include "playeraccount.h"
 
 #include <cstdio>
 #include <memory>
@@ -320,6 +321,28 @@ struct MainMenuTestAccess {
     static int LobbyTournamentListCountOf(const MainMenu& menu) { return menu.LobbyTournamentListCount(); }
     static int LobbyRoomListStartOf(const MainMenu& menu) { return menu.LobbyRoomListStart(); }
     static int ServerListDiscordIndexOf(const MainMenu& menu) { return menu.ServerListDiscordIndex(); }
+    static int ServerListSetNameIndexOf(const MainMenu& menu, bool isLAN) { return menu.ServerListSetNameIndex(isLAN); }
+    // Account code screen (mainmenu_account.cpp).
+    static void OpenAccount(MainMenu& menu) { menu.OpenAccountPanel(); }
+    static void RenderAccount(MainMenu& menu) { menu.AccountPanelRender(); }
+    static bool AccountKey(MainMenu& menu, SDL_Keycode key) {
+        SDL_Event ev = {};
+        ev.type = SDL_EVENT_KEY_DOWN;
+        ev.key.key = key;
+        return menu.AccountPanelKey(&ev);
+    }
+    static void AccountText(MainMenu& menu, const char* text) {
+        SDL_Event ev = {};
+        ev.type = SDL_EVENT_TEXT_INPUT;
+        ev.text.text = text;
+        menu.AccountPanelKey(&ev);
+    }
+    static bool ShowingAccount(const MainMenu& menu) { return menu.showingAccount; }
+    static void AccountEvent(MainMenu& menu, SDL_Event* ev) { menu.AccountPanelKey(ev); }
+    static int AccountMode(const MainMenu& menu) { return menu.accountMode; }
+    static int AccountSelection(const MainMenu& menu) { return menu.accountSelection; }
+    static const std::string& AccountMessage(const MainMenu& menu) { return menu.accountMessage; }
+    static int ServerListAccountIndexOf(const MainMenu& menu, bool isLAN) { return menu.ServerListAccountIndex(isLAN); }
     // Tournament bracket/browser panel (mainmenu_tournament.cpp).
     static void CallOpenTournament(MainMenu& menu, int id = 0) { menu.OpenTournament(id); }
     static void RenderTournamentPanel(MainMenu& menu) { menu.TournamentPanelRender(); }
@@ -642,10 +665,17 @@ int main() {
             }
             MainMenuTestAccess::SetPublicServers(*menu, servers);
             MainMenuTestAccess::RenderServerList(*menu, false);
-            int lastIdx = 1 + serverCount;
+            const int setNameIdx = MainMenuTestAccess::ServerListSetNameIndexOf(*menu, false);
+            const int accountIdx = MainMenuTestAccess::ServerListAccountIndexOf(*menu, false);
             const std::vector<SDL_Rect> rects =
-                MainMenuTestAccess::RectsForIndex(*menu, lastIdx);
-            return rects.empty() ? -1 : rects[0].y;
+                MainMenuTestAccess::RectsForIndex(*menu, setNameIdx);
+            const std::vector<SDL_Rect> accountRects =
+                MainMenuTestAccess::RectsForIndex(*menu, accountIdx);
+            if (rects.empty() || accountRects.empty()) return -1;
+            // Account code sits directly under Set name, as the section's
+            // last row.
+            CHECK(accountRects[0].y == rects[0].y + menulist::kRowH);
+            return rects[0].y;
         };
 
         const int yFewServers = setNameRowY(1);
@@ -657,10 +687,11 @@ int main() {
         // must not move at all between a 1-server and a 5-server list.
         CHECK(yFewServers == yManyServers);
 
-        // And that fixed position must actually be the panel's own bottom
-        // edge -- not just some other constant a future refactor could drift
-        // away from the visible bottom without this test noticing.
-        CHECK(yFewServers + menulist::kRowH == menulist::kListFull.y + menulist::kListFull.h);
+        // And that section must actually end at the panel's own bottom edge
+        // (its last row, Account code, one row below Set name) -- not just
+        // some other constant a future refactor could drift away from the
+        // visible bottom without this test noticing.
+        CHECK(yFewServers + 2 * menulist::kRowH == menulist::kListFull.y + menulist::kListFull.h);
     }
 
     // --- "Set name" must activate on tap, not step left/right ------------
@@ -682,7 +713,7 @@ int main() {
         std::unique_ptr<MainMenu> menu = MainMenuTestAccess::Create(renderer);
         MainMenuTestAccess::SetPublicServers(*menu, {{"host0", 1511, "", 10}});
         MainMenuTestAccess::RenderServerList(*menu, false);
-        const int lastIdx = 1 + 1;  // 1 server -> Set name is index 2
+        const int lastIdx = MainMenuTestAccess::ServerListSetNameIndexOf(*menu, false);
 
         const std::vector<SDL_Rect> rects =
             MainMenuTestAccess::RectsForIndex(*menu, lastIdx);
@@ -704,6 +735,90 @@ int main() {
             CHECK(SDL_PollEvent(&ev) && ev.type == SDL_EVENT_KEY_DOWN);
             CHECK(ev.key.key == SDLK_RETURN);
         }
+    }
+
+    // --- Account code screen: reachable from the server list, every button
+    // reachable by keyboard focus and by tap, the destructive choice never
+    // the default, and a typed code actually switching the account ---------
+    {
+        std::unique_ptr<MainMenu> menu = MainMenuTestAccess::Create(renderer);
+        MainMenuTestAccess::SetPublicServers(*menu, {{"host0", 1511, "", 10}});
+        MainMenuTestAccess::RenderServerList(*menu, false);
+        const int accountIdx = MainMenuTestAccess::ServerListAccountIndexOf(*menu, false);
+        CHECK(accountIdx == MainMenuTestAccess::ServerListSetNameIndexOf(*menu, false) + 1);
+        CHECK(MainMenuTestAccess::RectsForIndex(*menu, accountIdx).size() == 1);
+
+        CHECK(playeraccount::UseCode("7K3M-9QX2-HD4R-B8TN", false));
+        MainMenuTestAccess::OpenAccount(*menu);
+        CHECK(MainMenuTestAccess::ShowingAccount(*menu));
+        MainMenuTestAccess::RenderAccount(*menu);
+        // Four buttons, each a tap target, focus starting on the first.
+        for (int i = 0; i < 4; i++)
+            CHECK(MainMenuTestAccess::RectsForIndex(*menu, i).size() == 1);
+        CHECK(MainMenuTestAccess::AccountSelection(*menu) == 0);
+        MainMenuTestAccess::AccountKey(*menu, SDLK_RIGHT);
+        CHECK(MainMenuTestAccess::AccountSelection(*menu) == 1);
+        MainMenuTestAccess::AccountKey(*menu, SDLK_LEFT);
+        MainMenuTestAccess::AccountKey(*menu, SDLK_LEFT);
+        CHECK(MainMenuTestAccess::AccountSelection(*menu) == 3);  // wraps to Back
+
+        // New account asks first, with Cancel focused; ESC backs out of it.
+        MainMenuTestAccess::AccountKey(*menu, SDLK_LEFT);          // New account
+        MainMenuTestAccess::AccountKey(*menu, SDLK_RETURN);
+        CHECK(MainMenuTestAccess::AccountMode(*menu) == 2);
+        CHECK(MainMenuTestAccess::AccountSelection(*menu) == 1);
+        MainMenuTestAccess::AccountKey(*menu, SDLK_RETURN);        // Cancel
+        CHECK(MainMenuTestAccess::AccountMode(*menu) == 0);
+        CHECK(playeraccount::Code() == "7K3M9QX2HD4RB8TN");
+
+        // Tapping the focused "New account" confirm button makes a new one.
+        MainMenuTestAccess::AccountKey(*menu, SDLK_LEFT);          // Back -> New account
+        CHECK(MainMenuTestAccess::AccountSelection(*menu) == 2);
+        MainMenuTestAccess::AccountKey(*menu, SDLK_RETURN);
+        MainMenuTestAccess::RenderAccount(*menu);
+        {
+            const std::vector<SDL_Rect> r = MainMenuTestAccess::RectsForIndex(*menu, 0);
+            CHECK(r.size() == 1);
+            if (!r.empty()) {
+                const float x = r[0].x + r[0].w * 0.5f, y = r[0].y + r[0].h * 0.5f;
+                SDL_PumpEvents();
+                for (SDL_Event drain; SDL_PollEvent(&drain); ) {}
+                CHECK(menu->HandlePanelTap(x, y));   // select
+                CHECK(menu->HandlePanelTap(x, y));   // activate -> pushes RETURN
+                // Skip whatever the platform queued meanwhile (an audio
+                // device appearing, say) to reach the pushed key.
+                SDL_Event ev = {};
+                bool got = false;
+                while (SDL_PollEvent(&ev))
+                    if (ev.type == SDL_EVENT_KEY_DOWN) { got = true; break; }
+                CHECK(got && ev.key.key == SDLK_RETURN);
+                MainMenuTestAccess::AccountEvent(*menu, &ev);
+            }
+        }
+        CHECK(MainMenuTestAccess::AccountMode(*menu) == 0);
+        CHECK(playeraccount::Code() != "7K3M9QX2HD4RB8TN");
+        CHECK(playeraccount::Code().size() == 16);
+
+        // Use another code: a bad one is refused and keeps the editor open,
+        // a good one (typed with dashes, lowercase) switches the account.
+        MainMenuTestAccess::AccountKey(*menu, SDLK_RIGHT);         // Back -> Copy
+        MainMenuTestAccess::AccountKey(*menu, SDLK_RIGHT);         // Use another code
+        MainMenuTestAccess::AccountKey(*menu, SDLK_RETURN);
+        CHECK(MainMenuTestAccess::AccountMode(*menu) == 1);
+        MainMenuTestAccess::AccountText(*menu, "NOPE");
+        MainMenuTestAccess::AccountKey(*menu, SDLK_RETURN);
+        CHECK(MainMenuTestAccess::AccountMode(*menu) == 1);
+        CHECK(!MainMenuTestAccess::AccountMessage(*menu).empty());
+        for (int i = 0; i < 4; i++) MainMenuTestAccess::AccountKey(*menu, SDLK_BACKSPACE);
+        MainMenuTestAccess::AccountText(*menu, "7k3m-9qx2-hd4r-b8tn");
+        MainMenuTestAccess::AccountKey(*menu, SDLK_RETURN);
+        CHECK(MainMenuTestAccess::AccountMode(*menu) == 0);
+        CHECK(playeraccount::Code() == "7K3M9QX2HD4RB8TN");
+
+        // ESC from the main view closes the screen.
+        MainMenuTestAccess::AccountKey(*menu, SDLK_ESCAPE);
+        CHECK(!MainMenuTestAccess::ShowingAccount(*menu));
+        SDL_StopTextInput(SDL_GetKeyboardFocus());
     }
 
     // --- A tap that lands on no row, on a panel that hit-tests its rows ---

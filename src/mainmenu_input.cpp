@@ -55,6 +55,7 @@
 void MainMenu::HandleInput(SDL_Event *e){
     if (TournamentPanelKey(e)) return;
     if (WeeklyPanelKey(e)) return;
+    if (AccountPanelKey(e)) return;
     switch(e->type) {
         case SDL_EVENT_TEXT_INPUT:
             MenuTextInputEvent(e);
@@ -1462,19 +1463,18 @@ void MainMenu::MenuUpKey() {
 void MainMenu::MenuDownKey() {
                     // LAN menu navigation
                     if (showingNetPanel && !networkInLobby && networkInputMode == 7) {
-                        int lanMenuMax = 2 + (int)discoveredServers.size(); // 0=Host, 1..n=servers, n+1=SetName
+                        const int lanMenuMax = ServerListAccountIndex(true) + 1;
                         if (lanMenuIndex < lanMenuMax - 1) { lanMenuIndex++; AudioMixer::Instance()->PlaySFX("menu_change"); }
                         return;
                     }
                     // Net game menu navigation
                     if (showingNetPanel && !networkInLobby && networkInputMode == 10) {
-                        // 0=Manual, 1..n=servers, n+1=SetName, and n+2=Join our
-                        // Discord when an invite is compiled in -- without the
-                        // extra stop, keyboard and gamepad players could see
-                        // the Discord row but never reach it, which is exactly
-                        // the input-parity gap CLAUDE.md calls out.
-                        int netMenuMax = 2 + (int)publicServers.size();
-                        if (ServerListDiscordIndex() >= 0) netMenuMax++;
+                        // Last row is Account code (ServerListAccountIndex) --
+                        // every row the screen draws, Discord included, must
+                        // be reachable, or keyboard and gamepad players could
+                        // see a row they can never select (the input-parity
+                        // gap CLAUDE.md calls out).
+                        const int netMenuMax = ServerListAccountIndex(false) + 1;
                         if (netMenuIndex < netMenuMax - 1) { netMenuIndex++; AudioMixer::Instance()->PlaySFX("menu_change"); }
                         return;
                     }
@@ -2287,9 +2287,14 @@ void MainMenu::MenuReturnKey() {
                                 lanMenuIndex = 0;
                                 return;
                             }
+                            if (lanMenuIndex == ServerListAccountIndex(true)) {
+                                OpenAccountPanel();
+                                AudioMixer::Instance()->PlaySFX("menu_selected");
+                                return;
+                            }
                             int serverIdx = lanMenuIndex - 1;
                             if (serverIdx >= (int)discoveredServers.size()) {
-                                // "Set Name" selected (last item)
+                                // "Set Name" selected (the only row left past the servers)
 #ifdef __WASM_PORT__
                                 if (WasmHasTouch()) {
                                     // Native prompt on touch devices (no soft keyboard in SDL3 Emscripten)
@@ -2332,9 +2337,14 @@ void MainMenu::MenuReturnKey() {
                                 AudioMixer::Instance()->PlaySFX("menu_selected");
                                 return;
                             }
+                            if (netMenuIndex == ServerListAccountIndex(false)) {
+                                OpenAccountPanel();
+                                AudioMixer::Instance()->PlaySFX("menu_selected");
+                                return;
+                            }
                             int serverIdx = netMenuIndex - 1;
                             if (serverIdx >= (int)publicServers.size()) {
-                                // "Set Name" selected (last item)
+                                // "Set Name" selected (the only row left past the servers)
 #ifdef __WASM_PORT__
                                 if (WasmHasTouch()) {
                                     // Native prompt on touch devices (no soft keyboard in SDL3 Emscripten)

@@ -594,6 +594,13 @@ private:
     // in three places it would only take one of them missing a change to the
     // rows above for a tap on Discord to fire "Set name" instead.
     int ServerListDiscordIndex() const;
+    // The Account section's two rows, same single-source reasoning. Rows run
+    // top to bottom in the order they are drawn: 0 = Host/Manual entry,
+    // 1..n = servers, then Join Discord (NET only, when compiled in), then
+    // Set name, then Account code -- so Up/Down moves the way the screen
+    // reads.
+    int ServerListSetNameIndex(bool isLAN) const;
+    int ServerListAccountIndex(bool isLAN) const { return ServerListSetNameIndex(isLAN) + 1; }
     // Same idea for the online lobby's own action list: 0 = Chat, 1 = Create
     // Game Room, then (2026-09-11) "Create Tournament" sits at a fixed slot 2
     // right under Create Game Room -- the organizer-facing feature belongs
@@ -631,6 +638,19 @@ private:
     bool WeeklyPanelKey(SDL_Event* e);
     bool showingWeekly = false;
     int weeklySelection = 0;
+    // "Account code" (mainmenu_account.cpp): full-screen view of this
+    // device's anonymous account (playeraccount.h), opened from the Account
+    // section of the LAN/NET server lists -- before connecting, since the
+    // code is what a player needs to move their ranking, not a server's.
+    void OpenAccountPanel();
+    void AccountPanelRender();
+    bool AccountPanelKey(SDL_Event* e);
+    bool showingAccount = false;
+    int accountSelection = 0;     // focused button in the current mode
+    int accountMode = 0;          // 0 view, 1 typing a code, 2 confirm new account
+    char accountCodeInput[24] = "";
+    std::string accountMessage;   // result of the last action, under the code
+    bool accountMessageBad = false;
     bool showingTournament = false, tournamentConfirm = false;
     // True while the organizer is picking a ruleset on the "Create
     // tournament" pre-creation screen (see TournamentPanelRender's

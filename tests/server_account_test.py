@@ -107,7 +107,7 @@ class AccountTest(WeeklyTestBase):
         joins = self.joins()
         self.assertEqual(len(joins), 1)
         parts = joins[0].split("|")
-        self.assertEqual(parts[1], "alice")
+        self.assertEqual(parts[1], self.acct.tagged("alice"), "Discord shows the account tag")
         self.assertEqual(parts[4], "M")
         self.assertEqual(parts[6], "3,1,50,1,1,1")
 
@@ -121,6 +121,18 @@ class AccountTest(WeeklyTestBase):
         joins = self.joins()
         self.assertEqual(len(joins), 1)
         self.assertEqual(joins[0].split("|")[6], "", "no account, no weekly line")
+        self.assertEqual(joins[0].split("|")[1], "alice", "no account, no tag")
+
+    def test_round_result_tags_signed_in_players_and_the_winner(self):
+        self.start()
+        self.play_round([("host", False), ("guest", False)], winner="host", popped=[1, 1],
+                        accounts=[True, False])
+        results = [d for d in self.round_datagrams if d.startswith("RESULT|")]
+        self.assertEqual(len(results), 1)
+        parts = results[0].split("|")
+        # RESULT|game_id|round|mode|winner|roster|...
+        self.assertEqual(parts[4], self.acct.tagged("host"))
+        self.assertEqual(parts[5], f"{self.acct.tagged('host')},guest")
 
     def test_signed_out_client_is_announced_at_once(self):
         self.start()

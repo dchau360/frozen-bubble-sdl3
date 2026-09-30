@@ -462,6 +462,7 @@ void MainMenu::NetPanelRender() {
 
     if (showingTournament) { TournamentPanelRender(); return; }
     if (showingWeekly) { WeeklyPanelRender(); return; }
+    if (showingAccount) { AccountPanelRender(); return; }
 
     // If in lobby, use world map background; otherwise use void panel for connection screens
 
@@ -1859,9 +1860,9 @@ int MainMenu::LobbyDiscordIndex(size_t roomCount) const {
 
 int MainMenu::ServerListDiscordIndex() const {
     if (!HasDiscordInvite()) return -1;
-    // One past Set name, which is itself one past the last server row
-    // (0 = Manual entry, 1..n = servers, n+1 = Set name).
-    return 2 + (int)publicServers.size();
+    // Right after the last server row (0 = Manual entry, 1..n = servers),
+    // matching where it is drawn; Set name and Account code follow it.
+    return 1 + (int)publicServers.size();
 }
 
 void MainMenu::ServerListPanelRender(bool isLAN) {
@@ -1908,7 +1909,7 @@ void MainMenu::ServerListPanelRender(bool isLAN) {
     // live: reported as wanting it "at the very bottom, in its own section").
     // Carved out of kListFull's own footprint (same x/width/bottom edge) so
     // the two sections together fill exactly the space one List used to.
-    const int kSetNameSectionH = 2 * menulist::kRowH;  // header row + the one row
+    const int kSetNameSectionH = 3 * menulist::kRowH;  // header row + Set name + Account code
     const int kSetNameGap = 8;
     // The Discord invite gets its own section between the list and Set name,
     // rather than riding along in either: it belongs to neither "servers you
@@ -1970,7 +1971,8 @@ void MainMenu::ServerListPanelRender(bool isLAN) {
 
     // Set Name: its own section, pinned to the bottom of the panel -- see
     // serverListViewport/setNameViewport above.
-    int lastIdx = 1 + (int)servers.size();
+    const int setNameIdx = ServerListSetNameIndex(isLAN);
+    const int accountIdx = ServerListAccountIndex(isLAN);
 
     if (showDiscord) {
         menulist::List discordList(discordViewport, menuIndex, menulist::kRowH,
@@ -2005,7 +2007,8 @@ void MainMenu::ServerListPanelRender(bool isLAN) {
     // why this only ever showed up as "the row highlights but tapping (or
     // clicking) it does nothing," reported live on itch.io on both iPhone
     // touch and desktop mouse.
-    setNameList.Row(lastIdx, "Set name", curNick, true);
+    setNameList.Row(setNameIdx, "Set name", curNick, true);
+    setNameList.Row(accountIdx, "Account code", "view / move", true);
     setNameList.End(rend, panelText, nullptr, tap);
 
     // Sidebar: details for whichever server row is currently selected, plus
@@ -2034,6 +2037,12 @@ void MainMenu::ServerListPanelRender(bool isLAN) {
         sidebarLine("online players", menulist::kMuted);
         sidebarLine("connect.", menulist::kMuted);
         sidebarLine("Opens in your browser.", menulist::kMuted, 13);
+    } else if (menuIndex == accountIdx) {
+        sidebarLine("Account code", menulist::kText, 16);
+        sidebarLine("Your weekly ranking", menulist::kMuted);
+        sidebarLine("belongs to this code.", menulist::kMuted);
+        sidebarLine("View it, or move an", menulist::kMuted);
+        sidebarLine("account here.", menulist::kMuted);
     } else if (menuIndex >= 1 && menuIndex <= (int)servers.size()) {
         const ServerInfo& s = servers[menuIndex - 1];
         bool offline = (s.latencyMs < 0);
