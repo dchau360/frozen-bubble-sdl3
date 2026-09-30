@@ -183,9 +183,13 @@ drift apart.
    `image: nginx:alpine` and restore the old 426 response in
    `docker/nginx.conf`, or mount your own directory over
    `/usr/share/nginx/html`.
-3. The site includes a **World highscores** page (`/scores/`). Its script
-   reads the board live from `fb.servequake.com`, whichever domain serves
-   the page, since that is the one server the game sends runs to (below).
+3. The site includes a **World highscores** page (`/scores/`) and a
+   **Weekly rankings** page (`/weekly/`), linked from the top of every page.
+   Both scripts read live from `fb.servequake.com`, whichever domain serves
+   them. For `/scores/` that is right, since it's the one server the game
+   sends runs to (below). For `/weekly/` it means your domain shows
+   **fb.servequake.com's** weekly rankings, not your own server's; your
+   players still see your server's board in the in-game lobby.
 
 ---
 
@@ -435,6 +439,8 @@ are players on game versions from before v2.4.118, which can't sign in to the
 anonymous account rankings are kept by (names show as `bob#7f3a`). Players see
 the same board in the online lobby under **Weekly rankings**, and each
 player's round-wins rank shows as `#N` beside their name in the lobby list.
+The website's `/weekly/` page shows fb.servequake.com's board (see "The
+website on 443" above), not yours.
 
 The numbers are stored on the `fb-data` Docker volume
 (`/var/lib/fb-server/weekly.dat` inside the container), so they survive

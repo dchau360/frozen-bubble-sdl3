@@ -1,6 +1,6 @@
 # Privacy Policy — Frozen Bubble: SDL3
 
-**Effective date:** September 29, 2026
+**Effective date:** September 30, 2026
 
 Frozen Bubble: SDL3 ("the app") is a free, open-source game
 ([GPLv2 licensed](https://github.com/dchau360/frozen-bubble-sdl3/blob/main/COPYING), source at
@@ -119,7 +119,8 @@ server actually posts is outside the developer's control — see
 you won and lost and how many bubbles you popped this week (Monday
 00:00 UTC to the next), and ranks players by each. The counts are cleared
 every Monday. Every player on that server can see the top 10 in the online
-lobby's "Weekly rankings" screen, and if the server runs the Discord relay
+lobby's "Weekly rankings" screen, and the reference server's top 10 is also
+public on the web page at [/weekly/](../weekly/). If the server runs the Discord relay
 above, your join alert also shows your own weekly counts and ranks, and a
 daily message lists the top 5 in each category. **Only nicknames, the short
 account tag, and those counts are included** — nothing else about you. Computer-controlled
