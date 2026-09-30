@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v2.4.120
 
 - **World highscores.** Your best classic single-player runs now go on a world board, shared by everyone playing Frozen Bubble: SDL3. There are two boards: **furthest level** cleared from level 1, with the faster time breaking ties, and **most points** scored in one life (the score starts over at every death). Both are split into keyboard/gamepad and mouse/touch like your own tables. Open **High Scores**, then **WORLD LEVEL** or **WORLD POINTS** (UP/DOWN, or tap the tab), to see the all-time and this-week top 10 and your own rank. **Open in browser** shows the same board as a web page at https://fb.servequake.com/scores/. Runs are sent under your anonymous account, shown as `nick#tag`, once you're back in a menu, and are kept until then if you're offline. It's on by default; turn off **World highscores** in the 1-player menu to stop sending. Scores aren't verified yet. This needs a server running this version (protocol 1.7).
 - **Continue? after a death.** Losing in a classic solo game now asks whether to continue. **Continue** retries the level you died on with your score back to 0; the run's clock keeps going. **Start over** goes back to level 1 as a new run. Choose with LEFT/RIGHT and ENTER, the gamepad, or a tap on either button. This replaces the **Arcade Mode** setting, which is gone from the 1-player menu.
