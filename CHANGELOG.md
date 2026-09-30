@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v2.4.122
 
 - **Graphics with LEFT/RIGHT.** The title screen's **GRAPHICS** row now takes LEFT/RIGHT (or the D-pad) too, stepping the quality level either way, like the **STYLE** row. RIGHT goes the same way ENTER and a tap always have. In every theme but Classic, whose row is the original artwork, the label shows `< >` arrows while selected.
 
