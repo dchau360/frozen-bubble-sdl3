@@ -46,7 +46,9 @@ Every mode plays the same whether you're local or online, and the host can adjus
 > have had rendering glitches. Two causes are fixed (see
 > [CHANGELOG.md](CHANGELOG.md)); the mode has not had a full pass since.
 
-**Single player** — 100 levels of classic bubble-popping, with scoring and chain reactions.
+**Single player** — 100 levels of classic bubble-popping, with scoring and chain reactions. Lose a level and you're asked whether to **Continue** (retry that level, score back to 0, the run's clock keeps going) or **Start over** from level 1.
+
+**World highscores.** Classic runs from level 1 go on a world board shared by everyone playing this port: **furthest level** cleared (faster time breaks ties) and **most points** in one life, each split keyboard/gamepad vs mouse/touch, all-time and this week. See it in the game under **High Scores → WORLD LEVEL / WORLD POINTS**, or on the web at [fb.servequake.com/scores](https://fb.servequake.com/scores/). Runs are sent under your anonymous account once you're back in a menu; turn off **World highscores** in the 1-player menu to stop sending. Scores aren't verified yet.
 
 **Attack bubbles** is a three-way setting, host-controlled in the room and per-player in local multiplayer: **ON** sends every malus you earn straight at your opponents, **OFF** turns attacks off entirely, and **Blockable** has the malus you earn pay down whatever is still queued against you first, sending only the surplus — it can't go negative, so blocking more than you owe just empties your queue rather than banking credit. A HELP button next to Bot skill (or **F1**/gamepad **Y** anytime) opens a full settings guide covering this and everything else on the panel, including how malus targeting differs once a room has 6 or more players alive.
 
@@ -61,7 +63,7 @@ After each round a per-player stats table shows bubbles fired and popped, malus 
 
 **Dealing with abusive players.** If you host the room, `/kick p2` removes the player in that roster position (`/kick <nick>` works too). Type `/block <nick>` in chat to hide someone's messages — in the lobby and mid-match both, and it takes effect immediately without needing the server's cooperation. `/unblock <nick>` undoes it, `/blocked` lists who you have blocked, and the list is saved per device. `/report <nick> <what happened>` sends a report to that server's operator; each server is run by a different person, so what happens next is up to them — blocking is the part that is in your hands. Type `/help` in chat for the full list.
 
-**Weekly rankings.** Each server ranks its players by round wins, round losses and bubbles popped for the week, starting over every Monday at 00:00 UTC. Bots are never counted. Open **Weekly rankings** in the online lobby to see the top 10 in each category and your own line. The lobby's Online list shows each player's round-wins rank as a gold `#N` next to their name, with you listed first. This needs a server running v2.4.116 or later.
+**Weekly rankings.** Each server ranks its players by round wins, round losses and bubbles popped for the week, starting over every Monday at 00:00 UTC. Bots are never counted. Open **Weekly rankings** in the online lobby to see the top 10 in each category and your own line; the public server's board is also on the web at [fb.servequake.com/weekly](https://fb.servequake.com/weekly/). The lobby's Online list shows each player's round-wins rank as a gold `#N` next to their name, with you listed first. This needs a server running v2.4.116 or later.
 
 <p align="center">
   <img src="docs/screenshots/weekly-rankings.png" alt="Weekly rankings screen: top ten players by round wins, round losses and bubbles popped, with the viewer's own line highlighted" width="480">

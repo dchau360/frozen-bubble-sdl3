@@ -57,7 +57,9 @@ twenty, which needed new UI to be playable at all:
 | **Aim guide** — per-player trajectory preview | v2.3.0 |
 | **Performance overlay** (**F3**) — frame rate, frame-time range, and effective game speed against the configured speed | v2.4.30 |
 | **Lobby refresh** — persistent chat dock, scrollable room cards with player count and cap, online-player sidebar | v2.4.26 |
-| **Weekly rankings** — each server ranks players by round wins, round losses and bubbles popped for the week (reset Monday 00:00 UTC, bots not counted), shown on a lobby screen and as `#N` badges in the online-player sidebar | v2.4.116 |
+| **Weekly rankings** — each server ranks players by round wins, round losses and bubbles popped for the week (reset Monday 00:00 UTC, bots not counted), shown on a lobby screen, as `#N` badges in the online-player sidebar, and on the web at [/weekly/](https://fb.servequake.com/weekly/) | v2.4.116 |
+| **World highscores** — one world board for classic single-player runs: furthest level and most points in one life, keyboard vs mouse/touch, all-time and this week, in the game and on the web at [/scores/](https://fb.servequake.com/scores/) | v2.4.120 |
+| **Continue after a death** — a classic solo loss offers Continue (same level, score reset, clock keeps running) or Start over | v2.4.120 |
 
 ### Controls and settings
 
