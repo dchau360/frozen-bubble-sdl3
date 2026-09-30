@@ -128,7 +128,9 @@ std::string MenuButton::LabelText() const
     if (buttonName == "2pgame")     return "START 2P GAME";
     if (buttonName == "langame")    return "START LAN GAME";
     if (buttonName == "netgame")    return "START NET GAME";
-    if (buttonName == "graphics")   return "GRAPHICS";
+    // Arrows while selected, as on MENU STYLE below: LEFT/RIGHT step the
+    // level. Classic's own GRAPHICS row is baked art and shows none.
+    if (buttonName == "graphics")   return isActive ? "< GRAPHICS >" : "GRAPHICS";
     // "SETTINGS", not the artwork's "CHANGE KEYS": the panel this row opens
     // calls itself CONTROLS & SETTINGS and has long since grown past key
     // bindings into game speed, sound, mouse/touch aim, fullscreen and the

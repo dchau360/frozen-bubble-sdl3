@@ -1401,14 +1401,19 @@ void MainMenu::MenuDownKey() {
 }
 
 void MainMenu::MenuLeftRightKey(SDL_Event *e) {
-                    // Title screen, MENU STYLE row: LEFT/RIGHT step through
-                    // the themes (ENTER and a tap still step forward).
-                    if (!HasAnyPanelOpen() && active_button_index < buttons.size() &&
-                        buttons[active_button_index].Name() == "menustyle") {
-                        GameSettings::Instance()->SetValue("Menu:Theme",
-                            e->key.key == SDLK_LEFT ? "-1" : "");
-                        AudioMixer::Instance()->PlaySFX("menu_change");
-                        return;
+                    // Title screen, GRAPHICS and MENU STYLE rows: LEFT/RIGHT
+                    // step through the values (ENTER and a tap still step the
+                    // RIGHT way).
+                    if (!HasAnyPanelOpen() && active_button_index < buttons.size()) {
+                        const std::string &row = buttons[active_button_index].Name();
+                        const char *option = row == "menustyle" ? "Menu:Theme"
+                                           : row == "graphics"  ? "GFX:Quality" : nullptr;
+                        if (option) {
+                            GameSettings::Instance()->SetValue(option,
+                                e->key.key == SDLK_LEFT ? "-1" : "");
+                            AudioMixer::Instance()->PlaySFX("menu_change");
+                            return;
+                        }
                     }
                     // Handle LEFT/RIGHT for changing settings values (when not Chat)
                     if (showingNetPanel && networkInLobby && networkInputMode == 0 && selectedActionIndex != 0) {

@@ -17,8 +17,9 @@
  */
 
 // On the title screen, LEFT/RIGHT on the STYLE row step back/forward through
-// the menu themes (ENTER and a tap only ever stepped forward). On any other
-// title row, and with a panel open, LEFT/RIGHT leave the theme alone.
+// the menu themes, and on the GRAPHICS row through the three quality levels
+// (ENTER and a tap only ever stepped one way). On any other title row, and
+// with a panel open, LEFT/RIGHT leave both alone.
 
 #include <SDL3_image/SDL_image.h>
 
@@ -50,6 +51,7 @@ struct MainMenuTestAccess {
     static void AddRows(MainMenu& menu, const SDL_Renderer* renderer) {
         menu.buttons.push_back(MenuButton(89, 14, "1pgame", renderer, "1pgame", 30));
         menu.buttons.push_back(MenuButton(89, 70, "menustyle", renderer, "editor", 67));
+        menu.buttons.push_back(MenuButton(89, 126, "graphics", renderer, "graphics", 30));
         menu.active_button_index = 0;
         menu.buttons[0].Activate();
     }
@@ -76,7 +78,7 @@ int main() {
     TTF_Init();
     InitDataDir();
     SDL_Window* window = SDL_CreateWindow(
-        "menu-style-keys-test", 64, 64, SDL_WINDOW_HIDDEN);
+        "menu-row-keys-test", 64, 64, SDL_WINDOW_HIDDEN);
     SDL_Renderer* renderer = window ? SDL_CreateRenderer(window, nullptr) : nullptr;
     if (renderer == nullptr) {
         std::fprintf(stderr, "headless renderer setup failed: %s\n", SDL_GetError());
@@ -86,7 +88,7 @@ int main() {
     // Settings are written through on every step; keep them out of the real
     // pref dir.
     const auto dir = std::filesystem::temp_directory_path() /
-        ("frozen-bubble-menu-style-keys-test-" + std::to_string(
+        ("frozen-bubble-menu-row-keys-test-" + std::to_string(
             std::chrono::steady_clock::now().time_since_epoch().count()));
     std::filesystem::create_directories(dir);
     const std::string prefPath = dir.string() + "/";
@@ -94,6 +96,7 @@ int main() {
     settings->prefPath = prefPath.c_str();
     settings->ReadSettings();
     CHECK(settings->menuTheme() == 2);  // Slate, a fresh install's default
+    CHECK(settings->gfxLevel() == 1);   // full effects, likewise
 
     {
         std::unique_ptr<MainMenu> menu = MainMenuTestAccess::Create(renderer);
@@ -103,6 +106,7 @@ int main() {
         PressKey(*menu, SDLK_RIGHT);
         PressKey(*menu, SDLK_LEFT);
         CHECK(settings->menuTheme() == 2);
+        CHECK(settings->gfxLevel() == 1);
 
         MainMenuTestAccess::SelectRow(*menu, 1);
         PressKey(*menu, SDLK_RIGHT);
@@ -117,8 +121,30 @@ int main() {
         PressKey(*menu, SDLK_LEFT);
         CHECK(settings->menuTheme() == 2);
 
+        CHECK(settings->gfxLevel() == 1);   // STYLE never touches graphics
+
+        // GRAPHICS: RIGHT goes the way ENTER always has (1 -> 3 -> 2 -> 1),
+        // LEFT the other way (1 -> 2 -> 3 -> 1).
+        MainMenuTestAccess::SelectRow(*menu, 2);
+        PressKey(*menu, SDLK_RIGHT);
+        CHECK(settings->gfxLevel() == 3);
+        PressKey(*menu, SDLK_RIGHT);
+        CHECK(settings->gfxLevel() == 2);
+        PressKey(*menu, SDLK_RIGHT);
+        CHECK(settings->gfxLevel() == 1);
+        PressKey(*menu, SDLK_LEFT);
+        CHECK(settings->gfxLevel() == 2);
+        PressKey(*menu, SDLK_LEFT);
+        CHECK(settings->gfxLevel() == 3);
+        PressKey(*menu, SDLK_LEFT);
+        CHECK(settings->gfxLevel() == 1);
+        CHECK(settings->menuTheme() == 2);  // and graphics never the theme
+
         // A panel on top of the title screen owns LEFT/RIGHT.
         MainMenuTestAccess::SetSPPanel(*menu, true);
+        PressKey(*menu, SDLK_RIGHT);
+        CHECK(settings->gfxLevel() == 1);
+        MainMenuTestAccess::SelectRow(*menu, 1);
         PressKey(*menu, SDLK_RIGHT);
         CHECK(settings->menuTheme() == 2);
         MainMenuTestAccess::SetSPPanel(*menu, false);
@@ -131,6 +157,6 @@ int main() {
     TTF_Quit();
     SDL_Quit();
     if (failures) std::fprintf(stderr, "%d check(s) failed\n", failures);
-    else std::printf("menu-style-keys-test: all checks passed\n");
+    else std::printf("menu-row-keys-test: all checks passed\n");
     return failures ? 1 : 0;
 }
