@@ -39,6 +39,7 @@ public:
     void Pressed(void *parent);
     void Activate();
     void Deactivate();
+    const std::string &Name() const { return buttonName; }
 private:
     // Rebuilds labelIdle/labelActive when the theme or the label text has
     // changed since they were last rendered. Both are full TTF renders plus a
