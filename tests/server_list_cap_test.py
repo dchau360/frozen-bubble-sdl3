@@ -18,6 +18,8 @@ import time
 import unittest
 from pathlib import Path
 
+from testports import free_tcp_port
+
 
 def recv_until(sock, token, timeout=5.0):
     sock.setblocking(False)
@@ -42,7 +44,7 @@ class ServerListCapTest(unittest.TestCase):
         if not self.server_path.exists():
             self.skipTest(f"fb-server binary not found at {self.server_path}")
 
-        self.port = 15512
+        self.port = free_tcp_port()
         # -d keeps the server in the foreground. Without it fb-server forks and
         # the parent exits, so Popen.kill() reaps only the parent and the real
         # daemon keeps the port -- the next test in this file would fail to bind

@@ -16,8 +16,6 @@ from server_weekly_test import WeeklyTestBase, monday_of, recv_until, re_challen
 
 
 class AccountTest(WeeklyTestBase):
-    PORT = 15531
-
     def raw(self):
         import socket
         s = socket.create_connection(("127.0.0.1", self.PORT), timeout=3.0)

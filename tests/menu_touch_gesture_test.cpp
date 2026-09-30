@@ -92,6 +92,8 @@
 #include <netinet/in.h>
 #include <sys/socket.h>
 #include <unistd.h>
+
+#include "test_ports.h"
 #endif
 
 static int failures = 0;
@@ -1816,7 +1818,7 @@ int main() {
     // that it didn't crash.
     {
         std::unique_ptr<MainMenu> menu = MainMenuTestAccess::Create(renderer);
-        const int testPort = 15519;  // Distinct from the Python server tests' 15512/15513/15517.
+        const int testPort = FreeTcpPort();
         MainMenuTestAccess::SetNetworkPort(*menu, testPort);
 
         Uint64 start = SDL_GetTicks();
@@ -1957,7 +1959,7 @@ int main() {
         // so the singleton NetworkClient's own SendNick() is forced into a
         // real collision against the real server, not a synthetic one.
         {
-            const int nickTestPort = 15522;  // distinct from every other port used in this file
+            const int nickTestPort = FreeTcpPort();
             MainMenuTestAccess::SetNetworkPort(*menu, nickTestPort);
             MainMenuTestAccess::CallStartLocalServer(*menu);
             CHECK(MainMenuTestAccess::IsServerHosting(*menu));

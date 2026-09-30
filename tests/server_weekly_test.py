@@ -26,6 +26,8 @@ import time
 import unittest
 from pathlib import Path
 
+from testports import free_tcp_port
+
 re_challenge = re.compile(r"AUTH: CHALLENGE ([0-9a-f]{64})")
 
 
@@ -95,9 +97,8 @@ class Accounts:
 
 
 class WeeklyTestBase(unittest.TestCase):
-    PORT = 15521
-
     def setUp(self):
+        self.PORT = free_tcp_port()
         if len(sys.argv) < 2:
             self.skipTest("fb-server binary path not passed as argv[1]")
         self.server_path = Path(sys.argv[1])
