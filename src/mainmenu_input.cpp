@@ -1401,6 +1401,15 @@ void MainMenu::MenuDownKey() {
 }
 
 void MainMenu::MenuLeftRightKey(SDL_Event *e) {
+                    // Title screen, MENU STYLE row: LEFT/RIGHT step through
+                    // the themes (ENTER and a tap still step forward).
+                    if (!HasAnyPanelOpen() && active_button_index < buttons.size() &&
+                        buttons[active_button_index].Name() == "menustyle") {
+                        GameSettings::Instance()->SetValue("Menu:Theme",
+                            e->key.key == SDLK_LEFT ? "-1" : "");
+                        AudioMixer::Instance()->PlaySFX("menu_change");
+                        return;
+                    }
                     // Handle LEFT/RIGHT for changing settings values (when not Chat)
                     if (showingNetPanel && networkInLobby && networkInputMode == 0 && selectedActionIndex != 0) {
                         NetworkClient* netClient = NetworkClient::Instance();

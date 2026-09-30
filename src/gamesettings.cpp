@@ -637,10 +637,12 @@ void GameSettings::SetValue(const char* option, const char* value)
         return;
     }
     else if (strcmp(option, "Menu:Theme") == 0) {
-        // Forward through the five themes, wrapping back to Classic. The count
-        // is spelled out rather than including menutheme.h, which would drag
+        // Forward through the five themes, wrapping back to Classic, or back
+        // one when value is "-1" (LEFT on the MENU STYLE row). The count is
+        // spelled out rather than including menutheme.h, which would drag
         // SDL_ttf into every translation unit that reads a setting.
-        menuThemeId = (menuThemeId + 1) % 5;
+        const int step = (value && strcmp(value, "-1") == 0) ? 5 - 1 : 1;
+        menuThemeId = (menuThemeId + step) % 5;
         // Section header has to exist or iniparser_dump_ini drops every key
         // under it (see SetReplayKeepCount/SaveHostSettings for the same
         // guard). CreateDefaultSettings() writes this on a fresh install, but

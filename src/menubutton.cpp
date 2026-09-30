@@ -136,8 +136,13 @@ std::string MenuButton::LabelText() const
     // txt_keys_{off,over}.png and is part of the original artwork.
     if (buttonName == "keys")       return "SETTINGS";
     if (buttonName == "highscores") return "HIGH SCORES";
-    if (buttonName == "menustyle")
-        return std::string("STYLE: ") + MenuThemeName(GameSettings::Instance()->menuTheme());
+    // The arrows show while the row is selected, since that is when LEFT/RIGHT
+    // step through the themes (MainMenu::MenuLeftRightKey).
+    if (buttonName == "menustyle") {
+        const char *name = MenuThemeName(GameSettings::Instance()->menuTheme());
+        return isActive ? std::string("STYLE: < ") + name + " >"
+                        : std::string("STYLE: ") + name;
+    }
     return buttonName;
 }
 

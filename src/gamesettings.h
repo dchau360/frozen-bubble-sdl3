@@ -185,7 +185,8 @@ public:
     const char *prefPath = nullptr; // Initialized lazily via InitPrefPath() after SDL is ready
     int gfxLevel() { return gfxQuality; }
     // Which title-screen menu theme is selected; see menutheme.h. Cycled by
-    // the MENU STYLE row through SetValue("Menu:Theme", "").
+    // the MENU STYLE row through SetValue("Menu:Theme", "") (forward) or
+    // SetValue("Menu:Theme", "-1") (back, LEFT on that row).
     int menuTheme() { return menuThemeId; }
     SDL_Point curResolution() { return {windowWidth, windowHeight}; }
     bool fullscreenMode() { return useFullscreen; }

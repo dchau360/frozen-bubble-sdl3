@@ -178,6 +178,15 @@ int main() {
         CHECK(iniHasKeyValue(settingsPath, "theme", std::to_string(expected)));
     }
 
+    // LEFT on the row steps back instead, wrapping from Classic to Pop, and
+    // is written through the same way.
+    const int backSequence[] = {1, 0, 4, 3, 2};
+    for (int expected : backSequence) {
+        settings->SetValue("Menu:Theme", "-1");
+        CHECK(settings->menuTheme() == expected);
+        CHECK(iniHasKeyValue(settingsPath, "theme", std::to_string(expected)));
+    }
+
     settings->SetValue("Menu:Theme", "");
     CHECK(settings->menuTheme() == 3);
     settings->ReadSettings();

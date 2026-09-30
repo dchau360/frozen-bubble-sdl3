@@ -426,6 +426,12 @@ if(BUILD_TESTING AND NOT EMSCRIPTEN AND NOT ANDROID AND NOT IOS)
     target_link_libraries(sp-panel-labels-test PRIVATE frozen-bubble-core-test)
     add_test(NAME sp-panel-labels-test COMMAND sp-panel-labels-test)
 
+    add_executable(menu-style-keys-test tests/menu_style_keys_test.cpp)
+    set_property(TARGET menu-style-keys-test PROPERTY CXX_STANDARD 17)
+    set_property(TARGET menu-style-keys-test PROPERTY CXX_EXTENSIONS OFF)
+    target_link_libraries(menu-style-keys-test PRIVATE frozen-bubble-core-test)
+    add_test(NAME menu-style-keys-test COMMAND menu-style-keys-test)
+
     add_executable(ttftext-cache-test
         tests/ttftext_cache_test.cpp
         src/ttftext.cpp
