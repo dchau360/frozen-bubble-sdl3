@@ -26,6 +26,7 @@ on:
       - 'site/**'
       - 'tools/build-site.py'
       - 'share/gfx/DroidSans.ttf'
+      - 'share/gfx/Baloo2-ExtraBold.ttf'
       - '.github/workflows/pages.yml'
   workflow_dispatch:
 
