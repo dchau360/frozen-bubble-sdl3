@@ -124,9 +124,6 @@ void GameSettings::CreateDefaultSettings()
         EvalIniResult(rval, dict, "Stats", NULL);
         EvalIniResult(rval, dict, "Stats:WorldHighscores", "true");
 
-        EvalIniResult(rval, dict, "Game", NULL);
-        EvalIniResult(rval, dict, "Game:ArcadeMode", "false");
-
         EvalIniResult(rval, dict, "Menu", NULL);
         EvalIniResult(rval, dict, "Menu:Theme", "2"); // MENU_THEME_SLATE
 
@@ -276,7 +273,6 @@ void GameSettings::ReadSettings()
     colorblindBubbles = iniparser_getboolean(optDict, "GFX:ColorblindBubbles", false);
     showFps = iniparser_getboolean(optDict, "GFX:ShowFPS", false);
     worldHighscores = iniparser_getboolean(optDict, "Stats:WorldHighscores", true);
-    arcadeMode = iniparser_getboolean(optDict, "Game:ArcadeMode", false);
     if (gfxQuality > 3 || gfxQuality < 1) gfxQuality = 3;
     if (windowWidth < 640 || windowWidth > 9999) windowWidth = 640;
     if (windowHeight < 480 || windowHeight > 9999) windowHeight = 480;
@@ -683,12 +679,6 @@ void GameSettings::SetValue(const char* option, const char* value)
         // sending runs, and viewing the board then goes unsigned.
         worldHighscores = !worldHighscores;
         iniparser_set(optDict, option, worldHighscores ? "true" : "false");
-        SaveSettings();
-        return;
-    }
-    else if (strcmp(option, "Game:ArcadeMode") == 0) {
-        arcadeMode = !arcadeMode;
-        iniparser_set(optDict, option, arcadeMode ? "true" : "false");
         SaveSettings();
         return;
     }

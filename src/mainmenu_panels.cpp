@@ -246,11 +246,10 @@ constexpr const char *kSPLabel[SP_OPT] = {
     "PLAY RANDOM LEVELS",
     "MULTIPLAYER TRAINING",
     "LOCAL MULTIPLAYER",
-    // These two are toggles, not navigation -- SPPanelRender draws an ON/OFF
-    // badge next to them (not baked into this cached label texture, so it can
-    // change without a re-render) and gives the highlighted one a description
-    // in the panel's header area instead of a fixed label like the rows above.
-    "ARCADE MODE",
+    // A toggle, not navigation -- SPPanelRender draws an ON/OFF badge next
+    // to it (not baked into this cached label texture, so it can change
+    // without a re-render) and gives it a description in the panel's header
+    // area when highlighted, instead of a fixed label like the rows above.
     "WORLD HIGHSCORES",
 };
 } // namespace
@@ -289,10 +288,10 @@ void MainMenu::SPPanelRender() {
     SDL_Renderer *rend = const_cast<SDL_Renderer*>(renderer);
 
     // The 5 original rows are big carved-plate navigation buttons on a
-    // uniform 41px pitch; Arcade Mode and World highscores are settings
-    // toggles, not navigation, so they get their own slimmer rows in a
-    // section below instead of stretching the plate grid to fit 7 full-size
-    // buttons -- there just isn't room for that in a fixed 640x480 canvas.
+    // uniform 41px pitch; World highscores is a settings toggle, not
+    // navigation, so it gets its own slimmer row in a section below instead
+    // of stretching the plate grid -- there isn't room for more full-size
+    // buttons in a fixed 640x480 canvas.
     // Both sections anchor off spPanelRct.y at a fixed offset, same as the
     // original single-section layout did, so bumping the panel's height here
     // cannot silently desync the two.
@@ -347,7 +346,6 @@ void MainMenu::SPPanelRender() {
     GameSettings* gs = GameSettings::Instance();
     struct ToggleRow { int idx; bool on; };
     ToggleRow toggles[SP_OPT - kBigRows] = {
-        {kSPRowArcadeMode,   gs->arcadeModeEnabled()},
         {kSPRowWorldScores,  gs->worldHighscoresEnabled()},
     };
     for (int t = 0; t < SP_OPT - kBigRows; t++) {
@@ -389,75 +387,13 @@ void MainMenu::SPPanelRender() {
     // row 0's plate.
     panelText.UpdateStyle(15, TTF_STYLE_NORMAL);
     panelText.UpdateColor({255, 255, 255, 255}, {0, 0, 0, 255});
-    if (activeSPIdx == kSPRowArcadeMode) {
-        panelText.UpdateText(rend, "Arcade Mode", 0);
-    } else if (activeSPIdx == kSPRowWorldScores) {
+    if (activeSPIdx == kSPRowWorldScores) {
         panelText.UpdateText(rend, "Send runs to the world board", 0);
     } else {
         panelText.UpdateText(rend, "Start 1-player game menu", 0);
     }
     panelText.UpdatePosition({(640/2) - (panelText.Coords()->w / 2), spPanelRct.y + 40});
     { SDL_FRect fr = ToFRect(*panelText.Coords()); SDL_RenderTexture(rend, panelText.Texture(), nullptr, &fr); }
-
-    // Shown instead of immediately flipping the row when the player tries to
-    // turn Arcade Mode ON (see press()) -- same box style as
-    // the Reset-all confirm in KeysPanelRender.
-    if (showingArcadeModeConfirm) {
-        SDL_Rect box = {(640/2) - 155, (480/2) - 112, 310, 224};
-        SDL_SetRenderDrawBlendMode(rend, SDL_BLENDMODE_BLEND);
-        SDL_SetRenderDrawColor(rend, menulist::kHeaderFill.r, menulist::kHeaderFill.g,
-                                menulist::kHeaderFill.b, 245);
-        { SDL_FRect fr = ToFRect(box); SDL_RenderFillRect(rend, &fr); }
-        SDL_SetRenderDrawColor(rend, menulist::kEdge.r, menulist::kEdge.g,
-                                menulist::kEdge.b, menulist::kEdge.a);
-        { SDL_FRect fr = ToFRect(box); SDL_RenderRect(rend, &fr); }
-
-        panelText.UpdateStyle(15, TTF_STYLE_BOLD);
-        panelText.UpdateColor(menulist::kGold, menulist::kTextShadow);
-        panelText.UpdateAlignment(TTF_HORIZONTAL_ALIGN_CENTER);
-        panelText.UpdateText(rend, "Enable Arcade Mode?", 290);
-        panelText.UpdatePosition({box.x + box.w/2 - panelText.Coords()->w/2, box.y + 12});
-        { SDL_FRect fr = ToFRect(*panelText.Coords()); SDL_RenderTexture(rend, panelText.Texture(), nullptr, &fr); }
-
-        panelText.UpdateStyle(13, TTF_STYLE_NORMAL);
-        panelText.UpdateColor(menulist::kText, menulist::kTextShadow);
-        panelText.UpdateAlignment(TTF_HORIZONTAL_ALIGN_LEFT);
-        panelText.UpdateText(rend,
-            "Dying in a classic solo game\n"
-            "will send you back to Level 1\n"
-            "with your score reset to 0,\n"
-            "instead of just retrying the\n"
-            "level you lost on.\n\n"
-            "Turn it off again any time.", 290);
-        panelText.UpdatePosition({box.x + 12, box.y + 44});
-        { SDL_FRect fr = ToFRect(*panelText.Coords()); SDL_RenderTexture(rend, panelText.Texture(), nullptr, &fr); }
-
-        // Two tappable buttons, hit-tested by HandlePanelTap.
-        arcadeConfirmYesRect = {box.x + 12, box.y + box.h - 34, 135, 26};
-        arcadeConfirmNoRect  = {box.x + box.w - 12 - 135, box.y + box.h - 34, 135, 26};
-        auto drawArcadeButton = [&](const SDL_Rect& r, const char* label, bool gold) {
-            SDL_SetRenderDrawColor(rend, 10, 38, 48, 210);
-            { SDL_FRect fr = ToFRect(r); SDL_RenderFillRect(rend, &fr); }
-            SDL_Color edge = gold ? menulist::kGold : menulist::kMuted;
-            SDL_SetRenderDrawColor(rend, edge.r, edge.g, edge.b, 255);
-            { SDL_FRect fr = ToFRect(r); SDL_RenderRect(rend, &fr); }
-            panelText.UpdateStyle(14, TTF_STYLE_BOLD);
-            panelText.UpdateColor(gold ? menulist::kGold : menulist::kText, menulist::kTextShadow);
-            panelText.UpdateText(rend, label, 0);
-            panelText.UpdatePosition({r.x + r.w/2 - panelText.Coords()->w/2,
-                                       r.y + r.h/2 - panelText.Coords()->h/2});
-            { SDL_FRect fr = ToFRect(*panelText.Coords()); SDL_RenderTexture(rend, panelText.Texture(), nullptr, &fr); }
-        };
-        drawArcadeButton(arcadeConfirmYesRect, "Turn On", !confirmDialogFocusNo);
-        drawArcadeButton(arcadeConfirmNoRect, "Cancel", confirmDialogFocusNo);
-
-        panelText.UpdateAlignment(TTF_HORIZONTAL_ALIGN_CENTER);  // restore default for the rest of this panel
-    }
-
-    // Spelled out rather than left for the player to discover by guessing.
-    if (showingArcadeModeConfirm) {
-        menulist::DrawFooterHint(rend, panelText, "LEFT/RIGHT choose    ENTER select    ESC cancel");
-    }
 }
 
 

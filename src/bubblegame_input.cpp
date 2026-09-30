@@ -37,6 +37,16 @@
 #include "bubblegame_internal.h"
 
 bool BubbleGame::HandleFinishedTap(float lx, float ly) {
+    if (continuePrompt && gameFinish) {
+        auto hit = [&](const SDL_Rect& r) {
+            return r.w > 0 && lx >= r.x && lx < r.x + r.w && ly >= r.y && ly < r.y + r.h;
+        };
+        if (hit(continueBtnRect)) ResolveContinuePrompt(false);
+        else if (hit(startOverBtnRect)) ResolveContinuePrompt(true);
+        // A tap anywhere else picks neither: the prompt is a real choice, so
+        // it is never answered by a stray tap the way the panel before it is.
+        return true;
+    }
     if (!currentSettings.networkGame || !gameFinish) return false;
     if (statsTournamentBtn.w > 0 &&
         lx >= statsTournamentBtn.x && lx < statsTournamentBtn.x + statsTournamentBtn.w &&
@@ -284,7 +294,19 @@ void BubbleGame::HandleInput(SDL_Event *e) {
                 case SDLK_T:
                     if (currentSettings.networkGame) StartInGameChat();
                     break;
+                case SDLK_LEFT:
+                case SDLK_RIGHT:
+                    if (continuePrompt) {
+                        continueFocusStartOver = e->key.key == SDLK_RIGHT;
+                        PlaySFX("menu_change");
+                    }
+                    break;
                 case SDLK_TAB:
+                    if (continuePrompt) {
+                        continueFocusStartOver = !continueFocusStartOver;
+                        PlaySFX("menu_change");
+                        break;
+                    }
                     // >5-player royale only: page through remote boards. CycleNetViewPage()
                     // itself no-ops for <=5-player/non-network games; the chattingMode guard
                     // above already keeps this from firing while composing a chat message.
@@ -455,22 +477,20 @@ void BubbleGame::HandleInput(SDL_Event *e) {
                             // upload before gameLost was set, so it is safe to
                             // zero now.
                             bubbleArrays[0].score = 0;
-                            // Arcade mode (SP-panel toggle, GameSettings) sends
-                            // every death back to level 1 rather than retrying
-                            // the level just lost on -- a harder, "one long
-                            // run" alternative to the default's per-level
-                            // retries. Restricted to the same classic solo
-                            // campaign NewGame()'s isDefaultClassic gates
-                            // (default levelset or a custom start level, not
-                            // random levels/training/network): those other
-                            // single-player modes don't treat curLevel as
-                            // campaign progress, so resetting it there would
-                            // not mean the same thing.
-                            const bool isDefaultClassic = !currentSettings.networkGame &&
-                                currentSettings.playerCount == 1 &&
-                                !currentSettings.randomLevels && !currentSettings.mpTraining;
-                            if (isDefaultClassic && GameSettings::Instance()->arcadeModeEnabled()) {
-                                curLevel = 1;
+                            // The classic solo campaign asks first: the
+                            // CONTINUE? prompt decides between retrying this
+                            // level and starting over from level 1
+                            // (ResolveContinuePrompt). Other solo modes just
+                            // retry the level.
+                            if (ArcadeContinueApplies()) {
+                                if (!continuePrompt) {
+                                    continuePrompt = true;
+                                    continueFocusStartOver = false;
+                                    PlaySFX("menu_selected");
+                                } else {
+                                    ResolveContinuePrompt(continueFocusStartOver);
+                                }
+                                break;
                             }
                             ReloadGame(curLevel);
                         }

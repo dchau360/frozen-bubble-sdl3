@@ -1,46 +1,43 @@
-<h1>FROZEN-BUBBLE</h1>
-<p class="sub">World highscores · classic 100 levels</p>
+<h1>World highscores</h1>
 
-<div class="controls">
-<span class="pill" role="group" aria-label="Board">
-<button type="button" data-board="0" aria-pressed="true">Furthest level</button>
-<button type="button" data-board="1" aria-pressed="false">Most points</button>
-</span>
-<span class="pill" role="group" aria-label="Period">
-<button type="button" data-scope="alltime" aria-pressed="true">All-time</button>
-<button type="button" data-scope="week" aria-pressed="false">This week</button>
-</span>
-<span class="pill" role="group" aria-label="Controls">
-<button type="button" data-track="0" aria-pressed="true">Keyboard / gamepad</button>
-<button type="button" data-track="1" aria-pressed="false">Mouse / touch</button>
-</span>
+<div class="tabs big" role="group" aria-label="Controls">
+<button type="button" data-track="0" aria-pressed="true">Keyboard</button>
+<button type="button" data-track="1" aria-pressed="false">Mouse/Touch</button>
+</div>
+<div class="tabs" role="group" aria-label="Board">
+<button type="button" data-board="0" aria-pressed="true">World level</button>
+<button type="button" data-board="1" aria-pressed="false">World points</button>
 </div>
 
-<div class="panel"><table><thead id="fb-head"></thead><tbody id="fb-body"><tr><td class="empty">Loading…</td></tr></tbody></table></div>
+<div class="boards">
+<section class="board"><h2>ALL-TIME</h2><ol id="fb-alltime"><li class="empty">Loading…</li></ol></section>
+<section class="board"><h2 id="fb-week-title">THIS WEEK</h2><ol id="fb-week"><li class="empty">Loading…</li></ol></section>
+</div>
 <p id="fb-status" class="status">Connecting to fb.servequake.com…</p>
+<p class="note">Scores are sent by each player's game and aren't verified.</p>
 
 <div class="about" markdown="1">
 
-**Furthest level** ranks runs from level 1 of the standard 100 levels: the
-furthest level cleared wins, and the faster time breaks a tie. **Most points**
-ranks the most points scored in one life. The score starts over at every
-death, and the level shown is the one that life got to. "This week" starts
-over every Monday at 00:00 UTC.
+**World level** ranks runs from level 1 of the standard 100 levels: the
+furthest level cleared wins, and the faster time breaks a tie. **World
+points** ranks the most points scored in one life. The score starts over at
+every death, and the level shown is the one that life got to. "This week"
+starts over every Monday at 00:00 UTC.
 
 Keyboard/gamepad and mouse/touch runs are ranked separately, since aiming
 with one is not the same game as aiming with the other. Players are listed as
 `nick#tag`: the tag comes from the player's anonymous account, so two players
-with the same nickname stay apart. Scores are sent by each player's game and
-are not verified.
+with the same nickname stay apart.
 
 The board lives on this port's own server at fb.servequake.com. Frozen Bubble:
 SDL3 is a fan-made port, and the board is not run by the original Frozen
 Bubble authors.
 
 Want to be on it? Get the game on the [home page](../), play a classic game
-from level 1, and your results are sent when you're back in the menu.
-Players can turn this off with **World highscores** in the 1-player menu; see
-the [privacy policy](../privacy/#world-highscores).
+from level 1, and your results are sent when you're back in the menu. The
+same boards are in the game under **High Scores**. Players can turn sending
+off with **World highscores** in the 1-player menu; see the
+[privacy policy](../privacy/#world-highscores).
 
 </div>
 
@@ -49,17 +46,21 @@ the [privacy policy](../privacy/#world-highscores).
   // The boards live on the port's own server (fb-server, protocol 1.7:
   // server/hiscores.h). Browsers reach it the way the web build of the game
   // does, over a secure WebSocket; the server answers in binary frames.
-  // Boards 0/1 are furthest level (keyboard/mouse), 2/3 most points.
+  // Boards 0/1 are furthest level (keyboard/mouse), 2/3 most points. Rows
+  // carry the same fields, in the same words, as the game's own WORLD LEVEL /
+  // WORLD POINTS tabs (HighscoreManager::RenderWorldBoard, worldboard.cpp).
   var SERVER = "wss://fb.servequake.com/";
   var BOARDS = 4;
   var boards = [], weekStart = 0;
-  var view = { kind: 0, scope: "alltime", track: 0 };
-  // "#points" (and "#mouse") open straight onto that board.
+  var view = { kind: 0, track: 0 };
+  // "#points" (and "#mouse") open straight onto that board; the game's
+  // "Open in browser" button sends whichever it was showing.
   var hash = location.hash.replace("#", "").split("-");
   if (hash.indexOf("points") >= 0) view.kind = 1;
   if (hash.indexOf("mouse") >= 0) view.track = 1;
   var statusEl = document.getElementById("fb-status");
-  function levelLabel(l) { return l > 100 ? "all 100" : String(l); }
+  function levelLabel(l) { return l > 100 ? "won!" : "level " + l; }
+  function shortLevel(l) { return l > 100 ? "won!" : "lv " + l; }
   function timeLabel(ms) {
     var t = Math.floor(ms / 1000), h = Math.floor(t / 3600), m = Math.floor(t / 60) % 60, s = t % 60;
     var mm = (h ? String(m).padStart(2, "0") : m) + "'" + String(s).padStart(2, "0") + '"';
@@ -74,68 +75,46 @@ the [privacy policy](../privacy/#world-highscores).
     });
   }
   function same(a, b) { return a.level === b.level && a.ms === b.ms && a.points === b.points; }
-  function cell(tr, cls, text) { var td = tr.insertCell(); if (cls) td.className = cls; td.textContent = text; return td; }
-  function render() {
-    document.querySelectorAll("[data-board]").forEach(function (b) { b.setAttribute("aria-pressed", String(+b.dataset.board === view.kind)); });
-    document.querySelectorAll("[data-scope]").forEach(function (b) { b.setAttribute("aria-pressed", String(b.dataset.scope === view.scope)); });
-    document.querySelectorAll("[data-track]").forEach(function (b) { b.setAttribute("aria-pressed", String(+b.dataset.track === view.track)); });
-    var points = view.kind === 1;
-    var cols = points ? ["Rank", "Player", "Score", "Level", "Time"] : ["Rank", "Player", "Level", "Time"];
-    var head = document.getElementById("fb-head");
-    head.textContent = "";
-    var hr = head.insertRow();
-    cols.forEach(function (c) { var th = document.createElement("th"); th.textContent = c; if (c === "Time") th.className = "time"; hr.appendChild(th); });
-    var board = boards[view.kind * 2 + view.track];
-    if (!board) return;
-    var list = board[view.scope], body = document.getElementById("fb-body");
-    body.textContent = "";
+  function span(li, cls, text) { var s = document.createElement("span"); s.className = cls; s.textContent = text; li.appendChild(s); }
+  function fill(id, list, emptyText) {
+    var ol = document.getElementById(id);
+    ol.textContent = "";
     if (!list.length) {
-      var td = cell(body.insertRow(), "empty", view.scope === "week" ? "Nobody yet this week. Be the first!" : "Nobody yet. Be the first!");
-      td.colSpan = cols.length;
+      var li = document.createElement("li");
+      li.className = "empty";
+      li.textContent = emptyText;
+      ol.appendChild(li);
       return;
     }
     var ranks = [];
     list.forEach(function (e, i) {
       var rank = i && same(list[i - 1], e) ? ranks[i - 1] : i + 1;
       ranks.push(rank);
-      var tr = body.insertRow();
-      if (rank <= 3) tr.className = "r" + rank;
-      cell(tr, "rank", "#" + rank);
-      var hashAt = e.name.lastIndexOf("#");
-      var name = cell(tr, "name", hashAt > 0 ? e.name.slice(0, hashAt) : e.name);
-      if (hashAt > 0) {
-        var tag = document.createElement("span");
-        tag.className = "tag";
-        tag.textContent = e.name.slice(hashAt);
-        name.appendChild(tag);
-      }
-      if (points) {
-        cell(tr, "big", pointsLabel(e.points));
-        cell(tr, "", levelLabel(e.level));
-      } else {
-        cell(tr, "big", levelLabel(e.level));
-      }
-      cell(tr, "dim time", timeLabel(e.ms));
+      var li = document.createElement("li");
+      span(li, "rank" + (rank <= 3 ? " m" + rank : ""), rank + ".");
+      span(li, "name", e.name);
+      span(li, "figs", view.kind === 1
+        ? pointsLabel(e.points) + "  " + shortLevel(e.level) + "  " + timeLabel(e.ms)
+        : levelLabel(e.level) + "  " + timeLabel(e.ms));
+      ol.appendChild(li);
     });
   }
-  function bind(attr, key, num) {
+  function render() {
+    document.querySelectorAll("[data-board]").forEach(function (b) { b.setAttribute("aria-pressed", String(+b.dataset.board === view.kind)); });
+    document.querySelectorAll("[data-track]").forEach(function (b) { b.setAttribute("aria-pressed", String(+b.dataset.track === view.track)); });
+    var board = boards[view.kind * 2 + view.track];
+    if (!board) return;
+    fill("fb-alltime", board.alltime, "Nobody yet -- be the first!");
+    fill("fb-week", board.week, "Nobody yet this week -- be the first!");
+  }
+  function bind(attr, key) {
     document.querySelectorAll("[data-" + attr + "]").forEach(function (b) {
-      b.addEventListener("click", function () {
-        var v = b.getAttribute("data-" + attr);
-        view[key] = num ? +v : v;
-        render();
-      });
+      b.addEventListener("click", function () { view[key] = +b.getAttribute("data-" + attr); render(); });
     });
   }
-  bind("board", "kind", true);
-  bind("scope", "scope", false);
-  bind("track", "track", true);
+  bind("board", "kind");
+  bind("track", "track");
   render();
-  function weekLabel() {
-    if (!weekStart) return "";
-    var d = new Date(weekStart * 1000);
-    return " This week started " + d.toLocaleDateString(undefined, { month: "short", day: "numeric", timeZone: "UTC" }) + ".";
-  }
   var ws, buf = "", got = 0;
   try { ws = new WebSocket(SERVER); } catch (e) { statusEl.textContent = "Couldn't reach the server."; return; }
   ws.binaryType = "arraybuffer";
@@ -156,7 +135,15 @@ the [privacy policy](../privacy/#world-highscores).
           weekStart = +f[0];
           boards[got] = { alltime: parseList(f[1]), week: parseList(f[2]) };
         }
-        if (++got === BOARDS) { statusEl.textContent = "Live from fb.servequake.com." + weekLabel(); ws.close(); }
+        if (++got === BOARDS) {
+          statusEl.textContent = "Live from fb.servequake.com.";
+          if (weekStart) {
+            var d = new Date(weekStart * 1000);
+            document.getElementById("fb-week-title").textContent = "THIS WEEK (SINCE " +
+              d.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" }).toUpperCase() + ")";
+          }
+          ws.close();
+        }
         render();
       }
     }

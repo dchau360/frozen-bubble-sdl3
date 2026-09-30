@@ -509,37 +509,10 @@ bool MainMenu::HandlePanelTap(float lx, float ly, float verticalDrift) {
     // underneath it, and hit-tests its own swatch rects instead -- first, and
     // consuming every tap, for the same reason as the popups below.
     if (showingTeamsPanel) return HandleTeamsPanelTap(lx, ly);
-    // The "enable Arcade Mode?" popup (opened from the 1-player submenu, see
-    // SPPanelRender/press()) is modal and sits on top of whichever panel is
-    // underneath, but panelTapRows still holds that panel's rows -- checked
-    // here, first, so a tap never falls through to whichever hidden row
-    // happens to occupy this screen position. Every tap is consumed while it
-    // is showing, hit or miss, so a miss can't silently move the selection
-    // underneath.
-    if (showingArcadeModeConfirm) {
-        auto hit = [&](const SDL_Rect& r) {
-            return lx >= r.x && lx < r.x + r.w && ly >= r.y && ly < r.y + r.h;
-        };
-        SDL_Keycode key = SDLK_UNKNOWN;
-        // Force focus to match whichever button was actually tapped before
-        // pushing the synthetic RETURN -- KeysPanelKey's RETURN handling
-        // below now reads confirmDialogFocusNo to decide Turn On vs Cancel,
-        // and a tap must win over whatever a keyboard/gamepad left it at.
-        if (hit(arcadeConfirmYesRect)) { confirmDialogFocusNo = false; key = SDLK_RETURN; }
-        else if (hit(arcadeConfirmNoRect)) key = SDLK_ESCAPE;
-        if (key != SDLK_UNKNOWN) {
-            SDL_Event ev = {};
-            ev.type = SDL_EVENT_KEY_DOWN;
-            ev.key.key = key;
-            SDL_PushEvent(&ev);
-        }
-        return true;
-    }
     // The "Enable chain reaction? Y or N?" prompt (OptPanelRender /
     // NetSetupPanelRender -- random level, multiplayer training, and network
     // game all share it) is modal the same way, and registers no rows of its
-    // own -- checked here for the same reason as showingArcadeModeConfirm
-    // above, so a tap never falls through to whatever row list is stale
+    // own -- checked here, first, so a tap never falls through to whatever row list is stale
     // underneath. Previously any key but ESC answered this from a
     // keyboard/gamepad; there was no touch equivalent at all.
     if ((showingOptPanel || showingNetSetupPanel) && awaitKp) {
@@ -717,30 +690,6 @@ bool MainMenu::HelpPanelKey(SDL_Event *e) {
 }
 
 bool MainMenu::KeysPanelKey(SDL_Event *e) {
-            // Opened from the 1-player submenu's "Arcade Mode" toggle (see
-            // SPPanelRender/press() in mainmenu.cpp) but handled here rather
-            // than a separate SPPanelKey of its own, checked ahead of the
-            // showingKeysPanel block below and not gated on which panel is
-            // open. LEFT/RIGHT/TAB move keyboard focus between the two
-            // buttons (confirmDialogFocusNo, see mainmenu.h), ENTER
-            // activates whichever is focused, and ESC
-            // still cancels outright as a shortcut regardless of focus.
-            if (showingArcadeModeConfirm) {
-                if (e->key.key == SDLK_LEFT || e->key.key == SDLK_RIGHT || e->key.key == SDLK_TAB) {
-                    confirmDialogFocusNo = !confirmDialogFocusNo;
-                    AudioMixer::Instance()->PlaySFX("menu_change");
-                } else if (e->key.key == SDLK_RETURN && !confirmDialogFocusNo) {
-                    GameSettings::Instance()->SetValue("Game:ArcadeMode", "");
-                    showingArcadeModeConfirm = false;
-                    confirmDialogFocusNo = false;
-                    AudioMixer::Instance()->PlaySFX("typewriter");
-                } else if (e->key.key == SDLK_RETURN || e->key.key == SDLK_ESCAPE || e->key.key == SDLK_AC_BACK) {
-                    showingArcadeModeConfirm = false;
-                    confirmDialogFocusNo = false;
-                    AudioMixer::Instance()->PlaySFX("menu_change");
-                }
-                return true;
-            }
             if (showingKeysPanel) {
                 if (awaitKp && e->key.key != SDLK_ESCAPE) {
                     // Set the key for the current player/index

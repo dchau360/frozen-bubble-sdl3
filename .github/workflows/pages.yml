@@ -25,6 +25,7 @@ on:
       - 'docs/PRIVACY_POLICY.md'
       - 'site/**'
       - 'tools/build-site.py'
+      - 'share/gfx/DroidSans.ttf'
       - '.github/workflows/pages.yml'
   workflow_dispatch:
 

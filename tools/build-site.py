@@ -39,8 +39,8 @@ PAGES = [
     # WebSocket (see site/scores.md), so nothing on this site has to know the
     # scores and every origin that serves it shows the same live board. The
     # game's "Open in browser" button points here (kWorldScoresUrl). It has
-    # its own template: a dark arcade scoreboard rather than the plain
-    # document look the other two pages share.
+    # its own template, dressed as the game's High Scores screen, rather than
+    # the plain document look the other two pages share.
     (os.path.join(SITE, "scores.md"),
      os.path.join("scores", "index.html"),
      "World highscores — Frozen Bubble: SDL3",
@@ -67,6 +67,18 @@ ASSETS = [
     # than hotlinked so opening the page makes no request to Google.
     (os.path.join(SITE, "img", "google-play-badge.png"),
      os.path.join("img", "google-play-badge.png")),
+    # The world highscores page wears the game's own High Scores screen:
+    # pieces cut from share/gfx/back_hiscores.png (the logo on its wood
+    # strip, a plain stretch of that wood, and the artwork inside the frame)
+    # and the font that screen is drawn in, served from here like the badge.
+    (os.path.join(SITE, "img", "scores-header.png"),
+     os.path.join("img", "scores-header.png")),
+    (os.path.join(SITE, "img", "scores-wood.png"),
+     os.path.join("img", "scores-wood.png")),
+    (os.path.join(SITE, "img", "scores-back.jpg"),
+     os.path.join("img", "scores-back.jpg")),
+    (os.path.join(ROOT, "share", "gfx", "DroidSans.ttf"),
+     os.path.join("fonts", "DroidSans.ttf")),
 ]
 
 # Copied through verbatim. The Google verification token must keep its exact

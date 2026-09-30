@@ -209,7 +209,6 @@ public:
     // of just resetting score and retrying the level just lost on. See the
     // gameLost branch in bubblegame_input.cpp and the SP-panel toggle in
     // mainmenu_panels.cpp's SPPanelRender.
-    bool arcadeModeEnabled() { return arcadeMode; }
 
     // Replay library keep count: how many completed rounds the on-disk rolling
     // library retains, 0 meaning "do not record" (default 5). ReadSettings()
@@ -353,7 +352,6 @@ private:
     bool playMusic = true, playSfx = true, classicSound = false;
     bool showFps = false;
     bool worldHighscores = true;
-    bool arcadeMode = false;
     // Replay library keep count. In-class default so a harness or a failed load
     // that never reached ReadSettings() still reads a valid count -- same reason
     // as gfxQuality above. Named ...Value because the getter takes the obvious

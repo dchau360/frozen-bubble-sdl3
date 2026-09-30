@@ -11,8 +11,9 @@
 # an allowlist (`*` plus `!` re-includes): a future Dockerfile that copies
 # something new keeps working, instead of failing on a missing file that is
 # silently absent from the context. Between the three Dockerfiles the context
-# needs only server/, CMakeLists.txt, site/, tools/build-site.py and
-# docs/{PRIVACY_POLICY.md,screenshots,store-assets} -- all left in.
+# needs only server/, CMakeLists.txt, site/, tools/build-site.py,
+# docs/{PRIVACY_POLICY.md,screenshots,store-assets} and
+# share/gfx/DroidSans.ttf -- all left in.
 
 # Android port: SDL3/SDL3_image/SDL3_mixer submodules, Gradle caches. 15GB.
 android/

@@ -96,6 +96,19 @@ struct BubbleGameTestAccess {
         event.key.key = SDLK_RETURN;
         game.HandleInput(&event);
     }
+    static void pressKey(BubbleGame& game, SDL_Keycode key) {
+        SDL_Event event{};
+        event.type = SDL_EVENT_KEY_DOWN;
+        event.key.key = key;
+        game.HandleInput(&event);
+    }
+    static bool continuePrompt(const BubbleGame& game) { return game.continuePrompt; }
+    static bool focusStartOver(const BubbleGame& game) { return game.continueFocusStartOver; }
+    static void setContinueButtons(BubbleGame& game, SDL_Rect cont, SDL_Rect startOver) {
+        game.continueBtnRect = cont;
+        game.startOverBtnRect = startOver;
+    }
+    static bool tapFinished(BubbleGame& game, float x, float y) { return game.HandleFinishedTap(x, y); }
     static void finishAsDraw(BubbleGame& game) { game.FinishRoundAsDraw(); }
     static void setTournamentRound(BubbleGame& game, bool value) { game.tournamentRound = value; }
     static bool tournamentReported(const BubbleGame& game) { return game.tournamentResultReported; }
@@ -1306,11 +1319,70 @@ int main() {
         BubbleGameTestAccess::player(game, 0).score = 12500;
         BubbleGameTestAccess::setGameOverState(game, true, true);
         BubbleGameTestAccess::capturePostRoundTransition(game);
+        // The first ENTER opens the CONTINUE? prompt instead of retrying.
         BubbleGameTestAccess::pressContinue(game);
-        // Retries the level just lost on, not level 1 -- curLevel already
-        // means "the level just lost on" everywhere else that reads it.
+        CHECK(BubbleGameTestAccess::continuePrompt(game));
+        CHECK(BubbleGameTestAccess::reloadLevel(game) == -1);
+        // ENTER again takes the focused default, Continue: retries the level
+        // just lost on, not level 1 -- curLevel already means "the level
+        // just lost on" everywhere else that reads it.
+        BubbleGameTestAccess::pressContinue(game);
         CHECK(BubbleGameTestAccess::reloadLevel(game) == 4);
         CHECK(BubbleGameTestAccess::player(game, 0).score == 0);
+        CHECK(!BubbleGameTestAccess::continuePrompt(game));
+    }
+
+    // CONTINUE? prompt: RIGHT moves focus to Start over, and taking it goes
+    // back to level 1. LEFT/TAB move focus back and forth.
+    {
+        BubbleGame game(renderer);
+        BubbleGameTestAccess::reset(game, 1, false, false);
+        BubbleGameTestAccess::setLevel(game, 9);
+        BubbleGameTestAccess::player(game, 0).score = 700;
+        BubbleGameTestAccess::setGameOverState(game, true, true);
+        BubbleGameTestAccess::capturePostRoundTransition(game);
+        BubbleGameTestAccess::pressContinue(game);
+        CHECK(!BubbleGameTestAccess::focusStartOver(game));
+        BubbleGameTestAccess::pressKey(game, SDLK_RIGHT);
+        CHECK(BubbleGameTestAccess::focusStartOver(game));
+        BubbleGameTestAccess::pressKey(game, SDLK_LEFT);
+        CHECK(!BubbleGameTestAccess::focusStartOver(game));
+        BubbleGameTestAccess::pressKey(game, SDLK_TAB);
+        CHECK(BubbleGameTestAccess::focusStartOver(game));
+        BubbleGameTestAccess::pressContinue(game);
+        CHECK(BubbleGameTestAccess::reloadLevel(game) == 1);
+        CHECK(BubbleGameTestAccess::player(game, 0).score == 0);
+    }
+
+    // CONTINUE? prompt by tap: a tap off both buttons answers nothing (and
+    // is consumed, so it can't fall through to "tap to continue"); a tap on
+    // a button picks it regardless of keyboard focus.
+    {
+        BubbleGame game(renderer);
+        BubbleGameTestAccess::reset(game, 1, false, false);
+        BubbleGameTestAccess::setLevel(game, 6);
+        BubbleGameTestAccess::setGameOverState(game, true, true);
+        BubbleGameTestAccess::capturePostRoundTransition(game);
+        BubbleGameTestAccess::pressContinue(game);
+        BubbleGameTestAccess::setContinueButtons(game, {100, 400, 100, 30}, {300, 400, 100, 30});
+        CHECK(BubbleGameTestAccess::tapFinished(game, 10.f, 10.f));
+        CHECK(BubbleGameTestAccess::continuePrompt(game));
+        CHECK(BubbleGameTestAccess::reloadLevel(game) == -1);
+        CHECK(BubbleGameTestAccess::tapFinished(game, 350.f, 410.f));
+        CHECK(BubbleGameTestAccess::reloadLevel(game) == 1);
+    }
+
+    // Other solo modes (random levels here) keep the plain retry: no prompt.
+    {
+        BubbleGame game(renderer);
+        BubbleGameTestAccess::reset(game, 1, false, false);
+        BubbleGameTestAccess::settings(game).randomLevels = true;
+        BubbleGameTestAccess::setLevel(game, 3);
+        BubbleGameTestAccess::setGameOverState(game, true, true);
+        BubbleGameTestAccess::capturePostRoundTransition(game);
+        BubbleGameTestAccess::pressContinue(game);
+        CHECK(!BubbleGameTestAccess::continuePrompt(game));
+        CHECK(BubbleGameTestAccess::reloadLevel(game) == 3);
     }
 
     // ---- Race mode ------------------------------------------------------

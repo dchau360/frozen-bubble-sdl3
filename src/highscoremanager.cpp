@@ -625,6 +625,11 @@ void HighscoreManager::RenderWorldBoard() {
         SDL_RenderTexture(rend, trackLabelText.Texture(), nullptr, &fr);
         return trackLabelText.Coords()->w;
     };
+    auto measure = [&](const std::string& str) {
+        trackLabelText.UpdateStyle(13, TTF_STYLE_NORMAL);
+        trackLabelText.UpdateText(rend, str.c_str(), 0);
+        return trackLabelText.Coords()->w;
+    };
     auto textRight = [&](const std::string& str, int right, int y, SDL_Color color) {
         trackLabelText.UpdateStyle(13, TTF_STYLE_NORMAL);
         trackLabelText.UpdateText(rend, str.c_str(), 0);
@@ -654,12 +659,32 @@ void HighscoreManager::RenderWorldBoard() {
         for (size_t i = 0; i < list.size() && i < 10; ++i) {
             const int y = 102 + (int)i * 22;
             const SDL_Color col = list[i].name == me ? menulist::kGold : menulist::kText;
-            char left[48];
-            snprintf(left, sizeof(left), "%2d. %s", WorldBoard::Rank(list, i), list[i].name.c_str());
-            text(left, x + 10, y, col);
-            textRight(viewPoints ? WorldBoard::PointsLabel(list[i].points) + "  " + WorldBoard::LevelLabel(list[i].level)
-                                 : WorldBoard::LevelLabel(list[i].level) + "  " + WorldBoard::TimeLabel(list[i].timeMs),
-                      x + w - 10, y, col);
+            // The same fields as the web page (site/scores.md): rank, player,
+            // then points / level / time on a points board, level / time on
+            // a level board. Top three ranks in gold, silver and bronze.
+            const int rank = WorldBoard::Rank(list, i);
+            static const SDL_Color kMedal[3] = {{255, 210, 74, 255}, {214, 221, 232, 255}, {227, 154, 90, 255}};
+            text(std::to_string(rank) + ".", x + 10, y, rank <= 3 ? kMedal[rank - 1] : col);
+            const std::string shortLevel =
+                list[i].level > 100 ? "won!" : "lv " + std::to_string(list[i].level);
+            const std::string right =
+                viewPoints ? WorldBoard::PointsLabel(list[i].points) + "  " + shortLevel + "  " +
+                                 WorldBoard::TimeLabel(list[i].timeMs)
+                           : WorldBoard::LevelLabel(list[i].level) + "  " + WorldBoard::TimeLabel(list[i].timeMs);
+            // A wide nick next to a big score can run into the figures:
+            // shorten the nick (never the #tag, which tells same-named
+            // players apart) until the row fits.
+            const int nameRoom = (x + w - 10 - measure(right)) - (x + 34) - 8;
+            std::string name = list[i].name;
+            const size_t hashAt = name.rfind('#');
+            std::string nick = hashAt == std::string::npos ? name : name.substr(0, hashAt);
+            const std::string tag = hashAt == std::string::npos ? "" : name.substr(hashAt);
+            while (nick.size() > 1 && measure(name) > nameRoom) {
+                nick.pop_back();
+                name = nick + "\u2026" + tag;
+            }
+            text(name, x + 34, y, col);
+            textRight(right, x + w - 10, y, col);
         }
     }
 

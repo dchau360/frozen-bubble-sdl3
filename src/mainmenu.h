@@ -55,15 +55,16 @@
 #define BLINK_FRAMES 5
 #define BLINK_SLOWDOWN 30
 
-// The 5 original navigation rows plus 2 settings toggles (Arcade Mode, World
-// highscores) that live in this submenu since both are about how a solo
-// campaign run plays out -- see SPPanelRender/press() in mainmenu.cpp.
-#define SP_OPT 7
-// First of the two toggle rows (Arcade Mode); the second (World highscores,
-// worldscores.h) is kSPRowWorldScores. Named rather than left as bare 5/6 so
-// SPPanelRender and press()/up()/down() (mainmenu.cpp) can't drift apart.
-#define kSPRowArcadeMode 5
-#define kSPRowWorldScores 6
+// The 5 original navigation rows plus 1 settings toggle (World highscores)
+// that lives in this submenu since it is about solo campaign runs -- see
+// SPPanelRender/press() in mainmenu.cpp. (An Arcade Mode toggle used to sit
+// here too; a death in a classic solo game now always asks whether to
+// continue -- BubbleGame's continue prompt -- so there is nothing to set.)
+#define SP_OPT 6
+// The toggle row (World highscores, worldscores.h). Named rather than left as
+// a bare 5 so SPPanelRender and press()/up()/down() (mainmenu.cpp) can't
+// drift apart.
+#define kSPRowWorldScores 5
 
 class MainMenu final
 {
@@ -294,20 +295,9 @@ private:
     SDL_Texture *singleButtonAct, *singleButtonIdle;
     int activeSPIdx = 0;
     bool showingSPPanel = false;
-    // Shown instead of immediately flipping the row when the player tries to
-    // turn Arcade Mode ON: a bare "OFF -> ON" toggle can't say
-    // what it changes, so a confirm popup with a description does. Turning
-    // it back OFF needs no confirmation and skips this entirely. See
-    // KeysPanelKey/SPPanelRender/press().
-    bool showingArcadeModeConfirm = false;
-    // On-screen bands for this popup's two buttons, recomputed each frame by
-    // SPPanelRender and hit-tested by HandlePanelTap -- a dedicated pair
-    // rather than folding into panelTapRows, since that list belongs to the
-    // settings rows this popup is drawn over.
-    SDL_Rect arcadeConfirmYesRect{}, arcadeConfirmNoRect{};
-    // Keyboard focus for this panel's two-button popup
-    // (showingArcadeModeConfirm). false = the left/primary button (Turn On)
-    // is focused, true = the right/secondary one (Cancel).
+    // Keyboard focus for a two-button confirm popup (the Replays page's).
+    // false = the left/primary button is focused, true = the right/secondary
+    // one (Cancel).
     // LEFT/RIGHT/TAB flips it, ENTER activates whichever is focused; ESC
     // still cancels/skips outright regardless, as a keyboard shortcut. A
     // tap always wins over stale focus -- see HandlePanelTap, which forces
