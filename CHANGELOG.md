@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- **Graphics with LEFT/RIGHT.** The title screen's **GRAPHICS** row now takes LEFT/RIGHT (or the D-pad) too, stepping the quality level either way, like the **STYLE** row. RIGHT goes the same way ENTER and a tap always have. In every theme but Classic, whose row is the original artwork, the label shows `< >` arrows while selected.
+
 ## v2.4.121
 
 - **Menu style with LEFT/RIGHT.** On the title screen's **STYLE** row, LEFT/RIGHT (or the D-pad) now step back and forth through the menu themes, and the row shows `< >` arrows while it is selected. ENTER and a tap still step forward.

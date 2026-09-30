@@ -628,7 +628,10 @@ void GameSettings::SetValue(const char* option, const char* value)
 {
     //update runtime options
     if (strcmp(option, "GFX:Quality") == 0) {
-        if (gfxQuality == 1) gfxQuality = 3;
+        // 1 is full effects, 3 the fewest. ENTER (and RIGHT) go 1 -> 3 -> 2
+        // -> 1 as they always have; value "-1" (LEFT) goes the other way.
+        if (value && strcmp(value, "-1") == 0) gfxQuality = gfxQuality % 3 + 1;
+        else if (gfxQuality == 1) gfxQuality = 3;
         else gfxQuality--;
 
         // gfxQuality needs a hot reload
