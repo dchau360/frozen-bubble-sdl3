@@ -48,11 +48,25 @@ def recv_until(sock, token, timeout=5.0):
     return got
 
 
+def production_pending_stats_timeout(test):
+    """Runs `test` against fb-server's own PENDING_STATS_TIMEOUT_SECS rather
+    than its class's pending_stats_timeout override -- for the one test
+    that is about that timeout itself."""
+    test.pending_stats_timeout = None
+    return test
+
+
 class _FbServerTestBase(unittest.TestCase):
     """Boots a real fb-server per test with a UDP socket standing in for
     discord-relay. Shared by ServerDiscordAlertTest (arrival alerts) and
     ServerDiscordResultAlertTest (round-end alerts) -- same server, same
     stand-in relay, different wire messages driving it."""
+
+    # Seconds fb-server waits for missing 'S' reports before posting a
+    # round anyway (FB_SERVER_PENDING_STATS_TIMEOUT_SECS). None keeps the
+    # production default; a test method can override its class's value
+    # with @production_pending_stats_timeout.
+    pending_stats_timeout = None
 
     def setUp(self):
         if len(sys.argv) < 2:
@@ -74,6 +88,10 @@ class _FbServerTestBase(unittest.TestCase):
         # Keep stats out of the developer's real home directory.
         env["FB_SERVER_STATS_FILE"] = str(Path(self.tmpdir.name) / "stats.dat")
         env["FB_SERVER_WEEKLY_FILE"] = str(Path(self.tmpdir.name) / "weekly.dat")
+        timeout = getattr(getattr(self, self._testMethodName), "pending_stats_timeout",
+                          self.pending_stats_timeout)
+        if timeout is not None:
+            env["FB_SERVER_PENDING_STATS_TIMEOUT_SECS"] = str(timeout)
 
         self.port = 15518
         # -d keeps the server in the foreground. Without it fb-server forks and
@@ -270,7 +288,17 @@ class ServerDiscordResultAlertTest(_FbServerTestBase):
     whatever byte 0 is with the sender's real seat id before relaying, so
     these tests use a placeholder ('?') the same way other prio opcodes in
     game.c's own comments do (e.g. "?p\\n", "?!\\n").
+
+    The deferred-post timeout is raised far past anything a test here waits
+    for, so every "not posted yet" assertion is about the missing 'S'
+    reports and never races the fallback deadline (under ASan the steps
+    between 'F' and such an assertion took long enough to lose that race at
+    the production 2s), and every post that does arrive proves the
+    all-seats-reported path rather than possibly the timeout. The test of
+    the timeout itself opts back into the production value.
     """
+
+    pending_stats_timeout = 60
 
     def _start_two_player_game(self, room, guest_nick="guest1", mode=None, victories_limit=None):
         """Gets a 2-player room to GAME_STATUS_PLAYING with BOTH connections
@@ -597,17 +625,28 @@ class ServerDiscordResultAlertTest(_FbServerTestBase):
                          "must fire promptly once the last seat reports, well "
                          "before PENDING_STATS_TIMEOUT_SECS elapses")
 
+    @production_pending_stats_timeout
     def test_deferred_post_fires_after_timeout_when_a_seat_never_reports(self):
         # guest1 never sends its own 'S' at all -- the round must still be
         # posted (with an empty popped field for that seat) once
         # PENDING_STATS_TIMEOUT_SECS passes, rather than waiting forever.
         a, b = self._start_two_player_game("tmoutroom")
+        f_sent = time.monotonic()
         a.sendall(b"?Fguest1\n")
         self._report_stats(a, popped=4)
-        self.assertEqual(self.drain_relay(timeout=0.5), [],
-                         "must not fire before the deadline with a seat still missing")
+        early = self.drain_relay(timeout=0.5)
+        # Only meaningful while clearly inside the 2s deadline: a slow
+        # (sanitizer) run that got here late may legitimately see the post.
+        if time.monotonic() - f_sent < 1.5:
+            self.assertEqual(early, [],
+                             "must not fire before the deadline with a seat still missing")
 
-        fired = self.drain_relay(timeout=5.0)
+        fired = early or self.drain_relay(timeout=5.0)
+        if fired and not early:
+            # The deadline is kept in microseconds: in whole seconds it
+            # truncated and fired anywhere from 1s to 2s after 'F'.
+            self.assertGreaterEqual(time.monotonic() - f_sent, 1.9,
+                                    "posted before the full 2s had passed")
         self.assertEqual(len(fired), 1,
                          "must still fire once the timeout passes, generous "
                          "margin over the ~2s deadline for scheduling jitter")

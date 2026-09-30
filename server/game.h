@@ -27,8 +27,8 @@ void player_disconnects(int fd);
 void calculate_list_games(void);
 
 /* Deferred Discord round-result posts (see struct game's stats_pending,
- * game.c). The event loop supplies monotonic seconds, same contract as
- * tournament_tick(). */
+ * game.c). The event loop supplies g_get_monotonic_time() microseconds --
+ * unlike tournament_tick()'s seconds, so the 2s deadline is really 2s. */
 void game_tick(int64_t now);
 int games_have_pending_stats(void);
 
