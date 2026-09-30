@@ -211,6 +211,12 @@ bool UseCode(const std::string& typed, bool save) {
     return true;
 }
 
+bool StartNewAccount() {
+    const std::string c = NewCode();
+    if (c.empty()) return false;
+    return UseCode(c);
+}
+
 std::string PublicKeyHex() {
     DeriveKeys();
     return keysReady ? ToHex(publicKey, sizeof(publicKey)) : "";

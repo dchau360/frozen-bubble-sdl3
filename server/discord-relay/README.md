@@ -55,6 +55,13 @@ the datagram is dropped and gameplay is unaffected.
     MATCH|<game_id>|<wins>|<game_mode>|<champion>|<servername>
     LEADERBOARD|<final>|<week_start>|<wins>|<losses>|<popped>|<servername>
 
+A player who signed in to an anonymous account (protocol 1.6) appears in
+`JOIN`'s `nick`, `RESULT`'s `roster` and `winner`, and `MATCH`'s `champion`
+as `nick#tag` -- the first 4 hex digits of the account id, the same form the
+weekly rankings use (`discord_name()` in `game.c`). `is_nick_ok()` never lets a
+nick contain `#`, so it can't collide with a real one; a player who didn't sign
+in stays a bare nick. The relay posts these names as-is.
+
 `platform` is one char naming the client's OS -- `W`indows, `M`acOS,
 `L`inux, `A`ndroid, `I`OS, `B`rowser -- from the `PLATFORM` command, or
 empty for a client too old to send it. The client sends it *before* `NICK`

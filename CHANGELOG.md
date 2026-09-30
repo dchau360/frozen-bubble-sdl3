@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- **Account code screen.** A new **Account code** row on the LAN GAME and NET GAME screens shows your recovery code. Copy it, type it into another device to carry your weekly rankings over, or enter a code you saved earlier. **New account** replaces the code with a fresh one, which is also how you delete your account: without the old code nobody can sign in as it again, and the server forgets its weekly line at the Monday reset.
+- **Discord posts show account tags.** Join alerts and round results now name signed-in players the way the weekly rankings do, for example `bob#7f3a`, so two players called "bob" can be told apart.
+- **Privacy policy** gains a "Deleting your account" section.
+
 ## v2.4.118
 
 - **Anonymous player accounts, so weekly rankings belong to you rather than to a name.** The first time you play online, the game creates a random recovery code on your device and uses it to sign in to servers automatically; there's nothing to register or type. Two players who both call themselves "bob" now get separate lines in the weekly rankings, shown as `bob#7f3a` and `bob#c21e`, and changing your nickname keeps your line. Only signed-in players are ranked, which needs this version of both the game and the server (protocol 1.6); older games still play normally but aren't ranked. The weekly stats kept by name before this start the week over.

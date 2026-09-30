@@ -153,7 +153,8 @@ answer key.
 | Play category | Collected? | Shared? | Purpose | Notes |
 |---|---|---|---|---|
 | **Location** | **Yes — approximate location** | **Yes, with other users** | App functionality (shown on a world map in the lobby) | Derived from IP address via ipinfo.io/ip-api.com, not GPS or a device location permission. Cached to one decimal place (~city/region accuracy). See the content-rating section above for detail |
-| **Personal info** (name, email, address, phone, User IDs) | No | — | — | Nickname is free-text, unverified, not linked to real identity — Google's own guidance treats this as not requiring declaration here |
+| **Personal info** — name, email, address, phone | No | — | — | Nickname is free-text, unverified, not linked to real identity — Google's own guidance treats this as not requiring declaration here |
+| **Personal info** — User IDs | **Yes** (when you play online) | **Yes — with other players, the server's operator, and its Discord channel** (the short `#xxxx` tag beside your name) | App functionality | The anonymous account (v2.4.118+): servers receive a public key derived from the on-device recovery code and store a 16-hex account id with that week's counts; the first 4 hex digits appear as `name#xxxx` in rankings and Discord posts. Not linked to name, email, device ID or ad ID. Declared under User IDs rather than Device IDs because the same code works on every device the player enters it on |
 | **Financial info** | No (by the app) | — | — | Google Play Billing handles the purchase; the app never receives payment details, only a purchase token |
 | **Health & fitness** | No | — | — | |
 | **Messages** (in-app messaging) | Yes | Yes — with other players in your match, and the server you're connected to | App functionality | Only while playing network multiplayer; not stored by the developer |
@@ -165,10 +166,24 @@ answer key.
 | **Device or other IDs** — advertising ID | Yes (Android, via AdMob SDK) | Yes — with Google/AdMob | Advertising or marketing | Not collected directly by the developer; handled inside Google's SDK. Optional in the sense that "Remove Ads" stops ads (but the identifier collection is AdMob SDK behavior, not something toggled off by that purchase) |
 | **Device or other IDs** — push token | Yes (opt-in, when you follow a server) | Yes — with that specific server's operator only | App functionality | Only sent to servers you explicitly follow; removed on unfollow |
 
-**Data deletion:** No account exists to delete. Uninstalling removes all
-local data. For a followed server's push registration, unfollowing removes
-it, or contact that server's operator (this is disclosed in the privacy
-policy already).
+**Data deletion:** The anonymous account counts as an account for Play's
+deletion policy (it follows the player across devices), so answer that
+users *can* request deletion:
+
+- **In app:** NET GAME (or LAN GAME) → **Account code** → **New account**.
+  That erases the recovery code from the device, and without it nobody can
+  sign in as that account again. Clearing app data or uninstalling does the
+  same.
+- **Web link** (the "delete account URL" field):
+  `https://dchau360.github.io/frozen-bubble-sdl3/privacy/#delete-account`
+- **What's deleted / kept:** servers keep only that week's ranking line
+  (account id, last nickname, counts), deleted automatically at the next
+  Monday 00:00 UTC reset; earlier removal on request via the issue tracker.
+  Discord messages already posted in a server's channel stay there.
+
+For a followed server's push registration, unfollowing removes it, or
+contact that server's operator (this is disclosed in the privacy policy
+already).
 
 **Encryption in transit:** Not uniformly — answer **No** on "is all user
 data encrypted in transit," or use the per-category breakdown if the form

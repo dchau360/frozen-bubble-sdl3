@@ -33,6 +33,12 @@ std::string FormatCode(const std::string& code);
 // save=false keeps it for this run only (tests).
 bool UseCode(const std::string& typed, bool save = true);
 
+// Throw this device's account away for a fresh one ("New account"). The old
+// code keeps working anywhere it is typed back in; nothing is deleted on any
+// server, where a weekly line simply ages out at the next Monday reset.
+// False only if no randomness was available (the old account is kept).
+bool StartNewAccount();
+
 }  // namespace playeraccount
 
 #endif

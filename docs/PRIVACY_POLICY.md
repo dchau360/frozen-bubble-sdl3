@@ -30,7 +30,9 @@ half and a one-off signature, never the code itself, and each server works
 out the same short account ID from the public key (the first four
 characters are shown after your nickname in rankings, like `bob#7f3a`). The
 account is not linked to your name, email, device ID, or ad ID, and there is
-no central account database.
+no central account database. You can see your code under **Account code**
+on the LAN GAME and NET GAME screens, copy it, enter it on another device to
+move your account there, or start a new account.
 
 **Network connection data.** Playing network multiplayer means connecting
 to a game server over TCP — your IP address is visible to that server the
@@ -71,9 +73,9 @@ are exactly what your own client claims.
 **Discord join alerts (server-operator feature, not controlled by the
 developer).** A server's operator can optionally run a relay that posts a
 message to a Discord channel of their choosing every time a player connects
-to their server. **That message contains your nickname, the server's name,
-and, if your client reported them, your platform badge and your
-country flag** (both described just above). Your IP address and the more
+to their server. **That message contains your nickname (with your short
+account tag, like `bob#7f3a`, if you signed in), the server's name, and, if
+your client reported them, your platform badge and your country flag** (both described just above). Your IP address and the more
 precise coordinates behind the lobby's world map are never included: both
 briefly reach the relay as part of the connect event (the same information
 the server already receives under "Network connection data" and
@@ -92,7 +94,8 @@ this one. What is described here is what the shipped relay sends.
 **Discord round-result alerts (same server-operator feature, not controlled
 by the developer).** The same optional relay can also post a message at the
 end of every round: which game mode it was played in, who won or that it
-ended in a draw, and the nicknames — plus, if reported, platform badge,
+ended in a draw, and the nicknames (with account tags, as above) — plus, if
+reported, platform badge,
 input-device badge, and country flag — of every player who was in that
 room. **Nothing beyond nicknames, the game mode, those three badges, and the
 server's name is included** — no IP address, no precise location, same as
@@ -185,6 +188,22 @@ or analytics SDK, so none is collected by the developer.
   developer. Discord's policy also applies if you follow the game's "Join
   our Discord" link.
 
+## Deleting your account {#delete-account}
+
+Your account is the recovery code on your device (see "Anonymous player
+account" above). To delete it, open **NET GAME** (or **LAN GAME**), choose
+**Account code**, then **New account**. That erases the old code from the
+device and replaces it with a new one, and without the old code nobody can
+sign in as that account again. Clearing the app's data or uninstalling the
+app does the same.
+
+Servers keep nothing about an account except its weekly ranking line: the
+short account tag, the nickname last played under, and that week's counts.
+That line is deleted automatically at the next Monday 00:00 UTC reset. To
+have it removed sooner from the official server, open an issue on the
+tracker under Contact below with your account tag (the `#xxxx` after your
+name in the rankings).
+
 ## Data retention
 
 - Nickname, settings and your account's recovery code live only in local
@@ -210,6 +229,9 @@ avoid entering real names or other identifying information.
   it only runs before network play.
 - Uninstalling the app removes all locally stored settings, nicknames and
   your account's recovery code.
+- Start a new account, or move yours to another device, from **Account
+  code** on the LAN GAME / NET GAME screens (see "Deleting your account"
+  above).
 
 ## Changes to this policy
 

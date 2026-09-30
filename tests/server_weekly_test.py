@@ -212,7 +212,7 @@ class WeeklyTestBase(unittest.TestCase):
         host.sendall(f"?F{winner}\n".encode())
         for s, p in zip(socks, popped):
             s.sendall(f"?S0:{p}:0:0:0:0\n".encode())
-        self.drain()
+        self.round_datagrams = self.drain()
         return socks
 
 
@@ -372,7 +372,7 @@ class JoinAlertTest(WeeklyTestBase):
         parts = joins[0].split("|")
         # JOIN|nick|ip|geoloc|platform|country|weekly|servername
         self.assertEqual(len(parts), 8, joins[0])
-        self.assertEqual(parts[1], "alice")
+        self.assertEqual(parts[1], self.acct.tagged("alice"))
         self.assertEqual(parts[6], "3,1,50,2,1,1")
 
     def test_new_player_has_an_empty_weekly_field(self):
