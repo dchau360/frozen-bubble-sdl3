@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v2.4.119
 
 - **Account code screen.** A new **Account code** row on the LAN GAME and NET GAME screens shows your recovery code. Copy it, type it into another device to carry your weekly rankings over, or enter a code you saved earlier. **New account** replaces the code with a fresh one, which is also how you delete your account: without the old code nobody can sign in as it again, and the server forgets its weekly line at the Monday reset.
 - **Discord posts show account tags.** Join alerts and round results now name signed-in players the way the weekly rankings do, for example `bob#7f3a`, so two players called "bob" can be told apart.
