@@ -63,6 +63,25 @@ enum game_status { GAME_STATUS_OPEN, GAME_STATUS_CLOSED, GAME_STATUS_PLAYING };
  * feeds only ever catches obviously-impossible claims. POP_CEILING_GRACE is
  * a flat allowance on top of that for round-boundary/timing slop. */
 #define PENDING_STATS_TIMEOUT_SECS 2
+
+/* PENDING_STATS_TIMEOUT_SECS, unless FB_SERVER_PENDING_STATS_TIMEOUT_SECS
+ * overrides it. The override exists for tests/server_discordalert_test.py:
+ * its "not fired yet" assertions race this deadline, and under ASan the
+ * steps between 'F' and those assertions can take long enough to lose. An
+ * operator has no reason to set it. Read once; in microseconds, since the
+ * deadline is compared against g_get_monotonic_time() directly -- a
+ * whole-second deadline truncated 'now' and fired anywhere from 1s to 2s
+ * after 'F'. */
+static int64_t pending_stats_timeout_us(void)
+{
+        static int64_t cached = -1;
+        if (cached < 0) {
+                const char* env = getenv("FB_SERVER_PENDING_STATS_TIMEOUT_SECS");
+                int secs = env ? atoi(env) : 0;
+                cached = (int64_t)(secs > 0 ? secs : PENDING_STATS_TIMEOUT_SECS) * G_USEC_PER_SEC;
+        }
+        return cached;
+}
 #define MAX_POPS_PER_SHOT 104
 #define POP_CEILING_GRACE 10
 
@@ -144,7 +163,7 @@ struct game
          * only the Discord datagram itself waits, so it can carry every
          * seat's popped count instead of firing before most have arrived. */
         int stats_pending;       /* a round's 'F' arrived; Discord post is deferred */
-        int64_t stats_deadline;  /* g_get_monotonic_time()/G_USEC_PER_SEC deadline */
+        int64_t stats_deadline;  /* g_get_monotonic_time() deadline, microseconds */
         char pending_winner[32]; /* snapshot of the 'F' payload for the deferred post */
         int pending_match_fire;  /* does this round's deferred post also need a MATCH event? */
         int pending_match_wins;
@@ -2092,7 +2111,7 @@ void process_msg_prio_(int fd, char* msg, ssize_t len, struct game* g)
                         g->round_number++;
                         {
                                 int wins = report_round_result(g, winner[0] ? winner : NULL);
-                                int64_t now = g_get_monotonic_time() / G_USEC_PER_SEC;
+                                int64_t now = g_get_monotonic_time();
                                 snprintf(g->pending_winner, sizeof(g->pending_winner), "%s", winner);
                                 g->pending_match_fire = (winner[0] && g->victories_limit > 0 &&
                                                           wins >= g->victories_limit) ? 1 : 0;
@@ -2101,7 +2120,7 @@ void process_msg_prio_(int fd, char* msg, ssize_t len, struct game* g)
                                         ? (int)((g_get_monotonic_time() - g->round_started_us) / G_USEC_PER_SEC)
                                         : 0;
                                 g->stats_pending = 1;
-                                g->stats_deadline = now + PENDING_STATS_TIMEOUT_SECS;
+                                g->stats_deadline = now + pending_stats_timeout_us();
                                 maybe_fire_pending_result(g, now);
                         }
                         g->result_posted = 1;
@@ -2167,7 +2186,7 @@ void process_msg_prio_(int fd, char* msg, ssize_t len, struct game* g)
                         g->players_popped_flagged[sender_slot] = (popped > cap) ? 1 : 0;
                         g->players_popped[sender_slot] = (popped > cap) ? cap : popped;
                         g->players_popped_reported[sender_slot] = 1;
-                        maybe_fire_pending_result(g, g_get_monotonic_time() / G_USEC_PER_SEC);
+                        maybe_fire_pending_result(g, g_get_monotonic_time());
                 }
 
                 for (i = 0; i < g->players_number; i++) {

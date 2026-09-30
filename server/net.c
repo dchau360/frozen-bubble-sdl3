@@ -818,7 +818,7 @@ void connections_manager(void)
                 fd_set write_set;  // fds with a non-empty output queue (BUG-007)
 
                 tournament_tick(g_get_monotonic_time() / G_USEC_PER_SEC);
-                game_tick(g_get_monotonic_time() / G_USEC_PER_SEC);
+                game_tick(g_get_monotonic_time());
                 reregister_server_if_needed();
 
                 if (recalculate_list_games)
