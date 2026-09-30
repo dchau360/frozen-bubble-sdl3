@@ -164,7 +164,6 @@ answer key.
 | **Web browsing** | No | — | — | |
 | **App info & performance** (crash logs, diagnostics) | No | — | — | No crash-reporting SDK |
 | **Device or other IDs** — advertising ID | Yes (Android, via AdMob SDK) | Yes — with Google/AdMob | Advertising or marketing | Not collected directly by the developer; handled inside Google's SDK. Optional in the sense that "Remove Ads" stops ads (but the identifier collection is AdMob SDK behavior, not something toggled off by that purchase) |
-| **Device or other IDs** — push token | Yes (opt-in, when you follow a server) | Yes — with that specific server's operator only | App functionality | Only sent to servers you explicitly follow; removed on unfollow |
 
 **Data deletion:** The anonymous account counts as an account for Play's
 deletion policy (it follows the player across devices), so answer that
@@ -180,10 +179,6 @@ users *can* request deletion:
   (account id, last nickname, counts), deleted automatically at the next
   Monday 00:00 UTC reset; earlier removal on request via the issue tracker.
   Discord messages already posted in a server's channel stay there.
-
-For a followed server's push registration, unfollowing removes it, or
-contact that server's operator (this is disclosed in the privacy policy
-already).
 
 **Encryption in transit:** Not uniformly — answer **No** on "is all user
 data encrypted in transit," or use the per-category breakdown if the form
