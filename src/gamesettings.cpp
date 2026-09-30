@@ -122,7 +122,7 @@ void GameSettings::CreateDefaultSettings()
         EvalIniResult(rval, dict, "GFX:ShowFPS", "false");
 
         EvalIniResult(rval, dict, "Stats", NULL);
-        EvalIniResult(rval, dict, "Stats:UploadHighscore", "false");
+        EvalIniResult(rval, dict, "Stats:WorldHighscores", "true");
 
         EvalIniResult(rval, dict, "Game", NULL);
         EvalIniResult(rval, dict, "Game:ArcadeMode", "false");
@@ -275,7 +275,7 @@ void GameSettings::ReadSettings()
     windowHeight = iniparser_getint(optDict, "GFX:WindowHeight", 480);
     colorblindBubbles = iniparser_getboolean(optDict, "GFX:ColorblindBubbles", false);
     showFps = iniparser_getboolean(optDict, "GFX:ShowFPS", false);
-    uploadHighscoreStats = iniparser_getboolean(optDict, "Stats:UploadHighscore", false);
+    worldHighscores = iniparser_getboolean(optDict, "Stats:WorldHighscores", true);
     arcadeMode = iniparser_getboolean(optDict, "Game:ArcadeMode", false);
     if (gfxQuality > 3 || gfxQuality < 1) gfxQuality = 3;
     if (windowWidth < 640 || windowWidth > 9999) windowWidth = 640;
@@ -677,14 +677,12 @@ void GameSettings::SetValue(const char* option, const char* value)
         SaveSettings();
         return;
     }
-    else if (strcmp(option, "Stats:UploadHighscore") == 0) {
-        // Turning this ON is gated behind a confirmation popup, opened from
-        // the 1-player submenu's toggle (see KeysPanelKey in
-        // mainmenu_input.cpp and SPPanelRender/press() in mainmenu.cpp) that
-        // names exactly what starts being sent -- this setter itself just
-        // flips and persists the flag, the same as every other toggle here.
-        uploadHighscoreStats = !uploadHighscoreStats;
-        iniparser_set(optDict, option, uploadHighscoreStats ? "true" : "false");
+    else if (strcmp(option, "Stats:WorldHighscores") == 0) {
+        // The 1-player submenu's "World highscores" toggle (SPPanelRender /
+        // press() in mainmenu.cpp). On by default; off stops worldscores.cpp
+        // sending runs, and viewing the board then goes unsigned.
+        worldHighscores = !worldHighscores;
+        iniparser_set(optDict, option, worldHighscores ? "true" : "false");
         SaveSettings();
         return;
     }

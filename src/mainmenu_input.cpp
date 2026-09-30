@@ -297,12 +297,6 @@ void MainMenu::MenuTextInputEvent(SDL_Event *e) {
             if (networkInputMode == 11) {
                 AppendUtf8Input(networkPreNick, e->text.text, 15);
             }
-            // Handle virtual keyboard character input for the post-stats-opt-in
-            // nickname prompt -- opened from the 1-player submenu now, not
-            // this panel (see KeysPanelKey), so not gated on showingKeysPanel.
-            if (showingStatsNicknamePrompt) {
-                AppendUtf8Input(statsUploadNickname, e->text.text, 15);
-            }
             // Handle virtual keyboard character input for chat (mode 4)
             if (showingNetPanel && networkInLobby && networkInputMode == 4) {
                 AppendUtf8Input(networkChatInput, e->text.text);
@@ -324,10 +318,6 @@ bool MainMenu::MenuEditingKey(SDL_Event *e) {
                 }
                 if (showingNetPanel && !networkInLobby && networkInputMode == 11) {
                     BackspaceUtf8(networkPreNick);
-                    return true;
-                }
-                if (showingStatsNicknamePrompt) {
-                    BackspaceUtf8(statsUploadNickname);
                     return true;
                 }
             }
@@ -520,9 +510,12 @@ bool MainMenu::HandlePanelTap(float lx, float ly, float verticalDrift) {
     // consuming every tap, for the same reason as the popups below.
     if (showingTeamsPanel) return HandleTeamsPanelTap(lx, ly);
     // The "enable Arcade Mode?" popup (opened from the 1-player submenu, see
-    // SPPanelRender/press()) -- same reasoning as showingStatsUploadConfirm
-    // below: modal, sits on top of whichever panel is underneath, and every
-    // tap is consumed while it's showing, hit or miss.
+    // SPPanelRender/press()) is modal and sits on top of whichever panel is
+    // underneath, but panelTapRows still holds that panel's rows -- checked
+    // here, first, so a tap never falls through to whichever hidden row
+    // happens to occupy this screen position. Every tap is consumed while it
+    // is showing, hit or miss, so a miss can't silently move the selection
+    // underneath.
     if (showingArcadeModeConfirm) {
         auto hit = [&](const SDL_Rect& r) {
             return lx >= r.x && lx < r.x + r.w && ly >= r.y && ly < r.y + r.h;
@@ -542,50 +535,10 @@ bool MainMenu::HandlePanelTap(float lx, float ly, float verticalDrift) {
         }
         return true;
     }
-    // The "upload highscore stats?" popup (opened from the 1-player submenu,
-    // see SPPanelRender/press()) is modal and sits on top of whichever panel
-    // is underneath, but panelTapRows still holds that panel's rows -- checked
-    // here, first, so a tap never falls through to whichever hidden row
-    // happens to occupy this screen position. Every tap is consumed while
-    // this is showing, hit or miss, since letting a miss fall through would
-    // let it silently move the row/button selection underneath (previously
-    // the only way to react to this popup at all was a physical ENTER/ESC
-    // keypress -- there was no touch equivalent). Not gated on which panel is
-    // open: only one of them ever sets these flags at a time.
-    if (showingStatsNicknamePrompt) {
-        auto hit = [&](const SDL_Rect& r) {
-            return lx >= r.x && lx < r.x + r.w && ly >= r.y && ly < r.y + r.h;
-        };
-        SDL_Keycode key = SDLK_UNKNOWN;
-        if (hit(statsNicknameSaveRect)) { confirmDialogFocusNo = false; key = SDLK_RETURN; }
-        else if (hit(statsNicknameSkipRect)) key = SDLK_ESCAPE;
-        if (key != SDLK_UNKNOWN) {
-            SDL_Event ev = {};
-            ev.type = SDL_EVENT_KEY_DOWN;
-            ev.key.key = key;
-            SDL_PushEvent(&ev);
-        }
-        return true;
-    }
-    if (showingStatsUploadConfirm) {
-        auto hit = [&](const SDL_Rect& r) {
-            return lx >= r.x && lx < r.x + r.w && ly >= r.y && ly < r.y + r.h;
-        };
-        SDL_Keycode key = SDLK_UNKNOWN;
-        if (hit(statsConfirmYesRect)) { confirmDialogFocusNo = false; key = SDLK_RETURN; }
-        else if (hit(statsConfirmNoRect)) key = SDLK_ESCAPE;
-        if (key != SDLK_UNKNOWN) {
-            SDL_Event ev = {};
-            ev.type = SDL_EVENT_KEY_DOWN;
-            ev.key.key = key;
-            SDL_PushEvent(&ev);
-        }
-        return true;
-    }
     // The "Enable chain reaction? Y or N?" prompt (OptPanelRender /
     // NetSetupPanelRender -- random level, multiplayer training, and network
     // game all share it) is modal the same way, and registers no rows of its
-    // own -- checked here for the same reason as showingStatsUploadConfirm
+    // own -- checked here for the same reason as showingArcadeModeConfirm
     // above, so a tap never falls through to whatever row list is stale
     // underneath. Previously any key but ESC answered this from a
     // keyboard/gamepad; there was no touch equivalent at all.
@@ -766,11 +719,11 @@ bool MainMenu::HelpPanelKey(SDL_Event *e) {
 bool MainMenu::KeysPanelKey(SDL_Event *e) {
             // Opened from the 1-player submenu's "Arcade Mode" toggle (see
             // SPPanelRender/press() in mainmenu.cpp) but handled here rather
-            // than a separate SPPanelKey of its own -- same reasoning as the
-            // two stats-upload modals just below. LEFT/RIGHT/TAB move
-            // keyboard focus between the two buttons (confirmDialogFocusNo,
-            // shared by all three of this panel's two-button popups; see
-            // mainmenu.h), ENTER activates whichever is focused, and ESC
+            // than a separate SPPanelKey of its own, checked ahead of the
+            // showingKeysPanel block below and not gated on which panel is
+            // open. LEFT/RIGHT/TAB move keyboard focus between the two
+            // buttons (confirmDialogFocusNo, see mainmenu.h), ENTER
+            // activates whichever is focused, and ESC
             // still cancels outright as a shortcut regardless of focus.
             if (showingArcadeModeConfirm) {
                 if (e->key.key == SDLK_LEFT || e->key.key == SDLK_RIGHT || e->key.key == SDLK_TAB) {
@@ -783,69 +736,6 @@ bool MainMenu::KeysPanelKey(SDL_Event *e) {
                     AudioMixer::Instance()->PlaySFX("typewriter");
                 } else if (e->key.key == SDLK_RETURN || e->key.key == SDLK_ESCAPE || e->key.key == SDLK_AC_BACK) {
                     showingArcadeModeConfirm = false;
-                    confirmDialogFocusNo = false;
-                    AudioMixer::Instance()->PlaySFX("menu_change");
-                }
-                return true;
-            }
-            // These two modals are opened from the 1-player submenu's "Upload
-            // highscore stats" toggle (see SPPanelRender/press() in
-            // mainmenu.cpp) but handled here rather than duplicated in a
-            // SPPanelKey of their own -- checked ahead of the showingKeysPanel
-            // block below, and not gated on which panel is open, since only
-            // one of them ever sets these flags at a time. Same
-            // LEFT/RIGHT/TAB + ENTER/ESC focus scheme as showingArcadeModeConfirm
-            // above.
-            if (showingStatsNicknamePrompt) {
-                // Typed characters/backspace arrive through
-                // MenuTextInputEvent/MenuEditingKey; only focus-move and
-                // Save/Skip matter here. Either finishes turning the
-                // setting on: this is an offer to set a nickname, not a
-                // second gate on it.
-                if (e->key.key == SDLK_LEFT || e->key.key == SDLK_RIGHT || e->key.key == SDLK_TAB) {
-                    confirmDialogFocusNo = !confirmDialogFocusNo;
-                    AudioMixer::Instance()->PlaySFX("menu_change");
-                } else if (e->key.key == SDLK_RETURN && !confirmDialogFocusNo) {
-                    if (statsUploadNickname[0] != '\0') {
-                        GameSettings* gs = GameSettings::Instance();
-                        snprintf(gs->savedNickname, sizeof(gs->savedNickname), "%s", statsUploadNickname);
-                        gs->SaveKeys();
-                    }
-                    showingStatsNicknamePrompt = false;
-                    confirmDialogFocusNo = false;
-                    SDL_StopTextInput(SDL_GetKeyboardFocus());
-                    AudioMixer::Instance()->PlaySFX("typewriter");
-                } else if (e->key.key == SDLK_RETURN || e->key.key == SDLK_ESCAPE || e->key.key == SDLK_AC_BACK) {
-                    showingStatsNicknamePrompt = false;
-                    confirmDialogFocusNo = false;
-                    SDL_StopTextInput(SDL_GetKeyboardFocus());
-                    AudioMixer::Instance()->PlaySFX("menu_change");
-                }
-                return true;
-            }
-            if (showingStatsUploadConfirm) {
-                if (e->key.key == SDLK_LEFT || e->key.key == SDLK_RIGHT || e->key.key == SDLK_TAB) {
-                    confirmDialogFocusNo = !confirmDialogFocusNo;
-                    AudioMixer::Instance()->PlaySFX("menu_change");
-                } else if (e->key.key == SDLK_RETURN && !confirmDialogFocusNo) {
-                    GameSettings::Instance()->SetValue("Stats:UploadHighscore", "");
-                    showingStatsUploadConfirm = false;
-                    confirmDialogFocusNo = false;
-                    AudioMixer::Instance()->PlaySFX("typewriter");
-                    // Ask for a nickname right away, pre-filled with
-                    // whatever is already saved (if anything) so this
-                    // doubles as a chance to review/change it -- without
-                    // this, a player with no nickname set would have
-                    // their uploads silently read as "Anonymous", with
-                    // the Net Game screen the only other place they could
-                    // have discovered to set one.
-                    showingStatsNicknamePrompt = true;
-                    snprintf(statsUploadNickname, sizeof(statsUploadNickname), "%s",
-                             GameSettings::Instance()->savedNickname);
-                    SDL_StopTextInput(SDL_GetKeyboardFocus());
-                    SDL_StartTextInput(SDL_GetKeyboardFocus());
-                } else if (e->key.key == SDLK_RETURN || e->key.key == SDLK_ESCAPE || e->key.key == SDLK_AC_BACK) {
-                    showingStatsUploadConfirm = false;
                     confirmDialogFocusNo = false;
                     AudioMixer::Instance()->PlaySFX("menu_change");
                 }

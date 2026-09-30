@@ -437,6 +437,8 @@ void BubbleGame::NewGame(SetupSettings setup) {
     for (int i = 0; i < currentSettings.playerCount; i++) ResetRoundInputState(bubbleArrays[i]);
     pendingHighscore = false;
     curLevel = setup.startLevel;
+    runEligibleForWorld = !setup.networkGame && setup.playerCount == 1 && !setup.randomLevels &&
+                          !setup.mpTraining && !setup.localMultiplayer && setup.startLevel == 1;
     connectedPlayerCount = setup.playerCount;  // Reset connected count for new game
     gameStartTime = SDL_GetTicks();
     // One gameplay RNG stream for the whole match; seeded here and left

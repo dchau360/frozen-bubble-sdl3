@@ -161,7 +161,8 @@ answer key. Last checked against the submitted form's CSV export on
 | **Messages** (in-app messaging) | Yes | Yes — with other players in your match, and the server you're connected to | Yes | Required | App functionality | Only while playing network multiplayer; not stored by the developer |
 | **Photos/videos/audio/files** | No | — | — | — | — |  |
 | **Calendar / Contacts** | No | — | — | — | — |  |
-| **App activity** (app interactions, in-app search history, etc.) | No | — | — | — | — | No analytics SDK; gameplay isn't reported anywhere |
+| **App activity** — Other actions (gameplay) | **Yes** (from the release with World highscores) | **Yes — with other users** (listed publicly on the world board, in-game and on the web) | **No** | **Optional** (the "World highscores" toggle in the 1-player menu, on by default) | App functionality | The best classic single-player run (furthest level, time, input type), sent with the nickname to fb.servequake.com under the anonymous account. Weekly best cleared Mondays; all-time kept until removal is requested. No analytics SDK; nothing else about gameplay is reported |
+| **App activity** — app interactions, in-app search history, etc. | No | — | — | — | — | No analytics SDK |
 | **Web browsing** | No | — | — | — | — |  |
 | **App info & performance** (crash logs, diagnostics) | No | — | — | — | — | No crash-reporting SDK |
 | **Device or other IDs** — advertising ID | Yes (Android, via AdMob SDK) | Yes — with Google/AdMob | **No** | Required | Collected and shared: Advertising or marketing, Analytics, Fraud prevention/security/compliance (the purposes Google lists for the Mobile Ads SDK) | Not collected directly by the developer; handled inside Google's SDK. Declared shared as well as collected to stay on the safe side. Required, not optional: "Remove Ads" is a purchase, not a data-collection toggle |

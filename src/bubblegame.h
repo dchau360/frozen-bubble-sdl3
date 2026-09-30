@@ -635,6 +635,10 @@ public:
     enum class ScoringInputMethod { Unset, Keyboard, Mouse };
     ScoringInputMethod scoringInputMethod = ScoringInputMethod::Unset;
     bool scoringDisqualified = false;
+    // Whether this session's cleared levels go to the world board
+    // (worldscores.h): classic solo, standard levelset, started at level 1.
+    // Set once in NewGame(); a retry (ReloadGame) keeps the same run going.
+    bool runEligibleForWorld = false;
 
     bool IsGameFinished() const { return gameFinish; }
     // The inbound gameplay payloads applied during the most recent step, in

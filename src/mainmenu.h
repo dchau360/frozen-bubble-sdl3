@@ -55,15 +55,15 @@
 #define BLINK_FRAMES 5
 #define BLINK_SLOWDOWN 30
 
-// The 5 original navigation rows plus 2 settings toggles (Arcade Mode, Upload
-// highscore stats) that live in this submenu since both are about how a solo
+// The 5 original navigation rows plus 2 settings toggles (Arcade Mode, World
+// highscores) that live in this submenu since both are about how a solo
 // campaign run plays out -- see SPPanelRender/press() in mainmenu.cpp.
 #define SP_OPT 7
-// First of the two toggle rows (Arcade Mode); the second (Upload highscore
-// stats) is kSPRowUploadStats. Named rather than left as bare 5/6 so
+// First of the two toggle rows (Arcade Mode); the second (World highscores,
+// worldscores.h) is kSPRowWorldScores. Named rather than left as bare 5/6 so
 // SPPanelRender and press()/up()/down() (mainmenu.cpp) can't drift apart.
 #define kSPRowArcadeMode 5
-#define kSPRowUploadStats 6
+#define kSPRowWorldScores 6
 
 class MainMenu final
 {
@@ -295,23 +295,19 @@ private:
     int activeSPIdx = 0;
     bool showingSPPanel = false;
     // Shown instead of immediately flipping the row when the player tries to
-    // turn Arcade Mode ON -- same reasoning and same box style as
-    // showingStatsUploadConfirm below: a bare "OFF -> ON" toggle can't say
+    // turn Arcade Mode ON: a bare "OFF -> ON" toggle can't say
     // what it changes, so a confirm popup with a description does. Turning
     // it back OFF needs no confirmation and skips this entirely. See
     // KeysPanelKey/SPPanelRender/press().
     bool showingArcadeModeConfirm = false;
     // On-screen bands for this popup's two buttons, recomputed each frame by
-    // SPPanelRender and hit-tested by HandlePanelTap -- same reasoning as
-    // statsConfirmYesRect/NoRect below (a dedicated pair rather than folding
-    // into panelTapRows, since that list belongs to the settings rows this
-    // popup is drawn over).
+    // SPPanelRender and hit-tested by HandlePanelTap -- a dedicated pair
+    // rather than folding into panelTapRows, since that list belongs to the
+    // settings rows this popup is drawn over.
     SDL_Rect arcadeConfirmYesRect{}, arcadeConfirmNoRect{};
-    // Shared keyboard focus for all three of this panel's two-button popups
-    // (showingArcadeModeConfirm, showingStatsUploadConfirm,
-    // showingStatsNicknamePrompt) -- only one is ever showing at a time, so
-    // one flag covers all three. false = the left/primary button (Turn On /
-    // Save) is focused, true = the right/secondary one (Cancel / Skip).
+    // Keyboard focus for this panel's two-button popup
+    // (showingArcadeModeConfirm). false = the left/primary button (Turn On)
+    // is focused, true = the right/secondary one (Cancel).
     // LEFT/RIGHT/TAB flips it, ENTER activates whichever is focused; ESC
     // still cancels/skips outright regardless, as a keyboard shortcut. A
     // tap always wins over stale focus -- see HandlePanelTap, which forces
@@ -375,36 +371,6 @@ private:
     // so a single stray Enter must not be able to wipe the lot. Cleared whenever
     // the selection moves or the panel closes.
     bool resetAllArmed = false;
-    // The next two modals belong to the 1-player submenu's "Upload highscore
-    // stats" toggle (SPPanelRender/press() in mainmenu.cpp, SP_OPT's
-    // kSPRowUploadStats), not to this panel -- they live here as members
-    // purely because KeysPanelKey (mainmenu_input.cpp) is where their
-    // keyboard handling is written, alongside the rest of this panel's key
-    // dispatch, rather than a separate SPPanelKey of their own.
-    //
-    // Shown instead of immediately flipping the row when the player tries to
-    // turn ON highscore-stat uploading: a bare "OFF -> ON" toggle can't say
-    // what that starts sending, so a popup does. Turning it back OFF needs no
-    // confirmation and skips this entirely. See KeysPanelKey/SPPanelRender.
-    bool showingStatsUploadConfirm = false;
-    // On-screen bands for this popup's two buttons, recomputed each frame by
-    // SPPanelRender and hit-tested by HandlePanelTap. A dedicated pair
-    // rather than folding these into panelTapRows: that list is shared with
-    // (and sits underneath) the settings rows the popup is drawn over, so a
-    // tap on either button would otherwise be caught by whichever hidden row
-    // happens to occupy the same screen position first.
-    SDL_Rect statsConfirmYesRect{}, statsConfirmNoRect{};
-    // Shown right after confirming "Upload highscore stats? -> Turn On",
-    // pre-filled with whatever nickname is already saved (blank if none) so
-    // it doubles as a chance to review/change it -- without this a player
-    // with no nickname set would have their uploads silently read as
-    // "Anonymous", with no way to notice short of spotting it on
-    // petitain.be. Answering either way (Save or Skip) finishes turning the
-    // setting on; this only offers a nickname, it never blocks enabling
-    // stats on its own. See KeysPanelKey/SPPanelRender.
-    bool showingStatsNicknamePrompt = false;
-    char statsUploadNickname[32] = "";  // scratch buffer while typing here
-    SDL_Rect statsNicknameSaveRect{}, statsNicknameSkipRect{};
     void KeysPanelRender();
 
     // LAN server discovery

@@ -57,7 +57,7 @@ public:
     void Dispose();
     static HighscoreManager* Instance(SDL_Renderer *rend = nullptr);
 private:
-    int curMode;
+    int curMode = 0;  // 0 = levelset tables; ShowNewScorePanel() sets it
 
     GameSettings *gameSettings;
     SDL_Renderer *rend;
@@ -87,6 +87,16 @@ private:
     // coordinates) against the two score-screen tab boxes and switches
     // viewTrack if it landed on one. See ScoreTrackTabRect() in the .cpp.
     bool TapScoreTrackTab(float lx, float ly);
+
+    // The WORLD tab (worldscores.h): the official server's board for the
+    // same two tracks, next to this device's own tables. UP/DOWN or a tap on
+    // the MY SCORES / WORLD tabs switches; in the world view ENTER (or a tap
+    // on the button) opens the same board as a web page.
+    bool viewWorld = false;
+    Uint64 worldFetchedAt = 0;
+    void SetViewWorld(bool world);
+    void RenderWorldBoard();
+    bool TapWorldControls(float lx, float ly);
     void CreateLevelImages();
 
     SDL_Surface *backgroundSfc, *useBubbles[8];

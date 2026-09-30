@@ -183,8 +183,27 @@ drift apart.
    `image: nginx:alpine` and restore the old 426 response in
    `docker/nginx.conf`, or mount your own directory over
    `/usr/share/nginx/html`.
+3. The site includes a **World highscores** page (`/scores/`). Its script
+   reads the board live from `fb.servequake.com`, whichever domain serves
+   the page, since that is the one server the game sends runs to (below).
 
 ---
+
+### World highscores
+
+The game sends each player's best classic single-player runs to one server
+fixed at build time (`kWorldScoresHost` in `src/platform.cpp`, currently
+`fb.servequake.com`), not to whichever server they play online on, so there
+is a single world board rather than one per server. It opens its own short
+connection for this (protocol 1.7: `AUTH`, `AUTHSIG`, `HISCORE`, `HISCORES`),
+never sends `NICK`, and so never shows up in your lobby or fires a join
+alert.
+
+Any 1.7 server *can* keep a board — the commands are always there and the
+file lives next to the weekly stats (`/var/lib/fb-server/hiscores.dat`,
+`FB_SERVER_HISCORE_FILE`) — but on yours it stays empty unless you build the
+game with `kWorldScoresHost` pointing at you. Scores are self-reported by the
+game and not verified.
 
 ## Optional — Discord Join & Result Alerts
 

@@ -52,7 +52,8 @@ set(FROZEN_BUBBLE_CORE_SOURCES
     ${FB_SRC}/bubblegame_render.cpp
     ${FB_SRC}/bubblegame_shooter.cpp
     ${FB_SRC}/bubblegame_state.cpp
-    ${FB_SRC}/sendGameStats.cpp
+    ${FB_SRC}/worldboard.cpp
+    ${FB_SRC}/worldscores.cpp
     ${FB_SRC}/netbot.cpp
     ${FB_SRC}/netview.cpp
     ${FB_SRC}/tournamentstate.cpp

@@ -18,6 +18,7 @@
  */
 
 #include "frozenbubble.h"
+#include "worldscores.h"
 #include "logger.h"
 #include "platform.h"
 #include "replay_library.h"
@@ -522,6 +523,10 @@ void FrozenBubble::RunOneFrame()
     // matter what screen is up. See MainMenu::PumpNetworkFrame()'s comment
     // for why this replaced the old showingNetPanel-gated pump.
     if (mainMenu) mainMenu->PumpNetworkFrame();
+    // The world board's own short connections (worldscores.h). Pending runs
+    // wait until the player is out of a game, so a send never competes with
+    // gameplay.
+    worldscores::Pump(currentState == MainGame);
 
     // render
     if(!IsGamePause) {

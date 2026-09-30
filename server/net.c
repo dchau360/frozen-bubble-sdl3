@@ -70,8 +70,10 @@ const int proto_major = 1;
  * 1.5 adds the WEEKLY command (the lobby's weekly rankings, see
  * weekly_command in game.c), gated client-side the same way.
  * 1.6 adds AUTH/AUTHSIG, account sign-in (see account.h); the weekly
- * rankings count only signed-in connections from then on. */
-const int proto_minor = 6;
+ * rankings count only signed-in connections from then on.
+ * 1.7 adds HISCORE/HISCORES, the world board for single-player runs (see
+ * hiscores.h and hiscore_command in game.c). */
+const int proto_minor = 7;
 
 static char greets_msg_base[] = "SERVER_READY %s %s";
 static char* servername = NULL;

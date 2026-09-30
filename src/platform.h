@@ -118,12 +118,6 @@ bool WasmPromptText(const char* title, const char* current, char* out, int outLe
 // ships no curl binary, so the desktop popen("curl ...") path returns nothing
 // there; this is the iOS counterpart of Android's JNI fetchUrl().
 std::string IosFetchUrl(const char* url, int timeoutSeconds);
-
-// Fire-and-forget HTTP POST of a JSON body -- returns immediately, the
-// request itself runs on NSURLSession's own background queue. Used by
-// sendGameStats.cpp; see that file's header comment for the wire format.
-// Defined in platform_ios.mm.
-void IosPostJson(const std::string& url, const std::string& jsonBody);
 #endif
 
 // ── Community Discord ─────────────────────────────────────────────────────────
@@ -136,6 +130,11 @@ void IosPostJson(const std::string& url, const std::string& jsonBody);
 // own UI, which is a phishing primitive, not a feature. Changing where players
 // are sent therefore takes a release, deliberately.
 extern const char* const kDiscordInviteUrl;
+
+// The world highscore board's server and web page (see platform.cpp and
+// worldscores.h). Empty strings turn the feature off in a fork.
+extern const char* const kWorldScoresHost;
+extern const char* const kWorldScoresUrl;
 
 // True when kDiscordInviteUrl is actually set to something. The rows that
 // offer it are not built at all when it is empty, so a fork that has no

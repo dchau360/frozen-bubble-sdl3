@@ -34,6 +34,14 @@ PAGES = [
     (os.path.join(ROOT, "docs", "PRIVACY_POLICY.md"),
      os.path.join("privacy", "index.html"),
      "Privacy Policy — Frozen Bubble: SDL3"),
+    # The world highscore board. Static like everything else here: the page's
+    # own script asks the world-board server (fb.servequake.com) over a
+    # WebSocket (see site/scores.md), so nothing on this site has to know the
+    # scores and every origin that serves it shows the same live board. The
+    # game's "Open in browser" button points here (kWorldScoresUrl).
+    (os.path.join(SITE, "scores.md"),
+     os.path.join("scores", "index.html"),
+     "World highscores — Frozen Bubble: SDL3"),
 ]
 
 # (source path, path within the site)

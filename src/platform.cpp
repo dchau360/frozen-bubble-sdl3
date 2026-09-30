@@ -325,6 +325,15 @@ bool DeviceHasTouchscreen() {
 // limit.
 const char* const kDiscordInviteUrl = "https://discord.gg/uE4dq8fqGW";
 
+// The world board for classic single-player runs (worldscores.h): the one
+// server that keeps it, and the web page that shows it. A build-time constant
+// like the Discord invite, for the same reason -- a board address arriving
+// over the wire would let any server redirect every player's scores. A fork
+// can point these at its own server, or empty them to drop the feature (the
+// setting, the World tab and the web button all disappear).
+const char* const kWorldScoresHost = "fb.servequake.com";
+const char* const kWorldScoresUrl = "https://fb.servequake.com/scores/";
+
 #ifdef FROZEN_BUBBLE_TEST_ACCESS
 bool testForceDiscordInviteOff = false;
 #endif

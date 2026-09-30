@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- **World highscores.** Your best classic single-player runs now go on a world board, shared by everyone playing Frozen Bubble: SDL3. It's ranked by the furthest level cleared from level 1, with the faster time breaking ties, and split into keyboard/gamepad and mouse/touch like your own tables. Open **High Scores**, then **WORLD** (UP/DOWN, or tap the tab), to see the all-time and this-week top 10 and your own rank. **Open in browser** shows the same board as a web page at https://fb.servequake.com/scores/. Runs are sent under your anonymous account, shown as `nick#tag`, once you're back in a menu, and are kept until then if you're offline. It's on by default; turn off **World highscores** in the 1-player menu to stop sending. Scores aren't verified yet. This needs a server running this version (protocol 1.7).
+- **Removed the petitain.be highscore upload.** The old opt-in setting that sent your nickname, a device id, and your score and level to a third-party site when a solo game ended is gone. The world board replaces it, run on this project's own server and covered by its privacy policy.
+- **Privacy policy** updated for the world board: what is sent, where it's shown, how to turn it off, and how long it's kept.
+
 ## v2.4.119
 
 - **Account code screen.** A new **Account code** row on the LAN GAME and NET GAME screens shows your recovery code. Copy it, type it into another device to carry your weekly rankings over, or enter a code you saved earlier. **New account** replaces the code with a fresh one, which is also how you delete your account: without the old code nobody can sign in as it again, and the server forgets its weekly line at the Monday reset.
