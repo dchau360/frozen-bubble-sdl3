@@ -180,22 +180,31 @@ jobs:
           echo "wsl-hb12f-linux: API says ${linux_status:-unknown}, heartbeat age $(( now - ${HEARTBEAT_LINUX:-0} ))s"
           echo "win-hb12f-windows: API says ${windows_status:-unknown}, heartbeat age $(( now - ${HEARTBEAT_WINDOWS:-0} ))s"
 
-          if [ -n "$HEARTBEAT_LINUX" ]; then
-            is_fresh "$HEARTBEAT_LINUX" && linux_online=true || linux_online=false
-          else
-            [ "$linux_status" = "online" ] && linux_online=true || linux_online=false
-          fi
-          if [ -n "$HEARTBEAT_WINDOWS" ]; then
-            is_fresh "$HEARTBEAT_WINDOWS" && windows_online=true || windows_online=false
-          else
-            [ "$windows_status" = "online" ] && windows_online=true || windows_online=false
-          fi
+          # Self-hosted only when every signal we have agrees it is up:
+          #   - the heartbeat, if set, must be fresh (the box is awake), and
+          #   - the API, if it answered, must not say anything but "online"
+          #     (the runner service itself is running; a stopped service
+          #     leaves the heartbeat fresh, since that is driven from the
+          #     Windows side).
+          # Anything else -- stale heartbeat, API offline, or no signal at
+          # all -- goes GitHub-hosted. Each value is written exactly once:
+          # GITHUB_OUTPUT keeps the last write of a key, and a second,
+          # API-only write after this one used to override the heartbeat
+          # decision, so a sleeping box that the API still called "online"
+          # got the job and left it queued.
+          decide() {
+            local heartbeat="$1" status="$2"
+            if [ -z "$heartbeat" ] && [ -z "$status" ]; then echo false; return; fi
+            if [ -n "$heartbeat" ] && ! is_fresh "$heartbeat"; then echo false; return; fi
+            if [ -n "$status" ] && [ "$status" != "online" ]; then echo false; return; fi
+            echo true
+          }
+          linux_online=$(decide "$HEARTBEAT_LINUX" "$linux_status")
+          windows_online=$(decide "$HEARTBEAT_WINDOWS" "$windows_status")
+          echo "Routing: linux self-hosted=$linux_online, windows self-hosted=$windows_online"
 
           echo "linux_online=$linux_online" >> "$GITHUB_OUTPUT"
           echo "windows_online=$windows_online" >> "$GITHUB_OUTPUT"
-
-          [ "$linux_status" = "online" ] && echo "linux_online=true" >> "$GITHUB_OUTPUT" || echo "linux_online=false" >> "$GITHUB_OUTPUT"
-          [ "$windows_status" = "online" ] && echo "windows_online=true" >> "$GITHUB_OUTPUT" || echo "windows_online=false" >> "$GITHUB_OUTPUT"
 
   # ────────────────────────────────────────────────────────────────
   # Linux → AppImage
