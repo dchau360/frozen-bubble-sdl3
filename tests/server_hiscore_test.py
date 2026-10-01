@@ -216,6 +216,41 @@ class HiscoreTest(WeeklyTestBase):
         self.assertEqual(week, [])
         self.assertEqual(me, "1,40,500000,0,0,0,0,0")
 
+    def test_new_week_snapshots_both_files_and_keeps_the_newest(self):
+        import datetime
+        last_week = monday_of(today()) - 7
+        date = lambda day: datetime.datetime.fromtimestamp(
+            day * 86400, datetime.timezone.utc).strftime("%Y-%m-%d")
+        hiscores = f"v3 {last_week}\n{self.acct.id('alice')} alice DE " + " ".join(
+            ["40 500000 0", "0 0 0", "0 0 0", "0 0 0"] * 2) + "\n"
+        self.hiscore_file.write_text(hiscores)
+        d = self.hiscore_file.parent
+        # Three older snapshots, and a file that only looks like one.
+        for weeks in (2, 3, 4):
+            (d / f"hiscores.dat.{date(last_week - 7 * (weeks - 1))}").write_text("old")
+        (d / "hiscores.dat.bak").write_text("mine")
+        self.start(seed=f"v2 {last_week} {today() - 1}\n" + self.line("alice", 3, 1, 50),
+                   extra_env={"FB_SERVER_SNAPSHOTS": "3"})
+        self.board(self.session(), 0)   # touching the board rolls it over
+
+        snap = d / f"hiscores.dat.{date(last_week)}"
+        self.assertEqual(snap.read_text(), hiscores, "the finished week, as it ended")
+        kept = sorted(p.name for p in d.glob("hiscores.dat.????-??-??"))
+        self.assertEqual(kept, sorted([snap.name] + [
+            f"hiscores.dat.{date(last_week - 7 * w)}" for w in (1, 2)]))
+        self.assertEqual((d / "hiscores.dat.bak").read_text(), "mine")
+        weekly_snap = d / f"weekly.dat.{date(last_week)}"
+        self.assertIn(self.acct.id("alice"), weekly_snap.read_text())
+
+    def test_snapshots_can_be_turned_off(self):
+        last_week = monday_of(today()) - 7
+        self.hiscore_file.write_text(
+            f"v1 {last_week}\n{self.acct.id('alice')} alice 40 500000 0 0 40 500000 0 0\n")
+        self.start(seed=f"v2 {last_week} {today() - 1}\n" + self.line("alice", 3, 1, 50),
+                   extra_env={"FB_SERVER_SNAPSHOTS": "0"})
+        self.board(self.session(), 0)
+        self.assertEqual(list(self.hiscore_file.parent.glob("*.dat.????-??-??")), [])
+
 
 if __name__ == "__main__":
     unittest.main(argv=sys.argv[:1], verbosity=2)

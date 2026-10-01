@@ -115,11 +115,12 @@ class WeeklyTestBase(unittest.TestCase):
         self.socks = []
         self.server = None
 
-    def start(self, seed=None):
+    def start(self, seed=None, extra_env=None):
         """Boot the server, optionally after writing `seed` as weekly.dat."""
         if seed is not None:
             self.weekly_file.write_text(seed)
         env = dict(os.environ)
+        env.update(extra_env or {})
         env["FB_SERVER_DISCORD_RELAY"] = f"127.0.0.1:{self.relay.getsockname()[1]}"
         env["FB_SERVER_STATS_FILE"] = str(Path(self.tmpdir.name) / "stats.dat")
         env["FB_SERVER_WEEKLY_FILE"] = str(self.weekly_file)
