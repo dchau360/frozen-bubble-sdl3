@@ -84,7 +84,12 @@ int main() {
         std::fprintf(stderr, "headless renderer setup failed: %s\n", SDL_GetError());
         return 1;
     }
-    setenv("USER", "tester!x", 1);  // the prefill drops the '!'
+    // the prefill drops the '!' (MinGW has no setenv under strict C++17)
+#ifdef _WIN32
+    _putenv_s("USER", "tester!x");
+#else
+    setenv("USER", "tester!x", 1);
+#endif
 
     const auto dir = std::filesystem::temp_directory_path() /
         ("frozen-bubble-sp-name-prompt-test-" + std::to_string(
