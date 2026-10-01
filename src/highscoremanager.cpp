@@ -580,8 +580,7 @@ void HighscoreManager::RenderScoreScreen() {
             if (SDL_Rect* c = lt.Coords())
                 lt.UpdatePosition({108 * (col + 1) - c->w / 2, 185 * (row + 1)});
             { SDL_FRect fr = ToFRect(*lt.Coords()); SDL_RenderTexture(rend, lt.Texture(), nullptr, &fr); }
-            if (ShowsBoth())
-                DrawTrackBadge(rend, trackLabelText, scores[i].track, framePos.x + 4, framePos.y + 4);
+            DrawTrackBadge(rend, trackLabelText, scores[i].track, framePos.x + 4, framePos.y + 4);
         }
 
         // Two tab boxes, each a toggle -- click/tap one to turn it on or off
@@ -700,14 +699,16 @@ void HighscoreManager::RenderWorldBoard() {
     const std::string me = worldscores::ShownName();
     SDL_SetRenderDrawBlendMode(rend, SDL_BLENDMODE_BLEND);
 
-    // Both inputs on: one list per column, merged and badged.
-    const std::vector<WorldBoard::Entry> mergedAll =
-        both ? WorldBoard::Merge(kb.alltime, ms.alltime, viewPoints) : std::vector<WorldBoard::Entry>();
-    const std::vector<WorldBoard::Entry> mergedWeek =
-        both ? WorldBoard::Merge(kb.week, ms.week, viewPoints) : std::vector<WorldBoard::Entry>();
+    // One list per column from whichever inputs are on, through Merge even
+    // for one so every entry carries its input for the badge.
+    const std::vector<WorldBoard::Entry> none;
+    const bool showKb = ShowsTrack(0), showMs = ShowsTrack(1);
+    const std::vector<WorldBoard::Entry> mergedAll = WorldBoard::Merge(
+        showKb ? kb.alltime : none, showMs ? ms.alltime : none, viewPoints);
+    const std::vector<WorldBoard::Entry> mergedWeek = WorldBoard::Merge(
+        showKb ? kb.week : none, showMs ? ms.week : none, viewPoints);
     struct Column { const char* title; const std::vector<WorldBoard::Entry>* list; };
-    const Column cols[2] = {{"ALL-TIME", both ? &mergedAll : &b.alltime},
-                            {"THIS WEEK", both ? &mergedWeek : &b.week}};
+    const Column cols[2] = {{"ALL-TIME", &mergedAll}, {"THIS WEEK", &mergedWeek}};
     for (int c = 0; c < 2; ++c) {
         const int x = 22 + c * 304, w = 292;
         SDL_SetRenderDrawColor(rend, 20, 12, 32, 170);
@@ -740,7 +741,7 @@ void HighscoreManager::RenderWorldBoard() {
             // shorten the nick (never the #tag, which tells same-named
             // players apart) until the row fits.
             int nameX = x + 34;
-            if (both) nameX += DrawTrackBadge(rend, trackLabelText, list[i].track, nameX, y + 2) + 6;
+            nameX += DrawTrackBadge(rend, trackLabelText, list[i].track, nameX, y + 2) + 6;
             if (!list[i].country.empty())
                 nameX += DrawChip(rend, trackLabelText, list[i].country.c_str(), kCountryChipFill,
                                   nameX, y + 2) + 6;

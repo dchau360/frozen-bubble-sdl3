@@ -40,7 +40,8 @@ public:
     // BubbleGame::ScoringInputMethod, which this mirrors) and counts toward
     // that table only -- keyboard/gamepad and mouse/touch scores are not
     // comparable to each other, so each keeps its own top 10. The screen can
-    // still show both at once (ShowsBoth()), merged and badged by input.
+    // still show both at once (ShowsBoth()), merged; every entry shown
+    // carries its input's badge either way.
     enum class InputMethod { Keyboard = 0, Mouse = 1 };
 
     void ShowScoreScreen(int ls);
@@ -67,7 +68,7 @@ private:
 
     // Which of the two tables the score screen shows is a pair of toggles kept
     // in GameSettings::scoreTracks() (bit 0 keyboard/gamepad, bit 1 mouse/
-    // touch; both on merges them, with an input badge per entry). Tapping a
+    // touch; both on merges them; each entry has an input badge). Tapping a
     // tab toggles it; LEFT/RIGHT cycles KEYBOARD -> MOUSE/TOUCH -> BOTH.
     // pendingHighscoreTrack is the table the most recent CheckAndAddScore()
     // added a pending (unnamed) entry to -- ShowNewScorePanel()/HandleInput's
