@@ -251,6 +251,9 @@ constexpr const char *kSPLabel[SP_OPT] = {
     // without a re-render) and gives it a description in the panel's header
     // area when highlighted, instead of a fixed label like the rows above.
     "WORLD HIGHSCORES",
+    // Opens the Account code screen; drawn in the slim section with the
+    // toggle, with a ">" where the toggle has ON/OFF.
+    "ACCOUNT CODE",
 };
 } // namespace
 
@@ -284,6 +287,9 @@ void MainMenu::EnsureSPLabels() {
 
 void MainMenu::SPPanelRender() {
     if (!showingSPPanel) return;
+    // The account screen is full-screen and takes over until it is closed,
+    // back to this panel.
+    if (showingAccount) { AccountPanelRender(); return; }
     EnsureSPLabels();
     SDL_Renderer *rend = const_cast<SDL_Renderer*>(renderer);
 
@@ -344,9 +350,11 @@ void MainMenu::SPPanelRender() {
     // it is drawn fresh every frame rather than baked into EnsureSPLabels'
     // cache.
     GameSettings* gs = GameSettings::Instance();
-    struct ToggleRow { int idx; bool on; };
+    struct ToggleRow { int idx; bool on; const char* badge; };
+    const bool worldOn = gs->worldHighscoresEnabled();
     ToggleRow toggles[SP_OPT - kBigRows] = {
-        {kSPRowWorldScores,  gs->worldHighscoresEnabled()},
+        {kSPRowWorldScores, worldOn, worldOn ? "ON" : "OFF"},
+        {kSPRowAccount,     true,    ">"},
     };
     for (int t = 0; t < SP_OPT - kBigRows; t++) {
         int i = toggles[t].idx;
@@ -371,7 +379,7 @@ void MainMenu::SPPanelRender() {
         panelText.UpdateStyle(13, TTF_STYLE_BOLD);
         panelText.UpdateColor(toggles[t].on ? onColor : offColor, {41, 22, 8, 235});
         panelText.UpdateAlignment(TTF_HORIZONTAL_ALIGN_RIGHT);
-        panelText.UpdateText(rend, toggles[t].on ? "ON" : "OFF", 0);
+        panelText.UpdateText(rend, toggles[t].badge, 0);
         panelText.UpdatePosition({entryRct.x + entryRct.w - 14 - panelText.Coords()->w,
                                    entryRct.y + (entryRct.h - panelText.Coords()->h) / 2});
         { SDL_FRect fr = ToFRect(*panelText.Coords()); SDL_RenderTexture(rend, panelText.Texture(), nullptr, &fr); }
@@ -389,6 +397,8 @@ void MainMenu::SPPanelRender() {
     panelText.UpdateColor({255, 255, 255, 255}, {0, 0, 0, 255});
     if (activeSPIdx == kSPRowWorldScores) {
         panelText.UpdateText(rend, "Send runs to the world board", 0);
+    } else if (activeSPIdx == kSPRowAccount) {
+        panelText.UpdateText(rend, "View, copy or change your account", 0);
     } else {
         panelText.UpdateText(rend, "Start 1-player game menu", 0);
     }

@@ -56,15 +56,20 @@
 #define BLINK_SLOWDOWN 30
 
 // The 5 original navigation rows plus 1 settings toggle (World highscores)
-// that lives in this submenu since it is about solo campaign runs -- see
+// and the Account code screen, both here since world-board runs are signed
+// with the account (an online-only player reaches the same screen from the
+// server list) -- see
 // SPPanelRender/press() in mainmenu.cpp. (An Arcade Mode toggle used to sit
 // here too; a death in a classic solo game now always asks whether to
 // continue -- BubbleGame's continue prompt -- so there is nothing to set.)
-#define SP_OPT 6
+#define SP_OPT 7
 // The toggle row (World highscores, worldscores.h). Named rather than left as
 // a bare 5 so SPPanelRender and press()/up()/down() (mainmenu.cpp) can't
 // drift apart.
 #define kSPRowWorldScores 5
+// Opens the Account code screen (mainmenu_account.cpp), the same one the
+// LAN/NET server lists open.
+#define kSPRowAccount 6
 
 class MainMenu final
 {

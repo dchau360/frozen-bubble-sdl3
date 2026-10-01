@@ -12,7 +12,8 @@
 // account is nothing but its 16-character code, so this is where a player
 // reads the code down, types one in from another device, or starts over.
 // Opened from the Account section of the LAN/NET server lists
-// (ServerListAccountIndex()), full-screen like the weekly rankings view.
+// (ServerListAccountIndex()) and from the 1-player menu (kSPRowAccount),
+// full-screen like the weekly rankings view.
 //
 // Input parity (CLAUDE.md): every button is a registered tap row, LEFT/RIGHT/
 // TAB move a visibly-highlighted focus, ENTER activates, ESC backs out one
@@ -78,9 +79,9 @@ void MainMenu::AccountPanelRender() {
         text(code.empty() ? "(unavailable on this device)" : playeraccount::FormatCode(code),
              18, y + 20, menulist::kGold, 24);
         y += 70;
-        text("Your weekly ranking belongs to this code, not to your name.", 18, y);
-        text("Write it down to keep your ranking after reinstalling, or", 18, y + 22, menulist::kMuted);
-        text("enter it on another device with \"Use another code\".", 18, y + 42, menulist::kMuted);
+        text("Your weekly ranking and world highscores belong to this code,", 18, y);
+        text("not to your name. Write it down to keep them after reinstalling,", 18, y + 22, menulist::kMuted);
+        text("or enter it on another device with \"Use another code\".", 18, y + 42, menulist::kMuted);
         text("Anyone who has the code can play as you. The game never", 18, y + 72, menulist::kMuted);
         text("sends it anywhere: servers only see a key made from it.", 18, y + 92, menulist::kMuted);
     }
