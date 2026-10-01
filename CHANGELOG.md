@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- **High scores show keyboard and mouse together by default.** The High Scores screen and the world highscores web page now open with both inputs on, each entry tagged **KB** or **M/T**. If you already picked one, the game keeps your choice.
+
 ## v2.4.126
 
 - **Account code in the 1-player menu and High Scores.** Your account code, which your world highscores and weekly ranking are kept under, can now be viewed, copied or changed from the 1-player menu (**Account code**, under World highscores) and from the High Scores screen's World Level and World Points tabs (an **Account code** button next to Open in browser; Back returns you to High Scores). Before, the only way in was from the online server list.

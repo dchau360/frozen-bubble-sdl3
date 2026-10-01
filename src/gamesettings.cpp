@@ -278,8 +278,9 @@ void GameSettings::ReadSettings()
     colorblindBubbles = iniparser_getboolean(optDict, "GFX:ColorblindBubbles", false);
     showFps = iniparser_getboolean(optDict, "GFX:ShowFPS", false);
     worldHighscores = iniparser_getboolean(optDict, "Stats:WorldHighscores", true);
-    scoreTrackMask = iniparser_getint(optDict, "Stats:ScoreTracks", 1);
-    if (scoreTrackMask < 1 || scoreTrackMask > 3) scoreTrackMask = 1;
+    // Both inputs until the player picks: one list, each entry badged.
+    scoreTrackMask = iniparser_getint(optDict, "Stats:ScoreTracks", 3);
+    if (scoreTrackMask < 1 || scoreTrackMask > 3) scoreTrackMask = 3;
     lastCountryCode = iniparser_getstring(optDict, "Stats:Country", "");
     if (!IsCountryCode(lastCountryCode)) lastCountryCode.clear();
     if (gfxQuality > 3 || gfxQuality < 1) gfxQuality = 3;

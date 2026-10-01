@@ -837,12 +837,12 @@ void HighscoreManager::ActivateWorldButton(int b) {
 }
 
 void HighscoreManager::OpenWorldPage() {
-    // The page reads a "#points" / "#mouse" / "#both" anchor (site/scores.md) and opens
-    // on the same board this screen is showing.
+    // The page reads a "#points" / "#kb" / "#mouse" anchor (site/scores.md) and opens
+    // on the same board this screen is showing; no input anchor means both.
     std::string url = worldscores::WebUrl();
     std::string anchor;
     if (viewPoints) anchor = "points";
-    const char* input = ShowsBoth() ? "both" : ShowsTrack((int)InputMethod::Mouse) ? "mouse" : nullptr;
+    const char* input = ShowsBoth() ? nullptr : ShowsTrack((int)InputMethod::Mouse) ? "mouse" : "kb";
     if (input) anchor += (anchor.empty() ? "" : "-") + std::string(input);
     if (!anchor.empty()) url += "#" + anchor;
     if (!SDL_OpenURL(url.c_str()))

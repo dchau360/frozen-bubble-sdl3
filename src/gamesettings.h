@@ -371,7 +371,7 @@ private:
     bool playMusic = true, playSfx = true, classicSound = false;
     bool showFps = false;
     bool worldHighscores = true;
-    int scoreTrackMask = 1;
+    int scoreTrackMask = 3;
     std::string lastCountryCode;
     // Replay library keep count. In-class default so a harness or a failed load
     // that never reached ReadSettings() still reads a valid count -- same reason
