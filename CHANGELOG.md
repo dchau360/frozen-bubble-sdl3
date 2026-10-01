@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v2.4.125
 
 - **Country on the world highscores.** World board entries now show the player's country: a code next to the name in the game, and a flag on the web page. It's the country the game already looks up when you play online, saved and sent with your runs. If you only play solo, or in the browser, no country is sent and none is shown. The privacy policy describes this.
 - **Show keyboard and mouse scores together.** On the High Scores screen the KEYBOARD and MOUSE/TOUCH tabs are now separate switches: turn both on to see one list with each run tagged **KB** or **M/T**. LEFT/RIGHT steps through keyboard, mouse/touch, and both. The game remembers your choice, so if you play with the mouse, the mouse scores are what you'll see. The world highscores web page has the same switches, and the game's **Open in browser** button opens it with your current selection.
