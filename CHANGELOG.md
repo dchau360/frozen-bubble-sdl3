@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- **Show keyboard and mouse scores together.** On the High Scores screen the KEYBOARD and MOUSE/TOUCH tabs are now separate switches: turn both on to see one list with each run tagged **KB** or **M/T**. LEFT/RIGHT steps through keyboard, mouse/touch, and both. The game remembers your choice, so if you play with the mouse, the mouse scores are what you'll see. The world highscores web page has the same switches, and the game's **Open in browser** button opens it with your current selection.
+
 ## v2.4.124
 
 - **Name prompt before a 1-player game.** If world highscores are on and you haven't set a name, START in the 1-player menu first asks for one, prefilled with your computer's login name on desktop, so your runs don't go on the world board as `unnamed`. **Save and play** keeps the name (the same one online play uses); **Skip** or ESC plays without one, and it won't ask again until you restart the game.

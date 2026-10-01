@@ -43,6 +43,27 @@ int main() {
         CHECK(!b.Parse(bad));
     CHECK(b.alltime.size() == 1 && b.alltime[0].name == "x#0000");
 
+    // Both inputs at once: merged in board order, each tagged with its track.
+    {
+        WorldBoard kb, ms;
+        CHECK(kb.Parse("0 a#0001=40/300000/0,b#0002=20/100000/0 - -"));
+        CHECK(ms.Parse("0 c#0003=40/200000/0,a#0001=30/100000/0 - -"));
+        const auto lv = WorldBoard::Merge(kb.alltime, ms.alltime, false);
+        CHECK(lv.size() == 4);
+        CHECK(lv[0].name == "c#0003" && lv[0].track == 1);  // same level, faster
+        CHECK(lv[1].name == "a#0001" && lv[1].track == 0);
+        CHECK(lv[2].name == "a#0001" && lv[2].track == 1);  // one account, both inputs
+        CHECK(lv[3].name == "b#0002" && lv[3].track == 0);
+
+        CHECK(kb.Parse("0 a#0001=10/300000/9000,b#0002=50/100000/5000 - -"));
+        CHECK(ms.Parse("0 c#0003=60/100000/9000 - -"));
+        const auto pt = WorldBoard::Merge(kb.alltime, ms.alltime, true);
+        CHECK(pt.size() == 3);
+        CHECK(pt[0].name == "c#0003" && pt[1].name == "a#0001");  // points tie: higher level first
+        CHECK(pt[2].name == "b#0002");
+        CHECK(WorldBoard::Merge({}, {}, true).empty());
+    }
+
     CHECK(WorldBoard::PointsLabel(48210) == "48,210 pts");
     CHECK(WorldBoard::PointsLabel(1234567) == "1,234,567 pts");
     CHECK(WorldBoard::PointsLabel(999) == "999 pts");

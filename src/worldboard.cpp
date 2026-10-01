@@ -1,5 +1,6 @@
 #include "worldboard.h"
 
+#include <algorithm>
 #include <cstdio>
 #include <cstdlib>
 #include <sstream>
@@ -55,6 +56,21 @@ int WorldBoard::Rank(const std::vector<Entry>& list, size_t i) {
            list[i - 1].points == list[i].points)
         --i;
     return (int)i + 1;
+}
+
+std::vector<WorldBoard::Entry> WorldBoard::Merge(const std::vector<Entry>& keyboard,
+                                                const std::vector<Entry>& mouse, bool points) {
+    auto better = [points](const Entry& a, const Entry& b) {
+        if (points && a.points != b.points) return a.points > b.points;
+        if (a.level != b.level) return a.level > b.level;
+        return a.timeMs < b.timeMs;
+    };
+    std::vector<Entry> out;
+    out.reserve(keyboard.size() + mouse.size());
+    for (Entry e : keyboard) { e.track = 0; out.push_back(e); }
+    for (Entry e : mouse) { e.track = 1; out.push_back(e); }
+    std::stable_sort(out.begin(), out.end(), better);
+    return out;
 }
 
 std::string WorldBoard::PointsLabel(int points) {

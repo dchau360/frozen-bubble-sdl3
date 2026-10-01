@@ -204,6 +204,13 @@ public:
     // Off, nothing is sent; the board can still be viewed.
     bool worldHighscoresEnabled() { return worldHighscores; }
 
+    // Which inputs the High Scores screen shows, as toggles: bit 0 keyboard/
+    // gamepad, bit 1 mouse/touch, never 0. Both on shows one merged list with
+    // an input badge on each entry. Remembered, so a mouse player who turned
+    // MOUSE/TOUCH on finds it on next time.
+    int scoreTracks() { return scoreTrackMask; }
+    void setScoreTracks(int mask);
+
     // Off by default. When on, dying in classic 1-player play (default
     // levelset or a custom start level -- not random levels, training, or any
     // networked mode) sends the run back to level 1 with score reset, instead
@@ -353,6 +360,7 @@ private:
     bool playMusic = true, playSfx = true, classicSound = false;
     bool showFps = false;
     bool worldHighscores = true;
+    int scoreTrackMask = 1;
     // Replay library keep count. In-class default so a harness or a failed load
     // that never reached ReadSettings() still reads a valid count -- same reason
     // as gfxQuality above. Named ...Value because the getter takes the obvious

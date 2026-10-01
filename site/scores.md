@@ -1,6 +1,6 @@
 <h1>World highscores</h1>
 
-<div class="tabs big" role="group" aria-label="Controls">
+<div class="tabs big" role="group" aria-label="Controls (turn on both to compare)">
 <button type="button" data-track="0" aria-pressed="true">Keyboard</button>
 <button type="button" data-track="1" aria-pressed="false">Mouse/Touch</button>
 </div>
@@ -25,7 +25,9 @@ every death, and the level shown is the one that life got to. "This week"
 starts over every Monday at 00:00 UTC.
 
 Keyboard/gamepad and mouse/touch runs are ranked separately, since aiming
-with one is not the same game as aiming with the other. Players are listed as
+with one is not the same game as aiming with the other. Turn both on to see
+them in one list, each run tagged <span class="badge t0">KB</span> or
+<span class="badge t1">M/T</span>. Players are listed as
 `nick#tag`: the tag comes from the player's anonymous account, so two players
 with the same nickname stay apart.
 
@@ -52,12 +54,16 @@ off with **World highscores** in the 1-player menu; see the
   var SERVER = "wss://fb.servequake.com/";
   var BOARDS = 4;
   var boards = [], weekStart = 0;
-  var view = { kind: 0, track: 0 };
-  // "#points" (and "#mouse") open straight onto that board; the game's
-  // "Open in browser" button sends whichever it was showing.
+  // tracks: which inputs are on, [keyboard/gamepad, mouse/touch]; both on
+  // merges the two boards and tags each row (the game's High Scores screen
+  // does the same, with the same labels and colours).
+  var view = { kind: 0, tracks: [true, false] };
+  // "#points" (and "#mouse" or "#both") open straight onto that board; the
+  // game's "Open in browser" button sends whichever it was showing.
   var hash = location.hash.replace("#", "").split("-");
   if (hash.indexOf("points") >= 0) view.kind = 1;
-  if (hash.indexOf("mouse") >= 0) view.track = 1;
+  if (hash.indexOf("mouse") >= 0) view.tracks = [false, true];
+  if (hash.indexOf("both") >= 0) view.tracks = [true, true];
   var statusEl = document.getElementById("fb-status");
   function levelLabel(l) { return l > 100 ? "won!" : "level " + l; }
   function shortLevel(l) { return l > 100 ? "won!" : "lv " + l; }
@@ -75,7 +81,16 @@ off with **World highscores** in the 1-player menu; see the
     });
   }
   function same(a, b) { return a.level === b.level && a.ms === b.ms && a.points === b.points; }
+  // Server order for the board kind (server/hiscores.c): furthest level then
+  // lower time; or most points, then higher level, then lower time.
+  function better(a, b) {
+    if (view.kind === 1 && a.points !== b.points) return b.points - a.points;
+    if (a.level !== b.level) return b.level - a.level;
+    return a.ms - b.ms;
+  }
+  function tagged(list, track) { return list.map(function (e) { return Object.assign({ track: track }, e); }); }
   function span(li, cls, text) { var s = document.createElement("span"); s.className = cls; s.textContent = text; li.appendChild(s); }
+  var both = false;
   function fill(id, list, emptyText) {
     var ol = document.getElementById(id);
     ol.textContent = "";
@@ -92,6 +107,13 @@ off with **World highscores** in the 1-player menu; see the
       ranks.push(rank);
       var li = document.createElement("li");
       span(li, "rank" + (rank <= 3 ? " m" + rank : ""), rank + ".");
+      if (both) {
+        var badge = document.createElement("span");
+        badge.className = "badge t" + e.track;
+        badge.textContent = e.track ? "M/T" : "KB";
+        badge.title = e.track ? "Mouse/touch" : "Keyboard/gamepad";
+        li.appendChild(badge);
+      }
       span(li, "name", e.name);
       span(li, "figs", view.kind === 1
         ? pointsLabel(e.points) + "  " + shortLevel(e.level) + "  " + timeLabel(e.ms)
@@ -101,11 +123,17 @@ off with **World highscores** in the 1-player menu; see the
   }
   function render() {
     document.querySelectorAll("[data-board]").forEach(function (b) { b.setAttribute("aria-pressed", String(+b.dataset.board === view.kind)); });
-    document.querySelectorAll("[data-track]").forEach(function (b) { b.setAttribute("aria-pressed", String(+b.dataset.track === view.track)); });
-    var board = boards[view.kind * 2 + view.track];
-    if (!board) return;
-    fill("fb-alltime", board.alltime, "Nobody yet -- be the first!");
-    fill("fb-week", board.week, "Nobody yet this week -- be the first!");
+    document.querySelectorAll("[data-track]").forEach(function (b) { b.setAttribute("aria-pressed", String(view.tracks[+b.dataset.track])); });
+    both = view.tracks[0] && view.tracks[1];
+    var shown = [0, 1].filter(function (t) { return view.tracks[t] && boards[view.kind * 2 + t]; });
+    if (!shown.length) return;
+    function pick(key) {
+      var list = [];
+      shown.forEach(function (t) { list = list.concat(tagged(boards[view.kind * 2 + t][key], t)); });
+      return both ? list.sort(better) : list;  // Array.sort is stable: a tie keeps keyboard first
+    }
+    fill("fb-alltime", pick("alltime"), "Nobody yet -- be the first!");
+    fill("fb-week", pick("week"), "Nobody yet this week -- be the first!");
   }
   function bind(attr, key) {
     document.querySelectorAll("[data-" + attr + "]").forEach(function (b) {
@@ -113,7 +141,15 @@ off with **World highscores** in the 1-player menu; see the
     });
   }
   bind("board", "kind");
-  bind("track", "track");
+  // Each input button is a toggle; the last one on stays on.
+  document.querySelectorAll("[data-track]").forEach(function (b) {
+    b.addEventListener("click", function () {
+      var t = +b.dataset.track;
+      if (view.tracks[t] && !view.tracks[1 - t]) return;
+      view.tracks[t] = !view.tracks[t];
+      render();
+    });
+  });
   render();
   var ws, buf = "", got = 0;
   try { ws = new WebSocket(SERVER); } catch (e) { statusEl.textContent = "Couldn't reach the server."; return; }

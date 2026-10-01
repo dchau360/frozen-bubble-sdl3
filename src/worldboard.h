@@ -20,6 +20,7 @@ struct WorldBoard {
         int level = 0;
         int timeMs = 0;
         int points = 0;
+        int track = 0;  // 0 keyboard/gamepad, 1 mouse/touch; set by Merge()
     };
     struct Mine {
         int rank = 0, level = 0, timeMs = 0, points = 0;  // all zero: no run in that scope
@@ -35,6 +36,14 @@ struct WorldBoard {
 
     // Competition rank of list[i] ("1, 2, 2, 4"): equal runs share a rank.
     static int Rank(const std::vector<Entry>& list, size_t i);
+
+    // One list out of a keyboard/gamepad list and a mouse/touch list, for
+    // showing both inputs at once: each entry tagged with its track, ordered
+    // the way fb-server orders that kind of board (furthest level, then lower
+    // time; or most points, then higher level, then lower time). A stable
+    // merge, so an exact tie keeps keyboard/gamepad first.
+    static std::vector<Entry> Merge(const std::vector<Entry>& keyboard,
+                                    const std::vector<Entry>& mouse, bool points);
 
     // "12,345 pts".
     static std::string PointsLabel(int points);
