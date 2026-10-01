@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v2.4.128
 
 - **World points comes before World level.** On the High Scores screen the tabs are now MY SCORES, WORLD POINTS, WORLD LEVEL, and UP/DOWN goes through them in that order. The world highscores web page lists World points first and opens on it.
 - **Shot count in 1-player games.** A classic 1-player game now shows **Shots: N** under the score: how many bubbles you've fired this run. Like the run's clock, it keeps counting when you **Continue** after losing and starts over with **Start over** or a new game.
