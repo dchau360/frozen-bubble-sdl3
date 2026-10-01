@@ -598,6 +598,20 @@ private:
     // device's anonymous account (playeraccount.h), opened from the Account
     // section of the LAN/NET server lists -- before connecting, since the
     // code is what a player needs to move their ranking, not a server's.
+    // "Name for the world board" prompt (mainmenu_spname.cpp): opened by
+    // START in the 1-player menu when world highscores are on and no name is
+    // set, so a run doesn't go on the public board as "unnamed". Asked once
+    // per session; Skip starts the game without a name.
+    bool SPNamePromptApplies() const;
+    void OpenSPNamePrompt();
+    void SPNamePromptRender();
+    bool SPNamePromptKey(SDL_Event* e);
+    void FinishSPNamePrompt(bool save);
+    bool spNamePrompt = false;
+    bool spNamePromptAsked = false;  // this session; never asked twice
+    int spNameFocus = 0;             // 0 Save and play, 1 Skip
+    char spNameInput[16] = "";
+
     void OpenAccountPanel();
     void AccountPanelRender();
     bool AccountPanelKey(SDL_Event* e);
