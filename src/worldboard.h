@@ -10,7 +10,8 @@
 //
 //   <week_start> <alltime> <week> <me>
 //
-// each list "nick#tag=level/time_ms/points,..." or "-", me
+// each list "nick#tag=level/time_ms/points[/CC],..." or "-" (CC the player's
+// country, when the server has one), me
 // "arank,alevel,atime,apoints,wrank,wlevel,wtime,wpoints" or "-". Level 101
 // means the whole set was cleared; points is 0 on a furthest-level board.
 // Kept free of SDL and networking so it can be tested alone.
@@ -21,6 +22,7 @@ struct WorldBoard {
         int timeMs = 0;
         int points = 0;
         int track = 0;  // 0 keyboard/gamepad, 1 mouse/touch; set by Merge()
+        std::string country;  // ISO alpha-2, or "" when the player has none
     };
     struct Mine {
         int rank = 0, level = 0, timeMs = 0, points = 0;  // all zero: no run in that scope

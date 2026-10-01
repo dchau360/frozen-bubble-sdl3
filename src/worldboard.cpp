@@ -17,8 +17,14 @@ bool ParseList(const std::string& field, std::vector<WorldBoard::Entry>& out) {
         if (eq == std::string::npos || eq == 0) return false;
         WorldBoard::Entry e;
         e.name = item.substr(0, eq);
-        if (std::sscanf(item.c_str() + eq + 1, "%d/%d/%d", &e.level, &e.timeMs, &e.points) != 3)
-            return false;
+        char cc[4] = "";
+        const int n = std::sscanf(item.c_str() + eq + 1, "%d/%d/%d/%3s", &e.level, &e.timeMs,
+                                  &e.points, cc);
+        if (n < 3) return false;
+        // Anything but two capitals is dropped rather than refused: a later
+        // server's extra field mustn't cost the whole board.
+        if (n == 4 && cc[0] >= 'A' && cc[0] <= 'Z' && cc[1] >= 'A' && cc[1] <= 'Z' && !cc[2])
+            e.country = cc;
         if (e.level <= 0) return false;
         out.push_back(e);
     }

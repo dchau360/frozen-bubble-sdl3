@@ -211,6 +211,13 @@ public:
     int scoreTracks() { return scoreTrackMask; }
     void setScoreTracks(int mask);
 
+    // The country (ISO alpha-2) the online lobby's lookup last found, or "".
+    // Remembered so the world board can show it next to this player's runs:
+    // worldscores sends it with each submission. Set only from that lookup,
+    // which this build never makes for a player who only plays solo.
+    const std::string& lastCountry() { return lastCountryCode; }
+    void setLastCountry(const std::string& code);
+
     // Off by default. When on, dying in classic 1-player play (default
     // levelset or a custom start level -- not random levels, training, or any
     // networked mode) sends the run back to level 1 with score reset, instead
@@ -361,6 +368,7 @@ private:
     bool showFps = false;
     bool worldHighscores = true;
     int scoreTrackMask = 1;
+    std::string lastCountryCode;
     // Replay library keep count. In-class default so a harness or a failed load
     // that never reached ReadSettings() still reads a valid count -- same reason
     // as gfxQuality above. Named ...Value because the getter takes the obvious

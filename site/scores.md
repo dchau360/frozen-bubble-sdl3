@@ -29,7 +29,8 @@ with one is not the same game as aiming with the other. Turn both on to see
 them in one list, each run tagged <span class="badge t0">KB</span> or
 <span class="badge t1">M/T</span>. Players are listed as
 `nick#tag`: the tag comes from the player's anonymous account, so two players
-with the same nickname stay apart.
+with the same nickname stay apart. The flag is the country the player's game
+last reported when it went online; players who only play solo have none.
 
 The board lives on this port's own server at fb.servequake.com. Frozen Bubble:
 SDL3 is a fan-made port, and the board is not run by the original Frozen
@@ -77,7 +78,9 @@ off with **World highscores** in the 1-player menu; see the
     if (field === "-") return [];
     return field.split(",").map(function (item) {
       var eq = item.lastIndexOf("="), v = item.slice(eq + 1).split("/");
-      return { name: item.slice(0, eq), level: +v[0], ms: +v[1], points: +(v[2] || 0) };
+      // v[3]: the player's country, when the server has one.
+      var cc = /^[A-Z]{2}$/.test(v[3] || "") ? v[3] : "";
+      return { name: item.slice(0, eq), level: +v[0], ms: +v[1], points: +(v[2] || 0), country: cc };
     });
   }
   function same(a, b) { return a.level === b.level && a.ms === b.ms && a.points === b.points; }
@@ -113,6 +116,16 @@ off with **World highscores** in the 1-player menu; see the
         badge.textContent = e.track ? "M/T" : "KB";
         badge.title = e.track ? "Mouse/touch" : "Keyboard/gamepad";
         li.appendChild(badge);
+      }
+      if (e.country) {
+        var flag = document.createElement("span");
+        flag.className = "flag";
+        // Regional-indicator pair: the flag emoji, where the system has one.
+        flag.textContent = String.fromCodePoint(0x1F1E6 + e.country.charCodeAt(0) - 65,
+                                                0x1F1E6 + e.country.charCodeAt(1) - 65);
+        flag.title = e.country;
+        flag.setAttribute("aria-label", e.country);
+        li.appendChild(flag);
       }
       span(li, "name", e.name);
       span(li, "figs", view.kind === 1

@@ -538,7 +538,8 @@ static void weekly_command(int fd, char* msg_orig)
  *
  * board is 0/1 furthest level (keyboard-gamepad/mouse-touch), 2/3 most
  * points (same tracks); points is 0 on 0/1. Each list is hiscore_top_csv()'s
- * "nick#tag=level/time_ms/points,..." or "-"; me is hiscore_player_csv()'s
+ * "nick#tag=level/time_ms/points[/CC],..." or "-" (CC the country the
+ * account's game last sent with COUNTRY before a HISCORE); me is hiscore_player_csv()'s
  * "arank,alevel,atime,apoints,wrank,wlevel,wtime,wpoints" or "-".
  * No ':' after the prefix, for the same reason as WEEKLY above. The nick is
  * checked with is_nick_ok() like any other, since it is listed publicly. */
@@ -555,7 +556,8 @@ static void hiscore_command(int fd, char* args, char* msg_orig)
                 return;
         }
         if (!args || sscanf(args, "%d %d %d %d %31s", &board, &level, &time_ms, &points, name) != 5
-            || !is_nick_ok(name) || !hiscore_submit(id, name, board, level, time_ms, points)) {
+            || !is_nick_ok(name)
+            || !hiscore_submit(id, name, country_tag[fd], board, level, time_ms, points)) {
                 send_line_log(fd, "INVALID", msg_orig);
                 return;
         }

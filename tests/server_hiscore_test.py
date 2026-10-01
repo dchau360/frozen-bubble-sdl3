@@ -138,6 +138,38 @@ class HiscoreTest(WeeklyTestBase):
         self.assertEqual(self.board(self.session(), 3)[1],
                          [f"{self.acct.tagged('alice')}=7/70000/4321"])
 
+    def test_country_rides_on_the_entry(self):
+        self.start()
+        a, b = self.session("alice"), self.session("bob")
+        self.assertEqual(self.ask(a, "FB/1.3 COUNTRY FR", "COUNTRY: "), "OK")
+        self.submit(a, 0, 30, 100000, "alice")
+        self.submit(b, 0, 20, 100000, "bob")  # never sent one: no field at all
+        self.assertEqual(self.board(a, 0)[1], [f"{self.acct.tagged('alice')}=30/100000/0/FR",
+                                               f"{self.acct.tagged('bob')}=20/100000/0"])
+        # It's the account's, so it shows on every board it has a run on...
+        self.submit(a, 2, 30, 100000, "alice", 5000)
+        self.assertEqual(self.board(a, 2)[1], [f"{self.acct.tagged('alice')}=30/100000/5000/FR"])
+        # ...a later session without COUNTRY keeps it, and a new one replaces it.
+        c = self.session("alice")
+        self.submit(c, 0, 31, 100000, "alice")
+        self.assertEqual(self.board(c, 0)[1][0], f"{self.acct.tagged('alice')}=31/100000/0/FR")
+        self.ask(c, "FB/1.3 COUNTRY DE", "COUNTRY: ")
+        self.submit(c, 0, 31, 200000, "alice")
+        self.assertEqual(self.board(c, 0)[1][0], f"{self.acct.tagged('alice')}=31/100000/0/DE")
+        # And it survives a restart.
+        self.server.kill()
+        self.server.wait(timeout=5)
+        self.start()
+        self.assertEqual(self.board(self.session(), 2)[1],
+                         [f"{self.acct.tagged('alice')}=30/100000/5000/DE"])
+
+    def test_v2_file_loads_without_countries(self):
+        self.hiscore_file.write_text(
+            f"v2 {monday_of(today())}\n{self.acct.id('alice')} alice "
+            + " ".join(["40 500000 0", "0 0 0", "0 0 0", "0 0 0"] * 2) + "\n")
+        self.start()
+        self.assertEqual(self.board(self.session(), 0)[1], [f"{self.acct.tagged('alice')}=40/500000/0"])
+
     def test_v1_file_loads_into_the_level_boards(self):
         self.hiscore_file.write_text(
             f"v1 {monday_of(today())}\n{self.acct.id('alice')} alice 40 500000 12 34000 41 510000 0 0\n")

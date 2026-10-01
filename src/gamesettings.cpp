@@ -30,6 +30,11 @@ bool virtualKeyState[CTRL_SC_COUNT] = {};
 ControllerInput controllerInputs[5] = {};
 bool lastPressWasGamepad = false;
 
+// Two capital letters, the only shape fb-server's COUNTRY accepts.
+static bool IsCountryCode(const std::string& c) {
+    return c.size() == 2 && c[0] >= 'A' && c[0] <= 'Z' && c[1] >= 'A' && c[1] <= 'Z';
+}
+
 void GameSettings::InitPrefPath() {
     if (!prefPath)
         prefPath = SDL_GetPrefPath("", "frozen-bubble");
@@ -275,6 +280,8 @@ void GameSettings::ReadSettings()
     worldHighscores = iniparser_getboolean(optDict, "Stats:WorldHighscores", true);
     scoreTrackMask = iniparser_getint(optDict, "Stats:ScoreTracks", 1);
     if (scoreTrackMask < 1 || scoreTrackMask > 3) scoreTrackMask = 1;
+    lastCountryCode = iniparser_getstring(optDict, "Stats:Country", "");
+    if (!IsCountryCode(lastCountryCode)) lastCountryCode.clear();
     if (gfxQuality > 3 || gfxQuality < 1) gfxQuality = 3;
     if (windowWidth < 640 || windowWidth > 9999) windowWidth = 640;
     if (windowHeight < 480 || windowHeight > 9999) windowHeight = 480;
@@ -577,6 +584,14 @@ void GameSettings::SetReplayKeepCount(int count)
     // Section header has to exist or iniparser_dump_ini drops every key under it.
     iniparser_set(optDict, "Replay", NULL);
     iniparser_set(optDict, "Replay:KeepCount", std::to_string(count).c_str());
+    SaveSettings();
+}
+
+void GameSettings::setLastCountry(const std::string& code) {
+    if (!IsCountryCode(code) || code == lastCountryCode) return;
+    lastCountryCode = code;
+    iniparser_set(optDict, "Stats", NULL);
+    iniparser_set(optDict, "Stats:Country", code.c_str());
     SaveSettings();
 }
 
