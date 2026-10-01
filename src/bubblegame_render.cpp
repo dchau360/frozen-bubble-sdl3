@@ -290,6 +290,13 @@ int BubbleGame::DrawLiveBadges(int x, int y) {
     return x - startX;
 }
 
+// A 1-player game of any kind but multiplayer training, which has its own
+// timer-and-score line.
+bool BubbleGame::ShowsShotCount() const {
+    return currentSettings.playerCount == 1 && !currentSettings.networkGame &&
+           !currentSettings.localMultiplayer && !currentSettings.mpTraining;
+}
+
 void BubbleGame::UpdateScoreText(BubbleArray &bArray, int slot) {
     char scoreStr[64];
     // For 2-player network games, show only player nickname (no score) in wooden banners
@@ -1483,6 +1490,14 @@ void BubbleGame::Draw() {
         // so a redundant/extra render cannot recompute the texture).
         UpdateScoreText(curArray, 0);
         DrawScoreText(0);
+        if (ShowsShotCount()) {
+            const std::string shots = "Shots: " + std::to_string(runShots);
+            shotsText.UpdateText(renderer, shots.c_str(), 0);
+            const SDL_Rect* score = scoreText[0].Coords();
+            shotsText.UpdatePosition({score->x, score->y + score->h});
+            SDL_FRect fr = ToFRect(*shotsText.Coords());
+            SDL_RenderTexture(rend, shotsText.Texture(), nullptr, &fr);
+        }
 
         // Multiplayer training: show countdown timer and training score
         if (currentSettings.mpTraining && mpTrainStartTime > 0) {

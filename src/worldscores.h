@@ -38,14 +38,16 @@ inline int BoardIndex(bool points, int track) { return (points ? kTracks : 0) + 
 // timeMs. Kept on disk until the server has it, so a run survives a crash or
 // no network; only the best pending run per board is kept, since the server
 // only keeps bests. Sent the next time the game is out of a game (Pump()).
-void RecordRun(int track, int level, int timeMs);
+// shots: how many the run has taken so far, kept with the run on the board
+// (0 = not counted); it never decides which run is better.
+void RecordRun(int track, int level, int timeMs, int shots = 0);
 
 // The same run's current life has scored `points` so far, on `level`, at
 // timeMs into the run. A life's score only grows until it ends (the game
 // zeroes it on death), so calling this at every level cleared and again at
 // the death keeps the life's final total -- and a life cut short by quitting
 // still counts up to its last cleared level.
-void RecordLife(int track, int points, int level, int timeMs);
+void RecordLife(int track, int points, int level, int timeMs, int shots = 0);
 
 // Fetch every board (and send anything pending on the way).
 void RequestBoards();

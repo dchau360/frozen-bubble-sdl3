@@ -103,6 +103,8 @@ struct BubbleGameTestAccess {
         game.HandleInput(&event);
     }
     static bool continuePrompt(const BubbleGame& game) { return game.continuePrompt; }
+    static int& runShots(BubbleGame& game) { return game.runShots; }
+    static void launch(BubbleGame& game, int array) { game.LaunchBubble(game.bubbleArrays[array]); }
     static bool focusStartOver(const BubbleGame& game) { return game.continueFocusStartOver; }
     static void setContinueButtons(BubbleGame& game, SDL_Rect cont, SDL_Rect startOver) {
         game.continueBtnRect = cont;
@@ -1330,6 +1332,37 @@ int main() {
         CHECK(BubbleGameTestAccess::reloadLevel(game) == 4);
         CHECK(BubbleGameTestAccess::player(game, 0).score == 0);
         CHECK(!BubbleGameTestAccess::continuePrompt(game));
+    }
+
+    // The run's shot count: every shot from the local board counts, and it
+    // carries on through Continue like the run's clock; Start over zeroes it
+    // (and so does NewGame()).
+    {
+        BubbleGame game(renderer);
+        BubbleGameTestAccess::reset(game, 1, false, false);
+        CHECK(BubbleGameTestAccess::runShots(game) == 0);
+        BubbleGameTestAccess::launch(game, 0);
+        BubbleGameTestAccess::launch(game, 0);
+        CHECK(BubbleGameTestAccess::runShots(game) == 2);
+        BubbleGameTestAccess::setLevel(game, 4);
+        BubbleGameTestAccess::setGameOverState(game, true, true);
+        BubbleGameTestAccess::capturePostRoundTransition(game);
+        BubbleGameTestAccess::pressContinue(game);
+        BubbleGameTestAccess::pressContinue(game);  // Continue
+        CHECK(BubbleGameTestAccess::runShots(game) == 2);
+    }
+    {
+        BubbleGame game(renderer);
+        BubbleGameTestAccess::reset(game, 1, false, false);
+        BubbleGameTestAccess::runShots(game) = 9;
+        BubbleGameTestAccess::setLevel(game, 4);
+        BubbleGameTestAccess::setGameOverState(game, true, true);
+        BubbleGameTestAccess::capturePostRoundTransition(game);
+        BubbleGameTestAccess::pressContinue(game);
+        BubbleGameTestAccess::pressKey(game, SDLK_RIGHT);
+        BubbleGameTestAccess::pressContinue(game);  // Start over
+        CHECK(BubbleGameTestAccess::reloadLevel(game) == 1);
+        CHECK(BubbleGameTestAccess::runShots(game) == 0);
     }
 
     // CONTINUE? prompt: RIGHT moves focus to Start over, and taking it goes

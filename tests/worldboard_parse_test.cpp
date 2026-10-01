@@ -41,6 +41,19 @@ int main() {
     CHECK(b.Parse("1790380800 al#c21e=40/300000/0/DE al#c21e=40/300000/0/DE - 20727 20727"));
     CHECK(b.alltime.size() == 1 && b.alltime[0].country == "DE" && b.week.size() == 1);
 
+    // ...and the two shot lists after the days fill each entry's shots, in
+    // list order; a "-" or a list that doesn't line up leaves them at 0
+    // without costing the board.
+    CHECK(b.Parse("1 a#0001=40/300000/0,b#0002=20/100000/0 b#0002=20/100000/0 - 1,2 2 412,0 77"));
+    CHECK(b.alltime.size() == 2 && b.alltime[0].shots == 412 && b.alltime[1].shots == 0);
+    CHECK(b.week.size() == 1 && b.week[0].shots == 77);
+    CHECK(b.Parse("1 a#0001=40/300000/0,b#0002=20/100000/0 b#0002=20/100000/0 - 1,2 2 412 x"));
+    CHECK(b.alltime[0].shots == 0 && b.week[0].shots == 0);
+    CHECK(b.Parse("1 a#0001=40/300000/0 - - 1 - 412 -"));
+    CHECK(b.alltime[0].shots == 412 && b.week.empty());
+    CHECK(WorldBoard::ShotsLabel(0).empty() && WorldBoard::ShotsLabel(1) == "1 shot" &&
+          WorldBoard::ShotsLabel(412) == "412 shots");
+
     // Refused, and the board is left as it was.
     b.Parse("1790380800 x#0000=5/1000/0 - -");
     for (const char* bad : {"", "notanumber - - -", "1 x=5 - -", "1 x=0/5/0 - -", "1 x=5/1000 - -",

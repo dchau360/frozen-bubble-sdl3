@@ -37,8 +37,11 @@ class HiscoreTest(WeeklyTestBase):
         got += recv_until(sock, b"\n", timeout=0.5)
         return got.decode().split(token, 1)[1].strip()
 
-    def submit(self, sock, board, level, ms, nick, points=0):
-        return self.ask(sock, f"FB/1.3 HISCORE {board} {level} {ms} {points} {nick}", "HISCORE: ")
+    def submit(self, sock, board, level, ms, nick, points=0, shots=None):
+        """shots None: the pre-shots form, with no shots field at all."""
+        tail = "" if shots is None else f" {shots}"
+        return self.ask(sock, f"FB/1.3 HISCORE {board} {level} {ms} {points} {nick}{tail}",
+                        "HISCORE: ")
 
     def board(self, sock, board):
         ws, alltime, week, me = self.board_fields(sock, board)[:4]
@@ -51,9 +54,16 @@ class HiscoreTest(WeeklyTestBase):
     def days(self, sock, board):
         """The (alltime, week) day lists: the UTC day each listed run was set."""
         f = self.board_fields(sock, board)
-        self.assertEqual(len(f), 6)
+        self.assertEqual(len(f), 8)
         split = lambda v: [] if v == "-" else [int(d) for d in v.split(",")]
         return split(f[4]), split(f[5])
+
+    def shots(self, sock, board):
+        """The (alltime, week) shot lists: the shots each listed run took."""
+        f = self.board_fields(sock, board)
+        self.assertEqual(len(f), 8)
+        split = lambda v: [] if v == "-" else [int(d) for d in v.split(",")]
+        return split(f[6]), split(f[7])
 
     def test_needs_a_signed_in_account(self):
         self.start()
@@ -311,12 +321,60 @@ class HiscoreTest(WeeklyTestBase):
         self.submit(a, 0, 20, 100000, "alice")
         self.assertEqual(self.days(a, 0)[0], [0, today()])
         self.assertEqual(self.days(a, 2), ([], []))
-        # Saved as v4 and read back.
+        # Saved as v5 and read back.
         self.server.kill()
         self.server.wait(timeout=5)
-        self.assertTrue(self.hiscore_file.read_text().startswith("v4 "))
+        self.assertTrue(self.hiscore_file.read_text().startswith("v5 "))
         self.start()
         self.assertEqual(self.days(self.session(), 0), ([0, today()], [0, today()]))
+
+
+    def test_each_run_carries_its_shots(self):
+        # A v4 file: no shots yet, so its runs come back as 0 (not counted).
+        self.hiscore_file.write_text(
+            f"v4 {monday_of(today())}\n{self.acct.id('bob')} bob - "
+            + " ".join([f"50 500000 0 {today()}", "0 0 0 0", "0 0 0 0", "0 0 0 0"] * 2) + "\n")
+        self.start()
+        a, c = self.session("alice"), self.session("carol")
+        self.assertTrue(self.submit(a, 0, 30, 100000, "alice", shots=240).startswith("OK"))
+        # A game from before shots were counted sends none: listed as 0.
+        self.assertTrue(self.submit(c, 0, 20, 100000, "carol").startswith("OK"))
+        self.assertEqual(self.shots(a, 0), ([0, 240, 0], [0, 240, 0]))
+        # The shots ride with the run they came with: a worse run with fewer
+        # shots changes nothing, a better one replaces both.
+        self.submit(a, 0, 25, 100000, "alice", shots=100)
+        self.assertEqual(self.shots(a, 0)[0], [0, 240, 0])
+        self.submit(a, 0, 31, 100000, "alice", shots=300)
+        self.assertEqual(self.shots(a, 0)[0], [0, 300, 0])
+        # Older parsers read four fields and still see the same lists.
+        self.assertEqual(self.board(a, 0)[1][1], f"{self.acct.tagged('alice')}=31/100000/0")
+        # Most-points boards carry them too, though only the web page and
+        # the game's level boards show them.
+        self.submit(a, 2, 5, 60000, "alice", 7000, shots=90)
+        self.assertEqual(self.shots(a, 2), ([90], [90]))
+        # Saved as v5 and read back.
+        self.server.kill()
+        self.server.wait(timeout=5)
+        self.assertTrue(self.hiscore_file.read_text().startswith("v5 "))
+        self.start()
+        self.assertEqual(self.shots(self.session(), 0), ([0, 300, 0], [0, 300, 0]))
+
+    def test_fewer_shots_than_levels_is_refused(self):
+        self.start()
+        a = self.session("alice")
+        # Every cleared level takes at least one shot.
+        self.assertEqual(self.submit(a, 0, 30, 100000, "alice", shots=29), "IMPLAUSIBLE")
+        self.assertEqual(self.submit(a, 1, 101, 1000000, "alice", shots=99), "IMPLAUSIBLE")
+        # A life on level 5 has cleared 4.
+        self.assertEqual(self.submit(a, 2, 5, 60000, "alice", 5000, shots=3), "IMPLAUSIBLE")
+        self.assertEqual(self.board(a, 0)[1], [])
+        self.assertTrue(self.submit(a, 0, 30, 100000, "alice", shots=30).startswith("OK"))
+        self.assertTrue(self.submit(a, 1, 101, 1000000, "alice", shots=100).startswith("OK"))
+        self.assertTrue(self.submit(a, 2, 5, 60000, "alice", 5000, shots=4).startswith("OK"))
+        # Out of range is refused outright.
+        for bad in ("-1", f"{1000000 + 1}"):
+            self.assertEqual(self.ask(a, f"FB/1.3 HISCORE 0 10 100000 0 alice {bad}", "HISCORE: "),
+                             "INVALID", bad)
 
 
 if __name__ == "__main__":

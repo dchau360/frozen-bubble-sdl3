@@ -31,6 +31,24 @@ bool ParseList(const std::string& field, std::vector<WorldBoard::Entry>& out) {
     return true;
 }
 
+// A side list ("N,N,..." or "-") index-aligned with `list`: fills each
+// entry's shots. One that doesn't line up is ignored rather than refused,
+// like a later server's extra field: the board itself is still good.
+void ParseShots(const std::string& field, std::vector<WorldBoard::Entry>& list) {
+    if (field == "-") return;
+    std::vector<int> v;
+    std::stringstream ss(field);
+    std::string item;
+    while (std::getline(ss, item, ',')) {
+        char* end = nullptr;
+        const long n = std::strtol(item.c_str(), &end, 10);
+        if (item.empty() || !end || *end || n < 0) return;
+        v.push_back((int)n);
+    }
+    if (v.size() != list.size()) return;
+    for (size_t i = 0; i < v.size(); ++i) list[i].shots = v[i];
+}
+
 }  // namespace
 
 bool WorldBoard::Parse(const std::string& payload) {
@@ -52,6 +70,12 @@ bool WorldBoard::Parse(const std::string& payload) {
         b.hasMine = true;
         b.myAlltime = {v[0], v[1], v[2], v[3]};
         b.myWeek = {v[4], v[5], v[6], v[7]};
+    }
+    // Then the two day lists (the web page's), then the two shot lists.
+    std::string allDays, weekDays, allShots, weekShots;
+    if (ss >> allDays >> weekDays >> allShots >> weekShots) {
+        ParseShots(allShots, b.alltime);
+        ParseShots(weekShots, b.week);
     }
     *this = b;
     return true;
@@ -83,6 +107,11 @@ std::string WorldBoard::PointsLabel(int points) {
     std::string digits = std::to_string(points < 0 ? 0 : points);
     for (int i = (int)digits.size() - 3; i > 0; i -= 3) digits.insert((size_t)i, ",");
     return digits + " pts";
+}
+
+std::string WorldBoard::ShotsLabel(int shots) {
+    if (shots <= 0) return "";
+    return std::to_string(shots) + (shots == 1 ? " shot" : " shots");
 }
 
 std::string WorldBoard::LevelLabel(int level) {

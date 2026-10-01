@@ -53,6 +53,9 @@
 #define HISCORE_MIN_MS_PER_LEVEL 1000
 /* ... and a life can't score more than this per level it reached. */
 #define HISCORE_MAX_POINTS_PER_LEVEL 20000
+/* A run's shot count is only range-checked against this (and against one
+ * shot per level cleared, in hiscore_implausible()). */
+#define HISCORE_MAX_SHOTS 1000000
 
 /* hiscore_submit()'s results. */
 #define HISCORE_INVALID 0      /* out of range: a broken or foreign client */
@@ -80,14 +83,16 @@ void hiscore_init(void);
  * HISCORE_IMPLAUSIBLE (nothing recorded in any of those), else HISCORE_OK --
  * whether or not the run beat the account's existing bests, which are kept
  * either way. points must be 0 on a
- * furthest-level board and at least 1 on a most-points one. nick must already
+ * furthest-level board and at least 1 on a most-points one; shots is how
+ * many the run took, 0 for a game that doesn't count them. nick must already
  * have passed is_nick_ok(). Saves to disk when anything improved. */
 int hiscore_submit(const char* id, const char* nick, const char* country, int board, int level,
-                   int time_ms, int points);
+                   int time_ms, int points, int shots);
 
 /* 1 if no real run could reach `level` in `time_ms` (or score `points` on a
- * most-points board), by the HISCORE_*_PER_LEVEL limits above. */
-int hiscore_implausible(int board, int level, int time_ms, int points);
+ * most-points board), by the HISCORE_*_PER_LEVEL limits above, or took fewer
+ * than one shot per level cleared (shots 0 = not counted, never refused). */
+int hiscore_implausible(int board, int level, int time_ms, int points, int shots);
 
 /* 1 if the account id is in the ban file (re-read first if it changed). */
 int hiscore_banned(const char* id);
@@ -107,9 +112,10 @@ int hiscore_rank(const char* id, int board, enum hiscore_scope scope);
  * country, when it has one: a fourth field older parsers never read), comma-joined, best first
  * (ties broken by nick), or "" when the board is empty. days, when not NULL,
  * gets the UTC day index each of those runs was set, comma-joined in the same
- * order (0 for a run from before the server kept days). */
+ * order (0 for a run from before the server kept days); shots, likewise,
+ * the shots each run took (0 = not counted). */
 void hiscore_top_csv(int board, enum hiscore_scope scope, int n, char* out, size_t outsz,
-                     char* days, size_t dayssz);
+                     char* days, size_t dayssz, char* shots, size_t shotssz);
 
 /* The account's own "arank,alevel,atime,apoints,wrank,wlevel,wtime,wpoints"
  * for a board (all zero where it has no run), or "" when it has no run in

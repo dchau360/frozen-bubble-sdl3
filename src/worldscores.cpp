@@ -39,6 +39,7 @@ struct Run {
     int level = 0;
     int timeMs = 0;
     int points = 0;  // most-points boards only
+    int shots = 0;   // shots the run had taken (0 = not counted)
 };
 
 // The server's order (hiscores.c better()): points first on a most-points
@@ -78,16 +79,17 @@ void LoadPending() {
     pendingLoaded = true;
 #ifndef FROZEN_BUBBLE_TEST_ACCESS
     if (testMode) return;
-    // "<board> <level> <timeMs> <points>" per line; a line without points
-    // (written before the most-points boards) is a furthest-level run.
+    // "<board> <level> <timeMs> <points> <shots>" per line; a line without
+    // points (written before the most-points boards) is a furthest-level
+    // run, one without shots is from before they were counted.
     std::ifstream in(PendingPath());
     std::string line;
     while (std::getline(in, line)) {
-        int board, level, timeMs, points = 0;
-        if (std::sscanf(line.c_str(), "%d %d %d %d", &board, &level, &timeMs, &points) < 3) continue;
+        int board, level, timeMs, points = 0, shots = 0;
+        if (std::sscanf(line.c_str(), "%d %d %d %d %d", &board, &level, &timeMs, &points, &shots) < 3) continue;
         if (board >= 0 && board < kBoards && level > 0 && timeMs > 0 &&
             (board >= kTracks ? points > 0 : points == 0))
-            pending[board] = {level, timeMs, points};
+            pending[board] = {level, timeMs, points, shots > 0 ? shots : 0};
     }
 #endif
 }
@@ -98,7 +100,8 @@ void SavePending() {
     std::ofstream out(PendingPath(), std::ios::trunc);
     for (int b = 0; b < kBoards; ++b)
         if (pending[b].level > 0)
-            out << b << ' ' << pending[b].level << ' ' << pending[b].timeMs << ' ' << pending[b].points << '\n';
+            out << b << ' ' << pending[b].level << ' ' << pending[b].timeMs << ' ' << pending[b].points
+                << ' ' << pending[b].shots << '\n';
 #endif
 }
 
@@ -363,7 +366,7 @@ void SendRequests(Session& s) {
             if (r.level <= 0) continue;
             s.transport->Send("FB/1.3 HISCORE " + std::to_string(b) + " " + std::to_string(r.level) +
                               " " + std::to_string(r.timeMs) + " " + std::to_string(r.points) +
-                              " " + nick);
+                              " " + nick + " " + std::to_string(r.shots));
             ++s.awaiting;
         }
     }
@@ -498,23 +501,23 @@ bool SendingEnabled() {
     return Available() && GameSettings::Instance()->worldHighscoresEnabled();
 }
 
-void RecordRun(int track, int level, int timeMs) {
+void RecordRun(int track, int level, int timeMs, int shots) {
     if (track < 0 || track >= kTracks || level <= 0 || timeMs <= 0) return;
     if (!SendingEnabled()) return;
     LoadPending();
-    const Run run{level, timeMs, 0};
+    const Run run{level, timeMs, 0, shots > 0 ? shots : 0};
     if (pending[track].level <= 0 || Better(track, run, pending[track])) {
         pending[track] = run;
         SavePending();
     }
 }
 
-void RecordLife(int track, int points, int level, int timeMs) {
+void RecordLife(int track, int points, int level, int timeMs, int shots) {
     if (track < 0 || track >= kTracks || points <= 0 || level <= 0 || timeMs <= 0) return;
     if (!SendingEnabled()) return;
     LoadPending();
     const int b = BoardIndex(true, track);
-    const Run run{level, timeMs, points};
+    const Run run{level, timeMs, points, shots > 0 ? shots : 0};
     if (pending[b].level <= 0 || Better(b, run, pending[b])) {
         pending[b] = run;
         SavePending();
