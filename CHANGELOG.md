@@ -1,5 +1,13 @@
 # Changelog
 
+## v2.4.123
+
+No gameplay changes; this release only speeds up how builds are tested.
+
+- **Faster test runs.** Every test that starts its own game server now picks a free port, so the test suite runs in parallel: about 90 seconds instead of about 9 minutes locally.
+- **Faster releases.** The sanitizer build runs on GitHub's runners alongside the Linux build instead of queuing behind it on the self-hosted machine, and a release commit is no longer built a second time on `main` right before its tag build.
+- **Builds fall back to GitHub's runners reliably.** A job only goes to the self-hosted machine when it is both awake and its runner is online. Before, GitHub's own runner list could override that check and send a job to a sleeping machine, where it sat queued.
+
 ## v2.4.122
 
 - **Graphics with LEFT/RIGHT.** The title screen's **GRAPHICS** row now takes LEFT/RIGHT (or the D-pad) too, stepping the quality level either way, like the **STYLE** row. RIGHT goes the same way ENTER and a tap always have. In every theme but Classic, whose row is the original artwork, the label shows `< >` arrows while selected.
