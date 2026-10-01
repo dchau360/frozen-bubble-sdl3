@@ -87,13 +87,17 @@ static SDL_Rect ScoreTrackTabRect(int track) {
 static const char* const kTrackBadgeLabel[2] = {"KB", "M/T"};
 static const SDL_Color kTrackBadgeFill[2] = {{62, 92, 150, 255}, {38, 128, 112, 255}};
 
-// Draws a track's badge with its top-left at (x, y); returns its width.
-static int DrawTrackBadge(SDL_Renderer* rend, TTFText& t, int track, int x, int y) {
+// A world-board player's country, as its ISO code: no flag survives at this
+// size, and DroidSans has no flag glyphs anyway. The web page shows the flag.
+static const SDL_Color kCountryChipFill = {52, 48, 66, 255};
+
+// Draws a small labelled chip with its top-left at (x, y); returns its width.
+static int DrawChip(SDL_Renderer* rend, TTFText& t, const char* label, const SDL_Color& c,
+                    int x, int y) {
     t.UpdateStyle(10, TTF_STYLE_BOLD);
     t.UpdateColor({245, 245, 250, 255}, {0, 0, 0, 0});
-    t.UpdateText(rend, kTrackBadgeLabel[track], 0);
+    t.UpdateText(rend, label, 0);
     const int w = t.Coords()->w + 8, h = t.Coords()->h + 2;
-    const SDL_Color& c = kTrackBadgeFill[track];
     SDL_SetRenderDrawBlendMode(rend, SDL_BLENDMODE_BLEND);
     SDL_SetRenderDrawColor(rend, c.r, c.g, c.b, c.a);
     SDL_FRect chip{(float)x, (float)y, (float)w, (float)h};
@@ -102,6 +106,10 @@ static int DrawTrackBadge(SDL_Renderer* rend, TTFText& t, int track, int x, int 
     SDL_FRect fr = ToFRect(*t.Coords());
     SDL_RenderTexture(rend, t.Texture(), nullptr, &fr);
     return w;
+}
+
+static int DrawTrackBadge(SDL_Renderer* rend, TTFText& t, int track, int x, int y) {
+    return DrawChip(rend, t, kTrackBadgeLabel[track], kTrackBadgeFill[track], x, y);
 }
 
 HighscoreManager *HighscoreManager::ptrInstance = NULL;
@@ -730,6 +738,9 @@ void HighscoreManager::RenderWorldBoard() {
             // players apart) until the row fits.
             int nameX = x + 34;
             if (both) nameX += DrawTrackBadge(rend, trackLabelText, list[i].track, nameX, y + 2) + 6;
+            if (!list[i].country.empty())
+                nameX += DrawChip(rend, trackLabelText, list[i].country.c_str(), kCountryChipFill,
+                                  nameX, y + 2) + 6;
             const int nameRoom = (x + w - 10 - measure(right)) - nameX - 8;
             std::string name = list[i].name;
             const size_t hashAt = name.rfind('#');

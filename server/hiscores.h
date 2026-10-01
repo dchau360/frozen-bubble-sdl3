@@ -50,18 +50,25 @@ enum hiscore_scope { HISCORE_ALLTIME = 0, HISCORE_WEEK = 1 };
  * /var/lib/fb-server/hiscores.dat. Missing file = empty board, no error. */
 void hiscore_init(void);
 
-/* Record a run for a signed-in account. Returns 0 when the arguments are out
+/* Record a run for a signed-in account. country is what that connection's
+ * COUNTRY command said (country_tag, game.c), or "" -- kept per account as
+ * its latest, and an empty one leaves the stored country alone. Returns 0 when the arguments are out
  * of range (nothing recorded), else 1 -- whether or not the run beat the
  * account's existing bests, which are kept either way. points must be 0 on a
  * furthest-level board and at least 1 on a most-points one. nick must already
  * have passed is_nick_ok(). Saves to disk when anything improved. */
-int hiscore_submit(const char* id, const char* nick, int board, int level, int time_ms, int points);
+int hiscore_submit(const char* id, const char* nick, const char* country, int board, int level,
+                   int time_ms, int points);
+
+/* An ISO 3166-1 alpha-2 shape: two capital letters. */
+int hiscore_country_ok(const char* c);
 
 /* The account's competition rank in that board, or 0 when it has no run
  * there. */
 int hiscore_rank(const char* id, int board, enum hiscore_scope scope);
 
-/* Up to n "nick#tag=level/time_ms/points" entries, comma-joined, best first
+/* Up to n "nick#tag=level/time_ms/points[/CC]" entries (CC the account's
+ * country, when it has one: a fourth field older parsers never read), comma-joined, best first
  * (ties broken by nick), or "" when the board is empty. */
 void hiscore_top_csv(int board, enum hiscore_scope scope, int n, char* out, size_t outsz);
 

@@ -343,6 +343,11 @@ void SendRequests(Session& s) {
     s.sentRequests = true;
     if (s.signIn) {
         const std::string nick = SubmitNick();
+        // Shown beside this account's runs; the server keeps the last one it
+        // was given, so a session without it changes nothing. Its "COUNTRY:"
+        // reply is just not read.
+        const std::string& country = GameSettings::Instance()->lastCountry();
+        if (!country.empty()) s.transport->Send("FB/1.3 COUNTRY " + country);
         for (int b = 0; b < kBoards; ++b) {
             const Run& r = s.submitting[b];
             if (r.level <= 0) continue;

@@ -311,6 +311,7 @@ void MainMenu::PollGeoLocFetch() {
             if (geoLocFetchDone) {
                 result = geoLocFetchResult;
                 countryToSend = countryFetchResult;
+                GameSettings::Instance()->setLastCountry(countryFetchResult);
                 geoLocFetchDone = false;  // consumed into geoLocToSend below
             }
         }

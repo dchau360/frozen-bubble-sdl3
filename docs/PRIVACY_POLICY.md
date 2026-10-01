@@ -65,10 +65,12 @@ next to your name to the other players in that match, and to a server's
 Discord relay if one is running (below) — never stored beyond the current
 session. Separately, the same third-party lookup behind "Approximate
 location" above is also asked for your country only (not the finer
-coordinates used for the map), and that country code is sent **only** to a
-server's Discord relay if one is running; it is never shown in-game or on
-the lobby's world map. None of these three is verified by the server — they
-are exactly what your own client claims.
+coordinates used for the map). That country code is sent to a server's
+Discord relay if one is running, and it is never shown in the lobby or on
+its world map. On desktop and Android the app also remembers the last
+country it found, so that it can go with your world highscores (below).
+None of these three is verified by the server — they are exactly what your
+own client claims.
 
 **Discord join alerts (server-operator feature, not controlled by the
 developer).** A server's operator can optionally run a relay that posts a
@@ -132,11 +134,16 @@ level cleared, how long it took, and whether you played with
 keyboard/gamepad or mouse/touch — and your best score from a single life,
 with the level that life reached. Once you're back in a menu, it sends these
 with your nickname to fb.servequake.com, the server run by this port's
-developer, signed with your anonymous account. That server keeps each
-account's bests all-time and this week, and lists them publicly as
-`nickname#tag` in the game's High Scores → WORLD LEVEL and WORLD POINTS tabs
-and on the web page at [/scores/](../scores/). Nothing else is sent: not
-your levels or how you played them. This is **on by default**; turn off
+developer, signed with your anonymous account. If the app has looked up
+your country for online play (see "Platform, input device, and approximate
+country" above), it sends that country code too. The app never makes the
+lookup just for this, so a player who only plays solo, or plays in a
+browser, sends no country. That server keeps each account's bests all-time
+and this week, along with the last country it was sent, and lists them
+publicly as `nickname#tag` with a country flag or code in the game's High
+Scores → WORLD LEVEL and WORLD POINTS tabs and on the web page at
+[/scores/](../scores/). Nothing else is sent: not your levels or how you
+played them. This is **on by default**; turn off
 **World highscores** in the 1-player menu and nothing is sent at all (you
 can still view the board, which then asks the server without signing in).
 Weekly bests are cleared every Monday 00:00 UTC; all-time bests stay until
@@ -203,6 +210,7 @@ or analytics SDK, so none is collected by the developer.
 - [ipinfo.io](https://ipinfo.io/privacy-policy) / [ip-api.com](https://ip-api.com/docs/legal) —
   approximate location and country from your IP address, for the network
   lobby's world map and, for the country only, a server's Discord alerts
+  and the world highscores
 - [Discord](https://discord.com/privacy) — some servers relay an alert when
   you connect, and another at the end of each round (nickname(s), server
   name, game mode/outcome, and platform/input/country badges only), to a

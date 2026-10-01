@@ -32,6 +32,7 @@ typedef struct {
 typedef struct {
         Run best[2][HISCORE_BOARDS];  /* [scope][board] */
         char nick[16];                /* the name of this account's latest submission */
+        char country[3];              /* ISO alpha-2 its game last reported, or "" */
 } HiscoreLine;
 
 static GHashTable* table = NULL;   /* account id -> HiscoreLine* */
@@ -75,11 +76,11 @@ static void save(void)
                 g_free(tmp);
                 return;
         }
-        fprintf(f, "v2 %ld\n", week_start_day);
+        fprintf(f, "v3 %ld\n", week_start_day);
         g_hash_table_iter_init(&iter, table);
         while (g_hash_table_iter_next(&iter, &key, &value)) {
                 HiscoreLine* hl = value;
-                fprintf(f, "%s %s", (const char*)key, hl->nick);
+                fprintf(f, "%s %s %s", (const char*)key, hl->nick, hl->country[0] ? hl->country : "-");
                 for (s = 0; s < 2; s++)
                         for (b = 0; b < HISCORE_BOARDS; b++)
                                 fprintf(f, " %d %d %d", hl->best[s][b].level,
@@ -115,7 +116,7 @@ void hiscore_init(void)
         const char* home = getenv("HOME");
         FILE* f;
         char buf[1024];
-        int loaded = 0, version = 2;
+        int loaded = 0, version = 3;
 
         table = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, g_free);
         if (explicit_path && *explicit_path)
@@ -135,22 +136,26 @@ void hiscore_init(void)
         f = fopen(file_path, "r");
         if (!f)
                 return;
-        /* Header "v2 <week_start_day>", then per account "<id> <nick>" and
-         * "<level> <time_ms> <points>" for every board (0-3, see hiscores.h),
-         * all-time first, then this week. A "v1" file (furthest-level boards
+        /* Header "v3 <week_start_day>", then per account "<id> <nick>
+         * <country or ->" and "<level> <time_ms> <points>" for every board
+         * (0-3, see hiscores.h), all-time first, then this week. A "v2" file
+         * is the same without the country; a "v1" file (furthest-level boards
          * only, "<level> <time_ms>" for kb/mouse all-time then week) loads
          * into boards 0 and 1. */
         if (fgets(buf, sizeof(buf), f)) {
                 long ws;
-                if (sscanf(buf, "v2 %ld", &ws) == 1)
+                if (sscanf(buf, "v3 %ld", &ws) == 1)
                         week_start_day = ws;
-                else if (sscanf(buf, "v1 %ld", &ws) == 1) {
+                else if (sscanf(buf, "v2 %ld", &ws) == 1) {
+                        week_start_day = ws;
+                        version = 2;
+                } else if (sscanf(buf, "v1 %ld", &ws) == 1) {
                         week_start_day = ws;
                         version = 1;
                 }
         }
         while (fgets(buf, sizeof(buf), f)) {
-                char id[64], nick[64];
+                char id[64], nick[64], country[64] = "-";
                 int v[2 * HISCORE_BOARDS * 3], i, used, n = 0;
                 const int want = version == 1 ? 8 : 2 * HISCORE_BOARDS * 3;
                 const char* p;
@@ -158,6 +163,11 @@ void hiscore_init(void)
                 if (sscanf(buf, "%63s %63s%n", id, nick, &used) != 2)
                         continue;
                 p = buf + used;
+                if (version >= 3) {
+                        if (sscanf(p, "%63s%n", country, &used) != 1)
+                                continue;
+                        p += used;
+                }
                 while (n < want && sscanf(p, "%d%n", &v[n], &used) == 1) {
                         p += used;
                         n++;
@@ -166,6 +176,8 @@ void hiscore_init(void)
                         continue;
                 hl = g_new0(HiscoreLine, 1);
                 snprintf(hl->nick, sizeof(hl->nick), "%s", nick);
+                if (hiscore_country_ok(country))
+                        memcpy(hl->country, country, 3);
                 if (version == 1) {
                         for (i = 0; i < 4; i++) {
                                 hl->best[i / 2][i % 2].level = v[i * 2];
@@ -187,7 +199,13 @@ void hiscore_init(void)
         rollover_if_needed();
 }
 
-int hiscore_submit(const char* id, const char* nick, int board, int level, int time_ms, int points)
+int hiscore_country_ok(const char* c)
+{
+        return c && c[0] >= 'A' && c[0] <= 'Z' && c[1] >= 'A' && c[1] <= 'Z' && c[2] == '\0';
+}
+
+int hiscore_submit(const char* id, const char* nick, const char* country, int board, int level,
+                   int time_ms, int points)
 {
         HiscoreLine* hl;
         Run run;
@@ -209,6 +227,12 @@ int hiscore_submit(const char* id, const char* nick, int board, int level, int t
         if (strcmp(hl->nick, nick)) {
                 snprintf(hl->nick, sizeof(hl->nick), "%s", nick);
                 improved = 1;  /* a rename alone is worth saving */
+        }
+        /* A submission without one (a game that hasn't looked it up this
+         * time) leaves the last country in place rather than clearing it. */
+        if (hiscore_country_ok(country) && strcmp(hl->country, country)) {
+                memcpy(hl->country, country, 3);
+                improved = 1;
         }
         run.level = level;
         run.time_ms = time_ms;
@@ -295,10 +319,11 @@ void hiscore_top_csv(int board, enum hiscore_scope scope, int n, char* out, size
         sort_board = board;
         qsort(entries, used, sizeof(Entry), entry_cmp);
         for (i = 0; i < used && (int)i < n; i++) {
-                int w = snprintf(out + len, outsz - len, "%s%s#%.*s=%d/%d/%d",
+                int w = snprintf(out + len, outsz - len, "%s%s#%.*s=%d/%d/%d%s%s",
                                  i ? "," : "", entries[i].line->nick, WEEKLY_TAG_LEN,
                                  entries[i].id, entries[i].run.level, entries[i].run.time_ms,
-                                 entries[i].run.points);
+                                 entries[i].run.points, entries[i].line->country[0] ? "/" : "",
+                                 entries[i].line->country);
                 if (w < 0 || (size_t)w >= outsz - len) {
                         out[len] = '\0';  /* whole entries only */
                         break;

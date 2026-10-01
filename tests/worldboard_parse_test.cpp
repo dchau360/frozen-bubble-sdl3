@@ -43,6 +43,13 @@ int main() {
         CHECK(!b.Parse(bad));
     CHECK(b.alltime.size() == 1 && b.alltime[0].name == "x#0000");
 
+    // An optional fourth field is the player's country; anything that
+    // isn't two capitals is dropped, not refused.
+    CHECK(b.Parse("0 a#0001=40/300000/0/FR,b#0002=20/100000/0,c#0003=10/1/0/xx,d#0004=9/1/0/ABC - -"));
+    CHECK(b.alltime.size() == 4);
+    CHECK(b.alltime[0].country == "FR" && b.alltime[0].level == 40);
+    CHECK(b.alltime[1].country.empty() && b.alltime[2].country.empty() && b.alltime[3].country.empty());
+
     // Both inputs at once: merged in board order, each tagged with its track.
     {
         WorldBoard kb, ms;
