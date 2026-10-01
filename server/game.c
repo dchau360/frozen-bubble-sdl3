@@ -534,13 +534,17 @@ static void weekly_command(int fd, char* msg_orig)
  *   HISCORE <board> <level> <time_ms> <points> <nick>
  *     -> HISCORE: OK <alltime_rank> <week_rank> | NOT_SIGNED_IN | INVALID
  *   HISCORES <board>
- *     -> HISCORES: <week_start> <alltime> <week> <me>
+ *     -> HISCORES: <week_start> <alltime> <week> <me> <alltime_days> <week_days>
  *
  * board is 0/1 furthest level (keyboard-gamepad/mouse-touch), 2/3 most
  * points (same tracks); points is 0 on 0/1. Each list is hiscore_top_csv()'s
  * "nick#tag=level/time_ms/points[/CC],..." or "-" (CC the country the
  * account's game last sent with COUNTRY before a HISCORE); me is hiscore_player_csv()'s
- * "arank,alevel,atime,apoints,wrank,wlevel,wtime,wpoints" or "-".
+ * "arank,alevel,atime,apoints,wrank,wlevel,wtime,wpoints" or "-". The two
+ * day lists give, in the same order as alltime/week, the UTC day index each
+ * run was set (0 = unknown), or "-"; they come last because the game's and
+ * the web page's older parsers read the first four fields and ignore the
+ * rest -- a date added to each entry would have run into the country field.
  * No ':' after the prefix, for the same reason as WEEKLY above. The nick is
  * checked with is_nick_ok() like any other, since it is listed publicly. */
 #define HISCORE_TOP_N 10
@@ -582,18 +586,21 @@ static void hiscore_command(int fd, char* args, char* msg_orig)
 
 static void hiscores_command(int fd, char* args, char* msg_orig)
 {
-        char alltime[1024], week[1024], me[128];
+        char alltime[1024], week[1024], me[128], alltime_days[256], week_days[256];
         char* line;
         int board;
         if (!args || sscanf(args, "%d", &board) != 1 || board < 0 || board >= HISCORE_BOARDS) {
                 send_line_log(fd, "INVALID", msg_orig);
                 return;
         }
-        hiscore_top_csv(board, HISCORE_ALLTIME, HISCORE_TOP_N, alltime, sizeof(alltime));
-        hiscore_top_csv(board, HISCORE_WEEK, HISCORE_TOP_N, week, sizeof(week));
+        hiscore_top_csv(board, HISCORE_ALLTIME, HISCORE_TOP_N, alltime, sizeof(alltime),
+                        alltime_days, sizeof(alltime_days));
+        hiscore_top_csv(board, HISCORE_WEEK, HISCORE_TOP_N, week, sizeof(week),
+                        week_days, sizeof(week_days));
         hiscore_player_csv(account_id(fd), board, me, sizeof(me));
-        line = asprintf_("%ld %s %s %s", (long)hiscore_week_start(),
-                         alltime[0] ? alltime : "-", week[0] ? week : "-", me[0] ? me : "-");
+        line = asprintf_("%ld %s %s %s %s %s", (long)hiscore_week_start(),
+                         alltime[0] ? alltime : "-", week[0] ? week : "-", me[0] ? me : "-",
+                         alltime_days[0] ? alltime_days : "-", week_days[0] ? week_days : "-");
         send_line_log(fd, line, msg_orig);
         free(line);
 }

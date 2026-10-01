@@ -41,9 +41,19 @@ class HiscoreTest(WeeklyTestBase):
         return self.ask(sock, f"FB/1.3 HISCORE {board} {level} {ms} {points} {nick}", "HISCORE: ")
 
     def board(self, sock, board):
-        ws, alltime, week, me = self.ask(sock, f"FB/1.3 HISCORES {board}", "HISCORES: ").split(" ")
+        ws, alltime, week, me = self.board_fields(sock, board)[:4]
         split = lambda v: [] if v == "-" else v.split(",")
         return int(ws), split(alltime), split(week), me
+
+    def board_fields(self, sock, board):
+        return self.ask(sock, f"FB/1.3 HISCORES {board}", "HISCORES: ").split(" ")
+
+    def days(self, sock, board):
+        """The (alltime, week) day lists: the UTC day each listed run was set."""
+        f = self.board_fields(sock, board)
+        self.assertEqual(len(f), 6)
+        split = lambda v: [] if v == "-" else [int(d) for d in v.split(",")]
+        return split(f[4]), split(f[5])
 
     def test_needs_a_signed_in_account(self):
         self.start()
@@ -285,6 +295,28 @@ class HiscoreTest(WeeklyTestBase):
         import os, time
         os.utime(bans, (time.time() + 5, time.time() + 5))  # a new mtime even within the second
         self.assertEqual(self.board(anon, 0)[1][0], f"{self.acct.tagged('alice')}=40/400000/0")
+
+    def test_each_run_carries_the_day_it_was_set(self):
+        old = monday_of(today()) - 7
+        # A v3 file: no days yet, so its runs come back as 0 (unknown).
+        self.hiscore_file.write_text(
+            f"v3 {monday_of(today())}\n{self.acct.id('bob')} bob - "
+            + " ".join(["50 500000 0", "0 0 0", "0 0 0", "0 0 0"] * 2) + "\n")
+        self.start()
+        a = self.session("alice")
+        self.submit(a, 0, 30, 100000, "alice")
+        self.assertEqual(self.days(a, 0), ([0, today()], [0, today()]))
+        # Matching your own best doesn't move its date; nor does a worse run.
+        self.submit(a, 0, 30, 100000, "alice")
+        self.submit(a, 0, 20, 100000, "alice")
+        self.assertEqual(self.days(a, 0)[0], [0, today()])
+        self.assertEqual(self.days(a, 2), ([], []))
+        # Saved as v4 and read back.
+        self.server.kill()
+        self.server.wait(timeout=5)
+        self.assertTrue(self.hiscore_file.read_text().startswith("v4 "))
+        self.start()
+        self.assertEqual(self.days(self.session(), 0), ([0, today()], [0, today()]))
 
 
 if __name__ == "__main__":
