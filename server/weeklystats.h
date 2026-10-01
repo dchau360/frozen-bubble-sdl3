@@ -57,6 +57,10 @@ void weekly_record_popped(const char* id, const char* nick, int popped);
 /* Write to disk; call once after a round's worth of record_* calls. */
 void weekly_save(void);
 
+/* Drop the account's line (DELETEACCOUNT), saving if there was one. Returns
+ * 1 if there was a line, else 0. */
+int weekly_forget(const char* id);
+
 /* The account's six numbers as "W,L,P,rankW,rankL,rankP" (a rank is 0 when
  * that count is 0), or "" if it has no line this week. */
 void weekly_player_csv(const char* id, char* out, size_t outsz);

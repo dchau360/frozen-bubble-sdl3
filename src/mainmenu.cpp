@@ -408,6 +408,10 @@ void MainMenu::press() {
             GameSettings::Instance()->SetValue("Stats:WorldHighscores", "");
             AudioMixer::Instance()->PlaySFX("menu_change");
         }
+        else if (activeSPIdx == kSPRowAccount) {
+            AudioMixer::Instance()->PlaySFX("menu_selected");
+            OpenAccountPanel();
+        }
         return;
     }
 

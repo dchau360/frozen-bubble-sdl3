@@ -39,8 +39,9 @@ std::string FormatCode(const std::string& code);
 bool UseCode(const std::string& typed, bool save = true);
 
 // Throw this device's account away for a fresh one ("New account"). The old
-// code keeps working anywhere it is typed back in; nothing is deleted on any
-// server, where a weekly line simply ages out at the next Monday reset.
+// code keeps working anywhere it is typed back in; this alone deletes nothing
+// on any server -- "Delete account" (worldscores::RequestDeleteAccount) asks
+// the world-board server to first, then calls this.
 // False only if no randomness was available (the old account is kept).
 bool StartNewAccount();
 

@@ -75,6 +75,8 @@ int main() {
         CHECK(MapControllerButton(0, SDL_GAMEPAD_BUTTON_DPAD_UP,    false, false, false, false).realKey == SDLK_UP);
         CHECK(MapControllerButton(0, SDL_GAMEPAD_BUTTON_DPAD_DOWN,  false, false, false, false).realKey == SDLK_DOWN);
         CHECK(MapControllerButton(0, SDL_GAMEPAD_BUTTON_NORTH,      false, false, false, false).realKey == SDLK_F1);
+        // X/Square is TAB in menus: "next button" where the D-pad is all taken.
+        CHECK(MapControllerButton(0, SDL_GAMEPAD_BUTTON_WEST,       false, false, false, false).realKey == SDLK_TAB);
         // A button with no menu meaning does nothing -- and so needs nothing
         // released on disconnect either.
         CHECK(MapControllerButton(0, SDL_GAMEPAD_BUTTON_BACK, false, false, false, false).kind

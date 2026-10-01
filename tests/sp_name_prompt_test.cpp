@@ -21,8 +21,12 @@
 // go on the public board as "unnamed". Pins: when it opens and when it
 // doesn't, that only valid name characters can be typed, Save stores the
 // name and starts the game, Skip starts it without one, an empty Save does
-// nothing, and it is never asked twice in a session.
+// nothing, and it is never asked twice in a session. Also that the menu's
+// Account code row opens the account screen and ESC comes back to the menu,
+// and that the High Scores screen's Account code button opens it on its own
+// and closing it goes back to High Scores.
 
+#include "frozenbubble.h"
 #include "gamesettings.h"
 #include "mainmenu.h"
 #include "platform.h"
@@ -56,6 +60,11 @@ struct MainMenuTestAccess {
     static bool Prompt(const MainMenu& m) { return m.spNamePrompt; }
     static std::string Input(const MainMenu& m) { return m.spNameInput; }
     static int Focus(const MainMenu& m) { return m.spNameFocus; }
+    static int SPIdx(const MainMenu& m) { return m.activeSPIdx; }
+    static bool SPPanel(const MainMenu& m) { return m.showingSPPanel; }
+    static bool Account(const MainMenu& m) { return m.showingAccount; }
+    static void Render(MainMenu& m) { m.SPPanelRender(); }
+    static void RenderMenu(MainMenu& m) { m.Render(); }
 };
 
 static void Key(MainMenu& menu, SDL_Keycode key) {
@@ -184,6 +193,42 @@ int main() {
         Key(*menu, SDLK_RETURN);
         CHECK(!MainMenuTestAccess::Prompt(*menu));
         CHECK(starts == 6);
+    }
+
+    // Account code: the last row (UP from the first wraps to it) opens the
+    // account screen, which the panel then draws; ESC goes back to the menu.
+    {
+        auto menu = MainMenuTestAccess::Create(renderer);
+        MainMenuTestAccess::OpenSPOnStart(*menu);
+        Key(*menu, SDLK_UP);
+        CHECK(MainMenuTestAccess::SPIdx(*menu) == kSPRowAccount);
+        Key(*menu, SDLK_RETURN);
+        CHECK(MainMenuTestAccess::Account(*menu));
+        CHECK(starts == 6);
+        MainMenuTestAccess::Render(*menu);
+        Key(*menu, SDLK_ESCAPE);
+        CHECK(!MainMenuTestAccess::Account(*menu));
+        CHECK(MainMenuTestAccess::SPPanel(*menu));
+        MainMenuTestAccess::Render(*menu);
+    }
+
+    // From the High Scores screen: drawn on its own, back to High Scores on
+    // ESC or Back.
+    {
+        auto menu = MainMenuTestAccess::Create(renderer);
+        FrozenBubble* fb = FrozenBubble::Instance();
+        for (SDL_Keycode closeKey : {SDLK_ESCAPE, SDLK_RETURN}) {
+            menu->OpenAccountFromHighscores();
+            fb->currentState = TitleScreen;
+            CHECK(MainMenuTestAccess::Account(*menu));
+            CHECK(menu->HasAnyPanelOpen());
+            MainMenuTestAccess::RenderMenu(*menu);
+            if (closeKey == SDLK_RETURN)  // focus Back (the last button), then press it
+                for (int i = 0; i < 4; ++i) Key(*menu, SDLK_TAB);
+            Key(*menu, closeKey);
+            CHECK(!MainMenuTestAccess::Account(*menu));
+            CHECK(fb->currentState == Highscores);
+        }
     }
 
     std::error_code ec;

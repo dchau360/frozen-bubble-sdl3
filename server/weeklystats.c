@@ -162,6 +162,14 @@ void weekly_init(void)
         l1(OUTPUT_TYPE_INFO, "Loaded weekly stats for %d players", loaded);
 }
 
+int weekly_forget(const char* id)
+{
+        if (!table || !id || !*id || !g_hash_table_remove(table, id))
+                return 0;
+        weekly_save();
+        return 1;
+}
+
 void weekly_save(void)
 {
         GHashTableIter iter;

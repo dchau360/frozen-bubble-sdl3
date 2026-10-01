@@ -1,6 +1,6 @@
 # Privacy Policy — Frozen Bubble: SDL3
 
-**Effective date:** September 30, 2026
+**Effective date:** October 1, 2026
 
 Frozen Bubble: SDL3 ("the app") is a free, open-source game
 ([GPLv2 licensed](https://github.com/dchau360/frozen-bubble-sdl3/blob/main/COPYING), source at
@@ -31,8 +31,9 @@ out the same short account ID from the public key (the first four
 characters are shown after your nickname in rankings, like `bob#7f3a`). The
 account is not linked to your name, email, device ID, or ad ID, and there is
 no central account database. You can see your code under **Account code**
-on the LAN GAME and NET GAME screens, copy it, enter it on another device to
-move your account there, or start a new account.
+on the LAN GAME and NET GAME screens, in the 1-player menu, and on the High
+Scores screen's world tabs; copy it, enter it on another device to move your
+account there, start a new account, or delete the account.
 
 **Network connection data.** Playing network multiplayer means connecting
 to a game server over TCP — your IP address is visible to that server the
@@ -147,7 +148,7 @@ played them. This is **on by default**; turn off
 **World highscores** in the 1-player menu and nothing is sent at all (you
 can still view the board, which then asks the server without signing in).
 Weekly bests are cleared every Monday 00:00 UTC; all-time bests stay until
-you ask for them to be removed (see "Deleting your account").
+you delete your account (see "Deleting your account").
 {: #world-highscores }
 
 **Opening the community Discord.** The NET GAME server list and the online
@@ -221,21 +222,29 @@ or analytics SDK, so none is collected by the developer.
 ## Deleting your account {#delete-account}
 
 Your account is the recovery code on your device (see "Anonymous player
-account" above). To delete it, open **NET GAME** (or **LAN GAME**), choose
-**Account code**, then **New account**. That erases the old code from the
-device and replaces it with a new one, and without the old code nobody can
-sign in as that account again. Clearing the app's data or uninstalling the
-app does the same.
+account" above). Servers keep nothing about an account except its weekly
+ranking line (the short account tag, the nickname last played under, and
+that week's counts) and, on fb.servequake.com, its world highscore line (the
+same tag and nickname, the country last sent, and the account's best run
+all-time and this week).
 
-Servers keep nothing about an account except its weekly ranking line (the
-short account tag, the nickname last played under, and that week's counts)
-and, on fb.servequake.com, its world highscore line (the same tag and
-nickname, with the account's best run all-time and this week). The weekly
-line and the week's best run are deleted automatically at the next Monday
-00:00 UTC reset. The all-time best is kept until you ask for it to be
-removed: open an issue on the tracker under Contact below with your account
-tag (the `#xxxx` after your name on the board), and it will be deleted along
-with anything else that server holds for that tag.
+To delete your account, open **Account code** (in the 1-player menu, on the
+High Scores screen's world tabs, or on the LAN GAME / NET GAME screens) and
+choose **Delete account**. The game signs in to fb.servequake.com as that
+account one last time and asks it to delete the account's world highscore
+line and weekly ranking line there, then erases the code from your device
+and gives it a new one, so nobody can sign in as the old account again. If
+the server can't be reached, nothing is changed and you can try again.
+
+**New account** on the same screen, clearing the app's data, or
+uninstalling the app only erases the code from the device. The server's
+lines then stay until they age out: the weekly line and the week's best run
+at the next Monday 00:00 UTC reset, the all-time best not at all. To have
+those removed without the code, open an issue on the tracker under Contact
+below with your account tag (the `#xxxx` after your name on the board).
+
+Other servers you played on keep at most a weekly ranking line for the
+account, deleted at their next Monday 00:00 UTC reset.
 
 ## Data retention
 
@@ -243,8 +252,8 @@ with anything else that server holds for that tag.
   app storage until you clear app data or uninstall. Losing the code loses
   the account; there is no way to recover it from a server.
 - World highscores on fb.servequake.com: the week's bests until the
-  Monday reset, the all-time bests until you ask for removal (see "Deleting
-  your account").
+  Monday reset, the all-time bests until you delete your account (see
+  "Deleting your account").
 - Server-side connection logs, match statistics, and any Discord channel a
   server's join alerts are posted to are retained at the discretion of
   whoever operates that particular server.
@@ -266,9 +275,8 @@ avoid entering real names or other identifying information.
   off in the 1-player menu, single-player sends nothing at all.
 - Uninstalling the app removes all locally stored settings, nicknames and
   your account's recovery code.
-- Start a new account, or move yours to another device, from **Account
-  code** on the LAN GAME / NET GAME screens (see "Deleting your account"
-  above).
+- Start a new account, move yours to another device, or delete it, from
+  **Account code** (see "Deleting your account" above).
 
 ## Changes to this policy
 

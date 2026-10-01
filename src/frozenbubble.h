@@ -123,6 +123,12 @@ public:
     // runs at the same real-time speed regardless of frame rate.
     float deltaScale = 1.0f;
     void CallMenuReturn() { mainMenu->ReturnToMenu(); };
+    // The High Scores screen's "Account code" button. The account screen is
+    // the menu's, so this hands over to it; closing it comes back here.
+    void ShowAccountFromHighscores() {
+        mainMenu->OpenAccountFromHighscores();
+        currentState = TitleScreen;
+    }
     void CallNetLobbyReturn() { mainMenu->ReturnToNetLobby(); };
     void CallGameQuit() { IsGameQuit = true; };
     void CallGamePause() { IsGamePause = !IsGamePause; };

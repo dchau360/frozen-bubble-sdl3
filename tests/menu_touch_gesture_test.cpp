@@ -76,7 +76,9 @@
 #include "platform.h"
 #include "playeraccount.h"
 
+#include <chrono>
 #include <cstdio>
+#include <filesystem>
 #include <memory>
 #include <string>
 #include <utility>
@@ -400,6 +402,14 @@ int main() {
     SDL_Init(SDL_INIT_VIDEO);
     TTF_Init();
     InitDataDir();
+    // Menu taps save settings; keep them out of the player's real pref dir.
+    const auto prefDir = std::filesystem::temp_directory_path() /
+        ("frozen-bubble-menu-touch-gesture-test-" + std::to_string(
+            std::chrono::steady_clock::now().time_since_epoch().count()));
+    std::filesystem::create_directories(prefDir);
+    const std::string prefPath = prefDir.string() + "/";
+    GameSettings::Instance()->prefPath = prefPath.c_str();
+    GameSettings::Instance()->ReadSettings();
     SDL_Window* window = SDL_CreateWindow(
         "menu-touch-gesture-test", 64, 64, SDL_WINDOW_HIDDEN);
     SDL_Renderer* renderer = window ? SDL_CreateRenderer(window, nullptr) : nullptr;
@@ -754,15 +764,25 @@ int main() {
         MainMenuTestAccess::OpenAccount(*menu);
         CHECK(MainMenuTestAccess::ShowingAccount(*menu));
         MainMenuTestAccess::RenderAccount(*menu);
-        // Four buttons, each a tap target, focus starting on the first.
-        for (int i = 0; i < 4; i++)
+        // Five buttons, each a tap target, focus starting on the first.
+        for (int i = 0; i < 5; i++)
             CHECK(MainMenuTestAccess::RectsForIndex(*menu, i).size() == 1);
         CHECK(MainMenuTestAccess::AccountSelection(*menu) == 0);
         MainMenuTestAccess::AccountKey(*menu, SDLK_RIGHT);
         CHECK(MainMenuTestAccess::AccountSelection(*menu) == 1);
         MainMenuTestAccess::AccountKey(*menu, SDLK_LEFT);
         MainMenuTestAccess::AccountKey(*menu, SDLK_LEFT);
-        CHECK(MainMenuTestAccess::AccountSelection(*menu) == 3);  // wraps to Back
+        CHECK(MainMenuTestAccess::AccountSelection(*menu) == 4);  // wraps to Back
+
+        // Delete account asks first too, with Cancel focused.
+        MainMenuTestAccess::AccountKey(*menu, SDLK_LEFT);          // Delete account
+        MainMenuTestAccess::AccountKey(*menu, SDLK_RETURN);
+        CHECK(MainMenuTestAccess::AccountMode(*menu) == 3);
+        CHECK(MainMenuTestAccess::AccountSelection(*menu) == 1);
+        MainMenuTestAccess::AccountKey(*menu, SDLK_RETURN);        // Cancel
+        CHECK(MainMenuTestAccess::AccountMode(*menu) == 0);
+        CHECK(MainMenuTestAccess::AccountSelection(*menu) == 3);
+        CHECK(playeraccount::Code() == "7K3M9QX2HD4RB8TN");
 
         // New account asks first, with Cancel focused; ESC backs out of it.
         MainMenuTestAccess::AccountKey(*menu, SDLK_LEFT);          // New account
@@ -774,7 +794,8 @@ int main() {
         CHECK(playeraccount::Code() == "7K3M9QX2HD4RB8TN");
 
         // Tapping the focused "New account" confirm button makes a new one.
-        MainMenuTestAccess::AccountKey(*menu, SDLK_LEFT);          // Back -> New account
+        MainMenuTestAccess::AccountKey(*menu, SDLK_LEFT);          // Back -> Delete
+        MainMenuTestAccess::AccountKey(*menu, SDLK_LEFT);          // -> New account
         CHECK(MainMenuTestAccess::AccountSelection(*menu) == 2);
         MainMenuTestAccess::AccountKey(*menu, SDLK_RETURN);
         MainMenuTestAccess::RenderAccount(*menu);
@@ -2061,6 +2082,8 @@ int main() {
         }
     }
 #endif
+
+    std::filesystem::remove_all(prefDir);
 
     if (failures == 0) {
         std::printf("menu touch gesture tests passed\n");

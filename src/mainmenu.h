@@ -56,15 +56,20 @@
 #define BLINK_SLOWDOWN 30
 
 // The 5 original navigation rows plus 1 settings toggle (World highscores)
-// that lives in this submenu since it is about solo campaign runs -- see
+// and the Account code screen, both here since world-board runs are signed
+// with the account (an online-only player reaches the same screen from the
+// server list) -- see
 // SPPanelRender/press() in mainmenu.cpp. (An Arcade Mode toggle used to sit
 // here too; a death in a classic solo game now always asks whether to
 // continue -- BubbleGame's continue prompt -- so there is nothing to set.)
-#define SP_OPT 6
+#define SP_OPT 7
 // The toggle row (World highscores, worldscores.h). Named rather than left as
 // a bare 5 so SPPanelRender and press()/up()/down() (mainmenu.cpp) can't
 // drift apart.
 #define kSPRowWorldScores 5
+// Opens the Account code screen (mainmenu_account.cpp), the same one the
+// LAN/NET server lists open.
+#define kSPRowAccount 6
 
 class MainMenu final
 {
@@ -102,8 +107,12 @@ public:
     bool HasAnyPanelOpen() const {
         return showingKeysPanel || showingSPPanel || showingOptPanel
             || showingNetPanel || showingLevelPanel || showingLocalMPPanel
-            || showingNetSetupPanel || showingHelpPanel || showingTeamsPanel;
+            || showingNetSetupPanel || showingHelpPanel || showingTeamsPanel
+            || showingAccount;
     }
+    // The High Scores screen's "Account code" button: the account screen on
+    // its own, full-screen, going back to High Scores when it closes.
+    void OpenAccountFromHighscores();
     void SetupNewGame(int mode);
     void ShowPanel(int which);
     void OpenTournament(int id = 0);
@@ -613,9 +622,11 @@ private:
     char spNameInput[16] = "";
 
     void OpenAccountPanel();
+    void CloseAccountPanel();
     void AccountPanelRender();
     bool AccountPanelKey(SDL_Event* e);
     bool showingAccount = false;
+    bool accountFromHighscores = false;  // close returns to the High Scores screen
     int accountSelection = 0;     // focused button in the current mode
     int accountMode = 0;          // 0 view, 1 typing a code, 2 confirm new account
     char accountCodeInput[24] = "";

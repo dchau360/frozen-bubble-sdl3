@@ -163,6 +163,33 @@ class HiscoreTest(WeeklyTestBase):
         self.assertEqual(self.board(self.session(), 2)[1],
                          [f"{self.acct.tagged('alice')}=30/100000/5000/DE"])
 
+    def test_delete_account_drops_its_runs_and_weekly_line(self):
+        wk = monday_of(today())
+        self.start(seed=f"v2 {wk} {today()}\n" + self.line("alice", 3, 1, 50) + self.line("bob", 5, 0, 20))
+        a, b = self.session("alice"), self.session("bob")
+        self.submit(a, 0, 30, 100000, "alice")
+        self.submit(a, 2, 30, 100000, "alice", 900)
+        self.submit(b, 0, 20, 100000, "bob")
+        # Signed out: refused, nothing dropped.
+        anon = self.session()
+        self.assertEqual(self.ask(anon, "FB/1.3 DELETEACCOUNT", "DELETEACCOUNT: "), "NOT_SIGNED_IN")
+        self.assertEqual(len(self.board(anon, 0)[1]), 2)
+
+        self.assertEqual(self.ask(a, "FB/1.3 DELETEACCOUNT", "DELETEACCOUNT: "), "OK")
+        self.assertEqual(self.board(anon, 0)[1], [f"{self.acct.tagged('bob')}=20/100000/0"])
+        self.assertEqual(self.board(anon, 2)[1], [])
+        wins = self.weekly(anon)[1]
+        self.assertNotIn(self.acct.tagged("alice"), wins)
+        self.assertIn(self.acct.tagged("bob"), wins)
+        # Nothing left to drop is still OK, and it stays gone after a restart.
+        self.assertEqual(self.ask(a, "FB/1.3 DELETEACCOUNT", "DELETEACCOUNT: "), "OK")
+        self.server.kill()
+        self.server.wait(timeout=5)
+        self.start()
+        s = self.session()
+        self.assertEqual(self.board(s, 0)[1], [f"{self.acct.tagged('bob')}=20/100000/0"])
+        self.assertNotIn(self.acct.tagged("alice"), self.weekly(s)[1])
+
     def test_v2_file_loads_without_countries(self):
         self.hiscore_file.write_text(
             f"v2 {monday_of(today())}\n{self.acct.id('alice')} alice "
