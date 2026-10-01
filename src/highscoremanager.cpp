@@ -241,7 +241,7 @@ void HighscoreManager::LoadHighscoreLevels(const char *path) {
     }
 }
 
-// The MY SCORES / WORLD LEVEL / WORLD POINTS tabs, a row under the track
+// The MY SCORES / WORLD POINTS / WORLD LEVEL tabs, a row under the track
 // tabs; and the world view's one button. Shared by drawing and hit-testing,
 // like ScoreTrackTabRect.
 constexpr int kScopeTabs = 3;
@@ -630,7 +630,7 @@ void HighscoreManager::RenderScoreScreen() {
         }
 
         if (worldscores::Available()) {
-            static const char* kScopeLabels[kScopeTabs] = {"MY SCORES", "WORLD LEVEL", "WORLD POINTS"};
+            static const char* kScopeLabels[kScopeTabs] = {"MY SCORES", "WORLD POINTS", "WORLD LEVEL"};
             for (int tab = 0; tab < kScopeTabs; tab++) {
                 SDL_Rect box = ScoreScopeTabRect(tab);
                 bool active = (tab == ScopeTab());
@@ -670,7 +670,7 @@ void HighscoreManager::SetScopeTab(int tab) {
     if (tab == 0) {
         SetViewWorld(false);
     } else if (worldscores::Available()) {
-        viewPoints = tab == 2;
+        viewPoints = tab == 1;
         SetViewWorld(true);
     }
 }
@@ -870,11 +870,12 @@ void HighscoreManager::ActivateWorldButton(int b) {
 }
 
 void HighscoreManager::OpenWorldPage() {
-    // The page reads a "#points" / "#kb" / "#mouse" anchor (site/scores.md) and opens
-    // on the same board this screen is showing; no input anchor means both.
+    // The page reads a "#points" / "#level" / "#kb" / "#mouse" anchor
+    // (site/scores.md) and opens on the same board this screen is showing;
+    // no input anchor means both. The board is always named: the page opens
+    // on points by default, but games before 2.4.128 sent nothing for level.
     std::string url = worldscores::WebUrl();
-    std::string anchor;
-    if (viewPoints) anchor = "points";
+    std::string anchor = viewPoints ? "points" : "level";
     const char* input = ShowsBoth() ? nullptr : ShowsTrack((int)InputMethod::Mouse) ? "mouse" : "kb";
     if (input) anchor += (anchor.empty() ? "" : "-") + std::string(input);
     if (!anchor.empty()) url += "#" + anchor;
@@ -1008,7 +1009,7 @@ void HighscoreManager::HandleInput(SDL_Event *e){
                     break;
                 case SDLK_UP:
                 case SDLK_DOWN:
-                    // MY SCORES -> WORLD LEVEL -> WORLD POINTS, round and
+                    // MY SCORES -> WORLD POINTS -> WORLD LEVEL, round and
                     // round (UP goes back). Browsing only, like LEFT/RIGHT.
                     if (!awaitKeyType && curMode == 0 && worldscores::Available()) {
                         const int step = e->key.key == SDLK_DOWN ? 1 : kScopeTabs - 1;

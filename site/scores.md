@@ -5,8 +5,8 @@
 <button type="button" data-track="1" aria-pressed="true">Mouse/Touch</button>
 </div>
 <div class="tabs" role="group" aria-label="Board">
-<button type="button" data-board="0" aria-pressed="true">World level</button>
-<button type="button" data-board="1" aria-pressed="false">World points</button>
+<button type="button" data-board="1" aria-pressed="true">World points</button>
+<button type="button" data-board="0" aria-pressed="false">World level</button>
 </div>
 
 <div class="boards">
@@ -18,12 +18,13 @@
 
 <div class="about" markdown="1">
 
-**World level** ranks runs from level 1 of the standard 100 levels: the
-furthest level cleared wins, and the faster time breaks a tie. The shots
-column is how many bubbles the run fired to get there; it doesn't change the
-ranking, and runs from before October 2026 have none. **World
-points** ranks the most points scored in one life. The score starts over at
-every death, and the level shown is the one that life got to. "This week"
+**World points** ranks the most points scored in one life, in a game from
+level 1 of the standard 100 levels. The score starts over at every death,
+and the level shown is the one that life got to. **World level** ranks whole
+runs from level 1: the furthest level cleared wins, and the faster time
+breaks a tie. The shots column is how many bubbles the run fired to get
+there; it doesn't change the ranking, and runs from before October 2026 have
+none. "This week"
 starts over every Monday at 00:00 UTC. The date after a run is the day it was
 set, in UTC; runs from before October 2026 have none.
 
@@ -61,12 +62,15 @@ off with **World highscores** in the 1-player menu; see the
   // tracks: which inputs are on, [keyboard/gamepad, mouse/touch]; both on
   // merges the two boards and tags each row (the game's High Scores screen
   // does the same, with the same labels and colours).
-  var view = { kind: 0, tracks: [true, true] };
-  // "#points" (and "#kb" or "#mouse") open straight onto that board, both
-  // inputs otherwise; the game's "Open in browser" button sends whichever it
-  // was showing. "#both" is what older games sent for both.
+  // kind: 1 = most points (shown first, and the default), 0 = furthest level.
+  var view = { kind: 1, tracks: [true, true] };
+  // "#points" or "#level" (and "#kb" or "#mouse") open straight onto that
+  // board, both inputs otherwise; the game's "Open in browser" button sends
+  // whichever it was showing. "#both" is what older games sent for both;
+  // they also sent no board for level, which now opens on points.
   var hash = location.hash.replace("#", "").split("-");
   if (hash.indexOf("points") >= 0) view.kind = 1;
+  if (hash.indexOf("level") >= 0) view.kind = 0;
   if (hash.indexOf("kb") >= 0) view.tracks = [true, false];
   if (hash.indexOf("mouse") >= 0) view.tracks = [false, true];
   if (hash.indexOf("both") >= 0) view.tracks = [true, true];
