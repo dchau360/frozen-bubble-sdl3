@@ -250,6 +250,41 @@ class HiscoreTest(WeeklyTestBase):
                    extra_env={"FB_SERVER_SNAPSHOTS": "0"})
         self.board(self.session(), 0)
         self.assertEqual(list(self.hiscore_file.parent.glob("*.dat.????-??-??")), [])
+    def test_impossible_runs_are_refused(self):
+        self.start()
+        a = self.session("alice")
+        # 30 levels in 29s (under 1s a level), and 100 levels in 99s.
+        self.assertEqual(self.submit(a, 0, 30, 29999, "alice"), "IMPLAUSIBLE")
+        self.assertEqual(self.submit(a, 1, 101, 99999, "alice"), "IMPLAUSIBLE")
+        # A life that reached level 3 scoring more than 20,000 a level.
+        self.assertEqual(self.submit(a, 2, 3, 60000, "alice", 60001), "IMPLAUSIBLE")
+        self.assertEqual(self.board(a, 0)[1], [])
+        self.assertEqual(self.board(a, 2)[1], [])
+        # Right at the limits is fine: a life still on level 1 cleared nothing.
+        self.assertTrue(self.submit(a, 0, 30, 30000, "alice").startswith("OK"))
+        self.assertTrue(self.submit(a, 1, 101, 100000, "alice").startswith("OK"))
+        self.assertTrue(self.submit(a, 2, 1, 50, "alice", 20000).startswith("OK"))
+        self.assertTrue(self.submit(a, 3, 3, 60000, "alice", 60000).startswith("OK"))
+
+    def test_banned_account_is_hidden_and_refused_until_unbanned(self):
+        self.start()
+        a, b = self.session("alice"), self.session("bob")
+        self.submit(a, 0, 40, 400000, "alice")
+        self.submit(b, 0, 20, 400000, "bob")
+        bans = self.hiscore_file.parent / "banned.txt"
+        # A comment, a junk line and a whole pasted hiscores.dat line.
+        bans.write_text(f"# cheaters\nnot-an-id\n{self.acct.id('alice')} alice DE 40 400000 0\n")
+        anon = self.session()
+        self.assertEqual(self.board(anon, 0)[1], [f"{self.acct.tagged('bob')}=20/400000/0"])
+        ws, alltime, week, me = self.board(a, 0)
+        self.assertEqual(me, "-")
+        self.assertTrue(self.board(b, 0)[3].startswith("1,"), "bob ranks first with alice hidden")
+        self.assertEqual(self.submit(a, 0, 50, 500000, "alice"), "BANNED")
+        # Unbanned: the old line comes back; the refused run never landed.
+        bans.write_text("")
+        import os, time
+        os.utime(bans, (time.time() + 5, time.time() + 5))  # a new mtime even within the second
+        self.assertEqual(self.board(anon, 0)[1][0], f"{self.acct.tagged('alice')}=40/400000/0")
 
 
 if __name__ == "__main__":

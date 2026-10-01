@@ -556,8 +556,21 @@ static void hiscore_command(int fd, char* args, char* msg_orig)
                 return;
         }
         if (!args || sscanf(args, "%d %d %d %d %31s", &board, &level, &time_ms, &points, name) != 5
-            || !is_nick_ok(name)
-            || !hiscore_submit(id, name, country_tag[fd], board, level, time_ms, points)) {
+            || !is_nick_ok(name)) {
+                send_line_log(fd, "INVALID", msg_orig);
+                return;
+        }
+        /* The game drops a run on any reply but OK, so these never retry. */
+        switch (hiscore_submit(id, name, country_tag[fd], board, level, time_ms, points)) {
+        case HISCORE_OK:
+                break;
+        case HISCORE_IMPLAUSIBLE:
+                send_line_log(fd, "IMPLAUSIBLE", msg_orig);
+                return;
+        case HISCORE_BANNED:
+                send_line_log(fd, "BANNED", msg_orig);
+                return;
+        default:
                 send_line_log(fd, "INVALID", msg_orig);
                 return;
         }

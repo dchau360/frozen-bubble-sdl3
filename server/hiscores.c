@@ -18,6 +18,7 @@
 #include <sys/stat.h>
 
 #include <glib.h>
+#include <glib/gstdio.h>
 
 #include "hiscores.h"
 #include "weeklystats.h"   /* WEEKLY_TAG_LEN: both boards list "nick#tag" */
@@ -39,6 +40,11 @@ typedef struct {
 static GHashTable* table = NULL;   /* account id -> HiscoreLine* */
 static char* file_path = NULL;
 static long week_start_day = 0;    /* UTC day index of this week's Monday */
+
+static GHashTable* banned = NULL;  /* account id -> unused, from the ban file */
+static char* banned_path = NULL;
+static gint64 banned_mtime = -1;   /* -1 = not read yet; 0 = no file */
+static void refresh_bans(void);
 
 /* Same day math as weeklystats.c, so both boards turn over together. */
 static long day_index(time_t t)
@@ -134,6 +140,14 @@ void hiscore_init(void)
                 g_free(dir);
         }
         l1(OUTPUT_TYPE_INFO, "Hiscores file: %s", file_path);
+        {
+                const char* explicit_bans = getenv("FB_SERVER_BANNED_FILE");
+                char* dir = g_path_get_dirname(file_path);
+                banned_path = explicit_bans && *explicit_bans
+                        ? g_strdup(explicit_bans) : g_build_filename(dir, "banned.txt", NULL);
+                g_free(dir);
+                refresh_bans();
+        }
 
         week_start_day = monday_of(day_index(time(NULL)));
         f = fopen(file_path, "r");
@@ -202,6 +216,74 @@ void hiscore_init(void)
         rollover_if_needed();
 }
 
+static int is_account_id(const char* s, size_t n)
+{
+        size_t i;
+        if (n != 16) return 0;
+        for (i = 0; i < n; i++)
+                if (!g_ascii_isxdigit(s[i])) return 0;
+        return 1;
+}
+
+/* Re-read the ban file when its mtime changes (or it appears/disappears). */
+static void refresh_bans(void)
+{
+        GStatBuf st;
+        gint64 mtime = 0;
+        FILE* f;
+        char buf[1024];
+
+        if (!banned_path) return;
+        if (g_stat(banned_path, &st) == 0)
+                /* Size too, so a second edit within the same second still
+                 * counts; never 0 when the file is there. */
+                mtime = ((gint64)st.st_mtime << 20) + ((gint64)st.st_size & 0xfffff) + 1;
+        if (mtime == banned_mtime) return;
+        banned_mtime = mtime;
+        if (!banned)
+                banned = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, NULL);
+        g_hash_table_remove_all(banned);
+        f = mtime ? fopen(banned_path, "r") : NULL;
+        if (!f) return;
+        while (fgets(buf, sizeof(buf), f)) {
+                char* p = buf;
+                size_t n;
+                while (*p == ' ' || *p == '\t') p++;
+                if (*p == '#') continue;
+                n = strspn(p, "0123456789abcdefABCDEF");
+                if (!is_account_id(p, n)) continue;
+                p[n] = '\0';
+                g_hash_table_add(banned, g_ascii_strdown(p, -1));
+        }
+        fclose(f);
+        l2(OUTPUT_TYPE_INFO, "Ban file %s: %u account(s)", banned_path,
+           g_hash_table_size(banned));
+}
+
+int hiscore_banned(const char* id)
+{
+        refresh_bans();
+        return banned && id && g_hash_table_contains(banned, id);
+}
+
+/* Without a re-read: the list functions refresh once and then ask per line. */
+static int is_banned(const char* id)
+{
+        return banned && g_hash_table_contains(banned, id);
+}
+
+int hiscore_implausible(int board, int level, int time_ms, int points)
+{
+        /* Levels a run cleared: a furthest-level run reports the level it
+         * just cleared (101 = the whole set of 100), a life the level it
+         * reached, which it may not have cleared. */
+        int cleared = board >= HISCORE_BOARD_POINTS ? level - 1 : (level > 100 ? 100 : level);
+        if ((long long)time_ms < (long long)cleared * HISCORE_MIN_MS_PER_LEVEL) return 1;
+        if (board >= HISCORE_BOARD_POINTS &&
+            (long long)points > (long long)level * HISCORE_MAX_POINTS_PER_LEVEL) return 1;
+        return 0;
+}
+
 int hiscore_country_ok(const char* c)
 {
         return c && c[0] >= 'A' && c[0] <= 'Z' && c[1] >= 'A' && c[1] <= 'Z' && c[2] == '\0';
@@ -214,12 +296,18 @@ int hiscore_submit(const char* id, const char* nick, const char* country, int bo
         Run run;
         int s, improved = 0;
 
-        if (!table || !id || !*id || !nick || !*nick) return 0;
-        if (board < 0 || board >= HISCORE_BOARDS) return 0;
-        if (level < 1 || level > HISCORE_MAX_LEVEL) return 0;
-        if (time_ms <= 0 || time_ms > HISCORE_MAX_TIME_MS) return 0;
+        if (!table || !id || !*id || !nick || !*nick) return HISCORE_INVALID;
+        if (board < 0 || board >= HISCORE_BOARDS) return HISCORE_INVALID;
+        if (level < 1 || level > HISCORE_MAX_LEVEL) return HISCORE_INVALID;
+        if (time_ms <= 0 || time_ms > HISCORE_MAX_TIME_MS) return HISCORE_INVALID;
         if (board >= HISCORE_BOARD_POINTS ? (points < 1 || points > HISCORE_MAX_POINTS) : points != 0)
-                return 0;
+                return HISCORE_INVALID;
+        if (hiscore_banned(id)) return HISCORE_BANNED;
+        if (hiscore_implausible(board, level, time_ms, points)) {
+                l4(OUTPUT_TYPE_INFO, "Refused implausible run from %s: board %d level %d, %d ms",
+                   id, board, level, time_ms);
+                return HISCORE_IMPLAUSIBLE;
+        }
         rollover_if_needed();
 
         hl = g_hash_table_lookup(table, id);
@@ -249,7 +337,7 @@ int hiscore_submit(const char* id, const char* nick, const char* country, int bo
         }
         if (improved)
                 save();
-        return 1;
+        return HISCORE_OK;
 }
 
 int hiscore_forget(const char* id)
@@ -270,13 +358,14 @@ int hiscore_rank(const char* id, int board, enum hiscore_scope scope)
 
         if (!table || !id || !*id || board < 0 || board >= HISCORE_BOARDS) return 0;
         rollover_if_needed();
+        if (hiscore_banned(id)) return 0;
         hl = g_hash_table_lookup(table, id);
         if (!hl || hl->best[scope][board].level == 0) return 0;
         mine = &hl->best[scope][board];
         g_hash_table_iter_init(&iter, table);
         while (g_hash_table_iter_next(&iter, &key, &value)) {
                 const Run* r = &((HiscoreLine*)value)->best[scope][board];
-                if (r->level && better(board, r, mine))
+                if (r->level && !is_banned(key) && better(board, r, mine))
                         above++;
         }
         return above + 1;
@@ -314,13 +403,14 @@ void hiscore_top_csv(int board, enum hiscore_scope scope, int n, char* out, size
         out[0] = '\0';
         if (!table || n <= 0 || board < 0 || board >= HISCORE_BOARDS) return;
         rollover_if_needed();
+        refresh_bans();
         size = g_hash_table_size(table);
         if (size == 0) return;
         entries = g_new(Entry, size);
         g_hash_table_iter_init(&iter, table);
         while (g_hash_table_iter_next(&iter, &key, &value)) {
                 const HiscoreLine* hl = value;
-                if (hl->best[scope][board].level) {
+                if (hl->best[scope][board].level && !is_banned(key)) {
                         entries[used].id = key;
                         entries[used].line = hl;
                         entries[used].run = hl->best[scope][board];
@@ -353,6 +443,7 @@ void hiscore_player_csv(const char* id, int board, char* out, size_t outsz)
         out[0] = '\0';
         if (!table || !id || !*id || board < 0 || board >= HISCORE_BOARDS) return;
         rollover_if_needed();
+        if (hiscore_banned(id)) return;
         hl = g_hash_table_lookup(table, id);
         if (!hl) return;
         a = &hl->best[HISCORE_ALLTIME][board];

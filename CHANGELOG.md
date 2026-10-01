@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- **World highscores refuse impossible runs.** This port's server now turns away runs no real game could produce, such as clearing levels faster than one a second, or far more points than a level can give. Real runs are well inside the limits.
+
 ## v2.4.126
 
 - **Account code in the 1-player menu and High Scores.** Your account code, which your world highscores and weekly ranking are kept under, can now be viewed, copied or changed from the 1-player menu (**Account code**, under World highscores) and from the High Scores screen's World Level and World Points tabs (an **Account code** button next to Open in browser; Back returns you to High Scores). Before, the only way in was from the online server list.
