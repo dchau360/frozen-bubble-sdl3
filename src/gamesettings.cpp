@@ -273,6 +273,8 @@ void GameSettings::ReadSettings()
     colorblindBubbles = iniparser_getboolean(optDict, "GFX:ColorblindBubbles", false);
     showFps = iniparser_getboolean(optDict, "GFX:ShowFPS", false);
     worldHighscores = iniparser_getboolean(optDict, "Stats:WorldHighscores", true);
+    scoreTrackMask = iniparser_getint(optDict, "Stats:ScoreTracks", 1);
+    if (scoreTrackMask < 1 || scoreTrackMask > 3) scoreTrackMask = 1;
     if (gfxQuality > 3 || gfxQuality < 1) gfxQuality = 3;
     if (windowWidth < 640 || windowWidth > 9999) windowWidth = 640;
     if (windowHeight < 480 || windowHeight > 9999) windowHeight = 480;
@@ -575,6 +577,14 @@ void GameSettings::SetReplayKeepCount(int count)
     // Section header has to exist or iniparser_dump_ini drops every key under it.
     iniparser_set(optDict, "Replay", NULL);
     iniparser_set(optDict, "Replay:KeepCount", std::to_string(count).c_str());
+    SaveSettings();
+}
+
+void GameSettings::setScoreTracks(int mask) {
+    if (mask < 1 || mask > 3) return;
+    scoreTrackMask = mask;
+    iniparser_set(optDict, "Stats", NULL);
+    iniparser_set(optDict, "Stats:ScoreTracks", std::to_string(mask).c_str());
     SaveSettings();
 }
 

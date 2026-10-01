@@ -39,7 +39,8 @@ public:
     // A run is locked to whichever input fired its first shot (see
     // BubbleGame::ScoringInputMethod, which this mirrors) and counts toward
     // that table only -- keyboard/gamepad and mouse/touch scores are not
-    // comparable to each other, so they are never merged into one list.
+    // comparable to each other, so each keeps its own top 10. The screen can
+    // still show both at once (ShowsBoth()), merged and badged by input.
     enum class InputMethod { Keyboard = 0, Mouse = 1 };
 
     void ShowScoreScreen(int ls);
@@ -64,13 +65,16 @@ private:
 
     std::map<int, std::array<std::vector<int>,10>> highscoreLevels;
 
-    // Which of the two tables the score screen is currently showing (see
-    // RenderScoreScreen/HandleInput's LEFT/RIGHT switch), and which table the
-    // most recent CheckAndAddScore() call added a pending (unnamed) entry to
-    // -- ShowNewScorePanel()/HandleInput's name-entry flow need to know that
-    // to find and label the right entry, regardless of which table is being
-    // browsed at the time.
-    int viewTrack = 0;
+    // Which of the two tables the score screen shows is a pair of toggles kept
+    // in GameSettings::scoreTracks() (bit 0 keyboard/gamepad, bit 1 mouse/
+    // touch; both on merges them, with an input badge per entry). Tapping a
+    // tab toggles it; LEFT/RIGHT cycles KEYBOARD -> MOUSE/TOUCH -> BOTH.
+    // pendingHighscoreTrack is the table the most recent CheckAndAddScore()
+    // added a pending (unnamed) entry to -- ShowNewScorePanel()/HandleInput's
+    // name-entry flow need it to find and label the right entry, whatever is
+    // being browsed at the time.
+    bool ShowsTrack(int track) const { return (gameSettings->scoreTracks() >> track) & 1; }
+    bool ShowsBoth() const { return gameSettings->scoreTracks() == 3; }
     int pendingHighscoreTrack = 0;
 
     // What SaveNewHighscores() last put on disk, so a save can skip the table
@@ -85,7 +89,7 @@ private:
     void LoadHighscoreLevels(const char *path);
     // Hit-tests a click/tap (already converted to logical 640x480 canvas
     // coordinates) against the two score-screen tab boxes and switches
-    // viewTrack if it landed on one. See ScoreTrackTabRect() in the .cpp.
+    // toggles that track if it landed on one. See ScoreTrackTabRect() in the .cpp.
     bool TapScoreTrackTab(float lx, float ly);
 
     // The WORLD tabs (worldscores.h): this port's server's boards for the

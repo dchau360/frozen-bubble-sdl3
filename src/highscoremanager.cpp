@@ -26,6 +26,7 @@
 #include "menulist.h"
 #include "worldscores.h"
 
+#include <algorithm>
 #include <filesystem>
 #include <fstream>
 #include <sstream>
@@ -78,6 +79,29 @@ static SDL_Rect ScoreTrackTabRect(int track) {
     constexpr int x0 = 640 / 2 - totalW / 2;
     constexpr int y = 8;
     return { x0 + track * (w + gap), y, w, h };
+}
+
+// The input tag on an entry when both tables are shown at once. Two colours,
+// so the inputs tell apart at a glance; the label for anyone who can't. The
+// web page (site/scores.md) uses the same labels and colours.
+static const char* const kTrackBadgeLabel[2] = {"KB", "M/T"};
+static const SDL_Color kTrackBadgeFill[2] = {{62, 92, 150, 255}, {38, 128, 112, 255}};
+
+// Draws a track's badge with its top-left at (x, y); returns its width.
+static int DrawTrackBadge(SDL_Renderer* rend, TTFText& t, int track, int x, int y) {
+    t.UpdateStyle(10, TTF_STYLE_BOLD);
+    t.UpdateColor({245, 245, 250, 255}, {0, 0, 0, 0});
+    t.UpdateText(rend, kTrackBadgeLabel[track], 0);
+    const int w = t.Coords()->w + 8, h = t.Coords()->h + 2;
+    const SDL_Color& c = kTrackBadgeFill[track];
+    SDL_SetRenderDrawBlendMode(rend, SDL_BLENDMODE_BLEND);
+    SDL_SetRenderDrawColor(rend, c.r, c.g, c.b, c.a);
+    SDL_FRect chip{(float)x, (float)y, (float)w, (float)h};
+    SDL_RenderFillRect(rend, &chip);
+    t.UpdatePosition({x + 4, y + 1});
+    SDL_FRect fr = ToFRect(*t.Coords());
+    SDL_RenderTexture(rend, t.Texture(), nullptr, &fr);
+    return w;
 }
 
 HighscoreManager *HighscoreManager::ptrInstance = NULL;
@@ -253,7 +277,9 @@ bool HighscoreManager::CheckAndAddScore(int level, float time, InputMethod metho
     if (scores.size() > 10) scores.resize(10);
 
     pendingHighscoreTrack = track;
-    viewTrack = track;  // so the score screen opens showing the table that was just earned
+    // So the score screen opens showing the table that was just earned,
+    // alongside whatever else the player had on.
+    if (!ShowsTrack(track)) gameSettings->setScoreTracks(gameSettings->scoreTracks() | (1 << track));
 
     SaveNewHighscores();
 
@@ -507,7 +533,18 @@ void HighscoreManager::RenderScoreScreen() {
     SDL_RenderTexture(rend, highscoresBG, nullptr, nullptr);
 
     if (curMode == 0) { // 0 = Levelset
-        std::vector<HighscoreData>& scores = levelsetScores[viewTrack];
+        // The shown table: one track's, or both merged in the same order
+        // CheckAndAddScore keeps each in (higher level, then faster), top 10.
+        struct Shown { HighscoreData* entry; int track; };
+        std::vector<Shown> scores;
+        for (int track = 0; track < 2; track++)
+            if (ShowsTrack(track))
+                for (HighscoreData& d : levelsetScores[track]) scores.push_back({&d, track});
+        std::stable_sort(scores.begin(), scores.end(), [](const Shown& a, const Shown& b) {
+            if (a.entry->level != b.entry->level) return a.entry->level > b.entry->level;
+            return a.entry->time < b.entry->time;
+        });
+        if (scores.size() > 10) scores.resize(10);
         if (viewWorld) RenderWorldBoard();
         for (size_t i = 0; i < scores.size() && !viewWorld; i++) {
             int sx = 64, sy = 85;
@@ -526,17 +563,24 @@ void HighscoreManager::RenderScoreScreen() {
             SDL_Rect framePos = {bgPos.x - 7, bgPos.y - 7, 81, 100};
             { SDL_FRect fr = ToFRect(framePos); SDL_RenderTexture(rend, highscoreFrame, nullptr, &fr); }
             if (smallBG[i]) { SDL_FRect fr = ToFRect(bgPos); SDL_RenderTexture(rend, smallBG[i], nullptr, &fr); }
-            { SDL_FRect fr = ToFRect(*scores[i].layoutText.Coords()); SDL_RenderTexture(rend, scores[i].layoutText.Texture(), nullptr, &fr); }
+            // An entry's text was placed for its slot in its own table;
+            // place it for the slot it is shown in.
+            TTFText& lt = scores[i].entry->layoutText;
+            if (SDL_Rect* c = lt.Coords())
+                lt.UpdatePosition({108 * (col + 1) - c->w / 2, 185 * (row + 1)});
+            { SDL_FRect fr = ToFRect(*lt.Coords()); SDL_RenderTexture(rend, lt.Texture(), nullptr, &fr); }
+            if (ShowsBoth())
+                DrawTrackBadge(rend, trackLabelText, scores[i].track, framePos.x + 4, framePos.y + 4);
         }
 
-        // Two tab boxes -- click/tap either one to switch tables (see
-        // HandleInput's MOUSE_BUTTON_DOWN/FINGER_DOWN cases), or LEFT/RIGHT
-        // from a keyboard/gamepad. Own TTFText, not panelText: panelText's
+        // Two tab boxes, each a toggle -- click/tap one to turn it on or off
+        // (see HandleInput's MOUSE_BUTTON_DOWN/FINGER_DOWN cases), or LEFT/
+        // RIGHT from a keyboard/gamepad to cycle keyboard, mouse, both. Own TTFText, not panelText: panelText's
         // style/color is shared mutable state that ShowNewScorePanel()/
         // RenderPanel() need left alone.
         for (int track = 0; track < 2; track++) {
             SDL_Rect box = ScoreTrackTabRect(track);
-            bool active = (track == viewTrack);
+            bool active = ShowsTrack(track);
 
             SDL_SetRenderDrawBlendMode(rend, SDL_BLENDMODE_BLEND);
             if (active) SDL_SetRenderDrawColor(rend, 255, 196, 64, 90);
@@ -578,7 +622,7 @@ void HighscoreManager::RenderScoreScreen() {
         }
         if (!awaitKeyType) {
             const char* hint = !worldscores::Available()
-                ? "LEFT/RIGHT: KEYBOARD / MOUSE   ANY OTHER KEY: BACK"
+                ? "LEFT/RIGHT: KEYBOARD / MOUSE / BOTH   ANY OTHER KEY: BACK"
                 : viewWorld
                     ? (worldscores::WebUrl()[0] ? "LEFT/RIGHT: INPUT   UP/DOWN: BOARD   ENTER / A: OPEN IN BROWSER   ESC / B: BACK"
                                                 : "LEFT/RIGHT: INPUT   UP/DOWN: BOARD   ESC / B: BACK")
@@ -636,13 +680,23 @@ void HighscoreManager::RenderWorldBoard() {
         text(str, right - trackLabelText.Coords()->w, y, color);
     };
 
-    const WorldBoard& b = worldscores::Board(worldscores::BoardIndex(viewPoints, viewTrack));
+    const bool both = ShowsBoth();
+    const int onlyTrack = ShowsTrack(0) ? 0 : 1;
+    const WorldBoard& kb = worldscores::Board(worldscores::BoardIndex(viewPoints, 0));
+    const WorldBoard& ms = worldscores::Board(worldscores::BoardIndex(viewPoints, 1));
+    const WorldBoard& b = onlyTrack ? ms : kb;
     const worldscores::Status st = worldscores::BoardStatus();
     const std::string me = worldscores::ShownName();
     SDL_SetRenderDrawBlendMode(rend, SDL_BLENDMODE_BLEND);
 
+    // Both inputs on: one list per column, merged and badged.
+    const std::vector<WorldBoard::Entry> mergedAll =
+        both ? WorldBoard::Merge(kb.alltime, ms.alltime, viewPoints) : std::vector<WorldBoard::Entry>();
+    const std::vector<WorldBoard::Entry> mergedWeek =
+        both ? WorldBoard::Merge(kb.week, ms.week, viewPoints) : std::vector<WorldBoard::Entry>();
     struct Column { const char* title; const std::vector<WorldBoard::Entry>* list; };
-    const Column cols[2] = {{"ALL-TIME", &b.alltime}, {"THIS WEEK", &b.week}};
+    const Column cols[2] = {{"ALL-TIME", both ? &mergedAll : &b.alltime},
+                            {"THIS WEEK", both ? &mergedWeek : &b.week}};
     for (int c = 0; c < 2; ++c) {
         const int x = 22 + c * 304, w = 292;
         SDL_SetRenderDrawColor(rend, 20, 12, 32, 170);
@@ -674,7 +728,9 @@ void HighscoreManager::RenderWorldBoard() {
             // A wide nick next to a big score can run into the figures:
             // shorten the nick (never the #tag, which tells same-named
             // players apart) until the row fits.
-            const int nameRoom = (x + w - 10 - measure(right)) - (x + 34) - 8;
+            int nameX = x + 34;
+            if (both) nameX += DrawTrackBadge(rend, trackLabelText, list[i].track, nameX, y + 2) + 6;
+            const int nameRoom = (x + w - 10 - measure(right)) - nameX - 8;
             std::string name = list[i].name;
             const size_t hashAt = name.rfind('#');
             std::string nick = hashAt == std::string::npos ? name : name.substr(0, hashAt);
@@ -683,7 +739,7 @@ void HighscoreManager::RenderWorldBoard() {
                 nick.pop_back();
                 name = nick + "\u2026" + tag;
             }
-            text(name, x + 34, y, col);
+            text(name, nameX, y, col);
             textRight(right, x + w - 10, y, col);
         }
     }
@@ -695,7 +751,19 @@ void HighscoreManager::RenderWorldBoard() {
         line = worldscores::LastError();
     } else if (!worldscores::SendingEnabled()) {
         line = "Your runs aren't sent: World highscores is off in the 1-player menu.";
-    } else if (b.hasMine && (b.myAlltime.rank || b.myWeek.rank)) {
+    } else if (both && ((kb.hasMine && (kb.myAlltime.rank || kb.myWeek.rank)) ||
+                        (ms.hasMine && (ms.myAlltime.rank || ms.myWeek.rank)))) {
+        // Each input is its own board on the server, so each has its own
+        // rank: one short part per input.
+        auto part = [&](const char* label, const WorldBoard& w) {
+            if (!w.hasMine || (!w.myAlltime.rank && !w.myWeek.rank))
+                return std::string(label) + " no run";
+            auto r = [](int rank) { return rank ? "#" + std::to_string(rank) : std::string("-"); };
+            return std::string(label) + " " + r(w.myAlltime.rank) + " all-time, " + r(w.myWeek.rank) + " week";
+        };
+        line = "You, " + me + ": " + part("KB", kb) + "  ·  " + part("M/T", ms);
+        lineColor = menulist::kGold;
+    } else if (!both && b.hasMine && (b.myAlltime.rank || b.myWeek.rank)) {
         auto part = [&](const char* scope, const WorldBoard::Mine& m) {
             const std::string detail = viewPoints
                 ? WorldBoard::PointsLabel(m.points) + ", " + WorldBoard::LevelLabel(m.level)
@@ -735,12 +803,13 @@ void HighscoreManager::RenderWorldBoard() {
 }
 
 void HighscoreManager::OpenWorldPage() {
-    // The page reads a "#points" / "#mouse" anchor (site/scores.md) and opens
+    // The page reads a "#points" / "#mouse" / "#both" anchor (site/scores.md) and opens
     // on the same board this screen is showing.
     std::string url = worldscores::WebUrl();
     std::string anchor;
     if (viewPoints) anchor = "points";
-    if (viewTrack == (int)InputMethod::Mouse) anchor += anchor.empty() ? "mouse" : "-mouse";
+    const char* input = ShowsBoth() ? "both" : ShowsTrack((int)InputMethod::Mouse) ? "mouse" : nullptr;
+    if (input) anchor += (anchor.empty() ? "" : "-") + std::string(input);
     if (!anchor.empty()) url += "#" + anchor;
     if (!SDL_OpenURL(url.c_str()))
         SDL_Log("World board: SDL_OpenURL failed: %s", SDL_GetError());
@@ -865,12 +934,14 @@ void HighscoreManager::HandleInput(SDL_Event *e){
                     break;
                 case SDLK_LEFT:
                 case SDLK_RIGHT:
-                    // Switch between the keyboard/gamepad and mouse/touch
-                    // tables. Only while browsing (not while naming a new
-                    // entry -- awaitKeyType's own panel has no use for L/R,
-                    // and pendingHighscoreTrack already picks the right one).
+                    // Cycle keyboard/gamepad -> mouse/touch -> both (RIGHT;
+                    // LEFT goes back). Only while browsing (not while naming
+                    // a new entry -- awaitKeyType's own panel has no use for
+                    // L/R, and pendingHighscoreTrack already picks the table).
                     if (!awaitKeyType && curMode == 0) {
-                        viewTrack = 1 - viewTrack;
+                        // masks 1, 2, 3 in that order
+                        const int m = gameSettings->scoreTracks();
+                        gameSettings->setScoreTracks(e->key.key == SDLK_RIGHT ? m % 3 + 1 : (m + 1) % 3 + 1);
                         AudioMixer::Instance()->PlaySFX("menu_change");
                     }
                     break;
@@ -937,8 +1008,13 @@ bool HighscoreManager::TapScoreTrackTab(float lx, float ly) {
     for (int track = 0; track < 2; track++) {
         SDL_Rect box = ScoreTrackTabRect(track);
         if (lx >= box.x && lx < box.x + box.w && ly >= box.y && ly < box.y + box.h) {
-            if (track != viewTrack) {
-                viewTrack = track;
+            // A toggle; the last one on stays on, since an empty screen
+            // would only look broken.
+            const int m = gameSettings->scoreTracks() ^ (1 << track);
+            if (m == 0) {
+                AudioMixer::Instance()->PlaySFX("cancel");
+            } else {
+                gameSettings->setScoreTracks(m);
                 AudioMixer::Instance()->PlaySFX("menu_change");
             }
             return true;
