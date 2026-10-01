@@ -46,10 +46,35 @@ jobs:
     runs-on: ubuntu-22.04
     outputs:
       client_unaffected: ${{ steps.filter.outputs.client_unaffected }}
+      release_bump: ${{ steps.release.outputs.release_bump }}
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
+      # A release is a "chore: release vX.Y.Z" commit merged to main, then a
+      # vX.Y.Z tag pushed on that same commit seconds later. Both used to
+      # build everything, so the main build and the tag build of identical
+      # code competed for the one self-hosted Linux runner. The release PR
+      # has already built and tested that tree, and the tag build is the one
+      # that ships, so the main push of a release commit skips every build
+      # job. Only that exact commit-message prefix on a push to main counts;
+      # tags, PRs and every other push are unaffected. The message goes
+      # through env, never straight into the script.
+      - name: Is this the main push of a release-bump commit?
+        id: release
+        env:
+          HEAD_MESSAGE: ${{ github.event.head_commit.message }}
+        run: |
+          bump=false
+          if [ "${{ github.event_name }}" = "push" ] && [ "${{ github.ref }}" = "refs/heads/main" ]; then
+            first_line="$(printf '%s\n' "$HEAD_MESSAGE" | head -n1)"
+            if printf '%s' "$first_line" | grep -Eq '^chore: release v[0-9]+\.[0-9]+\.[0-9]+'; then
+              bump=true
+            fi
+          fi
+          echo "release_bump=$bump" >> "$GITHUB_OUTPUT"
+          echo "release_bump=$bump"
 
       - name: Classify this push/PR's changed files
         id: filter
@@ -177,7 +202,8 @@ jobs:
   # ────────────────────────────────────────────────────────────────
   build-linux:
     name: Linux (AppImage)
-    needs: runner-status
+    needs: [changes, runner-status]
+    if: needs.changes.outputs.release_bump != 'true'
     # Self-hosted only for push/tag/dispatch (already-reviewed code) AND only
     # when runner-status confirmed the self-hosted Linux runner is online; a
     # pull_request always gets a GitHub-hosted runner regardless of who
@@ -228,10 +254,12 @@ jobs:
       # into this job's own prefix; a rebuild only happens on a real
       # mismatch, which is also true on every hosted run since no marker
       # exists yet). Installed under a job-specific /tmp prefix rather than
-      # the default system path: this job's Release build and the sanitizer
-      # job's RelWithDebInfo build queue on the SAME self-hosted runner every
-      # push (there's only one), and a shared install path would mean each
-      # job overwrites the other's build every single run.
+      # the default system path: the sanitizer job's RelWithDebInfo build
+      # used to queue on this same self-hosted runner every push, and a
+      # shared install path would have meant each job overwriting the
+      # other's build. The sanitizer job is GitHub-hosted now, but a
+      # job-specific prefix still costs nothing and keeps that true if it
+      # ever moves back.
       - name: Build SDL3 from source
         run: |
           SDL_DEPS_SPEC="SDL release-3.4.4;SDL_image release-3.4.2;SDL_mixer release-3.2.0;SDL_ttf release-3.2.2"
@@ -292,7 +320,8 @@ jobs:
       # out to also leak memory inside ALSA's own config parser.
       # server-tournament-test excluded here too as of 2026-09-23: this job's
       # self-hosted runner shares its physical host with build-windows (and,
-      # serially, test-linux-sanitizer), and a run with build-windows
+      # until it moved to a hosted runner, ran serially with
+      # test-linux-sanitizer), and a run with build-windows
       # executing concurrently pushed its tearDown shutdown wait -- already
       # bumped 5s->20s->40s for exactly this margin reason, see
       # test-linux-sanitizer's identical exclusion below -- past 40s for the
@@ -374,23 +403,16 @@ jobs:
   # ────────────────────────────────────────────────────────────────
   test-linux-sanitizer:
     name: Linux (ASan/UBSan)
-    needs: runner-status
-    # See build-linux's comment on this same expression.
-    runs-on: ${{ github.event_name != 'pull_request' && needs.runner-status.outputs.linux_online == 'true' && fromJSON('["self-hosted", "Linux", "wsl-hb12f"]') || 'ubuntu-22.04' }}
+    needs: changes
+    if: needs.changes.outputs.release_bump != 'true'
+    # Always GitHub-hosted, unlike build-linux. The self-hosted WSL runner
+    # takes one job at a time, so on main and tag pushes this job and
+    # build-linux used to run back to back there (~10 + ~9 min, one of them
+    # always queued). On a hosted runner they run side by side. The repo is
+    # public, so hosted minutes cost nothing.
+    runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
-
-      # See build-linux's identical step for why this reaches the Windows
-      # host's power API rather than anything inside this Linux/WSL2 guest.
-      - name: Prevent system sleep during this job (Windows host)
-        if: ${{ github.event_name != 'pull_request' }}
-        run: |
-          if command -v powershell.exe >/dev/null 2>&1; then
-            powershell.exe -ExecutionPolicy Bypass -File "$(wslpath -w "$PWD/tools/ci/keepawake-start.ps1")" \
-              -PidFile 'C:\Windows\Temp\fb-ci-keepawake-linux.pid'
-          else
-            echo "powershell.exe not available (hosted runner) -- skipping"
-          fi
 
       - name: Install build tools
         run: |
@@ -406,10 +428,8 @@ jobs:
             libfreetype-dev libharfbuzz-dev
 
       # See build-linux's identical step for why this is idempotent/cached
-      # and installed under its own /tmp prefix rather than a system path:
-      # this job's RelWithDebInfo build and build-linux's Release build queue
-      # on the SAME self-hosted runner every push, and a shared install path
-      # would mean each job overwrites the other's build every run.
+      # and installed under its own /tmp prefix rather than a system path.
+      # On this job's hosted runner /tmp starts empty, so it always builds.
       - name: Build SDL3 from source
         run: |
           SDL_DEPS_SPEC="SDL release-3.4.4;SDL_image release-3.4.2;SDL_mixer release-3.2.0;SDL_ttf release-3.2.2"
@@ -500,21 +520,13 @@ jobs:
         # comment on the identical exclusion.
         run: ctest --test-dir build-asan --output-on-failure -j "$(nproc)" -E server-tournament-test
 
-      - name: Allow system sleep again
-        if: ${{ always() && github.event_name != 'pull_request' }}
-        run: |
-          if command -v powershell.exe >/dev/null 2>&1; then
-            powershell.exe -ExecutionPolicy Bypass -File "$(wslpath -w "$PWD/tools/ci/keepawake-stop.ps1")" \
-              -PidFile 'C:\Windows\Temp\fb-ci-keepawake-linux.pid'
-          fi
-
   # ────────────────────────────────────────────────────────────────
   # macOS → DMG
   # ────────────────────────────────────────────────────────────────
   build-macos:
     name: macOS (DMG)
     needs: changes
-    if: needs.changes.outputs.client_unaffected != 'true'
+    if: needs.changes.outputs.client_unaffected != 'true' && needs.changes.outputs.release_bump != 'true'
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
@@ -646,7 +658,7 @@ jobs:
   build-windows:
     name: Windows (installer)
     needs: [changes, runner-status]
-    if: needs.changes.outputs.client_unaffected != 'true'
+    if: needs.changes.outputs.client_unaffected != 'true' && needs.changes.outputs.release_bump != 'true'
     # See build-linux's comment on this same expression (Windows variant).
     runs-on: ${{ github.event_name != 'pull_request' && needs.runner-status.outputs.windows_online == 'true' && fromJSON('["self-hosted", "Windows", "win-hb12f"]') || 'windows-latest' }}
     defaults:
@@ -848,7 +860,7 @@ jobs:
   build-android:
     name: Android TV (APK)
     needs: changes
-    if: needs.changes.outputs.client_unaffected != 'true'
+    if: needs.changes.outputs.client_unaffected != 'true' && needs.changes.outputs.release_bump != 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -1046,7 +1058,7 @@ jobs:
   build-wasm:
     name: WebAssembly (WASM)
     needs: changes
-    if: needs.changes.outputs.client_unaffected != 'true'
+    if: needs.changes.outputs.client_unaffected != 'true' && needs.changes.outputs.release_bump != 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

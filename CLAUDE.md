@@ -199,6 +199,8 @@ Key line references: malus formula (line 958), chain reactions (819–841), win 
 
 A failing ASan/UBSan run hard-blocks both: no platform ships, itch.io included, if it catches a memory-safety bug. A single platform build failing on its own (say, Windows) does *not* block the others any more — `release`'s `if:` opts out of the default needs-failure skip (`!cancelled()`) and just omits that platform's file from the release, so the other four still ship and the failed one stays on whatever version its last successful tag published until it's fixed and re-tagged. Only `release` and `deploy-itchio-html5` are tag-gated (`startsWith(github.ref, 'refs/tags/')`), so pushes and PRs build (and, for six jobs, test) without publishing anything.
 
+The ASan/UBSan job always runs on a GitHub-hosted runner; the other Linux job (and Windows) use the self-hosted box when its heartbeat says it's online. That box takes one job at a time, so the two Linux jobs used to run back to back there on every main/tag push. The `main` push of a `chore: release vX.Y.Z` commit skips every build job (`changes`' `release_bump` output): the release PR already built that tree and the tag pushed right after it is the build that ships, so building it a third time only made the tag build wait for the runner.
+
 Android releases are signed with a persistent key held in repository secrets, and a tagged build fails outright rather than shipping an APK that cannot be upgraded — see `docs/ANDROID_SIGNING.md`.
 
 ### Cutting a release
