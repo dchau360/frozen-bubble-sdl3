@@ -29,6 +29,8 @@ import time
 import unittest
 from pathlib import Path
 
+from testports import free_tcp_port
+
 
 def recv_until(sock, token, timeout=5.0):
     sock.setblocking(False)
@@ -64,7 +66,7 @@ class ServerPlatformInputTest(unittest.TestCase):
         env["FB_SERVER_STATS_FILE"] = str(Path(self.tmpdir.name) / "stats.dat")
         env["FB_SERVER_WEEKLY_FILE"] = str(Path(self.tmpdir.name) / "weekly.dat")
 
-        self.port = 15521
+        self.port = free_tcp_port()
         self.server = subprocess.Popen(
             [str(self.server_path), "-p", str(self.port), "-q", "-z", "-d"],
             stdout=subprocess.DEVNULL,

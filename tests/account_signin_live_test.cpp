@@ -20,6 +20,7 @@
 #include "../third_party/monocypher/monocypher.h"
 #include "networkclient.h"
 #include "playeraccount.h"
+#include "test_ports.h"
 
 static int failures = 0;
 #define CHECK(cond) do { if (!(cond)) { std::fprintf(stderr, "FAIL %s:%d: %s\n", __FILE__, __LINE__, #cond); ++failures; } } while (0)
@@ -29,7 +30,7 @@ int main(int argc, char** argv) {
         std::fprintf(stderr, "usage: %s <fb-server>\n", argv[0]);
         return 77;
     }
-    const int port = 15532;
+    const int port = FreeTcpPort();
     char weeklyFile[] = "/tmp/fb-account-live-XXXXXX";
     const int tmpfd = mkstemp(weeklyFile);
     if (tmpfd >= 0) close(tmpfd);

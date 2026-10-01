@@ -304,7 +304,7 @@ jobs:
         env:
           SDL_AUDIODRIVER: dummy
           LD_LIBRARY_PATH: /tmp/fb-sdl3-deps-release/lib
-        run: ctest --test-dir build --output-on-failure -E server-tournament-test
+        run: ctest --test-dir build --output-on-failure -j "$(nproc)" -E server-tournament-test
 
       - name: Install into AppDir
         run: |
@@ -498,7 +498,7 @@ jobs:
         # different cause (CPU contention from this shared self-hosted host's
         # other concurrent job, not sanitizer overhead) -- see that job's own
         # comment on the identical exclusion.
-        run: ctest --test-dir build-asan --output-on-failure -E server-tournament-test
+        run: ctest --test-dir build-asan --output-on-failure -j "$(nproc)" -E server-tournament-test
 
       - name: Allow system sleep again
         if: ${{ always() && github.event_name != 'pull_request' }}

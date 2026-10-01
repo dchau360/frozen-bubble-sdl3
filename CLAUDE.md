@@ -19,8 +19,13 @@ cmake --build build --parallel
 
 **Tests:**
 ```bash
-ctest --test-dir build --output-on-failure
+ctest --test-dir build --output-on-failure -j8
 ```
+The suite is safe to run in parallel: every test that starts its own fb-server
+asks the OS for a free port (`tests/testports.py`, `tests/test_ports.h`) rather
+than using a fixed one, so never give a new server test a hard-coded port.
+Run serially it takes about 9 minutes, almost all of it in the dozen server and
+replay tests that wait on real timeouts; with `-j8` it's about 90 seconds.
 Two server tests exercise memory-safety fixes and need a sanitizer build; on an
 ordinary build they report as skipped rather than passing without running. To
 actually run them:
@@ -30,8 +35,10 @@ cmake -B build-asan -G Ninja -DCMAKE_BUILD_TYPE=Debug \
   -DCMAKE_CXX_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer"
 cmake --build build-asan --parallel
 ASAN_OPTIONS=detect_leaks=1:fast_unwind_on_malloc=0 UBSAN_OPTIONS=print_stacktrace=1 \
-  ctest --test-dir build-asan --output-on-failure
+  ctest --test-dir build-asan --output-on-failure -j4
 ```
+(On macOS drop `detect_leaks=1`: LeakSanitizer isn't supported there, and ASan
+aborts every test at startup if it's asked for.)
 `fast_unwind_on_malloc=0` matters here: the default frame-pointer-based
 unwinder breaks the moment a leak's call stack passes through SDL3/FreeType/
 HarfBuzz (built without `-fsanitize`, so ASan's malloc interceptor still

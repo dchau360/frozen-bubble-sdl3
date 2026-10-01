@@ -17,6 +17,8 @@ import time
 import unittest
 from pathlib import Path
 
+from testports import free_tcp_port
+
 
 def recv_until(sock, token, timeout=5.0):
     sock.setblocking(False)
@@ -44,7 +46,7 @@ class ServerBotCapTestBase(unittest.TestCase):
         if not self.server_path.exists():
             self.skipTest(f"fb-server binary not found at {self.server_path}")
 
-        self.port = 15513
+        self.port = free_tcp_port()
         args = [str(self.server_path), "-p", str(self.port), "-q", "-z", "-d"]
         if self.max_bots_flag is not None:
             args += ["-b", str(self.max_bots_flag)]

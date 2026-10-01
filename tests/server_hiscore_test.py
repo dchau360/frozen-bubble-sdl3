@@ -17,8 +17,6 @@ from server_weekly_test import WeeklyTestBase, monday_of, recv_until, today
 
 
 class HiscoreTest(WeeklyTestBase):
-    PORT = 15533
-
     @property
     def hiscore_file(self):
         return Path(self.tmpdir.name) / "hiscores.dat"

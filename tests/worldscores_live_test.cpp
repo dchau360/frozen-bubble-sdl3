@@ -19,6 +19,7 @@
 #include "gamesettings.h"
 #include "playeraccount.h"
 #include "worldscores.h"
+#include "test_ports.h"
 
 static int failures = 0;
 #define CHECK(cond) do { if (!(cond)) { std::fprintf(stderr, "FAIL %s:%d: %s\n", __FILE__, __LINE__, #cond); ++failures; } } while (0)
@@ -37,7 +38,7 @@ int main(int argc, char** argv) {
         std::fprintf(stderr, "usage: %s <fb-server>\n", argv[0]);
         return 77;
     }
-    const int port = 15534;
+    const int port = FreeTcpPort();
     char dir[] = "/tmp/fb-worldscores-live-XXXXXX";
     if (!mkdtemp(dir)) return 1;
     const std::string base = dir;

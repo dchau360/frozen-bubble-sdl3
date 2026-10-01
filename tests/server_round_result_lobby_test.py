@@ -25,6 +25,8 @@ import time
 import unittest
 from pathlib import Path
 
+from testports import free_tcp_port
+
 
 def recv_until(sock, token, timeout=5.0):
     sock.setblocking(False)
@@ -50,7 +52,7 @@ class ServerRoundResultLobbyTest(unittest.TestCase):
             self.skipTest(f"fb-server binary not found at {self.server_path}")
 
         self.tmpdir = tempfile.TemporaryDirectory()
-        self.port = 15519
+        self.port = free_tcp_port()
 
         # Rounds finished here would otherwise land in the developer's real
         # ~/.fb-server stats and weekly-rankings files.

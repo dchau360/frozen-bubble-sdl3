@@ -32,6 +32,8 @@ import time
 import unittest
 from pathlib import Path
 
+from testports import free_tcp_port
+
 
 def recv_until(sock, token, timeout=5.0):
     sock.setblocking(False)
@@ -93,7 +95,7 @@ class _FbServerTestBase(unittest.TestCase):
         if timeout is not None:
             env["FB_SERVER_PENDING_STATS_TIMEOUT_SECS"] = str(timeout)
 
-        self.port = 15518
+        self.port = free_tcp_port()
         # -d keeps the server in the foreground. Without it fb-server forks and
         # the parent exits, so Popen.kill() reaps only the parent and the real
         # daemon keeps the port -- every later test in this file would then
