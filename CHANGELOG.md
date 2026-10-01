@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- **High scores always show the input.** Every entry on the High Scores screen and the world highscores web page now carries its **KB** or **M/T** tag, not only when both inputs are switched on.
+
 ## v2.4.125
 
 - **Country on the world highscores.** World board entries now show the player's country: a code next to the name in the game, and a flag on the web page. It's the country the game already looks up when you play online, saved and sent with your runs. If you only play solo, or in the browser, no country is sent and none is shown. The privacy policy describes this.
