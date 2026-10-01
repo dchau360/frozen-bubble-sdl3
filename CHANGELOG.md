@@ -3,6 +3,7 @@
 ## Unreleased
 
 - **High scores show keyboard and mouse together by default.** The High Scores screen and the world highscores web page now open with both inputs on, each entry tagged **KB** or **M/T**. If you already picked one, the game keeps your choice.
+- **World highscores refuse impossible runs.** This port's server now turns away runs no real game could produce, such as clearing levels faster than one a second, or far more points than a level can give. Real runs are well inside the limits.
 
 ## v2.4.126
 

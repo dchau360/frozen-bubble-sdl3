@@ -208,7 +208,30 @@ Any 1.7 server *can* keep a board — the commands are always there and the
 file lives next to the weekly stats (`/var/lib/fb-server/hiscores.dat`,
 `FB_SERVER_HISCORE_FILE`) — but on yours it stays empty unless you build the
 game with `kWorldScoresHost` pointing at you. Scores are self-reported by the
-game and not verified.
+game and not verified beyond two loose limits that only catch impossible
+runs: clearing levels faster than one second each on average (even the
+fastest speed setting can't), and a life scoring more than 20,000 points per
+level it reached (real lives score under 2,000). Such a run is answered
+`IMPLAUSIBLE`, logged with its account id, and never stored.
+
+#### Banning an account
+
+To take a cheater off the board, add their account id to `banned.txt` beside
+`hiscores.dat` (or the file `FB_SERVER_BANNED_FILE` names). No restart is
+needed: the server re-reads the file whenever it changes. A banned account's
+runs are refused (`BANNED`) and its line is hidden from every list and rank,
+but kept on disk, so removing the id again restores it. Find the id by the
+tag shown after the name (`bob#7f3a`):
+
+```bash
+sudo docker run --rm -v docker_fb-data:/d alpine grep '^7f3a' /d/hiscores.dat
+# one id per line; anything after the id is ignored, so the whole line can go in
+sudo docker run --rm -v docker_fb-data:/d alpine sh -c 'echo "<full id> cheater, 2026-10-01" >> /d/banned.txt'
+```
+
+Lines starting with `#` are comments. A ban covers the world board only, not
+the weekly rankings. A banned player can still start a new account; ban that
+one too when it shows up.
 
 #### Weekly backups, and removing a cheater
 
@@ -221,8 +244,8 @@ copy happens the first time anything touches the board after midnight, not
 on a timer, so a quiet server may date it a little late; the contents are
 still the week as it ended.
 
-To take one cheater off the board, remove their line rather than rolling
-everyone back. A line starts with the account id, whose first four hex digits
+Banning (above) is the easiest way to take one cheater off the board. To
+delete their line outright instead, rather than rolling everyone back, stop the server first. A line starts with the account id, whose first four hex digits
 are the tag shown after the name (`bob#7f3a`):
 
 ```bash
