@@ -266,6 +266,28 @@ old week's bests, which is what a new week does anyway. Restoring an old
 `weekly.dat` is only useful as a record: the server sees a finished week,
 posts its final standings to Discord again and starts a fresh one.
 
+#### Backing up the scores
+
+The weekly snapshots sit on the same disk as the live files, so they don't
+help if the server itself is lost. `tools/backup-fb-data.sh` copies the whole
+`fb-data` volume to another machine as `fb-data-YYYY-MM-DD.tgz`, keeping the
+last 30 days (`FB_BACKUP_KEEP`):
+
+```bash
+tools/backup-fb-data.sh ubuntu@your.server ~/fb-backups
+```
+
+It needs key-based SSH and passwordless `sudo` on the server, mounts the
+volume read-only, and never replaces a good backup with a broken download.
+Run it daily from cron, or on a Mac from a launchd agent with
+`StartCalendarInterval` (a run missed while the Mac slept happens on wake).
+macOS lets such an agent write into `~/Documents` but not list it, which is
+why the script deletes old backups by date rather than by listing the folder.
+Keep the backups private: they hold every player's account id, nickname and
+country. To restore, stop `fb-server`, unpack the tarball into the volume
+(`sudo docker run --rm -i -v docker_fb-data:/d alpine tar xzf - -C /d <
+fb-data-2026-10-01.tgz`) and start it again.
+
 ## Optional — Discord Join & Result Alerts
 
 Every time a player arrives on your server, it can post a message to a
