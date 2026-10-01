@@ -249,6 +249,14 @@ int hiscore_submit(const char* id, const char* nick, const char* country, int bo
         return 1;
 }
 
+int hiscore_forget(const char* id)
+{
+        if (!table || !id || !*id || !g_hash_table_remove(table, id))
+                return 0;
+        save();
+        return 1;
+}
+
 int hiscore_rank(const char* id, int board, enum hiscore_scope scope)
 {
         GHashTableIter iter;

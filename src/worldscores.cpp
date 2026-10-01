@@ -58,6 +58,9 @@ bool pendingLoaded = false;
 
 WorldBoard boards[kBoards];
 Status status = Status::Idle;
+DeleteStatus deleteStatus = DeleteStatus::Idle;
+std::string deleteError;
+bool deleteWanted = false;  // asked while another session was in flight
 std::string lastError;
 bool boardsWanted = false;
 Uint64 retryAt = 0;
@@ -316,6 +319,8 @@ struct Session {
     Uint64 deadline = 0;
     bool signIn = false;       // send AUTH (and any pending runs)
     bool fetchBoards = false;
+    bool deleteAccount = false;  // DELETEACCOUNT instead of HISCORE/HISCORES
+    bool deleted = false;        // ...and the server said OK
     Run submitting[kBoards];
     int awaiting = 0;          // replies still owed
     bool sentRequests = false;
@@ -341,6 +346,11 @@ bool ReplyTo(const std::string& line, const char* cmd, std::string& payload) {
 
 void SendRequests(Session& s) {
     s.sentRequests = true;
+    if (s.deleteAccount) {
+        s.transport->Send("FB/1.3 DELETEACCOUNT");
+        ++s.awaiting;
+        return;
+    }
     if (s.signIn) {
         const std::string nick = SubmitNick();
         // Shown beside this account's runs; the server keeps the last one it
@@ -403,6 +413,16 @@ void HandleLine(Session& s, const std::string& line) {
         }
         SavePending();
         --s.awaiting;
+    } else if (ReplyTo(line, "DELETEACCOUNT", payload)) {
+        --s.awaiting;
+        if (payload.compare(0, 2, "OK") == 0) {
+            s.deleted = true;
+        } else {
+            s.failed = true;
+            s.error = payload.compare(0, 15, "UNKNOWN_COMMAND") == 0
+                ? "The server can't delete accounts yet. Try again after it is updated."
+                : "The server couldn't delete the account.";
+        }
     } else if (ReplyTo(line, "HISCORES", payload)) {
         const int b = s.boardOrder++;
         if (b < kBoards && s.gotBoards[b].Parse(payload)) s.gotBoard[b] = true;
@@ -410,13 +430,16 @@ void HandleLine(Session& s, const std::string& line) {
     }
 }
 
-void Start(bool withBoards) {
+void Start(bool withBoards, bool deleteAccount = false) {
     const std::string host = Host();
     if (host.empty()) return;
     auto s = std::make_unique<Session>();
-    s->signIn = SendingEnabled();
-    s->fetchBoards = withBoards;
-    if (s->signIn)
+    s->deleteAccount = deleteAccount;
+    // Deleting needs the account's own signature whatever the setting says,
+    // and sends nothing else: unsent runs belong to the account being deleted.
+    s->signIn = deleteAccount || SendingEnabled();
+    s->fetchBoards = withBoards && !deleteAccount;
+    if (s->signIn && !deleteAccount)
         for (int b = 0; b < kBoards; ++b) s->submitting[b] = pending[b];
     const int port = testMode ? testPort : 0;
 #ifdef __WASM_PORT__
@@ -435,6 +458,22 @@ void Start(bool withBoards) {
 void Finish() {
     Session& s = *session;
     const bool complete = s.sentRequests && s.awaiting <= 0 && !s.failed;
+    if (s.deleteAccount) {
+        if (complete && s.deleted) {
+            for (auto& p : pending) p = Run{};
+            SavePending();
+            playeraccount::StartNewAccount();
+            deleteStatus = DeleteStatus::Done;
+            deleteError.clear();
+            // The boards on screen still list the deleted runs.
+            status = Status::Idle;
+        } else {
+            deleteStatus = DeleteStatus::Failed;
+            deleteError = !s.error.empty() ? s.error : "Couldn't reach the server to delete the account.";
+        }
+        session.reset();
+        return;
+    }
     if (s.fetchBoards) {
         for (int b = 0; b < kBoards; ++b)
             if (s.gotBoard[b]) boards[b] = s.gotBoards[b];
@@ -493,6 +532,26 @@ void RequestBoards() {
     Start(true);
 }
 
+void RequestDeleteAccount() {
+    if (deleteStatus == DeleteStatus::Working) return;
+    if (!Available()) {
+        deleteStatus = DeleteStatus::Failed;
+        deleteError = "This build has no account server.";
+        return;
+    }
+    LoadPending();
+    deleteStatus = DeleteStatus::Working;
+    deleteError.clear();
+    if (session) deleteWanted = true;  // after the one in flight
+    else Start(false, true);
+}
+
+DeleteStatus DeleteAccountStatus() { return deleteStatus; }
+const std::string& DeleteAccountError() { return deleteError; }
+void ClearDeleteAccountStatus() {
+    if (deleteStatus != DeleteStatus::Working) deleteStatus = DeleteStatus::Idle;
+}
+
 Status BoardStatus() { return status; }
 const WorldBoard& Board(int board) { return boards[board < 0 || board >= kBoards ? 0 : board]; }
 const std::string& LastError() { return lastError; }
@@ -531,7 +590,10 @@ void Pump(bool inGame) {
         const bool done = session->sentRequests && session->awaiting <= 0;
         if (done || session->failed || !alive || SDL_GetTicks() > session->deadline) {
             Finish();
-            if (boardsWanted) {
+            if (deleteWanted) {
+                deleteWanted = false;
+                Start(false, true);
+            } else if (boardsWanted) {
                 boardsWanted = false;
                 Start(true);
             }
@@ -552,6 +614,9 @@ void SetServerForTest(const std::string& host, int port) {
     retryAt = 0;
     session.reset();
     status = Status::Idle;
+    deleteStatus = DeleteStatus::Idle;
+    deleteError.clear();
+    deleteWanted = false;
 }
 
 int PendingCountForTest() {

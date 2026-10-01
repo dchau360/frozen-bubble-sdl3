@@ -112,9 +112,32 @@ int main(int argc, char** argv) {
     PumpUntil([] { return worldscores::BoardStatus() != worldscores::Status::Loading; }, 5000);
     CHECK(worldscores::Board(0).alltime.size() == 1);
 
+    // Delete account: the server drops the account's runs, then this device
+    // forgets its unsent ones and moves to a new account. StartNewAccount()
+    // saves the new code beside the settings, so point those at the temp
+    // directory first -- never the developer's real account file.
+    std::string prefDir = base + "/";
+    gs->prefPath = prefDir.c_str();
+    const std::string oldId = playeraccount::AccountIdHex();
+    worldscores::RecordRun(0, 31, 1000);
+    CHECK(worldscores::PendingCountForTest() == 1);
+    worldscores::RequestDeleteAccount();
+    CHECK(worldscores::DeleteAccountStatus() == worldscores::DeleteStatus::Working);
+    PumpUntil([] { return worldscores::DeleteAccountStatus() != worldscores::DeleteStatus::Working; }, 5000);
+    CHECK(worldscores::DeleteAccountStatus() == worldscores::DeleteStatus::Done);
+    CHECK(worldscores::DeleteAccountError().empty());
+    CHECK(playeraccount::AccountIdHex() != oldId);
+    CHECK(worldscores::PendingCountForTest() == 0);
+    worldscores::ClearDeleteAccountStatus();
+    CHECK(worldscores::DeleteAccountStatus() == worldscores::DeleteStatus::Idle);
+    worldscores::RequestBoards();
+    PumpUntil([] { return worldscores::BoardStatus() != worldscores::Status::Loading; }, 5000);
+    for (int b = 0; b < worldscores::kBoards; ++b) CHECK(worldscores::Board(b).alltime.empty());
+
     kill(server, SIGKILL);
     waitpid(server, nullptr, 0);
-    for (const char* f : {"/weekly.dat", "/stats.dat", "/hiscores.dat"}) unlink((base + f).c_str());
+    for (const char* f : {"/weekly.dat", "/stats.dat", "/hiscores.dat", "/account.txt"})
+        unlink((base + f).c_str());
     rmdir(dir);
     SDL_Quit();
     if (failures) return 1;

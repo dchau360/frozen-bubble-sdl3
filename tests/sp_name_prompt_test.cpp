@@ -224,7 +224,7 @@ int main() {
             CHECK(menu->HasAnyPanelOpen());
             MainMenuTestAccess::RenderMenu(*menu);
             if (closeKey == SDLK_RETURN)  // focus Back (the last button), then press it
-                for (int i = 0; i < 3; ++i) Key(*menu, SDLK_TAB);
+                for (int i = 0; i < 4; ++i) Key(*menu, SDLK_TAB);
             Key(*menu, closeKey);
             CHECK(!MainMenuTestAccess::Account(*menu));
             CHECK(fb->currentState == Highscores);

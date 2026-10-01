@@ -550,6 +550,14 @@ void GameSettings::SaveKeys()
 
 void GameSettings::SaveSettings()
 {
+    // Nothing was loaded, so there is nothing to save -- and writing anyway
+    // would replace the player's real settings.ini with an empty one. A test
+    // that drives the menus without ReadSettings() did exactly that.
+    if (!optDict) {
+        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
+                    "SaveSettings: settings were never loaded; not saving");
+        return;
+    }
     InitPrefPath();
     FILE *setFile;
     char setPath[256];

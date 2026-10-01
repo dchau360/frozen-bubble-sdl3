@@ -5,6 +5,7 @@
 #include "frozenbubble.h"
 #include "platform.h"
 #include "playeraccount.h"
+#include "worldscores.h"
 #include "textinput.h"
 #include <algorithm>
 
@@ -22,12 +23,22 @@
 // level, and the footer spells that out.
 
 namespace {
-enum ViewButton { kViewCopy = 0, kViewUseCode, kViewNew, kViewBack, kViewCount };
+enum ViewButton { kViewCopy = 0, kViewUseCode, kViewNew, kViewDelete, kViewBack, kViewCount };
 enum EnterButton { kEnterOk = 0, kEnterCancel, kEnterCount };
 enum ConfirmButton { kConfirmNew = 0, kConfirmCancel, kConfirmCount };
+enum DeleteButton { kDeleteYes = 0, kDeleteCancel, kDeleteCount };
+// accountMode: 0 view, 1 typing a code, 2 confirm New account, 3 confirm
+// Delete account, 4 waiting for the server to delete it.
+enum { kModeView = 0, kModeEnter, kModeConfirmNew, kModeConfirmDelete, kModeDeleting };
 
 int ButtonCount(int mode) {
-    return mode == 0 ? kViewCount : mode == 1 ? kEnterCount : kConfirmCount;
+    switch (mode) {
+    case kModeView: return kViewCount;
+    case kModeEnter: return kEnterCount;
+    case kModeConfirmNew: return kConfirmCount;
+    case kModeConfirmDelete: return kDeleteCount;
+    default: return 0;  // deleting: nothing to press until the server answers
+    }
 }
 }  // namespace
 
@@ -83,13 +94,39 @@ void MainMenu::AccountPanelRender() {
         char line[48];
         snprintf(line, sizeof(line), "[ %s_ ]", accountCodeInput);
         text(line, 160, 180, menulist::kGold, 20);
-    } else if (accountMode == 2) {
+    } else if (accountMode == kModeConfirmNew) {
         text("Start a new account on this device?", 18, y, menulist::kText, 15);
-        text("Your weekly ranking stays with the current code:", 18, y + 30, menulist::kMuted);
+        text("Your world highscores and weekly ranking stay with the current code:", 18, y + 30, menulist::kMuted);
         text(playeraccount::FormatCode(playeraccount::Code()), 18, y + 52, menulist::kGold, 18);
         text("Write it down first if you want to come back to it.", 18, y + 84, menulist::kMuted);
-        text("Servers keep nothing else: a ranking line just ends", 18, y + 104, menulist::kMuted);
-        text("at the next Monday reset once nobody plays as it.", 18, y + 124, menulist::kMuted);
+        text("To remove them from the server instead, use Delete account.", 18, y + 104, menulist::kMuted);
+    } else if (accountMode == kModeConfirmDelete) {
+        text("Delete this account?", 18, y, menulist::kText, 15);
+        text(std::string("This removes everything ") + kWorldScoresHost + " keeps for it:", 18, y + 30);
+        text("your world highscores and your weekly ranking.", 18, y + 50);
+        text("This device then starts a new account with a new code.", 18, y + 80, menulist::kMuted);
+        text("Other servers only keep a weekly line, which ends at their next", 18, y + 100, menulist::kMuted);
+        text("Monday reset. This can't be undone.", 18, y + 120, menulist::kMuted);
+    } else if (accountMode == kModeDeleting) {
+        text(std::string("Deleting your account from ") + kWorldScoresHost + "...", 18, y, menulist::kText, 15);
+        switch (worldscores::DeleteAccountStatus()) {
+        case worldscores::DeleteStatus::Done:
+            accountMode = kModeView;
+            accountSelection = kViewBack;
+            accountMessage = "Account deleted. This device has a new code now.";
+            accountMessageBad = false;
+            worldscores::ClearDeleteAccountStatus();
+            break;
+        case worldscores::DeleteStatus::Failed:
+            accountMode = kModeView;
+            accountSelection = kViewBack;
+            accountMessage = worldscores::DeleteAccountError() + " Nothing was changed.";
+            accountMessageBad = true;
+            worldscores::ClearDeleteAccountStatus();
+            break;
+        default:
+            break;
+        }
     } else {
         text("Account code", 18, y, menulist::kMuted);
         const std::string code = playeraccount::Code();
@@ -105,25 +142,37 @@ void MainMenu::AccountPanelRender() {
     if (!accountMessage.empty())
         text(accountMessage, 18, 340, accountMessageBad ? menulist::kBad : menulist::kGold);
 
-    static const char* kView[kViewCount] = {"Copy code", "Use another code", "New account", "Back"};
+    static const char* kView[kViewCount] = {"Copy code", "Use another code", "New account",
+                                            "Delete account", "Back"};
     static const char* kEnter[kEnterCount] = {"Use this code", "Cancel"};
     static const char* kConfirm[kConfirmCount] = {"New account", "Cancel"};
-    const char* const* labels = accountMode == 0 ? kView : accountMode == 1 ? kEnter : kConfirm;
+    static const char* kDelete[kDeleteCount] = {"Delete account", "Cancel"};
+    const char* const* labels = accountMode == kModeView ? kView
+                              : accountMode == kModeEnter ? kEnter
+                              : accountMode == kModeConfirmNew ? kConfirm : kDelete;
     const int count = ButtonCount(accountMode);
-    accountSelection = std::clamp(accountSelection, 0, count - 1);
-    BeginPanelTapRows(&accountSelection);
-    panelText.UpdateStyle(13, TTF_STYLE_NORMAL);
-    for (int i = 0; i < count; ++i) {
-        SDL_Rect r = {18 + i * 153, 396, 146, 26};
-        const bool sel = i == accountSelection;
-        SDL_SetRenderDrawColor(rend, sel ? 94 : 35, 69, 76, 255);
-        auto fr = ToFRect(r);
-        SDL_RenderFillRect(rend, &fr);
-        text(labels[i], r.x + 7, r.y + 3, sel ? menulist::kGold : menulist::kText);
-        AddPanelTapRow(i, r);
+    if (count > 0) {
+        accountSelection = std::clamp(accountSelection, 0, count - 1);
+        BeginPanelTapRows(&accountSelection);
+        // The row's 604px shared out evenly, so five fit as well as two.
+        constexpr int kGap = 7;
+        const int w = (604 - (count - 1) * kGap) / count;
+        for (int i = 0; i < count; ++i) {
+            SDL_Rect r = {18 + i * (w + kGap), 396, w, 26};
+            const bool sel = i == accountSelection;
+            SDL_SetRenderDrawColor(rend, sel ? 94 : 35, 69, 76, 255);
+            auto fr = ToFRect(r);
+            SDL_RenderFillRect(rend, &fr);
+            panelText.UpdateStyle(13, TTF_STYLE_NORMAL);
+            panelText.UpdateText(rend, labels[i], 0);
+            text(labels[i], r.x + (r.w - panelText.Coords()->w) / 2, r.y + 3,
+                 sel ? menulist::kGold : menulist::kText);
+            AddPanelTapRow(i, r);
+        }
     }
-    menulist::DrawFooterHint(rend, panelText, accountMode == 1
+    menulist::DrawFooterHint(rend, panelText, accountMode == kModeEnter
         ? "TYPE THE CODE   ENTER: USE IT   ESC / B: CANCEL"
+        : accountMode == kModeDeleting ? "PLEASE WAIT"
         : "LEFT/RIGHT: MOVE   ENTER / A: SELECT   ESC / B: BACK");
     panelText.UpdateStyle(15, TTF_STYLE_NORMAL);
 }
@@ -135,6 +184,9 @@ bool MainMenu::AccountPanelKey(SDL_Event* e) {
         return true;
     }
     if (e->type != SDL_EVENT_KEY_DOWN) return false;
+    // Waiting on the server: the result decides what the screen says next,
+    // so nothing (not even ESC) leaves it half-done.
+    if (accountMode == kModeDeleting) return true;
     const auto key = e->key.key;
     const int count = ButtonCount(accountMode);
 
@@ -209,6 +261,19 @@ bool MainMenu::AccountPanelKey(SDL_Event* e) {
         accountSelection = kViewBack;
         return true;
     }
+    if (accountMode == kModeConfirmDelete) {
+        if (accountSelection == kDeleteYes) {
+            AudioMixer::Instance()->PlaySFX("menu_selected");
+            accountMessage.clear();
+            accountMode = kModeDeleting;
+            worldscores::RequestDeleteAccount();
+        } else {
+            AudioMixer::Instance()->PlaySFX("cancel");
+            accountMode = kModeView;
+            accountSelection = kViewDelete;
+        }
+        return true;
+    }
 
     AudioMixer::Instance()->PlaySFX("menu_selected");
     switch (accountSelection) {
@@ -262,8 +327,13 @@ bool MainMenu::AccountPanelKey(SDL_Event* e) {
         break;
     case kViewNew:
         accountMessage.clear();
-        accountMode = 2;
+        accountMode = kModeConfirmNew;
         accountSelection = kConfirmCancel;  // the destructive choice is never the default
+        break;
+    case kViewDelete:
+        accountMessage.clear();
+        accountMode = kModeConfirmDelete;
+        accountSelection = kDeleteCancel;  // never the default either
         break;
     default:
         CloseAccountPanel();

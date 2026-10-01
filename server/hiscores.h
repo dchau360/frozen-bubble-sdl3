@@ -63,6 +63,10 @@ int hiscore_submit(const char* id, const char* nick, const char* country, int bo
 /* An ISO 3166-1 alpha-2 shape: two capital letters. */
 int hiscore_country_ok(const char* c);
 
+/* Drop every run the account has, on every board, all-time and this week
+ * (DELETEACCOUNT), saving if it had any. Returns 1 if it had a line. */
+int hiscore_forget(const char* id);
+
 /* The account's competition rank in that board, or 0 when it has no run
  * there. */
 int hiscore_rank(const char* id, int board, enum hiscore_scope scope);

@@ -66,6 +66,20 @@ std::string SubmitNick();
 // this build has none.
 const char* WebUrl();
 
+// "Delete account" (the account screen): signs in to the board's server as
+// this device's account and asks it to drop everything it keeps for it --
+// the world-board runs and the weekly line (DELETEACCOUNT, server/game.c).
+// Only once the server says OK does this device forget its unsent runs and
+// start a new account (playeraccount::StartNewAccount()), so a failure
+// changes nothing. Works whether or not sending is switched on.
+enum class DeleteStatus { Idle, Working, Done, Failed };
+void RequestDeleteAccount();
+DeleteStatus DeleteAccountStatus();
+// Why the last delete failed; empty otherwise.
+const std::string& DeleteAccountError();
+// Back to Idle once the screen has shown the result.
+void ClearDeleteAccountStatus();
+
 // Call once per frame. inGame suppresses sending pending runs mid-run (they
 // go once the player is back in a menu); an explicit RequestBoards() always
 // runs.

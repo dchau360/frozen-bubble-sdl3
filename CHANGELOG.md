@@ -3,6 +3,7 @@
 ## Unreleased
 
 - **Account code in the 1-player menu and High Scores.** Your account code, which your world highscores and weekly ranking are kept under, can now be viewed, copied or changed from the 1-player menu (**Account code**, under World highscores) and from the High Scores screen's World Level and World Points tabs (an **Account code** button next to Open in browser; Back returns you to High Scores). Before, the only way in was from the online server list.
+- **Delete account.** The Account code screen has a new **Delete account** button. It asks this port's server (fb.servequake.com) to delete everything it keeps for your account, your world highscores and your weekly ranking line, then gives this device a new code. It asks you to confirm first, and if the server can't be reached nothing is changed. Before, the all-time world highscores stayed until you asked by opening an issue. The privacy policy describes this.
 - **Gamepad: X (Square) moves between buttons** in menus that have more than one. On the High Scores world tabs it switches between Open in browser and Account code; in popups and the account screen it does what TAB does.
 
 ## v2.4.125

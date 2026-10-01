@@ -585,6 +585,29 @@ static void hiscores_command(int fd, char* args, char* msg_orig)
         free(line);
 }
 
+/* DELETEACCOUNT: the in-app "Delete account" (src/mainmenu_account.cpp).
+ * Needs the connection signed in to the account it deletes -- the same proof
+ * as HISCORE -- and drops that account's world-board runs and weekly line, the
+ * only things this server keeps per account (see docs/PRIVACY_POLICY.md,
+ * "Deleting your account"). There is no registry to remove it from: the code
+ * that made the key is on the player's device, which starts a new one once
+ * this answers OK. Answers OK even when there was nothing to drop, since the
+ * end state the player asked for is the same.
+ *   DELETEACCOUNT -> DELETEACCOUNT: OK | NOT_SIGNED_IN */
+static void deleteaccount_command(int fd, char* msg_orig)
+{
+        const char* id = account_id(fd);
+        int w, h;
+        if (!id || !*id) {
+                send_line_log(fd, "NOT_SIGNED_IN", msg_orig);
+                return;
+        }
+        w = weekly_forget(id);
+        h = hiscore_forget(id);
+        l3(OUTPUT_TYPE_INFO, "Account %.4s deleted (weekly line %d, hiscores %d)", id, w, h);
+        send_line_log(fd, "OK", msg_orig);
+}
+
 /* Game list is of the following scheme:
  * 1.4 protocol:
  * <list-of-open-players format="NICK|NICK:GEOLOC|NICK:GEOLOC:PLATFORM|NICK::PLATFORM"> [...] (as 1.1 otherwise; see append_player_list_tags)
@@ -1737,6 +1760,8 @@ int process_msg(int fd, char* msg)
                 hiscore_command(fd, args, msg_orig);
         } else if (streq(current_command, "HISCORES")) {
                 hiscores_command(fd, args, msg_orig);
+        } else if (streq(current_command, "DELETEACCOUNT")) {
+                deleteaccount_command(fd, msg_orig);
         } else if (streq(current_command, "STATUS")) {  // 1.0 command
                 if (!already_in_game(fd)) {
                         send_line_log(fd, wn_not_in_game, msg_orig);
