@@ -144,6 +144,9 @@ BubbleGame::BubbleGame(const SDL_Renderer *renderer)
         scoreText[i].UpdateAlignment(TTF_HORIZONTAL_ALIGN_LEFT);
         scoreText[i].UpdateColor({255, 255, 255, 255}, {0, 0, 0, 255});
     }
+    shotsText.LoadFont(ASSET("/gfx/DroidSans.ttf").c_str(), 18);
+    shotsText.UpdateAlignment(TTF_HORIZONTAL_ALIGN_LEFT);
+    shotsText.UpdateColor({255, 255, 255, 255}, {0, 0, 0, 255});
 
     comboText.LoadFont(ASSET("/gfx/DroidSans.ttf").c_str(), 32);
     comboText.UpdateAlignment(TTF_HORIZONTAL_ALIGN_CENTER);
@@ -439,6 +442,7 @@ void BubbleGame::NewGame(SetupSettings setup) {
     for (int i = 0; i < currentSettings.playerCount; i++) ResetRoundInputState(bubbleArrays[i]);
     pendingHighscore = false;
     curLevel = setup.startLevel;
+    runShots = 0;
     runEligibleForWorld = !setup.networkGame && setup.playerCount == 1 && !setup.randomLevels &&
                           !setup.mpTraining && !setup.localMultiplayer && setup.startLevel == 1;
     connectedPlayerCount = setup.playerCount;  // Reset connected count for new game

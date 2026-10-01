@@ -19,7 +19,9 @@
 <div class="about" markdown="1">
 
 **World level** ranks runs from level 1 of the standard 100 levels: the
-furthest level cleared wins, and the faster time breaks a tie. **World
+furthest level cleared wins, and the faster time breaks a tie. The shots
+column is how many bubbles the run fired to get there; it doesn't change the
+ranking, and runs from before October 2026 have none. **World
 points** ranks the most points scored in one life. The score starts over at
 every death, and the level shown is the one that life got to. "This week"
 starts over every Monday at 00:00 UTC. The date after a run is the day it was
@@ -69,7 +71,6 @@ off with **World highscores** in the 1-player menu; see the
   if (hash.indexOf("mouse") >= 0) view.tracks = [false, true];
   if (hash.indexOf("both") >= 0) view.tracks = [true, true];
   var statusEl = document.getElementById("fb-status");
-  function levelLabel(l) { return l > 100 ? "won!" : "level " + l; }
   function shortLevel(l) { return l > 100 ? "won!" : "lv " + l; }
   function timeLabel(ms) {
     var t = Math.floor(ms / 1000), h = Math.floor(t / 3600), m = Math.floor(t / 60) % 60, s = t % 60;
@@ -78,16 +79,18 @@ off with **World highscores** in the 1-player menu; see the
   }
   function pointsLabel(p) { return p.toLocaleString("en-US") + " pts"; }
   // days: the reply's matching day list (the UTC day index each run was set,
-  // 0 = from before the server kept them), or undefined from an older server.
-  function parseList(field, days) {
+  // 0 = from before the server kept them), or undefined from an older server;
+  // shots likewise the shots each run took (0 = not counted).
+  function parseList(field, days, shots) {
     if (field === "-") return [];
     var d = days && days !== "-" ? days.split(",") : [];
+    var n = shots && shots !== "-" ? shots.split(",") : [];
     return field.split(",").map(function (item, i) {
       var eq = item.lastIndexOf("="), v = item.slice(eq + 1).split("/");
       // v[3]: the player's country, when the server has one.
       var cc = /^[A-Z]{2}$/.test(v[3] || "") ? v[3] : "";
       return { name: item.slice(0, eq), level: +v[0], ms: +v[1], points: +(v[2] || 0), country: cc,
-               day: +(d[i] || 0) };
+               day: +(d[i] || 0), shots: +(n[i] || 0) };
     });
   }
   // "Oct 1", or "Aug 27 '25" outside this year; UTC, like the week.
@@ -144,7 +147,18 @@ off with **World highscores** in the 1-player menu; see the
       span(li, "name", e.name);
       span(li, "figs", view.kind === 1
         ? pointsLabel(e.points) + "  " + shortLevel(e.level) + "  " + timeLabel(e.ms)
-        : levelLabel(e.level) + "  " + timeLabel(e.ms));
+        : shortLevel(e.level) + "  " + timeLabel(e.ms));
+      // A level board's runs carry their shots, as in the game; a points
+      // record is one life, which the run's shots don't describe. Always a
+      // cell there, like the date, so the columns line up.
+      // On a phone the word goes (template-scores.html) and the number stays.
+      if (view.kind === 0) {
+        span(li, "shots", e.shots ? String(e.shots) : "");
+        if (e.shots) {
+          span(li.lastChild, "unit", e.shots === 1 ? " shot" : " shots");
+          li.lastChild.title = e.shots + (e.shots === 1 ? " shot" : " shots");
+        }
+      }
       // Always a cell, empty for a run with no date, so the figures line up.
       span(li, "date", e.day ? dateLabel(e.day) : "");
       if (e.day)
@@ -201,7 +215,7 @@ off with **World highscores** in the 1-player menu; see the
         var f = m[1].split(" ");
         if (f.length >= 4) {
           weekStart = +f[0];
-          boards[got] = { alltime: parseList(f[1], f[4]), week: parseList(f[2], f[5]) };
+          boards[got] = { alltime: parseList(f[1], f[4], f[6]), week: parseList(f[2], f[5], f[7]) };
         }
         if (++got === BOARDS) {
           statusEl.textContent = "Live from fb.servequake.com.";

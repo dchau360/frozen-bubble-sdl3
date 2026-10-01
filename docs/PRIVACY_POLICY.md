@@ -131,8 +131,9 @@ bots are never counted.
 
 **World highscores.** When you clear a level in a classic single-player
 game started from level 1, the app keeps your best run so far — the furthest
-level cleared, how long it took, and whether you played with
-keyboard/gamepad or mouse/touch — and your best score from a single life,
+level cleared, how long it took, how many shots you fired, and whether you
+played with keyboard/gamepad or mouse/touch — and your best score from a
+single life,
 with the level that life reached. Once you're back in a menu, it sends these
 with your nickname to fb.servequake.com, the server run by this port's
 developer, signed with your anonymous account. If the app has looked up

@@ -240,6 +240,9 @@ int main() {
     settings->ReadSettings();
     CHECK(settings->menuTheme() == 2);
 
+    // A table written before shots were counted: four fields a row. It must
+    // still load (and come back out with shots 0) rather than be dropped.
+    { std::ofstream(scorePath) << "30,oldie,400.5,2\n"; }
     HighscoreManager* manager = HighscoreManager::Instance(renderer);
     const std::array<std::vector<int>, 10> literalGrid = {{
         {1, 2, 3},
@@ -264,6 +267,7 @@ int main() {
 
     CHECK(manager->CheckAndAddScore(17, 12.5f, HighscoreManager::InputMethod::Keyboard));
     CHECK(csvHasLevelAndTime(scorePath, 17, 12.5f));
+    CHECK(fileContains(scorePath, "30,oldie,400.5,2,0\n"));
 
     // Editing a Unicode name must save intact UTF-8 after Backspace.
     manager->ShowNewScorePanel(0);
@@ -288,9 +292,19 @@ int main() {
 
     // A save replaces the table rather than appending to it, so a second score
     // must not leave the first one duplicated.
-    CHECK(manager->CheckAndAddScore(18, 9.0f, HighscoreManager::InputMethod::Keyboard));
+    CHECK(manager->CheckAndAddScore(18, 9.0f, HighscoreManager::InputMethod::Keyboard, 57));
     CHECK(csvHasLevelAndTime(scorePath, 18, 9.0f));
-    CHECK(countCsvRows(scorePath) == 2);
+    CHECK(countCsvRows(scorePath) == 3);
+    // The run's shots are its row's fifth field.
+    {
+        std::ifstream in(scorePath);
+        std::string line;
+        bool found = false;
+        while (std::getline(in, line))
+            if (line.rfind("18,", 0) == 0 && line.size() > 3 && line.compare(line.size() - 3, 3, ",57") == 0)
+                found = true;
+        CHECK(found);
+    }
 
     // The swap itself must replace the destination outright, not merge into it.
     const std::filesystem::path replaceTarget = prefDir / "replace-target";

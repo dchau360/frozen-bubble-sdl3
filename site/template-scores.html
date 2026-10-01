@@ -103,6 +103,7 @@
   .rank.m3 { color: var(--medal-3); }
   .board .name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .board .figs { flex: 0 0 auto; white-space: pre; }
+  .board .shots { flex: 0 0 5.4em; text-align: right; color: var(--muted); font-size: .8em; white-space: nowrap; }
   .board .date { flex: 0 0 4.9em; text-align: right; color: var(--muted); font-size: .8em; white-space: nowrap; }
   .badge { flex: 0 0 auto; align-self: center; font-size: .66rem; font-weight: 700; line-height: 1; padding: .18rem .3rem; color: #f5f5fa; text-shadow: none; letter-spacing: .03em; }
   .badge.t0 { background: #3e5c96; }
@@ -122,6 +123,8 @@
   .boards.three { grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); }
   .board .sub { color: var(--muted); font-size: .8rem; margin: -.2rem 0 .35rem; }
   @media (max-width: 520px) {
+    .board .shots { flex-basis: 2.6em; }
+    .board .shots .unit { display: none; }
     .tabs button, .tabs.big button { min-width: 0; flex: 1 1 0; padding: .35rem .4rem; font-size: .82rem; }
     .board li { font-size: .86rem; gap: .45rem; }
   }

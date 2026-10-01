@@ -475,10 +475,10 @@ void BubbleGame::SubmitScore(BubbleArray &bArray) {
     // for a run that began at 50. Every level cleared updates the run's
     // pending best; worldscores sends it once the player is out of the game.
     if (runEligibleForWorld)
-        worldscores::RecordRun((int)method, curLevel, (int)(elapsedSeconds * 1000.0f));
+        worldscores::RecordRun((int)method, curLevel, (int)(elapsedSeconds * 1000.0f), runShots);
     RecordWorldLife(bArray);
 
-    if (hm->CheckAndAddScore(curLevel, elapsedSeconds, method)) {
+    if (hm->CheckAndAddScore(curLevel, elapsedSeconds, method, runShots)) {
         pendingHighscore = true;
         SDL_Log("New high score! Level %d in %.1fs", curLevel, elapsedSeconds);
     }
@@ -505,8 +505,9 @@ void BubbleGame::ResolveContinuePrompt(bool startOver) {
         curLevel = 1;
         FrozenBubble::Instance()->startTime = SDL_GetTicks();
         runEligibleForWorld = true;
+        runShots = 0;
     }
-    // Continue leaves startTime alone: the run's clock keeps counting.
+    // Continue leaves startTime and runShots alone: the run keeps counting.
     ReloadGame(curLevel);
 }
 
@@ -563,7 +564,7 @@ void BubbleGame::RecordWorldLife(const BubbleArray &bArray) {
                           ? (int)HighscoreManager::InputMethod::Mouse
                           : (int)HighscoreManager::InputMethod::Keyboard;
     const Uint64 elapsedMs = SDL_GetTicks() - FrozenBubble::Instance()->startTime;
-    worldscores::RecordLife(track, bArray.score, curLevel, (int)elapsedMs);
+    worldscores::RecordLife(track, bArray.score, curLevel, (int)elapsedMs, runShots);
 }
 
 // Count living players (original: sub living_players() at line 600)

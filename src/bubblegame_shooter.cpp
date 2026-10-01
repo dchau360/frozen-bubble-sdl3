@@ -53,6 +53,7 @@ void BubbleGame::LaunchBubble(BubbleArray &bArray) {
     FrozenBubble::Instance()->totalBubbles++;
     // Stats: count shots for locally-owned arrays only (remote arrays sync via 'S').
     if (OwnsArray(bArray)) bArray.rFired++;
+    if (&bArray == &bubbleArrays[0]) runShots++;
     bArray.hurryTimer = 0;
     bArray.chainLevel = 0; // Reset chain level for new shot
 

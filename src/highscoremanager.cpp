@@ -40,6 +40,7 @@ struct HighscoreData {
     float time;
     std::string name;
     int picId;
+    int shots = 0;  // shots the run took; 0 = from before the game counted them
     TTFText layoutText;
     bool newHighscore = false;
 
@@ -90,6 +91,9 @@ static const SDL_Color kTrackBadgeFill[2] = {{62, 92, 150, 255}, {38, 128, 112, 
 // A world-board player's country, as its ISO code: no flag survives at this
 // size, and DroidSans has no flag glyphs anyway. The web page shows the flag.
 static const SDL_Color kCountryChipFill = {52, 48, 66, 255};
+
+// A record's shot count (see RenderScoreScreen).
+static const SDL_Color kShotsChipFill = {150, 82, 40, 255};
 
 // Draws a small labelled chip with its top-left at (x, y); returns its width.
 static int DrawChip(SDL_Renderer* rend, TTFText& t, const char* label, const SDL_Color& c,
@@ -144,17 +148,19 @@ void HighscoreManager::LoadLevelsetHighscores(const char *path, int track) {
                 // once every field has parsed, so a partial row is not stored.
                 try
                 {
+                    // level,name,time,picId[,shots]: the shots field is
+                    // newer, and a game from before it stops reading at
+                    // picId, so the same file works both ways.
                     while(std::getline(ss, curChar, ','))
                     {
                         if (task == 0) hs.level = stoi(curChar);
                         else if (task == 1) hs.name = curChar;
                         else if (task == 2) hs.time = stof(curChar);
-                        else if (task == 3) {
-                            hs.picId = stoi(curChar);
-                            levelsetScores[track].push_back(std::move(hs));
-                        }
+                        else if (task == 3) hs.picId = stoi(curChar);
+                        else if (task == 4) hs.shots = std::max(0, stoi(curChar));
                         task++;
                     }
+                    if (task >= 4) levelsetScores[track].push_back(std::move(hs));
                 }
                 catch (const std::logic_error &)
                 {
@@ -258,7 +264,7 @@ void HighscoreManager::AppendToLevels(std::array<std::vector<int>, 10> lvl, int 
     SaveNewHighscores();
 }
 
-bool HighscoreManager::CheckAndAddScore(int level, float time, InputMethod method) {
+bool HighscoreManager::CheckAndAddScore(int level, float time, InputMethod method, int shots) {
     const int track = (int)method;
     std::vector<HighscoreData>& scores = levelsetScores[track];
 
@@ -276,6 +282,7 @@ bool HighscoreManager::CheckAndAddScore(int level, float time, InputMethod metho
     newEntry.level = level;
     newEntry.time = time;
     newEntry.picId = rand() % 5 + 1;
+    newEntry.shots = shots;
     newEntry.newHighscore = true;
     newEntry.RefreshTextStatus(rend, highscoreFont);
     scores.push_back(std::move(newEntry));
@@ -444,7 +451,7 @@ void HighscoreManager::SaveNewHighscores() {
     for (int track = 0; track < 2; track++) {
         std::ostringstream levelsetStream;
         for (const HighscoreData& a : levelsetScores[track]) {
-            levelsetStream << a.level << "," << a.name << "," << a.time << "," << a.picId << "\n";
+            levelsetStream << a.level << "," << a.name << "," << a.time << "," << a.picId << "," << a.shots << "\n";
         }
         levelsetContents[track] = levelsetStream.str();
     }
@@ -581,6 +588,18 @@ void HighscoreManager::RenderScoreScreen() {
                 lt.UpdatePosition({108 * (col + 1) - c->w / 2, 185 * (row + 1)});
             { SDL_FRect fr = ToFRect(*lt.Coords()); SDL_RenderTexture(rend, lt.Texture(), nullptr, &fr); }
             DrawTrackBadge(rend, trackLabelText, scores[i].track, framePos.x + 4, framePos.y + 4);
+            // The run's shot count as a chip in the thumbnail's bottom
+            // corner: a fourth text line under the name/level/time runs
+            // into the second row's thumbnails. None on a record from
+            // before shots were counted.
+            if (int shots = scores[i].entry->shots; shots > 0) {
+                std::string label = std::to_string(shots) + (shots == 1 ? " SHOT" : " SHOTS");
+                trackLabelText.UpdateStyle(10, TTF_STYLE_BOLD);
+                trackLabelText.UpdateText(rend, label.c_str(), 0);
+                const int w = trackLabelText.Coords()->w + 8, h = trackLabelText.Coords()->h + 2;
+                DrawChip(rend, trackLabelText, label.c_str(), kShotsChipFill,
+                         framePos.x + framePos.w - 4 - w, framePos.y + framePos.h - 4 - h);
+            }
         }
 
         // Two tab boxes, each a toggle -- click/tap one to turn it on or off
@@ -716,6 +735,15 @@ void HighscoreManager::RenderWorldBoard() {
         SDL_RenderFillRect(rend, &box);
         text(cols[c].title, x + 10, 76, menulist::kGold, 13, TTF_STYLE_BOLD);
         const auto& list = *cols[c].list;
+        // Level boards end each row with the run's shots, in a column of
+        // its own under a SHOTS heading so the bare number reads.
+        const int shotsW = viewPoints ? 0 : measure("8888");
+        const int figuresRight = x + w - 10 - (shotsW ? shotsW + 12 : 0);
+        if (shotsW) {
+            trackLabelText.UpdateStyle(11, TTF_STYLE_BOLD);
+            trackLabelText.UpdateText(rend, "SHOTS", 0);
+            text("SHOTS", x + w - 10 - trackLabelText.Coords()->w, 78, menulist::kMuted, 11, TTF_STYLE_BOLD);
+        }
         if (list.empty()) {
             const char* msg = st == worldscores::Status::Loading ? "Loading..."
                             : st == worldscores::Status::Ready   ? "Nobody yet -- be the first!"
@@ -727,16 +755,19 @@ void HighscoreManager::RenderWorldBoard() {
             const SDL_Color col = list[i].name == me ? menulist::kGold : menulist::kText;
             // The same fields as the web page (site/scores.md): rank, player,
             // then points / level / time on a points board, level / time on
-            // a level board. Top three ranks in gold, silver and bronze.
+            // a level board, plus a shots column on a level board (a
+            // points record is one life, which the run's shots don't
+            // describe). Top three ranks in gold, silver and bronze.
             const int rank = WorldBoard::Rank(list, i);
             static const SDL_Color kMedal[3] = {{255, 210, 74, 255}, {214, 221, 232, 255}, {227, 154, 90, 255}};
             text(std::to_string(rank) + ".", x + 10, y, rank <= 3 ? kMedal[rank - 1] : col);
             const std::string shortLevel =
                 list[i].level > 100 ? "won!" : "lv " + std::to_string(list[i].level);
-            const std::string right =
+            const std::string figures =
                 viewPoints ? WorldBoard::PointsLabel(list[i].points) + "  " + shortLevel + "  " +
                                  WorldBoard::TimeLabel(list[i].timeMs)
-                           : WorldBoard::LevelLabel(list[i].level) + "  " + WorldBoard::TimeLabel(list[i].timeMs);
+                           : shortLevel + "  " + WorldBoard::TimeLabel(list[i].timeMs);
+            const std::string& right = figures;
             // A wide nick next to a big score can run into the figures:
             // shorten the nick (never the #tag, which tells same-named
             // players apart) until the row fits.
@@ -745,7 +776,7 @@ void HighscoreManager::RenderWorldBoard() {
             if (!list[i].country.empty())
                 nameX += DrawChip(rend, trackLabelText, list[i].country.c_str(), kCountryChipFill,
                                   nameX, y + 2) + 6;
-            const int nameRoom = (x + w - 10 - measure(right)) - nameX - 8;
+            const int nameRoom = (figuresRight - measure(right)) - nameX - 8;
             std::string name = list[i].name;
             const size_t hashAt = name.rfind('#');
             std::string nick = hashAt == std::string::npos ? name : name.substr(0, hashAt);
@@ -755,7 +786,9 @@ void HighscoreManager::RenderWorldBoard() {
                 name = nick + "\u2026" + tag;
             }
             text(name, nameX, y, col);
-            textRight(right, x + w - 10, y, col);
+            textRight(right, figuresRight, y, col);
+            if (shotsW && list[i].shots > 0)
+                textRight(std::to_string(list[i].shots), x + w - 10, y, col);
         }
     }
 

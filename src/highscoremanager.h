@@ -53,7 +53,8 @@ public:
 
     void AppendToLevels(std::array<std::vector<int>, 10> lvl, int id);
     // Returns true if this is a new high score in `method`'s own table.
-    bool CheckAndAddScore(int level, float time, InputMethod method);
+    // shots: how many the run took (0 = not counted, e.g. training).
+    bool CheckAndAddScore(int level, float time, InputMethod method, int shots = 0);
 
     HighscoreManager(const HighscoreManager& obj) = delete;
     void Dispose();

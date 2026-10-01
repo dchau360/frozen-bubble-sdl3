@@ -531,10 +531,11 @@ static void weekly_command(int fd, char* msg_orig)
  * connection for these (AUTH, AUTHSIG, then these, then close), never NICKs,
  * so it never shows up in the lobby or fires a join alert.
  *
- *   HISCORE <board> <level> <time_ms> <points> <nick>
+ *   HISCORE <board> <level> <time_ms> <points> <nick> [<shots>]
  *     -> HISCORE: OK <alltime_rank> <week_rank> | NOT_SIGNED_IN | INVALID
  *   HISCORES <board>
  *     -> HISCORES: <week_start> <alltime> <week> <me> <alltime_days> <week_days>
+ *                  <alltime_shots> <week_shots>
  *
  * board is 0/1 furthest level (keyboard-gamepad/mouse-touch), 2/3 most
  * points (same tracks); points is 0 on 0/1. Each list is hiscore_top_csv()'s
@@ -545,13 +546,17 @@ static void weekly_command(int fd, char* msg_orig)
  * run was set (0 = unknown), or "-"; they come last because the game's and
  * the web page's older parsers read the first four fields and ignore the
  * rest -- a date added to each entry would have run into the country field.
+ * The two shot lists work the same way: the shots each run took, 0 = not
+ * counted (a run from a game, or a server, from before they were). shots on
+ * HISCORE is optional and last for the same reason: an older server's
+ * sscanf stops at the nick, and an older game just doesn't send it.
  * No ':' after the prefix, for the same reason as WEEKLY above. The nick is
  * checked with is_nick_ok() like any other, since it is listed publicly. */
 #define HISCORE_TOP_N 10
 static int is_nick_ok(char* nick);
 static void hiscore_command(int fd, char* args, char* msg_orig)
 {
-        int board, level, time_ms, points;
+        int board, level, time_ms, points, shots = 0;
         char name[32];
         char* line;
         const char* id = account_id(fd);
@@ -559,13 +564,14 @@ static void hiscore_command(int fd, char* args, char* msg_orig)
                 send_line_log(fd, "NOT_SIGNED_IN", msg_orig);
                 return;
         }
-        if (!args || sscanf(args, "%d %d %d %d %31s", &board, &level, &time_ms, &points, name) != 5
+        if (!args || sscanf(args, "%d %d %d %d %31s %d", &board, &level, &time_ms, &points, name,
+                            &shots) < 5
             || !is_nick_ok(name)) {
                 send_line_log(fd, "INVALID", msg_orig);
                 return;
         }
         /* The game drops a run on any reply but OK, so these never retry. */
-        switch (hiscore_submit(id, name, country_tag[fd], board, level, time_ms, points)) {
+        switch (hiscore_submit(id, name, country_tag[fd], board, level, time_ms, points, shots)) {
         case HISCORE_OK:
                 break;
         case HISCORE_IMPLAUSIBLE:
@@ -587,6 +593,7 @@ static void hiscore_command(int fd, char* args, char* msg_orig)
 static void hiscores_command(int fd, char* args, char* msg_orig)
 {
         char alltime[1024], week[1024], me[128], alltime_days[256], week_days[256];
+        char alltime_shots[256], week_shots[256];
         char* line;
         int board;
         if (!args || sscanf(args, "%d", &board) != 1 || board < 0 || board >= HISCORE_BOARDS) {
@@ -594,13 +601,14 @@ static void hiscores_command(int fd, char* args, char* msg_orig)
                 return;
         }
         hiscore_top_csv(board, HISCORE_ALLTIME, HISCORE_TOP_N, alltime, sizeof(alltime),
-                        alltime_days, sizeof(alltime_days));
+                        alltime_days, sizeof(alltime_days), alltime_shots, sizeof(alltime_shots));
         hiscore_top_csv(board, HISCORE_WEEK, HISCORE_TOP_N, week, sizeof(week),
-                        week_days, sizeof(week_days));
+                        week_days, sizeof(week_days), week_shots, sizeof(week_shots));
         hiscore_player_csv(account_id(fd), board, me, sizeof(me));
-        line = asprintf_("%ld %s %s %s %s %s", (long)hiscore_week_start(),
+        line = asprintf_("%ld %s %s %s %s %s %s %s", (long)hiscore_week_start(),
                          alltime[0] ? alltime : "-", week[0] ? week : "-", me[0] ? me : "-",
-                         alltime_days[0] ? alltime_days : "-", week_days[0] ? week_days : "-");
+                         alltime_days[0] ? alltime_days : "-", week_days[0] ? week_days : "-",
+                         alltime_shots[0] ? alltime_shots : "-", week_shots[0] ? week_shots : "-");
         send_line_log(fd, line, msg_orig);
         free(line);
 }

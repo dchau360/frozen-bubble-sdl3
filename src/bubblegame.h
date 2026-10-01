@@ -639,6 +639,12 @@ public:
     // (worldscores.h): classic solo, standard levelset, started at level 1.
     // Set once in NewGame(); a retry (ReloadGame) keeps the same run going.
     bool runEligibleForWorld = false;
+    // Shots the local player has fired this run, across levels: shown under
+    // the 1-player score and kept with the run's highscores (local and
+    // world). Like the run's clock, it carries on through CONTINUE and only
+    // NewGame() or START OVER zero it.
+    int runShots = 0;
+    bool ShowsShotCount() const;
 
     // The CONTINUE? prompt: after a death in a classic solo game, the first ENTER / tap
     // on the game-over panel opens it instead of retrying straight away.
@@ -900,6 +906,7 @@ private:
     // each player's text differs would invalidate and re-render every single call
     // even when nothing about that player's own line changed frame to frame.
     TTFText scoreText[2];     // "Score: N" / "Nickname[: N]", indexed by player slot (single-player and 2P only)
+    TTFText shotsText;        // "Shots: N" under the 1-player score
     TTFText playerNameWinText[MAX_NET_PLAYERS];  // "PlayerName: WinCount" for each player (3-5 player mode)
     // Live popped-bubble count per player, drawn to the right of that
     // player's own "next bubble" preview slot. Shown in every multiplayer

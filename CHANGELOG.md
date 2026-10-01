@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- **Shot count in 1-player games.** A classic 1-player game now shows **Shots: N** under the score: how many bubbles you've fired this run. Like the run's clock, it keeps counting when you **Continue** after losing and starts over with **Start over** or a new game.
+- **High scores keep the shots.** Each new record on the High Scores screen shows how many shots the run took, as a small tag on its picture. The World Level board in the game and on the web page has a **Shots** column too. Records from before this change have none. The World Points board doesn't show shots: a points record is one life, and the run's total doesn't describe it. Shots never change the ranking.
+- **World highscores refuse runs with too few shots.** Every level you clear takes at least one shot, so this port's server turns away a run claiming fewer shots than levels cleared.
+
 ## v2.4.127
 
 - **Dates on the world highscores web page.** Each run on the web page now shows the day it was set. Runs from before this change have no date.
