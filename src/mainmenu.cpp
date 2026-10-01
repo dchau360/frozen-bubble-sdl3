@@ -180,6 +180,12 @@ MainMenu::MainMenu(const SDL_Renderer *renderer)
         });
         if (wasmNick) {
             snprintf(networkPreNick, sizeof(networkPreNick), "%s", wasmNick);
+            // The web build keeps the name in localStorage, not settings.ini,
+            // but the world highscore board reads GameSettings::savedNickname
+            // (worldscores::SubmitNick). Without this every browser run was
+            // sent as "unnamed", whatever name the player had set.
+            GameSettings* gsn = GameSettings::Instance();
+            snprintf(gsn->savedNickname, sizeof(gsn->savedNickname), "%s", wasmNick);
             free(wasmNick);
         }
     }
@@ -350,6 +356,9 @@ void MainMenu::SavePreNick() {
     if (networkPreNick[0] == '\0') return;
 #ifdef __WASM_PORT__
     EM_ASM({ localStorage.setItem('fb_nickname', UTF8ToString($0)); }, networkPreNick);
+    // Also in memory, for the world highscore board (see the constructor).
+    snprintf(GameSettings::Instance()->savedNickname,
+             sizeof(GameSettings::Instance()->savedNickname), "%s", networkPreNick);
 #else
     GameSettings* gsn = GameSettings::Instance();
     snprintf(gsn->savedNickname, sizeof(gsn->savedNickname), "%s", networkPreNick);
