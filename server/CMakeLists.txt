@@ -53,6 +53,7 @@ add_executable(fb-server
     stats.c
     weeklystats.c
     hiscores.c
+    snapshot.c
     account.c
     discordalert.c
     ws.c

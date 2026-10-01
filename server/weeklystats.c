@@ -22,6 +22,7 @@
 #include "weeklystats.h"
 #include "discordalert.h"
 #include "log.h"
+#include "snapshot.h"
 
 /* Top-N carried by the daily Discord leaderboard. The lobby's own WEEKLY
  * command asks for its own N (game.c). */
@@ -361,6 +362,8 @@ void weekly_tick(time_t now)
                  * This replaces that day's ordinary daily post. */
                 last_posted_day = today;
                 fire_leaderboard(1);
+                weekly_save();
+                snapshot_week(file_path, week_start_day);
                 g_hash_table_remove_all(table);
                 week_start_day = monday;
                 l0(OUTPUT_TYPE_INFO, "Weekly stats rolled over to a new week");

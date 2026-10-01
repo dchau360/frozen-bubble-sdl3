@@ -22,6 +22,7 @@
 #include "hiscores.h"
 #include "weeklystats.h"   /* WEEKLY_TAG_LEN: both boards list "nick#tag" */
 #include "log.h"
+#include "snapshot.h"
 
 typedef struct {
         int level;    /* 0 = no run */
@@ -101,6 +102,8 @@ static void rollover_if_needed(void)
         if (!table) return;
         monday = monday_of(day_index(time(NULL)));
         if (monday == week_start_day) return;
+        /* Every submit saves, so the file is the finished week as it ended. */
+        snapshot_week(file_path, week_start_day);
         g_hash_table_iter_init(&iter, table);
         while (g_hash_table_iter_next(&iter, &key, &value))
                 memset(((HiscoreLine*)value)->best[HISCORE_WEEK], 0,
