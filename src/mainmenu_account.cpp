@@ -195,6 +195,26 @@ bool MainMenu::AccountPanelKey(SDL_Event* e) {
     AudioMixer::Instance()->PlaySFX("menu_selected");
     switch (accountSelection) {
     case kViewCopy:
+#ifdef __WASM_PORT__
+        // SDL's clipboard call reports success in the browser even when the
+        // page is in a frame that may not write the clipboard (itch.io), so
+        // the copy never happened. WasmCopyText knows; when it fails, the
+        // code is shown in a browser box the player can copy from instead.
+        {
+            const std::string formatted = playeraccount::FormatCode(playeraccount::Code());
+            if (WasmCopyText(formatted.c_str())) {
+                accountMessage = "Copied to the clipboard.";
+                accountMessageBad = false;
+            } else {
+                char ignored[64];
+                WasmPromptText("Copy your account code (select it, then copy):",
+                               formatted.c_str(), ignored, sizeof(ignored));
+                accountMessage = "Copy it from the box, or write it down.";
+                accountMessageBad = false;
+            }
+        }
+        break;
+#endif
         if (SDL_SetClipboardText(playeraccount::FormatCode(playeraccount::Code()).c_str())) {
             accountMessage = "Copied to the clipboard.";
             accountMessageBad = false;

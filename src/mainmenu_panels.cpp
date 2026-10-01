@@ -394,6 +394,10 @@ void MainMenu::SPPanelRender() {
     }
     panelText.UpdatePosition({(640/2) - (panelText.Coords()->w / 2), spPanelRct.y + 40});
     { SDL_FRect fr = ToFRect(*panelText.Coords()); SDL_RenderTexture(rend, panelText.Texture(), nullptr, &fr); }
+
+    // Drawn last so its buttons replace the rows registered above as the
+    // panel's tap targets while it is up.
+    if (spNamePrompt) SPNamePromptRender();
 }
 
 

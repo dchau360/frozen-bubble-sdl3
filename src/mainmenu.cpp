@@ -372,7 +372,10 @@ void MainMenu::press() {
     AudioMixer::Instance()->PlaySFX("menu_selected");
 
     if (showingSPPanel) {
-        if (activeSPIdx == 0) SetupNewGame(1);
+        if (activeSPIdx == 0) {
+            if (SPNamePromptApplies()) { OpenSPNamePrompt(); return; }
+            SetupNewGame(1);
+        }
         else if (activeSPIdx == 1) {
             // Pick start level: open number input panel
             showingLevelPanel = true;
@@ -578,7 +581,7 @@ void MainMenu::SetupNewGame(int mode) {
             // by other modes' own Y/N prompts (Random Levels, MP
             // Training, Network); this path shows no such prompt, so it must not
             // read their leftover value.
-            FrozenBubble::Instance()->bubbleGame()->NewGame({false, 1, false});
+            StartLocalGame({false, 1, false});
             break;
         case 3:
             FrozenBubble::Instance()->bubbleGame()->NewGame({chainReaction, 1, false, true});

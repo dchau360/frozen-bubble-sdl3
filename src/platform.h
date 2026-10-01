@@ -110,6 +110,15 @@ bool WasmHasTouch();
 // Returns true and copies the entry into `out` when the user confirms;
 // returns false (out untouched) when the user cancels.
 bool WasmPromptText(const char* title, const char* current, char* out, int outLen);
+
+// Copy text to the clipboard from inside a page embedded in another site's
+// iframe (itch.io). SDL_SetClipboardText goes through navigator.clipboard,
+// which such an iframe is not allowed to use unless the host page grants
+// "clipboard-write", so it fails there and SDL can't tell. This tries the
+// older execCommand("copy"), which only needs the player's recent key press
+// or tap, and returns whether it reported success. When it returns false the
+// caller should show the text for the player to copy by hand.
+bool WasmCopyText(const char* text);
 #endif
 
 #ifdef __IOS_PORT__

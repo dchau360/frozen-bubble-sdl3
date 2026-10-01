@@ -31,6 +31,7 @@ set(FROZEN_BUBBLE_CORE_SOURCES
     ${FB_SRC}/mainmenu_input.cpp
     ${FB_SRC}/mainmenu_weekly.cpp
     ${FB_SRC}/mainmenu_account.cpp
+    ${FB_SRC}/mainmenu_spname.cpp
     ${FB_SRC}/mainmenu_netpanel.cpp
     ${FB_SRC}/mainmenu_panels.cpp
     ${FB_SRC}/mainmenu_help.cpp

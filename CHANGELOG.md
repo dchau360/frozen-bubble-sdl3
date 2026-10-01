@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **Name prompt before a 1-player game.** If world highscores are on and you haven't set a name, START in the 1-player menu first asks for one, prefilled with your computer's login name on desktop, so your runs don't go on the world board as `unnamed`. **Save and play** keeps the name (the same one online play uses); **Skip** or ESC plays without one, and it won't ask again until you restart the game.
+- **Fixed: Copy code on the Account screen in the browser (itch.io).** It said "Copied" but nothing reached the clipboard, because itch.io's embedded page isn't allowed to use the browser's clipboard API. It now copies a way that works there, and if even that fails it shows the code in a box to copy from.
 - **Fixed: browser runs on the world highscores showed as "unnamed".** In the browser version the name you set was only used online, so every world-board run went up as `unnamed`. Runs now carry your name. A run already on the board picks up the name with your next submitted run.
 
 ## v2.4.123

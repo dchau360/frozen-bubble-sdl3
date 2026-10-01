@@ -217,6 +217,31 @@ bool WasmPromptText(const char* title, const char* current, char* out, int outLe
     }, title, current ? current : "", out, outLen);
     return got == 1;
 }
+
+bool WasmCopyText(const char* text) {
+    return EM_ASM_INT({
+        var s = UTF8ToString($0);
+        var ok = false;
+        try {
+            var ta = document.createElement('textarea');
+            ta.value = s;
+            ta.setAttribute('readonly', '');
+            ta.style.position = 'fixed';
+            ta.style.top = '-1000px';
+            document.body.appendChild(ta);
+            ta.select();
+            ta.setSelectionRange(0, s.length);
+            ok = document.execCommand('copy');
+            document.body.removeChild(ta);
+            var canvas = document.getElementById('canvas');
+            if (canvas) canvas.focus();
+        } catch (e) { ok = false; }
+        // Also the modern API where it is allowed; it can't report back in
+        // time, so it never decides the result.
+        try { if (navigator.clipboard) navigator.clipboard.writeText(s).catch(function () {}); } catch (e) {}
+        return ok ? 1 : 0;
+    }, text) == 1;
+}
 #endif
 
 bool ReplaceFileAtomically(const std::string& tempPath,
