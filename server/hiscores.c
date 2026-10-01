@@ -29,6 +29,7 @@ typedef struct {
         int level;    /* 0 = no run */
         int time_ms;
         int points;   /* most-points boards only */
+        int day;      /* UTC day index the run was set, 0 = from before v4 */
 } Run;
 
 typedef struct {
@@ -83,15 +84,16 @@ static void save(void)
                 g_free(tmp);
                 return;
         }
-        fprintf(f, "v3 %ld\n", week_start_day);
+        fprintf(f, "v4 %ld\n", week_start_day);
         g_hash_table_iter_init(&iter, table);
         while (g_hash_table_iter_next(&iter, &key, &value)) {
                 HiscoreLine* hl = value;
                 fprintf(f, "%s %s %s", (const char*)key, hl->nick, hl->country[0] ? hl->country : "-");
                 for (s = 0; s < 2; s++)
                         for (b = 0; b < HISCORE_BOARDS; b++)
-                                fprintf(f, " %d %d %d", hl->best[s][b].level,
-                                        hl->best[s][b].time_ms, hl->best[s][b].points);
+                                fprintf(f, " %d %d %d %d", hl->best[s][b].level,
+                                        hl->best[s][b].time_ms, hl->best[s][b].points,
+                                        hl->best[s][b].day);
                 fputc('\n', f);
         }
         if (fclose(f) != 0 || rename(tmp, file_path) != 0)
@@ -125,7 +127,7 @@ void hiscore_init(void)
         const char* home = getenv("HOME");
         FILE* f;
         char buf[1024];
-        int loaded = 0, version = 3;
+        int loaded = 0, version = 4;
 
         table = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, g_free);
         if (explicit_path && *explicit_path)
@@ -153,16 +155,21 @@ void hiscore_init(void)
         f = fopen(file_path, "r");
         if (!f)
                 return;
-        /* Header "v3 <week_start_day>", then per account "<id> <nick>
-         * <country or ->" and "<level> <time_ms> <points>" for every board
-         * (0-3, see hiscores.h), all-time first, then this week. A "v2" file
-         * is the same without the country; a "v1" file (furthest-level boards
-         * only, "<level> <time_ms>" for kb/mouse all-time then week) loads
-         * into boards 0 and 1. */
+        /* Header "v4 <week_start_day>", then per account "<id> <nick>
+         * <country or ->" and "<level> <time_ms> <points> <day>" for every
+         * board (0-3, see hiscores.h), all-time first, then this week, day
+         * being the UTC day index the run was set. A "v3" file is the same
+         * without the days, "v2" also without the country; a "v1" file
+         * (furthest-level boards only, "<level> <time_ms>" for kb/mouse
+         * all-time then week) loads into boards 0 and 1. */
         if (fgets(buf, sizeof(buf), f)) {
                 long ws;
-                if (sscanf(buf, "v3 %ld", &ws) == 1)
+                if (sscanf(buf, "v4 %ld", &ws) == 1)
                         week_start_day = ws;
+                else if (sscanf(buf, "v3 %ld", &ws) == 1) {
+                        week_start_day = ws;
+                        version = 3;
+                }
                 else if (sscanf(buf, "v2 %ld", &ws) == 1) {
                         week_start_day = ws;
                         version = 2;
@@ -173,8 +180,9 @@ void hiscore_init(void)
         }
         while (fgets(buf, sizeof(buf), f)) {
                 char id[64], nick[64], country[64] = "-";
-                int v[2 * HISCORE_BOARDS * 3], i, used, n = 0;
-                const int want = version == 1 ? 8 : 2 * HISCORE_BOARDS * 3;
+                int v[2 * HISCORE_BOARDS * 4], i, used, n = 0;
+                const int per = version >= 4 ? 4 : 3;
+                const int want = version == 1 ? 8 : 2 * HISCORE_BOARDS * per;
                 const char* p;
                 HiscoreLine* hl;
                 if (sscanf(buf, "%63s %63s%n", id, nick, &used) != 2)
@@ -203,9 +211,10 @@ void hiscore_init(void)
                 } else {
                         for (i = 0; i < 2 * HISCORE_BOARDS; i++) {
                                 Run* r = &hl->best[i / HISCORE_BOARDS][i % HISCORE_BOARDS];
-                                r->level = v[i * 3];
-                                r->time_ms = v[i * 3 + 1];
-                                r->points = v[i * 3 + 2];
+                                r->level = v[i * per];
+                                r->time_ms = v[i * per + 1];
+                                r->points = v[i * per + 2];
+                                r->day = per == 4 ? v[i * per + 3] : 0;
                         }
                 }
                 g_hash_table_replace(table, g_strdup(id), hl);
@@ -328,6 +337,7 @@ int hiscore_submit(const char* id, const char* nick, const char* country, int bo
         run.level = level;
         run.time_ms = time_ms;
         run.points = points;
+        run.day = (int)day_index(time(NULL));
         for (s = 0; s < 2; s++) {
                 Run* cur = &hl->best[s][board];
                 if (cur->level == 0 || better(board, &run, cur)) {
@@ -391,16 +401,18 @@ static int entry_cmp(const void* a, const void* b)
         return c ? c : strcmp(x->id, y->id);
 }
 
-void hiscore_top_csv(int board, enum hiscore_scope scope, int n, char* out, size_t outsz)
+void hiscore_top_csv(int board, enum hiscore_scope scope, int n, char* out, size_t outsz,
+                     char* days, size_t dayssz)
 {
         GHashTableIter iter;
         gpointer key, value;
         Entry* entries;
         guint size, used = 0, i;
-        size_t len = 0;
+        size_t len = 0, dlen = 0;
 
         if (outsz == 0) return;
         out[0] = '\0';
+        if (days && dayssz) days[0] = '\0';
         if (!table || n <= 0 || board < 0 || board >= HISCORE_BOARDS) return;
         rollover_if_needed();
         refresh_bans();
@@ -430,6 +442,15 @@ void hiscore_top_csv(int board, enum hiscore_scope scope, int n, char* out, size
                         break;
                 }
                 len += (size_t)w;
+                if (days && dayssz) {
+                        int d = snprintf(days + dlen, dayssz - dlen, "%s%d", i ? "," : "",
+                                         entries[i].run.day);
+                        if (d < 0 || (size_t)d >= dayssz - dlen) {
+                                days[0] = '\0';  /* all or nothing, so indexes stay aligned */
+                                days = NULL;
+                        } else
+                                dlen += (size_t)d;
+                }
         }
         g_free(entries);
 }

@@ -22,7 +22,8 @@
 furthest level cleared wins, and the faster time breaks a tie. **World
 points** ranks the most points scored in one life. The score starts over at
 every death, and the level shown is the one that life got to. "This week"
-starts over every Monday at 00:00 UTC.
+starts over every Monday at 00:00 UTC. The date after a run is the day it was
+set, in UTC; runs from before October 2026 have none.
 
 Keyboard/gamepad and mouse/touch runs are ranked separately, since aiming
 with one is not the same game as aiming with the other. Every run is tagged
@@ -76,14 +77,25 @@ off with **World highscores** in the 1-player menu; see the
     return h ? h + ":" + mm : mm;
   }
   function pointsLabel(p) { return p.toLocaleString("en-US") + " pts"; }
-  function parseList(field) {
+  // days: the reply's matching day list (the UTC day index each run was set,
+  // 0 = from before the server kept them), or undefined from an older server.
+  function parseList(field, days) {
     if (field === "-") return [];
-    return field.split(",").map(function (item) {
+    var d = days && days !== "-" ? days.split(",") : [];
+    return field.split(",").map(function (item, i) {
       var eq = item.lastIndexOf("="), v = item.slice(eq + 1).split("/");
       // v[3]: the player's country, when the server has one.
       var cc = /^[A-Z]{2}$/.test(v[3] || "") ? v[3] : "";
-      return { name: item.slice(0, eq), level: +v[0], ms: +v[1], points: +(v[2] || 0), country: cc };
+      return { name: item.slice(0, eq), level: +v[0], ms: +v[1], points: +(v[2] || 0), country: cc,
+               day: +(d[i] || 0) };
     });
+  }
+  // "Oct 1", or "Aug 27 '25" outside this year; UTC, like the week.
+  function dateLabel(day) {
+    var d = new Date(day * 86400000);
+    var s = d.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
+    var y = d.getUTCFullYear();
+    return y === new Date().getUTCFullYear() ? s : s + " '" + String(y).slice(-2);
   }
   function same(a, b) { return a.level === b.level && a.ms === b.ms && a.points === b.points; }
   // Server order for the board kind (server/hiscores.c): furthest level then
@@ -133,6 +145,11 @@ off with **World highscores** in the 1-player menu; see the
       span(li, "figs", view.kind === 1
         ? pointsLabel(e.points) + "  " + shortLevel(e.level) + "  " + timeLabel(e.ms)
         : levelLabel(e.level) + "  " + timeLabel(e.ms));
+      // Always a cell, empty for a run with no date, so the figures line up.
+      span(li, "date", e.day ? dateLabel(e.day) : "");
+      if (e.day)
+        li.lastChild.title = "Set " + new Date(e.day * 86400000).toLocaleDateString("en-US",
+          { year: "numeric", month: "long", day: "numeric", timeZone: "UTC" }) + " (UTC)";
       ol.appendChild(li);
     });
   }
@@ -184,7 +201,7 @@ off with **World highscores** in the 1-player menu; see the
         var f = m[1].split(" ");
         if (f.length >= 4) {
           weekStart = +f[0];
-          boards[got] = { alltime: parseList(f[1]), week: parseList(f[2]) };
+          boards[got] = { alltime: parseList(f[1], f[4]), week: parseList(f[2], f[5]) };
         }
         if (++got === BOARDS) {
           statusEl.textContent = "Live from fb.servequake.com.";

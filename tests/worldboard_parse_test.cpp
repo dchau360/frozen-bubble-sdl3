@@ -36,6 +36,11 @@ int main() {
     CHECK(b.Parse("1790380800 - - -"));
     CHECK(b.alltime.empty() && b.week.empty() && !b.hasMine);
 
+    // A server that also sends each run's day (two trailing fields, for the
+    // web page) still parses: the game reads the first four only.
+    CHECK(b.Parse("1790380800 al#c21e=40/300000/0/DE al#c21e=40/300000/0/DE - 20727 20727"));
+    CHECK(b.alltime.size() == 1 && b.alltime[0].country == "DE" && b.week.size() == 1);
+
     // Refused, and the board is left as it was.
     b.Parse("1790380800 x#0000=5/1000/0 - -");
     for (const char* bad : {"", "notanumber - - -", "1 x=5 - -", "1 x=0/5/0 - -", "1 x=5/1000 - -",

@@ -105,8 +105,11 @@ int hiscore_rank(const char* id, int board, enum hiscore_scope scope);
 
 /* Up to n "nick#tag=level/time_ms/points[/CC]" entries (CC the account's
  * country, when it has one: a fourth field older parsers never read), comma-joined, best first
- * (ties broken by nick), or "" when the board is empty. */
-void hiscore_top_csv(int board, enum hiscore_scope scope, int n, char* out, size_t outsz);
+ * (ties broken by nick), or "" when the board is empty. days, when not NULL,
+ * gets the UTC day index each of those runs was set, comma-joined in the same
+ * order (0 for a run from before the server kept days). */
+void hiscore_top_csv(int board, enum hiscore_scope scope, int n, char* out, size_t outsz,
+                     char* days, size_t dayssz);
 
 /* The account's own "arank,alevel,atime,apoints,wrank,wlevel,wtime,wpoints"
  * for a board (all zero where it has no run), or "" when it has no run in
