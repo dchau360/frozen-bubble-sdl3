@@ -139,6 +139,10 @@ inline ControllerButtonTarget MapControllerButton(int playerSlot, int button, bo
         // Local Multiplayer by any input. NORTH (Y/Triangle) is otherwise
         // unused here.
         case SDL_GAMEPAD_BUTTON_NORTH:      return {ControllerActionKind::RealKey, SDLK_F1};
+        // X/Square: TAB, which every menu that has one already reads as "next
+        // button" (popups, the account screen, the High Scores screen's world
+        // buttons, where the D-pad's four directions are all taken).
+        case SDL_GAMEPAD_BUTTON_WEST:       return {ControllerActionKind::RealKey, SDLK_TAB};
         default: return {};
     }
 }

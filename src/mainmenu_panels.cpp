@@ -90,6 +90,12 @@ void MainMenu::Render(void) {
     panelTapSelection = nullptr;
     panelTapSubSelection = nullptr;
 
+    // Opened from the High Scores screen: nothing of the menu behind it.
+    if (showingAccount && accountFromHighscores) {
+        AccountPanelRender();
+        return;
+    }
+
     for (MenuButton &button : buttons) {
         button.Render(renderer);
     }

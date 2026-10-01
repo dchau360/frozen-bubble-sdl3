@@ -107,8 +107,12 @@ public:
     bool HasAnyPanelOpen() const {
         return showingKeysPanel || showingSPPanel || showingOptPanel
             || showingNetPanel || showingLevelPanel || showingLocalMPPanel
-            || showingNetSetupPanel || showingHelpPanel || showingTeamsPanel;
+            || showingNetSetupPanel || showingHelpPanel || showingTeamsPanel
+            || showingAccount;
     }
+    // The High Scores screen's "Account code" button: the account screen on
+    // its own, full-screen, going back to High Scores when it closes.
+    void OpenAccountFromHighscores();
     void SetupNewGame(int mode);
     void ShowPanel(int which);
     void OpenTournament(int id = 0);
@@ -618,9 +622,11 @@ private:
     char spNameInput[16] = "";
 
     void OpenAccountPanel();
+    void CloseAccountPanel();
     void AccountPanelRender();
     bool AccountPanelKey(SDL_Event* e);
     bool showingAccount = false;
+    bool accountFromHighscores = false;  // close returns to the High Scores screen
     int accountSelection = 0;     // focused button in the current mode
     int accountMode = 0;          // 0 view, 1 typing a code, 2 confirm new account
     char accountCodeInput[24] = "";

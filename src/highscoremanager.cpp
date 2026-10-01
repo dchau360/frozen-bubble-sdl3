@@ -245,8 +245,11 @@ static SDL_Rect ScoreScopeTabRect(int tab) {
     return { x0 + tab * (w + gap), 40, w, h };
 }
 
-static SDL_Rect WorldButtonRect() {
-    return { 640 / 2 - 100, 400, 200, 26 };
+// The world view's buttons, side by side, or the one centred when the build
+// has no web page for the board.
+static SDL_Rect WorldButtonRect(int button, bool both) {
+    if (!both) return { 640 / 2 - 95, 400, 190, 26 };
+    return { 640 / 2 - 200 + button * 210, 400, 190, 26 };
 }
 
 void HighscoreManager::AppendToLevels(std::array<std::vector<int>, 10> lvl, int id){
@@ -632,8 +635,8 @@ void HighscoreManager::RenderScoreScreen() {
             const char* hint = !worldscores::Available()
                 ? "LEFT/RIGHT: KEYBOARD / MOUSE / BOTH   ANY OTHER KEY: BACK"
                 : viewWorld
-                    ? (worldscores::WebUrl()[0] ? "LEFT/RIGHT: INPUT   UP/DOWN: BOARD   ENTER / A: OPEN IN BROWSER   ESC / B: BACK"
-                                                : "LEFT/RIGHT: INPUT   UP/DOWN: BOARD   ESC / B: BACK")
+                    ? (worldscores::WebUrl()[0] ? "LEFT/RIGHT: INPUT  UP/DOWN: BOARD  TAB / X: BUTTON  ENTER / A: SELECT  ESC / B: BACK"
+                                                : "LEFT/RIGHT: INPUT  UP/DOWN: BOARD  ENTER / A: ACCOUNT CODE  ESC / B: BACK")
                     : "LEFT/RIGHT: INPUT   UP/DOWN: WORLD BOARDS   ESC / B: BACK";
             menulist::DrawFooterHint(rend, trackLabelText, hint);
         }
@@ -800,17 +803,36 @@ void HighscoreManager::RenderWorldBoard() {
         text(kNote, 640 / 2 - trackLabelText.Coords()->w / 2, 370, menulist::kMuted, 11);
     }
 
-    if (worldscores::WebUrl()[0]) {
-        const SDL_Rect r = WorldButtonRect();
-        SDL_SetRenderDrawColor(rend, 94, 69, 76, 230);
+    static const char* kWorldButtonLabels[2] = {"Open in browser", "Account code"};
+    const bool twoButtons = HasWorldButton(kWorldBtnBrowser);
+    if (!HasWorldButton(worldButtonFocus)) worldButtonFocus = kWorldBtnAccount;
+    for (int b = 0; b < 2; ++b) {
+        if (!HasWorldButton(b)) continue;
+        const SDL_Rect r = WorldButtonRect(b, twoButtons);
+        const bool focused = b == worldButtonFocus;
+        SDL_SetRenderDrawColor(rend, focused ? 94 : 35, 69, 76, 230);
         { SDL_FRect fr = ToFRect(r); SDL_RenderFillRect(rend, &fr); }
-        SDL_SetRenderDrawColor(rend, menulist::kGold.r, menulist::kGold.g, menulist::kGold.b, 255);
-        { SDL_FRect fr = ToFRect(r); SDL_RenderRect(rend, &fr); }
+        if (focused) {
+            SDL_SetRenderDrawColor(rend, menulist::kGold.r, menulist::kGold.g, menulist::kGold.b, 255);
+            SDL_FRect fr = ToFRect(r);
+            SDL_RenderRect(rend, &fr);
+        }
         trackLabelText.UpdateStyle(13, TTF_STYLE_BOLD);
-        trackLabelText.UpdateText(rend, "Open in browser", 0);
+        trackLabelText.UpdateText(rend, kWorldButtonLabels[b], 0);
         const int w = trackLabelText.Coords()->w, h = trackLabelText.Coords()->h;
-        text("Open in browser", r.x + r.w / 2 - w / 2, r.y + r.h / 2 - h / 2, menulist::kGold, 13, TTF_STYLE_BOLD);
+        text(kWorldButtonLabels[b], r.x + r.w / 2 - w / 2, r.y + r.h / 2 - h / 2,
+             focused ? menulist::kGold : menulist::kText, 13, TTF_STYLE_BOLD);
     }
+}
+
+bool HighscoreManager::HasWorldButton(int b) const {
+    return b == kWorldBtnAccount || (b == kWorldBtnBrowser && worldscores::WebUrl()[0]);
+}
+
+void HighscoreManager::ActivateWorldButton(int b) {
+    AudioMixer::Instance()->PlaySFX("menu_selected");
+    if (b == kWorldBtnBrowser) OpenWorldPage();
+    else FrozenBubble::Instance()->ShowAccountFromHighscores();
 }
 
 void HighscoreManager::OpenWorldPage() {
@@ -839,10 +861,15 @@ bool HighscoreManager::TapWorldControls(float lx, float ly) {
             }
         }
     }
-    if (viewWorld && worldscores::WebUrl()[0] && hit(WorldButtonRect())) {
-        AudioMixer::Instance()->PlaySFX("menu_selected");
-        OpenWorldPage();
-        return true;
+    if (viewWorld) {
+        const bool both = HasWorldButton(kWorldBtnBrowser);
+        for (int b = 0; b < 2; ++b) {
+            if (HasWorldButton(b) && hit(WorldButtonRect(b, both))) {
+                worldButtonFocus = b;
+                ActivateWorldButton(b);
+                return true;
+            }
+        }
     }
     return false;
 }
@@ -916,13 +943,25 @@ void HighscoreManager::HandleInput(SDL_Event *e){
                         SaveNewHighscores();
                         break;
                     }
-                    // In the world view ENTER is the "Open in browser" button.
-                    if (viewWorld && curMode == 0 && worldscores::WebUrl()[0]) {
-                        AudioMixer::Instance()->PlaySFX("menu_selected");
-                        OpenWorldPage();
+                    // In the world view ENTER presses the focused button.
+                    if (viewWorld && curMode == 0) {
+                        if (!HasWorldButton(worldButtonFocus)) worldButtonFocus = kWorldBtnAccount;
+                        ActivateWorldButton(worldButtonFocus);
                         break;
                     }
                     FrozenBubble::Instance()->currentState = TitleScreen;
+                    break;
+                case SDLK_TAB:
+                    // The world view's two buttons; anywhere else TAB is any
+                    // other key, as it always was.
+                    if (!awaitKeyType && viewWorld && curMode == 0) {
+                        if (HasWorldButton(kWorldBtnBrowser)) {
+                            worldButtonFocus = 1 - worldButtonFocus;
+                            AudioMixer::Instance()->PlaySFX("menu_change");
+                        }
+                        break;
+                    }
+                    if (!awaitKeyType) FrozenBubble::Instance()->currentState = TitleScreen;
                     break;
                 case SDLK_BACKSPACE:
                     if (awaitKeyType) {

@@ -2,6 +2,7 @@
 #include "menulist.h"
 #include "sdl3_compat.h"
 #include "audiomixer.h"
+#include "frozenbubble.h"
 #include "platform.h"
 #include "playeraccount.h"
 #include "textinput.h"
@@ -12,8 +13,9 @@
 // account is nothing but its 16-character code, so this is where a player
 // reads the code down, types one in from another device, or starts over.
 // Opened from the Account section of the LAN/NET server lists
-// (ServerListAccountIndex()) and from the 1-player menu (kSPRowAccount),
-// full-screen like the weekly rankings view.
+// (ServerListAccountIndex()), the 1-player menu (kSPRowAccount) and the High
+// Scores screen's world tabs (OpenAccountFromHighscores()), full-screen like
+// the weekly rankings view.
 //
 // Input parity (CLAUDE.md): every button is a registered tap row, LEFT/RIGHT/
 // TAB move a visibly-highlighted focus, ENTER activates, ESC backs out one
@@ -41,6 +43,21 @@ void MainMenu::OpenAccountPanel() {
     accountSelection = kViewCopy;
     accountMessage.clear();
     SDL_StopTextInput(SDL_GetKeyboardFocus());
+}
+
+void MainMenu::OpenAccountFromHighscores() {
+    OpenAccountPanel();
+    accountFromHighscores = true;
+}
+
+void MainMenu::CloseAccountPanel() {
+    showingAccount = false;
+    if (accountFromHighscores) {
+        accountFromHighscores = false;
+        // Straight back, without ShowScoreScreen(): that resets the screen to
+        // MY SCORES, and the player came from a world tab.
+        FrozenBubble::Instance()->currentState = Highscores;
+    }
 }
 
 void MainMenu::AccountPanelRender() {
@@ -143,7 +160,7 @@ bool MainMenu::AccountPanelKey(SDL_Event* e) {
     if (key == SDLK_ESCAPE || key == SDLK_AC_BACK) {
         AudioMixer::Instance()->PlaySFX("cancel");
         if (accountMode == 0) {
-            showingAccount = false;
+            CloseAccountPanel();
         } else {
             accountMode = 0;
             accountSelection = kViewBack;
@@ -249,7 +266,7 @@ bool MainMenu::AccountPanelKey(SDL_Event* e) {
         accountSelection = kConfirmCancel;  // the destructive choice is never the default
         break;
     default:
-        showingAccount = false;
+        CloseAccountPanel();
         break;
     }
     return true;

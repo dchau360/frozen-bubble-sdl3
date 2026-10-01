@@ -107,6 +107,13 @@ private:
     void RenderWorldBoard();
     bool TapWorldControls(float lx, float ly);
     void OpenWorldPage();
+    // The world view's buttons: "Open in browser" (when there is a web page)
+    // and "Account code". TAB (X on a pad) moves the focus, ENTER activates
+    // it, a tap activates either outright.
+    enum { kWorldBtnBrowser = 0, kWorldBtnAccount = 1 };
+    int worldButtonFocus = kWorldBtnBrowser;
+    bool HasWorldButton(int b) const;
+    void ActivateWorldButton(int b);
     void CreateLevelImages();
 
     SDL_Surface *backgroundSfc, *useBubbles[8];
