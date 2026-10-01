@@ -2,7 +2,7 @@
 
 <div class="tabs big" role="group" aria-label="Controls (turn on both to compare)">
 <button type="button" data-track="0" aria-pressed="true">Keyboard</button>
-<button type="button" data-track="1" aria-pressed="false">Mouse/Touch</button>
+<button type="button" data-track="1" aria-pressed="true">Mouse/Touch</button>
 </div>
 <div class="tabs" role="group" aria-label="Board">
 <button type="button" data-board="0" aria-pressed="true">World level</button>
@@ -26,8 +26,8 @@ starts over every Monday at 00:00 UTC.
 
 Keyboard/gamepad and mouse/touch runs are ranked separately, since aiming
 with one is not the same game as aiming with the other. Every run is tagged
-<span class="badge t0">KB</span> or <span class="badge t1">M/T</span>; turn
-both on to see them in one list. Players are listed as
+<span class="badge t0">KB</span> or <span class="badge t1">M/T</span>, and
+both are shown in one list until you switch one off. Players are listed as
 `nick#tag`: the tag comes from the player's anonymous account, so two players
 with the same nickname stay apart. The flag is the country the player's game
 last reported when it went online; players who only play solo have none.
@@ -58,11 +58,13 @@ off with **World highscores** in the 1-player menu; see the
   // tracks: which inputs are on, [keyboard/gamepad, mouse/touch]; both on
   // merges the two boards and tags each row (the game's High Scores screen
   // does the same, with the same labels and colours).
-  var view = { kind: 0, tracks: [true, false] };
-  // "#points" (and "#mouse" or "#both") open straight onto that board; the
-  // game's "Open in browser" button sends whichever it was showing.
+  var view = { kind: 0, tracks: [true, true] };
+  // "#points" (and "#kb" or "#mouse") open straight onto that board, both
+  // inputs otherwise; the game's "Open in browser" button sends whichever it
+  // was showing. "#both" is what older games sent for both.
   var hash = location.hash.replace("#", "").split("-");
   if (hash.indexOf("points") >= 0) view.kind = 1;
+  if (hash.indexOf("kb") >= 0) view.tracks = [true, false];
   if (hash.indexOf("mouse") >= 0) view.tracks = [false, true];
   if (hash.indexOf("both") >= 0) view.tracks = [true, true];
   var statusEl = document.getElementById("fb-status");
