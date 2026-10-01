@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- **Fixed: browser runs on the world highscores showed as "unnamed".** In the browser version the name you set was only used online, so every world-board run went up as `unnamed`. Runs now carry your name. A run already on the board picks up the name with your next submitted run.
+
 ## v2.4.123
 
 No gameplay changes; this release only speeds up how builds are tested.

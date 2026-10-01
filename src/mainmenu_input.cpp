@@ -2278,6 +2278,8 @@ void MainMenu::MenuReturnKey() {
                                 if (networkPreNick[0] != '\0') {
 #ifdef __WASM_PORT__
                                     EM_ASM({ localStorage.setItem('fb_nickname', UTF8ToString($0)); }, nickname);
+                                    snprintf(GameSettings::Instance()->savedNickname,
+                                             sizeof(GameSettings::Instance()->savedNickname), "%s", nickname);
 #else
                                     GameSettings* gsn = GameSettings::Instance();
                                     snprintf(gsn->savedNickname, sizeof(gsn->savedNickname), "%s", nickname);
