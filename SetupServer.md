@@ -245,40 +245,7 @@ on a timer, so a quiet server may date it a little late; the contents are
 still the week as it ended.
 
 Banning (above) is the easiest way to take one cheater off the board. To
-delete their line outright instead, rather than rolling everyone back: A line starts with the account id, whose first four hex digits
-are the tag shown after the name (`bob#7f3a`):
-
-```bash
-cd ~/frozen-bubble-sdl3/docker
-sudo docker compose stop fb-server
-sudo docker run --rm -v docker_fb-data:/d alpine grep -n '^7f3a' /d/hiscores.dat
-# check that matched only the one you meant, then, with the full id it printed:
-sudo docker run --rm -v docker_fb-data:/d alpine sed -i '/^<full id> /d' /d/hiscores.dat /d/weekly.dat
-sudo docker compose start fb-server
-```
-
-The server must be stopped first: it rewrites the file from memory on every
-new score, which would put the line back. To roll the whole board back
-instead, stop the server, copy a snapshot over the file (`cp
-/d/hiscores.dat.2026-09-28 /d/hiscores.dat` in the same `docker run`), and
-start it. A restored world board keeps its all-time bests and drops that
-old week's bests, which is what a new week does anyway. Restoring an old
-`weekly.dat` is only useful as a record: the server sees a finished week,
-posts its final standings to Discord again and starts a fresh one.
-
-#### Weekly backups, and removing a cheater
-
-Every Monday 00:00 UTC, just before a finished week is cleared, `fb-server`
-copies `hiscores.dat` and `weekly.dat` to `hiscores.dat.YYYY-MM-DD` and
-`weekly.dat.YYYY-MM-DD` beside them, dated with that week's Monday. It keeps
-the newest 12 of each and deletes older ones; set `FB_SERVER_SNAPSHOTS` in
-`docker-compose.yml` to keep a different number, or `0` to take none. The
-copy happens the first time anything touches the board after midnight, not
-on a timer, so a quiet server may date it a little late; the contents are
-still the week as it ended.
-
-To take one cheater off the board, remove their line rather than rolling
-everyone back. A line starts with the account id, whose first four hex digits
+delete their line outright instead, rather than rolling everyone back, stop the server first. A line starts with the account id, whose first four hex digits
 are the tag shown after the name (`bob#7f3a`):
 
 ```bash
