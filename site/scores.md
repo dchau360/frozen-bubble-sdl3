@@ -25,9 +25,9 @@ every death, and the level shown is the one that life got to. "This week"
 starts over every Monday at 00:00 UTC.
 
 Keyboard/gamepad and mouse/touch runs are ranked separately, since aiming
-with one is not the same game as aiming with the other. Turn both on to see
-them in one list, each run tagged <span class="badge t0">KB</span> or
-<span class="badge t1">M/T</span>. Players are listed as
+with one is not the same game as aiming with the other. Every run is tagged
+<span class="badge t0">KB</span> or <span class="badge t1">M/T</span>; turn
+both on to see them in one list. Players are listed as
 `nick#tag`: the tag comes from the player's anonymous account, so two players
 with the same nickname stay apart. The flag is the country the player's game
 last reported when it went online; players who only play solo have none.
@@ -110,7 +110,7 @@ off with **World highscores** in the 1-player menu; see the
       ranks.push(rank);
       var li = document.createElement("li");
       span(li, "rank" + (rank <= 3 ? " m" + rank : ""), rank + ".");
-      if (both) {
+      {
         var badge = document.createElement("span");
         badge.className = "badge t" + e.track;
         badge.textContent = e.track ? "M/T" : "KB";
