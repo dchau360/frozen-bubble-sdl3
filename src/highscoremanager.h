@@ -95,15 +95,15 @@ private:
     bool TapScoreTrackTab(float lx, float ly);
 
     // The WORLD tabs (worldscores.h): this port's server's boards for the
-    // same two tracks, next to this device's own tables -- WORLD LEVEL
-    // (furthest level) and WORLD POINTS (most points in one life). UP/DOWN
-    // cycles MY SCORES -> WORLD LEVEL -> WORLD POINTS, or a tap on a tab picks
+    // same two tracks, next to this device's own tables -- WORLD POINTS
+    // (most points in one life) and WORLD LEVEL (furthest level). UP/DOWN
+    // cycles MY SCORES -> WORLD POINTS -> WORLD LEVEL, or a tap on a tab picks
     // one; in a world view ENTER (or a tap on the button) opens the same
     // boards as a web page.
     bool viewWorld = false;
     bool viewPoints = false;  // which world board, while viewWorld
     Uint64 worldFetchedAt = 0;
-    int ScopeTab() const { return viewWorld ? (viewPoints ? 2 : 1) : 0; }
+    int ScopeTab() const { return viewWorld ? (viewPoints ? 1 : 2) : 0; }
     void SetScopeTab(int tab);
     void SetViewWorld(bool world);
     void RenderWorldBoard();

@@ -143,7 +143,7 @@ lookup just for this, so a player who only plays solo, or plays in a
 browser, sends no country. That server keeps each account's bests all-time
 and this week, along with the last country it was sent, and lists them
 publicly as `nickname#tag` with a country flag or code in the game's High
-Scores → WORLD LEVEL and WORLD POINTS tabs and on the web page at
+Scores → WORLD POINTS and WORLD LEVEL tabs and on the web page at
 [/scores/](../scores/). Nothing else is sent: not your levels or how you
 played them. This is **on by default**; turn off
 **World highscores** in the 1-player menu and nothing is sent at all (you
