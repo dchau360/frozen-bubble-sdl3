@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v2.4.127
 
 - **Dates on the world highscores web page.** Each run on the web page now shows the day it was set. Runs from before this change have no date.
 - **High scores show keyboard and mouse together by default.** The High Scores screen and the world highscores web page now open with both inputs on, each entry tagged **KB** or **M/T**. If you already picked one, the game keeps your choice.
