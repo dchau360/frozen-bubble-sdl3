@@ -148,6 +148,12 @@ BubbleGame::BubbleGame(const SDL_Renderer *renderer)
     shotsText.UpdateAlignment(TTF_HORIZONTAL_ALIGN_LEFT);
     shotsText.UpdateColor({255, 255, 255, 255}, {0, 0, 0, 255});
 
+    scorePopupText.LoadFont(ASSET("/gfx/DroidSans.ttf").c_str(), 20);
+    scorePopupText.UpdateAlignment(TTF_HORIZONTAL_ALIGN_CENTER);
+    scorePopupText.UpdateStyle(20, TTF_STYLE_BOLD);
+    scorePopupText.UpdateColor({255, 240, 120, 255}, {0, 0, 0, 255});
+    scorePopupText.UpdateRing({0, 0, 0, 255}, 2);  // readable over any bubble
+
     comboText.LoadFont(ASSET("/gfx/DroidSans.ttf").c_str(), 32);
     comboText.UpdateAlignment(TTF_HORIZONTAL_ALIGN_CENTER);
     comboText.UpdateColor({255, 255, 0, 255}, {0, 0, 0, 255}); // Yellow text
@@ -441,6 +447,7 @@ void BubbleGame::NewGame(SetupSettings setup) {
     for (int i = 0; i < MAX_NET_PLAYERS; i++) playerTargeting[i] = -1;
     for (int i = 0; i < currentSettings.playerCount; i++) ResetRoundInputState(bubbleArrays[i]);
     pendingHighscore = false;
+    scorePopups.clear();
     curLevel = setup.startLevel;
     runShots = 0;
     runEligibleForWorld = !setup.networkGame && setup.playerCount == 1 && !setup.randomLevels &&
@@ -1183,6 +1190,7 @@ void BubbleGame::ReloadGame(int level) {
         QuitToTitle();
         return;
     }
+    scorePopups.clear();
 
     SDL_Renderer *rend = const_cast<SDL_Renderer*>(renderer);
 
