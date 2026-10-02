@@ -97,6 +97,15 @@ echo "Target device: $DEVICE_UDID"
 # file list against current CMakeLists.txt -- needed every time a source file
 # has been added or removed since the tree was last configured, and cheap
 # otherwise. A fresh tree (or --clean) needs the full option set once.
+#
+# Deployment target floor is whatever the installed Xcode's iPhoneOS SDK still
+# accepts, not a number tied to any API this app actually uses -- Apple raises
+# it over time (13.0 stopped working once Xcode shipped an SDK whose floor had
+# moved to 15.0; `xcodebuild` reports the current floor in its own error if
+# this needs raising again) and a tree configured against an SDK Xcode no
+# longer ships silently falls through to building for macOS instead of iOS
+# (see CMAKE_OSX_SYSROOT going stale below) rather than failing loudly -- the
+# fatal 'UIKit/UIKit.h' error from a straight CompileC failure is the tell.
 [ "$CLEAN" = "1" ] && rm -rf "$BUILD_DIR"
 
 if [ ! -f "$BUILD_DIR/CMakeCache.txt" ]; then
@@ -105,7 +114,7 @@ if [ ! -f "$BUILD_DIR/CMakeCache.txt" ]; then
         -DCMAKE_SYSTEM_NAME=iOS \
         -DCMAKE_OSX_ARCHITECTURES=arm64 \
         -DCMAKE_OSX_SYSROOT="$SYSROOT" \
-        -DCMAKE_OSX_DEPLOYMENT_TARGET=13.0 \
+        -DCMAKE_OSX_DEPLOYMENT_TARGET=15.0 \
         -DFB_IOS_XCODE_MANAGED_SIGNING=ON \
         -DBUILD_TESTING=OFF
 else

@@ -8,7 +8,15 @@ This is the drafted content so you're not starting from a blank form.
 
 ## Store listing text
 
-**App name:** Frozen Bubble
+**App name:** Frozen Bubble: Fan Edition (26 of 30 chars)
+
+Renamed 2026-10-01 from "Frozen Bubble 2", which is the original game's own
+title. A different developer publishing under exactly that name looks like
+impersonation to Google's policy checks (a suspect while AdMob's review was
+stuck), and the description's "fan-made, not affiliated" line only helps a
+reviewer who reads that far. The phone's home-screen label stays the short
+"Frozen Bubble" (`android/app/src/main/res/values/strings.xml`), which fits
+under a launcher icon.
 
 **Promo text** (Play's separate promotional-text field, 80 chars max — this
 one is 78):
