@@ -46,9 +46,9 @@ Every mode plays the same whether you're local or online, and the host can adjus
 > have had rendering glitches. Two causes are fixed (see
 > [CHANGELOG.md](CHANGELOG.md)); the mode has not had a full pass since.
 
-**Single player** — 100 levels of classic bubble-popping, with scoring and chain reactions. Lose a level and you're asked whether to **Continue** (retry that level, score back to 0, the run's clock keeps going) or **Start over** from level 1.
+**Single player** — 100 levels of classic bubble-popping, with scoring and chain reactions. A shot counter under the score shows how many bubbles you've fired this run. Lose a level and you're asked whether to **Continue** (retry that level, score back to 0, the run's clock and shot count keep going) or **Start over** from level 1. Your best runs are kept on the **High Scores** screen, each with its level, time and shot count.
 
-**World highscores.** Classic runs from level 1 go on a world board shared by everyone playing this port: **furthest level** cleared (faster time breaks ties) and **most points** in one life, each split keyboard/gamepad vs mouse/touch, all-time and this week. See it in the game under **High Scores → WORLD POINTS / WORLD LEVEL**, or on the web at [fb.servequake.com/scores](https://fb.servequake.com/scores/). Runs are sent under your anonymous account once you're back in a menu; turn off **World highscores** in the 1-player menu to stop sending. Scores aren't verified yet.
+**Online highscores.** Classic runs from level 1 go on an online board shared by everyone playing this port: **most points** in one life, and **furthest level** cleared (faster time breaks ties, so the fastest finish of all 100 levels is #1; each run also shows its shot count), each split keyboard/gamepad vs mouse/touch, all-time and this week. See it in the game under **High Scores → POINTS / LEVEL**, or on the web at [fb.servequake.com/scores](https://fb.servequake.com/scores/). Runs are sent under your anonymous account once you're back in a menu; turn off **Online highscores** in the 1-player menu to stop sending. Scores aren't verified yet.
 
 **Attack bubbles** is a three-way setting, host-controlled in the room and per-player in local multiplayer: **ON** sends every malus you earn straight at your opponents, **OFF** turns attacks off entirely, and **Blockable** has the malus you earn pay down whatever is still queued against you first, sending only the surplus — it can't go negative, so blocking more than you owe just empties your queue rather than banking credit. A HELP button next to Bot skill (or **F1**/gamepad **Y** anytime) opens a full settings guide covering this and everything else on the panel, including how malus targeting differs once a room has 6 or more players alive.
 
@@ -206,7 +206,7 @@ a Discord channel of your choosing — see [SetupServer.md](SetupServer.md#optio
 ## More
 
 - [Changelog](CHANGELOG.md) — release history
-- [Privacy policy](https://dchau360.github.io/frozen-bubble-sdl3/) — what data the app and its servers handle
+- [Privacy policy](https://dchau360.github.io/frozen-bubble-sdl3/privacy/) — what data the app and its servers handle
 - [Building from source](docs/BUILDING.md) — all platforms, including WebAssembly, Android and iOS
 - [iOS notes](docs/IOS.md) — experimental unsigned build, and how to sign it
 - [Compared with the original](docs/PARITY.md) — features added, fixes to the original's own server code, and what's reproduced unchanged

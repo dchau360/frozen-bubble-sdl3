@@ -49,7 +49,7 @@ PAGES = [
     # use it), PAGE marks which of the two pages is current in the nav.
     (os.path.join(SITE, "scores.md"),
      os.path.join("scores", "index.html"),
-     "World highscores — Frozen Bubble: SDL3",
+     "Highscores — Frozen Bubble: SDL3",
      "template-scores.html",
      {"BAR": '<img src="{{ROOT}}img/scores-header.png" alt="High Scores" width="558" height="30">',
       "PAGE": "scores"}),

@@ -54,7 +54,7 @@ void MainMenu::OpenSPNamePrompt() {
         // like the other name fields. Cancel or an empty answer is a skip.
         char typed[32];
         spNameInput[0] = '\0';
-        if (WasmPromptText("Name for the world highscores (up to 10 letters/digits):",
+        if (WasmPromptText("Name for the online highscores (up to 10 letters/digits):",
                            "", typed, sizeof(typed)))
             AppendName(spNameInput, typed);
         FinishSPNamePrompt(spNameInput[0] != '\0');
@@ -99,8 +99,8 @@ void MainMenu::SPNamePromptRender() {
         SDL_FRect r = ToFRect(*panelText.Coords());
         SDL_RenderTexture(rend, panelText.Texture(), nullptr, &r);
     };
-    text("NAME FOR THE WORLD BOARD", box.y + 14, menulist::kGold, 15);
-    text("Your classic runs go on this port's world highscores.", box.y + 44, menulist::kText, 13);
+    text("NAME FOR THE ONLINE BOARD", box.y + 14, menulist::kGold, 15);
+    text("Your classic runs go on this port's online highscores.", box.y + 44, menulist::kText, 13);
     text("Up to 10 letters, digits, _ or -. Skip to play as \"unnamed\".", box.y + 64,
          menulist::kMuted, 13);
     char line[32];

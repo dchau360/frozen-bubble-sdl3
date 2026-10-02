@@ -384,7 +384,7 @@ void HandleLine(Session& s, const std::string& line) {
         const int minor = std::atoi(line.c_str() + 5);
         if (minor < kMinProtoMinor) {
             s.failed = true;
-            s.error = "The world board server needs an update.";
+            s.error = "The online board server needs an update.";
             return;
         }
         if (s.signIn) s.transport->Send("FB/1.3 AUTH " + playeraccount::PublicKeyHex());
@@ -484,7 +484,7 @@ void Finish() {
             status = Status::Ready;
         } else {
             status = Status::Failed;
-            lastError = !s.error.empty() ? s.error : "Couldn't reach the world board.";
+            lastError = !s.error.empty() ? s.error : "Couldn't reach the online board.";
         }
     }
     if (!complete) retryAt = SDL_GetTicks() + kRetryAfterMs;

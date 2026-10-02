@@ -183,7 +183,7 @@ drift apart.
    `image: nginx:alpine` and restore the old 426 response in
    `docker/nginx.conf`, or mount your own directory over
    `/usr/share/nginx/html`.
-3. The site includes a **World highscores** page (`/scores/`) and a
+3. The site includes a **Highscores** page (`/scores/`) and a
    **Weekly rankings** page (`/weekly/`), linked from the top of every page.
    Both scripts read live from `fb.servequake.com`, whichever domain serves
    them. For `/scores/` that is right, since it's the one server the game
@@ -193,13 +193,13 @@ drift apart.
 
 ---
 
-### World highscores
+### Online highscores
 
 The game sends each player's best classic single-player runs (furthest
 level, and most points in one life) to one server
 fixed at build time (`kWorldScoresHost` in `src/platform.cpp`, currently
 `fb.servequake.com`), not to whichever server they play online on, so there
-is a single world board rather than one per server. It opens its own short
+is a single online board rather than one per server. It opens its own short
 connection for this (protocol 1.7: `AUTH`, `AUTHSIG`, `HISCORE`, `HISCORES`),
 never sends `NICK`, and so never shows up in your lobby or fires a join
 alert.
@@ -208,10 +208,12 @@ Any 1.7 server *can* keep a board — the commands are always there and the
 file lives next to the weekly stats (`/var/lib/fb-server/hiscores.dat`,
 `FB_SERVER_HISCORE_FILE`) — but on yours it stays empty unless you build the
 game with `kWorldScoresHost` pointing at you. Scores are self-reported by the
-game and not verified beyond two loose limits that only catch impossible
+game and not verified beyond three loose limits that only catch impossible
 runs: clearing levels faster than one second each on average (even the
-fastest speed setting can't), and a life scoring more than 20,000 points per
-level it reached (real lives score under 2,000). Such a run is answered
+fastest speed setting can't), a life scoring more than 20,000 points per
+level it reached (real lives score under 2,000), and a run claiming fewer
+shots than levels cleared (every clear takes at least one; a game too old
+to count shots sends none and isn't checked). Such a run is answered
 `IMPLAUSIBLE`, logged with its account id, and never stored.
 
 #### Banning an account
@@ -229,7 +231,7 @@ sudo docker run --rm -v docker_fb-data:/d alpine grep '^7f3a' /d/hiscores.dat
 sudo docker run --rm -v docker_fb-data:/d alpine sh -c 'echo "<full id> cheater, 2026-10-01" >> /d/banned.txt'
 ```
 
-Lines starting with `#` are comments. A ban covers the world board only, not
+Lines starting with `#` are comments. A ban covers the online board only, not
 the weekly rankings. A banned player can still start a new account; ban that
 one too when it shows up.
 
@@ -261,7 +263,7 @@ The server must be stopped first: it rewrites the file from memory on every
 new score, which would put the line back. To roll the whole board back
 instead, stop the server, copy a snapshot over the file (`cp
 /d/hiscores.dat.2026-09-28 /d/hiscores.dat` in the same `docker run`), and
-start it. A restored world board keeps its all-time bests and drops that
+start it. A restored online board keeps its all-time bests and drops that
 old week's bests, which is what a new week does anyway. Restoring an old
 `weekly.dat` is only useful as a record: the server sees a finished week,
 posts its final standings to Discord again and starts a fresh one.

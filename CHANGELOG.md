@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- **"World" dropped from the high score names.** The High Scores tabs are now MY SCORES, POINTS and LEVEL. The 1-player menu switch is now **Online highscores**, and the web page is just **Highscores**. Your setting is kept.
+
 ## v2.4.128
 
 - **World points comes before World level.** On the High Scores screen the tabs are now MY SCORES, WORLD POINTS, WORLD LEVEL, and UP/DOWN goes through them in that order. The world highscores web page lists World points first and opens on it.

@@ -256,7 +256,7 @@ constexpr const char *kSPLabel[SP_OPT] = {
     // to it (not baked into this cached label texture, so it can change
     // without a re-render) and gives it a description in the panel's header
     // area when highlighted, instead of a fixed label like the rows above.
-    "WORLD HIGHSCORES",
+    "ONLINE HIGHSCORES",
     // Opens the Account code screen; drawn in the slim section with the
     // toggle, with a ">" where the toggle has ON/OFF.
     "ACCOUNT CODE",
@@ -402,7 +402,7 @@ void MainMenu::SPPanelRender() {
     panelText.UpdateStyle(15, TTF_STYLE_NORMAL);
     panelText.UpdateColor({255, 255, 255, 255}, {0, 0, 0, 255});
     if (activeSPIdx == kSPRowWorldScores) {
-        panelText.UpdateText(rend, "Send runs to the world board", 0);
+        panelText.UpdateText(rend, "Send runs to the online board", 0);
     } else if (activeSPIdx == kSPRowAccount) {
         panelText.UpdateText(rend, "View, copy or change your account", 0);
     } else {

@@ -23,7 +23,7 @@ Aim, fire, pop -- 4 multiplayer modes, teams, and online play up to 20 strong.
 4 multiplayer modes, team play, and online rooms up to 20. Free & open source.
 ```
 
-**Full description** (max 4000 chars — this one is 2600, updated to lead with
+**Full description** (max 4000 chars — this one is 2855, updated to lead with
 the multiplayer modes, teams, and online play, per the game's v2.4.95 Race
 and Timed mode addition, plus a mention of Discord join/result alerts):
 
@@ -68,6 +68,10 @@ and less tested than 2-player.)
 
 SINGLE PLAYER
 100 levels of classic bubble-popping, with scoring and chain reactions.
+Lose a level and choose to continue or start over. A shot counter tracks
+every bubble you fire, and your best runs -- most points in one life,
+furthest level, fastest finish -- can go on an online highscore board
+shared with every player, on the web too.
 
 CONTROLLER SUPPORT
 Full gamepad support with per-player rebindable controls, built for both
@@ -86,20 +90,17 @@ purchase.
 ```
 
 **Release notes / "What's new"** (Play's per-release field, 500 chars max —
-this one is 447; covers `v2.4.75`-`v2.4.82`, the changes since this listing
-was last drafted):
+this one is 406; covers v2.4.128 and what's new since the listing's
+last notes, which dated from v2.4.82):
 
 ```
-Teams are now a per-player setting in every mode, not a separate mode of
-their own -- join a team (or stay free-for-all) from the new Set Teams
-screen, with one-tap Auto-balance for the host. Fixed illegible text on
-the Set Teams screen, and the room's HELP guide being unreachable with
-Up/Down on a keyboard. Faster rendering and lighter logging during
-multiplayer, plus highscore-screen alignment fixes.
+New in 1-player: a shot counter under your score, kept with every high
+score, and a Shots column on the online Level board. High Scores now shows
+Points before Level. Plus: Continue or start over after losing a level, an
+online highscore board for classic runs (also at fb.servequake.com/scores),
+an account code to carry your scores between devices or delete them, and
+weekly rankings in the online lobby.
 ```
-
-(v2.4.82 itself is a CI-only fix with no player-facing change from v2.4.81
--- nothing to call out separately.)
 
 **Category:** Games > Puzzle
 **Contact email:** (your email — this is shown publicly on the listing)
@@ -161,7 +162,7 @@ answer key. Last checked against the submitted form's CSV export on
 | **Messages** (in-app messaging) | Yes | Yes — with other players in your match, and the server you're connected to | Yes | Required | App functionality | Only while playing network multiplayer; not stored by the developer |
 | **Photos/videos/audio/files** | No | — | — | — | — |  |
 | **Calendar / Contacts** | No | — | — | — | — |  |
-| **App activity** — Other actions (gameplay) | **Yes** (from the release with World highscores) | **Yes — with other users** (listed publicly on the world board, in-game and on the web) | **No** | **Optional** (the "World highscores" toggle in the 1-player menu, on by default) | App functionality | The best classic single-player run (furthest level, time, input type) and best single-life score (points, level reached), sent with the nickname to fb.servequake.com under the anonymous account. Weekly best cleared Mondays; all-time kept until removal is requested. No analytics SDK; nothing else about gameplay is reported |
+| **App activity** — Other actions (gameplay) | **Yes** (from the release with Online highscores) | **Yes — with other users** (listed publicly on the online board, in-game and on the web) | **No** | **Optional** (the "Online highscores" toggle in the 1-player menu, on by default) | App functionality | The best classic single-player run (furthest level, time, input type) and best single-life score (points, level reached), sent with the nickname to fb.servequake.com under the anonymous account. Weekly best cleared Mondays; all-time kept until removal is requested. No analytics SDK; nothing else about gameplay is reported |
 | **App activity** — app interactions, in-app search history, etc. | No | — | — | — | — | No analytics SDK |
 | **Web browsing** | No | — | — | — | — |  |
 | **App info & performance** (crash logs, diagnostics) | No | — | — | — | — | No crash-reporting SDK |

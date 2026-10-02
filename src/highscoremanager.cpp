@@ -630,7 +630,7 @@ void HighscoreManager::RenderScoreScreen() {
         }
 
         if (worldscores::Available()) {
-            static const char* kScopeLabels[kScopeTabs] = {"MY SCORES", "WORLD POINTS", "WORLD LEVEL"};
+            static const char* kScopeLabels[kScopeTabs] = {"MY SCORES", "POINTS", "LEVEL"};
             for (int tab = 0; tab < kScopeTabs; tab++) {
                 SDL_Rect box = ScoreScopeTabRect(tab);
                 bool active = (tab == ScopeTab());
@@ -655,7 +655,7 @@ void HighscoreManager::RenderScoreScreen() {
                 : viewWorld
                     ? (worldscores::WebUrl()[0] ? "LEFT/RIGHT: INPUT  UP/DOWN: BOARD  TAB / X: BUTTON  ENTER / A: SELECT  ESC / B: BACK"
                                                 : "LEFT/RIGHT: INPUT  UP/DOWN: BOARD  ENTER / A: ACCOUNT CODE  ESC / B: BACK")
-                    : "LEFT/RIGHT: INPUT   UP/DOWN: WORLD BOARDS   ESC / B: BACK";
+                    : "LEFT/RIGHT: INPUT   UP/DOWN: ONLINE BOARDS   ESC / B: BACK";
             menulist::DrawFooterHint(rend, trackLabelText, hint);
         }
     }
@@ -798,7 +798,7 @@ void HighscoreManager::RenderWorldBoard() {
     if (st == worldscores::Status::Failed) {
         line = worldscores::LastError();
     } else if (!worldscores::SendingEnabled()) {
-        line = "Your runs aren't sent: World highscores is off in the 1-player menu.";
+        line = "Your runs aren't sent: Online highscores is off in the 1-player menu.";
     } else if (both && ((kb.hasMine && (kb.myAlltime.rank || kb.myWeek.rank)) ||
                         (ms.hasMine && (ms.myAlltime.rank || ms.myWeek.rank)))) {
         // Each input is its own board on the server, so each has its own
