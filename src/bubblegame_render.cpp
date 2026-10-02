@@ -1209,13 +1209,13 @@ bool BubbleGame::AdvanceSimulationAtScale(float deltaScale, Uint32 gameClockMs) 
             gameFinish = true;
             gameWon = true;
             // Store training score as level=101 (sentinel for mp_train) with time=score.
-            // Same keyboard/gamepad-vs-mouse/touch split and mixed-input
-            // disqualification as the classic solo path -- see
-            // BubbleGame::ScoringInputMethod and its lock/disqualify site in
+            // Same keyboard/gamepad-vs-mouse/touch split as the classic
+            // solo path -- see BubbleGame::ScoringInputMethod and where it is
+            // set in
             // bubblegame_shooter.cpp, which applies here too since mp_train
             // is single-player and not a network game. Playback suppresses the
             // highscore write but keeps the in-memory score/win state.
-            if (EffectsEnabled() && !scoringDisqualified) {
+            if (EffectsEnabled()) {
                 HighscoreManager::InputMethod method =
                     (scoringInputMethod == ScoringInputMethod::Mouse) ? HighscoreManager::InputMethod::Mouse
                                                                         : HighscoreManager::InputMethod::Keyboard;

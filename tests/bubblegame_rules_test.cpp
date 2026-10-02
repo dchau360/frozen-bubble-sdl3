@@ -104,6 +104,13 @@ struct BubbleGameTestAccess {
     }
     static bool continuePrompt(const BubbleGame& game) { return game.continuePrompt; }
     static int& runShots(BubbleGame& game) { return game.runShots; }
+    static void penguin(BubbleGame& game, int idx) { game.UpdatePenguin(game.bubbleArrays[idx], 1.f); }
+    static bool scoringMouse(const BubbleGame& game) {
+        return game.scoringInputMethod == BubbleGame::ScoringInputMethod::Mouse;
+    }
+    static bool scoringKeyboard(const BubbleGame& game) {
+        return game.scoringInputMethod == BubbleGame::ScoringInputMethod::Keyboard;
+    }
     static void launch(BubbleGame& game, int array) { game.LaunchBubble(game.bubbleArrays[array]); }
     static bool focusStartOver(const BubbleGame& game) { return game.continueFocusStartOver; }
     static void setContinueButtons(BubbleGame& game, SDL_Rect cont, SDL_Rect startOver) {
@@ -1153,6 +1160,38 @@ int main() {
         game.HandleMouseAim(local.shooterSprite.rect.x + local.shooterSprite.rect.w * 0.5f,
                              local.shooterSprite.rect.y - 40.f);
         CHECK(local.mouseTargetAngle < 0.f);
+    }
+
+    // --- Mixed input goes to mouse/touch, never nowhere -----------------
+    //
+    // Reported from a 1-player web run: played by mouse to level 64, the
+    // online board stopped at 54. A level whose shots mixed inputs used to be
+    // recorded nowhere, and the hurry timer's forced shot counts as keyboard,
+    // so one long pause on a mouse level was enough. Now any mouse/touch
+    // shot makes the level a mouse/touch one, in either order.
+    for (int mouseFirst = 0; mouseFirst < 2; ++mouseFirst) {
+        BubbleGame game(renderer);
+        BubbleGameTestAccess::reset(game, 1, false, false);
+        BubbleArray& p = BubbleGameTestAccess::player(game, 0);
+        const int shots0 = BubbleGameTestAccess::runShots(game);
+        auto mouseShot = [&] {
+            p.newShoot = true;
+            p.mouseFirePending = true;
+            BubbleGameTestAccess::penguin(game, 0);
+        };
+        auto hurryShot = [&] {
+            p.newShoot = true;
+            p.hurryTimer = TIME_HURRY_MAX;
+            BubbleGameTestAccess::penguin(game, 0);
+        };
+        if (mouseFirst) { mouseShot(); hurryShot(); }
+        else {
+            hurryShot();
+            CHECK(BubbleGameTestAccess::scoringKeyboard(game));
+            mouseShot();
+        }
+        CHECK(BubbleGameTestAccess::runShots(game) == shots0 + 2);
+        CHECK(BubbleGameTestAccess::scoringMouse(game));
     }
 
     // ---- Attack bubbles: canceling, end to end -------------------------
