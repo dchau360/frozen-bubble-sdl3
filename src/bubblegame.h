@@ -627,14 +627,13 @@ public:
     // path) and mouse/touch are tracked separately (see HighscoreManager),
     // because a mouse-aimed run is not comparable to a keyboard/gamepad one.
     //
-    // Locked to whichever input fires the run's first shot (set in
-    // bubblegame_shooter.cpp, right where a shot actually launches) and reset
-    // for every fresh attempt in NewGame()/ReloadGame(). If a shot from the
-    // *other* input method fires after that, scoringDisqualified latches true
-    // and the run is excluded from both tables -- see SubmitScore().
+    // Set where a shot actually launches (bubblegame_shooter.cpp) and reset
+    // for every level in NewGame()/ReloadGame(): Mouse as soon as any
+    // mouse/touch shot fires, Keyboard if every shot was keyboard/gamepad
+    // (a hurry-forced shot counts as keyboard). Mixing never disqualifies a
+    // level (user decision): it goes to the mouse/touch table.
     enum class ScoringInputMethod { Unset, Keyboard, Mouse };
     ScoringInputMethod scoringInputMethod = ScoringInputMethod::Unset;
-    bool scoringDisqualified = false;
     // Whether this session's cleared levels go to the world board
     // (worldscores.h): classic solo, standard levelset, started at level 1.
     // Set once in NewGame(); a retry (ReloadGame) keeps the same run going.

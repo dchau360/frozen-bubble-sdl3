@@ -29,7 +29,9 @@ starts over every Monday at 00:00 UTC. The date after a run is the day it was
 set, in UTC; runs from before October 2026 have none.
 
 Keyboard/gamepad and mouse/touch runs are ranked separately, since aiming
-with one is not the same game as aiming with the other. Every run is tagged
+with one is not the same game as aiming with the other. A level played with
+both counts as mouse/touch, so the keyboard board holds only levels played
+entirely with keyboard or gamepad. Every run is tagged
 <span class="badge t0">KB</span> or <span class="badge t1">M/T</span>, and
 both are shown in one list until you switch one off. Players are listed as
 `nick#tag`: the tag comes from the player's anonymous account, so two players

@@ -454,14 +454,6 @@ void BubbleGame::SubmitScore(BubbleArray &bArray) {
     hm->AppendToLevels(savedLevelGrid, curLevel);
     SDL_Log("SubmitScore: AppendToLevels done");
 
-    // Mixed keyboard/gamepad and mouse/touch input this run -- neither table
-    // gets a fair result, so it counts toward neither (see
-    // ScoringInputMethod's own comment in bubblegame.h).
-    if (scoringDisqualified) {
-        SDL_Log("SubmitScore: mixed input methods this run -- not eligible for either highscore table");
-        return;
-    }
-
     // Check if this qualifies as a top-10 score and save it, in whichever
     // table this run locked to. Unset (no shot fired at all -- e.g. clearing
     // a level with bubbles already in flight from the previous one) falls
@@ -558,8 +550,8 @@ void BubbleGame::RenderContinuePrompt(SDL_Renderer *rend) {
 
 void BubbleGame::RecordWorldLife(const BubbleArray &bArray) {
     // Same gates as SubmitScore()'s world-board run: live play, a classic run
-    // from level 1, one input method throughout.
-    if (!EffectsEnabled() || !runEligibleForWorld || scoringDisqualified) return;
+    // from level 1.
+    if (!EffectsEnabled() || !runEligibleForWorld) return;
     const int track = scoringInputMethod == ScoringInputMethod::Mouse
                           ? (int)HighscoreManager::InputMethod::Mouse
                           : (int)HighscoreManager::InputMethod::Keyboard;

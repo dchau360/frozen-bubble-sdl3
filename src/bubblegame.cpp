@@ -457,7 +457,6 @@ void BubbleGame::NewGame(SetupSettings setup) {
         rng.Seed(static_cast<uint32_t>(SDL_GetTicks()) * 747796405u + 2891336453u);
     }
     scoringInputMethod = ScoringInputMethod::Unset;
-    scoringDisqualified = false;
 
     // Reset multiplayer training state
     mpTrainScore = 0;
@@ -1444,7 +1443,6 @@ void BubbleGame::ReloadGame(int level) {
     frameCount = 0;
     gameStartTime = SDL_GetTicks();
     scoringInputMethod = ScoringInputMethod::Unset;
-    scoringDisqualified = false;
 
     if (!currentSettings.randomLevels) {
         LoadLevel(level);

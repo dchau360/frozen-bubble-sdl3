@@ -649,6 +649,17 @@ void HighscoreManager::RenderScoreScreen() {
                 { SDL_FRect fr = ToFRect(*trackLabelText.Coords()); SDL_RenderTexture(rend, trackLabelText.Texture(), nullptr, &fr); }
             }
         }
+        // Where a level that used both inputs went (BubbleGame's
+        // ScoringInputMethod): said on the keyboard table, where a player
+        // would look for it and not find it.
+        if (ShowsTrack((int)InputMethod::Keyboard)) {
+            trackLabelText.UpdateStyle(12, TTF_STYLE_NORMAL);
+            trackLabelText.UpdateColor(menulist::kMuted, menulist::kTextShadow);
+            trackLabelText.UpdateText(rend, "A level played with both mouse/touch and keyboard counts as MOUSE/TOUCH", 0);
+            trackLabelText.UpdatePosition({320 - trackLabelText.Coords()->w / 2, menulist::kFooterY - 22});
+            SDL_FRect fr = ToFRect(*trackLabelText.Coords());
+            SDL_RenderTexture(rend, trackLabelText.Texture(), nullptr, &fr);
+        }
         if (!awaitKeyType) {
             const char* hint = !worldscores::Available()
                 ? "LEFT/RIGHT: KEYBOARD / MOUSE / BOTH   ANY OTHER KEY: BACK"

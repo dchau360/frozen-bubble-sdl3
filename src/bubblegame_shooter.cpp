@@ -374,22 +374,20 @@ void BubbleGame::ApplyPlayerControls(BubbleArray &bArray, const PlayerControls &
         if (!bArray.mpFirePending)
             ReportRoundInput(bArray, ClassifyShotInput(bArray, firedByMouse));
 
-        // Lock (or disqualify) which local highscore table this classic solo
+        // Decide which local highscore table this classic solo
         // run counts toward -- only meaningful there, so skip it entirely for
         // network play and local multiplayer. mp_fire shots are always a
         // remote player's, never player 0's own input, so they don't count.
         if (!currentSettings.networkGame && currentSettings.playerCount == 1 && !bArray.mpFirePending) {
-            ScoringInputMethod thisShot = firedByMouse ? ScoringInputMethod::Mouse
-                                                        : ScoringInputMethod::Keyboard;
-            if (scoringInputMethod == ScoringInputMethod::Unset) {
-                scoringInputMethod = thisShot;
-            } else if (scoringInputMethod != thisShot) {
-                // Switched input methods mid-run -- neither table gets a
-                // fair comparison against runs that stuck to one. See
-                // SubmitScore(), which checks this flag before recording
-                // anything.
-                scoringDisqualified = true;
-            }
+            // Any mouse/touch shot makes the level a mouse/touch one; a
+            // level counts as keyboard/gamepad only if every shot was.
+            // Mixing used to drop the level from every table, which lost
+            // whole stretches of real runs (a hurry-forced shot counts as
+            // keyboard, so one long pause on a mouse level was enough).
+            if (firedByMouse)
+                scoringInputMethod = ScoringInputMethod::Mouse;
+            else if (scoringInputMethod == ScoringInputMethod::Unset)
+                scoringInputMethod = ScoringInputMethod::Keyboard;
         }
 
         LaunchBubble(bArray);
