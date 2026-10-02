@@ -56,6 +56,7 @@ void MainMenu::HandleInput(SDL_Event *e){
     if (TournamentPanelKey(e)) return;
     if (WeeklyPanelKey(e)) return;
     if (AccountPanelKey(e)) return;
+    if (SPAimPromptKey(e)) return;
     if (SPNamePromptKey(e)) return;
     switch(e->type) {
         case SDL_EVENT_TEXT_INPUT:

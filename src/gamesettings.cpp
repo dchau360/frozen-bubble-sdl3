@@ -278,6 +278,7 @@ void GameSettings::ReadSettings()
     colorblindBubbles = iniparser_getboolean(optDict, "GFX:ColorblindBubbles", false);
     showFps = iniparser_getboolean(optDict, "GFX:ShowFPS", false);
     worldHighscores = iniparser_getboolean(optDict, "Stats:WorldHighscores", true);
+    spAimGuide = iniparser_getboolean(optDict, "Game:SPAimGuide", false);
     // Both inputs until the player picks: one list, each entry badged.
     scoreTrackMask = iniparser_getint(optDict, "Stats:ScoreTracks", 3);
     if (scoreTrackMask < 1 || scoreTrackMask > 3) scoreTrackMask = 3;
@@ -709,6 +710,13 @@ void GameSettings::SetValue(const char* option, const char* value)
     else if (strcmp(option, "GFX:ColorblindBubbles") == 0) {
         colorblindBubbles = (strcmp(value, "true") == 0);
         iniparser_set(optDict, option, value);
+        SaveSettings();
+        return;
+    }
+    else if (strcmp(option, "Game:SPAimGuide") == 0) {
+        // The 1-player menu's "Aim guide" toggle; a flip, like the one below.
+        spAimGuide = !spAimGuide;
+        iniparser_set(optDict, option, spAimGuide ? "true" : "false");
         SaveSettings();
         return;
     }
