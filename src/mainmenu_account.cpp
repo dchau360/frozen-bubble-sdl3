@@ -96,14 +96,14 @@ void MainMenu::AccountPanelRender() {
         text(line, 160, 180, menulist::kGold, 20);
     } else if (accountMode == kModeConfirmNew) {
         text("Start a new account on this device?", 18, y, menulist::kText, 15);
-        text("Your world highscores and weekly ranking stay with the current code:", 18, y + 30, menulist::kMuted);
+        text("Your online highscores and weekly ranking stay with the current code:", 18, y + 30, menulist::kMuted);
         text(playeraccount::FormatCode(playeraccount::Code()), 18, y + 52, menulist::kGold, 18);
         text("Write it down first if you want to come back to it.", 18, y + 84, menulist::kMuted);
         text("To remove them from the server instead, use Delete account.", 18, y + 104, menulist::kMuted);
     } else if (accountMode == kModeConfirmDelete) {
         text("Delete this account?", 18, y, menulist::kText, 15);
         text(std::string("This removes everything ") + kWorldScoresHost + " keeps for it:", 18, y + 30);
-        text("your world highscores and your weekly ranking.", 18, y + 50);
+        text("your online highscores and your weekly ranking.", 18, y + 50);
         text("This device then starts a new account with a new code.", 18, y + 80, menulist::kMuted);
         text("Other servers only keep a weekly line, which ends at their next", 18, y + 100, menulist::kMuted);
         text("Monday reset. This can't be undone.", 18, y + 120, menulist::kMuted);
@@ -133,7 +133,7 @@ void MainMenu::AccountPanelRender() {
         text(code.empty() ? "(unavailable on this device)" : playeraccount::FormatCode(code),
              18, y + 20, menulist::kGold, 24);
         y += 70;
-        text("Your weekly ranking and world highscores belong to this code,", 18, y);
+        text("Your weekly ranking and online highscores belong to this code,", 18, y);
         text("not to your name. Write it down to keep them after reinstalling,", 18, y + 22, menulist::kMuted);
         text("or enter it on another device with \"Use another code\".", 18, y + 42, menulist::kMuted);
         text("Anyone who has the code can play as you. The game never", 18, y + 72, menulist::kMuted);

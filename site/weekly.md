@@ -24,7 +24,7 @@ unnamed players and tournament rounds are not counted.
 Frozen Bubble: SDL3 is a fan-made port, and these rankings are not run by the
 original Frozen Bubble authors. Want to be on them? Get the game on the
 [home page](../), pick **Net game**, and play a few rounds. Single-player runs
-have their own board: [World highscores](../scores/).
+have their own board: [Highscores](../scores/).
 
 </div>
 

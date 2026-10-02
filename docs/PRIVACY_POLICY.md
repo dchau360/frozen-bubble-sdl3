@@ -22,9 +22,9 @@ other players in your game can see it. It is not tied to any account and
 isn't sent anywhere else.
 
 **Anonymous player account.** The first time you play online, or use the
-world highscore board with World highscores on (below), the app creates a random 16-character recovery code and saves it only on your
+online highscore board with Online highscores on (below), the app creates a random 16-character recovery code and saves it only on your
 device. A cryptographic key derived from that code lets a server recognise
-you from one visit to the next, so your weekly ranking and world highscores
+you from one visit to the next, so your weekly ranking and online highscores
 stay yours even if someone else uses the same nickname. Servers receive only the key's public
 half and a one-off signature, never the code itself, and each server works
 out the same short account ID from the public key (the first four
@@ -32,7 +32,7 @@ characters are shown after your nickname in rankings, like `bob#7f3a`). The
 account is not linked to your name, email, device ID, or ad ID, and there is
 no central account database. You can see your code under **Account code**
 on the LAN GAME and NET GAME screens, in the 1-player menu, and on the High
-Scores screen's world tabs; copy it, enter it on another device to move your
+Scores screen's online tabs; copy it, enter it on another device to move your
 account there, start a new account, or delete the account.
 
 **Network connection data.** Playing network multiplayer means connecting
@@ -69,7 +69,7 @@ location" above is also asked for your country only (not the finer
 coordinates used for the map). That country code is sent to a server's
 Discord relay if one is running, and it is never shown in the lobby or on
 its world map. On desktop and Android the app also remembers the last
-country it found, so that it can go with your world highscores (below).
+country it found, so that it can go with your online highscores (below).
 None of these three is verified by the server — they are exactly what your
 own client claims.
 
@@ -129,7 +129,7 @@ daily message lists the top 5 in each category. **Only nicknames, the short
 account tag, and those counts are included** — nothing else about you. Computer-controlled
 bots are never counted.
 
-**World highscores.** When you clear a level in a classic single-player
+**Online highscores.** When you clear a level in a classic single-player
 game started from level 1, the app keeps your best run so far — the furthest
 level cleared, how long it took, how many shots you fired, and whether you
 played with keyboard/gamepad or mouse/touch — and your best score from a
@@ -143,10 +143,10 @@ lookup just for this, so a player who only plays solo, or plays in a
 browser, sends no country. That server keeps each account's bests all-time
 and this week, along with the last country it was sent, and lists them
 publicly as `nickname#tag` with a country flag or code in the game's High
-Scores → WORLD POINTS and WORLD LEVEL tabs and on the web page at
+Scores → POINTS and LEVEL tabs and on the web page at
 [/scores/](../scores/). Nothing else is sent: not your levels or how you
 played them. This is **on by default**; turn off
-**World highscores** in the 1-player menu and nothing is sent at all (you
+**Online highscores** in the 1-player menu and nothing is sent at all (you
 can still view the board, which then asks the server without signing in).
 Weekly bests are cleared every Monday 00:00 UTC; all-time bests stay until
 you delete your account (see "Deleting your account").
@@ -197,8 +197,8 @@ or analytics SDK, so none is collected by the developer.
   shown in the lobby and, if the server runs the relay, on Discord (see
   above).
 - Nickname, best single-player run and best single-life score: listed on
-  the world highscore boards,
-  in the game and on the web (see "World highscores"). Not posted to
+  the online highscore boards,
+  in the game and on the web (see "Online highscores"). Not posted to
   Discord.
 - Advertising identifiers: handled entirely within Google's AdMob SDK to
   select and measure ads; not accessed by the developer directly.
@@ -212,7 +212,7 @@ or analytics SDK, so none is collected by the developer.
 - [ipinfo.io](https://ipinfo.io/privacy-policy) / [ip-api.com](https://ip-api.com/docs/legal) —
   approximate location and country from your IP address, for the network
   lobby's world map and, for the country only, a server's Discord alerts
-  and the world highscores
+  and the online highscores
 - [Discord](https://discord.com/privacy) — some servers relay an alert when
   you connect, and another at the end of each round (nickname(s), server
   name, game mode/outcome, and platform/input/country badges only), to a
@@ -225,14 +225,14 @@ or analytics SDK, so none is collected by the developer.
 Your account is the recovery code on your device (see "Anonymous player
 account" above). Servers keep nothing about an account except its weekly
 ranking line (the short account tag, the nickname last played under, and
-that week's counts) and, on fb.servequake.com, its world highscore line (the
+that week's counts) and, on fb.servequake.com, its online highscore line (the
 same tag and nickname, the country last sent, and the account's best run
 all-time and this week).
 
 To delete your account, open **Account code** (in the 1-player menu, on the
-High Scores screen's world tabs, or on the LAN GAME / NET GAME screens) and
+High Scores screen's online tabs, or on the LAN GAME / NET GAME screens) and
 choose **Delete account**. The game signs in to fb.servequake.com as that
-account one last time and asks it to delete the account's world highscore
+account one last time and asks it to delete the account's online highscore
 line and weekly ranking line there, then erases the code from your device
 and gives it a new one, so nobody can sign in as the old account again. If
 the server can't be reached, nothing is changed and you can try again.
@@ -252,7 +252,7 @@ account, deleted at their next Monday 00:00 UTC reset.
 - Nickname, settings and your account's recovery code live only in local
   app storage until you clear app data or uninstall. Losing the code loses
   the account; there is no way to recover it from a server.
-- World highscores on fb.servequake.com: the week's bests until the
+- Online highscores on fb.servequake.com: the week's bests until the
   Monday reset, the all-time bests until you delete your account (see
   "Deleting your account").
 - Server-side connection logs, match statistics, and any Discord channel a
@@ -272,7 +272,7 @@ avoid entering real names or other identifying information.
   Play Store.
 - Play local single-player or local multiplayer to avoid multiplayer
   network traffic entirely — this also means no location lookup happens,
-  since it only runs before network play. With **World highscores** turned
+  since it only runs before network play. With **Online highscores** turned
   off in the 1-player menu, single-player sends nothing at all.
 - Uninstalling the app removes all locally stored settings, nicknames and
   your account's recovery code.

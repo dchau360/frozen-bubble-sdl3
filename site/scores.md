@@ -1,12 +1,12 @@
-<h1>World highscores</h1>
+<h1>Highscores</h1>
 
 <div class="tabs big" role="group" aria-label="Controls (turn on both to compare)">
 <button type="button" data-track="0" aria-pressed="true">Keyboard</button>
 <button type="button" data-track="1" aria-pressed="true">Mouse/Touch</button>
 </div>
 <div class="tabs" role="group" aria-label="Board">
-<button type="button" data-board="1" aria-pressed="true">World points</button>
-<button type="button" data-board="0" aria-pressed="false">World level</button>
+<button type="button" data-board="1" aria-pressed="true">Points</button>
+<button type="button" data-board="0" aria-pressed="false">Level</button>
 </div>
 
 <div class="boards">
@@ -18,9 +18,9 @@
 
 <div class="about" markdown="1">
 
-**World points** ranks the most points scored in one life, in a game from
+**Points** ranks the most points scored in one life, in a game from
 level 1 of the standard 100 levels. The score starts over at every death,
-and the level shown is the one that life got to. **World level** ranks whole
+and the level shown is the one that life got to. **Level** ranks whole
 runs from level 1: the furthest level cleared wins, and the faster time
 breaks a tie. The shots column is how many bubbles the run fired to get
 there; it doesn't change the ranking, and runs from before October 2026 have
@@ -43,7 +43,7 @@ Bubble authors.
 Want to be on it? Get the game on the [home page](../), play a classic game
 from level 1, and your results are sent when you're back in the menu. The
 same boards are in the game under **High Scores**. Players can turn sending
-off with **World highscores** in the 1-player menu; see the
+off with **Online highscores** in the 1-player menu; see the
 [privacy policy](../privacy/#world-highscores).
 
 </div>
@@ -54,8 +54,8 @@ off with **World highscores** in the 1-player menu; see the
   // server/hiscores.h). Browsers reach it the way the web build of the game
   // does, over a secure WebSocket; the server answers in binary frames.
   // Boards 0/1 are furthest level (keyboard/mouse), 2/3 most points. Rows
-  // carry the same fields, in the same words, as the game's own WORLD LEVEL /
-  // WORLD POINTS tabs (HighscoreManager::RenderWorldBoard, worldboard.cpp).
+  // carry the same fields, in the same words, as the game's own POINTS /
+  // LEVEL tabs (HighscoreManager::RenderWorldBoard, worldboard.cpp).
   var SERVER = "wss://fb.servequake.com/";
   var BOARDS = 4;
   var boards = [], weekStart = 0;
@@ -211,7 +211,7 @@ off with **World highscores** in the 1-player menu; see the
     while ((nl = buf.indexOf("\n")) >= 0) {
       var line = buf.slice(0, nl).replace(/\r$/, ""); buf = buf.slice(nl + 1);
       if (/^FB\/1\.\d+ PUSH: SERVER_READY/.test(line)) {
-        if (+line.split(" ")[0].split(".")[1] < 7) { statusEl.textContent = "The server doesn't have a world board yet."; ws.close(); return; }
+        if (+line.split(" ")[0].split(".")[1] < 7) { statusEl.textContent = "The server doesn't have a highscore board yet."; ws.close(); return; }
         for (var b = 0; b < BOARDS; b++) ws.send("FB/1.3 HISCORES " + b + "\n");
       }
       var m = line.match(/^FB\/1\.\d+ HISCORES: (.*)$/);

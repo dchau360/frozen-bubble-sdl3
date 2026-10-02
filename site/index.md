@@ -82,7 +82,7 @@ posts its weekly rankings there once a day: round wins, round losses and
 bubbles popped, reset every Monday at 00:00 UTC, bots not counted. The same
 rankings are on the **Weekly rankings** screen in the online lobby, and
 on the web: [Weekly rankings](weekly/). Single-player runs have their own
-[World highscores](scores/) board.
+[Highscores](scores/) board.
 
 Running your own server? It can post its own join and round-result alerts
 to a Discord channel of your choosing — see
