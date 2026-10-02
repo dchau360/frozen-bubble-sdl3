@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v2.4.131
 
 - **Points pop up where your shot lands.** In 1-player games, every shot that pops bubbles shows a "+N" on the spot where it hit: the points from that shot, counting the bubbles that fall and any chain bonus. It floats up and fades out after a second.
 
