@@ -1219,7 +1219,7 @@ bool BubbleGame::AdvanceSimulationAtScale(float deltaScale, Uint32 gameClockMs) 
             // bubblegame_shooter.cpp, which applies here too since mp_train
             // is single-player and not a network game. Playback suppresses the
             // highscore write but keeps the in-memory score/win state.
-            if (EffectsEnabled()) {
+            if (EffectsEnabled() && RunCountsForScores()) {
                 HighscoreManager::InputMethod method =
                     (scoringInputMethod == ScoringInputMethod::Mouse) ? HighscoreManager::InputMethod::Mouse
                                                                         : HighscoreManager::InputMethod::Keyboard;

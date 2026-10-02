@@ -207,6 +207,9 @@ public:
     // the world board (worldscores.h) under the player's anonymous account.
     // Off, nothing is sent; the board can still be viewed.
     bool worldHighscoresEnabled() { return worldHighscores; }
+    // 1-player aim guide (Game:SPAimGuide, default off). While on, a solo run
+    // draws the trajectory line and counts on no highscore table.
+    bool spAimGuideEnabled() { return spAimGuide; }
 
     // Which inputs the High Scores screen shows, as toggles: bit 0 keyboard/
     // gamepad, bit 1 mouse/touch, never 0. Both on shows one merged list with
@@ -371,6 +374,7 @@ private:
     bool playMusic = true, playSfx = true, classicSound = false;
     bool showFps = false;
     bool worldHighscores = true;
+    bool spAimGuide = false;
     int scoreTrackMask = 3;
     std::string lastCountryCode;
     // Replay library keep count. In-class default so a harness or a failed load

@@ -372,27 +372,10 @@ void MainMenu::press() {
     AudioMixer::Instance()->PlaySFX("menu_selected");
 
     if (showingSPPanel) {
-        if (activeSPIdx == 0) {
-            if (SPNamePromptApplies()) { OpenSPNamePrompt(); return; }
-            SetupNewGame(1);
-        }
-        else if (activeSPIdx == 1) {
-            // Pick start level: open number input panel
-            showingLevelPanel = true;
-            levelInput.clear();
-            runDelay = false;
-            SDL_StartTextInput(SDL_GetKeyboardFocus());
-        }
+        if (activeSPIdx == 0) BeginSoloStart(1);
+        else if (activeSPIdx == 1) BeginSoloStart(5);
         else if (activeSPIdx == 2) ShowPanel(1);
-        else if (activeSPIdx == 3) {
-            // mp_training: ask chain reaction then start
-            showingSPPanel = false;
-            showingOptPanel = awaitKp = true;
-            panelText.UpdateText(const_cast<SDL_Renderer*>(renderer),
-                "Multiplayer training\n\n\nEnable chain reaction?\n\n\nY or N?:          \n", 0);
-            panelText.UpdatePosition({(640/2) - (panelText.Coords()->w / 2), (480/2) - 120});
-            selectedMode = 6;  // mode 6 = mp_training
-        }
+        else if (activeSPIdx == 3) BeginSoloStart(6);
         else if (activeSPIdx == 4) {
             // Local multiplayer: open sub-panel to pick player count
             showingSPPanel = false;
@@ -406,6 +389,10 @@ void MainMenu::press() {
             // Either direction is a plain flip: the setting only stops or
             // resumes sending, and the privacy policy is where it is described.
             GameSettings::Instance()->SetValue("Stats:WorldHighscores", "");
+            AudioMixer::Instance()->PlaySFX("menu_change");
+        }
+        else if (activeSPIdx == kSPRowAimGuide) {
+            GameSettings::Instance()->SetValue("Game:SPAimGuide", "");
             AudioMixer::Instance()->PlaySFX("menu_change");
         }
         else if (activeSPIdx == kSPRowAccount) {
@@ -585,10 +572,18 @@ void MainMenu::SetupNewGame(int mode) {
             // by other modes' own Y/N prompts (Random Levels, MP
             // Training, Network); this path shows no such prompt, so it must not
             // read their leftover value.
-            StartLocalGame({false, 1, false});
+            {
+                SetupSettings s{false, 1, false};
+                ApplySoloAim(s);
+                StartLocalGame(s);
+            }
             break;
         case 3:
-            FrozenBubble::Instance()->bubbleGame()->NewGame({chainReaction, 1, false, true});
+            {
+                SetupSettings s{chainReaction, 1, false, true};
+                ApplySoloAim(s);
+                FrozenBubble::Instance()->bubbleGame()->NewGame(s);
+            }
             break;
         case 4: { // Network multiplayer (dynamic player count based on game room)
             NetworkClient* netClient = NetworkClient::Instance();
@@ -705,10 +700,18 @@ void MainMenu::SetupNewGame(int mode) {
             // Same classic-campaign rule as case 1: a specific numbered level is
             // not "random", so chain reaction must always be off here too, not
             // whatever leftover value another mode's prompt left in `chainReaction`.
-            FrozenBubble::Instance()->bubbleGame()->NewGame({false, 1, false, false, false, pickedStartLevel});
+            {
+                SetupSettings s{false, 1, false, false, false, pickedStartLevel};
+                ApplySoloAim(s);
+                FrozenBubble::Instance()->bubbleGame()->NewGame(s);
+            }
             break;
         case 6: // Multiplayer training
-            FrozenBubble::Instance()->bubbleGame()->NewGame({chainReaction, 1, false, true, false, 1, true});
+            {
+                SetupSettings s{chainReaction, 1, false, true, false, 1, true};
+                ApplySoloAim(s);
+                FrozenBubble::Instance()->bubbleGame()->NewGame(s);
+            }
             break;
         case 7: { // Local multiplayer (controller-based, 2-4 players)
             LocalMultiplayerOptions options = BuildLocalMultiplayerOptions(

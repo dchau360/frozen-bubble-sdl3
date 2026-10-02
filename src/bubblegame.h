@@ -664,6 +664,9 @@ public:
     bool continuePrompt = false;
     bool continueFocusStartOver = false;
     SDL_Rect continueBtnRect{}, startOverBtnRect{};
+    // False for a run played with the aim guide on: it reaches no highscore
+    // table, local or online (SubmitScore, RecordWorldLife, MP training).
+    bool RunCountsForScores() const { return !bubbleArrays[0].aimGuideEnabled; }
     bool ArcadeContinueApplies() const;
     void ResolveContinuePrompt(bool startOver);
     void RenderContinuePrompt(SDL_Renderer *rend);

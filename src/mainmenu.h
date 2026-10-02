@@ -62,14 +62,18 @@
 // SPPanelRender/press() in mainmenu.cpp. (An Arcade Mode toggle used to sit
 // here too; a death in a classic solo game now always asks whether to
 // continue -- BubbleGame's continue prompt -- so there is nothing to set.)
-#define SP_OPT 7
+#define SP_OPT 8
 // The toggle row (World highscores, worldscores.h). Named rather than left as
 // a bare 5 so SPPanelRender and press()/up()/down() (mainmenu.cpp) can't
 // drift apart.
 #define kSPRowWorldScores 5
+// The 1-player aim guide toggle (GameSettings::spAimGuideEnabled()). A run
+// played with it on never reaches any highscore table -- local or online --
+// and START asks to turn it off first (mainmenu_spaim.cpp).
+#define kSPRowAimGuide 6
 // Opens the Account code screen (mainmenu_account.cpp), the same one the
 // LAN/NET server lists open.
-#define kSPRowAccount 6
+#define kSPRowAccount 7
 
 class MainMenu final
 {
@@ -616,6 +620,20 @@ private:
     void SPNamePromptRender();
     bool SPNamePromptKey(SDL_Event* e);
     void FinishSPNamePrompt(bool save);
+    // "Aim guide is on" prompt (mainmenu_spaim.cpp): START in the 1-player
+    // menu (and the pick-a-level start) asks, while the aim guide is on,
+    // whether to turn it off, since a run played with it never counts on any
+    // highscore table. spAimPendingMode is the SetupNewGame() mode to go on
+    // with afterwards. 0 = turn it off and play, 1 = play without scores.
+    void BeginSoloStart(int mode);
+    void ContinueSoloStart(int mode);
+    void SPAimPromptRender();
+    bool SPAimPromptKey(SDL_Event* e);
+    void FinishSPAimPrompt(bool turnOff);
+    void ApplySoloAim(SetupSettings& settings) const;
+    bool spAimPrompt = false;
+    int spAimFocus = 0;
+    int spAimPendingMode = 1;
     bool spNamePrompt = false;
     bool spNamePromptAsked = false;  // this session; never asked twice
     int spNameFocus = 0;             // 0 Save and play, 1 Skip

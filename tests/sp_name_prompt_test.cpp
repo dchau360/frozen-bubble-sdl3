@@ -49,15 +49,18 @@ static int failures = 0;
 } while (false)
 
 static int starts = 0;
+static bool lastStartAim = false;
 
 struct MainMenuTestAccess {
     static std::unique_ptr<MainMenu> Create(const SDL_Renderer* renderer) {
         auto menu = std::unique_ptr<MainMenu>(new MainMenu(renderer, MainMenu::HeadlessTestTag{}));
-        menu->testLocalGameStart = [](const SetupSettings&) { ++starts; };
+        menu->testLocalGameStart = [](const SetupSettings& st) { ++starts; lastStartAim = st.aimGuide[0]; };
         return menu;
     }
     static void OpenSPOnStart(MainMenu& m) { m.showingSPPanel = true; m.activeSPIdx = 0; }
     static bool Prompt(const MainMenu& m) { return m.spNamePrompt; }
+    static bool AimPrompt(const MainMenu& m) { return m.spAimPrompt; }
+    static int AimFocus(const MainMenu& m) { return m.spAimFocus; }
     static std::string Input(const MainMenu& m) { return m.spNameInput; }
     static int Focus(const MainMenu& m) { return m.spNameFocus; }
     static int SPIdx(const MainMenu& m) { return m.activeSPIdx; }
@@ -195,6 +198,48 @@ int main() {
         CHECK(starts == 6);
     }
 
+    // Aim guide on: START asks first. Turn off clears the setting and starts
+    // a scoring game; Play without scores keeps it on and starts with the
+    // guide; ESC backs out without starting.
+    {
+        settings->SetValue("Game:SPAimGuide", "");
+        CHECK(settings->spAimGuideEnabled());
+        auto menu = MainMenuTestAccess::Create(renderer);
+        MainMenuTestAccess::OpenSPOnStart(*menu);
+        Key(*menu, SDLK_RETURN);
+        CHECK(MainMenuTestAccess::AimPrompt(*menu));
+        CHECK(starts == 6);
+        MainMenuTestAccess::Render(*menu);
+        Key(*menu, SDLK_ESCAPE);
+        CHECK(!MainMenuTestAccess::AimPrompt(*menu));
+        CHECK(starts == 6);
+        CHECK(settings->spAimGuideEnabled());
+
+        Key(*menu, SDLK_RETURN);
+        CHECK(MainMenuTestAccess::AimPrompt(*menu));
+        Key(*menu, SDLK_RIGHT);
+        CHECK(MainMenuTestAccess::AimFocus(*menu) == 1);
+        Key(*menu, SDLK_RETURN);
+        CHECK(!MainMenuTestAccess::AimPrompt(*menu));
+        CHECK(starts == 7);
+        CHECK(lastStartAim);
+        CHECK(settings->spAimGuideEnabled());
+
+        Key(*menu, SDLK_RETURN);
+        CHECK(MainMenuTestAccess::AimPrompt(*menu));
+        CHECK(MainMenuTestAccess::AimFocus(*menu) == 0);
+        Key(*menu, SDLK_RETURN);
+        CHECK(starts == 8);
+        CHECK(!lastStartAim);
+        CHECK(!settings->spAimGuideEnabled());
+
+        // Off: no prompt.
+        Key(*menu, SDLK_RETURN);
+        CHECK(!MainMenuTestAccess::AimPrompt(*menu));
+        CHECK(starts == 9);
+    }
+    const int startsBase = starts;
+
     // Account code: the last row (UP from the first wraps to it) opens the
     // account screen, which the panel then draws; ESC goes back to the menu.
     {
@@ -204,7 +249,7 @@ int main() {
         CHECK(MainMenuTestAccess::SPIdx(*menu) == kSPRowAccount);
         Key(*menu, SDLK_RETURN);
         CHECK(MainMenuTestAccess::Account(*menu));
-        CHECK(starts == 6);
+        CHECK(starts == startsBase);
         MainMenuTestAccess::Render(*menu);
         Key(*menu, SDLK_ESCAPE);
         CHECK(!MainMenuTestAccess::Account(*menu));

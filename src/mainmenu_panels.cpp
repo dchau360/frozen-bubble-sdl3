@@ -257,6 +257,8 @@ constexpr const char *kSPLabel[SP_OPT] = {
     // without a re-render) and gives it a description in the panel's header
     // area when highlighted, instead of a fixed label like the rows above.
     "ONLINE HIGHSCORES",
+    // Toggle: ON means runs don't count on any highscore table.
+    "AIM GUIDE",
     // Opens the Account code screen; drawn in the slim section with the
     // toggle, with a ">" where the toggle has ON/OFF.
     "ACCOUNT CODE",
@@ -358,8 +360,10 @@ void MainMenu::SPPanelRender() {
     GameSettings* gs = GameSettings::Instance();
     struct ToggleRow { int idx; bool on; const char* badge; };
     const bool worldOn = gs->worldHighscoresEnabled();
+    const bool aimOn = gs->spAimGuideEnabled();
     ToggleRow toggles[SP_OPT - kBigRows] = {
         {kSPRowWorldScores, worldOn, worldOn ? "ON" : "OFF"},
+        {kSPRowAimGuide,    aimOn,   aimOn ? "ON" : "OFF"},
         {kSPRowAccount,     true,    ">"},
     };
     for (int t = 0; t < SP_OPT - kBigRows; t++) {
@@ -403,6 +407,9 @@ void MainMenu::SPPanelRender() {
     panelText.UpdateColor({255, 255, 255, 255}, {0, 0, 0, 255});
     if (activeSPIdx == kSPRowWorldScores) {
         panelText.UpdateText(rend, "Send runs to the online board", 0);
+    } else if (activeSPIdx == kSPRowAimGuide) {
+        panelText.UpdateText(rend, aimOn ? "On: runs do not count for scores"
+                                         : "Off: runs count for highscores", 0);
     } else if (activeSPIdx == kSPRowAccount) {
         panelText.UpdateText(rend, "View, copy or change your account", 0);
     } else {
@@ -413,6 +420,7 @@ void MainMenu::SPPanelRender() {
 
     // Drawn last so its buttons replace the rows registered above as the
     // panel's tap targets while it is up.
+    if (spAimPrompt) SPAimPromptRender();
     if (spNamePrompt) SPNamePromptRender();
 }
 

@@ -441,6 +441,7 @@ void BubbleGame::SubmitScore(BubbleArray &bArray) {
     if (!EffectsEnabled()) return;
     SDL_Log("Level %d completed with score: %d", curLevel, bArray.score);
     if (currentSettings.networkGame || currentSettings.playerCount > 1) return;  // Only track 1P levelset scores
+    if (!RunCountsForScores()) return;  // aim guide on: no highscores
 
     SDL_Log("SubmitScore: getting elapsed time");
     float elapsedSeconds = (SDL_GetTicks() - FrozenBubble::Instance()->startTime) / 1000.0f;
@@ -551,7 +552,7 @@ void BubbleGame::RenderContinuePrompt(SDL_Renderer *rend) {
 void BubbleGame::RecordWorldLife(const BubbleArray &bArray) {
     // Same gates as SubmitScore()'s world-board run: live play, a classic run
     // from level 1.
-    if (!EffectsEnabled() || !runEligibleForWorld) return;
+    if (!EffectsEnabled() || !runEligibleForWorld || !RunCountsForScores()) return;
     const int track = scoringInputMethod == ScoringInputMethod::Mouse
                           ? (int)HighscoreManager::InputMethod::Mouse
                           : (int)HighscoreManager::InputMethod::Keyboard;
