@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v2.4.130
 
 - **Switching between mouse and keyboard no longer loses a level's score.** In a 1-player game, a level where you used both the mouse (or touch) and the keyboard (or gamepad) used to count for no high score table, locally or online. It now counts as mouse/touch. The game's own hurry-up shot, fired when you wait too long, counts as keyboard, so on a mouse level a single long pause was enough to lose it. That's how a mouse run to level 64 showed up online as level 54. The High Scores screen, the web page and the docs now say so.
 
