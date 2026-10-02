@@ -4,6 +4,10 @@
 
 - **1-player aim guide, and runs with it on don't count.** The 1-player menu has a new **Aim guide** switch (off by default) that draws the bounce line for your shot. A run played with it on is kept out of every high score table, your own and the online ones. If it's on when you press START, Pick start level or Multiplayer training, the game asks whether to turn it off first; "Play without scores" keeps it on.
 
+## v2.4.131
+
+- **Points pop up where your shot lands.** In 1-player games, every shot that pops bubbles shows a "+N" on the spot where it hit: the points from that shot, counting the bubbles that fall and any chain bonus. It floats up and fades out after a second.
+
 ## v2.4.130
 
 - **Switching between mouse and keyboard no longer loses a level's score.** In a 1-player game, a level where you used both the mouse (or touch) and the keyboard (or gamepad) used to count for no high score table, locally or online. It now counts as mouse/touch. The game's own hurry-up shot, fired when you wait too long, counts as keyboard, so on a mouse level a single long pause was enough to lose it. That's how a mouse run to level 64 showed up online as level 54. The High Scores screen, the web page and the docs now say so.

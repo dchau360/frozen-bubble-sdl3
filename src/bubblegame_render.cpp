@@ -292,6 +292,10 @@ int BubbleGame::DrawLiveBadges(int x, int y) {
 
 // A 1-player game of any kind but multiplayer training, which has its own
 // timer-and-score line.
+bool BubbleGame::ShowsScorePopups() const {
+    return currentSettings.playerCount == 1 && !currentSettings.networkGame;
+}
+
 bool BubbleGame::ShowsShotCount() const {
     return currentSettings.playerCount == 1 && !currentSettings.networkGame &&
            !currentSettings.localMultiplayer && !currentSettings.mpTraining;
@@ -1298,6 +1302,11 @@ bool BubbleGame::AdvanceSimulationAtScale(float deltaScale, Uint32 gameClockMs) 
         // per simulation step (R1d-iv).
         comboTextVisible = (comboDisplayTimer > 0);
         if (comboDisplayTimer > 0) comboDisplayTimer--;
+
+        for (ScorePopup& p : scorePopups) p.age++;
+        scorePopups.erase(std::remove_if(scorePopups.begin(), scorePopups.end(),
+                              [](const ScorePopup& p) { return p.age >= kScorePopupFrames; }),
+                          scorePopups.end());
     }
     else { //iterate until all penguins & status are advanced
         // Update ALL players' bubbles ONCE before the per-player loop (original: iter_players at line 2105)
@@ -1516,6 +1525,23 @@ void BubbleGame::Draw() {
         // Display combo text while the timer is active (aged by AdvanceSimulation)
         if (comboTextVisible) {
             { SDL_FRect fr = ToFRect(*comboText.Coords()); SDL_RenderTexture(rend, comboText.Texture(), nullptr, &fr); }
+        }
+
+        // "+N" where each scoring shot landed: rises 28px, fading out over
+        // its last 40%.
+        for (const ScorePopup& p : scorePopups) {
+            const float t = (float)p.age / kScorePopupFrames;
+            const Uint8 alpha = t < 0.6f ? 255 : (Uint8)(255.0f * (1.0f - (t - 0.6f) / 0.4f));
+            const std::string label = "+" + std::to_string(p.points);
+            scorePopupText.UpdateText(renderer, label.c_str(), 0);
+            const SDL_Rect* c = scorePopupText.Coords();
+            scorePopupText.UpdatePosition({p.x - c->w / 2, p.y - c->h / 2 - (int)(28.0f * t)});
+            SDL_Texture* tex = scorePopupText.Texture();
+            if (!tex) continue;
+            SDL_SetTextureAlphaMod(tex, alpha);
+            SDL_FRect fr = ToFRect(*scorePopupText.Coords());
+            SDL_RenderTexture(rend, tex, nullptr, &fr);
+            SDL_SetTextureAlphaMod(tex, 255);
         }
     }
     else { //iterate until all penguins & status are rendered

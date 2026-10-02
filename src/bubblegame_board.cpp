@@ -401,6 +401,10 @@ void BubbleGame::AssignChainReactions(BubbleArray &bArray) {
 
 void BubbleGame::CheckPossibleDestroy(BubbleArray &bArray){
     int totalDestroyed = 0;  // Track destroyed bubbles for malus calculation
+    // For the "+N" popup: the score before this shot, and the landed
+    // bubble's spot (taken before the group is cleared below).
+    const int scoreBefore = bArray.score;
+    SDL_Point popAt = {-1, -1};
 
     for (size_t i = 0; i < bArray.bubbleMap.size(); i++) {
         for (size_t j = 0; j < bArray.bubbleMap[i].size(); j++) {
@@ -413,6 +417,7 @@ void BubbleGame::CheckPossibleDestroy(BubbleArray &bArray){
                     SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION,
                                  "Match found: %d bubbles (chainReaction=%d)", groupedCount + 1, currentSettings.chainReaction);
                     PlaySFX("destroy_group");
+                    if (popAt.x < 0) popAt = bArray.bubbleMap[i][j].pos;
 
                     // Calculate score: 10 points per bubble (groupedCount+1 = total including activator), with chain multiplier
                     int baseScore = (groupedCount + 1) * 10;
@@ -473,6 +478,10 @@ void BubbleGame::CheckPossibleDestroy(BubbleArray &bArray){
         // ranking and the post-round Pop column all read this same counter.
         if (OwnsArray(bArray))
             bArray.rPopped += fallingCount;
+
+        // Both the group and the falling bubbles are scored by now.
+        if (popAt.x >= 0 && ShowsScorePopups() && bArray.score > scoreBefore)
+            scorePopups.push_back({popAt.x + 16, popAt.y + 16, bArray.score - scoreBefore, 0});
 
         // Assign chain reaction targets to newly falling bubbles (original line 814-865)
         // This happens ONCE per stick event, not every frame

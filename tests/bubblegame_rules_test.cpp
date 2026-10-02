@@ -104,6 +104,7 @@ struct BubbleGameTestAccess {
     }
     static bool continuePrompt(const BubbleGame& game) { return game.continuePrompt; }
     static int& runShots(BubbleGame& game) { return game.runShots; }
+    static std::vector<BubbleGame::ScorePopup>& scorePopups(BubbleGame& game) { return game.scorePopups; }
     static void penguin(BubbleGame& game, int idx) { game.UpdatePenguin(game.bubbleArrays[idx], 1.f); }
     static bool scoringMouse(const BubbleGame& game) {
         return game.scoringInputMethod == BubbleGame::ScoringInputMethod::Mouse;
@@ -1247,6 +1248,36 @@ int main() {
             CHECK(me.malusAlerts[0].blocked);
             CHECK(me.malusAlerts[0].count == 2);   // ...naming what it blocked
         }
+    }
+
+    // ---- "+N" score popup (1-player only) ------------------------------
+    // A scoring shot in a solo game leaves one popup at the landed bubble,
+    // worth exactly what the score went up by; a multiplayer board, none.
+    {
+        BubbleGame game(renderer);
+        BubbleGameTestAccess::reset(game, 1, false, false);
+        BubbleArray& me = BubbleGameTestAccess::player(game, 0);
+        SixInARow(me);
+        me.chainLevel = 0;
+        me.bubbleMap[0][0].pos = {200, 50};
+        const int before = me.score;
+        BubbleGameTestAccess::scorePopups(game).clear();
+        BubbleGameTestAccess::checkDestroy(game, 0);
+        auto& pops = BubbleGameTestAccess::scorePopups(game);
+        CHECK(pops.size() == 1);
+        if (pops.size() == 1) {
+            CHECK(pops[0].points == me.score - before);
+            CHECK(pops[0].points == 60);  // 6 popped x 10, nothing falling
+            CHECK(pops[0].x == 216 && pops[0].y == 66);  // the bubble's centre
+        }
+    }
+    {
+        BubbleGame game(renderer);
+        BubbleGameTestAccess::reset(game, 2, false, false);
+        SixInARow(BubbleGameTestAccess::player(game, 0));
+        BubbleGameTestAccess::scorePopups(game).clear();
+        BubbleGameTestAccess::checkDestroy(game, 0);
+        CHECK(BubbleGameTestAccess::scorePopups(game).empty());
     }
 
     // Fully absorbed: earn 3 while owing 5 -- 3 blocked, nothing sent, and the

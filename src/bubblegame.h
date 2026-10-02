@@ -644,6 +644,15 @@ public:
     // NewGame() or START OVER zero it.
     int runShots = 0;
     bool ShowsShotCount() const;
+    // "+N" floating up from where a shot landed, for the points that shot
+    // earned (its popped group plus whatever fell, chain multiplier
+    // included). One-player games only (ShowsScorePopups). Display only:
+    // spawned in CheckPossibleDestroy, aged once per simulation step like
+    // comboDisplayTimer, drawn by Draw(); never part of replay state.
+    struct ScorePopup { int x, y; int points; int age; };
+    static constexpr int kScorePopupFrames = 60;
+    std::vector<ScorePopup> scorePopups;
+    bool ShowsScorePopups() const;
 
     // The CONTINUE? prompt: after a death in a classic solo game, the first ENTER / tap
     // on the game-over panel opens it instead of retrying straight away.
@@ -898,6 +907,7 @@ private:
     std::unique_ptr<TTF_Font, FontCloser> statsPanelFont14;
     std::unique_ptr<TTF_Font, FontCloser> statsPanelFont16;
 
+    TTFText scorePopupText;
     TTFText inGameText, winsP1Text, winsP2Text, comboText, finalScoreText, mpTrainText, continueText;
     // Round-end winner banner, shown for every mode ("Board Cleared! <Name>
     // Wins!" / "First to Pop! <Name> Wins!" / "Time's Up! <Name> Wins!" /
