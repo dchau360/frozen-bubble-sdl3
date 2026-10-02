@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v2.4.129
 
 - **"World" dropped from the high score names.** The High Scores tabs are now MY SCORES, POINTS and LEVEL. The 1-player menu switch is now **Online highscores**, and the web page is just **Highscores**. Your setting is kept.
 
