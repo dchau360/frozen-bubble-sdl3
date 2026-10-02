@@ -8,7 +8,7 @@ This is the drafted content so you're not starting from a blank form.
 
 ## Store listing text
 
-**App name:** Frozen Bubble: FE (FE = Fan Edition; 17 of 30 chars)
+**App name:** Frozen Bubble: Fan Edition (26 of 30 chars)
 
 Renamed 2026-10-01 from "Frozen Bubble 2", which is the original game's own
 title. A different developer publishing under exactly that name looks like

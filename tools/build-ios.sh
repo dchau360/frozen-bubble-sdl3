@@ -61,11 +61,16 @@ done
 # Ninja rather than the Xcode generator: this build is deliberately unsigned, and
 # Ninja never invokes codesign at all, whereas the Xcode generator has to be
 # talked out of it. Bundle layout is identical either way.
+#
+# Deployment target floor tracks whatever the installed Xcode's iPhoneOS SDK
+# still accepts, not any API this app actually needs -- see the matching
+# comment in tools/deploy-ios-device.sh for what breaks (a silent fallback to
+# building for macOS, not a clean error) when this falls behind.
 cmake -B "$BUILD_DIR" -G Ninja \
     -DCMAKE_SYSTEM_NAME=iOS \
     -DCMAKE_OSX_ARCHITECTURES="$ARCHS" \
     -DCMAKE_OSX_SYSROOT="$SYSROOT" \
-    -DCMAKE_OSX_DEPLOYMENT_TARGET=13.0 \
+    -DCMAKE_OSX_DEPLOYMENT_TARGET=15.0 \
     -DCMAKE_BUILD_TYPE=Release \
     -DBUILD_TESTING=OFF
 
