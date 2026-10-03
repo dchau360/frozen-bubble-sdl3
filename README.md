@@ -84,7 +84,7 @@ After each round a per-player stats table shows bubbles fired and popped, malus 
 | Aim | Left / Right arrow | Move mouse | Tap left / right half, or drag |
 | Fire | Up arrow or Space | Left click | Tap centre, or tap target |
 | Back / quit | Escape | Right click | Swipe left |
-| Pause (1-player) | Pause, or gamepad Start | Pause button, top right | Pause button, top right |
+| Pause (1-player) | P or Pause, or gamepad Start | Pause button, top right | Pause button, top right |
 
 While paused, a click or tap anywhere resumes.
 

@@ -317,6 +317,16 @@ bool BubbleGame::PauseButtonHit(float x, float y) const {
     return x >= r.x - 8 && x < r.x + r.w + 8 && y >= r.y - 8 && y < r.y + r.h + 8;
 }
 
+Uint64 BubbleGame::RunClockMs() {
+    if (sessionMode != SessionMode::Live) return 0;
+    if (gameFinish) {
+        if (!hudFrozenMs) hudFrozenMs = SDL_GetTicks() - FrozenBubble::Instance()->startTime;
+        return hudFrozenMs;
+    }
+    hudFrozenMs = 0;
+    return SDL_GetTicks() - FrozenBubble::Instance()->startTime;
+}
+
 void BubbleGame::DrawModernHud(SDL_Renderer *rend, BubbleArray &bArray) {
     // The score counts up to the real one rather than jumping; a death's
     // reset to 0 (or anything else that lowers it) snaps straight down.
@@ -324,18 +334,7 @@ void BubbleGame::DrawModernHud(SDL_Renderer *rend, BubbleArray &bArray) {
     else if (hudShownScore < bArray.score)
         hudShownScore += std::max(1, (bArray.score - hudShownScore) / 6);
 
-    // The run's clock, as the highscore tables time it; stopped while a
-    // finished level's card is up.
-    Uint64 elapsed = 0;
-    if (sessionMode == SessionMode::Live) {
-        if (gameFinish) {
-            if (!hudFrozenMs) hudFrozenMs = SDL_GetTicks() - FrozenBubble::Instance()->startTime;
-            elapsed = hudFrozenMs;
-        } else {
-            hudFrozenMs = 0;
-            elapsed = SDL_GetTicks() - FrozenBubble::Instance()->startTime;
-        }
-    }
+    const Uint64 elapsed = RunClockMs();
     const std::string level = currentSettings.randomLevels ? "RANDOM" : std::to_string(curLevel);
     modernui::DrawHud(rend, modernFonts, level, hudShownScore, runShots, elapsed);
 }
@@ -1641,6 +1640,13 @@ void BubbleGame::Draw() {
             shotsText.UpdatePosition({score->x, score->y + score->h});
             SDL_FRect fr = ToFRect(*shotsText.Coords());
             SDL_RenderTexture(rend, shotsText.Texture(), nullptr, &fr);
+            // The whole run's time, the same clock as the modern panel's.
+            const std::string time = "Time: " + modernui::FormatTime(RunClockMs());
+            runTimeText.UpdateText(renderer, time.c_str(), 0);
+            const SDL_Rect* shotsRect = shotsText.Coords();
+            runTimeText.UpdatePosition({shotsRect->x, shotsRect->y + shotsRect->h});
+            SDL_FRect tr = ToFRect(*runTimeText.Coords());
+            SDL_RenderTexture(rend, runTimeText.Texture(), nullptr, &tr);
         }
 
         // Multiplayer training: show countdown timer and training score
@@ -2155,7 +2161,7 @@ void BubbleGame::RenderPaused() {
         card.stats[1] = {"SCORE", modernui::FormatNumber(bubbleArrays[0].score)};
         card.stats[2] = {"SHOTS", modernui::FormatNumber(runShots)};
         card.statCount = 3;
-        card.note = "Press PAUSE or tap to resume";
+        card.note = "Press P or tap to resume";
         SDL_Rect btn[2];
         modernui::DrawCard(rend, modernFonts, card, (float)(SDL_GetTicks() - modernPauseStartMs) / 380.0f, btn);
     } else {
