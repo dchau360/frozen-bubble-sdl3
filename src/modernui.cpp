@@ -113,6 +113,52 @@ void StrokeRoundRect(SDL_Renderer* rend, SDL_FRect r, float radius, float width,
     SDL_RenderGeometry(rend, nullptr, v.data(), (int)v.size(), idx.data(), (int)idx.size());
 }
 
+int DrawTextLine(SDL_Renderer* rend, TTFText& t, const char* s, SDL_Color fg, SDL_Color shadow,
+                 int x, int cy, int align) {
+    t.UpdateColor(fg, shadow);
+    t.UpdateText(rend, s, 0);
+    const SDL_Rect* c = t.Coords();
+    const int left = align == 0 ? x : align == 1 ? x - c->w / 2 : x - c->w;
+    t.UpdatePosition({left, cy - c->h / 2});
+    if (t.Texture()) {
+        SDL_FRect fr = {(float)t.Coords()->x, (float)t.Coords()->y, (float)c->w, (float)c->h};
+        SDL_RenderTexture(rend, t.Texture(), nullptr, &fr);
+    }
+    return c->w;
+}
+
+void DrawSwitch(SDL_Renderer* rend, int x, int cy, bool on) {
+    FillRoundRect(rend, {(float)x, (float)cy - 8, 30, 16}, 8,
+                  on ? SDL_Color{95, 224, 160, 255} : SDL_Color{58, 75, 108, 255});
+    FillRoundRect(rend, {(float)(on ? x + 16 : x + 2), (float)cy - 6, 12, 12}, 6, kValue);
+}
+
+int DrawChip(SDL_Renderer* rend, TTFText& t, const char* s, int x, int cy, SDL_Color c, bool filled) {
+    t.UpdateColor(filled ? kInk : c, kNoShadow);
+    t.UpdateText(rend, s, 0);
+    const int w = t.Coords()->w + 10;
+    FillRoundRect(rend, {(float)x, (float)cy - 8, (float)w, 16}, 8,
+                  filled ? c : SDL_Color{c.r, c.g, c.b, 46});
+    DrawTextLine(rend, t, s, filled ? kInk : c, kNoShadow, x + 5, cy);
+    return w;
+}
+
+void DrawPill(SDL_Renderer* rend, TTFText& t, const char* s, SDL_Rect r, bool primary, bool focused) {
+    const SDL_FRect f = {(float)r.x, (float)r.y, (float)r.w, (float)r.h};
+    const float rad = f.h / 2;
+    FillRoundRect(rend, f, rad, primary ? kIce : SDL_Color{127, 214, 255, 26});
+    if (!primary) StrokeRoundRect(rend, f, rad, 1, SDL_Color{127, 214, 255, 72});
+    if (focused) StrokeRoundRect(rend, {f.x - 3, f.y - 3, f.w + 6, f.h + 6}, rad + 3, 2, kValue);
+    DrawTextLine(rend, t, s, primary ? kInk : kFrost, kNoShadow, r.x + r.w / 2, r.y + r.h / 2, 1);
+}
+
+void DrawCard(SDL_Renderer* rend, SDL_Rect r, float radius) {
+    const SDL_FRect f = {(float)r.x, (float)r.y, (float)r.w, (float)r.h};
+    FillRoundRect(rend, {f.x, f.y + 4, f.w, f.h}, radius, {0, 0, 0, 77});
+    FillRoundRect(rend, f, radius, {12, 24, 48, 235});
+    StrokeRoundRect(rend, f, radius, 1.5f, {127, 214, 255, 72});
+}
+
 std::string FormatTime(Uint64 ms) {
     const Uint64 s = ms / 1000;
     char buf[32];

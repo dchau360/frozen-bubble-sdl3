@@ -1449,7 +1449,11 @@ int main() {
     // order. This proves an unchanged cell's texture survives a second,
     // otherwise-identical render, and that changing one player's value does
     // not disturb an unrelated cell's cached texture.
+    // The classic room's grid: the Modern menu style (the default) draws the
+    // room with its own text pool (mainmenu_roommodern.cpp), so this block
+    // picks Classic and puts the default back after.
     {
+        GameSettings::Instance()->SetValue("Menu:Theme", "");  // Modern -> Classic
         std::unique_ptr<MainMenu> menu = MainMenuTestAccess::Create(renderer);
 
         NetworkClient* nc = NetworkClient::Instance();
@@ -1498,6 +1502,7 @@ int main() {
             MainMenuTestAccess::NetGridCellTexture(*menu, 4)), marker, false));
 
         NetworkClientTestAccess::SetCurrentGame(*nc, nullptr);
+        GameSettings::Instance()->SetValue("Menu:Theme", "-1");  // back to Modern
     }
 
     // --- Online lobby sidebar: "Tournaments" / "Join Discord server" row

@@ -53,8 +53,12 @@ These four share a settings row or two and are all render- or audio-only.
    - [x] Title screen: the "Modern" MENU STYLE, the default, existing players moved to it once.
    - [x] 1-player menu: a card with a line under each mode, switches for
      the settings, LEFT/RIGHT flip them.
-   - [ ] Game room, including Set Teams and the 20-player layout. Keep the
-     button's wording "Set Teams" (user decision).
+   - [x] Game room, the 20-player layout too: rules, the per-player table,
+     players and chat as cards. The button keeps the wording "Set Teams"
+     (user decision).
+   - [ ] The Set Teams page.
+   - [ ] Settings (the CONTROLS & SETTINGS panel).
+   - [ ] Online lobby (room list and Online sidebar).
 
 ## Bigger
 

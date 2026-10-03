@@ -45,6 +45,28 @@ constexpr SDL_Color kNoShadow = {0, 0, 0, 0};
 void FillRoundRect(SDL_Renderer* rend, SDL_FRect r, float radius, SDL_Color c);
 void StrokeRoundRect(SDL_Renderer* rend, SDL_FRect r, float radius, float width, SDL_Color c);
 
+// Menu pieces shared by the Modern menu style's screens.
+constexpr SDL_Color kFrost = {219, 232, 251, 255};
+constexpr SDL_Color kTextShadow = {0, 0, 0, 115};
+constexpr SDL_Color kRowFocus = {127, 214, 255, 33};
+constexpr SDL_Color kRowIdle = {127, 214, 255, 10};
+constexpr SDL_Color kLine = {127, 214, 255, 41};
+
+// Draws `t` showing `s` with its middle at cy: align 0 starts at x, 1 is
+// centred on x, 2 ends at x. Returns the width drawn.
+int DrawTextLine(SDL_Renderer* rend, TTFText& t, const char* s, SDL_Color fg, SDL_Color shadow,
+                 int x, int cy, int align = 0);
+// An on/off switch, 30x16, left edge x, middle cy.
+void DrawSwitch(SDL_Renderer* rend, int x, int cy, bool on);
+// A small rounded label (HOST, YOU) starting at x, middle cy; `filled`
+// draws it solid in `c` with dark text. Returns its width.
+int DrawChip(SDL_Renderer* rend, TTFText& t, const char* s, int x, int cy, SDL_Color c, bool filled = false);
+// A rounded button: `primary` is solid ice, otherwise a faint outline;
+// `focused` adds the white ring keyboard focus is shown with.
+void DrawPill(SDL_Renderer* rend, TTFText& t, const char* s, SDL_Rect r, bool primary, bool focused);
+// The card every Modern menu screen is built from.
+void DrawCard(SDL_Renderer* rend, SDL_Rect r, float radius = 14);
+
 // 3'07" -- the same form the High Scores screen uses.
 std::string FormatTime(Uint64 ms);
 // 12,345.
