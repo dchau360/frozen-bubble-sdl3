@@ -207,7 +207,7 @@ A failing ASan/UBSan run hard-blocks both: no platform ships, itch.io included, 
 
 The ASan/UBSan job always runs on a GitHub-hosted runner; the other Linux job (and Windows) use the self-hosted box when its heartbeat says it's online. That box takes one job at a time, so the two Linux jobs used to run back to back there on every main/tag push. The `main` push of a `chore: release vX.Y.Z` commit skips every build job (`changes`' `release_bump` output): the release PR already built that tree and the tag pushed right after it is the build that ships, so building it a third time only made the tag build wait for the runner.
 
-Android releases are signed with a persistent key held in repository secrets, and a tagged build fails outright rather than shipping an APK that cannot be upgraded — see `docs/ANDROID_SIGNING.md`.
+Android releases are signed with a persistent key held in repository secrets, and a tagged build fails outright rather than shipping an APK that cannot be upgraded — see `docs/ANDROID_SIGNING.md`. A tag also runs `deploy-play-store`, which uploads that build's `.aab` to Google Play's production track **as a draft** (owner's choice: a person still rolls it out in the Play Console), with "What's new" generated from the tag's `CHANGELOG.md` section by `tools/play-release-notes.py` (500-character limit). It is gated on the sanitizer job like the other publishes, needs the `PLAY_SERVICE_ACCOUNT_JSON` secret (setup in `docs/ANDROID_SIGNING.md`), and only warns when that secret is missing. Its upload action is pinned to a commit for the same reason as the itch.io one.
 
 ### Cutting a release
 

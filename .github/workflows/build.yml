@@ -1332,3 +1332,65 @@ jobs:
           ITCH_USER: ${{ vars.ITCHIO_USERNAME }}
           PACKAGE: artifact-wasm/dist-wasm
           VERSION: ${{ github.ref_name }}
+
+  # ────────────────────────────────────────────────────────────────
+  # Google Play — the tag's signed .aab, uploaded as a production DRAFT
+  # ────────────────────────────────────────────────────────────────
+  # Draft on purpose (owner's decision): the release is created and filled in
+  # (bundle, "What's new" from CHANGELOG.md via tools/play-release-notes.py)
+  # but nobody gets it until someone presses "Review release" / "Start
+  # rollout" in the Play Console. Same sanitizer gate as every other publish.
+  #
+  # Needs the PLAY_SERVICE_ACCOUNT_JSON secret: the JSON key of a Google
+  # Cloud service account that has the Google Play Android Developer API
+  # enabled and has been invited in Play Console > Users and permissions with
+  # release rights on org.frozenbubble (docs/ANDROID_SIGNING.md). Without it
+  # the job warns and does nothing, so a fork or a fresh setup never fails a
+  # release over it. The action is pinned to a commit, like the itch.io one
+  # above, because it is handed that credential.
+  deploy-play-store:
+    name: Upload AAB to Google Play (draft)
+    needs: [build-android, test-linux-sanitizer]
+    if: >-
+      startsWith(github.ref, 'refs/tags/') &&
+      !cancelled() &&
+      needs.build-android.result == 'success' &&
+      needs.test-linux-sanitizer.result == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check for the Play service account
+        id: play
+        env:
+          PLAY_JSON: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+        run: |
+          if [ -z "$PLAY_JSON" ]; then
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::PLAY_SERVICE_ACCOUNT_JSON is not set; not uploading to Google Play."
+          else
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      # Before download-artifact: checkout cleans the workspace (see release).
+      - if: steps.play.outputs.present == 'true'
+        uses: actions/checkout@v4
+
+      - if: steps.play.outputs.present == 'true'
+        uses: actions/download-artifact@v4
+        with:
+          name: Android-AAB
+          path: artifact-aab
+
+      - name: Write "What's new" from CHANGELOG.md
+        if: steps.play.outputs.present == 'true'
+        run: python3 tools/play-release-notes.py "$GITHUB_REF_NAME" whatsnew
+
+      - if: steps.play.outputs.present == 'true'
+        uses: r0adkll/upload-google-play@e738b9dd8f2476ea806d921b64aacd24f34515a5  # v1.1.5
+        with:
+          serviceAccountJsonPlainText: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+          packageName: org.frozenbubble
+          releaseFiles: artifact-aab/frozen-bubble-android-tv.aab
+          releaseName: ${{ github.ref_name }}
+          track: production
+          status: draft
+          whatsNewDirectory: whatsnew
