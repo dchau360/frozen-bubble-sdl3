@@ -792,5 +792,10 @@ review request.
   2026-09-20.
 - Whether initial sharing across platforms is required. That may favor a more
   authoritative state stream if floating-point re-simulation diverges.
-- Whether to invest later in fixed-step live gameplay. Replays do not require
-  that change for the recorded-step design.
+- ~~Whether to invest later in fixed-step live gameplay.~~ **Not needed
+  (owner decision, 2026-10-03).** Asked as a curiosity: could replays use the
+  original Perl game's method (seed + frame-numbered key changes, as in
+  `share/data/demo*.bz2`)? Only with fixed-step gameplay, which the
+  recorded-step design here doesn't need. The one reason to revisit it would be
+  replay-based verification of online highscores, which needs small
+  deterministic recordings a server can re-simulate.
