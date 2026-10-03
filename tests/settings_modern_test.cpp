@@ -154,7 +154,7 @@ int main() {
         MainMenuTestAccess::Tap(*menu, 600, kSpeedY + 18);
         CHECK(MainMenuTestAccess::Selected(*menu) == kKeyRowSpeed);
         CHECK(settings->speedMultiplier == speed);
-        Draw(renderer, *menu, "settings-modern-speed");
+        SDL_DestroySurface(Draw(renderer, *menu, "settings-modern-speed"));
         MainMenuTestAccess::Tap(*menu, 600, kSpeedY + 18);
         CHECK(std::fabs(settings->speedMultiplier - (speed + 0.1f)) < 0.01f);
         MainMenuTestAccess::Tap(*menu, 360, kSpeedY + 18);
@@ -176,7 +176,7 @@ int main() {
         CHECK(MainMenuTestAccess::Selected(*menu) == kKeyRowFire);
         MainMenuTestAccess::Tap(*menu, 100, 237);
         CHECK(MainMenuTestAccess::Awaiting(*menu));
-        Draw(renderer, *menu, "settings-modern-await");
+        SDL_DestroySurface(Draw(renderer, *menu, "settings-modern-await"));
         MainMenuTestAccess::Key(*menu, SDLK_SPACE, SDL_SCANCODE_SPACE);
         CHECK(!MainMenuTestAccess::Awaiting(*menu));
         CHECK(settings->player1Keys.fire == SDL_SCANCODE_SPACE);
@@ -187,7 +187,7 @@ int main() {
         MainMenuTestAccess::Tap(*menu, 400, 324);
         CHECK(MainMenuTestAccess::Armed(*menu));
         CHECK(settings->player1Keys.fire == SDL_SCANCODE_SPACE);
-        Draw(renderer, *menu, "settings-modern-reset");
+        SDL_DestroySurface(Draw(renderer, *menu, "settings-modern-reset"));
 
         // ESC closes.
         MainMenuTestAccess::Key(*menu, SDLK_ESCAPE);
