@@ -478,6 +478,7 @@ void BubbleGame::NewGame(SetupSettings setup) {
     scorePopups.clear();
     levelStartMs = levelClearMs = 0;
     levelTimeBonus = 0;
+    levelStartScore = levelPoints = 0;
     levelIntroStartMs = 0;
     hudShownScore = 0;
     curLevel = setup.startLevel;
@@ -1225,6 +1226,7 @@ void BubbleGame::ReloadGame(int level) {
     scorePopups.clear();
     levelStartMs = levelClearMs = 0;
     levelTimeBonus = 0;
+    levelStartScore = levelPoints = 0;
     levelIntroStartMs = 0;
 
     SDL_Renderer *rend = const_cast<SDL_Renderer*>(renderer);

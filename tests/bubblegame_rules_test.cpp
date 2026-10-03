@@ -110,6 +110,8 @@ struct BubbleGameTestAccess {
     }
     static Uint32 levelClearMs(const BubbleGame& game) { return game.levelClearMs; }
     static int levelTimeBonus(const BubbleGame& game) { return game.levelTimeBonus; }
+    static void levelStartScore(BubbleGame& game, int score) { game.levelStartScore = score; }
+    static int levelPoints(const BubbleGame& game) { return game.levelPoints; }
     static std::vector<BubbleGame::ScorePopup>& scorePopups(BubbleGame& game) { return game.scorePopups; }
     static void penguin(BubbleGame& game, int idx) { game.UpdatePenguin(game.bubbleArrays[idx], 1.f); }
     static bool scoringMouse(const BubbleGame& game) {
@@ -460,6 +462,16 @@ int main() {
         CHECK(BubbleGameTestAccess::levelTimeBonus(game) == 3488);
         BubbleGameTestAccess::check(game, 0);
         CHECK(BubbleGameTestAccess::player(game, 0).score == 3488);
+
+        // The win panel shows the level's own points, bonus included, not the
+        // run's total: 2,000 carried in from earlier levels, 650 popped here.
+        BubbleGameTestAccess::reset(game, 1, true, false);
+        BubbleGameTestAccess::player(game, 0).score = 2650;
+        BubbleGameTestAccess::levelStartScore(game, 2000);
+        BubbleGameTestAccess::levelClock(game, 1000, 24400);
+        BubbleGameTestAccess::check(game, 0);
+        CHECK(BubbleGameTestAccess::player(game, 0).score == 2650 + 3488);
+        CHECK(BubbleGameTestAccess::levelPoints(game) == 650 + 3488);
 
         // The time bonus: Puzzle Bobble's at a tenth of its size.
         CHECK(BubbleGame::TimeBonusFor(0) == 5000);
