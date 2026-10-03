@@ -971,7 +971,7 @@ void MainMenu::NetPanelLobbyActionsRender() {
                 TTFText &cell = NetGridCell(gridCellIdx++);
                 cell.UpdateText(rend2, txt, 0);
                 int tw = 0;
-                if (cell.Texture()) { float ftw; SDL_GetTextureSize(cell.Texture(), &ftw, nullptr); tw = (int)ftw; }
+                if (cell.Texture()) tw = cell.Coords()->w;
                 int cx = colLeft + colW / 2 - tw / 2;
                 cell.UpdatePosition({cx, y});
                 { SDL_FRect fr = ToFRect(*cell.Coords()); SDL_RenderTexture(rend2, cell.Texture(), nullptr, &fr); };

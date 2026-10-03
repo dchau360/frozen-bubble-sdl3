@@ -214,7 +214,7 @@ a Discord channel of your choosing — see [SetupServer.md](SetupServer.md#optio
 - [Privacy policy](https://dchau360.github.io/frozen-bubble-sdl3/privacy/) — what data the app and its servers handle
 - [Building from source](docs/BUILDING.md) — all platforms, including WebAssembly, Android and iOS
 - [iOS notes](docs/IOS.md) — experimental unsigned build, and how to sign it
-- [Compared with the original](docs/PARITY.md) — 69 numbered differences (features added, rules changed, fixes to the original's own server code), plus what's reproduced unchanged
+- [Compared with the original](docs/PARITY.md) — 70 numbered differences (features added, rules changed, fixes to the original's own server code), plus what's reproduced unchanged
 - [Browser build notes](web/README.md) — saved data, Emscripten port status, serving locally
 
 ---

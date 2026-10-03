@@ -24,6 +24,8 @@
 #include "replay_library.h"
 #include "replay_recorder.h"
 #include <sys/stat.h>
+#include <algorithm>
+#include <cmath>
 #include <utility>
 #include <vector>
 
@@ -187,6 +189,15 @@ FrozenBubble::FrozenBubble() {
 #endif
 #endif
 
+#ifndef __WASM_PORT__
+    // Render at the display's real pixels on a Retina Mac or an iPhone,
+    // where the window is otherwise drawn at point size and the system
+    // doubles it, softening the sharp text (UpdateTextScale) along with
+    // everything else. Input is unaffected: every pointer and touch path
+    // goes through SDL_RenderCoordinatesFromWindow, which accounts for it.
+    // Not on the web build, whose canvas is pinned at 640x480 below.
+    fullscreen |= SDL_WINDOW_HIGH_PIXEL_DENSITY;
+#endif
     window = SDL_CreateWindow("Frozen-Bubble: SDL3", resolution.x, resolution.y, fullscreen);
     // SDL3: texture scale mode is set per-texture, not globally via hint.
     // Linear scaling will be applied when textures are created.
@@ -289,6 +300,7 @@ FrozenBubble::FrozenBubble() {
     ReplayRecorder::Instance()->SetKeepCount(GameSettings::Instance()->replayKeepCount());
 #endif
     init_effects((char*)g_dataDir.c_str());
+    UpdateTextScale();  // before the menus render their labels
     mainMenu = new MainMenu(renderer);
     mainGame = new BubbleGame(renderer);
 
@@ -457,6 +469,23 @@ void FrozenBubble::RenderFpsOverlay()
     SDL_RenderTexture(renderer, fpsText.Texture(), nullptr, &fr);
 }
 
+// Font text is drawn at the screen's resolution rather than the 640x480
+// canvas's, so it stays sharp when the canvas is stretched to a big or dense
+// screen; the board's pixel art is still stretched as before. The GRAPHICS
+// level's Low keeps the old stretched text, for a device that struggles.
+void FrozenBubble::UpdateTextScale() {
+    float scale = 1.f;
+    SDL_FRect r{};
+    if (renderer && gameOptions && gameOptions->gfxLevel() <= 2 &&
+        SDL_GetRenderLogicalPresentationRect(renderer, &r) && r.w > 0 && r.h > 0) {
+        // Quarter steps, so dragging a window edge doesn't redraw every
+        // piece of text each frame; capped so a word's texture stays small.
+        scale = std::min(r.w / 640.f, r.h / 480.f);
+        scale = std::clamp(std::round(scale * 4) / 4, 1.f, 6.f);
+    }
+    SetTextRenderScale(scale);
+}
+
 void FrozenBubble::RunOneFrame()
 {
     frameLastTick = frameTicks;
@@ -529,6 +558,7 @@ void FrozenBubble::RunOneFrame()
     worldscores::Pump(currentState == MainGame);
 
     // render
+    UpdateTextScale();
     if(!IsGamePause) {
         // Clear to opaque black explicitly. SDL_RenderClear paints with
         // whatever draw colour was last set, and nothing here resets it
