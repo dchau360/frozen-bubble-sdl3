@@ -609,9 +609,9 @@ void MainMenu::NetPanelLobbyActionsRender() {
     // The lobby and the game room are one screen with two selection axes: the
     // action/room list, and the player column for the per-player grid rows.
     BeginPanelTapRows(&selectedActionIndex, &currentPlayerCol);
-    if (netClient->GetCurrentGame() &&
-        GameSettings::Instance()->menuTheme() == MENU_THEME_MODERN) {
-        NetPanelRoomRenderModern();
+    if (GameSettings::Instance()->menuTheme() == MENU_THEME_MODERN) {
+        if (netClient->GetCurrentGame()) NetPanelRoomRenderModern();
+        else NetPanelLobbyRenderModern();
         return;
     }
 
@@ -1473,10 +1473,10 @@ void MainMenu::NetPanelChatDockRender(bool expanded) {
     // area, with the input row's focus box only shown while Chat is selected.
     // Grown upward while composing; the input row stays put at the bottom so
     // the caret does not move under the finger that just opened the keyboard.
-    // In a room in the Modern menu style the card, the input line and each
-    // message are drawn by NetChatDockModern/NetChatLineModern instead
+    // In the Modern menu style (room and lobby) the card, the input line and
+    // each message are drawn by NetChatDockModern/NetChatLineModern instead
     // (mainmenu_roommodern.cpp); the message handling below is shared.
-    const bool modern = currentGame && GameSettings::Instance()->menuTheme() == MENU_THEME_MODERN;
+    const bool modern = GameSettings::Instance()->menuTheme() == MENU_THEME_MODERN;
     const int dockTop = expanded ? 60 : 334;
     const int dockHeight = expanded ? 412 : 138;
     if (modern) NetChatDockModern(expanded);

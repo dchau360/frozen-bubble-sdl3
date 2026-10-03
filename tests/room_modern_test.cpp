@@ -37,6 +37,7 @@
 #include <filesystem>
 #include <memory>
 #include <string>
+#include <vector>
 
 static int failures = 0;
 #define CHECK(expression) do { \
@@ -65,6 +66,9 @@ struct MainMenuTestAccess {
     static int TeamOf(const MainMenu& m, int slot) { return m.TeamOfSlot(slot); }
     static int AutoFocus(const MainMenu& m) { return m.teamsAutoFocus; }
     static int TeamsCursor(const MainMenu& m) { return m.teamsCursorPlayer; }
+    static int RoomSize(const MainMenu& m) { return m.netRoomSizeChoice; }
+    static int WeeklyIndex(const MainMenu& m, size_t rooms) { return m.LobbyWeeklyIndex(rooms); }
+    static int DiscordIndex(const MainMenu& m, size_t rooms) { return m.LobbyDiscordIndex(rooms); }
     static void Key(MainMenu& m, SDL_Keycode key) {
         SDL_Event e{};
         e.type = SDL_EVENT_KEY_DOWN;
@@ -88,6 +92,11 @@ struct MainMenuTestAccess {
 struct NetworkClientTestAccess {
     static void SetPlayerNick(NetworkClient& nc, const std::string& nick) { nc.playerNick = nick; }
     static void SetCurrentGame(NetworkClient& nc, GameRoom* game) { nc.currentGame = game; }
+    static void SetLobby(NetworkClient& nc, std::vector<GameRoom> games, std::vector<NetworkPlayer> online) {
+        nc.gameList = std::move(games);
+        nc.openPlayers = std::move(online);
+        nc.connectedHost = "fb.servequake.com";
+    }
     static void PushChat(NetworkClient& nc, const std::string& nick, const std::string& msg) {
         nc.chatMessages.push_back({nick, msg, 0});
     }
@@ -263,6 +272,69 @@ int main() {
         MainMenuTestAccess::Tap(*menu, 578, 32);
         CHECK(!MainMenuTestAccess::TeamsOpen(*menu));
         NetworkClientTestAccess::SetCurrentGame(*nc, nullptr);
+    }
+
+    // The lobby: Create game room's size steps from its value, a tap on a
+    // room or a pinned row selects it, and many rooms scroll.
+    {
+        auto room = [](const char* creator, std::vector<const char*> nicks, bool started, int cap) {
+            GameRoom g;
+            g.creator = creator;
+            g.started = started;
+            g.maxPlayers = cap;
+            for (const char* n : nicks) g.players.push_back({n, "", false});
+            return g;
+        };
+        NetworkClientTestAccess::SetCurrentGame(*nc, nullptr);
+        NetworkClientTestAccess::SetLobby(*nc,
+            {room("Mika", {"Mika", "snowfox"}, false, 5), room("penguin", {"penguin", "a", "b", "c", "d"}, true, 5)},
+            {{"Hc", "", false}, {"Lumi", "", false}, {"Otso", "", false}});
+        auto menu = MainMenuTestAccess::Create(renderer);
+        MainMenuTestAccess::EnterRoom(*menu, 1);   // Create game room
+
+        // Create game room is y 86..120, the rooms from y 126, 44 apart.
+        SDL_Surface* frame = Draw(renderer, *menu, "lobby-modern");
+        CHECK(frame != nullptr);
+        if (frame) {
+            CHECK(IceAt(frame, 21, 24, 103));      // Create game room, focused
+            CHECK(!IceAt(frame, 21, 24, 146));     // the first room, not
+            SDL_DestroySurface(frame);
+        }
+
+        // Already selected, so a tap on the value's left half steps the size
+        // down (20 -> 10) instead of creating the room.
+        CHECK(MainMenuTestAccess::RoomSize(*menu) == 2);
+        MainMenuTestAccess::Tap(*menu, 300, 103);
+        CHECK(MainMenuTestAccess::RoomSize(*menu) == 1);
+        CHECK(MainMenuTestAccess::Selected(*menu) == 1);
+
+        // The second room (y 170..210), then the pinned rows of the Online card.
+        MainMenuTestAccess::Tap(*menu, 100, 190);
+        CHECK(MainMenuTestAccess::Selected(*menu) == 3);
+        Draw(renderer, *menu, "lobby-modern-room");
+        MainMenuTestAccess::Tap(*menu, 500, 307);
+        CHECK(MainMenuTestAccess::Selected(*menu) == MainMenuTestAccess::WeeklyIndex(*menu, 2));
+        if (MainMenuTestAccess::DiscordIndex(*menu, 2) >= 0) {
+            MainMenuTestAccess::Tap(*menu, 500, 337);
+            CHECK(MainMenuTestAccess::Selected(*menu) == MainMenuTestAccess::DiscordIndex(*menu, 2));
+        }
+        // The chat line is index 0 here too.
+        MainMenuTestAccess::Tap(*menu, 300, 450);
+        CHECK(MainMenuTestAccess::Selected(*menu) == 0);
+
+        // Twelve rooms: the last one selected scrolls into view.
+        std::vector<GameRoom> many;
+        for (int i = 0; i < 12; i++) many.push_back(room(("host" + std::to_string(i)).c_str(), {"x"}, i % 3 == 0, 5));
+        NetworkClientTestAccess::SetLobby(*nc, many, {{"Hc", "", false}});
+        MainMenuTestAccess::EnterRoom(*menu, 2 + 11);
+        frame = Draw(renderer, *menu, "lobby-modern-scroll");
+        CHECK(frame != nullptr);
+        if (frame) {
+            // Five rooms fit; host11 is the last of them (y 302..342).
+            CHECK(IceAt(frame, 21, 24, 322));
+            SDL_DestroySurface(frame);
+        }
+        NetworkClientTestAccess::SetLobby(*nc, {}, {});
     }
 
     // Another style keeps the classic room.

@@ -640,8 +640,11 @@ int main() {
     // fixes it by confining the L/R split to the drawn value block itself,
     // leaving the label its own tap zone that still creates the room. This
     // drives the real lobby render and checks the row now has all three
-    // zones, left-to-right, in the right order.
+    // zones, left-to-right, in the right order. The classic lobby: the Modern
+    // menu style (the default) draws its own (room_modern_test.cpp), so this
+    // block picks Classic and puts the default back after.
     {
+        GameSettings::Instance()->SetValue("Menu:Theme", "");  // Modern -> Classic
         std::unique_ptr<MainMenu> menu = MainMenuTestAccess::Create(renderer);
         MainMenuTestAccess::RenderLobbyActions(*menu);
 
@@ -659,6 +662,7 @@ int main() {
             CHECK(rects[0].x + rects[0].w == rects[1].x);
             CHECK(rects[1].x + rects[1].w == rects[2].x);
         }
+        GameSettings::Instance()->SetValue("Menu:Theme", "-1");  // back to Modern
     }
 
     // --- ServerListPanelRender: "Set name" pinned to the panel's own
