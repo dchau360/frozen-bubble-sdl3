@@ -1051,13 +1051,31 @@ jobs:
           name: Android
           path: frozen-bubble-android-tv.apk
 
-      # AAB isn't installable by sideloading, so it's a separate artifact
-      # rather than bundled with the APK -- only needed for the Play Console
-      # upload, not for itch.io/Amazon Appstore/direct download.
-      - uses: actions/upload-artifact@v4
+      # The AAB goes only to Google Play (deploy-play-store), never to the
+      # public: a run artifact on this public repo can be downloaded by any
+      # signed-in GitHub user, so it is uploaded on tags only, encrypted with
+      # a key only the secrets hold, kept a day at most, and deleted by
+      # deploy-play-store as soon as it has been handed to Play.
+      - name: Encrypt AAB for the Play upload
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          AAB_KEY: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          if [ -z "$AAB_KEY" ]; then
+            echo "::error::ANDROID_KEY_PASSWORD is not set; refusing to upload an unencrypted AAB."
+            exit 1
+          fi
+          printf '%s' "$AAB_KEY" | gpg --batch --yes --pinentry-mode loopback \
+            --passphrase-fd 0 --symmetric --cipher-algo AES256 \
+            -o frozen-bubble-android-tv.aab.gpg frozen-bubble-android-tv.aab
+          rm -f frozen-bubble-android-tv.aab
+
+      - if: startsWith(github.ref, 'refs/tags/')
+        uses: actions/upload-artifact@v4
         with:
           name: Android-AAB
-          path: frozen-bubble-android-tv.aab
+          path: frozen-bubble-android-tv.aab.gpg
+          retention-days: 1
 
   # ────────────────────────────────────────────────────────────────
   # WebAssembly (WASM) — SDL3 via Emscripten ports
@@ -1272,9 +1290,9 @@ jobs:
       # The AAB is deliberately not attached here. It isn't installable by
       # sideloading -- only Play Console (or bundletool) can do anything with
       # it -- so publishing it on the public Release page just hands visitors
-      # a file they can't use. build-android still produces it as the
-      # "Android-AAB" workflow artifact for whoever is about to do the Play
-      # Console upload to grab directly from that run.
+      # a file they can't use. build-android hands it to deploy-play-store
+      # as an encrypted, short-lived "Android-AAB" artifact (download-artifact
+      # above fetches that ciphertext too; nothing here attaches it).
       - uses: softprops/action-gh-release@v2
         with:
           body: ${{ steps.changelog.outputs.body }}
@@ -1350,13 +1368,20 @@ jobs:
   # above, because it is handed that credential.
   deploy-play-store:
     name: Upload AAB to Google Play (draft)
-    needs: [build-android, test-linux-sanitizer]
+    # After release, not alongside it: release downloads every artifact, and
+    # this job deletes Android-AAB at the end -- in parallel the delete could
+    # land mid-download and fail the release. !cancelled() below still runs
+    # this whatever release's own result was.
+    needs: [build-android, test-linux-sanitizer, release]
     if: >-
       startsWith(github.ref, 'refs/tags/') &&
       !cancelled() &&
       needs.build-android.result == 'success' &&
       needs.test-linux-sanitizer.result == 'success'
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: write  # to delete the Android-AAB artifact once it is uploaded
     steps:
       - name: Check for the Play service account
         id: play
@@ -1380,6 +1405,15 @@ jobs:
           name: Android-AAB
           path: artifact-aab
 
+      - name: Decrypt AAB
+        if: steps.play.outputs.present == 'true'
+        env:
+          AAB_KEY: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          printf '%s' "$AAB_KEY" | gpg --batch --yes --pinentry-mode loopback \
+            --passphrase-fd 0 -o artifact-aab/frozen-bubble-android-tv.aab \
+            --decrypt artifact-aab/frozen-bubble-android-tv.aab.gpg
+
       - name: Write "What's new" from CHANGELOG.md
         if: steps.play.outputs.present == 'true'
         run: python3 tools/play-release-notes.py "$GITHUB_REF_NAME" whatsnew
@@ -1394,3 +1428,17 @@ jobs:
           track: production
           status: draft
           whatsNewDirectory: whatsnew
+
+      # Upload worked or not, the AAB leaves the run now; a failed Play
+      # upload is redone by rebuilding the tag, not by fetching this.
+      - name: Delete the Android-AAB artifact
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ids=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/artifacts" \
+                  -q '.artifacts[] | select(.name == "Android-AAB") | .id')
+          for id in $ids; do
+            gh api -X DELETE "repos/$GITHUB_REPOSITORY/actions/artifacts/$id"
+            echo "Deleted artifact $id"
+          done

@@ -126,8 +126,15 @@ local copy once the secret is saved, or keep it in a password manager.
 A draft only becomes a release when you press **Next → Save → Send for
 review / Start rollout** in Play Console → Production. If a tag's upload
 fails (for example a `versionCode` that was not bumped), the GitHub Release
-and itch.io deploy are unaffected; fix it and upload the `.aab` from the
-release's `Android-AAB` artifact, or build one locally as above.
+and itch.io deploy are unaffected; fix it and re-run the tag's workflow, or
+build an `.aab` locally as above and upload it by hand.
+
+The `.aab` is never public. Run artifacts on this public repo can be
+downloaded by any signed-in GitHub user, so `build-android` uploads it on
+tag builds only, encrypted with `ANDROID_KEY_PASSWORD` and kept for one day,
+and `deploy-play-store` deletes it once it has been handed to Play, whether
+that upload worked or not. PR and `main` builds still build an `.aab` (so a
+broken bundle fails CI) but never upload it.
 
 ## Related
 
