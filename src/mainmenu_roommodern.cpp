@@ -1,5 +1,7 @@
 #include "mainmenu.h"
 #include "mainmenu_internal.h"
+#include "menulist.h"
+#include "netteams.h"
 #include "bubblegame.h"
 #include "localmultiplayer_settings.h"
 #include "modernui.h"
@@ -26,6 +28,10 @@
 // tap row; the focused row is drawn with the ice edge and a focused stepper
 // shows its < > arrows; the chat card's hint names ESC, F1 and A, the keys
 // with no row of their own.
+//
+// The Set Teams page (TeamsPanelRenderModern, at the end) is here too, to
+// share the fonts; it publishes the same tap rects as the classic page in
+// mainmenu_teampanel.cpp, which keeps all of its input handling.
 
 namespace {
 using namespace modernui;
@@ -48,13 +54,19 @@ constexpr int kSeatBalls[5] = {7, 3, 4, 5, 6};
 struct MainMenu::RoomModernText {
     TTF_Font *title = nullptr, *value = nullptr, *small = nullptr;
     TTF_Font *body = nullptr, *chat = nullptr, *chatBold = nullptr, *tiny = nullptr;
-    std::deque<TTFText> pool, chatPool;
-    size_t used = 0, chatUsed = 0;
+    std::deque<TTFText> pool, chatPool, teamPool;
+    size_t used = 0, chatUsed = 0, teamUsed = 0;
     SDL_Texture* ball[5] = {};
 
     TTFText& Take(TTF_Font* f) {
         if (used == pool.size()) pool.emplace_back();
         TTFText& t = pool[used++];
+        t.LoadFont(f);
+        return t;
+    }
+    TTFText& TakeTeam(TTF_Font* f) {
+        if (teamUsed == teamPool.size()) teamPool.emplace_back();
+        TTFText& t = teamPool[teamUsed++];
         t.LoadFont(f);
         return t;
     }
@@ -419,4 +431,133 @@ void MainMenu::NetChatLineModern(const ChatMessage& cm, int y) {
     snprintf(text, sizeof(text), "%.64s", cm.message.c_str());
     const int w = DrawTextLine(rend, T.TakeChat(T.chatBold), nick, kIce, kNoShadow, 28, cy);
     DrawTextLine(rend, T.TakeChat(T.chat), text, kFrost, kNoShadow, 28 + w + 6, cy);
+}
+
+void MainMenu::TeamsPanelRenderModern() {
+    NetworkClient* netClient = NetworkClient::Instance();
+    GameRoom* room = netClient->GetCurrentGame();
+    if (!room) return;
+    SDL_Renderer* rend = const_cast<SDL_Renderer*>(renderer);
+    RoomModernText& T = RoomModern();
+    T.teamUsed = 0;
+
+    const bool isHost = room->creator == netClient->GetPlayerNick();
+    const int mySlot = MyRoomSlot();
+    const int playerCount = (int)room->players.size();
+    teamSwatchTaps.clear();
+    teamPlayerNameTaps.clear();
+    teamAutoBalanceTaps.clear();
+    teamsCursorPlayer = std::clamp(teamsCursorPlayer, 0, std::max(0, playerCount - 1));
+
+    // A fresh backdrop: this page covers the room completely.
+    if (netGameBackground) SDL_RenderTexture(rend, netGameBackground, nullptr, nullptr);
+    SDL_SetRenderDrawBlendMode(rend, SDL_BLENDMODE_BLEND);
+    SDL_SetRenderDrawColor(rend, 5, 10, 22, 168);
+    SDL_RenderFillRect(rend, nullptr);
+
+    // Top bar: the page, the room, and Done.
+    DrawCard(rend, {12, 10, 616, 44});
+    const int w = DrawTextLine(rend, T.TakeTeam(T.title), "SET TEAMS", kValue, kTextShadow, 28, 32);
+    char sub[64];
+    snprintf(sub, sizeof(sub), "%d players  \xC2\xB7  %.16s's room", playerCount, room->creator.c_str());
+    DrawTextLine(rend, T.TakeTeam(T.chat), sub, kLabel, kNoShadow, 28 + w + 14, 33);
+    teamsDoneRect = {538, 18, 82, 28};
+    DrawPill(rend, T.TakeTeam(T.value), "DONE", teamsDoneRect, true, false);
+
+    const SDL_Rect body = {12, 62, 616, 384};
+    DrawCard(rend, body);
+
+    // Auto: the host's one-tap splits, also a keyboard row (teamsAutoFocus).
+    if (isHost) {
+        DrawTextLine(rend, T.TakeTeam(T.tiny), "AUTO", kLabel, kNoShadow, 28, 76);
+        const char* labels[kMaxTeams] = {"NONE", "2", "3", "4", "5"};
+        int x = 70;
+        for (int b = 0; b < kMaxTeams; b++) {
+            const SDL_Rect r = {x, 65, b == 0 ? 50 : 30, 22};
+            const bool f = teamsAutoFocus == b;
+            FillRoundRect(rend, ToFRect(r), 8, f ? kIce : SDL_Color{127, 214, 255, 26});
+            if (!f) StrokeRoundRect(rend, ToFRect(r), 8, 1, SDL_Color{127, 214, 255, 72});
+            DrawTextLine(rend, T.TakeTeam(T.small), labels[b], f ? kInk : kFrost, kNoShadow,
+                         r.x + r.w / 2, r.y + r.h / 2, 1);
+            teamAutoBalanceTaps.push_back({r, b == 0 ? kNoTeam : b + 1});
+            x += r.w + 6;
+        }
+        DrawTextLine(rend, T.TakeTeam(T.chat), "splits everyone evenly", kLabel, kNoShadow, x + 6, 76);
+    }
+
+    // Column heads: the teams in their own colours.
+    const int teamX0 = 390, teamPitch = 38;
+    DrawTextLine(rend, T.TakeTeam(T.tiny), "PLAYER", kLabel, kNoShadow, 34, 108);
+    for (int t = kNoTeam; t <= kMaxTeams; t++) {
+        DrawTextLine(rend, T.TakeTeam(T.tiny), t == kNoTeam ? "NONE" : std::to_string(t).c_str(),
+                     t == kNoTeam ? kLabel : kTeamColors[t - 1], kNoShadow,
+                     teamX0 + t * teamPitch + 16, 108, 1);
+    }
+    SDL_SetRenderDrawColor(rend, kLine.r, kLine.g, kLine.b, kLine.a);
+    SDL_FRect rule = {22, 118, 596, 1};
+    SDL_RenderFillRect(rend, &rule);
+
+    // Nine rows at a time; the window follows the cursor, as on the
+    // classic page.
+    constexpr int kVisible = 9, kRowPitch = 34, kRowsTop = 126;
+    const int shown = std::min(playerCount, kVisible);
+    const int first = std::clamp(teamsCursorPlayer - shown + 1, 0, std::max(0, playerCount - shown));
+    if (playerCount > shown) {
+        char range[48];
+        snprintf(range, sizeof(range), "%d-%d of %d", first + 1, first + shown, playerCount);
+        DrawTextLine(rend, T.TakeTeam(T.tiny), range, kLabel, kNoShadow, 612, 76, 2);
+        const float trackH = kVisible * kRowPitch - 4;
+        FillRoundRect(rend, {622, (float)kRowsTop, 4, trackH}, 2, kRowIdle);
+        FillRoundRect(rend, {622, kRowsTop + trackH * first / playerCount, 4,
+                             trackH * shown / playerCount}, 2, kIce);
+    }
+
+    for (int k = 0; k < shown; k++) {
+        const int slot = first + k;
+        const NetworkPlayer& player = room->players[slot];
+        const SDL_Rect r = {22, kRowsTop + k * kRowPitch, 596, 30};
+        const int cy = r.y + r.h / 2;
+        const bool self = slot == mySlot;
+        // The host moves anyone, everyone else only themselves.
+        const bool editable = isHost || self;
+        const bool focused = slot == teamsCursorPlayer && teamsAutoFocus < 0;
+        if (focused) {
+            FillRoundRect(rend, ToFRect(r), 8, kRowFocus);
+            StrokeRoundRect(rend, ToFRect(r), 8, 1.5f, kIce);
+        } else if (k % 2) {
+            FillRoundRect(rend, ToFRect(r), 8, {127, 214, 255, 8});
+        }
+        char num[4];
+        snprintf(num, sizeof(num), "%d", slot + 1);
+        DrawTextLine(rend, T.TakeTeam(T.tiny), num, kLabel, kNoShadow, r.x + 22, cy, 2);
+        const int current = TeamOfSlot(slot);
+        if (current != kNoTeam)
+            FillRoundRect(rend, {(float)r.x + 32, (float)cy - 6, 12, 12}, 6, kTeamColors[current - 1]);
+        else
+            StrokeRoundRect(rend, {(float)r.x + 32, (float)cy - 6, 12, 12}, 6, 1.5f, {58, 75, 108, 255});
+        char nick[16];
+        snprintf(nick, sizeof(nick), "%.12s", player.nick.c_str());
+        int cx = r.x + 54 + DrawTextLine(rend, T.TakeTeam(T.value), nick, self ? kIce : kValue,
+                                          kNoShadow, r.x + 54, cy) + 8;
+        if (player.nick == room->creator) cx += DrawChip(rend, T.TakeTeam(T.tiny), "HOST", cx, cy, kGold) + 4;
+        if (self) DrawChip(rend, T.TakeTeam(T.tiny), "YOU", cx, cy, kIce, true);
+        if (editable) teamPlayerNameTaps.push_back({{r.x, r.y, teamX0 - 8 - r.x, r.h}, slot});
+
+        for (int t = kNoTeam; t <= kMaxTeams; t++) {
+            const SDL_Rect b = {teamX0 + t * teamPitch, r.y + 4, 32, r.h - 8};
+            const SDL_Color col = t == kNoTeam ? kLabel : kTeamColors[t - 1];
+            const bool on = t == current;
+            const SDL_FRect fb = ToFRect(b);
+            FillRoundRect(rend, fb, 7, on ? col : SDL_Color{127, 214, 255, 13});
+            if (on) StrokeRoundRect(rend, fb, 7, 2, kValue);
+            else StrokeRoundRect(rend, fb, 7, 1, {col.r, col.g, col.b, (Uint8)(editable ? 115 : 45)});
+            DrawTextLine(rend, T.TakeTeam(T.small), t == kNoTeam ? "-" : std::to_string(t).c_str(),
+                         on ? kInk : (editable ? kFrost : kLabel), kNoShadow, b.x + b.w / 2, cy, 1);
+            if (editable) teamSwatchTaps.push_back({b, slot, t});
+        }
+    }
+
+    menulist::DrawFooterHint(rend, panelText,
+        isHost ? "UP/DOWN player or Auto    LEFT/RIGHT or tap a team    ENTER applies Auto    ESC closes"
+               : "LEFT/RIGHT or tap a team    ESC / Done closes");
 }

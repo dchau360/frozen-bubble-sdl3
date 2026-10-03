@@ -61,6 +61,17 @@ struct MainMenuTestAccess {
     static GameMode Mode(const MainMenu& m) { return m.netGameMode; }
     static bool TeamsOpen(const MainMenu& m) { return m.showingTeamsPanel; }
     static void CloseTeams(MainMenu& m) { m.showingTeamsPanel = false; }
+    static void RenderTeams(MainMenu& m) { m.TeamsPanelRender(); }
+    static int TeamOf(const MainMenu& m, int slot) { return m.TeamOfSlot(slot); }
+    static int AutoFocus(const MainMenu& m) { return m.teamsAutoFocus; }
+    static int TeamsCursor(const MainMenu& m) { return m.teamsCursorPlayer; }
+    static void Key(MainMenu& m, SDL_Keycode key) {
+        SDL_Event e{};
+        e.type = SDL_EVENT_KEY_DOWN;
+        e.key.key = key;
+        e.key.down = true;
+        m.HandleInput(&e);
+    }
     static void Render(MainMenu& m) {
         m.NetPanelLobbyActionsRender();
         m.NetPanelChatDockRender();
@@ -204,6 +215,53 @@ int main() {
         CHECK(MainMenuTestAccess::Selected(*menu) == kRoomRosterTapBase + 1);
         MainMenuTestAccess::Tap(*menu, 380, 126);
         CHECK(MainMenuTestAccess::TeamsOpen(*menu));
+        CHECK(MainMenuTestAccess::TeamsCursor(*menu) == 1);
+
+        // Set Teams. A tap on a team button sets it at once: seat 2's row is
+        // the second (y 160..190), team 3's button starts at x 504.
+        MainMenuTestAccess::RenderTeams(*menu);
+        SDL_Surface* teams = Draw(renderer, *menu, "teams-modern-under");
+        if (teams) SDL_DestroySurface(teams);
+        MainMenuTestAccess::RenderTeams(*menu);
+        MainMenuTestAccess::Tap(*menu, 520, 175);
+        CHECK(MainMenuTestAccess::TeamOf(*menu, 1) == 3);
+
+        // The Auto buttons from the keyboard: UP past the first player onto
+        // Auto 2, RIGHT to Auto 3, ENTER splits everyone three ways.
+        MainMenuTestAccess::Key(*menu, SDLK_UP);
+        CHECK(MainMenuTestAccess::AutoFocus(*menu) == -1);
+        MainMenuTestAccess::Key(*menu, SDLK_UP);
+        CHECK(MainMenuTestAccess::AutoFocus(*menu) == 1);
+        MainMenuTestAccess::Key(*menu, SDLK_RIGHT);
+        CHECK(MainMenuTestAccess::AutoFocus(*menu) == 2);
+        MainMenuTestAccess::Key(*menu, SDLK_RETURN);
+        CHECK(MainMenuTestAccess::TeamsOpen(*menu));   // ENTER on Auto applies, not closes
+        CHECK(MainMenuTestAccess::TeamOf(*menu, 0) == 1);
+        CHECK(MainMenuTestAccess::TeamOf(*menu, 1) == 2);
+        CHECK(MainMenuTestAccess::TeamOf(*menu, 2) == 3);
+        CHECK(MainMenuTestAccess::TeamOf(*menu, 3) == 1);
+        {
+            SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
+            SDL_RenderClear(renderer);
+            MainMenuTestAccess::RenderTeams(*menu);
+            SDL_Surface* frame2 = SDL_RenderReadPixels(renderer, nullptr);
+            if (frame2) {
+                // The focused Auto 3 button (x 162..192, y 65..87) is solid
+                // ice; Auto 2 beside it (126..156) is not.
+                CHECK(IceAt(frame2, 176, 178, 70));
+                CHECK(!IceAt(frame2, 140, 142, 70));
+                if (const char* dump = SDL_getenv("FB_DUMP_DIR"))
+                    IMG_SavePNG(frame2, (std::string(dump) + "/teams-modern.png").c_str());
+                SDL_DestroySurface(frame2);
+            }
+        }
+        // DOWN goes back to the first player; Done closes.
+        MainMenuTestAccess::Key(*menu, SDLK_DOWN);
+        CHECK(MainMenuTestAccess::AutoFocus(*menu) == -1);
+        CHECK(MainMenuTestAccess::TeamsCursor(*menu) == 0);
+        MainMenuTestAccess::RenderTeams(*menu);
+        MainMenuTestAccess::Tap(*menu, 578, 32);
+        CHECK(!MainMenuTestAccess::TeamsOpen(*menu));
         NetworkClientTestAccess::SetCurrentGame(*nc, nullptr);
     }
 

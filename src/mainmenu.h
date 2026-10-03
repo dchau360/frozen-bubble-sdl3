@@ -777,11 +777,21 @@ private:
     // to is ApplyTeamChoice's business, not this panel's.
     bool showingTeamsPanel = false;
     int teamsCursorPlayer = 0;   // row (player slot) the keyboard cursor is on
+    // The host's Auto buttons as a keyboard row above the players: -1 while
+    // the cursor is on a player, else 0 = NONE and 1..4 = Auto 2..5. UP from
+    // the first player reaches it, LEFT/RIGHT move along it, ENTER applies.
+    int teamsAutoFocus = -1;
     // Opens the page with the cursor on `slot`, or -- for slot < 0, which is
     // what the [A] hotkey passes, having no row in mind -- on this player's
     // own row, since that is the one row everybody can always change.
     void OpenTeamsPanel(int slot = -1);
     void TeamsPanelRender();
+    // The same page in the Modern menu style (mainmenu_teammodern.cpp),
+    // publishing the same tap rects as the classic one.
+    void TeamsPanelRenderModern();
+    // Auto: every occupied seat across `teamCount` teams, or no team for
+    // kNoTeam. Host only; the Auto buttons and their keyboard row share it.
+    void ApplyAutoTeams(int teamCount);
     bool TeamsPanelKey(SDL_Event *e);  // true when consumed; modal like the guide
     // Modal too: every tap is consumed while this page is up, hit or miss,
     // so none can reach the room list still registered underneath it.
