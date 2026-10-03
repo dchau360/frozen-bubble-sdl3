@@ -192,6 +192,11 @@ public:
     // the MENU STYLE row through SetValue("Menu:Theme", "") (forward) or
     // SetValue("Menu:Theme", "-1") (back, LEFT on that row).
     int menuTheme() { return menuThemeId; }
+    // MENU_THEME_MODERN (5) and MENU_THEME_COUNT -- see menutheme.h. Kept as
+    // raw numbers rather than that header's enum: menutheme.h pulls in
+    // SDL_ttf, which every translation unit that merely reads a setting would
+    // otherwise pay for. menutheme.cpp static_asserts they match.
+    static constexpr int kMenuThemeDefault = 5, kMenuThemeCount = 6;
     SDL_Point curResolution() { return {windowWidth, windowHeight}; }
     bool fullscreenMode() { return useFullscreen; }
     bool linearScaling = false;
@@ -374,10 +379,7 @@ private:
     // type 'bool'" -- and an indeterminate gfxQuality silently changes which
     // rendering path the game takes. Defaults here match CreateDefaultSettings().
     int gfxQuality = 1, windowWidth = 640, windowHeight = 480;
-    // MENU_THEME_SLATE (2) -- see menutheme.h. Kept as a raw index rather
-    // than that header's enum: menutheme.h pulls in SDL_ttf, which every
-    // translation unit that merely reads a setting would otherwise pay for.
-    int menuThemeId = 2;
+    int menuThemeId = kMenuThemeDefault;
     bool useFullscreen = false, colorblindBubbles = false, modernGameTheme = true, modernBubbleSet = true;
     bool playMusic = true, playSfx = true, classicSound = false;
     bool showFps = false;

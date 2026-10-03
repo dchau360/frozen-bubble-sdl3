@@ -207,20 +207,20 @@ int main() {
 
     // The MENU STYLE row cycles the title-screen theme forward and wraps
     // around, and the choice has to survive a restart -- it is written
-    // through to settings.ini on every press, not only at shutdown. Slate
-    // (2) is a fresh install's default, not Classic -- CreateDefaultSettings
-    // above writes "2" for exactly this.
-    CHECK(settings->menuTheme() == 2);
-    const int expectedSequence[] = {3, 4, 0, 1, 2};
+    // through to settings.ini on every press, not only at shutdown. Modern
+    // (5) is a fresh install's default, not Classic -- CreateDefaultSettings
+    // above writes "5" for exactly this.
+    CHECK(settings->menuTheme() == 5);
+    const int expectedSequence[] = {0, 1, 2, 3, 4, 5};
     for (int expected : expectedSequence) {
         settings->SetValue("Menu:Theme", "");
         CHECK(settings->menuTheme() == expected);
         CHECK(iniHasKeyValue(settingsPath, "theme", std::to_string(expected)));
     }
 
-    // LEFT on the row steps back instead, wrapping from Classic to Pop, and
-    // is written through the same way.
-    const int backSequence[] = {1, 0, 4, 3, 2};
+    // LEFT on the row steps back instead, wrapping from Classic to Modern,
+    // and is written through the same way.
+    const int backSequence[] = {4, 3, 2, 1, 0, 5};
     for (int expected : backSequence) {
         settings->SetValue("Menu:Theme", "-1");
         CHECK(settings->menuTheme() == expected);
@@ -228,16 +228,24 @@ int main() {
     }
 
     settings->SetValue("Menu:Theme", "");
-    CHECK(settings->menuTheme() == 3);
+    CHECK(settings->menuTheme() == 0);
     settings->ReadSettings();
-    CHECK(settings->menuTheme() == 3);   // survives a restart
+    CHECK(settings->menuTheme() == 0);   // survives a restart
+
+    // A settings.ini written before Modern existed keeps the style it holds:
+    // Slate, the old default, stays Slate rather than turning into Modern.
+    settings->SetValue("Menu:Theme", "");
+    settings->SetValue("Menu:Theme", "");
+    CHECK(settings->menuTheme() == 2);
+    settings->ReadSettings();
+    CHECK(settings->menuTheme() == 2);
 
     // Regression: a settings.ini carried over from a build that predates the
     // Menu Style feature has no [menu] section at all. SetValue("Menu:Theme",
     // "") used to update the in-memory dictionary without first creating the
     // bare "Menu" section key, and iniparser_dump_ini() only ever dumps keys
     // under a section it can enumerate -- so the new theme silently vanished
-    // from every SaveSettings() call and reverted to Slate (2) on the next
+    // from every SaveSettings() call and reverted to the default on the next
     // restart, even though the title screen itself showed the newly chosen
     // theme for the rest of that session. Simulate that pre-feature file by
     // stripping the [menu] section out of what this test has built up so far.
@@ -253,17 +261,17 @@ int main() {
         std::ofstream(settingsPath) << ini;
     }
     settings->ReadSettings();
-    CHECK(settings->menuTheme() == 2);            // no key at all -> falls back to default
+    CHECK(settings->menuTheme() == 5);            // no key at all -> falls back to default
     CHECK(!iniHasKeyValue(settingsPath, "theme", "2"));  // confirms the section is really gone
 
     settings->SetValue("Menu:Theme", "");
-    CHECK(settings->menuTheme() == 3);
+    CHECK(settings->menuTheme() == 0);
     settings->ReadSettings();
-    CHECK(settings->menuTheme() == 3);            // must survive: this is the actual bug
-    CHECK(iniHasKeyValue(settingsPath, "theme", "3"));
+    CHECK(settings->menuTheme() == 0);            // must survive: this is the actual bug
+    CHECK(iniHasKeyValue(settingsPath, "theme", "0"));
 
     // A file written by some other build, carrying a theme id this one has no
-    // style entry for, must fall back to the same default (Slate) rather
+    // style entry for, must fall back to the same default (Modern) rather
     // than index past the end of the table -- MenuStyleFor() is indexed by
     // this value directly.
     {
@@ -280,7 +288,7 @@ int main() {
         std::ofstream(settingsPath) << ini;
     }
     settings->ReadSettings();
-    CHECK(settings->menuTheme() == 2);
+    CHECK(settings->menuTheme() == 5);
 
     // A table written before shots were counted: four fields a row. It must
     // still load (and come back out with shots 0) rather than be dropped.

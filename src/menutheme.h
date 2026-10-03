@@ -34,7 +34,10 @@
  * Clear is deliberately not a hand-coded imitation of the Classic plate: it
  * blits the same artwork Classic uses, from the label-free plate that
  * tools/make-menustyle-plate.py cloned out of it, and puts clean type on top.
- * Only Slate, Ice and Pop paint their own plate.
+ * Slate, Ice and Pop paint their own plate. Modern draws the in-game
+ * theme's rounded dark card (modernui.h), marks the selected row with a candy
+ * bubble, and dims the artwork behind the column (MenuThemeDrawBackdrop).
+ * It is appended last so the ids saved in settings.ini keep their meaning.
  */
 enum MenuThemeId {
     MENU_THEME_CLASSIC = 0,
@@ -42,6 +45,7 @@ enum MenuThemeId {
     MENU_THEME_SLATE,
     MENU_THEME_ICE,
     MENU_THEME_POP,
+    MENU_THEME_MODERN,
     MENU_THEME_COUNT
 };
 
@@ -61,6 +65,8 @@ struct MenuThemeStyle {
     SDL_Color plateTopActive, plateBotActive, plateBorderActive;
     SDL_Color topHighlight;   // 1px line inside the top edge; a=0 disables
     SDL_Color railActive;     // left accent bar on the selected row; a=0 disables
+    bool  roundCard;          // Modern's rounded card instead of a square plate
+    int   activeLabelShift;   // selected label moves right to clear a marker
 };
 
 const MenuThemeStyle &MenuStyleFor(int theme);
@@ -69,6 +75,11 @@ const MenuThemeStyle &MenuStyleFor(int theme);
 // rows -- MenuButton blits those directly -- but is called for its MENU STYLE
 // row, which has no baked art because its label names the current theme.
 void MenuThemeDrawPlate(const SDL_Renderer *rend, const SDL_Rect &rect, int theme, bool active);
+
+// Draws whatever a theme puts between the title screen's artwork and its
+// rows: Modern dims the left of the screen so its cards read against the
+// busy artwork. Nothing for the other themes.
+void MenuThemeDrawBackdrop(const SDL_Renderer *rend, int theme);
 
 // Renders one label into a new texture the caller owns. Returns nullptr if the
 // theme has no font (Classic's baked rows) or the font failed to open.
