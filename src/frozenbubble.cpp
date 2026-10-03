@@ -867,6 +867,13 @@ void FrozenBubble::HandleInput(SDL_Event *e) {
                     gameOptions->SetValue("GFX:Fullscreen", "");
                     SDL_SetWindowFullscreen(window, gameOptions->fullscreenMode());
                     break;
+                case SDLK_P:
+                    // P as a second pause key, for the many keyboards with
+                    // no Pause key (every Mac's). 1-player games only, the
+                    // same games that show the pause button: P has no other
+                    // job in a game, but it does in the online lobby.
+                    if (currentState != MainGame || !mainGame->ShowsPauseButton()) break;
+                    [[fallthrough]];
                 case SDLK_PAUSE:
                     CallGamePause();
                     if (currentState == MainGame) {

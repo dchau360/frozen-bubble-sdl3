@@ -1,9 +1,8 @@
-# Modern in-game theme — plan (parked)
+# Modern in-game theme — plan
 
-Status: **built on the `modern-theme` branch, not yet merged or released.**
-Every step below is done except the last two: deciding whether it ships on
-by default (it is on now), and a manual play-through on Android and the web
-build. Restyling the online multiplayer screens is not part of it; online
+Status: **shipped in v2.4.133**, on by default (PR #187). The in-game theme
+and the bubbles are separate settings in the 1-player menu. Kept as the
+record of what was planned and why. Restyling the online multiplayer screens is not part of it; online
 games get the new bubbles only.
 
 Preview mockups (private claude.ai artifacts, owner's account):

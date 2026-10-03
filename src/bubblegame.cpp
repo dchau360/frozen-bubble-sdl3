@@ -158,6 +158,9 @@ BubbleGame::BubbleGame(const SDL_Renderer *renderer)
     shotsText.LoadFont(ASSET("/gfx/DroidSans.ttf").c_str(), 18);
     shotsText.UpdateAlignment(TTF_HORIZONTAL_ALIGN_LEFT);
     shotsText.UpdateColor({255, 255, 255, 255}, {0, 0, 0, 255});
+    runTimeText.LoadFont(ASSET("/gfx/DroidSans.ttf").c_str(), 18);
+    runTimeText.UpdateAlignment(TTF_HORIZONTAL_ALIGN_LEFT);
+    runTimeText.UpdateColor({255, 255, 255, 255}, {0, 0, 0, 255});
 
     modernFonts.Load();
 

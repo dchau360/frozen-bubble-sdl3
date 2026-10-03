@@ -677,6 +677,10 @@ public:
     Uint64 modernPauseStartMs = 0;
     Uint64 levelIntroStartMs = 0;    // 0 = the drop-in starts on the next frame after the transition
     void DrawModernHud(SDL_Renderer *rend, BubbleArray &bArray);
+    // The run's clock as the highscore tables time it (from NewGame, through
+    // CONTINUE, less any pause), held still once the level is finished.
+    // Both themes show it; 0 outside a live game.
+    Uint64 RunClockMs();
     void DrawModernResultCard(SDL_Renderer *rend, BubbleArray &bArray);
 
     // The CONTINUE? prompt: after a death in a classic solo game, the first ENTER / tap
@@ -964,6 +968,7 @@ private:
     // even when nothing about that player's own line changed frame to frame.
     TTFText scoreText[2];     // "Score: N" / "Nickname[: N]", indexed by player slot (single-player and 2P only)
     TTFText shotsText;        // "Shots: N" under the 1-player score
+    TTFText runTimeText;      // "Time: 3'07"" under it (original theme)
     TTFText playerNameWinText[MAX_NET_PLAYERS];  // "PlayerName: WinCount" for each player (3-5 player mode)
     // Live popped-bubble count per player, drawn to the right of that
     // player's own "next bubble" preview slot. Shown in every multiplayer

@@ -36,13 +36,14 @@ To play on an iPhone, use the browser build.
 
 ## What it does
 
-- **Single player** through the original level set, plus a level editor.
+- **Single player** through the original 100 levels, now with points, a
+  time bonus for fast clears, online highscores and a level editor.
 - **Local multiplayer** for 2–5 players, with gamepad support. Games above
   two players are experimental and less play-tested than the rest. Empty
   seats can be filled with bots. Above five players, use a network room.
 - **Network multiplayer** against the original `fb-server` protocol, so this
   port and the original game can share a server.
-- **Chain reactions**, malus attacks and the original scoring — ported against
+- **Chain reactions** and malus attacks — ported against
   the Perl source rather than reimplemented from memory.
 
 ## Screens

@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- **P pauses 1-player games.** Most keyboards (every Mac's included) have no Pause key, so **P** now pauses and resumes a 1-player game too. The Pause key, gamepad Start and the on-screen button still work.
+- **Run time in the original theme.** A 1-player game in the original theme now shows **Time: 3'07"** under the shot count: the whole run's time, the same clock the high score tables use. It keeps going when you Continue, and stops while paused or once a level is finished. The modern theme's score panel already showed it.
+
 ## v2.4.134
 
 - **A time bonus for clearing a level, like Bust-a-Move's.** In 1-player games, clearing a level in 5 seconds or less is worth 5,000 points, then 84 less for every second after that, down to nothing at 65 seconds. It replaces the flat 1,000 every clear used to get. The level-cleared panel now shows how long the level took and the bonus it earned.
