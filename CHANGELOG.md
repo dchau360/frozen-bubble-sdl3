@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v2.4.136
 
 - **Level cleared shows that level's points.** The score on the level-cleared panel (both themes) is now what the level just earned, time bonus included, rather than the run's running total. The total is still in the score panel.
 
