@@ -1,5 +1,11 @@
 # Changelog
 
+## v2.4.137
+
+- **Sharper text on big screens.** Menu and game text is now drawn at your screen's real resolution instead of being stretched up from 640×480, so it stays crisp on large windows, fullscreen and high-density (Retina) displays. The board and sprites look the same as before. GRAPHICS Low turns it off.
+- **Modern menu style.** A new **Modern** look for the title screen, matching the modern in-game theme: dark rounded cards, with a candy bubble on the selected row. Every player is switched to it once with this update; pick another look with **STYLE** on the title screen and it is kept.
+- **Modern 1-player menu.** With the Modern style, the 1-player menu is a card too. Each game mode has a line saying what it does, and the settings are switches. **LEFT/RIGHT** now flip a setting in the 1-player menu, in either style.
+
 ## v2.4.136
 
 - **Level cleared shows that level's points.** The score on the level-cleared panel (both themes) is now what the level just earned, time bonus included, rather than the run's running total. The total is still in the score panel.
