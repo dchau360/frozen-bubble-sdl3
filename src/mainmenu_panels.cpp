@@ -304,6 +304,12 @@ void MainMenu::SPPanelRender() {
     // The account screen is full-screen and takes over until it is closed,
     // back to this panel.
     if (showingAccount) { AccountPanelRender(); return; }
+    if (GameSettings::Instance()->menuTheme() == MENU_THEME_MODERN) {
+        SPPanelRenderModern();
+        if (spAimPrompt) SPAimPromptRender();
+        if (spNamePrompt) SPNamePromptRender();
+        return;
+    }
     EnsureSPLabels();
     SDL_Renderer *rend = const_cast<SDL_Renderer*>(renderer);
 

@@ -343,6 +343,13 @@ private:
 
     SDL_Rect voidPanelRct = {(640/2) - (341/2), (480/2) - (280/2), 341, 280};
     void SPPanelRender();
+    // The same panel in the Modern menu style (mainmenu_spmodern.cpp): a
+    // card with a line under each mode saying what it does, and switches for
+    // the settings rows. Same rows, indices and tap handling as the wood one.
+    struct SPModernText;
+    SPModernText *spModern = nullptr;
+    void SPPanelRenderModern();
+    void FreeSPModern();
 
     //Options panel render
     bool showingOptPanel = false, awaitKp = false, runDelay = false;

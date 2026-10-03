@@ -1403,6 +1403,15 @@ void MainMenu::MenuDownKey() {
 }
 
 void MainMenu::MenuLeftRightKey(SDL_Event *e) {
+                    // 1-player menu: each settings row has two values, so
+                    // either key flips it, the same as ENTER (press()). The
+                    // Modern style's footer offers this; the account row and
+                    // the game modes ignore it.
+                    if (showingSPPanel) {
+                        if (activeSPIdx >= kSPRowWorldScores && activeSPIdx != kSPRowAccount)
+                            press();
+                        return;
+                    }
                     // Title screen, GRAPHICS and MENU STYLE rows: LEFT/RIGHT
                     // step through the values (ENTER and a tap still step the
                     // RIGHT way).
