@@ -133,6 +133,7 @@ void GameSettings::CreateDefaultSettings()
 
         EvalIniResult(rval, dict, "Menu", NULL);
         EvalIniResult(rval, dict, "Menu:Theme", "5"); // MENU_THEME_MODERN
+        EvalIniResult(rval, dict, "Menu:ModernSwitched", "true");
 
         EvalIniResult(rval, dict, "Sound", NULL);
         EvalIniResult(rval, dict, "Sound:EnableMusic", "true");
@@ -258,6 +259,7 @@ void GameSettings::ReadSettings()
         CreateDefaultSettings();
         optDict = iniparser_load(setPath);
     }
+    const bool setFileLoaded = optDict != NULL;
     if (optDict == NULL)
     {
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
@@ -270,11 +272,20 @@ void GameSettings::ReadSettings()
     // 5 == MENU_THEME_MODERN, the default for a fresh install (see
     // CreateDefaultSettings above) and also what a missing or invalid value
     // falls back to -- a file from a future build carrying a theme id past
-    // MENU_THEME_COUNT indexes MenuStyleFor() out of bounds otherwise. A
-    // settings.ini from before Modern existed already holds the player's
-    // style, Slate (2) if they never changed it, and keeps it.
+    // MENU_THEME_COUNT indexes MenuStyleFor() out of bounds otherwise.
     menuThemeId = iniparser_getint(optDict, "Menu:Theme", kMenuThemeDefault);
     if (menuThemeId < 0 || menuThemeId >= kMenuThemeCount) menuThemeId = kMenuThemeDefault;
+    // Every player is moved to Modern once, whatever style they had (user
+    // decision); Menu:ModernSwitched records that it happened, so a style
+    // picked afterwards is kept. Skipped when the file could not be read,
+    // since nothing would be saved.
+    if (setFileLoaded && !iniparser_getboolean(optDict, "Menu:ModernSwitched", false)) {
+        menuThemeId = kMenuThemeDefault;
+        iniparser_set(optDict, "Menu", NULL);
+        iniparser_set(optDict, "Menu:Theme", std::to_string(kMenuThemeDefault).c_str());
+        iniparser_set(optDict, "Menu:ModernSwitched", "true");
+        SaveSettings();
+    }
     linearScaling = iniparser_getboolean(optDict, "GFX:LinearScaling", false);
     useFullscreen = iniparser_getboolean(optDict, "GFX:Fullscreen", false);
     windowWidth = iniparser_getint(optDict, "GFX:WindowWidth", 640);
