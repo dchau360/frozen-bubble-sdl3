@@ -46,7 +46,7 @@ Every mode plays the same whether you're local or online, and the host can adjus
 > have had rendering glitches. Two causes are fixed (see
 > [CHANGELOG.md](CHANGELOG.md)); the mode has not had a full pass since.
 
-**Single player** — 100 levels of classic bubble-popping, with scoring and chain reactions. A shot counter under the score shows how many bubbles you've fired this run. Lose a level and you're asked whether to **Continue** (retry that level, score back to 0, the run's clock and shot count keep going) or **Start over** from level 1. Your best runs are kept on the **High Scores** screen, each with its level, time and shot count.
+**Single player** — 100 levels of classic bubble-popping, with scoring and chain reactions. Clear a level fast for a time bonus, Bust-a-Move style: 5,000 points within 5 seconds, 84 fewer per second after that, nothing from 65 seconds. A shot counter and the run's total time sit under the score. Lose a level and you're asked whether to **Continue** (retry that level, score back to 0, the run's clock and shot count keep going) or **Start over** from level 1. Your best runs are kept on the **High Scores** screen, each with its level, time and shot count.
 
 **Modern in-game theme** (on by default; switch it under **In-game theme** in the 1-player menu). In a 1-player game: a score panel down the left (level, score counting up, shots, time), cards for level cleared, game over and pause, the next level dropping in row by row, and an "N DROPPED!" when a shot cuts bubbles loose. The background, penguin, launcher, sounds and scoring stay as they were; **Original** brings back the classic look. The glossy candy bubbles are a separate switch, **Bubbles** (CANDY / CLASSIC, also on by default), so either set goes with either look; they apply in every mode, multiplayer included.
 
@@ -214,7 +214,7 @@ a Discord channel of your choosing — see [SetupServer.md](SetupServer.md#optio
 - [Privacy policy](https://dchau360.github.io/frozen-bubble-sdl3/privacy/) — what data the app and its servers handle
 - [Building from source](docs/BUILDING.md) — all platforms, including WebAssembly, Android and iOS
 - [iOS notes](docs/IOS.md) — experimental unsigned build, and how to sign it
-- [Compared with the original](docs/PARITY.md) — features added, fixes to the original's own server code, and what's reproduced unchanged
+- [Compared with the original](docs/PARITY.md) — 69 numbered differences (features added, rules changed, fixes to the original's own server code), plus what's reproduced unchanged
 - [Browser build notes](web/README.md) — saved data, Emscripten port status, serving locally
 
 ---
