@@ -8,8 +8,11 @@ import {tmpdir} from 'node:os';
 import {delimiter as pathDelimiter, join, resolve} from 'node:path';
 import {spawn} from 'node:child_process';
 
+// Carries Menu:ModernSwitched so the game has nothing to change on load: a
+// file without it gets the one-time switch to the Modern menu style written
+// back (GameSettings::ReadSettings), which is not what this test checks.
 const SETTINGS_FIXTURE =
-    '[GFX]\nQuality = 2\n[Keys]\nSpeedMultiplier = 4.25\n';
+    '[GFX]\nQuality = 2\n[Keys]\nSpeedMultiplier = 4.25\n[Menu]\nModernSwitched = true\n';
 const HIGHSCORES_FIXTURE = '17,Browser Test,12.5,3\n';
 const HISTORY_FIXTURE =
 `0   1   2   3   4   5   6   7
