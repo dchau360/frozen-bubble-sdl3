@@ -8,13 +8,13 @@ in [`server/`](../server/).
 
 ## The count
 
-**69 differences from the original**, numbered 1–69 below:
+**70 differences from the original**, numbered 1–70 below:
 
 | Section | Numbers | How many |
 |---|---|---|
-| [Features added](#features-added) | 1–56 | 56 |
-| [Plays differently](#plays-differently) | 57–61 | 5 |
-| [Fixes to the original server](#fixes-to-the-original-server) | 62–69 | 8 |
+| [Features added](#features-added) | 1–57 | 57 |
+| [Plays differently](#plays-differently) | 58–62 | 5 |
+| [Fixes to the original server](#fixes-to-the-original-server) | 63–70 | 8 |
 
 Numbers run on from one table to the next, so the last row of the last table
 is the total. When a difference is added, give it the next free number in its
@@ -91,49 +91,50 @@ twenty, which needed new UI to be playable at all:
 | 22 | **Candy bubbles** — a glossy redraw of the eight colours and their colour-blind versions, as their own setting (**Bubbles: Candy / Classic**), so either set goes with either theme, in every mode | v2.4.133 |
 | 23 | **Menu styles** — five looks for the title screen: Classic (the original artwork), Clear, Slate, Ice and Pop | v2.4.65 |
 | 24 | **On-screen pause button** in 1-player games, for touch screens; **P** pauses too, since most keyboards have no Pause key (next release). The original paused on the Pause key only | v2.4.133 |
+| 25 | **Sharp text** — on a big monitor, a TV, a Retina Mac or a phone, words are drawn at the screen's own resolution instead of being stretched up from the 640×480 game screen, so scores, cards, popups and menus stay crisp; the board keeps its pixel art. GRAPHICS set to Low brings back the stretched text. Not in the browser build | next release |
 
 ### Feedback and information
 
 | # | Feature | Added |
 |---|---|---|
-| 25 | **Post-round stats table** — bubbles fired and popped, malus sent and received, per player. Network clients broadcast their own numbers so everyone sees exact figures for everyone | v2.4.24 |
-| 26 | **Lobby match summary** — the host posts final standings to lobby chat when a match ends | v2.4.24 |
-| 27 | **Incoming-malus indicator** — a fading toast naming who attacked you and how many bubbles they sent; repeated hits aggregate | v2.4.24 |
-| 28 | **Aim guide** — per-player trajectory preview | v2.3.0 |
-| 29 | **Performance overlay** (**F3**) — frame rate, frame-time range, and effective game speed against the configured speed | v2.4.30 |
-| 30 | **Lobby refresh** — persistent chat dock, scrollable room cards with player count and cap, online-player sidebar | v2.4.26 |
-| 31 | **Platform, input and country badges** — beside each name in a network game: the player's system, and each round whether they shoot with keyboard, mouse, touch or gamepad | v2.4.105 |
+| 26 | **Post-round stats table** — bubbles fired and popped, malus sent and received, per player. Network clients broadcast their own numbers so everyone sees exact figures for everyone | v2.4.24 |
+| 27 | **Lobby match summary** — the host posts final standings to lobby chat when a match ends | v2.4.24 |
+| 28 | **Incoming-malus indicator** — a fading toast naming who attacked you and how many bubbles they sent; repeated hits aggregate | v2.4.24 |
+| 29 | **Aim guide** — per-player trajectory preview | v2.3.0 |
+| 30 | **Performance overlay** (**F3**) — frame rate, frame-time range, and effective game speed against the configured speed | v2.4.30 |
+| 31 | **Lobby refresh** — persistent chat dock, scrollable room cards with player count and cap, online-player sidebar | v2.4.26 |
+| 32 | **Platform, input and country badges** — beside each name in a network game: the player's system, and each round whether they shoot with keyboard, mouse, touch or gamepad | v2.4.105 |
 
 ### Online services
 
 | # | Feature | Added |
 |---|---|---|
-| 32 | **Weekly rankings** — each server ranks players by round wins, round losses and bubbles popped for the week (reset Monday 00:00 UTC, bots not counted), shown on a lobby screen, as `#N` badges in the online-player sidebar, and on the web at [/weekly/](https://fb.servequake.com/weekly/) | v2.4.116 |
-| 33 | **Online highscores** — one online board for classic single-player runs: furthest level and most points in one life, keyboard vs mouse/touch, all-time and this week, in the game and on the web at [/scores/](https://fb.servequake.com/scores/) | v2.4.120 |
-| 34 | **Anonymous player accounts** — a recovery code on the device, signed in by challenge-response, so rankings and highscores belong to a player rather than a name. The code can be copied to another device, replaced, or the account deleted from the game | v2.4.118 |
-| 35 | **Discord alerts** (server operator's choice) — a post when a player joins, and per round the result, its length, a win-count chart and bubbles popped, threaded per room | v2.4.101 |
-| 36 | **Follow a server** — star a server in the LAN or Net list and be notified when someone joins it | v2.4.37 |
-| 37 | **Join our Discord** — a row on the server list and in the lobby that opens the community Discord | — |
-| 38 | **Website** — a landing page, privacy policy, the online highscores and the weekly rankings, served by the same nginx as the game's WebSocket proxy and on GitHub Pages | v2.4.116 |
+| 33 | **Weekly rankings** — each server ranks players by round wins, round losses and bubbles popped for the week (reset Monday 00:00 UTC, bots not counted), shown on a lobby screen, as `#N` badges in the online-player sidebar, and on the web at [/weekly/](https://fb.servequake.com/weekly/) | v2.4.116 |
+| 34 | **Online highscores** — one online board for classic single-player runs: furthest level and most points in one life, keyboard vs mouse/touch, all-time and this week, in the game and on the web at [/scores/](https://fb.servequake.com/scores/) | v2.4.120 |
+| 35 | **Anonymous player accounts** — a recovery code on the device, signed in by challenge-response, so rankings and highscores belong to a player rather than a name. The code can be copied to another device, replaced, or the account deleted from the game | v2.4.118 |
+| 36 | **Discord alerts** (server operator's choice) — a post when a player joins, and per round the result, its length, a win-count chart and bubbles popped, threaded per room | v2.4.101 |
+| 37 | **Follow a server** — star a server in the LAN or Net list and be notified when someone joins it | v2.4.37 |
+| 38 | **Join our Discord** — a row on the server list and in the lobby that opens the community Discord | — |
+| 39 | **Website** — a landing page, privacy policy, the online highscores and the weekly rankings, served by the same nginx as the game's WebSocket proxy and on GitHub Pages | v2.4.116 |
 
 ### Players and moderation
 
 | # | Feature | Added |
 |---|---|---|
-| 39 | **Block and report** — `/block` hides a player's chat (saved per device), `/report` sends a note to the server's operator | v2.4.40 |
-| 40 | **Kick** — the room's host can `/kick p2` or `/kick <nick>` | v2.4.41 |
-| 41 | **Remembered room settings** — a host's last room setup carries over to the next room, across restarts | v2.4.64 |
+| 40 | **Block and report** — `/block` hides a player's chat (saved per device), `/report` sends a note to the server's operator | v2.4.40 |
+| 41 | **Kick** — the room's host can `/kick p2` or `/kick <nick>` | v2.4.41 |
+| 42 | **Remembered room settings** — a host's last room setup carries over to the next room, across restarts | v2.4.64 |
 
 ### Controls and settings
 
 | # | Feature | Added |
 |---|---|---|
-| 42 | **Mouse and touch aiming**, host-controlled per room and synced to all players; on by default where there is no keyboard | — |
-| 43 | **Controller support** with per-player rebinding of any button, and one-click restore of defaults | v2.3.1 |
-| 44 | **Game speed setting**, 1.0–5.0×, saved per device | v2.4.12 |
-| 45 | **Frame-rate-independent movement**, so the game runs at the same speed regardless of display refresh | v2.4.9 |
-| 46 | **Touch gestures** — tap-to-select in list panels, swipe left to go back or to leave a round | v2.4.35 |
-| 47 | **Sound toggle**, **fullscreen toggle**, **saved nickname** | v2.4.15, v2.4.24, v2.4.16 |
+| 43 | **Mouse and touch aiming**, host-controlled per room and synced to all players; on by default where there is no keyboard | — |
+| 44 | **Controller support** with per-player rebinding of any button, and one-click restore of defaults | v2.3.1 |
+| 45 | **Game speed setting**, 1.0–5.0×, saved per device | v2.4.12 |
+| 46 | **Frame-rate-independent movement**, so the game runs at the same speed regardless of display refresh | v2.4.9 |
+| 47 | **Touch gestures** — tap-to-select in list panels, swipe left to go back or to leave a round | v2.4.35 |
+| 48 | **Sound toggle**, **fullscreen toggle**, **saved nickname** | v2.4.15, v2.4.24, v2.4.16 |
 
 ### Platforms
 
@@ -141,15 +142,15 @@ The original was Linux-only.
 
 | # | Platform | Notes |
 |---|---|---|
-| 48 | **macOS** (Apple Silicon) | Native build |
-| 49 | **Windows** | Native build, installer |
-| 50 | **Linux AppImage** | Single-file build that runs on most distributions |
-| 51 | **Android** (phones, tablets, TV) | One APK; controller-first on TV, rotates freely on a phone or tablet; on Google Play |
-| 52 | **Android ads, removable** | The Play build shows ads, removable by a yearly subscription or a one-time unlock (v2.4.40) |
-| 53 | **Browser** (WebAssembly) | Runs on desktop and mobile, including iPhone. Browser clients reach the same server as native ones over WebSocket, so they play together |
-| 54 | **Browser saves** | Settings, key bindings, level history and high scores persist across a reload via IndexedDB (v2.4.34) |
-| 55 | **iOS** (experimental) | Builds and runs, unsigned; not distributed — see [IOS.md](IOS.md) (v2.4.35) |
-| 56 | **Server in Docker** | `fb-server` plus an nginx TLS/WebSocket front end in one compose stack — see [SetupServer.md](../SetupServer.md) |
+| 49 | **macOS** (Apple Silicon) | Native build |
+| 50 | **Windows** | Native build, installer |
+| 51 | **Linux AppImage** | Single-file build that runs on most distributions |
+| 52 | **Android** (phones, tablets, TV) | One APK; controller-first on TV, rotates freely on a phone or tablet; on Google Play |
+| 53 | **Android ads, removable** | The Play build shows ads, removable by a yearly subscription or a one-time unlock (v2.4.40) |
+| 54 | **Browser** (WebAssembly) | Runs on desktop and mobile, including iPhone. Browser clients reach the same server as native ones over WebSocket, so they play together |
+| 55 | **Browser saves** | Settings, key bindings, level history and high scores persist across a reload via IndexedDB (v2.4.34) |
+| 56 | **iOS** (experimental) | Builds and runs, unsigned; not distributed — see [IOS.md](IOS.md) (v2.4.35) |
+| 57 | **Server in Docker** | `fb-server` plus an nginx TLS/WebSocket front end in one compose stack — see [SetupServer.md](../SetupServer.md) |
 
 ---
 
@@ -161,11 +162,11 @@ look) aren't counted again.
 
 | # | Difference | Original | Here |
 |---|---|---|---|
-| 57 | **Losing a classic level** | The level restarts straight away | Asked first: **Continue** retries that level with the score back to 0 while the run's clock and shots keep counting, or **Start over** goes back to level 1 (v2.4.120) |
-| 58 | **Highscores** | One table: furthest level, then time | Furthest level and most points in one life, kept separately for keyboard/gamepad and mouse/touch (a level where both were used counts as mouse/touch, v2.4.130), each record with its shot count |
-| 59 | **Replays** | Recorded on Print Screen (or every game with `--auto-record`) to a file, played back with `--replay` from the command line | Every finished round recorded automatically to a rolling library on the device and played back from the Replays page (v2.4.108) |
-| 60 | **Continue when players leave** | A room setting | Always on (v2.4.36) |
-| 61 | **Title screen** | The original menu artwork | The Slate menu style by default; **Classic** keeps the original (v2.4.67) |
+| 58 | **Losing a classic level** | The level restarts straight away | Asked first: **Continue** retries that level with the score back to 0 while the run's clock and shots keep counting, or **Start over** goes back to level 1 (v2.4.120) |
+| 59 | **Highscores** | One table: furthest level, then time | Furthest level and most points in one life, kept separately for keyboard/gamepad and mouse/touch (a level where both were used counts as mouse/touch, v2.4.130), each record with its shot count |
+| 60 | **Replays** | Recorded on Print Screen (or every game with `--auto-record`) to a file, played back with `--replay` from the command line | Every finished round recorded automatically to a rolling library on the device and played back from the Replays page (v2.4.108) |
+| 61 | **Continue when players leave** | A room setting | Always on (v2.4.36) |
+| 62 | **Title screen** | The original menu artwork | The Slate menu style by default; **Classic** keeps the original (v2.4.67) |
 
 ---
 
@@ -175,14 +176,14 @@ All of these are in original `fb-server` code and are still present upstream.
 
 | # | Fixed | What was wrong | Release |
 |---|---|---|---|
-| 62 | **Crash on simultaneous disconnects** | Tearing down a room recursively freed the game while an outer frame was still using it (`game.c`). On a normal build this corrupted whichever branch it read next and could write a bogus win to the stats file; under a sanitizer it aborted the whole process, taking every unrelated room down with it | v2.4.28 |
-| 63 | **Player impersonation** | The server relayed each in-game message with the sender byte exactly as the client wrote it, so any client could claim to be any other player in its room — or the room leader. Every relayed message is now stamped with the seat the server assigned | v2.4.29 |
-| 64 | **One stray message could kill the server** | A connection left in a room that had closed or kicked it could terminate the entire server process with its next in-game message. Only that connection closes now | v2.4.29 |
-| 65 | **Malformed LAN discovery packet** | A full-length discovery datagram made the server read past the end of its receive buffer | v2.4.28 |
-| 66 | **Silent privilege-drop failure** | Started with `-u`, a failed switch to the requested user was ignored and the daemon carried on with full privileges, keeping its supplementary groups. It now refuses to start | v2.4.29 |
-| 67 | **Unchecked master-server reply** | A hostile or broken master-server response could steer the server's own buffer arithmetic; the length is range-checked before use | v2.4.29 |
-| 68 | **Busy discovery port aborted startup** | If anything else held the LAN discovery port the server refused to start at all. It now serves games normally and reports only that broadcast discovery is unavailable | v2.4.31 |
-| 69 | **Lobby free-player count** | `LIST` reported a `free:` count that contradicted the open-player list in the same message, counting players seated in not-yet-started rooms as free | — |
+| 63 | **Crash on simultaneous disconnects** | Tearing down a room recursively freed the game while an outer frame was still using it (`game.c`). On a normal build this corrupted whichever branch it read next and could write a bogus win to the stats file; under a sanitizer it aborted the whole process, taking every unrelated room down with it | v2.4.28 |
+| 64 | **Player impersonation** | The server relayed each in-game message with the sender byte exactly as the client wrote it, so any client could claim to be any other player in its room — or the room leader. Every relayed message is now stamped with the seat the server assigned | v2.4.29 |
+| 65 | **One stray message could kill the server** | A connection left in a room that had closed or kicked it could terminate the entire server process with its next in-game message. Only that connection closes now | v2.4.29 |
+| 66 | **Malformed LAN discovery packet** | A full-length discovery datagram made the server read past the end of its receive buffer | v2.4.28 |
+| 67 | **Silent privilege-drop failure** | Started with `-u`, a failed switch to the requested user was ignored and the daemon carried on with full privileges, keeping its supplementary groups. It now refuses to start | v2.4.29 |
+| 68 | **Unchecked master-server reply** | A hostile or broken master-server response could steer the server's own buffer arithmetic; the length is range-checked before use | v2.4.29 |
+| 69 | **Busy discovery port aborted startup** | If anything else held the LAN discovery port the server refused to start at all. It now serves games normally and reports only that broadcast discovery is unavailable | v2.4.31 |
+| 70 | **Lobby free-player count** | `LIST` reported a `free:` count that contradicted the open-player list in the same message, counting players seated in not-yet-started rooms as free | — |
 
 ---
 

@@ -189,6 +189,15 @@ FrozenBubble::FrozenBubble() {
 #endif
 #endif
 
+#ifndef __WASM_PORT__
+    // Render at the display's real pixels on a Retina Mac or an iPhone,
+    // where the window is otherwise drawn at point size and the system
+    // doubles it, softening the sharp text (UpdateTextScale) along with
+    // everything else. Input is unaffected: every pointer and touch path
+    // goes through SDL_RenderCoordinatesFromWindow, which accounts for it.
+    // Not on the web build, whose canvas is pinned at 640x480 below.
+    fullscreen |= SDL_WINDOW_HIGH_PIXEL_DENSITY;
+#endif
     window = SDL_CreateWindow("Frozen-Bubble: SDL3", resolution.x, resolution.y, fullscreen);
     // SDL3: texture scale mode is set per-texture, not globally via hint.
     // Linear scaling will be applied when textures are created.
