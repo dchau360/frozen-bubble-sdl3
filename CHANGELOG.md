@@ -1,5 +1,11 @@
 # Changelog
 
+## v2.4.139
+
+- **Modern lobby, settings and Set Teams.** With the Modern menu style, the online lobby, the Controls & Settings screen and the Set Teams page now use the same cards as the rest of the menus. The lobby lists every room with its players, and your key bindings show as keys.
+- **Auto teams from the keyboard.** On the Set Teams page, the host's Auto buttons can now be reached with the keyboard or a gamepad (UP from the first player), not only by tapping.
+- **"You Win!"** The round-end banner no longer says "You Wins!".
+
 ## v2.4.138
 
 - **Modern game room.** With the Modern menu style, the online game room is laid out as cards: the room and the host's Start button along the top, the match rules with each player's settings under them, the players with their teams, and the chat along the bottom. Settings show as switches, and every row can be tapped.
