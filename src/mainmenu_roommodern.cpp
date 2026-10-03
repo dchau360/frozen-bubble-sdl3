@@ -8,6 +8,7 @@
 #include "netbot.h"
 #include "networkclient.h"
 #include "platform.h"
+#include "playerbadge.h"
 #include "sdl3_compat.h"
 #include <SDL3_image/SDL_image.h>
 #include <algorithm>
@@ -409,7 +410,10 @@ void MainMenu::NetChatDockModern(bool expanded) {
         DrawTextLine(rend, T.TakeChat(T.chat), line, kValue, kNoShadow, input.x + 14, cy);
     }
     if (!expanded)
-        DrawTextLine(rend, T.TakeChat(T.tiny), "ESC leave  \xC2\xB7  F1 help  \xC2\xB7  A teams", kLabel,
+        DrawTextLine(rend, T.TakeChat(T.tiny),
+                     NetworkClient::Instance()->GetCurrentGame()
+                         ? "ESC leave  \xC2\xB7  F1 help  \xC2\xB7  A teams"
+                         : "ENTER create / join  \xC2\xB7  ESC leave server", kLabel,
                      kNoShadow, input.x + input.w - 14, cy, 2);
 }
 
@@ -560,4 +564,226 @@ void MainMenu::TeamsPanelRenderModern() {
     menulist::DrawFooterHint(rend, panelText,
         isHost ? "UP/DOWN player or Auto    LEFT/RIGHT or tap a team    ENTER applies Auto    ESC closes"
                : "LEFT/RIGHT or tap a team    ESC / Done closes");
+}
+
+// The online lobby in the Modern style: a top bar, a Game rooms card (Create
+// game room with its size, the tournament rows, then every room), an Online
+// card (the free players, Weekly rankings and Join Discord pinned at its
+// foot), and the chat card. Drawing only, like the room: every row keeps the
+// index the classic lobby gives it (LobbyTournamentIndex, LobbyRoomListStart,
+// LobbyWeeklyIndex, LobbyDiscordIndex), so Up/Down, ENTER and the tap rows
+// cannot tell the two apart. Uses the room's fonts.
+void MainMenu::NetPanelLobbyRenderModern() {
+    NetworkClient* netClient = NetworkClient::Instance();
+    SDL_Renderer* rend = const_cast<SDL_Renderer*>(renderer);
+    RoomModernText& T = RoomModern();
+    T.used = 0;
+
+    const std::string me = netClient->GetPlayerNick();
+    const std::vector<GameRoom> games = netClient->GetGameList();
+    std::vector<NetworkPlayer> online = netClient->GetOpenPlayers();
+    // You first, so the list is never empty while you are connected.
+    std::stable_partition(online.begin(), online.end(),
+                          [&](const NetworkPlayer& p) { return p.nick == me; });
+
+    // The map and its player spots show through the dimming, as in the room.
+    SDL_SetRenderDrawBlendMode(rend, SDL_BLENDMODE_BLEND);
+    SDL_SetRenderDrawColor(rend, 5, 10, 22, 120);
+    SDL_RenderFillRect(rend, nullptr);
+
+    auto focusRow = [&](const SDL_Rect& r, float radius) {
+        const SDL_FRect f = ToFRect(r);
+        FillRoundRect(rend, f, radius, kRowFocus);
+        StrokeRoundRect(rend, f, radius, 1.5f, kIce);
+    };
+
+    // ---- Top bar --------------------------------------------------------------
+    DrawCard(rend, kTopBar);
+    int x = 28 + DrawTextLine(rend, T.Take(T.title), "Online lobby", kValue, kTextShadow, 28, 32) + 12;
+    char nick[24];
+    snprintf(nick, sizeof(nick), "%.16s", me.c_str());
+    x += DrawChip(rend, T.Take(T.tiny), nick, x, 31, kIce, true) + 6;
+    char count[32];
+    snprintf(count, sizeof(count), "%d IN LOBBY", (int)online.size());
+    DrawChip(rend, T.Take(T.tiny), count, x, 31, kLabel);
+    char host[80];
+    snprintf(host, sizeof(host), "%.40s", netClient->GetHost().c_str());
+    DrawTextLine(rend, T.Take(T.chat), host, kLabel, kNoShadow, 612, 31, 2);
+
+    // ---- Game rooms -----------------------------------------------------------
+    const SDL_Rect rooms = {12, kCardTop, 386, kCardH};
+    DrawCard(rend, rooms);
+    DrawTextLine(rend, T.Take(T.tiny), "GAME ROOMS", kLabel, kNoShadow, rooms.x + 16, kCardTop + 14);
+    const int rowX = rooms.x + 10, rowW = rooms.w - 20;
+    int y = kCardTop + 26;
+    {
+        // Create game room: the label creates (ENTER), the size steps with
+        // LEFT/RIGHT, so its value block splits into LEFT/RIGHT halves
+        // (menulist::List::End's labelActivateKey row).
+        const SDL_Rect r = {rowX, y, rowW, 34};
+        const bool f = selectedActionIndex == 1;
+        if (f) focusRow(r, 9);
+        else FillRoundRect(rend, ToFRect(r), 9, kRowIdle);
+        const int cy = r.y + r.h / 2;
+        if (T.ball[0]) {
+            SDL_FRect b = {(float)r.x + 8, (float)cy - 9, 18, 18};
+            SDL_RenderTexture(rend, T.ball[0], nullptr, &b);
+        }
+        DrawTextLine(rend, T.Take(T.value), "Create game room", f ? kValue : kFrost, kTextShadow, r.x + 34, cy);
+        char size[24];
+        snprintf(size, sizeof(size), "%d players", kRoomSizes[netRoomSizeChoice]);
+        const int xr = r.x + r.w - 12;
+        const int right = f ? xr - 12 : xr;
+        const int w = DrawTextLine(rend, T.Take(T.small), size, f ? kValue : kLabel, kNoShadow, right, cy, 2);
+        if (f) {
+            DrawTextLine(rend, T.Take(T.body), "\xE2\x80\xB9", kIce, kNoShadow, right - w - 10, cy - 1, 1);
+            DrawTextLine(rend, T.Take(T.body), "\xE2\x80\xBA", kIce, kNoShadow, xr - 2, cy - 1, 1);
+        }
+        const int valueLeft = right - w - 18;
+        const int split = (valueLeft + r.x + r.w) / 2;
+        AddPanelTapRow(1, {r.x, r.y, valueLeft - r.x, r.h}, -1, false, SDLK_RETURN);
+        AddPanelTapRow(1, {valueLeft, r.y, split - valueLeft, r.h}, -1, false, SDLK_LEFT);
+        AddPanelTapRow(1, {split, r.y, r.x + r.w - split, r.h}, -1, false, SDLK_RIGHT);
+        y += 38;
+    }
+    // A plain row: label on the left, an optional value on the right.
+    auto plainRow = [&](int index, int h, const char* label, const char* value) {
+        const SDL_Rect r = {rowX, y, rowW, h};
+        const bool f = selectedActionIndex == index;
+        if (f) focusRow(r, 8);
+        else FillRoundRect(rend, ToFRect(r), 8, kRowIdle);
+        const int cy = r.y + r.h / 2;
+        DrawTextLine(rend, T.Take(T.body), label, f ? kValue : kFrost, kNoShadow, r.x + 12, cy);
+        if (value && value[0]) DrawTextLine(rend, T.Take(T.chat), value, kLabel, kNoShadow, r.x + r.w - 12, cy, 2);
+        AddPanelTapRow(index, r);
+        y += h + 4;
+    };
+    const int tourIdx = LobbyTournamentIndex();
+    if (tourIdx >= 0) {
+        plainRow(tourIdx, 26, "Create tournament", "");
+        const auto joinable = LobbyJoinableTournaments();
+        for (size_t i = 0; i < joinable.size(); i++) {
+            const auto& t = joinable[i];
+            char label[48], value[48];
+            snprintf(label, sizeof(label), "%.16s's tournament", t.owner.c_str());
+            snprintf(value, sizeof(value), "%d \xC2\xB7 %s", t.count, t.state.c_str());
+            plainRow(tourIdx + 1 + (int)i, 26, label, value);
+        }
+    }
+
+    // The rooms, two lines each, scrolled so the selected one stays in view
+    // (one slot from the top, clamped at the ends, as menulist::List does).
+    const int roomStart = LobbyRoomListStart();
+    const int areaTop = y + 2, areaBottom = rooms.y + rooms.h - 10;
+    const int pitch = 44;
+    const int visible = std::max(1, (areaBottom - areaTop + 4) / pitch);
+    const int total = (int)games.size();
+    const int sel = selectedActionIndex - roomStart;
+    const int maxScroll = std::max(0, total - visible);
+    const int scrollTop = (sel >= 0 && sel < total) ? std::clamp(sel - 1, 0, maxScroll) : 0;
+    if (total == 0) {
+        DrawTextLine(rend, T.Take(T.chat), "No rooms yet. Create one and others can join.", kLabel, kNoShadow,
+                     rowX + 12, areaTop + 16);
+    }
+    for (int i = scrollTop; i < total && i < scrollTop + visible; i++) {
+        const GameRoom& g = games[i];
+        const SDL_Rect r = {rowX, areaTop + (i - scrollTop) * pitch, rowW - (maxScroll ? 8 : 0), pitch - 4};
+        const int index = roomStart + i;
+        const bool f = selectedActionIndex == index;
+        if (f) focusRow(r, 9);
+        else FillRoundRect(rend, ToFRect(r), 9, kRowIdle);
+        char title[48];
+        snprintf(title, sizeof(title), "%.16s's room", g.creator.c_str());
+        DrawTextLine(rend, T.Take(T.value), title, f ? kValue : kFrost, kTextShadow, r.x + 12, r.y + 13);
+        std::string names;
+        for (const NetworkPlayer& p : g.players) {
+            if (!names.empty()) names += ", ";
+            names += p.nick;
+        }
+        if (names.size() > 48) names = names.substr(0, 45) + "...";
+        DrawTextLine(rend, T.Take(T.chat), names.c_str(), kLabel, kNoShadow, r.x + 12, r.y + 29);
+        char seats[16];
+        snprintf(seats, sizeof(seats), "%d / %d", (int)g.players.size(), g.maxPlayers);
+        int cx = r.x + r.w - 10;
+        const bool full = (int)g.players.size() >= g.maxPlayers;
+        // A chip is drawn from its left edge, so measure it first.
+        int sw = 0;
+        if (T.tiny) TTF_GetStringSize(T.tiny, seats, 0, &sw, nullptr);
+        cx -= sw + 12;
+        DrawChip(rend, T.Take(T.tiny), seats, cx, r.y + 13, full ? kLose : kIce);
+        if (g.started) {
+            int pw = 0;
+            if (T.tiny) TTF_GetStringSize(T.tiny, "PLAYING", 0, &pw, nullptr);
+            DrawChip(rend, T.Take(T.tiny), "PLAYING", cx - pw - 18, r.y + 13, kGold);
+        }
+        AddPanelTapRow(index, r);
+    }
+    if (maxScroll > 0) {
+        const float trackH = (float)(areaBottom - areaTop);
+        const float thumbH = std::max(16.f, trackH * visible / total);
+        const float thumbY = areaTop + (trackH - thumbH) * scrollTop / maxScroll;
+        FillRoundRect(rend, {(float)rooms.x + rooms.w - 12, (float)areaTop, 4, trackH}, 2, kRowIdle);
+        FillRoundRect(rend, {(float)rooms.x + rooms.w - 12, thumbY, 4, thumbH}, 2, kIce);
+    }
+
+    // ---- Online -----------------------------------------------------------------
+    const SDL_Rect side = {406, kCardTop, 222, kCardH};
+    DrawCard(rend, side);
+    DrawTextLine(rend, T.Take(T.tiny), "ONLINE", kLabel, kNoShadow, side.x + 16, kCardTop + 14);
+    // This week's round-wins rank after each name; a no-op on an old server.
+    netClient->MaybeRefreshWeekly();
+    const auto& ranks = netClient->weekly.lobbyWinsRank;
+
+    const int discordIdx = LobbyDiscordIndex(games.size());
+    const int weeklyIdx = LobbyWeeklyIndex(games.size());
+    const int pinned = 1 + (discordIdx >= 0 ? 1 : 0);
+    const int pinTop = side.y + side.h - 10 - pinned * 30 + 4;
+    int py = kCardTop + 30;
+    bool anyOther = false;
+    for (const NetworkPlayer& p : online) {
+        const bool self = p.nick == me;
+        if (!self) anyOther = true;
+        if (py + 22 > pinTop - 6) break;
+        const int cy = py + 10;
+        FillRoundRect(rend, {(float)side.x + 16, (float)cy - 3.5f, 7, 7}, 3.5f, {104, 220, 151, 255});
+        char name[16];
+        snprintf(name, sizeof(name), "%.10s", p.nick.c_str());
+        int cx = side.x + 30 + DrawTextLine(rend, T.Take(T.small), name, self ? kIce : kValue, kNoShadow,
+                                            side.x + 30, cy) + 6;
+        if (self) cx += DrawChip(rend, T.Take(T.tiny), "YOU", cx, cy, kIce, true) + 4;
+        auto rank = ranks.find(p.nick);
+        if (rank != ranks.end() && rank->second > 0) {
+            const std::string text = "#" + std::to_string(rank->second);
+            DrawTextLine(rend, T.Take(T.tiny), text.c_str(), kGold, kNoShadow, cx, cy);
+        }
+        PlayerBadge badge;
+        if (GetPlatformBadge(p.platform, badge)) {
+            int bw = 0;
+            if (T.tiny) TTF_GetStringSize(T.tiny, badge.label, 0, &bw, nullptr);
+            const SDL_FRect chip = {(float)side.x + side.w - 16 - bw - 10, (float)cy - 7, (float)bw + 10, 14};
+            FillRoundRect(rend, chip, 4, badge.fill);
+            DrawTextLine(rend, T.Take(T.tiny), badge.label, badge.text, kNoShadow, (int)chip.x + 5, cy);
+        }
+        py += 22;
+    }
+    if (!anyOther && py + 22 <= pinTop - 6)
+        DrawTextLine(rend, T.Take(T.chat), "No one else in the lobby", kLabel, kNoShadow, side.x + 16, py + 10);
+
+    SDL_SetRenderDrawColor(rend, kLine.r, kLine.g, kLine.b, kLine.a);
+    SDL_FRect divider = {(float)side.x + 14, (float)pinTop - 5, (float)side.w - 28, 1};
+    SDL_RenderFillRect(rend, &divider);
+    const struct { int idx; const char* label; } pins[2] = {
+        {weeklyIdx, "Weekly rankings"},
+        {discordIdx, "Join Discord server"},
+    };
+    for (int i = 0; i < pinned; i++) {
+        const SDL_Rect r = {side.x + 8, pinTop + i * 30, side.w - 16, 26};
+        const bool f = selectedActionIndex == pins[i].idx;
+        if (f) focusRow(r, 8);
+        else FillRoundRect(rend, ToFRect(r), 8, kRowIdle);
+        const int cy = r.y + r.h / 2;
+        DrawTextLine(rend, T.Take(T.body), pins[i].label, f ? kValue : kFrost, kNoShadow, r.x + 10, cy);
+        DrawTextLine(rend, T.Take(T.body), "\xE2\x80\xBA", kIce, kNoShadow, r.x + r.w - 12, cy - 1, 1);
+        AddPanelTapRow(pins[i].idx, r);
+    }
 }

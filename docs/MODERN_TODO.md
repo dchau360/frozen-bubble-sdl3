@@ -60,7 +60,8 @@ These four share a settings row or two and are all render- or audio-only.
      (UP from the first player), in both styles.
    - [x] Settings (the CONTROLS & SETTINGS panel): a Controls card with a tab
      per player and each binding as a key cap, and a Game card of switches.
-   - [ ] Online lobby (room list and Online sidebar).
+   - [x] Online lobby: a Game rooms card (each room with its players and
+     seats, scrolling), an Online card, and the room's chat card.
 
 ## Bigger
 

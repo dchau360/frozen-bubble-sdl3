@@ -576,6 +576,7 @@ private:
     void KeysPanelRenderModern();
     void FreeSettingsModern();
     void NetPanelRoomRenderModern();
+    void NetPanelLobbyRenderModern();
     void NetChatDockModern(bool expanded);
     void NetChatLineModern(const ChatMessage& cm, int y);
     void NetPanelConnectionScreensRender(); // Pre-login screens: LAN list, manual entry, public list
