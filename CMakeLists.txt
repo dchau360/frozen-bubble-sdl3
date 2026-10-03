@@ -456,6 +456,12 @@ if(BUILD_TESTING AND NOT EMSCRIPTEN AND NOT ANDROID AND NOT IOS)
     target_link_libraries(sp-name-prompt-test PRIVATE frozen-bubble-core-test)
     add_test(NAME sp-name-prompt-test COMMAND sp-name-prompt-test)
 
+    add_executable(sp-menu-modern-test tests/sp_menu_modern_test.cpp)
+    set_property(TARGET sp-menu-modern-test PROPERTY CXX_STANDARD 17)
+    set_property(TARGET sp-menu-modern-test PROPERTY CXX_EXTENSIONS OFF)
+    target_link_libraries(sp-menu-modern-test PRIVATE frozen-bubble-core-test)
+    add_test(NAME sp-menu-modern-test COMMAND sp-menu-modern-test)
+
     add_executable(ttftext-cache-test
         tests/ttftext_cache_test.cpp
         src/ttftext.cpp
