@@ -435,6 +435,18 @@ void BubbleGame::ProcessMalusQueue(BubbleArray &bArray, int currentFrame) {
     PlaySFX("malus");
 }
 
+// Puzzle Bobble's round-clear bonus at a tenth of its size: 5000 for a level
+// cleared in 5 seconds or less, 84 less for each whole second after that, and
+// nothing from 65 seconds on (the arcade's is 50,000, -840/s, 440 at 64s).
+// A tenth so a fast level still lands far under fb-server's points-per-level
+// plausibility cap (HISCORE_MAX_POINTS_PER_LEVEL, 20,000).
+int BubbleGame::TimeBonusFor(Uint32 levelMs) {
+    const int secs = (int)(levelMs / 1000);
+    if (secs <= 5) return 5000;
+    if (secs >= 65) return 0;
+    return 5000 - 84 * (secs - 5);
+}
+
 void BubbleGame::SubmitScore(BubbleArray &bArray) {
     // Playback keeps the in-memory score but never writes the highscore table
     // or campaign progress. See the SessionMode boundary in bubblegame.h.
@@ -1095,8 +1107,10 @@ void BubbleGame::CheckGameState(BubbleArray &bArray, bool countForRoot) {
         // and still need the local clear detected afterwards, which the
         // ResolveRoundOutcome path below handles.
         if (currentSettings.playerCount < 2 && !gameFinish) {
-            int clearBonus = 1000;
-            bArray.score += clearBonus;
+            // A time bonus in place of the old flat 1000 (TimeBonusFor).
+            levelClearMs = levelStartMs ? stepGameClockMs - levelStartMs : 0;
+            levelTimeBonus = TimeBonusFor(levelClearMs);
+            bArray.score += levelTimeBonus;
 
             // Submit score when level is cleared
             SubmitScore(bArray);

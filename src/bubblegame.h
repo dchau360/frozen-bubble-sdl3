@@ -894,6 +894,18 @@ private:
 
     // Multiplayer training state
     Uint32 mpTrainStartTime = 0;  // stepGameClockMs when mp_train round started
+    // 1-player time bonus, Puzzle Bobble's at a tenth of its size (TimeBonusFor).
+    // levelStartMs is the stepGameClockMs of the level's first step -- taken
+    // lazily from the step clock, like mpTrainStartTime, so a replay times
+    // the level exactly as it was played -- and is moved on by a pause.
+    // levelClearMs/levelTimeBonus describe the level just cleared, for the
+    // win panel. All three reset by NewGame/ReloadGame.
+    Uint32 levelStartMs = 0;
+    Uint32 levelClearMs = 0;
+    int levelTimeBonus = 0;
+public:
+    static int TimeBonusFor(Uint32 levelMs);
+private:
     int mpTrainScore = 0;         // Accumulated score (malus destroyed)
     bool mpTrainDone = false;     // 2-minute timer expired
 
@@ -940,6 +952,7 @@ private:
     std::unique_ptr<TTF_Font, FontCloser> statsPanelFont16;
 
     TTFText scorePopupText;
+    TTFText clearStatsText;  // the classic win panel's time/bonus and score lines
     TTFText inGameText, winsP1Text, winsP2Text, comboText, finalScoreText, mpTrainText, continueText;
     // Round-end winner banner, shown for every mode ("Board Cleared! <Name>
     // Wins!" / "First to Pop! <Name> Wins!" / "Time's Up! <Name> Wins!" /

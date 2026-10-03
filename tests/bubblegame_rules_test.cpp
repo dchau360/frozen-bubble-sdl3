@@ -104,6 +104,12 @@ struct BubbleGameTestAccess {
     }
     static bool continuePrompt(const BubbleGame& game) { return game.continuePrompt; }
     static int& runShots(BubbleGame& game) { return game.runShots; }
+    static void levelClock(BubbleGame& game, Uint32 start, Uint32 now) {
+        game.levelStartMs = start;
+        game.stepGameClockMs = now;
+    }
+    static Uint32 levelClearMs(const BubbleGame& game) { return game.levelClearMs; }
+    static int levelTimeBonus(const BubbleGame& game) { return game.levelTimeBonus; }
     static std::vector<BubbleGame::ScorePopup>& scorePopups(BubbleGame& game) { return game.scorePopups; }
     static void penguin(BubbleGame& game, int idx) { game.UpdatePenguin(game.bubbleArrays[idx], 1.f); }
     static bool scoringMouse(const BubbleGame& game) {
@@ -438,17 +444,31 @@ int main() {
         // already in flight keep driving CheckGameState after the win -- a late
         // chain landing on the empty board is dropped as unattached, leaving the
         // board clear again -- and that used to award the 1000 bonus a second
-        // time and write a duplicate highscore row.
+        // time and write a duplicate highscore row. The bonus is the time
+        // bonus now (a 23.4s level: 23 whole seconds, 5000 - 84 * 18 = 3488),
+        // and the win panel's figures are kept for it.
         //
         // networkGame is set purely so SubmitScore returns before it reaches the
         // highscore manager: this is about the scoring guard, not the save path.
         BubbleGameTestAccess::reset(game, 1, true, false);
         BubbleGameTestAccess::player(game, 0).score = 0;
+        BubbleGameTestAccess::levelClock(game, 1000, 24400);
         BubbleGameTestAccess::check(game, 0);
         CHECK(BubbleGameTestAccess::finished(game));
-        CHECK(BubbleGameTestAccess::player(game, 0).score == 1000);
+        CHECK(BubbleGameTestAccess::player(game, 0).score == 3488);
+        CHECK(BubbleGameTestAccess::levelClearMs(game) == 23400);
+        CHECK(BubbleGameTestAccess::levelTimeBonus(game) == 3488);
         BubbleGameTestAccess::check(game, 0);
-        CHECK(BubbleGameTestAccess::player(game, 0).score == 1000);
+        CHECK(BubbleGameTestAccess::player(game, 0).score == 3488);
+
+        // The time bonus: Puzzle Bobble's at a tenth of its size.
+        CHECK(BubbleGame::TimeBonusFor(0) == 5000);
+        CHECK(BubbleGame::TimeBonusFor(5999) == 5000);   // whole seconds
+        CHECK(BubbleGame::TimeBonusFor(6000) == 4916);
+        CHECK(BubbleGame::TimeBonusFor(10000) == 4580);
+        CHECK(BubbleGame::TimeBonusFor(64999) == 44);
+        CHECK(BubbleGame::TimeBonusFor(65000) == 0);
+        CHECK(BubbleGame::TimeBonusFor(600000) == 0);
 
         BubbleGameTestAccess::reset(game, 2, false, false);
         PutDangerBubble(BubbleGameTestAccess::player(game, 0));
