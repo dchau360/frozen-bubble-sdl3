@@ -91,6 +91,44 @@ supplied. Run it with:
 tools/build-android-aab.sh
 ```
 
+## Uploading to Google Play from CI
+
+On every `v*.*.*` tag, the `deploy-play-store` job in
+`.github/workflows/build.yml` uploads that build's signed `.aab` to the
+**production track as a draft**. Nothing reaches players until you open the
+release in the Play Console and roll it out yourself. The release is named
+after the tag, and its "What's new" text is built from that version's
+`CHANGELOG.md` section by `tools/play-release-notes.py` (bold titles plus
+first sentences, cut to Play's 500-character limit). Edit it in the Play
+Console before rolling out if you want different wording.
+
+It runs only when the sanitizer job and the Android build both passed, and
+does nothing (with a warning) until this one-time setup is done:
+
+1. In the [Google Cloud console](https://console.cloud.google.com/), create a
+   project (or reuse one) and enable the **Google Play Android Developer
+   API** for it.
+2. In that project, create a **service account** (IAM & Admin → Service
+   accounts). It needs no Cloud roles. Under its **Keys** tab, add a JSON
+   key and download it.
+3. In the Play Console, go to **Users and permissions → Invite new users**,
+   enter the service account's email address, and on the **App permissions**
+   tab add Frozen Bubble with **Release to production, exclude devices, and
+   use Play App Signing** and **Release apps to testing tracks**. Send the
+   invite (a service account accepts it automatically).
+4. In the GitHub repository, add the whole JSON file's contents as the
+   secret `PLAY_SERVICE_ACCOUNT_JSON` (Settings → Secrets and variables →
+   Actions).
+
+Like the keystore, the JSON key never belongs in the repository. Delete your
+local copy once the secret is saved, or keep it in a password manager.
+
+A draft only becomes a release when you press **Next → Save → Send for
+review / Start rollout** in Play Console → Production. If a tag's upload
+fails (for example a `versionCode` that was not bumped), the GitHub Release
+and itch.io deploy are unaffected; fix it and upload the `.aab` from the
+release's `Android-AAB` artifact, or build one locally as above.
+
 ## Related
 
 `versionCode` in `android/app/build.gradle` must increase on every release, or
