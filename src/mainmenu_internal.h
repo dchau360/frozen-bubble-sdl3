@@ -89,6 +89,10 @@ enum KeyConfigRow {
 // activates via SDLK_1..4 (mainmenu_input.cpp) instead of Left/Right/Return.
 static const int kKeyPlayerTapBase = 900;
 
+// "Ctrl1:A" for a pad button bound through the virtual scancodes, SDL's own
+// key name otherwise. Shared by both styles of the settings panel.
+std::string ControllerScancodeName(SDL_Scancode sc);
+
 // Row indices for the game room's action list (selectedActionIndex). The list
 // is built positionally in mainmenu_netpanel.cpp and acted on by index in
 // mainmenu_input.cpp, so every row that is added or removed renumbers the ones

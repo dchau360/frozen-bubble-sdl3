@@ -51,7 +51,7 @@
 
 #include "mainmenu_internal.h"
 
-static std::string ControllerScancodeName(SDL_Scancode sc) {
+std::string ControllerScancodeName(SDL_Scancode sc) {
     if (!IsVirtualScancode(sc)) return SDL_GetScancodeName(sc);
     int rel = sc - CTRL_SC_BASE;
     int slot = rel / 20;
@@ -727,6 +727,10 @@ void MainMenu::KeysPanelRender() {
     if (!showingKeysPanel) return;
 
     BeginPanelTapRows(&keyConfigIndex);
+    if (GameSettings::Instance()->menuTheme() == MENU_THEME_MODERN) {
+        KeysPanelRenderModern();
+        return;
+    }
 
 #ifdef __ANDROID__
     const bool adsRemoved = AdsRemoved();
