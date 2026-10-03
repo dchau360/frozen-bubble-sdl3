@@ -232,13 +232,33 @@ int main() {
     settings->ReadSettings();
     CHECK(settings->menuTheme() == 0);   // survives a restart
 
-    // A settings.ini written before Modern existed keeps the style it holds:
-    // Slate, the old default, stays Slate rather than turning into Modern.
+    // Every player is moved to Modern once (Menu:ModernSwitched): a
+    // settings.ini from before that holds Slate, the old default, comes up
+    // Modern, and Slate picked again afterwards is kept.
     settings->SetValue("Menu:Theme", "");
     settings->SetValue("Menu:Theme", "");
     CHECK(settings->menuTheme() == 2);
     settings->ReadSettings();
+    CHECK(settings->menuTheme() == 2);   // already switched: kept
+    CHECK(iniHasKeyValue(settingsPath, "modernswitched", "true"));
+    {
+        std::ifstream in(settingsPath);
+        std::string ini((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+        in.close();
+        const size_t at = ini.find("\nmodernswitched");
+        CHECK(at != std::string::npos);
+        if (at != std::string::npos) ini.erase(at + 1, ini.find('\n', at + 1) - at);
+        std::ofstream(settingsPath) << ini;
+    }
+    CHECK(!iniHasKeyValue(settingsPath, "modernswitched", "true"));
+    settings->ReadSettings();
+    CHECK(settings->menuTheme() == 5);   // the one-time switch
+    CHECK(iniHasKeyValue(settingsPath, "theme", "5"));
+    CHECK(iniHasKeyValue(settingsPath, "modernswitched", "true"));
+    for (int i = 0; i < 3; ++i) settings->SetValue("Menu:Theme", "");
     CHECK(settings->menuTheme() == 2);
+    settings->ReadSettings();
+    CHECK(settings->menuTheme() == 2);   // and only once
 
     // Regression: a settings.ini carried over from a build that predates the
     // Menu Style feature has no [menu] section at all. SetValue("Menu:Theme",

@@ -50,7 +50,7 @@ These four share a settings row or two and are all render- or audio-only.
    between classic menus. Mockup (title screen, 1-player menu, game room,
    Set Teams, 20-player room):
    https://claude.ai/artifact/2YrheMEW9StASYVAFjLv4z
-   - [x] Title screen: the "Modern" MENU STYLE, default on a new install.
+   - [x] Title screen: the "Modern" MENU STYLE, the default, existing players moved to it once.
    - [x] 1-player menu: a card with a line under each mode, switches for
      the settings, LEFT/RIGHT flip them.
    - [ ] Game room, including Set Teams and the 20-player layout. Keep the
