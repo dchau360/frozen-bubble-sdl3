@@ -177,6 +177,14 @@ BubbleGame::BubbleGame(const SDL_Renderer *renderer)
     clearWinText.UpdateColor({255, 220, 40, 255}, {0, 0, 0, 255}); // Gold text
     clearWinText.UpdateRing({0, 0, 0, 255}, 3); // Thick black ring: readable over any board
 
+    // Smaller than finalScoreText: the win panel's art leaves one ~49px strip
+    // at the bottom, which has to hold two lines here.
+    clearStatsText.LoadFont(ASSET("/gfx/DroidSans.ttf").c_str(), 17);
+    clearStatsText.UpdateAlignment(TTF_HORIZONTAL_ALIGN_CENTER);
+    clearStatsText.UpdateStyle(17, TTF_STYLE_BOLD);
+    clearStatsText.UpdateColor({255, 255, 255, 255}, {0, 0, 0, 255});
+    clearStatsText.UpdateRing({0, 0, 0, 255}, 2);
+
     finalScoreText.LoadFont(ASSET("/gfx/DroidSans.ttf").c_str(), 28);
     continueText.LoadFont(ASSET("/gfx/DroidSans.ttf").c_str(), 14);
     finalScoreText.UpdateAlignment(TTF_HORIZONTAL_ALIGN_CENTER);
@@ -465,6 +473,8 @@ void BubbleGame::NewGame(SetupSettings setup) {
     for (int i = 0; i < currentSettings.playerCount; i++) ResetRoundInputState(bubbleArrays[i]);
     pendingHighscore = false;
     scorePopups.clear();
+    levelStartMs = levelClearMs = 0;
+    levelTimeBonus = 0;
     levelIntroStartMs = 0;
     hudShownScore = 0;
     curLevel = setup.startLevel;
@@ -1210,6 +1220,8 @@ void BubbleGame::ReloadGame(int level) {
         return;
     }
     scorePopups.clear();
+    levelStartMs = levelClearMs = 0;
+    levelTimeBonus = 0;
     levelIntroStartMs = 0;
 
     SDL_Renderer *rend = const_cast<SDL_Renderer*>(renderer);

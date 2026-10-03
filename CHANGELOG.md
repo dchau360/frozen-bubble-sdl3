@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- **A time bonus for clearing a level, like Bust-a-Move's.** In 1-player games, clearing a level in 5 seconds or less is worth 5,000 points, then 84 less for every second after that, down to nothing at 65 seconds. It replaces the flat 1,000 every clear used to get. The level-cleared panel now shows how long the level took and the bonus it earned.
+
 ## v2.4.133
 
 - **Modern in-game theme.** A fresh look for the game screen, on by default, with glossy candy bubbles (colour-blind versions too). A 1-player game gets a score panel on the left with level, score (counting up), shots and time; new cards for level cleared, game over (with the Continue / Start over buttons) and pause; the next level dropping in row by row; and a big "N DROPPED!" when a shot cuts bubbles loose. The background, penguin, launcher, sounds and scoring are unchanged. Turn it off with **In-game theme → Original** in the 1-player menu. Online and local multiplayer games keep their original screens.

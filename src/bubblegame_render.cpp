@@ -348,10 +348,12 @@ void BubbleGame::DrawModernResultCard(SDL_Renderer *rend, BubbleArray &bArray) {
     modernui::Card card;
     const std::string level = currentSettings.randomLevels ? "RANDOM" : std::to_string(curLevel);
     if (gameWon) {
-        card.title = "LEVEL CLEARED";
-        card.stats[0] = {"LEVEL", level};
-        card.stats[1] = {"SCORE", modernui::FormatNumber(bArray.score)};
-        card.stats[2] = {"TIME", modernui::FormatTime(hudFrozenMs)};
+        // The level's own time and what it earned; the run's clock stays in
+        // the HUD above.
+        card.title = currentSettings.randomLevels ? "LEVEL CLEARED" : "LEVEL " + level + " CLEARED";
+        card.stats[0] = {"TIME", std::to_string(levelClearMs / 1000) + "s"};
+        card.stats[1] = {"TIME BONUS", "+" + modernui::FormatNumber(levelTimeBonus)};
+        card.stats[2] = {"SCORE", modernui::FormatNumber(bArray.score)};
         card.statCount = 3;
         card.note = "ENTER or tap for the next level";
     } else {
@@ -1286,6 +1288,10 @@ bool BubbleGame::AdvanceSimulationAtScale(float deltaScale, Uint32 gameClockMs) 
         UpdateTimedRound();
     }
 
+    // The level's own clock, for the time bonus: from its first step.
+    if (currentSettings.playerCount == 1 && !gameFinish && levelStartMs == 0)
+        levelStartMs = stepGameClockMs;
+
     // Multiplayer training mode: periodically inject random malus, enforce 2-min timer
     if (currentSettings.mpTraining && !gameFinish) {
         if (mpTrainStartTime == 0) mpTrainStartTime = stepGameClockMs;
@@ -1338,6 +1344,7 @@ bool BubbleGame::AdvanceSimulationAtScale(float deltaScale, Uint32 gameClockMs) 
         // The training clock needs the same correction as the highscore timer
         // above, or a paused game burns its two minutes while nothing moves.
         if (mpTrainStartTime > 0) mpTrainStartTime += pausedFor;
+        if (levelStartMs > 0) levelStartMs += pausedFor;  // and the time bonus's
         // Same for a Timed round's clock, and for the leader's deadline for
         // hearing everyone's final count -- a pause during that window would
         // otherwise expire it and rank the round on whoever had reported so far.
@@ -1567,15 +1574,29 @@ void BubbleGame::Draw() {
             }
             else if (gameWon) {
                 { SDL_FRect fr = ToFRect(panelRct); SDL_RenderTexture(rend, soloStatePanels[1], nullptr, &fr); }
-                // Show final score on win screen (training shows mp_train score, normal shows bubble score)
-                char finalScore[64];
-                if (currentSettings.mpTraining)
+                if (currentSettings.mpTraining) {
+                    char finalScore[64];
                     snprintf(finalScore, sizeof(finalScore), "Training Score: %d", mpTrainScore);
-                else
-                    snprintf(finalScore, sizeof(finalScore), "Final Score: %d", curArray.score);
-                finalScoreText.UpdateText(renderer, finalScore, 0);
-                finalScoreText.UpdatePosition({SCREEN_CENTER_X - (finalScoreText.Coords()->w / 2), panelRct.y + panelRct.h - 40});
-                { SDL_FRect fr = ToFRect(*finalScoreText.Coords()); SDL_RenderTexture(rend, finalScoreText.Texture(), nullptr, &fr); }
+                    finalScoreText.UpdateText(renderer, finalScore, 0);
+                    finalScoreText.UpdatePosition({SCREEN_CENTER_X - (finalScoreText.Coords()->w / 2), panelRct.y + panelRct.h - 40});
+                    SDL_FRect fr = ToFRect(*finalScoreText.Coords());
+                    SDL_RenderTexture(rend, finalScoreText.Texture(), nullptr, &fr);
+                } else {
+                    // The level's time and the bonus it earned, then the score,
+                    // in the strip under the panel's art.
+                    const std::string lines[2] = {
+                        "Time: " + std::to_string(levelClearMs / 1000) + "s   Time bonus: +" +
+                            modernui::FormatNumber(levelTimeBonus),
+                        "Score: " + modernui::FormatNumber(curArray.score)};
+                    int y = panelRct.y + panelRct.h - 49;
+                    for (const std::string& line : lines) {
+                        clearStatsText.UpdateText(renderer, line.c_str(), 0);
+                        clearStatsText.UpdatePosition({SCREEN_CENTER_X - (clearStatsText.Coords()->w / 2), y});
+                        SDL_FRect fr = ToFRect(*clearStatsText.Coords());
+                        SDL_RenderTexture(rend, clearStatsText.Texture(), nullptr, &fr);
+                        y += clearStatsText.Coords()->h - 4;
+                    }
+                }
             }
         }
 
