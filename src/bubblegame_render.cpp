@@ -2010,8 +2010,11 @@ void BubbleGame::Draw() {
             if (winningTeam != kNoTeam) {
                 snprintf(banner, sizeof(banner), "%sTeam %d Wins!", prefix, winningTeam);
             } else {
-                snprintf(banner, sizeof(banner), "%s%s Wins!", prefix,
-                         StatsPlayerName(bubbleArrays[winnerIdx], winnerIdx, currentSettings.networkGame).c_str());
+                // "You" is what StatsPlayerName gives the local player
+                // without a nick, and "You Wins!" reads as a typo.
+                const std::string name = StatsPlayerName(bubbleArrays[winnerIdx], winnerIdx, currentSettings.networkGame);
+                snprintf(banner, sizeof(banner), "%s%s %s!", prefix, name.c_str(),
+                         name == "You" ? "Win" : "Wins");
             }
             clearWinText.UpdateText(renderer, banner, 0);
             clearWinText.UpdatePosition({SCREEN_CENTER_X - (clearWinText.Coords()->w / 2), 165});
