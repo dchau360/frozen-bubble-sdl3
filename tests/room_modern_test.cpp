@@ -185,23 +185,23 @@ int main() {
         CHECK(MainMenuTestAccess::Mode(*menu) == before);
         MainMenuTestAccess::Tap(*menu, 380, 94);
         CHECK(MainMenuTestAccess::Mode(*menu) != before);
-        Draw(renderer, *menu, "room-modern-mode");
+        SDL_DestroySurface(Draw(renderer, *menu, "room-modern-mode"));
 
         // Start, HELP, Set Teams and the chat line each select on a tap.
         MainMenuTestAccess::Tap(*menu, 560, 31);
         CHECK(MainMenuTestAccess::Selected(*menu) == kRoomStart);
         MainMenuTestAccess::Tap(*menu, 420, 31);
         CHECK(MainMenuTestAccess::Selected(*menu) == kRoomHelpTapIndex);
-        Draw(renderer, *menu, "room-modern");   // tap rows follow the frame
+        SDL_DestroySurface(Draw(renderer, *menu, "room-modern"));   // tap rows follow the frame
         MainMenuTestAccess::Tap(*menu, 575, 79);
         CHECK(MainMenuTestAccess::Selected(*menu) == kRoomSetTeamsTapIndex);
         MainMenuTestAccess::Tap(*menu, 575, 79);
         CHECK(MainMenuTestAccess::TeamsOpen(*menu));
         MainMenuTestAccess::CloseTeams(*menu);
-        Draw(renderer, *menu, "room-modern");
+        SDL_DestroySurface(Draw(renderer, *menu, "room-modern"));
         MainMenuTestAccess::Tap(*menu, 200, 450);
         CHECK(MainMenuTestAccess::Selected(*menu) == kRoomChat);
-        Draw(renderer, *menu, "room-modern-chat");
+        SDL_DestroySurface(Draw(renderer, *menu, "room-modern-chat"));
         NetworkClientTestAccess::SetCurrentGame(*nc, nullptr);
     }
 
@@ -311,7 +311,7 @@ int main() {
         // The second room (y 170..210), then the pinned rows of the Online card.
         MainMenuTestAccess::Tap(*menu, 100, 190);
         CHECK(MainMenuTestAccess::Selected(*menu) == 3);
-        Draw(renderer, *menu, "lobby-modern-room");
+        SDL_DestroySurface(Draw(renderer, *menu, "lobby-modern-room"));
         MainMenuTestAccess::Tap(*menu, 500, 307);
         CHECK(MainMenuTestAccess::Selected(*menu) == MainMenuTestAccess::WeeklyIndex(*menu, 2));
         if (MainMenuTestAccess::DiscordIndex(*menu, 2) >= 0) {
