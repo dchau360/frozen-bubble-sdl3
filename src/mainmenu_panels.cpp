@@ -18,6 +18,7 @@
  */
 
 #include "mainmenu.h"
+#include "menutheme.h"
 #include "audiomixer.h"
 #include "frozenbubble.h"
 #include "localmultiplayer_settings.h"
@@ -82,6 +83,7 @@ void MainMenu::Render(void) {
     }
 
     SDL_RenderTexture(const_cast<SDL_Renderer*>(renderer), background, nullptr, nullptr);
+    MenuThemeDrawBackdrop(renderer, GameSettings::Instance()->menuTheme());
 
     // Drop last frame's tap targets before any panel republishes its own. A
     // panel that closed this frame would otherwise leave its rows behind, and a

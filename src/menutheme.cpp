@@ -18,6 +18,8 @@
  */
 
 #include "menutheme.h"
+#include "gamesettings.h"
+#include "modernui.h"
 #include "platform.h"
 #include "sdl3_compat.h"
 #include "ttftext.h"
@@ -86,9 +88,25 @@ const MenuThemeStyle kStyles[MENU_THEME_COUNT] = {
         C(255, 255, 255, 133),
         {}
     },
+    // MODERN -- the in-game theme's cards (modernui.h): dark fill, ice edge,
+    // Baloo type. The selected card gets a full ice edge and a candy bubble,
+    // which the label steps right to make room for.
+    {
+        "/gfx/Baloo2-ExtraBold.ttf", 15, 14, 0, false,
+        C(219, 232, 251), C(255, 255, 255),
+        C(0, 0, 0, 110), C(0, 0, 0, 130),
+        C(12, 24, 48, 235), C(12, 24, 48, 235), C(127, 214, 255, 72),
+        C(18, 36, 70, 245), C(18, 36, 70, 245), C(127, 214, 255, 255),
+        {}, {},
+        true, 20
+    },
 };
 
-const char *const kNames[MENU_THEME_COUNT] = {"CLASSIC", "CLEAR", "SLATE", "ICE", "POP"};
+static_assert(GameSettings::kMenuThemeCount == MENU_THEME_COUNT &&
+              GameSettings::kMenuThemeDefault == MENU_THEME_MODERN,
+              "GameSettings' copy of the menu theme ids is out of date");
+
+const char *const kNames[MENU_THEME_COUNT] = {"CLASSIC", "CLEAR", "SLATE", "ICE", "POP", "MODERN"};
 
 // Shared across every row: eight buttons opening their own copy of the same
 // font would be eight FreeType faces for one typeface.
@@ -100,6 +118,13 @@ int g_fontSizes[MENU_THEME_COUNT] = {0};
 SDL_Texture *g_plateIdle = nullptr;
 SDL_Texture *g_plateActive = nullptr;
 bool g_plateTried = false;
+
+// Modern's selection marker: a candy bubble, a different colour per row.
+// Index 0 is grey and 1 white, which read as disabled, so they are skipped.
+constexpr int kMarkerColours[] = {7, 3, 4, 5, 6, 8};
+constexpr int kMarkerCount = (int)(sizeof(kMarkerColours) / sizeof(kMarkerColours[0]));
+SDL_Texture *g_markers[kMarkerCount] = {nullptr};
+bool g_markersTried = false;
 
 int Clamp(int t) { return (t < 0 || t >= MENU_THEME_COUNT) ? MENU_THEME_CLASSIC : t; }
 
@@ -132,6 +157,38 @@ void EnsurePlates(const SDL_Renderer *rend)
         SDL_Log("MenuTheme: menustyle plate art missing (%s)", SDL_GetError());
 }
 
+void EnsureMarkers(const SDL_Renderer *rend)
+{
+    if (g_markersTried) return;
+    g_markersTried = true;
+    SDL_Renderer *r = const_cast<SDL_Renderer *>(rend);
+    for (int i = 0; i < kMarkerCount; i++) {
+        const std::string path = ASSET("/gfx/balls/modern/bubble-") + std::to_string(kMarkerColours[i]) + ".png";
+        g_markers[i] = IMG_LoadTexture(r, path.c_str());
+        if (g_markers[i]) SDL_SetTextureScaleMode(g_markers[i], SDL_SCALEMODE_LINEAR);
+    }
+}
+
+// The rounded card, and on the selected row its candy bubble.
+void DrawCard(const SDL_Renderer *rend, const SDL_Rect &rect, const MenuThemeStyle &s, bool active)
+{
+    SDL_Renderer *r = const_cast<SDL_Renderer *>(rend);
+    const SDL_FRect card = {(float)rect.x + 2, (float)rect.y, (float)rect.w - 4, (float)rect.h};
+    constexpr float kRadius = 14;
+    modernui::FillRoundRect(r, {card.x, card.y + 3, card.w, card.h}, kRadius, {0, 0, 0, 70});
+    modernui::FillRoundRect(r, card, kRadius, active ? s.plateTopActive : s.plateTopIdle);
+    modernui::StrokeRoundRect(r, card, kRadius, active ? 2.f : 1.5f,
+                              active ? s.plateBorderActive : s.plateBorderIdle);
+    if (!active) return;
+    EnsureMarkers(rend);
+    // Rows sit on a 56px pitch from y=14 (MainMenu's constructor).
+    SDL_Texture *marker = g_markers[((rect.y - 14) / 56 % kMarkerCount + kMarkerCount) % kMarkerCount];
+    if (marker) {
+        const SDL_FRect dst = {card.x + 8, card.y + card.h / 2 - 9, 18, 18};
+        SDL_RenderTexture(r, marker, nullptr, &dst);
+    }
+}
+
 // Straight-line interpolation between two colors, alpha included.
 SDL_Color Lerp(const SDL_Color &a, const SDL_Color &b, float t)
 {
@@ -159,6 +216,8 @@ void MenuThemeDrawPlate(const SDL_Renderer *rend, const SDL_Rect &rect, int them
     theme = Clamp(theme);
     const MenuThemeStyle &s = kStyles[theme];
     SDL_Renderer *r = const_cast<SDL_Renderer *>(rend);
+
+    if (s.roundCard) { DrawCard(rend, rect, s, active); return; }
 
     if (s.usesPlateArt) {
         EnsurePlates(rend);
@@ -206,6 +265,24 @@ void MenuThemeDrawPlate(const SDL_Renderer *rend, const SDL_Rect &rect, int them
     SDL_SetRenderDrawBlendMode(r, prev);
 }
 
+void MenuThemeDrawBackdrop(const SDL_Renderer *rend, int theme)
+{
+    if (Clamp(theme) != MENU_THEME_MODERN) return;
+    // Dark on the left, fading out past the column, so the cards read while
+    // the logo and the penguins on the right stay bright.
+    const SDL_FColor dark = {5 / 255.f, 10 / 255.f, 22 / 255.f, 0.6f};
+    const SDL_FColor light = {5 / 255.f, 10 / 255.f, 22 / 255.f, 0.15f};
+    const float w = 340, h = 480;
+    const SDL_Vertex v[4] = {
+        {{0, 0}, dark, {0, 0}}, {{w, 0}, light, {0, 0}},
+        {{w, h}, light, {0, 0}}, {{0, h}, dark, {0, 0}},
+    };
+    const int idx[6] = {0, 1, 2, 0, 2, 3};
+    SDL_Renderer *r = const_cast<SDL_Renderer *>(rend);
+    SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_BLEND);
+    SDL_RenderGeometry(r, nullptr, v, 4, idx, 6);
+}
+
 SDL_Texture *MenuThemeRenderLabel(const SDL_Renderer *rend, int theme,
                                   const char *text, bool active, SDL_Point *outSize)
 {
@@ -226,4 +303,6 @@ void MenuThemeShutdown()
     if (g_plateIdle) { SDL_DestroyTexture(g_plateIdle); g_plateIdle = nullptr; }
     if (g_plateActive) { SDL_DestroyTexture(g_plateActive); g_plateActive = nullptr; }
     g_plateTried = false;
+    for (SDL_Texture *&t : g_markers) if (t) { SDL_DestroyTexture(t); t = nullptr; }
+    g_markersTried = false;
 }

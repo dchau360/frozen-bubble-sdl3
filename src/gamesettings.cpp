@@ -132,7 +132,7 @@ void GameSettings::CreateDefaultSettings()
         EvalIniResult(rval, dict, "Stats:WorldHighscores", "true");
 
         EvalIniResult(rval, dict, "Menu", NULL);
-        EvalIniResult(rval, dict, "Menu:Theme", "2"); // MENU_THEME_SLATE
+        EvalIniResult(rval, dict, "Menu:Theme", "5"); // MENU_THEME_MODERN
 
         EvalIniResult(rval, dict, "Sound", NULL);
         EvalIniResult(rval, dict, "Sound:EnableMusic", "true");
@@ -267,12 +267,14 @@ void GameSettings::ReadSettings()
     }
 
     gfxQuality = iniparser_getint(optDict, "GFX:Quality", 1);
-    // 2 == MENU_THEME_SLATE, the default for a fresh install (see
-    // CreateDefaultSettings above) and also what an invalid value here falls
-    // back to -- a file from a future build carrying a theme id past
-    // MENU_THEME_COUNT indexes MenuStyleFor() out of bounds otherwise.
-    menuThemeId = iniparser_getint(optDict, "Menu:Theme", 2);
-    if (menuThemeId < 0 || menuThemeId >= 5) menuThemeId = 2;
+    // 5 == MENU_THEME_MODERN, the default for a fresh install (see
+    // CreateDefaultSettings above) and also what a missing or invalid value
+    // falls back to -- a file from a future build carrying a theme id past
+    // MENU_THEME_COUNT indexes MenuStyleFor() out of bounds otherwise. A
+    // settings.ini from before Modern existed already holds the player's
+    // style, Slate (2) if they never changed it, and keeps it.
+    menuThemeId = iniparser_getint(optDict, "Menu:Theme", kMenuThemeDefault);
+    if (menuThemeId < 0 || menuThemeId >= kMenuThemeCount) menuThemeId = kMenuThemeDefault;
     linearScaling = iniparser_getboolean(optDict, "GFX:LinearScaling", false);
     useFullscreen = iniparser_getboolean(optDict, "GFX:Fullscreen", false);
     windowWidth = iniparser_getint(optDict, "GFX:WindowWidth", 640);
@@ -679,12 +681,10 @@ void GameSettings::SetValue(const char* option, const char* value)
         return;
     }
     else if (strcmp(option, "Menu:Theme") == 0) {
-        // Forward through the five themes, wrapping back to Classic, or back
-        // one when value is "-1" (LEFT on the MENU STYLE row). The count is
-        // spelled out rather than including menutheme.h, which would drag
-        // SDL_ttf into every translation unit that reads a setting.
-        const int step = (value && strcmp(value, "-1") == 0) ? 5 - 1 : 1;
-        menuThemeId = (menuThemeId + step) % 5;
+        // Forward through the themes, wrapping back to Classic, or back one
+        // when value is "-1" (LEFT on the MENU STYLE row).
+        const int step = (value && strcmp(value, "-1") == 0) ? kMenuThemeCount - 1 : 1;
+        menuThemeId = (menuThemeId + step) % kMenuThemeCount;
         // Section header has to exist or iniparser_dump_ini drops every key
         // under it (see SetReplayKeepCount/SaveHostSettings for the same
         // guard). CreateDefaultSettings() writes this on a fresh install, but

@@ -95,7 +95,7 @@ int main() {
     GameSettings* settings = GameSettings::Instance();
     settings->prefPath = prefPath.c_str();
     settings->ReadSettings();
-    CHECK(settings->menuTheme() == 2);  // Slate, a fresh install's default
+    CHECK(settings->menuTheme() == 5);  // Modern, a fresh install's default
     CHECK(settings->gfxLevel() == 1);   // full effects, likewise
 
     {
@@ -105,21 +105,22 @@ int main() {
         // Not on the STYLE row: LEFT/RIGHT do nothing to the theme.
         PressKey(*menu, SDLK_RIGHT);
         PressKey(*menu, SDLK_LEFT);
-        CHECK(settings->menuTheme() == 2);
+        CHECK(settings->menuTheme() == 5);
         CHECK(settings->gfxLevel() == 1);
 
         MainMenuTestAccess::SelectRow(*menu, 1);
         PressKey(*menu, SDLK_RIGHT);
-        CHECK(settings->menuTheme() == 3);
-        PressKey(*menu, SDLK_RIGHT);
-        CHECK(settings->menuTheme() == 4);
-        PressKey(*menu, SDLK_RIGHT);
         CHECK(settings->menuTheme() == 0);  // wraps to Classic
+        PressKey(*menu, SDLK_RIGHT);
+        CHECK(settings->menuTheme() == 1);
         PressKey(*menu, SDLK_LEFT);
-        CHECK(settings->menuTheme() == 4);  // and back to Pop
+        CHECK(settings->menuTheme() == 0);
         PressKey(*menu, SDLK_LEFT);
+        CHECK(settings->menuTheme() == 5);  // and back to Modern
         PressKey(*menu, SDLK_LEFT);
-        CHECK(settings->menuTheme() == 2);
+        CHECK(settings->menuTheme() == 4);  // then Pop
+        PressKey(*menu, SDLK_RIGHT);
+        CHECK(settings->menuTheme() == 5);
 
         CHECK(settings->gfxLevel() == 1);   // STYLE never touches graphics
 
@@ -138,7 +139,7 @@ int main() {
         CHECK(settings->gfxLevel() == 3);
         PressKey(*menu, SDLK_LEFT);
         CHECK(settings->gfxLevel() == 1);
-        CHECK(settings->menuTheme() == 2);  // and graphics never the theme
+        CHECK(settings->menuTheme() == 5);  // and graphics never the theme
 
         // A panel on top of the title screen owns LEFT/RIGHT.
         MainMenuTestAccess::SetSPPanel(*menu, true);
@@ -146,7 +147,7 @@ int main() {
         CHECK(settings->gfxLevel() == 1);
         MainMenuTestAccess::SelectRow(*menu, 1);
         PressKey(*menu, SDLK_RIGHT);
-        CHECK(settings->menuTheme() == 2);
+        CHECK(settings->menuTheme() == 5);
         MainMenuTestAccess::SetSPPanel(*menu, false);
     }
 

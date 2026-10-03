@@ -218,7 +218,8 @@ void MenuButton::Render(const SDL_Renderer *renderer)
         const SDL_Point size = isActive ? labelActiveSize : labelIdleSize;
         if (label) {
             const MenuThemeStyle &style = MenuStyleFor(theme);
-            SDL_Rect dst = {rect.x + style.labelX, rect.y + (rect.h - size.y) / 2, size.x, size.y};
+            const int x = rect.x + style.labelX + (isActive ? style.activeLabelShift : 0);
+            SDL_Rect dst = {x, rect.y + (rect.h - size.y) / 2, size.x, size.y};
             SDL_FRect fr = ToFRect(dst);
             SDL_RenderTexture(const_cast<SDL_Renderer*>(renderer), label, nullptr, &fr);
         }

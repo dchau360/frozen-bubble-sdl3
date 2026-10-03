@@ -47,9 +47,13 @@ These four share a settings row or two and are all render- or audio-only.
    Google Play Games could mirror them later.
 8. **Menus in the modern theme.** The title screen, 1-player menu and lobby
    in the same cards and fonts as the in-game theme. Today a modern game sits
-   between classic menus. Likely a sixth MENU STYLE ("Modern"), the default
-   when the in-game theme is Modern. Mockup:
+   between classic menus. Mockup (title screen, 1-player menu, game room,
+   Set Teams, 20-player room):
    https://claude.ai/artifact/2YrheMEW9StASYVAFjLv4z
+   - [x] Title screen: the "Modern" MENU STYLE, default on a new install.
+   - [ ] 1-player menu.
+   - [ ] Game room, including Set Teams and the 20-player layout. Keep the
+     button's wording "Set Teams" (user decision).
 
 ## Bigger
 
