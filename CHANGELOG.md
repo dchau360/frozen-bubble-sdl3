@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v2.4.135
 
 - **P pauses 1-player games.** Most keyboards (every Mac's included) have no Pause key, so **P** now pauses and resumes a 1-player game too. The Pause key, gamepad Start and the on-screen button still work.
 - **Run time in the original theme.** A 1-player game in the original theme now shows **Time: 3'07"** under the shot count: the whole run's time, the same clock the high score tables use. It keeps going when you Continue, and stops while paused or once a level is finished. The modern theme's score panel already showed it.
