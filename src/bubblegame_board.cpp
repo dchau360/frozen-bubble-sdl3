@@ -482,6 +482,8 @@ void BubbleGame::CheckPossibleDestroy(BubbleArray &bArray){
         // Both the group and the falling bubbles are scored by now.
         if (popAt.x >= 0 && ShowsScorePopups() && bArray.score > scoreBefore)
             scorePopups.push_back({popAt.x + 16, popAt.y + 16, bArray.score - scoreBefore, 0});
+        if (fallingCount > 0 && ShowsScorePopups())
+            scorePopups.push_back({bArray.bubbleOffset.x + 128, 236, 0, 0, fallingCount});
 
         // Assign chain reaction targets to newly falling bubbles (original line 814-865)
         // This happens ONCE per stick event, not every frame

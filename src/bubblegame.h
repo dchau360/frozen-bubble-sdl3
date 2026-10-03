@@ -32,6 +32,7 @@
 #include <SDL3_image/SDL_image.h>
 #include "sdl3_compat.h"
 #include "ttftext.h"
+#include "modernui.h"
 #include "networkclient.h"
 #include "attackmode.h"
 #include "gamemode.h"
@@ -649,10 +650,27 @@ public:
     // included). One-player games only (ShowsScorePopups). Display only:
     // spawned in CheckPossibleDestroy, aged once per simulation step like
     // comboDisplayTimer, drawn by Draw(); never part of replay state.
-    struct ScorePopup { int x, y; int points; int age; };
+    // `dropped` > 0 marks an "N DROPPED!" entry (the bubbles a shot cut
+    // loose) instead of a "+N": pushed in either theme, drawn only by the
+    // modern one (UsesModernHud).
+    struct ScorePopup { int x, y; int points; int age; int dropped = 0; };
     static constexpr int kScorePopupFrames = 60;
     std::vector<ScorePopup> scorePopups;
     bool ShowsScorePopups() const;
+
+    // The modern in-game theme (GameSettings::modernTheme()) beyond its
+    // bubbles: the score panel, the cleared/lost/paused cards, the level
+    // drop-in and "N DROPPED!". Classic 1-player games only (ShowsShotCount).
+    // All of it is drawing; none of it is simulation or replay state.
+    bool UsesModernHud() const;
+    modernui::Fonts modernFonts;
+    int hudShownScore = 0;           // the HUD's score, counting up to the real one
+    Uint64 hudFrozenMs = 0;          // the clock as it stood when the round finished
+    Uint64 modernCardStartMs = 0;    // when the cleared/lost card started coming in
+    Uint64 modernPauseStartMs = 0;
+    Uint64 levelIntroStartMs = 0;    // 0 = the drop-in starts on the next frame after the transition
+    void DrawModernHud(SDL_Renderer *rend, BubbleArray &bArray);
+    void DrawModernResultCard(SDL_Renderer *rend, BubbleArray &bArray);
 
     // The CONTINUE? prompt: after a death in a classic solo game, the first ENTER / tap
     // on the game-over panel opens it instead of retrying straight away.

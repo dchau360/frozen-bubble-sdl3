@@ -32,7 +32,7 @@
 
 namespace modernui {
 
-constexpr SDL_Color kCardFill = {12, 24, 48, 240};
+constexpr SDL_Color kCardFill = {12, 24, 48, 248};
 constexpr SDL_Color kEdge = {127, 214, 255, 140};
 constexpr SDL_Color kIce = {127, 214, 255, 255};
 constexpr SDL_Color kLabel = {142, 163, 198, 255};
@@ -47,6 +47,8 @@ void StrokeRoundRect(SDL_Renderer* rend, SDL_FRect r, float radius, float width,
 
 // 3'07" -- the same form the High Scores screen uses.
 std::string FormatTime(Uint64 ms);
+// 12,345.
+std::string FormatNumber(int n);
 
 // The text objects the theme draws with, loaded once. Each line on screen
 // has its own object so a value that changes (the clock, a counting score)

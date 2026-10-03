@@ -230,8 +230,10 @@ int main() {
         std::ifstream in(settingsPath);
         std::string ini((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
         in.close();
-        const size_t at = ini.find("theme");
+        // The line that starts with the key: "moderntheme" (GFX) comes first.
+        size_t at = ini.find("\ntheme");
         CHECK(at != std::string::npos);
+        if (at != std::string::npos) at++;
         const size_t eq = ini.find('=', at);
         const size_t eol = ini.find('\n', eq);
         ini.replace(eq + 1, eol - eq - 1, " 99");

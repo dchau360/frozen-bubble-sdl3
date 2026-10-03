@@ -30,6 +30,7 @@ namespace modernui {
 namespace {
 
 constexpr int kCornerSteps = 8;
+constexpr float kPi = 3.14159265f;  // M_PI is not in MSVC's <cmath> by default
 constexpr SDL_Color kTextShadow = {0, 0, 0, 110};
 
 SDL_FColor ToF(SDL_Color c) { return {c.r / 255.f, c.g / 255.f, c.b / 255.f, c.a / 255.f}; }
@@ -42,9 +43,9 @@ std::vector<SDL_FPoint> Outline(SDL_FRect r, float radius) {
     std::vector<SDL_FPoint> pts;
     pts.reserve(4 * (kCornerSteps + 1));
     for (int corner = 0; corner < 4; ++corner) {
-        const float a0 = (float)M_PI + corner * (float)M_PI / 2;
+        const float a0 = kPi + corner * kPi / 2;
         for (int s = 0; s <= kCornerSteps; ++s) {
-            const float a = a0 + (float)M_PI / 2 * s / kCornerSteps;
+            const float a = a0 + kPi / 2 * s / kCornerSteps;
             pts.push_back({cx[corner] + std::cos(a) * radius, cy[corner] + std::sin(a) * radius});
         }
     }
@@ -119,6 +120,16 @@ std::string FormatTime(Uint64 ms) {
     return buf;
 }
 
+std::string FormatNumber(int n) {
+    const std::string digits = std::to_string(std::max(0, n));
+    std::string out;
+    for (size_t i = 0; i < digits.size(); ++i) {
+        if (i && (digits.size() - i) % 3 == 0) out += ',';
+        out += digits[i];
+    }
+    return out;
+}
+
 void Fonts::Load() {
     const std::string display = ASSET("/gfx/Baloo2-ExtraBold.ttf");
     const std::string body = ASSET("/gfx/DroidSans.ttf");
@@ -143,19 +154,8 @@ void DrawHud(SDL_Renderer* rend, Fonts& f, const std::string& level, int score, 
     FillRoundRect(rend, box, 16, kCardFill);
     StrokeRoundRect(rend, box, 16, 2, kEdge);
 
-    char scoreBuf[32];
-    {
-        // Thousands separators: 12,345.
-        std::string digits = std::to_string(std::max(0, score));
-        std::string out;
-        for (size_t i = 0; i < digits.size(); ++i) {
-            if (i && (digits.size() - i) % 3 == 0) out += ',';
-            out += digits[i];
-        }
-        SDL_snprintf(scoreBuf, sizeof(scoreBuf), "%s", out.c_str());
-    }
     const std::string labels[4] = {"LEVEL", "SCORE", "SHOTS", "TIME"};
-    const std::string values[4] = {level, scoreBuf, std::to_string(shots), FormatTime(timeMs)};
+    const std::string values[4] = {level, FormatNumber(score), FormatNumber(shots), FormatTime(timeMs)};
     SDL_SetRenderDrawBlendMode(rend, SDL_BLENDMODE_BLEND);
     for (int i = 0; i < 4; ++i) {
         const int y = (int)box.y + 12 + i * 45;

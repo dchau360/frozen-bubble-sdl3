@@ -259,6 +259,8 @@ constexpr const char *kSPLabel[SP_OPT] = {
     "ONLINE HIGHSCORES",
     // Toggle: ON means runs don't count on any highscore table.
     "AIM GUIDE",
+    // Toggle: MODERN / ORIGINAL look for the 1-player game screen.
+    "IN-GAME THEME",
     // Opens the Account code screen; drawn in the slim section with the
     // toggle, with a ">" where the toggle has ON/OFF.
     "ACCOUNT CODE",
@@ -311,14 +313,16 @@ void MainMenu::SPPanelRender() {
     // cannot silently desync the two.
     constexpr int kBigRows = 5;
     constexpr int kBigRowPitch = 41, kBigRowH = 37, kBigRowsTopOffset = 111;
-    constexpr int kToggleRowH = 30, kToggleRowGap = 6, kToggleSectionGapAfterBig = 18;
+    // Four slim rows only fit the 480px canvas this tight: at 30/6/18 the
+    // panel came to 482.
+    constexpr int kToggleRowH = 28, kToggleRowGap = 4, kToggleSectionGapAfterBig = 12;
     constexpr int kBottomMargin = 10;
     const int bigRowsBottomOffset = kBigRowsTopOffset + kBigRows * kBigRowPitch;         // 316
-    const int togglesTopOffset = bigRowsBottomOffset + kToggleSectionGapAfterBig;         // 334
+    const int togglesTopOffset = bigRowsBottomOffset + kToggleSectionGapAfterBig;         // 328
     const int togglesBottomOffset = togglesTopOffset +
-        (SP_OPT - kBigRows) * kToggleRowH + (SP_OPT - kBigRows - 1) * kToggleRowGap;      // 334 + 60 + 6 = 400
+        (SP_OPT - kBigRows) * kToggleRowH + (SP_OPT - kBigRows - 1) * kToggleRowGap;      // 328 + 112 + 12 = 452
     constexpr int kSPPanelW = 341;
-    const int spPanelH = togglesBottomOffset + kBottomMargin;                             // 410
+    const int spPanelH = togglesBottomOffset + kBottomMargin;                             // 462
 
     SDL_Rect spPanelRct = {(640/2) - (kSPPanelW/2), (480/2) - (spPanelH/2), kSPPanelW, spPanelH};
     { SDL_FRect fr = ToFRect(spPanelRct); SDL_RenderTexture(rend, singlePanelBG, nullptr, &fr); }
@@ -361,9 +365,11 @@ void MainMenu::SPPanelRender() {
     struct ToggleRow { int idx; bool on; const char* badge; };
     const bool worldOn = gs->worldHighscoresEnabled();
     const bool aimOn = gs->spAimGuideEnabled();
+    const bool modernOn = gs->modernTheme();
     ToggleRow toggles[SP_OPT - kBigRows] = {
         {kSPRowWorldScores, worldOn, worldOn ? "ON" : "OFF"},
         {kSPRowAimGuide,    aimOn,   aimOn ? "ON" : "OFF"},
+        {kSPRowTheme,       true,    modernOn ? "MODERN" : "ORIGINAL"},
         {kSPRowAccount,     true,    ">"},
     };
     for (int t = 0; t < SP_OPT - kBigRows; t++) {
@@ -410,6 +416,9 @@ void MainMenu::SPPanelRender() {
     } else if (activeSPIdx == kSPRowAimGuide) {
         panelText.UpdateText(rend, aimOn ? "On: runs do not count for scores"
                                          : "Off: runs count for highscores", 0);
+    } else if (activeSPIdx == kSPRowTheme) {
+        panelText.UpdateText(rend, modernOn ? "Modern: candy bubbles, score panel"
+                                            : "Original: the classic look", 0);
     } else if (activeSPIdx == kSPRowAccount) {
         panelText.UpdateText(rend, "View, copy or change your account", 0);
     } else {

@@ -301,6 +301,72 @@ bool BubbleGame::ShowsShotCount() const {
            !currentSettings.localMultiplayer && !currentSettings.mpTraining;
 }
 
+bool BubbleGame::UsesModernHud() const {
+    return GameSettings::Instance()->modernTheme() && ShowsShotCount();
+}
+
+void BubbleGame::DrawModernHud(SDL_Renderer *rend, BubbleArray &bArray) {
+    // The score counts up to the real one rather than jumping; a death's
+    // reset to 0 (or anything else that lowers it) snaps straight down.
+    if (hudShownScore > bArray.score) hudShownScore = bArray.score;
+    else if (hudShownScore < bArray.score)
+        hudShownScore += std::max(1, (bArray.score - hudShownScore) / 6);
+
+    // The run's clock, as the highscore tables time it; stopped while a
+    // finished level's card is up.
+    Uint64 elapsed = 0;
+    if (sessionMode == SessionMode::Live) {
+        if (gameFinish) {
+            if (!hudFrozenMs) hudFrozenMs = SDL_GetTicks() - FrozenBubble::Instance()->startTime;
+            elapsed = hudFrozenMs;
+        } else {
+            hudFrozenMs = 0;
+            elapsed = SDL_GetTicks() - FrozenBubble::Instance()->startTime;
+        }
+    }
+    const std::string level = currentSettings.randomLevels ? "RANDOM" : std::to_string(curLevel);
+    modernui::DrawHud(rend, modernFonts, level, hudShownScore, runShots, elapsed);
+}
+
+void BubbleGame::DrawModernResultCard(SDL_Renderer *rend, BubbleArray &bArray) {
+    const Uint64 now = SDL_GetTicks();
+    if (!modernCardStartMs) modernCardStartMs = now;
+    const float appear = (float)(now - modernCardStartMs) / 380.0f;
+
+    modernui::Card card;
+    const std::string level = currentSettings.randomLevels ? "RANDOM" : std::to_string(curLevel);
+    if (gameWon) {
+        card.title = "LEVEL CLEARED";
+        card.stats[0] = {"LEVEL", level};
+        card.stats[1] = {"SCORE", modernui::FormatNumber(bArray.score)};
+        card.stats[2] = {"TIME", modernui::FormatTime(hudFrozenMs)};
+        card.statCount = 3;
+        card.note = "ENTER or tap for the next level";
+    } else {
+        card.title = "GAME OVER";
+        card.titleColor = modernui::kLose;
+        card.stats[0] = {"LEVEL", level};
+        card.stats[1] = {"SCORE", modernui::FormatNumber(bArray.score)};
+        card.stats[2] = {"SHOTS", modernui::FormatNumber(runShots)};
+        card.statCount = 3;
+        if (continuePrompt) {
+            card.buttons[0] = "CONTINUE";
+            card.buttons[1] = "START OVER";
+            card.buttonCount = 2;
+            card.focus = continueFocusStartOver ? 1 : 0;
+            card.note = "Score goes back to 0; the clock keeps running.";
+        } else {
+            card.note = "ENTER or tap to go on";
+        }
+    }
+    SDL_Rect btn[2];
+    modernui::DrawCard(rend, modernFonts, card, appear, btn);
+    if (continuePrompt && !gameWon) {
+        continueBtnRect = btn[0];
+        startOverBtnRect = btn[1];
+    }
+}
+
 void BubbleGame::UpdateScoreText(BubbleArray &bArray, int slot) {
     char scoreStr[64];
     // For 2-player network games, show only player nickname (no score) in wooden banners
@@ -1254,6 +1320,7 @@ bool BubbleGame::AdvanceSimulationAtScale(float deltaScale, Uint32 gameClockMs) 
         // unpause even though the player had muted it.
         if (!audMixer->IsHalted()) audMixer->ResumeMusic();
         playedPause = false;
+        modernPauseStartMs = 0;
         Uint32 pausedFor = stepGameClockMs - timePaused;
         FrozenBubble::Instance()->startTime += pausedFor;
         // The training clock needs the same correction as the highscore timer
@@ -1440,7 +1507,33 @@ void BubbleGame::Draw() {
         { SDL_FRect fr = ToFRect(curArray.compressorRct); SDL_RenderTexture(rend, compressorTexture, nullptr, &fr); }
 
         SDL_Texture** useBubbles = GetBubbleTextures();
-        for (const std::vector<Bubble> &vecBubble : curArray.bubbleMap) for (Bubble bubble : vecBubble) bubble.Render(rend, useBubbles, imgBubblePrelight, imgBubbleFrozen);
+        const bool modern = UsesModernHud();
+        if (modern) {
+            // The level drops in row by row. It starts on the first frame
+            // after the level transition, which captures the frame before
+            // it (so the transition reveals an empty board), and moves only
+            // what is drawn: the bubbles themselves are already in place.
+            if (!levelIntroStartMs && firstRenderDone) levelIntroStartMs = SDL_GetTicks();
+            const float sinceMs = levelIntroStartMs ? (float)(SDL_GetTicks() - levelIntroStartMs) : -1.0f;
+            for (size_t row = 0; row < curArray.bubbleMap.size(); row++) {
+                const float t = sinceMs < 0 ? -1.0f : (sinceMs - 35.0f * row) / 320.0f;
+                if (t < 0) continue;
+                // ease-back: overshoots slightly, then settles
+                const float u = std::min(t, 1.0f) - 1.0f;
+                const float ease = 1.0f + 2.7f * u * u * u + 1.7f * u * u;
+                const int dy = (int)(-60.0f * (1.0f - ease));
+                const Uint8 alpha = (Uint8)(255.0f * std::min(1.0f, t * 2.5f));
+                for (Bubble bubble : curArray.bubbleMap[row]) {
+                    if (bubble.bubbleId < 0) continue;
+                    bubble.pos.y += dy;
+                    if (alpha < 255) SDL_SetTextureAlphaMod(useBubbles[bubble.bubbleId], alpha);
+                    bubble.Render(rend, useBubbles, imgBubblePrelight, imgBubbleFrozen);
+                    if (alpha < 255) SDL_SetTextureAlphaMod(useBubbles[bubble.bubbleId], 255);
+                }
+            }
+        } else {
+            for (const std::vector<Bubble> &vecBubble : curArray.bubbleMap) for (Bubble bubble : vecBubble) bubble.Render(rend, useBubbles, imgBubblePrelight, imgBubbleFrozen);
+        }
 
         // Stick effect animation (original: $sticking_bubble / sticking_step)
         if (curArray.stickAnimActive) {
@@ -1448,7 +1541,8 @@ void BubbleGame::Draw() {
             { SDL_FRect fr = ToFRect(sr); SDL_RenderTexture(rend, imgBubbleStick[curArray.stickAnimFrame], nullptr, &fr); }
         }
 
-        if(gameFinish) {
+        if (!gameFinish) modernCardStartMs = 0;
+        if(gameFinish && !modern) {
             if (gameLost) {
                 { SDL_FRect fr = ToFRect(panelRct); SDL_RenderTexture(rend, soloStatePanels[0], nullptr, &fr); }
                 // Show final score on lose screen
@@ -1500,13 +1594,14 @@ void BubbleGame::Draw() {
             bool isMini = (currentSettings.playerCount >= 3 && curArray.playerAssigned >= 1);
             DrawAimGuide(rend, curArray, isMini, stepDeltaScale);
         }
-        { SDL_FRect fr = ToFRect(*inGameText.Coords()); SDL_RenderTexture(rend, inGameText.Texture(), nullptr, &fr); }
+        if (!modern) { SDL_FRect fr = ToFRect(*inGameText.Coords()); SDL_RenderTexture(rend, inGameText.Texture(), nullptr, &fr); }
 
         // Display score: recompute the string, then blit it (R1d-iv a, split
         // so a redundant/extra render cannot recompute the texture).
         UpdateScoreText(curArray, 0);
-        DrawScoreText(0);
-        if (ShowsShotCount()) {
+        if (modern) DrawModernHud(rend, curArray);
+        else DrawScoreText(0);
+        if (ShowsShotCount() && !modern) {
             const std::string shots = "Shots: " + std::to_string(runShots);
             shotsText.UpdateText(renderer, shots.c_str(), 0);
             const SDL_Rect* score = scoreText[0].Coords();
@@ -1538,6 +1633,14 @@ void BubbleGame::Draw() {
         // its last 40%.
         for (const ScorePopup& p : scorePopups) {
             const float t = (float)p.age / kScorePopupFrames;
+            if (modern) {
+                if (p.dropped > 0)
+                    modernui::DrawPopup(rend, modernFonts.dropped, std::to_string(p.dropped) + " DROPPED!", p.x, p.y, t, true);
+                else
+                    modernui::DrawPopup(rend, modernFonts.popup, "+" + std::to_string(p.points), p.x, p.y, t, false);
+                continue;
+            }
+            if (p.dropped > 0) continue;
             const Uint8 alpha = t < 0.6f ? 255 : (Uint8)(255.0f * (1.0f - (t - 0.6f) / 0.4f));
             const std::string label = "+" + std::to_string(p.points);
             scorePopupText.UpdateText(renderer, label.c_str(), 0);
@@ -1550,6 +1653,9 @@ void BubbleGame::Draw() {
             SDL_RenderTexture(rend, tex, nullptr, &fr);
             SDL_SetTextureAlphaMod(tex, 255);
         }
+
+        // Over everything else on the board, popups included.
+        if (modern && gameFinish && (gameWon || gameLost)) DrawModernResultCard(rend, curArray);
     }
     else { //iterate until all penguins & status are rendered
         for (int i = 0; i < currentSettings.playerCount; i++) {
@@ -1992,7 +2098,8 @@ void BubbleGame::RenderPaused() {
     SDL_SetRenderDrawColor(rend, 0, 0, 0, 255);
     SDL_RenderClear(rend);
     SDL_RenderTexture(rend, prePauseBackground, nullptr, nullptr);
-    SDL_RenderTexture(rend, pauseBackground, nullptr, nullptr);
+    const bool modern = UsesModernHud();
+    if (!modern) SDL_RenderTexture(rend, pauseBackground, nullptr, nullptr);
 
     if (nextPauseUpd <= 0){
         pauseFrame++;
@@ -2003,8 +2110,23 @@ void BubbleGame::RenderPaused() {
     }
     else nextPauseUpd--;
 
-    SDL_Rect pauseRct = {SCREEN_CENTER_X - 95, SCREEN_CENTER_Y - 72, 190, 143};
-    { SDL_FRect fr = ToFRect(pauseRct); SDL_RenderTexture(rend, pausePenguin[pauseFrame], nullptr, &fr); }
+    if (modern) {
+        // The pause key is the only way out, so a hint rather than a button.
+        if (playedPause && !modernPauseStartMs) modernPauseStartMs = SDL_GetTicks();
+        modernui::Card card;
+        card.title = "PAUSED";
+        card.art = pausePenguin[pauseFrame];
+        card.stats[0] = {"LEVEL", currentSettings.randomLevels ? "RANDOM" : std::to_string(curLevel)};
+        card.stats[1] = {"SCORE", modernui::FormatNumber(bubbleArrays[0].score)};
+        card.stats[2] = {"SHOTS", modernui::FormatNumber(runShots)};
+        card.statCount = 3;
+        card.note = "Press PAUSE to resume";
+        SDL_Rect btn[2];
+        modernui::DrawCard(rend, modernFonts, card, (float)(SDL_GetTicks() - modernPauseStartMs) / 380.0f, btn);
+    } else {
+        SDL_Rect pauseRct = {SCREEN_CENTER_X - 95, SCREEN_CENTER_Y - 72, 190, 143};
+        { SDL_FRect fr = ToFRect(pauseRct); SDL_RenderTexture(rend, pausePenguin[pauseFrame], nullptr, &fr); }
+    }
 
     timePaused = SDL_GetTicks();
 }

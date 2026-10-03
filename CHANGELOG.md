@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- **Modern in-game theme.** A fresh look for the game screen, on by default. The bubbles are glossy candy ones (colour-blind versions too) in every mode. A 1-player game also gets a score panel on the left with level, score (counting up), shots and time; new cards for level cleared, game over (with the Continue / Start over buttons) and pause; the next level dropping in row by row; and a big "N DROPPED!" when a shot cuts bubbles loose. The background, penguin, launcher, sounds and scoring are unchanged. Turn it off with **In-game theme → Original** in the 1-player menu. Online and local multiplayer games get the new bubbles but keep their original screens.
+
 ## v2.4.132
 
 - **1-player aim guide, and runs with it on don't count.** The 1-player menu has a new **Aim guide** switch (off by default) that draws the bounce line for your shot. A run played with it on is kept out of every high score table, your own and the online ones. If it's on when you press START, Pick start level or Multiplayer training, the game asks whether to turn it off first; "Play without scores" keeps it on.

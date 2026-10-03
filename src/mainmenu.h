@@ -62,7 +62,7 @@
 // SPPanelRender/press() in mainmenu.cpp. (An Arcade Mode toggle used to sit
 // here too; a death in a classic solo game now always asks whether to
 // continue -- BubbleGame's continue prompt -- so there is nothing to set.)
-#define SP_OPT 8
+#define SP_OPT 9
 // The toggle row (World highscores, worldscores.h). Named rather than left as
 // a bare 5 so SPPanelRender and press()/up()/down() (mainmenu.cpp) can't
 // drift apart.
@@ -71,9 +71,12 @@
 // played with it on never reaches any highscore table -- local or online --
 // and START asks to turn it off first (mainmenu_spaim.cpp).
 #define kSPRowAimGuide 6
+// The in-game theme toggle, MODERN / ORIGINAL (GameSettings::modernTheme(),
+// BubbleGame::UsesModernHud()).
+#define kSPRowTheme 7
 // Opens the Account code screen (mainmenu_account.cpp), the same one the
 // LAN/NET server lists open.
-#define kSPRowAccount 7
+#define kSPRowAccount 8
 
 class MainMenu final
 {

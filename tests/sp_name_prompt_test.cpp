@@ -257,6 +257,24 @@ int main() {
         MainMenuTestAccess::Render(*menu);
     }
 
+    // In-game theme: the row just above Account code; ENTER flips it and
+    // starts nothing.
+    {
+        auto menu = MainMenuTestAccess::Create(renderer);
+        MainMenuTestAccess::OpenSPOnStart(*menu);
+        Key(*menu, SDLK_UP);
+        Key(*menu, SDLK_UP);
+        CHECK(MainMenuTestAccess::SPIdx(*menu) == kSPRowTheme);
+        const bool before = settings->modernTheme();
+        Key(*menu, SDLK_RETURN);
+        CHECK(settings->modernTheme() == !before);
+        CHECK(MainMenuTestAccess::SPPanel(*menu));
+        CHECK(starts == startsBase);
+        MainMenuTestAccess::Render(*menu);
+        Key(*menu, SDLK_RETURN);
+        CHECK(settings->modernTheme() == before);
+    }
+
     // From the High Scores screen: drawn on its own, back to High Scores on
     // ESC or Back.
     {
