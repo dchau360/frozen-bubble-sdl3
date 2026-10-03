@@ -66,6 +66,7 @@ set(FROZEN_BUBBLE_CORE_SOURCES
     ${FB_SRC}/netteams.cpp
     ${FB_SRC}/roundstats_color.cpp
     ${FB_SRC}/playerbadge.cpp
+    ${FB_SRC}/modernui.cpp
     ${FB_SRC}/transitionmanager.cpp
     ${FB_SRC}/ttftext.cpp
     ${FB_SRC}/highscoremanager.cpp

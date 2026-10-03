@@ -257,6 +257,35 @@ int main() {
         MainMenuTestAccess::Render(*menu);
     }
 
+    // In-game theme and Bubbles: the two rows above Account code. ENTER
+    // flips each on its own and starts nothing.
+    {
+        auto menu = MainMenuTestAccess::Create(renderer);
+        MainMenuTestAccess::OpenSPOnStart(*menu);
+        Key(*menu, SDLK_UP);
+        Key(*menu, SDLK_UP);
+        CHECK(MainMenuTestAccess::SPIdx(*menu) == kSPRowBubbles);
+        const bool themeBefore = settings->modernTheme();
+        const bool bubblesBefore = settings->modernBubbles();
+        Key(*menu, SDLK_RETURN);
+        CHECK(settings->modernBubbles() == !bubblesBefore);
+        CHECK(settings->modernTheme() == themeBefore);
+        MainMenuTestAccess::Render(*menu);
+        Key(*menu, SDLK_RETURN);
+        CHECK(settings->modernBubbles() == bubblesBefore);
+
+        Key(*menu, SDLK_UP);
+        CHECK(MainMenuTestAccess::SPIdx(*menu) == kSPRowTheme);
+        Key(*menu, SDLK_RETURN);
+        CHECK(settings->modernTheme() == !themeBefore);
+        CHECK(settings->modernBubbles() == bubblesBefore);
+        CHECK(MainMenuTestAccess::SPPanel(*menu));
+        CHECK(starts == startsBase);
+        MainMenuTestAccess::Render(*menu);
+        Key(*menu, SDLK_RETURN);
+        CHECK(settings->modernTheme() == themeBefore);
+    }
+
     // From the High Scores screen: drawn on its own, back to High Scores on
     // ESC or Back.
     {

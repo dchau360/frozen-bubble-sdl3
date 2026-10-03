@@ -165,6 +165,46 @@ int main() {
     settings->SetValue("GFX:ShowFPS", "");
     CHECK(iniHasKeyValue(settingsPath, "showfps", "true"));
 
+    // In-game theme: modern by default, and switching it back to original
+    // in the 1-player menu has to survive a restart -- including for a
+    // settings.ini from before the setting existed, which has no key for it.
+    CHECK(settings->modernTheme());
+    settings->SetValue("GFX:ModernTheme", "");
+    CHECK(!settings->modernTheme());
+    CHECK(iniHasKeyValue(settingsPath, "moderntheme", "false"));
+    settings->ReadSettings();
+    CHECK(!settings->modernTheme());
+    {
+        std::ifstream in(settingsPath);
+        std::string ini((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+        in.close();
+        const size_t at = ini.find("\nmoderntheme");
+        CHECK(at != std::string::npos);
+        if (at != std::string::npos) ini.erase(at + 1, ini.find('\n', at + 1) - at);
+        std::ofstream(settingsPath) << ini;
+    }
+    settings->ReadSettings();
+    CHECK(settings->modernTheme());  // no key: the default
+    settings->SetValue("GFX:ModernTheme", "");
+    settings->ReadSettings();
+    CHECK(!settings->modernTheme());
+    CHECK(iniHasKeyValue(settingsPath, "moderntheme", "false"));
+    settings->SetValue("GFX:ModernTheme", "");
+    settings->ReadSettings();
+    CHECK(settings->modernTheme());
+
+    // Bubbles are their own setting, saved the same way.
+    CHECK(settings->modernBubbles());
+    settings->SetValue("GFX:ModernBubbles", "");
+    CHECK(!settings->modernBubbles());
+    CHECK(settings->modernTheme());
+    settings->ReadSettings();
+    CHECK(!settings->modernBubbles());
+    CHECK(iniHasKeyValue(settingsPath, "modernbubbles", "false"));
+    settings->SetValue("GFX:ModernBubbles", "");
+    settings->ReadSettings();
+    CHECK(settings->modernBubbles());
+
     // The MENU STYLE row cycles the title-screen theme forward and wraps
     // around, and the choice has to survive a restart -- it is written
     // through to settings.ini on every press, not only at shutdown. Slate
@@ -230,8 +270,10 @@ int main() {
         std::ifstream in(settingsPath);
         std::string ini((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
         in.close();
-        const size_t at = ini.find("theme");
+        // The line that starts with the key: "moderntheme" (GFX) comes first.
+        size_t at = ini.find("\ntheme");
         CHECK(at != std::string::npos);
+        if (at != std::string::npos) at++;
         const size_t eq = ini.find('=', at);
         const size_t eol = ini.find('\n', eq);
         ini.replace(eq + 1, eol - eq - 1, " 99");

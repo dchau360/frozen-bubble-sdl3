@@ -58,6 +58,17 @@ BubbleGame::BubbleGame(const SDL_Renderer *renderer)
         imgMiniBubbles[i - 1] = IMG_LoadTexture(rend, ASSET(rel).c_str());
         snprintf(rel, sizeof(rel), "/gfx/balls/bubble-colourblind-%d-mini.png", i);
         imgMiniColorblindBubbles[i - 1] = IMG_LoadTexture(rend, ASSET(rel).c_str());
+
+        snprintf(rel, sizeof(rel), "/gfx/balls/modern/bubble-%d.png", i);
+        imgModernBubbles[i - 1] = IMG_LoadTexture(rend, ASSET(rel).c_str());
+        snprintf(rel, sizeof(rel), "/gfx/balls/modern/bubble-colourblind-%d.png", i);
+        imgModernColorblindBubbles[i - 1] = IMG_LoadTexture(rend, ASSET(rel).c_str());
+        snprintf(rel, sizeof(rel), "/gfx/balls/modern/bubble-%d-mini.png", i);
+        imgModernMiniBubbles[i - 1] = IMG_LoadTexture(rend, ASSET(rel).c_str());
+        snprintf(rel, sizeof(rel), "/gfx/balls/modern/bubble-colourblind-%d-mini.png", i);
+        imgModernMiniColorblindBubbles[i - 1] = IMG_LoadTexture(rend, ASSET(rel).c_str());
+        if (!imgModernBubbles[i - 1])
+            SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "Failed to load modern bubble %d: %s", i, SDL_GetError());
     }
 
     for (int i = 0; i <= BUBBLE_STICKFC; i++) {
@@ -148,6 +159,8 @@ BubbleGame::BubbleGame(const SDL_Renderer *renderer)
     shotsText.UpdateAlignment(TTF_HORIZONTAL_ALIGN_LEFT);
     shotsText.UpdateColor({255, 255, 255, 255}, {0, 0, 0, 255});
 
+    modernFonts.Load();
+
     scorePopupText.LoadFont(ASSET("/gfx/DroidSans.ttf").c_str(), 20);
     scorePopupText.UpdateAlignment(TTF_HORIZONTAL_ALIGN_CENTER);
     scorePopupText.UpdateStyle(20, TTF_STYLE_BOLD);
@@ -228,6 +241,10 @@ BubbleGame::~BubbleGame() {
         SDL_DestroyTexture(imgColorblindBubbles[i]);
         SDL_DestroyTexture(imgMiniBubbles[i]);
         SDL_DestroyTexture(imgMiniColorblindBubbles[i]);
+        SDL_DestroyTexture(imgModernBubbles[i]);
+        SDL_DestroyTexture(imgModernColorblindBubbles[i]);
+        SDL_DestroyTexture(imgModernMiniBubbles[i]);
+        SDL_DestroyTexture(imgModernMiniColorblindBubbles[i]);
     }
     for (int i = 0; i < MAX_NET_PLAYERS; i++) {
         if (bubbleArrays[i].hurryTexture) SDL_DestroyTexture(bubbleArrays[i].hurryTexture);
@@ -448,6 +465,8 @@ void BubbleGame::NewGame(SetupSettings setup) {
     for (int i = 0; i < currentSettings.playerCount; i++) ResetRoundInputState(bubbleArrays[i]);
     pendingHighscore = false;
     scorePopups.clear();
+    levelIntroStartMs = 0;
+    hudShownScore = 0;
     curLevel = setup.startLevel;
     runShots = 0;
     runEligibleForWorld = !setup.networkGame && setup.playerCount == 1 && !setup.randomLevels &&
@@ -1191,6 +1210,7 @@ void BubbleGame::ReloadGame(int level) {
         return;
     }
     scorePopups.clear();
+    levelIntroStartMs = 0;
 
     SDL_Renderer *rend = const_cast<SDL_Renderer*>(renderer);
 

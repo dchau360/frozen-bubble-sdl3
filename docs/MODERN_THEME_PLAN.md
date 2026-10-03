@@ -1,8 +1,10 @@
 # Modern in-game theme — plan (parked)
 
-Status: **to do, not scheduled.** A partial implementation lives on the
-`modern-theme` branch (commit `9a65535a`, "WIP: modern in-game theme"); nothing
-of it is on `main`.
+Status: **built on the `modern-theme` branch, not yet merged or released.**
+Every step below is done except the last two: deciding whether it ships on
+by default (it is on now), and a manual play-through on Android and the web
+build. Restyling the online multiplayer screens is not part of it; online
+games get the new bubbles only.
 
 Preview mockups (private claude.ai artifacts, owner's account):
 - Modern in-game theme: https://claude.ai/artifact/6CYU7iGzimRC6iMdM8zmh4

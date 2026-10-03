@@ -201,6 +201,14 @@ public:
     bool soundEnabled() { return playMusic && playSfx; }
     void setSoundEnabled(bool on);
     bool colorBlind() { return colorblindBubbles; }
+    // The in-game look (GFX:ModernTheme, default on): in a 1-player game the
+    // score panel, the new level-cleared/lost/paused cards, the level
+    // drop-in and the dropped count. Off is the original look. Menus have
+    // their own Menu:Theme.
+    bool modernTheme() { return modernGameTheme; }
+    // The bubbles, separately (GFX:ModernBubbles, default on): Candy gloss
+    // in every mode, or the original ones -- either goes with either theme.
+    bool modernBubbles() { return modernBubbleSet; }
     bool showFpsOverlay() { return showFps; }
 
     // On by default: sends this device's best classic single-player runs to
@@ -370,7 +378,7 @@ private:
     // than that header's enum: menutheme.h pulls in SDL_ttf, which every
     // translation unit that merely reads a setting would otherwise pay for.
     int menuThemeId = 2;
-    bool useFullscreen = false, colorblindBubbles = false;
+    bool useFullscreen = false, colorblindBubbles = false, modernGameTheme = true, modernBubbleSet = true;
     bool playMusic = true, playSfx = true, classicSound = false;
     bool showFps = false;
     bool worldHighscores = true;
