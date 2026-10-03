@@ -30,6 +30,16 @@
 #define WINDOW_H 480
 #define SURF_FORMAT SDL_PIXELFORMAT_ARGB8888
 
+// Screen pixels per 640x480 canvas pixel that font text is rasterized at.
+// At 1 a word is drawn at its canvas size and the logical presentation
+// stretches it with everything else, which goes soft on a big or dense
+// screen; above 1 it is drawn that much larger and the texture is placed in
+// the same canvas-sized rect (Coords() and RenderRingedText's outSize stay
+// in canvas pixels), so nothing moves. FrozenBubble sets it every frame from
+// the window size (FrozenBubble::UpdateTextScale); headless tests leave it 1.
+void SetTextRenderScale(float scale);
+float TextRenderScale();
+
 class TTFText final
 {
 public:
@@ -83,6 +93,7 @@ private:
     int curWrapLength = 0;
     const SDL_Renderer *textureRenderer = nullptr;
     bool textureDirty = true;
+    float textureScale = 1.f;  // TextRenderScale() the texture was made at
 
     SDL_Rect coords{};
     SDL_Color forecolor{}, backcolor{};
@@ -105,7 +116,8 @@ private:
 // baked labels this fixed -- can render legible text over a busy background
 // without pulling in the theme system to do it. Caller owns the returned
 // texture (null on failure) and should cache it: a full TTF render plus a
-// texture upload is too costly to repeat every frame.
+// texture upload is too costly to repeat every frame. Drawn at
+// TextRenderScale(); `outSize` is the size to draw it at on the canvas.
 SDL_Texture *RenderRingedText(const SDL_Renderer *rend, TTF_Font *font,
                                const char *text, SDL_Color fg, SDL_Color ring,
                                int ringPx, SDL_Point *outSize);

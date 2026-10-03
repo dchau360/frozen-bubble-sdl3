@@ -202,6 +202,9 @@ private:
     // a healthy 60, and a broken frame limiter changes fps while the intended
     // speed is preserved by deltaScale. One number cannot show both.
     TTFText fpsText;
+    // Sets the scale font text is rasterized at from the window size and the
+    // GRAPHICS level (SetTextRenderScale in ttftext.h).
+    void UpdateTextScale();
     void AccumulateFrameStats(float elapsedMs);
     void RenderFpsOverlay();
 

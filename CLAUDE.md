@@ -108,6 +108,8 @@ All major subsystems are singletons accessed via `::Instance()`: `FrozenBubble`,
 
 The game renders to a fixed **640×480 logical canvas** (`WINDOW_W`/`WINDOW_H` in `transitionmanager.h`); SDL3 scales this to the actual window. All stored rects are `SDL_Rect` (int), converted with `ToFRect()` (`src/sdl3_compat.h`) when calling SDL3 render functions that require `SDL_FRect`.
 
+**Sharp text:** font text is rasterized at the screen's resolution, not the canvas's. `FrozenBubble::UpdateTextScale()` sets `SetTextRenderScale()` (`ttftext.h`) every frame from the logical presentation rect (quarter steps, 1–6×; 1 at GRAPHICS Low, the only off switch, user decision: no separate setting), and `TTFText`/`RenderRingedText` draw that much larger while `Coords()`/`outSize` stay in canvas pixels. So always place a text texture by `Coords()`, never by `SDL_GetTextureSize()`. Text set once and never updated keeps the scale it was made at until its next `UpdateText`. The board, sprites and the original theme's bitmap fonts are still stretched. The web build's canvas is fixed at 640×480 and scaled by the page, so it gets no benefit. See `tests/sharp_text_test.cpp`.
+
 Transition effects (plasma, bars, circles, etc.) live in `src/shaderstuff.cpp` — pixel-manipulation routines ported from the original Perl/C source. `TransitionManager` calls `TakeSnipOut`/`DoSnipIn` to apply them between screens.
 
 ### Input parity (keyboard/gamepad + touch/mouse)

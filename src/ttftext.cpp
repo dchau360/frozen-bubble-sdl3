@@ -18,11 +18,65 @@
  */
 
 #include "ttftext.h"
+#include <algorithm>
+#include <cmath>
 #include <utility>
+#include <vector>
 
 #ifdef FROZEN_BUBBLE_TEST_ACCESS
 size_t TTFText::testTextureCreationCount = 0;
 #endif
+
+namespace {
+
+float g_textScale = 1.f;
+
+// Canvas pixels to texture pixels at `scale`; anything non-zero stays at
+// least one pixel.
+int Px(int canvasPx, float scale) {
+    return canvasPx ? std::max(1, (int)std::lround(canvasPx * scale)) : 0;
+}
+
+int ToCanvas(int px, float scale) { return (int)std::lround(px / scale); }
+
+// Sets a font to `scale` times its size for one render and puts it back
+// after. Fonts are shared (between TTFTexts, and with the menu theme), so the
+// change must not outlive the render.
+class ScaledFont {
+public:
+    ScaledFont(TTF_Font *f, float scale) : font(f), base(TTF_GetFontSize(f)) {
+        scaled = scale != 1.f && base > 0.f && TTF_SetFontSize(font, base * scale);
+    }
+    ~ScaledFont() { if (scaled) TTF_SetFontSize(font, base); }
+    ScaledFont(const ScaledFont&) = delete;
+    ScaledFont& operator=(const ScaledFont&) = delete;
+private:
+    TTF_Font *font;
+    float base;
+    bool scaled = false;
+};
+
+// Where to stamp the ring's copies of the text. At 1x it is the original
+// eight neighbours; a scaled ring is several pixels wide, where eight copies
+// leave notches, so it fills a disc instead.
+std::vector<SDL_Point> RingOffsets(int d, bool scaled) {
+    if (!scaled)
+        return {{-d,-d},{0,-d},{d,-d},{-d,0},{d,0},{-d,d},{0,d},{d,d}};
+    std::vector<SDL_Point> pts;
+    for (int r = d; r > 0; r -= 2) {
+        const int n = std::max(8, (int)std::ceil(3.14159265f * r));  // ~2px apart
+        for (int i = 0; i < n; ++i) {
+            const float a = 2 * 3.14159265f * i / n;
+            pts.push_back({(int)std::lround(std::cos(a) * r), (int)std::lround(std::sin(a) * r)});
+        }
+    }
+    return pts;
+}
+
+}  // namespace
+
+void SetTextRenderScale(float scale) { g_textScale = scale > 1.f ? scale : 1.f; }
+float TextRenderScale() { return g_textScale; }
 
 SDL_Texture *RenderRingedText(const SDL_Renderer *rend, TTF_Font *font,
                                const char *text, SDL_Color fg, SDL_Color ring,
@@ -31,11 +85,13 @@ SDL_Texture *RenderRingedText(const SDL_Renderer *rend, TTF_Font *font,
     if (outSize) *outSize = SDL_Point{0, 0};
     if (!font || !text || !*text) return nullptr;
 
+    const float scale = g_textScale;
+    ScaledFont scaledFont(font, scale);
     SDL_Surface *front = TTF_RenderText_Blended(font, text, 0, fg);
     if (!front) return nullptr;
 
     // Pad by however far the ring or shadow reaches, so neither is clipped.
-    const int pad = ringPx > 0 ? ringPx : (ring.a ? 1 : 0);
+    const int pad = ringPx > 0 ? Px(ringPx, scale) : (ring.a ? Px(1, scale) : 0);
     SDL_Surface *canvas = SDL_CreateSurface(front->w + pad * 2, front->h + pad * 2,
                                             SDL_PIXELFORMAT_ARGB8888);
     if (!canvas) { SDL_DestroySurface(front); return nullptr; }
@@ -45,14 +101,12 @@ SDL_Texture *RenderRingedText(const SDL_Renderer *rend, TTF_Font *font,
         if (shadow) {
             SDL_SetSurfaceBlendMode(shadow, SDL_BLENDMODE_BLEND);
             if (ringPx > 0) {
-                const int d = ringPx;
-                const int off[8][2] = {{-d,-d},{0,-d},{d,-d},{-d,0},{d,0},{-d,d},{0,d},{d,d}};
-                for (const auto &o : off) {
-                    SDL_Rect dst = {pad + o[0], pad + o[1], shadow->w, shadow->h};
+                for (const SDL_Point &o : RingOffsets(pad, scale != 1.f)) {
+                    SDL_Rect dst = {pad + o.x, pad + o.y, shadow->w, shadow->h};
                     SDL_BlitSurface(shadow, nullptr, canvas, &dst);
                 }
             } else {
-                SDL_Rect dst = {pad + 1, pad + 1, shadow->w, shadow->h};
+                SDL_Rect dst = {pad + pad, pad + pad, shadow->w, shadow->h};
                 SDL_BlitSurface(shadow, nullptr, canvas, &dst);
             }
             SDL_DestroySurface(shadow);
@@ -63,7 +117,7 @@ SDL_Texture *RenderRingedText(const SDL_Renderer *rend, TTF_Font *font,
     { SDL_Rect dst = {pad, pad, front->w, front->h}; SDL_BlitSurface(front, nullptr, canvas, &dst); }
 
     SDL_Texture *tex = SDL_CreateTextureFromSurface(const_cast<SDL_Renderer *>(rend), canvas);
-    if (outSize) *outSize = SDL_Point{canvas->w, canvas->h};
+    if (outSize) *outSize = SDL_Point{ToCanvas(canvas->w, scale), ToCanvas(canvas->h, scale)};
 
     SDL_DestroySurface(front);
     SDL_DestroySurface(canvas);
@@ -80,6 +134,7 @@ TTFText::TTFText(TTFText&& other) noexcept
       curWrapLength(other.curWrapLength),
       textureRenderer(other.textureRenderer),
       textureDirty(other.textureDirty),
+      textureScale(other.textureScale),
       coords(other.coords),
       forecolor(other.forecolor),
       backcolor(other.backcolor),
@@ -113,6 +168,7 @@ TTFText& TTFText::operator=(TTFText&& other) noexcept {
     curWrapLength = other.curWrapLength;
     textureRenderer = other.textureRenderer;
     textureDirty = other.textureDirty;
+    textureScale = other.textureScale;
     textFont = other.textFont;
     ownsFont = other.ownsFont;
     outTexture = other.outTexture;
@@ -155,8 +211,9 @@ void TTFText::UpdateText(const SDL_Renderer *rend, const char *txt, int wrapLeng
         InvalidateTexture();
         return;
     }
+    const float scale = g_textScale;
     if (!textureDirty && outTexture != nullptr && textureRenderer == rend &&
-        curWrapLength == wrapLength && curText == txt) {
+        curWrapLength == wrapLength && curText == txt && textureScale == scale) {
         return;
     }
     if (outTexture != nullptr) { SDL_DestroyTexture(outTexture); outTexture = nullptr; }
@@ -175,25 +232,31 @@ void TTFText::UpdateText(const SDL_Renderer *rend, const char *txt, int wrapLeng
 #endif
             textureRenderer = rend;
             textureDirty = false;
+            textureScale = scale;
         }
         return;
     }
 
-    SDL_Surface *front = TTF_RenderText_Blended_Wrapped(textFont, txt, 0, forecolor, wrapLength);
+    ScaledFont scaledFont(textFont, scale);
+    const int wrap = wrapLength > 0 ? Px(wrapLength, scale) : wrapLength;
+    SDL_Surface *front = TTF_RenderText_Blended_Wrapped(textFont, txt, 0, forecolor, wrap);
     if (!front) return;
-    SDL_Surface *back = TTF_RenderText_Blended_Wrapped(textFont, txt, 0, backcolor, wrapLength);
+    SDL_Surface *back = TTF_RenderText_Blended_Wrapped(textFont, txt, 0, backcolor, wrap);
     if (!back) { SDL_DestroySurface(front); return; }
-    SDL_Rect end = {-1, -1, front->w, front->h};
+    // The shadow sits one canvas pixel down-right of the text.
+    const int shadow = Px(1, scale);
+    SDL_Rect end = {-shadow, -shadow, front->w, front->h};
     SDL_BlitSurface(front, nullptr, back, &end);
     outTexture = SDL_CreateTextureFromSurface(const_cast<SDL_Renderer *>(rend), back);
-    coords.w = back->w;
-    coords.h = back->h;
+    coords.w = ToCanvas(back->w, scale);
+    coords.h = ToCanvas(back->h, scale);
     if (outTexture != nullptr) {
 #ifdef FROZEN_BUBBLE_TEST_ACCESS
         ++testTextureCreationCount;
 #endif
         textureRenderer = rend;
         textureDirty = false;
+        textureScale = scale;
     }
     SDL_DestroySurface(front);
     SDL_DestroySurface(back);

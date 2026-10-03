@@ -363,6 +363,12 @@ if(BUILD_TESTING AND NOT EMSCRIPTEN AND NOT ANDROID AND NOT IOS)
     target_link_libraries(modern-theme-render-test PRIVATE frozen-bubble-core-test)
     add_test(NAME modern-theme-render-test COMMAND modern-theme-render-test)
 
+    add_executable(sharp-text-test tests/sharp_text_test.cpp)
+    set_property(TARGET sharp-text-test PROPERTY CXX_STANDARD 17)
+    set_property(TARGET sharp-text-test PROPERTY CXX_EXTENSIONS OFF)
+    target_link_libraries(sharp-text-test PRIVATE frozen-bubble-core-test)
+    add_test(NAME sharp-text-test COMMAND sharp-text-test)
+
     add_executable(text-input-test tests/text_input_test.cpp)
     set_property(TARGET text-input-test PROPERTY CXX_STANDARD 17)
     set_property(TARGET text-input-test PROPERTY CXX_EXTENSIONS OFF)
