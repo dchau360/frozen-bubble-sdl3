@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v2.4.134
 
 - **A time bonus for clearing a level, like Bust-a-Move's.** In 1-player games, clearing a level in 5 seconds or less is worth 5,000 points, then 84 less for every second after that, down to nothing at 65 seconds. It replaces the flat 1,000 every clear used to get. The level-cleared panel now shows how long the level took and the bonus it earned.
 
