@@ -193,6 +193,18 @@ int main() {
     settings->ReadSettings();
     CHECK(settings->modernTheme());
 
+    // Bubbles are their own setting, saved the same way.
+    CHECK(settings->modernBubbles());
+    settings->SetValue("GFX:ModernBubbles", "");
+    CHECK(!settings->modernBubbles());
+    CHECK(settings->modernTheme());
+    settings->ReadSettings();
+    CHECK(!settings->modernBubbles());
+    CHECK(iniHasKeyValue(settingsPath, "modernbubbles", "false"));
+    settings->SetValue("GFX:ModernBubbles", "");
+    settings->ReadSettings();
+    CHECK(settings->modernBubbles());
+
     // The MENU STYLE row cycles the title-screen theme forward and wraps
     // around, and the choice has to survive a restart -- it is written
     // through to settings.ini on every press, not only at shutdown. Slate

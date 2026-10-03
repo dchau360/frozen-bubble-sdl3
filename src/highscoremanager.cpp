@@ -312,11 +312,11 @@ HighscoreManager::HighscoreManager(SDL_Renderer *renderer)
     backgroundSfc = IMG_Load(ASSET("/gfx/back_one_player.png").c_str());
 
     // The level thumbnails use the same bubbles as the game, picked once
-    // here: a theme or colour-blind change shows on them after a restart.
+    // here: a bubbles or colour-blind change shows on them after a restart.
     for (int i = 1; i <= 8; i++)
     {
         char rel[96];
-        const bool modern = gameSettings->modernTheme();
+        const bool modern = gameSettings->modernBubbles();
         snprintf(rel, sizeof(rel), "/gfx/balls/%s%s-%d.%s", modern ? "modern/" : "",
                  gameSettings->colorBlind() ? "bubble-colourblind" : "bubble", i, modern ? "png" : "gif");
         useBubbles[i - 1] = IMG_Load(ASSET(rel).c_str());

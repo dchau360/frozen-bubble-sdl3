@@ -15,6 +15,7 @@
 
 #include "bubblegame.h"
 #include "gamesettings.h"
+#include "mainmenu.h"
 #include "platform.h"
 
 #include <chrono>
@@ -62,6 +63,16 @@ struct BubbleGameTestAccess {
     static SDL_Rect continueBtn(const BubbleGame& game) { return game.continueBtnRect; }
     static SDL_Rect startOverBtn(const BubbleGame& game) { return game.startOverBtnRect; }
     static void clearButtons(BubbleGame& game) { game.continueBtnRect = game.startOverBtnRect = {}; }
+};
+
+// The 1-player menu, with its In-game theme and Bubbles rows.
+struct MainMenuTestAccess {
+    static void DrawSP(const SDL_Renderer* renderer, int row) {
+        MainMenu menu(renderer, MainMenu::HeadlessTestTag{});
+        menu.showingSPPanel = true;
+        menu.activeSPIdx = row;
+        menu.SPPanelRender();
+    }
 };
 
 static void Dump(SDL_Renderer* rend, const char* name) {
@@ -150,6 +161,17 @@ int main() {
         CHECK(cont.x + cont.w <= over.x);  // side by side, CONTINUE on the left
         Dump(renderer, "4-continue");
 
+        // Modern screens with the classic bubbles.
+        settings->SetValue("GFX:ModernBubbles", "");
+        CHECK(!settings->modernBubbles());
+        CHECK(BubbleGameTestAccess::modern(game));
+        BubbleGameTestAccess::unfinish(game);
+        BubbleGameTestAccess::draw(game);
+        Dump(renderer, "6-modern-classic-bubbles");
+        settings->SetValue("GFX:ModernBubbles", "");
+        BubbleGameTestAccess::finish(game, false, true);
+        BubbleGameTestAccess::draw(game);
+
         // Original theme: the same prompt still sets its own rects.
         settings->SetValue("GFX:ModernTheme", "");
         CHECK(!settings->modernTheme());
@@ -161,6 +183,11 @@ int main() {
         settings->SetValue("GFX:ModernTheme", "");
         CHECK(settings->modernTheme());
     }
+
+    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
+    SDL_RenderClear(renderer);
+    MainMenuTestAccess::DrawSP(renderer, kSPRowBubbles);
+    Dump(renderer, "7-sp-menu");
 
     // Local multiplayer keeps the original screens: only the bubbles change.
     {

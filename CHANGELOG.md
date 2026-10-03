@@ -2,7 +2,8 @@
 
 ## Unreleased
 
-- **Modern in-game theme.** A fresh look for the game screen, on by default. The bubbles are glossy candy ones (colour-blind versions too) in every mode. A 1-player game also gets a score panel on the left with level, score (counting up), shots and time; new cards for level cleared, game over (with the Continue / Start over buttons) and pause; the next level dropping in row by row; and a big "N DROPPED!" when a shot cuts bubbles loose. The background, penguin, launcher, sounds and scoring are unchanged. Turn it off with **In-game theme → Original** in the 1-player menu. Online and local multiplayer games get the new bubbles but keep their original screens.
+- **Modern in-game theme.** A fresh look for the game screen, on by default, with glossy candy bubbles (colour-blind versions too). A 1-player game gets a score panel on the left with level, score (counting up), shots and time; new cards for level cleared, game over (with the Continue / Start over buttons) and pause; the next level dropping in row by row; and a big "N DROPPED!" when a shot cuts bubbles loose. The background, penguin, launcher, sounds and scoring are unchanged. Turn it off with **In-game theme → Original** in the 1-player menu. Online and local multiplayer games keep their original screens.
+- **Bubbles setting.** The candy bubbles have their own switch, **Bubbles → Candy / Classic**, also in the 1-player menu, so you can keep the modern screens with the original bubbles (or the other way round). It applies in every mode. To make room, the small rows at the bottom of the 1-player menu are a little shorter.
 - **Pause button in 1-player games.** A round pause button in the top-right corner pauses the game with a click or tap, in either theme. That makes pausing possible on phones and tablets, which have no Pause key. While paused it turns into a play button, and a tap anywhere resumes.
 
 ## v2.4.132

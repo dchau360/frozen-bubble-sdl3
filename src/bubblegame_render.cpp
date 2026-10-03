@@ -432,7 +432,7 @@ SDL_Texture** BubbleGame::GetBubbleTextures(bool mini) {
     GameSettings *settings = GameSettings::Instance();
     // The modern set, unless any of it failed to load (an install missing the
     // folder still has the original set to fall back on).
-    if (settings->modernTheme() && imgModernBubbles[0] && imgModernMiniBubbles[0] &&
+    if (settings->modernBubbles() && imgModernBubbles[0] && imgModernMiniBubbles[0] &&
         imgModernColorblindBubbles[0] && imgModernMiniColorblindBubbles[0]) {
         if (mini) return settings->colorBlind() ? imgModernMiniColorblindBubbles : imgModernMiniBubbles;
         return settings->colorBlind() ? imgModernColorblindBubbles : imgModernBubbles;
