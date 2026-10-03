@@ -1,5 +1,10 @@
 # Changelog
 
+## v2.4.138
+
+- **Modern game room.** With the Modern menu style, the online game room is laid out as cards: the room and the host's Start button along the top, the match rules with each player's settings under them, the players with their teams, and the chat along the bottom. Settings show as switches, and every row can be tapped.
+- **Browser version updated.** v2.4.137 did not reach the browser version; this release brings it up to date.
+
 ## v2.4.137
 
 - **Sharper text on big screens.** Menu and game text is now drawn at your screen's real resolution instead of being stretched up from 640×480, so it stays crisp on large windows, fullscreen and high-density (Retina) displays. The board and sprites look the same as before. GRAPHICS Low turns it off.
