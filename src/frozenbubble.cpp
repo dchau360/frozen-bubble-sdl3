@@ -877,6 +877,26 @@ void FrozenBubble::HandleInput(SDL_Event *e) {
             break;
     }
 
+    // A paused 1-player game resumes on any click or tap: the pause button
+    // drawn there (BubbleGame::ShowsPauseButton) is the touch way in, so it
+    // has to be a way out too. Native touch resumes on FINGER_UP and skips
+    // the mouse event SDL synthesizes from it; WASM gets mouse events only.
+    if (IsGamePause && currentState == MainGame && mainGame->ShowsPauseButton()) {
+        bool resume = false;
+        if (e->type == SDL_EVENT_MOUSE_BUTTON_DOWN && e->button.button == SDL_BUTTON_LEFT) {
+#ifndef __WASM_PORT__
+            resume = e->button.which != SDL_TOUCH_MOUSEID;
+#else
+            resume = true;
+#endif
+        }
+#ifndef __WASM_PORT__
+        if (e->type == SDL_EVENT_FINGER_UP) resume = true;
+#endif
+        if (resume) CallGamePause();
+        return;
+    }
+
     if (IsGamePause) return;
 
     auto injectKey = [](SDL_Keycode k) {
@@ -1071,6 +1091,16 @@ void FrozenBubble::HandleInput(SDL_Event *e) {
                                             &wasmGameTouchStartX, &wasmGameTouchStartY);
             wasmGameTouchStarted = true;
 #endif
+            float plx, ply;
+            SDL_RenderCoordinatesFromWindow(renderer, e->button.x, e->button.y, &plx, &ply);
+            if (mainGame->PauseButtonHit(plx, ply)) {
+                CallGamePause();
+#ifdef __WASM_PORT__
+                wasmGameTouchStarted = false;
+                wasmLastPressWasTouch = false;
+#endif
+                return;
+            }
             if (mainGame->IsGameFinished()) {
                 float lx, ly;
                 SDL_RenderCoordinatesFromWindow(renderer, e->button.x, e->button.y, &lx, &ly);
@@ -1146,6 +1176,8 @@ void FrozenBubble::HandleInput(SDL_Event *e) {
                 // Deliberately ahead of the finished-game branch: a round that
                 // has ended still needs a way out that is not "start another".
                 injectKey(SDLK_ESCAPE);
+            } else if (mainGame->PauseButtonHit(lx, ly)) {
+                CallGamePause();
             } else if (mainGame->IsGameFinished()) {
                 if (!mainGame->HandleFinishedTap(lx, ly))
                     injectKey(SDLK_RETURN); // tap to continue after round

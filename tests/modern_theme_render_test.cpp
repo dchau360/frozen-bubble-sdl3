@@ -5,6 +5,8 @@
 // original theme -- a card drawn without them would leave CONTINUE / START
 // OVER keyboard-only.
 //
+// The 1-player pause button (ShowsPauseButton) is checked here too.
+//
 // Set FB_DUMP_DIR to a directory to also get each screen as a PNG.
 
 #include <SDL3/SDL.h>
@@ -40,6 +42,7 @@ struct BubbleGameTestAccess {
     static void paused(BubbleGame& game) { game.RenderPaused(); game.modernPauseStartMs = 1; game.RenderPaused(); }
     static void midDrop(BubbleGame& game) { game.levelIntroStartMs = SDL_GetTicks() - 200; }
     static bool modern(const BubbleGame& game) { return game.UsesModernHud(); }
+    static bool pauseHit(const BubbleGame& game, float x, float y) { return game.PauseButtonHit(x, y); }
     static BubbleArray& player(BubbleGame& game) { return game.bubbleArrays[0]; }
     static void finish(BubbleGame& game, bool won, bool prompt) {
         game.gameFinish = true;
@@ -112,6 +115,10 @@ int main() {
         for (int i = 0; i < 40; ++i) BubbleGameTestAccess::draw(game);  // let the score count up
         Dump(renderer, "1-playing");
 
+        // The pause button, top right; the board itself is not part of it.
+        CHECK(BubbleGameTestAccess::pauseHit(game, 616, 24));
+        CHECK(!BubbleGameTestAccess::pauseHit(game, 318, 200));
+
         BubbleGameTestAccess::paused(game);
         Dump(renderer, "1b-paused");
         BubbleGameTestAccess::midDrop(game);
@@ -122,6 +129,8 @@ int main() {
         BubbleGameTestAccess::finish(game, true, false);
         BubbleGameTestAccess::draw(game);
         Dump(renderer, "2-cleared");
+        // Gone once the level is over: a tap there answers the card instead.
+        CHECK(!BubbleGameTestAccess::pauseHit(game, 616, 24));
 
         // Lost, before the prompt: no buttons, so no tap targets.
         BubbleGameTestAccess::unfinish(game);
@@ -162,6 +171,7 @@ int main() {
         setup.randomLevels = true;
         game.NewGame(setup);
         CHECK(!BubbleGameTestAccess::modern(game));
+        CHECK(!BubbleGameTestAccess::pauseHit(game, 616, 24));  // no pause button either
     }
 
     SDL_DestroyRenderer(renderer);

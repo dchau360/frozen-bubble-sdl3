@@ -663,6 +663,13 @@ public:
     // drop-in and "N DROPPED!". Classic 1-player games only (ShowsShotCount).
     // All of it is drawing; none of it is simulation or replay state.
     bool UsesModernHud() const;
+    // The pause button in the top-right corner of a 1-player game (either
+    // theme), the tap/click way to pause; the PAUSE key and a pad's Start
+    // still work. FrozenBubble's event pump hit-tests it before a click
+    // would fire, and any tap resumes a paused game.
+    static constexpr SDL_Rect kPauseBtnRect = {600, 8, 32, 32};
+    bool ShowsPauseButton() const;
+    bool PauseButtonHit(float x, float y) const;
     modernui::Fonts modernFonts;
     int hudShownScore = 0;           // the HUD's score, counting up to the real one
     Uint64 hudFrozenMs = 0;          // the clock as it stood when the round finished

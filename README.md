@@ -84,6 +84,9 @@ After each round a per-player stats table shows bubbles fired and popped, malus 
 | Aim | Left / Right arrow | Move mouse | Tap left / right half, or drag |
 | Fire | Up arrow or Space | Left click | Tap centre, or tap target |
 | Back / quit | Escape | Right click | Swipe left |
+| Pause (1-player) | Pause, or gamepad Start | Pause button, top right | Pause button, top right |
+
+While paused, a click or tap anywhere resumes.
 
 In menus on touch devices: tap to select, swipe up/down to scroll, swipe left to go back. To leave a round in progress, swipe left **across the bottom of the screen**, level with the launcher or below it — anywhere higher is where you aim, so the swipe is confined to the band that aiming ignores and can't quit your game by accident. In list-style panels — settings, the LAN and Net server lists, the connect form, and the online lobby and game room — the first tap on a row highlights it and a second tap on the same row activates it, so you can see what a row says before changing it. Rows adjusted sideways (like game speed) step with a second tap on either half, rather than needing L/R keys. In the game room's per-player grid, a tap picks the cell first, so you never change the wrong player's setting by mis-tapping.
 

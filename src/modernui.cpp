@@ -232,6 +232,23 @@ void DrawCard(SDL_Renderer* rend, Fonts& f, const Card& card, float appear, SDL_
     }
 }
 
+void DrawPauseButton(SDL_Renderer* rend, SDL_Rect r, bool paused) {
+    const SDL_FRect box = {(float)r.x, (float)r.y, (float)r.w, (float)r.h};
+    const float radius = box.w / 2;
+    FillRoundRect(rend, box, radius, {12, 24, 48, 200});
+    StrokeRoundRect(rend, box, radius, 2, kEdge);
+    const float cx = box.x + box.w / 2, cy = box.y + box.h / 2;
+    SDL_SetRenderDrawBlendMode(rend, SDL_BLENDMODE_BLEND);
+    if (paused) {
+        const SDL_FColor c = {1, 1, 1, 1};
+        SDL_Vertex v[3] = {{{cx - 5, cy - 8}, c, {0, 0}}, {{cx - 5, cy + 8}, c, {0, 0}}, {{cx + 8, cy}, c, {0, 0}}};
+        SDL_RenderGeometry(rend, nullptr, v, 3, nullptr, 0);
+    } else {
+        FillRoundRect(rend, {cx - 7, cy - 8, 5, 16}, 1.5f, kValue);
+        FillRoundRect(rend, {cx + 2, cy - 8, 5, 16}, 1.5f, kValue);
+    }
+}
+
 void DrawPopup(SDL_Renderer* rend, TTFText& text, const std::string& label, int x, int y, float t, bool big) {
     t = std::clamp(t, 0.f, 1.f);
     text.UpdateColor(big ? kGold : kValue, kNoShadow);

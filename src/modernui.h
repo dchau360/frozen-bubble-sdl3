@@ -81,6 +81,10 @@ struct Card {
 };
 void DrawCard(SDL_Renderer* rend, Fonts& f, const Card& card, float appear, SDL_Rect btnOut[2]);
 
+// The on-screen pause button (BubbleGame::ShowsPauseButton): two bars, or a
+// play triangle while the game is paused.
+void DrawPauseButton(SDL_Renderer* rend, SDL_Rect r, bool paused);
+
 // A floating score: "+N" over the pop (small) or "N DROPPED!" (big),
 // `t` running 0..1 over its life.
 void DrawPopup(SDL_Renderer* rend, TTFText& text, const std::string& label, int x, int y, float t, bool big);

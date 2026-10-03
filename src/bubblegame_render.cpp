@@ -305,6 +305,18 @@ bool BubbleGame::UsesModernHud() const {
     return GameSettings::Instance()->modernTheme() && ShowsShotCount();
 }
 
+bool BubbleGame::ShowsPauseButton() const {
+    return currentSettings.playerCount == 1 && !currentSettings.networkGame &&
+           sessionMode == SessionMode::Live && !gameFinish;
+}
+
+bool BubbleGame::PauseButtonHit(float x, float y) const {
+    if (!ShowsPauseButton()) return false;
+    // A little bigger than the drawn button, for fingers.
+    const SDL_Rect& r = kPauseBtnRect;
+    return x >= r.x - 8 && x < r.x + r.w + 8 && y >= r.y - 8 && y < r.y + r.h + 8;
+}
+
 void BubbleGame::DrawModernHud(SDL_Renderer *rend, BubbleArray &bArray) {
     // The score counts up to the real one rather than jumping; a death's
     // reset to 0 (or anything else that lowers it) snaps straight down.
@@ -1654,6 +1666,8 @@ void BubbleGame::Draw() {
             SDL_SetTextureAlphaMod(tex, 255);
         }
 
+        if (ShowsPauseButton()) modernui::DrawPauseButton(rend, kPauseBtnRect, false);
+
         // Over everything else on the board, popups included.
         if (modern && gameFinish && (gameWon || gameLost)) DrawModernResultCard(rend, curArray);
     }
@@ -2120,13 +2134,15 @@ void BubbleGame::RenderPaused() {
         card.stats[1] = {"SCORE", modernui::FormatNumber(bubbleArrays[0].score)};
         card.stats[2] = {"SHOTS", modernui::FormatNumber(runShots)};
         card.statCount = 3;
-        card.note = "Press PAUSE to resume";
+        card.note = "Press PAUSE or tap to resume";
         SDL_Rect btn[2];
         modernui::DrawCard(rend, modernFonts, card, (float)(SDL_GetTicks() - modernPauseStartMs) / 380.0f, btn);
     } else {
         SDL_Rect pauseRct = {SCREEN_CENTER_X - 95, SCREEN_CENTER_Y - 72, 190, 143};
         { SDL_FRect fr = ToFRect(pauseRct); SDL_RenderTexture(rend, pausePenguin[pauseFrame], nullptr, &fr); }
     }
+    // Where the pause button was, now a play button; any tap resumes.
+    if (ShowsPauseButton()) modernui::DrawPauseButton(rend, kPauseBtnRect, true);
 
     timePaused = SDL_GetTicks();
 }
