@@ -718,6 +718,13 @@ private:
     SDL_Texture *imgMiniColorblindBubbles[BUBBLE_STYLES];
     SDL_Texture *imgMiniBubbles[BUBBLE_STYLES];
 
+    // The modern theme's Candy gloss set (share/gfx/balls/modern/), same four
+    // kinds; GetBubbleTextures() picks between the two sets.
+    SDL_Texture *imgModernBubbles[BUBBLE_STYLES] = {};
+    SDL_Texture *imgModernColorblindBubbles[BUBBLE_STYLES] = {};
+    SDL_Texture *imgModernMiniBubbles[BUBBLE_STYLES] = {};
+    SDL_Texture *imgModernMiniColorblindBubbles[BUBBLE_STYLES] = {};
+
     SDL_Texture *imgBubbleStick[BUBBLE_STICKFC + 1];
     SDL_Texture *imgMiniBubbleStick[BUBBLE_STICKFC + 1];
 

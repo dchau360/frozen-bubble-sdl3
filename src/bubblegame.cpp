@@ -58,6 +58,17 @@ BubbleGame::BubbleGame(const SDL_Renderer *renderer)
         imgMiniBubbles[i - 1] = IMG_LoadTexture(rend, ASSET(rel).c_str());
         snprintf(rel, sizeof(rel), "/gfx/balls/bubble-colourblind-%d-mini.png", i);
         imgMiniColorblindBubbles[i - 1] = IMG_LoadTexture(rend, ASSET(rel).c_str());
+
+        snprintf(rel, sizeof(rel), "/gfx/balls/modern/bubble-%d.png", i);
+        imgModernBubbles[i - 1] = IMG_LoadTexture(rend, ASSET(rel).c_str());
+        snprintf(rel, sizeof(rel), "/gfx/balls/modern/bubble-colourblind-%d.png", i);
+        imgModernColorblindBubbles[i - 1] = IMG_LoadTexture(rend, ASSET(rel).c_str());
+        snprintf(rel, sizeof(rel), "/gfx/balls/modern/bubble-%d-mini.png", i);
+        imgModernMiniBubbles[i - 1] = IMG_LoadTexture(rend, ASSET(rel).c_str());
+        snprintf(rel, sizeof(rel), "/gfx/balls/modern/bubble-colourblind-%d-mini.png", i);
+        imgModernMiniColorblindBubbles[i - 1] = IMG_LoadTexture(rend, ASSET(rel).c_str());
+        if (!imgModernBubbles[i - 1])
+            SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "Failed to load modern bubble %d: %s", i, SDL_GetError());
     }
 
     for (int i = 0; i <= BUBBLE_STICKFC; i++) {
@@ -228,6 +239,10 @@ BubbleGame::~BubbleGame() {
         SDL_DestroyTexture(imgColorblindBubbles[i]);
         SDL_DestroyTexture(imgMiniBubbles[i]);
         SDL_DestroyTexture(imgMiniColorblindBubbles[i]);
+        SDL_DestroyTexture(imgModernBubbles[i]);
+        SDL_DestroyTexture(imgModernColorblindBubbles[i]);
+        SDL_DestroyTexture(imgModernMiniBubbles[i]);
+        SDL_DestroyTexture(imgModernMiniColorblindBubbles[i]);
     }
     for (int i = 0; i < MAX_NET_PLAYERS; i++) {
         if (bubbleArrays[i].hurryTexture) SDL_DestroyTexture(bubbleArrays[i].hurryTexture);
