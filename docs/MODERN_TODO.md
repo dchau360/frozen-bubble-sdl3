@@ -58,7 +58,8 @@ These four share a settings row or two and are all render- or audio-only.
      (user decision).
    - [x] The Set Teams page. Its Auto buttons are a keyboard row now too
      (UP from the first player), in both styles.
-   - [ ] Settings (the CONTROLS & SETTINGS panel).
+   - [x] Settings (the CONTROLS & SETTINGS panel): a Controls card with a tab
+     per player and each binding as a key cap, and a Game card of switches.
    - [ ] Online lobby (room list and Online sidebar).
 
 ## Bigger

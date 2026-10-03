@@ -570,6 +570,11 @@ private:
     RoomModernText *roomModern = nullptr;
     RoomModernText &RoomModern();
     void FreeRoomModern();
+    // CONTROLS & SETTINGS in the Modern menu style (mainmenu_settingsmodern.cpp).
+    struct SettingsModernText;
+    SettingsModernText *settingsModern = nullptr;
+    void KeysPanelRenderModern();
+    void FreeSettingsModern();
     void NetPanelRoomRenderModern();
     void NetChatDockModern(bool expanded);
     void NetChatLineModern(const ChatMessage& cm, int y);
