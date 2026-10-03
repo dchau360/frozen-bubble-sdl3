@@ -907,6 +907,11 @@ private:
     Uint32 levelStartMs = 0;
     Uint32 levelClearMs = 0;
     int levelTimeBonus = 0;
+    // The score when the level started (taken with levelStartMs) and the
+    // points the level earned, bonus included: the win panel shows the
+    // level's points, not the run's total, which the HUD already shows.
+    int levelStartScore = 0;
+    int levelPoints = 0;
 public:
     static int TimeBonusFor(Uint32 levelMs);
 private:

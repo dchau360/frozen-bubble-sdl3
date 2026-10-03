@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- **Level cleared shows that level's points.** The score on the level-cleared panel (both themes) is now what the level just earned, time bonus included, rather than the run's running total. The total is still in the score panel.
+
 ## v2.4.135
 
 - **P pauses 1-player games.** Most keyboards (every Mac's included) have no Pause key, so **P** now pauses and resumes a 1-player game too. The Pause key, gamepad Start and the on-screen button still work.

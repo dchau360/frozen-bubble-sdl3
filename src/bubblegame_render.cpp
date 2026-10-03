@@ -352,7 +352,7 @@ void BubbleGame::DrawModernResultCard(SDL_Renderer *rend, BubbleArray &bArray) {
         card.title = currentSettings.randomLevels ? "LEVEL CLEARED" : "LEVEL " + level + " CLEARED";
         card.stats[0] = {"TIME", std::to_string(levelClearMs / 1000) + "s"};
         card.stats[1] = {"TIME BONUS", "+" + modernui::FormatNumber(levelTimeBonus)};
-        card.stats[2] = {"SCORE", modernui::FormatNumber(bArray.score)};
+        card.stats[2] = {"SCORE", modernui::FormatNumber(levelPoints)};
         card.statCount = 3;
         card.note = "ENTER or tap for the next level";
     } else {
@@ -1288,8 +1288,10 @@ bool BubbleGame::AdvanceSimulationAtScale(float deltaScale, Uint32 gameClockMs) 
     }
 
     // The level's own clock, for the time bonus: from its first step.
-    if (currentSettings.playerCount == 1 && !gameFinish && levelStartMs == 0)
+    if (currentSettings.playerCount == 1 && !gameFinish && levelStartMs == 0) {
         levelStartMs = stepGameClockMs;
+        levelStartScore = bubbleArrays[0].score;
+    }
 
     // Multiplayer training mode: periodically inject random malus, enforce 2-min timer
     if (currentSettings.mpTraining && !gameFinish) {
@@ -1581,12 +1583,12 @@ void BubbleGame::Draw() {
                     SDL_FRect fr = ToFRect(*finalScoreText.Coords());
                     SDL_RenderTexture(rend, finalScoreText.Texture(), nullptr, &fr);
                 } else {
-                    // The level's time and the bonus it earned, then the score,
-                    // in the strip under the panel's art.
+                    // The level's time and the bonus it earned, then the points
+                    // the level scored, in the strip under the panel's art.
                     const std::string lines[2] = {
                         "Time: " + std::to_string(levelClearMs / 1000) + "s   Time bonus: +" +
                             modernui::FormatNumber(levelTimeBonus),
-                        "Score: " + modernui::FormatNumber(curArray.score)};
+                        "Score: " + modernui::FormatNumber(levelPoints)};
                     int y = panelRct.y + panelRct.h - 49;
                     for (const std::string& line : lines) {
                         clearStatsText.UpdateText(renderer, line.c_str(), 0);

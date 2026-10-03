@@ -1111,6 +1111,7 @@ void BubbleGame::CheckGameState(BubbleArray &bArray, bool countForRoot) {
             levelClearMs = levelStartMs ? stepGameClockMs - levelStartMs : 0;
             levelTimeBonus = TimeBonusFor(levelClearMs);
             bArray.score += levelTimeBonus;
+            levelPoints = bArray.score - levelStartScore;
 
             // Submit score when level is cleared
             SubmitScore(bArray);
