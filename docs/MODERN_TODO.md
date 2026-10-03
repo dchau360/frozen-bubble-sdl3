@@ -56,7 +56,8 @@ These four share a settings row or two and are all render- or audio-only.
    - [x] Game room, the 20-player layout too: rules, the per-player table,
      players and chat as cards. The button keeps the wording "Set Teams"
      (user decision).
-   - [ ] The Set Teams page.
+   - [x] The Set Teams page. Its Auto buttons are a keyboard row now too
+     (UP from the first player), in both styles.
    - [ ] Settings (the CONTROLS & SETTINGS panel).
    - [ ] Online lobby (room list and Online sidebar).
 

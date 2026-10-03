@@ -47,6 +47,8 @@
 #include "networkclient.h"
 #include "bubblegame.h"   // kTeamColors
 #include "platform.h"
+#include "gamesettings.h"
+#include "menutheme.h"
 
 #include <algorithm>
 #include <cstdio>
@@ -203,6 +205,7 @@ void MainMenu::OpenTeamsPanel(int slot) {
     if (start < 0) start = 0;
 
     teamsCursorPlayer = start;
+    teamsAutoFocus = -1;
     showingTeamsPanel = true;
     PlayMenuSFX("menu_selected");
 }
@@ -220,6 +223,11 @@ void MainMenu::TeamsPanelRender() {
         teamPlayerNameTaps.clear();
         teamAutoBalanceTaps.clear();
         teamsDoneRect = SDL_Rect{};
+        return;
+    }
+
+    if (GameSettings::Instance()->menuTheme() == MENU_THEME_MODERN) {
+        TeamsPanelRenderModern();
         return;
     }
 
@@ -299,12 +307,15 @@ void MainMenu::TeamsPanelRender() {
         const int autoNoneW = 40;  // wider than a digit box: "NONE" needs the room.
         const int autoX0 = body.x + 168;
 
+        int autoButton = 0;
         auto drawAutoButton = [&](SDL_Rect box, const char* label, int teamCount) {
+            // The keyboard's Auto row (teamsAutoFocus) shows its button solid.
+            const bool focused = teamsAutoFocus == autoButton++;
             SDL_SetRenderDrawColor(rend, menulist::kSelFill.r, menulist::kSelFill.g,
-                                   menulist::kSelFill.b, 80);
+                                   menulist::kSelFill.b, focused ? 230 : 80);
             { SDL_FRect fr = ToFRect(box); SDL_RenderFillRect(rend, &fr); }
             SDL_SetRenderDrawColor(rend, menulist::kSelEdge.r, menulist::kSelEdge.g,
-                                   menulist::kSelEdge.b, 190);
+                                   menulist::kSelEdge.b, focused ? 255 : 190);
             { SDL_FRect fr = ToFRect(box); SDL_RenderRect(rend, &fr); }
             TTFText &text = TeamPanelCell(textCellIdx++, 13, TTF_STYLE_BOLD);
             text.UpdateColor(menulist::kText, menulist::kTextShadow);
@@ -355,7 +366,7 @@ void MainMenu::TeamsPanelRender() {
         // change travels as ordinary room chat.
         const bool editable = isHost || self;
 
-        if (slot == teamsCursorPlayer) {
+        if (slot == teamsCursorPlayer && teamsAutoFocus < 0) {
             SDL_Rect sel = {body.x + 10, rowY - 3, body.w - 20, rowH - 4};
             SDL_SetRenderDrawColor(rend, menulist::kSelFill.r, menulist::kSelFill.g,
                                    menulist::kSelFill.b, menulist::kSelFill.a);
@@ -433,7 +444,7 @@ void MainMenu::TeamsPanelRender() {
     // TeamsPanelKey), a right-click, or a back-swipe -- the last two both
     // arrive here as ESC.
     menulist::DrawFooterHint(rend, panelText,
-        isHost ? "Tap name to cycle    Auto None/2-5    arrows move/change    ESC/Done closes"
+        isHost ? "Tap name to cycle    UP to Auto, ENTER applies    arrows move/change    ESC/Done closes"
                : "Tap your name or a choice    LEFT/RIGHT changes    ESC/Done closes");
 }
 
@@ -450,28 +461,50 @@ bool MainMenu::TeamsPanelKey(SDL_Event *e) {
     const int teamCount = kMaxTeams;
 
     switch (e->key.key) {
+        case SDLK_RETURN:
+            // On the Auto row ENTER applies the focused button; anywhere
+            // else it closes, as ESC does.
+            if (isHost && teamsAutoFocus >= 0) {
+                ApplyAutoTeams(teamsAutoFocus == 0 ? kNoTeam : teamsAutoFocus + 1);
+                return true;
+            }
+            [[fallthrough]];
         case SDLK_ESCAPE:
         case SDLK_AC_BACK:
-        case SDLK_RETURN:
             showingTeamsPanel = false;
             PlayMenuSFX("cancel");
             return true;
         case SDLK_UP:
             // Only the host has anyone else's row to move to; a joiner's
             // cursor stays on their own, matching the roster's edit mode.
-            if (isHost && teamsCursorPlayer > 0) {
+            // Above the first player is the host's Auto row.
+            if (isHost && teamsAutoFocus < 0 && teamsCursorPlayer > 0) {
                 teamsCursorPlayer--;
+                PlayMenuSFX("menu_change");
+            } else if (isHost && teamsAutoFocus < 0) {
+                teamsAutoFocus = 1;  // Auto 2, the commonest split
                 PlayMenuSFX("menu_change");
             }
             return true;
         case SDLK_DOWN:
-            if (isHost && teamsCursorPlayer < playerCount - 1) {
+            if (isHost && teamsAutoFocus >= 0) {
+                teamsAutoFocus = -1;
+                teamsCursorPlayer = 0;
+                PlayMenuSFX("menu_change");
+            } else if (isHost && teamsCursorPlayer < playerCount - 1) {
                 teamsCursorPlayer++;
                 PlayMenuSFX("menu_change");
             }
             return true;
         case SDLK_LEFT:
         case SDLK_RIGHT: {
+            if (isHost && teamsAutoFocus >= 0) {
+                const int next = std::clamp(teamsAutoFocus + (e->key.key == SDLK_LEFT ? -1 : 1),
+                                            0, kMaxTeams - 1);
+                if (next != teamsAutoFocus) PlayMenuSFX("menu_change");
+                teamsAutoFocus = next;
+                return true;
+            }
             const int slot = isHost ? teamsCursorPlayer : mySlot;
             if (slot < 0 || slot >= playerCount) return true;
             const int direction = e->key.key == SDLK_LEFT ? -1 : 1;
@@ -501,28 +534,7 @@ bool MainMenu::HandleTeamsPanelTap(float lx, float ly) {
 
     for (const TeamAutoBalanceTap& button : teamAutoBalanceTaps) {
         if (!hit(button.rect)) continue;
-        NetworkClient* netClient = NetworkClient::Instance();
-        GameRoom* room = netClient->GetCurrentGame();
-        if (room && room->creator == netClient->GetPlayerNick()) {
-            // Every occupied seat, batched into one wire update instead of
-            // one per seat -- see ApplyTeamChoicesBatch's comment. Skipping a
-            // seat whose team is already correct (re-tapping the same Auto
-            // count) avoids even that no-op work.
-            const int playerCount = (int)room->players.size();
-            std::vector<std::pair<int, int>> changes;
-            changes.reserve(playerCount);
-            for (int slot = 0; slot < playerCount; ++slot) {
-                // kNoTeam means the NONE button: every seat becomes a free
-                // agent instead of being distributed by AutoBalanceTeam,
-                // which would otherwise clamp teamCount<1 to 1 and put
-                // everyone on "Team 1" -- the opposite of what NONE promises.
-                const int team = button.teamCount == kNoTeam
-                                      ? kNoTeam
-                                      : AutoBalanceTeam(slot, button.teamCount);
-                if (TeamOfSlot(slot) != team) changes.push_back({slot, team});
-            }
-            ApplyTeamChoicesBatch(changes);
-        }
+        ApplyAutoTeams(button.teamCount);
         return true;
     }
 
@@ -548,4 +560,27 @@ bool MainMenu::HandleTeamsPanelTap(float lx, float ly) {
 
     // Modal, so a miss is consumed rather than reaching the room underneath.
     return true;
+}
+
+void MainMenu::ApplyAutoTeams(int teamCount) {
+    NetworkClient* netClient = NetworkClient::Instance();
+    GameRoom* room = netClient->GetCurrentGame();
+    if (!room || room->creator != netClient->GetPlayerNick()) return;
+    // Every occupied seat, batched into one wire update instead of one per
+    // seat -- see ApplyTeamChoicesBatch's comment. Skipping a seat whose team
+    // is already correct (re-tapping the same Auto count) avoids even that
+    // no-op work.
+    const int playerCount = (int)room->players.size();
+    std::vector<std::pair<int, int>> changes;
+    changes.reserve(playerCount);
+    for (int slot = 0; slot < playerCount; ++slot) {
+        // kNoTeam means the NONE button: every seat becomes a free agent
+        // instead of being distributed by AutoBalanceTeam, which would
+        // otherwise clamp teamCount<1 to 1 and put everyone on "Team 1" --
+        // the opposite of what NONE promises.
+        const int team = teamCount == kNoTeam ? kNoTeam : AutoBalanceTeam(slot, teamCount);
+        if (TeamOfSlot(slot) != team) changes.push_back({slot, team});
+    }
+    ApplyTeamChoicesBatch(changes);
+    PlayMenuSFX("menu_change");
 }
