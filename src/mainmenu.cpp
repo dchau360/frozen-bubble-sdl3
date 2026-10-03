@@ -276,6 +276,7 @@ MainMenu::~MainMenu() {
         SDL_DestroyTexture(spLabelActive[i]);
     }
     FreeSPModern();
+    FreeRoomModern();
 }
 
 

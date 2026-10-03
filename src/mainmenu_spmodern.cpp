@@ -27,13 +27,6 @@ constexpr int kRowX = 166, kRowW = 308;
 constexpr int kBigTop = 52, kBigPitch = 45, kBigH = 40;
 constexpr int kSlimTop = 300, kSlimPitch = 27, kSlimH = 25;
 
-constexpr SDL_Color kFrost = {219, 232, 251, 255};
-constexpr SDL_Color kShadow = {0, 0, 0, 115};
-constexpr SDL_Color kRowFocus = {127, 214, 255, 33};
-constexpr SDL_Color kRowIdle = {127, 214, 255, 10};
-constexpr SDL_Color kLine = {127, 214, 255, 41};
-constexpr SDL_Color kSwitchOn = {95, 224, 160, 255};
-constexpr SDL_Color kSwitchOff = {58, 75, 108, 255};
 
 struct Mode { const char* label; const char* sub; int ball; };
 // The same five rows as kSPLabel, each with a line saying what it does and
@@ -68,26 +61,6 @@ void MainMenu::FreeSPModern() {
     for (TTF_Font* f : fonts) if (f) TTF_CloseFont(f);
 }
 
-namespace {
-// Draws `t` with its middle at cy; align is 0 left of x, 1 centred on x, 2
-// right of x. Returns the drawn width.
-int Line(SDL_Renderer* rend, TTFText& t, const char* s, SDL_Color fg, SDL_Color shadow,
-         int x, int cy, int align = 0) {
-    t.UpdateColor(fg, shadow);
-    t.UpdateText(rend, s, 0);
-    const SDL_Rect* c = t.Coords();
-    const int left = align == 0 ? x : align == 1 ? x - c->w / 2 : x - c->w;
-    t.UpdatePosition({left, cy - c->h / 2});
-    SDL_FRect fr = ToFRect(*t.Coords());
-    SDL_RenderTexture(rend, t.Texture(), nullptr, &fr);
-    return c->w;
-}
-
-void Switch(SDL_Renderer* rend, int x, int cy, bool on) {
-    FillRoundRect(rend, {(float)x, (float)cy - 8, 30, 16}, 8, on ? kSwitchOn : kSwitchOff);
-    FillRoundRect(rend, {(float)(on ? x + 16 : x + 2), (float)cy - 6, 12, 12}, 6, kValue);
-}
-}  // namespace
 
 void MainMenu::SPPanelRenderModern() {
     SDL_Renderer* rend = const_cast<SDL_Renderer*>(renderer);
@@ -135,8 +108,8 @@ void MainMenu::SPPanelRenderModern() {
     FillRoundRect(rend, {card.x, card.y + 4, card.w, card.h}, 18, {0, 0, 0, 77});
     FillRoundRect(rend, card, 18, {12, 24, 48, 242});
     StrokeRoundRect(rend, {card.x + 1, card.y + 1, card.w - 2, card.h - 2}, 17, 2, {127, 214, 255, 128});
-    Line(rend, s.titleText, "1 PLAYER", kValue, kShadow, kCard.x + 20, kCard.y + 26);
-    Line(rend, s.back, "ESC  BACK", kLabel, kNoShadow, kCard.x + kCard.w - 20, kCard.y + 26, 2);
+    DrawTextLine(rend, s.titleText, "1 PLAYER", kValue, kTextShadow, kCard.x + 20, kCard.y + 26);
+    DrawTextLine(rend, s.back, "ESC  BACK", kLabel, kNoShadow, kCard.x + kCard.w - 20, kCard.y + 26, 2);
 
     BeginPanelTapRows(&activeSPIdx);
 
@@ -152,11 +125,11 @@ void MainMenu::SPPanelRenderModern() {
             SDL_FRect b = {fr.x + 21 - d / 2, fr.y + fr.h / 2 - d / 2, d, d};
             SDL_RenderTexture(rend, s.ball[i], nullptr, &b);
         }
-        Line(rend, s.modeLabel[i], kModes[i].label, f ? kValue : kFrost, kShadow, r.x + 42, r.y + 14);
-        Line(rend, s.modeSub[i], kModes[i].sub, f ? kFrost : kLabel, kNoShadow, r.x + 42, r.y + 29);
+        DrawTextLine(rend, s.modeLabel[i], kModes[i].label, f ? kValue : kFrost, kTextShadow, r.x + 42, r.y + 14);
+        DrawTextLine(rend, s.modeSub[i], kModes[i].sub, f ? kFrost : kLabel, kNoShadow, r.x + 42, r.y + 29);
     }
 
-    Line(rend, s.options, "OPTIONS", kLabel, kNoShadow, kRowX, kSlimTop - 14);
+    DrawTextLine(rend, s.options, "OPTIONS", kLabel, kNoShadow, kRowX, kSlimTop - 14);
     SDL_SetRenderDrawColor(rend, kLine.r, kLine.g, kLine.b, kLine.a);
     SDL_FRect divider = {(float)kRowX, (float)kSlimTop - 6, (float)kRowW, 1};
     SDL_RenderFillRect(rend, &divider);
@@ -175,7 +148,7 @@ void MainMenu::SPPanelRenderModern() {
                                                    : "The original bubbles"; break;
     case kSPRowAccount: hint = "View, copy or change your account"; break;
     }
-    if (hint) Line(rend, s.optionHint, hint, kFrost, kNoShadow, kRowX + kRowW, kSlimTop - 14, 2);
+    if (hint) DrawTextLine(rend, s.optionHint, hint, kFrost, kNoShadow, kRowX + kRowW, kSlimTop - 14, 2);
 
     struct Slim { int idx; const char* label; int kind; bool on; const char* value; };
     enum { kSwitch, kValueRow, kArrow };
@@ -197,20 +170,20 @@ void MainMenu::SPPanelRenderModern() {
             StrokeRoundRect(rend, {fr.x + 0.75f, fr.y + 0.75f, fr.w - 1.5f, fr.h - 1.5f}, 7.5f, 1.5f, kIce);
         }
         const int cy = r.y + r.h / 2;
-        Line(rend, s.slimLabel[t], row.label, f ? kValue : kFrost, kNoShadow, r.x + 12, cy);
+        DrawTextLine(rend, s.slimLabel[t], row.label, f ? kValue : kFrost, kNoShadow, r.x + 12, cy);
         const int right = r.x + r.w - 14;
         if (row.kind == kSwitch) {
-            Switch(rend, r.x + r.w - 42, cy, row.on);
+            DrawSwitch(rend, r.x + r.w - 42, cy, row.on);
         } else if (row.kind == kValueRow) {
             // The ‹ › pair, on the focused row only, says LEFT/RIGHT change it.
-            const int w = Line(rend, s.slimValue[t], row.value, f ? kValue : kFrost, kShadow,
+            const int w = DrawTextLine(rend, s.slimValue[t], row.value, f ? kValue : kFrost, kTextShadow,
                                f ? right - 10 : right, cy, 2);
             if (f) {
-                Line(rend, s.chevL, "\xE2\x80\xB9", kIce, kNoShadow, right - 10 - w - 10, cy - 1, 1);
-                Line(rend, s.chevR, "\xE2\x80\xBA", kIce, kNoShadow, right, cy - 1, 1);
+                DrawTextLine(rend, s.chevL, "\xE2\x80\xB9", kIce, kNoShadow, right - 10 - w - 10, cy - 1, 1);
+                DrawTextLine(rend, s.chevR, "\xE2\x80\xBA", kIce, kNoShadow, right, cy - 1, 1);
             }
         } else {
-            Line(rend, s.slimValue[t], "\xE2\x80\xBA", kIce, kNoShadow, right, cy - 1, 2);
+            DrawTextLine(rend, s.slimValue[t], "\xE2\x80\xBA", kIce, kNoShadow, right, cy - 1, 2);
         }
     }
 

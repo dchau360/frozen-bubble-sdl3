@@ -562,6 +562,17 @@ private:
     // a bare input box -- which matters most on a phone, where composing raises
     // a keyboard over the bottom half of the screen.
     void NetPanelChatDockRender(bool expanded = false);
+    // The game room in the Modern menu style (mainmenu_roommodern.cpp):
+    // drawing only, over the same GameRoomRow rows and tap handling. The
+    // chat dock keeps its own message handling and calls the two chat
+    // helpers for its card and lines.
+    struct RoomModernText;
+    RoomModernText *roomModern = nullptr;
+    RoomModernText &RoomModern();
+    void FreeRoomModern();
+    void NetPanelRoomRenderModern();
+    void NetChatDockModern(bool expanded);
+    void NetChatLineModern(const ChatMessage& cm, int y);
     void NetPanelConnectionScreensRender(); // Pre-login screens: LAN list, manual entry, public list
     // LAN discovery (mode 7) and the public Net list (mode 10) are the same
     // screen shape -- a scrolling server list plus a details sidebar -- with
