@@ -12,7 +12,8 @@ The original was written in Perl; this is a full rewrite in C++. Core gameplay a
 **▶ [Play in your browser](https://dchau360.itch.io/frozenbubble2)** (no install, works on phones) · **[Download](#download)** for Linux, macOS, Windows, Android · **[Join the Discord](https://discord.gg/uE4dq8fqGW)** to find opponents. Online rooms hold up to 20 players.
 
 <p align="center">
-  <img src="docs/screenshots/net-5player.png" width="640" alt="A five-player online match: your board in the middle, four opponents around it">
+  <a href="docs/media/frozen-bubble-promo.mp4"><img src="docs/media/promo-preview.gif" width="480" alt="A clip of a 1-player game in the modern theme: a shot drops ten bubbles"></a><br>
+  <sub><a href="docs/media/frozen-bubble-promo.mp4">▶ Watch the 1-minute trailer</a>: 1-player, a 4-player battle, and a 2-player round to the win</sub>
 </p>
 
 ---
@@ -46,16 +47,33 @@ Every mode plays the same whether you're local or online, and the host can adjus
 > have had rendering glitches. Two causes are fixed (see
 > [CHANGELOG.md](CHANGELOG.md)); the mode has not had a full pass since.
 
+<p align="center">
+  <img src="docs/screenshots/local-4player.jpg" alt="A four-player local game: player 1's board in the middle, three opponents around it" width="400">
+  <img src="docs/screenshots/two-player-win.jpg" alt="The end of a 2-player round: You Win! with the round's stats along the top" width="400">
+</p>
+
 **Single player** — 100 levels of classic bubble-popping, with scoring and chain reactions. Clear a level fast for a time bonus, Bust-a-Move style: 5,000 points within 5 seconds, 84 fewer per second after that, nothing from 65 seconds. A shot counter and the run's total time sit under the score. Lose a level and you're asked whether to **Continue** (retry that level, score back to 0, the run's clock and shot count keep going) or **Start over** from level 1. Your best runs are kept on the **High Scores** screen, each with its level, time and shot count.
 
 **Modern in-game theme** (on by default; switch it under **In-game theme** in the 1-player menu). In a 1-player game: a score panel down the left (level, score counting up, shots, time), cards for level cleared, game over and pause, the next level dropping in row by row, and an "N DROPPED!" when a shot cuts bubbles loose. The background, penguin, launcher, sounds and scoring stay as they were; **Original** brings back the classic look. The glossy candy bubbles are a separate switch, **Bubbles** (CANDY / CLASSIC, also on by default), so either set goes with either look; they apply in every mode, multiplayer included.
+
+<p align="center">
+  <img src="docs/screenshots/modern-gameplay.jpg" alt="A 1-player game in the modern theme: score panel with level, score, shots and time, a +170 popup and 3 DROPPED!" width="400">
+  <img src="docs/screenshots/level-cleared.jpg" alt="The modern theme's level-cleared card: time 33s, time bonus +2,648, score 3,188" width="400">
+</p>
+
+**Modern menus.** The menus match the modern theme too: dark rounded cards, with a candy bubble on the selected row. The 1-player menu explains each mode in a line and has switches for its settings, and the online lobby, game room, Set Teams and Settings screens are cards as well. The original looks are still there: pick another **STYLE** on the title screen.
+
+<p align="center">
+  <img src="docs/screenshots/title-menu.jpg" alt="The title screen in the Modern menu style" width="400">
+  <img src="docs/screenshots/one-player-menu.jpg" alt="The 1-player menu in the Modern menu style: five modes with a line each, and switches for the settings" width="400">
+</p>
 
 **Online highscores.** Classic runs from level 1 go on an online board shared by everyone playing this port: **most points** in one life, and **furthest level** cleared (faster time breaks ties, so the fastest finish of all 100 levels is #1; each run also shows its shot count), each split keyboard/gamepad vs mouse/touch (a level where you used both counts as mouse/touch), all-time and this week. See it in the game under **High Scores → POINTS / LEVEL**, or on the web at [fb.servequake.com/scores](https://fb.servequake.com/scores/). Runs are sent under your anonymous account once you're back in a menu; turn off **Online highscores** in the 1-player menu to stop sending. Scores aren't verified yet.
 
 **Attack bubbles** is a three-way setting, host-controlled in the room and per-player in local multiplayer: **ON** sends every malus you earn straight at your opponents, **OFF** turns attacks off entirely, and **Blockable** has the malus you earn pay down whatever is still queued against you first, sending only the surplus — it can't go negative, so blocking more than you owe just empties your queue rather than banking credit. A HELP button next to Bot skill (or **F1**/gamepad **Y** anytime) opens a full settings guide covering this and everything else on the panel, including how malus targeting differs once a room has 6 or more players alive.
 
 <p align="center">
-  <img src="docs/screenshots/game-room.png" alt="Game room screen: match rules, per-player setup grid, and a 20-slot player roster" width="480">
+  <img src="docs/screenshots/game-room-modern.jpg" alt="Game room in the Modern menu style: match rules, each player's settings, the players and chat" width="480">
   <img src="docs/screenshots/net-5player.png" alt="Live 5-player network game: one full board in the centre, four opponent boards in the corners" width="480">
 </p>
 
