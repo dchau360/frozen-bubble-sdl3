@@ -38,6 +38,11 @@ To play on an iPhone, use the browser build.
 
 - **Single player** through the original 100 levels, now with points, a
   time bonus for fast clears, online highscores and a level editor.
+- **Swap**, a pocket beside the next bubble: press Swap to put the loaded
+  bubble in it, press again to shoot it while the loaded one takes its
+  place. Right Shift, a right click or a tap below the board, in 1-player and
+  online games; **How to play** in the 1-player menu shows it with your own
+  controls.
 - **Local multiplayer** for 2–5 players, with gamepad support. Games above
   two players are experimental and less play-tested than the rest. Empty
   seats can be filled with bots. Above five players, use a network room.
