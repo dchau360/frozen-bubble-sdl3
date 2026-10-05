@@ -126,6 +126,9 @@ struct BubbleGameTestAccess {
         return game.scoringInputMethod == BubbleGame::ScoringInputMethod::Keyboard;
     }
     static void launch(BubbleGame& game, int array) { game.LaunchBubble(game.bubbleArrays[array]); }
+    static void inbound(BubbleGame& game, int senderId, const std::string& data) {
+        game.ApplyInboundGameMessage(senderId, data);
+    }
     static bool focusStartOver(const BubbleGame& game) { return game.continueFocusStartOver; }
     static void setContinueButtons(BubbleGame& game, SDL_Rect cont, SDL_Rect startOver) {
         game.continueBtnRect = cont;
@@ -726,6 +729,73 @@ int main() {
         CHECK(miniLanding.first != 0);
         CHECK(mini.bubbleMap[2][3].bubbleId == 0);
         CHECK(mini.stickAnimPos.y > mini.topLimit);
+    }
+
+    // --- Colours from a peer are bounded to the bubble textures -----------
+    // Every colour ends up indexing a BUBBLE_STYLES-sized texture array, so a
+    // modified client sending 99 (or -1) must not reach a board, a launcher
+    // or a falling malus.
+    {
+        BubbleGame game(renderer);
+        BubbleGameTestAccess::reset(game, 2, true, false);
+        BubbleArray& remote = BubbleGameTestAccess::player(game, 1);
+        remote.lobbyPlayerId = 7;
+        remote.nextBubble = 2;
+        remote.nextColors = {1, 1, 1, 1, 1, 1, 1, 1};
+
+        // 'f': the shot still fires, the bad next colour is dropped.
+        BubbleGameTestAccess::inbound(game, 7, "f1.571:99");
+        CHECK(remote.mpFirePending);
+        CHECK(remote.nextBubble == 2);
+        BubbleGameTestAccess::inbound(game, 7, "f1.571:-1");
+        CHECK(remote.nextBubble == 2);
+        BubbleGameTestAccess::inbound(game, 7, "f1.571:5");
+        CHECK(remote.nextBubble == 5);
+        remote.mpFirePending = false;
+
+        // 's': position kept, colour deferred to the bubble in flight, and a
+        // queue with any bad entry leaves the old queue and next bubble.
+        BubbleGameTestAccess::inbound(game, 7, "s3:0:99:3 3 3 3 3 3 3 99");
+        CHECK(remote.mpStickPending);
+        CHECK(remote.stickCx == 3 && remote.stickCy == 0);
+        CHECK(!IsValidBubbleColor(remote.stickCol));
+        CHECK(remote.nextBubble == 5);
+        CHECK(remote.nextColors == std::vector<int>(8, 1));
+
+        ShapeBoard(remote, false);
+        remote.bubbleOffset = {20, 19};
+        remote.leftLimit = 20;
+        remote.rightLimit = 148;
+        remote.topLimit = 19;
+        singleBubbles = {VerticalLaunch(1, 4, 68, 300, 16, 20, 148, 19)};
+        BubbleGameTestAccess::updateAtScale(game, 1.0f);
+        CHECK(!remote.mpStickPending);
+        CHECK(remote.bubbleMap[0][3].bubbleId == 4);
+        for (const auto& row : remote.bubbleMap)
+            for (const Bubble& bubble : row)
+                CHECK(bubble.bubbleId == -1 || IsValidBubbleColor(bubble.bubbleId));
+
+        // A well-formed 's' still syncs the queue and next bubble.
+        BubbleGameTestAccess::inbound(game, 7, "s4:0:2:6 0 1 2 3 4 5 6");
+        CHECK(remote.stickCol == 2);
+        CHECK(remote.nextBubble == 6);
+        CHECK(remote.nextColors == (std::vector<int>{6, 0, 1, 2, 3, 4, 5, 6}));
+        remote.mpStickPending = false;
+
+        // 'm': a malus with a bad colour never starts falling.
+        singleBubbles.clear();
+        malusBubbles.clear();
+        BubbleGameTestAccess::inbound(game, 7, "m99:2:5:5");
+        BubbleGameTestAccess::inbound(game, 7, "m-3:2:5:5");
+        CHECK(malusBubbles.empty());
+        BubbleGameTestAccess::inbound(game, 7, "m3:2:5:5");
+        CHECK(malusBubbles.size() == 1);
+        malusBubbles.clear();
+
+        // The board itself refuses one, whoever asks.
+        remote.PlacePlayerBubble(BUBBLE_STYLES, 1, 1);
+        remote.PlacePlayerBubble(-1, 1, 1);
+        CHECK(remote.bubbleMap[1][1].bubbleId == -1);
     }
 
     // --- IsTouchBackSwipe -------------------------------------------------

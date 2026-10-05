@@ -72,6 +72,9 @@
 #define TIMEOUT_PENGUIN_SLEEP 200 * 2
 
 #define BUBBLE_STYLES 8
+// A colour that came off the wire. Every colour indexes the BUBBLE_STYLES
+// texture arrays, and a peer is not trusted to send one in range.
+inline bool IsValidBubbleColor(int c) { return c >= 0 && c < BUBBLE_STYLES; }
 #define BUBBLE_STICKFC 7
 // Original Perl source values (bin/frozen-bubble line 94-97):
 //   $BUBBLE_SPEED      = 10   → ported as 10/2=5 px/frame at 60fps = 300 px/sec
@@ -492,6 +495,8 @@ struct BubbleArray {
             return;
         std::vector<Bubble> &cells = bubbleMap[row];
         if (col < 0 || col >= static_cast<int>(cells.size()))
+            return;
+        if (!IsValidBubbleColor(bubbleId))
             return;
         Bubble &bubble = cells[col];
         bubble.bubbleId = bubbleId;

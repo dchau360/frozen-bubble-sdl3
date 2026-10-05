@@ -295,7 +295,15 @@ void BubbleGame::ApplyInboundGameMessage(int senderId, const std::string &gameDa
                 opponentArray.mpFirePending = true;
                 opponentArray.pendingAngle = angle;
                 opponentArray.shooterSprite.angle = angle;  // Update shooter angle for visual display
-                opponentArray.nextBubble = opponentNewNextColor;  // Update their next bubble color
+                // A colour out of range would index past the bubble textures;
+                // keep the shot (the angle is what moves the board) and the
+                // next bubble we already had.
+                if (IsValidBubbleColor(opponentNewNextColor))
+                    opponentArray.nextBubble = opponentNewNextColor;  // Update their next bubble color
+                else
+                    SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
+                                "Ignoring out-of-range next colour %d from senderId %d",
+                                opponentNewNextColor, senderId);
 
                 SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION,
                         "Received fire command from player %d (array %d): angle=%.3f, nextColor=%d",
@@ -381,7 +389,28 @@ void BubbleGame::ApplyInboundGameMessage(int senderId, const std::string &gameDa
                         while (*p == ' ') p++;
                     } else break;
                 }
-                int nextBubble = recvNextColors.empty() ? 0 : recvNextColors[0];
+                // Out-of-range colours would index past the bubble textures.
+                // The position still lands (dropping the whole 's' would let
+                // our copy of their shot stick wherever our own collision
+                // check puts it); -1 makes the stick use the in-flight
+                // bubble's own colour, which is what an honest peer sends.
+                // One bad entry discards the whole queue rather than
+                // shifting the rest, so the next root row keeps its colours.
+                if (!IsValidBubbleColor(bubbleColor)) {
+                    SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
+                                "Ignoring out-of-range stick colour %d from senderId %d",
+                                bubbleColor, senderId);
+                    bubbleColor = -1;
+                }
+                for (int c : recvNextColors) {
+                    if (!IsValidBubbleColor(c)) {
+                        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
+                                    "Ignoring next colours with out-of-range %d from senderId %d",
+                                    c, senderId);
+                        recvNextColors.clear();
+                        break;
+                    }
+                }
                 SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION,
                         "Received stick: col=%d row=%d color=%d nextColors[%zu] from lobbyId=%d",
                         cx, cy, bubbleColor, recvNextColors.size(), senderId);
@@ -425,15 +454,16 @@ void BubbleGame::ApplyInboundGameMessage(int senderId, const std::string &gameDa
                 opponentArray.stickCx = cx;
                 opponentArray.stickCy = cy;
                 opponentArray.stickCol = bubbleColor;
-                opponentArray.nextBubble = nextBubble;  // Update their next bubble (front of nextColors)
                 // Sync full nextColors queue (Perl-compatible: used by ExpandNewLane for new root row)
+                // and their next bubble (its front)
                 if (!recvNextColors.empty()) {
+                    opponentArray.nextBubble = recvNextColors[0];
                     opponentArray.nextColors = recvNextColors;
                 }
 
                 SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION,
                         "Set mp_stick for player %d (array %d): cx=%d cy=%d col=%d nextBubble=%d nextColors[%zu]",
-                        senderId, opponentIdx, cx, cy, bubbleColor, nextBubble, recvNextColors.size());
+                        senderId, opponentIdx, cx, cy, bubbleColor, opponentArray.nextBubble, recvNextColors.size());
             } else {
                 SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
                             "Failed to parse stick message: %s", gameData.c_str());
@@ -510,6 +540,15 @@ void BubbleGame::ApplyInboundGameMessage(int senderId, const std::string &gameDa
             }
             int bubbleId, cx, cy, stickY;
             if (sscanf(gameData.c_str() + 1, "%d:%d:%d:%d", &bubbleId, &cx, &cy, &stickY) == 4) {
+                // An out-of-range colour would index past the bubble textures
+                // while it falls. Without the bubble its 'M' finds nothing
+                // to stick, so the malus is simply lost on our copy.
+                if (!IsValidBubbleColor(bubbleId)) {
+                    SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
+                                "Ignoring malus with out-of-range colour %d from senderId %d",
+                                bubbleId, senderId);
+                    break;
+                }
                 SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION,
                         "Received opponent malus from senderId=%d: color=%d cx=%d cy=%d stickY=%d",
                         senderId, bubbleId, cx, cy, stickY);

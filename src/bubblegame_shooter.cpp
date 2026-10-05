@@ -730,7 +730,11 @@ void BubbleGame::UpdateSingleBubblesAtScale(float deltaScale) {
                         "Processing mp_stick for player %d: cx=%d cy=%d col=%d",
                         sBubble.assignedArray, launchArray->stickCx, launchArray->stickCy, launchArray->stickCol);
 
-                launchArray->PlacePlayerBubble(launchArray->stickCol, launchArray->stickCy, launchArray->stickCx);
+                // -1: the 's' carried an out-of-range colour (see
+                // ApplyInboundGameMessage), so use the bubble actually in flight.
+                int stickCol = IsValidBubbleColor(launchArray->stickCol)
+                    ? launchArray->stickCol : sBubble.bubbleId;
+                launchArray->PlacePlayerBubble(stickCol, launchArray->stickCy, launchArray->stickCx);
                 launchArray->newShoot = true;
                 launchArray->mpStickPending = false;  // Clear flag (original line 2191)
 
