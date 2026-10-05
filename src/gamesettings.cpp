@@ -158,6 +158,7 @@ void GameSettings::CreateDefaultSettings()
         EvalIniResult(rval, dict, "Keys:P1Right", "79");     // SDL_SCANCODE_RIGHT
         EvalIniResult(rval, dict, "Keys:P1Fire", "82");      // SDL_SCANCODE_UP
         EvalIniResult(rval, dict, "Keys:P1Center", "81");    // SDL_SCANCODE_DOWN
+        EvalIniResult(rval, dict, "Keys:P1FireNext", "229"); // SDL_SCANCODE_RSHIFT
         EvalIniResult(rval, dict, "Keys:P2Left", "27");      // SDL_SCANCODE_X
         EvalIniResult(rval, dict, "Keys:P2Right", "25");     // SDL_SCANCODE_V
         EvalIniResult(rval, dict, "Keys:P2Fire", "6");       // SDL_SCANCODE_C
@@ -497,6 +498,7 @@ void GameSettings::LoadDefaultKeys()
     player1Keys.right = LoadScancode(optDict, "Keys:P1Right", SDL_SCANCODE_RIGHT);
     player1Keys.fire = LoadScancode(optDict, "Keys:P1Fire", SDL_SCANCODE_UP);
     player1Keys.center = LoadScancode(optDict, "Keys:P1Center", SDL_SCANCODE_DOWN);
+    player1Keys.fireNext = LoadScancode(optDict, "Keys:P1FireNext", SDL_SCANCODE_RSHIFT);
 
     player2Keys.left = LoadScancode(optDict, "Keys:P2Left", SDL_SCANCODE_X);
     player2Keys.right = LoadScancode(optDict, "Keys:P2Right", SDL_SCANCODE_V);
@@ -541,6 +543,7 @@ void GameSettings::SaveKeys()
     iniparser_set(optDict, "Keys:P1Right", std::to_string(player1Keys.right).c_str());
     iniparser_set(optDict, "Keys:P1Fire", std::to_string(player1Keys.fire).c_str());
     iniparser_set(optDict, "Keys:P1Center", std::to_string(player1Keys.center).c_str());
+    iniparser_set(optDict, "Keys:P1FireNext", std::to_string(player1Keys.fireNext).c_str());
 
     iniparser_set(optDict, "Keys:P2Left", std::to_string(player2Keys.left).c_str());
     iniparser_set(optDict, "Keys:P2Right", std::to_string(player2Keys.right).c_str());

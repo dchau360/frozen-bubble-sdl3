@@ -43,10 +43,14 @@ enum KeyConfigRow {
     kKeyRowRight     = 1,
     kKeyRowFire      = 2,
     kKeyRowCenter    = 3,
-    kKeyRowResetCtrl = 4,
-    kKeyRowSpeed     = 5,
-    kKeyRowSound     = 6,
-    kKeyRowMouse     = 7,
+    // Player 1 only (PlayerKeys::fireNext): skipped by the panel's UP/DOWN
+    // and not drawn while another player's keys are shown. Every row below
+    // was renumbered by one when it went in.
+    kKeyRowFireNext  = 4,
+    kKeyRowResetCtrl = 5,
+    kKeyRowSpeed     = 6,
+    kKeyRowSound     = 7,
+    kKeyRowMouse     = 8,
     // A highscore-upload toggle used to be row 8 here; its successor, World
     // highscores, lives in the 1-player submenu instead (see SPPanelRender/press() in mainmenu.cpp),
     // since it is about solo campaign runs, not general app settings. Rows below were renumbered down by one
@@ -60,24 +64,24 @@ enum KeyConfigRow {
 #ifndef __WASM_PORT__
     // The browser build has no fullscreen row: an SDL fullscreen flag blacks out
     // the canvas there, so the CSS shell does the scaling instead.
-    kKeyRowFullscreen = 8,
+    kKeyRowFullscreen = 9,
 # ifdef __ANDROID__
     // Ads and in-app purchases are Android-only, so these three rows exist
     // nowhere else. They replaced an [R]-to-buy hint that was unreachable in
     // practice: nothing maps a controller or a touch to R, so no phone,
     // tablet, or TV box could ever trigger it.
-    kKeyRowRemoveAdsMonth   = 9,
-    kKeyRowRemoveAdsYear    = 10,
-    kKeyRowRemoveAdsForever = 11,
-    kKeyRowReplays    = 12,
-    kKeyRowResetAll   = 13,
+    kKeyRowRemoveAdsMonth   = 10,
+    kKeyRowRemoveAdsYear    = 11,
+    kKeyRowRemoveAdsForever = 12,
+    kKeyRowReplays    = 13,
+    kKeyRowResetAll   = 14,
 # else
-    kKeyRowReplays    = 9,
-    kKeyRowResetAll   = 10,
+    kKeyRowReplays    = 10,
+    kKeyRowResetAll   = 11,
 # endif
 #else
-    kKeyRowReplays    = 8,
-    kKeyRowResetAll   = 9,
+    kKeyRowReplays    = 9,
+    kKeyRowResetAll   = 10,
 #endif
     kKeyRowLast = kKeyRowResetAll
 };
@@ -92,6 +96,10 @@ static const int kKeyPlayerTapBase = 900;
 // "Ctrl1:A" for a pad button bound through the virtual scancodes, SDL's own
 // key name otherwise. Shared by both styles of the settings panel.
 std::string ControllerScancodeName(SDL_Scancode sc);
+
+// The settings label for player 1's fire-next key (kKeyRowFireNext), shared
+// by both styles of the panel. Its feature name lives only here.
+inline constexpr const char* kFireNextLabel = "Skip shot";
 
 // Row indices for the game room's action list (selectedActionIndex). The list
 // is built positionally in mainmenu_netpanel.cpp and acted on by index in

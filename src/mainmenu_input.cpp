@@ -706,6 +706,7 @@ bool MainMenu::KeysPanelKey(SDL_Event *e) {
                         case 1: keys.right  = e->key.scancode; break;
                         case 2: keys.fire   = e->key.scancode; break;
                         case 3: keys.center = e->key.scancode; break;
+                        case kKeyRowFireNext: keys.fireNext = e->key.scancode; break;
                     }
                     awaitKp = false;
                     AudioMixer::Instance()->PlaySFX("typewriter");
@@ -716,13 +717,15 @@ bool MainMenu::KeysPanelKey(SDL_Event *e) {
                     // keep their indices so the enum stays fixed, so navigation
                     // has to step over them or the highlight vanishes for two
                     // presses on a row that isn't drawn.
-                    auto skippableRow = [](int row) {
+                    // Fire next is player 1's alone, so its row is not
+                    // drawn for anyone else and navigation skips it too.
+                    auto skippableRow = [this](int row) {
+                        if (row == kKeyRowFireNext && keyConfigPlayer != 1) return true;
 #ifdef __ANDROID__
                         return (row == kKeyRowRemoveAdsMonth ||
                                 row == kKeyRowRemoveAdsYear ||
                                 row == kKeyRowRemoveAdsForever) && AdsRemoved();
 #else
-                        (void)row;
                         return false;
 #endif
                     };
@@ -802,6 +805,11 @@ bool MainMenu::KeysPanelKey(SDL_Event *e) {
                             keys.right  = (SDL_Scancode)(CTRL_SC_BASE + slot * 20 + SDL_GAMEPAD_BUTTON_DPAD_RIGHT);
                             keys.fire   = (SDL_Scancode)(CTRL_SC_BASE + slot * 20 + SDL_GAMEPAD_BUTTON_SOUTH);
                             keys.center = (SDL_Scancode)(CTRL_SC_BASE + slot * 20 + SDL_GAMEPAD_BUTTON_DPAD_DOWN);
+                            // X / Square: in a 1-player game it is otherwise
+                            // unused (it opens chat only in network games,
+                            // where fire next is off).
+                            if (slot == 0)
+                                keys.fireNext = (SDL_Scancode)(CTRL_SC_BASE + SDL_GAMEPAD_BUTTON_WEST);
                             gs->SaveKeys();
                             AudioMixer::Instance()->PlaySFX("typewriter");
                         } else if (keyConfigIndex == kKeyRowSpeed) {

@@ -135,7 +135,7 @@ void MainMenu::KeysPanelRenderModern() {
     const int pitch = std::min(40, (kCardBottomMax - 14 - firstRowY - gameExtra) / gameRows);
     const int rowH = pitch - 4;
     const int gameBottom = firstRowY + gameRows * pitch + gameExtra - 4 + 14;
-    const int controlsBottom = kCardTop + 66 + 4 * kKeyPitch + 4 + 32 + 14;
+    const int controlsBottom = kCardTop + 66 + (keyConfigPlayer == 1 ? 5 : 4) * kKeyPitch + 4 + 32 + 14;
     const int cardH = std::min(kCardBottomMax, std::max(gameBottom, controlsBottom)) - kCardTop;
     const SDL_Rect kControls = {kControlsX, kCardTop, kControlsW, cardH};
     const SDL_Rect kGame = {kGameX, kCardTop, kGameW, cardH};
@@ -154,14 +154,17 @@ void MainMenu::KeysPanelRenderModern() {
         AddPanelTapRow(kKeyPlayerTapBase + p, tab, -1, false, SDLK_1 + (p - 1));
     }
 
-    struct { int idx; const char* label; SDL_Scancode sc; } keyRows[4] = {
-        {kKeyRowLeft,   "Turn left",  pk.left},
-        {kKeyRowRight,  "Turn right", pk.right},
-        {kKeyRowFire,   "Fire",       pk.fire},
-        {kKeyRowCenter, "Center",     pk.center},
+    // Fire next is player 1's alone (PlayerKeys::fireNext).
+    struct { int idx; const char* label; SDL_Scancode sc; } keyRows[5] = {
+        {kKeyRowLeft,     "Turn left",    pk.left},
+        {kKeyRowRight,    "Turn right",   pk.right},
+        {kKeyRowFire,     "Fire",         pk.fire},
+        {kKeyRowCenter,   "Center",       pk.center},
+        {kKeyRowFireNext, kFireNextLabel, pk.fireNext},
     };
     int y = kControls.y + 66;
     for (auto& k : keyRows) {
+        if (k.idx == kKeyRowFireNext && keyConfigPlayer != 1) continue;
         const SDL_Rect r = {innerX, y, innerW, kKeyH};
         const int cy = row(k.idx, r, k.label, kFrost);
         if (awaitKp && keyConfigIndex == k.idx) {

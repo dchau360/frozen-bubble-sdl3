@@ -1153,7 +1153,9 @@ void FrozenBubble::HandleInput(SDL_Event *e) {
 #ifdef __WASM_PORT__
                 const bool fromTouch = wasmLastPressWasTouch;
                 wasmLastPressWasTouch = false;
-                mainGame->HandleMouseFire(fromTouch);
+                // A touch on the launcher strip is a skip shot; a mouse's left
+                // button never is (its skip shot is the right button).
+                mainGame->HandleMouseFire(fromTouch, fromTouch && mainGame->TouchIsSkipShot(ply));
 #else
                 mainGame->HandleMouseFire();
 #endif
@@ -1162,7 +1164,12 @@ void FrozenBubble::HandleInput(SDL_Event *e) {
 #ifndef __WASM_PORT__
             if (e->button.which == SDL_TOUCH_MOUSEID) return;
 #endif
-            injectKey(SDLK_ESCAPE);
+            // A skip shot in a 1-player game with mouse aim on; it leaves
+            // the game everywhere else, and once the round is over.
+            if (mainGame->RightClickIsSkipShot() && !mainGame->IsGameFinished())
+                mainGame->HandleMouseFire(/*fromTouch=*/false, /*skipShot=*/true);
+            else
+                injectKey(SDLK_ESCAPE);
         }
 #ifdef __WASM_PORT__
         // Touch has no other way out of a round on WASM: Escape, gamepad B
@@ -1220,7 +1227,8 @@ void FrozenBubble::HandleInput(SDL_Event *e) {
                     injectKey(SDLK_RETURN); // tap to continue after round
             } else {
                 mainGame->HandleMouseAim(lx, ly);
-                mainGame->HandleMouseFire(/*fromTouch=*/true);
+                // Released on the strip around the launcher: a skip shot.
+                mainGame->HandleMouseFire(/*fromTouch=*/true, mainGame->TouchIsSkipShot(ly));
             }
         }
 #endif

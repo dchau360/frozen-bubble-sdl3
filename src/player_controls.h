@@ -14,6 +14,10 @@ struct PlayerControls {
     // >=0: mouse/touch aim active this frame. Same sentinel as
     // BubbleArray::mouseTargetAngle, which this is captured from.
     float mouseAngle = -1.f;
+    // This frame's fire launches the NEXT bubble instead of the loaded one
+    // (the 1-player "fire next" key): the loaded bubble stays in the
+    // launcher and a new next is drawn. Only meaningful with fire set.
+    bool fireNext = false;
 };
 
 #endif

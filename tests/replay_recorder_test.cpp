@@ -215,6 +215,7 @@ static ReplayResult ReplayRecording(SDL_Renderer *renderer, const DecodedRecordi
                 c.right = s.right != 0;
                 c.center = s.center != 0;
                 c.fire = s.fire != 0;
+                c.fireNext = s.fire == 2;
                 c.firedByMouse = s.firedByMouse != 0;
                 c.mouseAngle = s.mouseAngle;
                 BubbleGameTestAccess::player(game, static_cast<int>(s.seatId)).lastControls = c;

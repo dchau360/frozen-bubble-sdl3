@@ -345,6 +345,7 @@ struct BubbleArray {
     float mouseTargetAngle = -1.f;  // -1 = inactive; set from mouse/touch position
     bool mouseFirePending = false;   // set on mouse click / touch-up
     bool mouseFireWasTouch = false;  // that pending fire came from a finger, not a mouse
+    bool mouseFireNext = false;      // that pending fire is a skip shot (right click, low touch)
     // Which device this player has actually been shooting with this round:
     // 'K' keyboard, 'M' mouse, 'T' touch, 'G' gamepad, or 0 before their first
     // shot. Latched per shot rather than decided once, so a player who picks up
@@ -553,7 +554,22 @@ public:
     // fromTouch distinguishes a finger from a mouse for the input badge only;
     // the two are the same shot everywhere else. Defaulted so the existing
     // mouse call sites (and tests) read unchanged.
-    void HandleMouseFire(bool fromTouch = false);
+    // skipShot: fire the next bubble instead (PlayerControls::fireNext) --
+    // a right click, or a touch released on the strip around the launcher
+    // (kSkipShotTouchY). Ignored where FireNextAllowed() is false.
+    void HandleMouseFire(bool fromTouch = false, bool skipShot = false);
+    // Touches released at or below this canvas y are skip shots, above it
+    // ordinary shots (1-player only): the strip around the launcher, just
+    // under the deepest bubble a live board can hold (row 11 ends at
+    // 51 + 11 * 28 + 32 = 391, and compression moves the danger row up as it
+    // moves the board down, so that never changes). Every bubble can still
+    // be touched for an ordinary shot. It was half the screen (240) at
+    // first, which turned a touch on a low bubble into a skip shot.
+    static constexpr float kSkipShotTouchY = 392.f;
+    bool TouchIsSkipShot(float y) const { return FireNextAllowed() && y >= kSkipShotTouchY; }
+    // A right click in a game is a skip shot where one is possible with the
+    // mouse, and leaves the game (ESC) everywhere else, as it always did.
+    bool RightClickIsSkipShot() const { return FireNextAllowed() && currentSettings.mouseEnabled; }
 
     // True when a finger press/release pair is an unambiguous "go back" swipe
     // rather than an aim-and-fire. Touch is the only input with no way out of a
@@ -693,9 +709,21 @@ public:
     bool continuePrompt = false;
     bool continueFocusStartOver = false;
     SDL_Rect continueBtnRect{}, startOverBtnRect{};
-    // False for a run played with the aim guide on: it reaches no highscore
-    // table, local or online (SubmitScore, RecordWorldLife, MP training).
-    bool RunCountsForScores() const { return !bubbleArrays[0].aimGuideEnabled; }
+    // False for a run played with the aim guide on, or one that has fired
+    // the next bubble (runUsedFireNext): it reaches no highscore table,
+    // local or online (SubmitScore, RecordWorldLife, MP training).
+    bool RunCountsForScores() const { return !bubbleArrays[0].aimGuideEnabled && !runUsedFireNext; }
+    // The "fire next" key (PlayerKeys::fireNext): one-player, non-network
+    // games only. A network peer launches its own copy of the shooter's
+    // loaded bubble from the 'f' message, so firing the next one there would
+    // put a different colour on each screen.
+    bool FireNextAllowed() const;
+    // Set the first time the run fires the next bubble; zeroed with
+    // runShots (NewGame, START OVER) and kept through CONTINUE. A run that
+    // has used it no longer counts for highscores (user-facing rule: it is a
+    // new way to shoot the original game never had, so it would not be a
+    // fair comparison with runs on the same boards without it).
+    bool runUsedFireNext = false;
     bool ArcadeContinueApplies() const;
     void ResolveContinuePrompt(bool startOver);
     void RenderContinuePrompt(SDL_Renderer *rend);

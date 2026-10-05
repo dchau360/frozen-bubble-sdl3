@@ -38,10 +38,14 @@ These four share a settings row or two and are all render- or audio-only.
    accounts, `hiscores.c` boards, the UTC day math from `weeklystats.c`. Needs
    a new board number, a menu entry and a rule for what counts as an attempt.
    Best candidate for bringing players back.
-6. **Swap with the next bubble** (Bust-a-Move style). Changes the rules, so it
-   must be optional and either kept off the online boards (as the aim guide
-   is, through `RunCountsForScores()`) or given its own boards. Needs a
-   replay event, since it changes the simulation.
+6. **Swap with the next bubble** (Bust-a-Move style). Started as **Skip
+   shot** instead: a second fire key that shoots the next bubble in one press
+   (same outcome as swap-then-fire). Done for keyboard/gamepad in 1-player
+   games, kept off the boards through `RunCountsForScores()`, recorded in
+   replays as `fire = 2`. Mouse: right click. Touch: a touch let go in the
+   strip around the launcher. Still open: network play
+   (needs a new opcode, since peers launch their own copy of the loaded
+   bubble).
 7. **Achievements.** Examples: clear a level in under 10 s, drop 20 bubbles
    at once, reach level 50, win an online match. Kept with the account;
    Google Play Games could mirror them later.
