@@ -1,5 +1,9 @@
 # Changelog
 
+## v2.4.142
+
+- **Swap shots stand out.** A bubble shot from the Swap pocket now has a glowing ring round it all the way up, and a "SWAP!" tag pops up over the launcher, at every game speed.
+
 ## v2.4.141
 
 - **Swap replaces Skip shot.** A pocket now sits beside the next bubble. Press Swap (Right Shift, a right click, or a tap below the board) to put the loaded bubble in it and bring the next one up; press it again to shoot the pocketed bubble, and the loaded one takes its place. Fire still shoots the loaded bubble. The pocket empties every level.
