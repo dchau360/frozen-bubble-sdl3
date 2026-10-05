@@ -292,6 +292,14 @@ void BubbleGame::ApplyInboundGameMessage(int senderId, const std::string &gameDa
 
                 // Set flag to fire in the game loop (original line 1403: $actions{$player}{mp_fire} = 1)
                 // Store angle and update nextcolor (original line 1404)
+                // Same range mouse aim is clamped to. Only the cannon and
+                // the aim guide read it (the shot itself lands where 's'
+                // says), but NaN would reach a float-to-int cast there.
+                // Clamped rather than dropped: without the 'f' there is no
+                // bubble in flight for their 's' to land.
+                if (!std::isfinite(angle)) angle = (float)PI / 2.0f;
+                angle = std::clamp(angle, 0.1f, (float)PI - 0.1f);
+
                 opponentArray.mpFirePending = true;
                 opponentArray.pendingAngle = angle;
                 opponentArray.shooterSprite.angle = angle;  // Update shooter angle for visual display

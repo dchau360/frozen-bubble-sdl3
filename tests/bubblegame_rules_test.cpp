@@ -751,6 +751,19 @@ int main() {
         CHECK(remote.nextBubble == 2);
         BubbleGameTestAccess::inbound(game, 7, "f1.571:5");
         CHECK(remote.nextBubble == 5);
+
+        // A non-finite or wild angle is clamped to the mouse aim's range.
+        BubbleGameTestAccess::inbound(game, 7, "fnan:5");
+        CHECK(remote.pendingAngle == (float)PI / 2.0f);
+        CHECK(remote.shooterSprite.angle == (float)PI / 2.0f);
+        BubbleGameTestAccess::inbound(game, 7, "finf:5");
+        CHECK(remote.pendingAngle == (float)PI / 2.0f);
+        BubbleGameTestAccess::inbound(game, 7, "f1e30:5");
+        CHECK(remote.pendingAngle == (float)PI - 0.1f);
+        BubbleGameTestAccess::inbound(game, 7, "f-7:5");
+        CHECK(remote.pendingAngle == 0.1f);
+        BubbleGameTestAccess::inbound(game, 7, "f1.2:5");
+        CHECK(remote.pendingAngle == 1.2f);
         remote.mpFirePending = false;
 
         // 's': position kept, colour deferred to the bubble in flight, and a
