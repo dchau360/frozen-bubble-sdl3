@@ -449,7 +449,13 @@ void BubbleGame::ApplyPlayerControls(BubbleArray &bArray, const PlayerControls &
                 std::swap(bArray.curLaunch, bArray.pocketColor);
             }
         }
+        const bool swapShot = controls.fireNext && !controls.skipShotLegacy && !bArray.mpFirePending &&
+                              FireNextAllowed() && &bArray == &bubbleArrays[0];
         LaunchBubble(bArray);
+        if (swapShot && !singleBubbles.empty()) {
+            singleBubbles.back().swapShot = true;
+            if (EffectsEnabled()) { swapTagStartMs = SDL_GetTicks(); swapTagFrom = bArray.curLaunchRct; }
+        }
         bArray.shooterAction = false;
         bArray.mpFirePending = false;  // Clear mp_fire flag (original line 2165)
         bArray.newShoot = false;

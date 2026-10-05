@@ -14,6 +14,7 @@
 #include <SDL3_ttf/SDL_ttf.h>
 
 #include "bubblegame.h"
+#include "bubblegame_internal.h"
 #include "gamesettings.h"
 #include "mainmenu.h"
 #include "platform.h"
@@ -63,6 +64,12 @@ struct BubbleGameTestAccess {
         for (auto& s : g.pocketSlides) s.startMs = SDL_GetTicks() - ms;
     }
     static size_t slideCount(const BubbleGame& g) { return g.pocketSlides.size(); }
+    // The swap shot indicator, `ms` after the shot left the launcher.
+    static void swapTag(BubbleGame& g, Uint64 ms) {
+        g.swapTagFrom = g.bubbleArrays[0].curLaunchRct;
+        g.swapTagStartMs = SDL_GetTicks() - ms;
+    }
+    static bool swapTagShowing(const BubbleGame& g) { return g.swapTagStartMs != 0; }
     static void finish(BubbleGame& game, bool won, bool prompt) {
         game.gameFinish = true;
         game.gameWon = won;
@@ -173,6 +180,26 @@ int main() {
         BubbleGameTestAccess::pocketSlides(game, false, BubbleGame::kPocketSlideMs);
         BubbleGameTestAccess::draw(game);
         CHECK(BubbleGameTestAccess::slideCount(game) == 0);   // over, and dropped
+        // A swap shot in flight: the bubble from the pocket ringed, "SWAP!"
+        // rising off the launcher.
+        {
+            BubbleArray& b = BubbleGameTestAccess::player(game);
+            SingleBubble shot{};
+            shot.assignedArray = 0;
+            shot.bubbleId = 3;
+            shot.pos = {b.curLaunchRct.x - 90, b.curLaunchRct.y - 90};
+            shot.bubbleSize = 32;
+            shot.launching = true;
+            shot.swapShot = true;
+            singleBubbles.push_back(shot);
+            BubbleGameTestAccess::swapTag(game, 250);
+            BubbleGameTestAccess::draw(game);
+            Dump(renderer, "1h-swap-shot");
+            singleBubbles.clear();
+            BubbleGameTestAccess::swapTag(game, BubbleGame::kSwapTagMs);
+            BubbleGameTestAccess::draw(game);
+            CHECK(!BubbleGameTestAccess::swapTagShowing(game));   // over
+        }
         BubbleGameTestAccess::player(game).pocketColor = -1;
 
         // The next run shows it again (user decision: no "learned" switch).

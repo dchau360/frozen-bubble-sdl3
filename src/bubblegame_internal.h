@@ -80,6 +80,9 @@ struct SingleBubble {
     // Set on probe bubbles the bot AI flies through a board to see where a
     // shot would land. They must not be heard, only measured.
     bool simulated = false;
+    // Fired with the swap button: the pocketed bubble. Drawing only (the
+    // ring BubbleGame::DrawSwapShotRing puts round it in flight).
+    bool swapShot = false;
     float speedX = 0, speedY = 0, genSpeed = 0; // used for falling bubbles
     bool chainExists = false; // enable chain reaction animation
     SDL_Point chainDest = {}; //where to land when chain reacting
