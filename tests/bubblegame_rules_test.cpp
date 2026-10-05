@@ -104,6 +104,11 @@ struct BubbleGameTestAccess {
     }
     static bool continuePrompt(const BubbleGame& game) { return game.continuePrompt; }
     static int& runShots(BubbleGame& game) { return game.runShots; }
+    static bool runUsedFireNext(const BubbleGame& game) { return game.runUsedFireNext; }
+    static bool runCounts(const BubbleGame& game) { return game.RunCountsForScores(); }
+    static void apply(BubbleGame& game, int idx, const PlayerControls& c) {
+        game.ApplyPlayerControls(game.bubbleArrays[idx], c, 1.f);
+    }
     static void levelClock(BubbleGame& game, Uint32 start, Uint32 now) {
         game.levelStartMs = start;
         game.stepGameClockMs = now;
@@ -1225,6 +1230,103 @@ int main() {
         }
         CHECK(BubbleGameTestAccess::runShots(game) == shots0 + 2);
         CHECK(BubbleGameTestAccess::scoringMouse(game));
+    }
+
+    // ---- Fire next (1-player) ------------------------------------------
+    // The second trigger launches the next bubble, keeps the loaded one in
+    // the launcher, and draws a new next. Bound here to a pad button's
+    // virtual scancode, the one key state a headless test can hold down.
+    {
+        GameSettings* gs = GameSettings::Instance();
+        const PlayerKeys savedKeys = gs->player1Keys;
+        const SDL_Scancode nextKey = VirtualScancode(0, SDL_GAMEPAD_BUTTON_WEST);
+        const SDL_Scancode fireKey = VirtualScancode(0, SDL_GAMEPAD_BUTTON_SOUTH);
+        gs->player1Keys.fire = fireKey;
+        gs->player1Keys.fireNext = nextKey;
+        auto hold = [](SDL_Scancode sc, bool down) { virtualKeyState[sc - CTRL_SC_BASE] = down; };
+
+        BubbleGame game(renderer);
+        BubbleGameTestAccess::reset(game, 1, false, false);
+        BubbleArray& p = BubbleGameTestAccess::player(game, 0);
+        p.bubbleMap[0][0].bubbleId = 5;     // the only colour left: the new next
+        p.curLaunch = 1;
+        p.nextBubble = 2;
+        p.newShoot = true;
+        CHECK(BubbleGameTestAccess::runCounts(game));
+
+        hold(nextKey, true);
+        BubbleGameTestAccess::penguin(game, 0);
+        CHECK(singleBubbles.size() == 1);
+        if (!singleBubbles.empty()) CHECK(singleBubbles.back().bubbleId == 2);
+        CHECK(p.curLaunch == 1);
+        CHECK(p.nextBubble == 5);
+        CHECK(p.lastControls.fire && p.lastControls.fireNext);
+        CHECK(BubbleGameTestAccess::runUsedFireNext(game));
+        CHECK(!BubbleGameTestAccess::runCounts(game));
+
+        // Still held once the shot has landed: the release interlock covers
+        // the second trigger too, so nothing fires again.
+        singleBubbles.clear();
+        p.newShoot = true;
+        BubbleGameTestAccess::penguin(game, 0);
+        CHECK(singleBubbles.empty());
+        hold(nextKey, false);
+        BubbleGameTestAccess::penguin(game, 0);
+        CHECK(singleBubbles.empty());
+
+        // The ordinary trigger still fires the loaded bubble.
+        hold(fireKey, true);
+        BubbleGameTestAccess::penguin(game, 0);
+        CHECK(singleBubbles.size() == 1);
+        if (!singleBubbles.empty()) CHECK(singleBubbles.back().bubbleId == 1);
+        CHECK(!p.lastControls.fireNext);
+        hold(fireKey, false);
+
+        // Mouse and touch: a right click, or a touch let go in the bottom
+        // half of the screen, is a skip shot; a left click or a high touch
+        // is not.
+        BubbleGameTestAccess::settings(game).mouseEnabled = true;
+        CHECK(game.RightClickIsSkipShot());
+        CHECK(!game.TouchIsSkipShot(BubbleGame::kSkipShotTouchY - 1.f));
+        CHECK(game.TouchIsSkipShot(BubbleGame::kSkipShotTouchY));
+        struct { bool fromTouch, skip; int expect; } clicks[] = {
+            {false, true, 2}, {true, true, 2}, {false, false, 1}, {true, false, 1},
+        };
+        for (const auto& c : clicks) {
+            singleBubbles.clear();
+            p.curLaunch = 1;
+            p.nextBubble = 2;
+            p.newShoot = true;
+            game.HandleMouseFire(c.fromTouch, c.skip);
+            BubbleGameTestAccess::penguin(game, 0);
+            CHECK(singleBubbles.size() == 1);
+            if (!singleBubbles.empty()) CHECK(singleBubbles.back().bubbleId == c.expect);
+            CHECK(p.lastControls.firedByMouse);
+            CHECK(p.lastControls.fireNext == (c.expect == 2));
+        }
+        BubbleGameTestAccess::settings(game).mouseEnabled = false;
+        CHECK(!game.RightClickIsSkipShot());   // no mouse aim: right click leaves, as before
+
+        // Network play never fires next, even from a forged control record:
+        // peers launch their own copy of the loaded bubble.
+        singleBubbles.clear();
+        BubbleGameTestAccess::reset(game, 2, true, false);
+        BubbleArray& n = BubbleGameTestAccess::player(game, 0);
+        n.curLaunch = 1;
+        n.nextBubble = 2;
+        n.newShoot = true;
+        PlayerControls c;
+        c.fire = c.fireNext = true;
+        BubbleGameTestAccess::apply(game, 0, c);
+        CHECK(singleBubbles.size() == 1);
+        if (!singleBubbles.empty()) CHECK(singleBubbles.back().bubbleId == 1);
+        singleBubbles.clear();
+        // ...and there a low touch is an ordinary shot, a right click leaves.
+        BubbleGameTestAccess::settings(game).mouseEnabled = true;
+        CHECK(!game.TouchIsSkipShot(400.f));
+        CHECK(!game.RightClickIsSkipShot());
+
+        gs->player1Keys = savedKeys;
     }
 
     // ---- Attack bubbles: canceling, end to end -------------------------

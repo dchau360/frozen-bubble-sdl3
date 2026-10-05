@@ -764,13 +764,16 @@ void MainMenu::KeysPanelRender() {
     snprintf(header, sizeof(header), "Player %d keys", keyConfigPlayer);
     list.Header(header);
 
-    struct { int idx; const char* label; SDL_Scancode sc; } keyRows[4] = {
-        {kKeyRowLeft,   "Turn left",  pk.left},
-        {kKeyRowRight,  "Turn right", pk.right},
-        {kKeyRowFire,   "Fire",       pk.fire},
-        {kKeyRowCenter, "Center",     pk.center},
+    // Fire next is player 1's alone (PlayerKeys::fireNext).
+    struct { int idx; const char* label; SDL_Scancode sc; } keyRows[5] = {
+        {kKeyRowLeft,     "Turn left",    pk.left},
+        {kKeyRowRight,    "Turn right",   pk.right},
+        {kKeyRowFire,     "Fire",         pk.fire},
+        {kKeyRowCenter,   "Center",       pk.center},
+        {kKeyRowFireNext, kFireNextLabel, pk.fireNext},
     };
     for (auto& row : keyRows) {
+        if (row.idx == kKeyRowFireNext && keyConfigPlayer != 1) continue;
         bool awaitingThis = awaitKp && keyConfigIndex == row.idx;
         list.Row(row.idx, row.label,
                  awaitingThis ? "Press a key..." : ControllerScancodeName(row.sc), true);

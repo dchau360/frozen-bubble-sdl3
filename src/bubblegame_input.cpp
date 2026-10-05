@@ -107,7 +107,7 @@ bool BubbleGame::IsTouchBackSwipe(float startX, float startY,
     return fabsf(dy) < fabsf(dx) * 0.6f;
 }
 
-void BubbleGame::HandleMouseFire(bool fromTouch) {
+void BubbleGame::HandleMouseFire(bool fromTouch, bool skipShot) {
     if (chattingMode) return;
     if (!currentSettings.mouseEnabled) return;
     if (currentSettings.playerCount < 1) return;
@@ -123,6 +123,7 @@ void BubbleGame::HandleMouseFire(bool fromTouch) {
     // by then the event that caused it is long gone, and mouse and touch are the
     // same code path from here on. Only the input badge distinguishes them.
     bubbleArrays[0].mouseFireWasTouch = fromTouch;
+    bubbleArrays[0].mouseFireNext = skipShot && FireNextAllowed();
 }
 
 void BubbleGame::StartInGameChat() {

@@ -36,6 +36,11 @@
 #include "bubblegame_internal.h"
 #include "bubbleai.h"
 
+bool BubbleGame::FireNextAllowed() const {
+    return currentSettings.playerCount == 1 && !currentSettings.networkGame &&
+           !currentSettings.localMultiplayer;
+}
+
 void BubbleGame::LaunchBubble(BubbleArray &bArray) {
     PlaySFX("launch");
     SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION,
@@ -151,6 +156,7 @@ PlayerControls BubbleGame::ResolvePlayerControls(BubbleArray &bArray, float delt
     // bubblegame_render.cpp. See docs/REPLAY_PROGRESS.md's R1d entry.
     bArray.hurryWarnVisible = false;
 
+    bool fireNext = false;
     // Process keyboard input only for local players (original: is_local_player($::p))
     if (isLocalPlayer) {
         // Use configured keys from settings
@@ -207,9 +213,14 @@ PlayerControls BubbleGame::ResolvePlayerControls(BubbleArray &bArray, float delt
                                         || SDL_GetGamepadButton(ctrl, SDL_GAMEPAD_BUTTON_DPAD_UP)                            != 0;
                 }
             } else if (bArray.playerAssigned == 0) {
-                bArray.shooterAction = IsKeyPressed(keys.fire);
+                // The fire-next key is a second trigger: it fires too, and
+                // shares the release interlock, so holding either one never
+                // shoots twice.
+                const bool nextHeld = FireNextAllowed() && IsKeyPressed(keys.fireNext);
+                bArray.shooterAction = IsKeyPressed(keys.fire) || nextHeld;
+                fireNext = nextHeld && !IsKeyPressed(keys.fire);
                 if (bArray.suppressFireUntilRelease) {
-                    if (!IsKeyPressed(keys.fire)) bArray.suppressFireUntilRelease = false;
+                    if (!IsKeyPressed(keys.fire) && !nextHeld) bArray.suppressFireUntilRelease = false;
                     else bArray.shooterAction = false;
                 }
                 bArray.shooterLeft   = IsKeyPressed(keys.left);
@@ -300,10 +311,13 @@ PlayerControls BubbleGame::ResolvePlayerControls(BubbleArray &bArray, float delt
     if (bArray.mouseFirePending) {
         bArray.shooterAction = true;
         bArray.mouseFirePending = false;
+        fireNext = bArray.mouseFireNext;   // a right click or a low touch
+        bArray.mouseFireNext = false;
     }
 
     PlayerControls controls{bArray.shooterLeft, bArray.shooterRight, bArray.shooterCenter,
-                           bArray.shooterAction, firedByMouse, bArray.mouseTargetAngle};
+                           bArray.shooterAction, firedByMouse, bArray.mouseTargetAngle,
+                           bArray.shooterAction && fireNext};
     // Bots aim by writing shooterSprite.angle directly (DriveBot's final snap
     // onto botTargetAngle), which left/right/fire cannot reproduce: a replay
     // that turned via left/right would fire one turn-step short of the live
@@ -390,6 +404,14 @@ void BubbleGame::ApplyPlayerControls(BubbleArray &bArray, const PlayerControls &
                 scoringInputMethod = ScoringInputMethod::Keyboard;
         }
 
+        // Fire next: launch the next bubble and keep the loaded one, which
+        // LaunchBubble's PickNextBubble then moves back into the launcher
+        // with a new next drawn behind it -- Bust-a-Move's swap-then-fire
+        // in one press.
+        if (controls.fireNext && !bArray.mpFirePending && FireNextAllowed()) {
+            std::swap(bArray.curLaunch, bArray.nextBubble);
+            runUsedFireNext = true;
+        }
         LaunchBubble(bArray);
         bArray.shooterAction = false;
         bArray.mpFirePending = false;  // Clear mp_fire flag (original line 2165)

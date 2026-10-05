@@ -207,6 +207,7 @@ struct StepRecord {
     // record per step, which is sufficient to prove the codec's framing,
     // hashing and validation.
     uint32_t seatId = 0;
+    // fire: 0 none, 1 the loaded bubble, 2 the next one (fire next).
     uint8_t left = 0, right = 0, center = 0, fire = 0, firedByMouse = 0;
     float mouseAngle = -1.0f;
 

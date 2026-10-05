@@ -483,6 +483,7 @@ void BubbleGame::NewGame(SetupSettings setup) {
     hudShownScore = 0;
     curLevel = setup.startLevel;
     runShots = 0;
+    runUsedFireNext = false;
     runEligibleForWorld = !setup.networkGame && setup.playerCount == 1 && !setup.randomLevels &&
                           !setup.mpTraining && !setup.localMultiplayer && setup.startLevel == 1;
     connectedPlayerCount = setup.playerCount;  // Reset connected count for new game

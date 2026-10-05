@@ -181,6 +181,32 @@ int main() {
         CHECK(!MainMenuTestAccess::Awaiting(*menu));
         CHECK(settings->player1Keys.fire == SDL_SCANCODE_SPACE);
 
+        // Skip shot, player 1's fifth binding (y 310..348): bound the same way.
+        MainMenuTestAccess::Tap(*menu, 100, 329);
+        CHECK(MainMenuTestAccess::Selected(*menu) == kKeyRowFireNext);
+        SDL_DestroySurface(Draw(renderer, *menu, "settings-modern-skipshot"));
+        MainMenuTestAccess::Tap(*menu, 100, 329);
+        CHECK(MainMenuTestAccess::Awaiting(*menu));
+        MainMenuTestAccess::Key(*menu, SDLK_RCTRL, SDL_SCANCODE_RCTRL);
+        CHECK(settings->player1Keys.fireNext == SDL_SCANCODE_RCTRL);
+
+        // It is player 1's alone: UP/DOWN step over it for anyone else, and
+        // there is no row to tap where it would be.
+        MainMenuTestAccess::Key(*menu, SDLK_2);
+        MainMenuTestAccess::Key(*menu, SDLK_UP);
+        MainMenuTestAccess::Key(*menu, SDLK_UP);
+        MainMenuTestAccess::Key(*menu, SDLK_UP);   // wraps from Turn left to Reset all
+        int guard = 0;
+        while (MainMenuTestAccess::Selected(*menu) != kKeyRowCenter && guard++ < 20)
+            MainMenuTestAccess::Key(*menu, SDLK_DOWN);
+        MainMenuTestAccess::Key(*menu, SDLK_DOWN);
+        CHECK(MainMenuTestAccess::Selected(*menu) == kKeyRowResetCtrl);
+        MainMenuTestAccess::Key(*menu, SDLK_UP);
+        CHECK(MainMenuTestAccess::Selected(*menu) == kKeyRowCenter);
+        MainMenuTestAccess::Tap(*menu, 100, 329);
+        CHECK(MainMenuTestAccess::Selected(*menu) != kKeyRowFireNext);
+        MainMenuTestAccess::Key(*menu, SDLK_1);
+
         // Reset all settings: the second tap only arms it.
         MainMenuTestAccess::Tap(*menu, 400, 324);
         CHECK(MainMenuTestAccess::Selected(*menu) == kKeyRowResetAll);

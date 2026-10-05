@@ -118,6 +118,10 @@ struct StepScript {
     bool aim = false;       // set a mouse aim angle this step (seat 0 only)
     float angle = -1.0f;
     bool fire = false;      // request a mouse/touch fire this step
+    // Hold player 1's skip-shot key (PlayerKeys::fireNext) this step. The
+    // round that uses it binds that key to a pad button's virtual scancode,
+    // the one key state a headless test can hold down.
+    bool fireNext = false;
     // R5b: when true the live driver calls AdvanceSimulationAtScale() with
     // this synthetic round-relative gameClockMs instead of AdvanceSimulation(),
     // so training's 120s timer / Timed's countdown can be jumped past without
@@ -226,6 +230,18 @@ static std::vector<int> CollectBubbleIds(BubbleGame& game, int seat) {
 // in the top row, with the launcher holding a third of the same color. The
 // fired bubble lands as the third member of the group, CheckPossibleDestroy
 // pops all three, and CheckGameState sees allClear() -> gameWon.
+// A skip shot is the only way to clear this board on the first shot: the
+// loaded bubble does not match, the next one does.
+static void SetupSkipShotBoard(BubbleGame& game) {
+    BubbleArray& p = BubbleGameTestAccess::player(game, 0);
+    ClearBoard(p);
+    PutBubble(p, 0, 3, 5);
+    PutBubble(p, 0, 4, 5);
+    p.curLaunch = 2;
+    p.nextBubble = 5;
+    p.nextColors.assign(8, 5);
+}
+
 static void SetupWinBoard(BubbleGame& game) {
     BubbleArray& p = BubbleGameTestAccess::player(game, 0);
     ClearBoard(p);
@@ -434,6 +450,8 @@ static void CaptureLiveSteps(BubbleGame& game, int playerCount,
         BubbleArray& p0 = BubbleGameTestAccess::player(game, 0);
         p0.mouseTargetAngle = s.aim ? s.angle : -1.0f;
         p0.mouseFirePending = s.fire;
+        const SDL_Scancode nextKey = GameSettings::Instance()->player1Keys.fireNext;
+        if (IsVirtualScancode(nextKey)) virtualKeyState[nextKey - CTRL_SC_BASE] = s.fireNext;
         // R6a: inject this step's simulated remote payloads through the real
         // client queue, so ProcessNetworkMessages() handles them live.
         if (!s.inboundWire.empty()) {
@@ -640,6 +658,7 @@ static ReplayResult RunReplay(SDL_Renderer* renderer, const CapturedRecording& r
                 c.right = s.right != 0;
                 c.center = s.center != 0;
                 c.fire = s.fire != 0;
+                c.fireNext = s.fire == 2;
                 c.firedByMouse = s.firedByMouse != 0;
                 c.mouseAngle = s.mouseAngle;
                 BubbleGameTestAccess::player(game, (int)s.seatId).lastControls = c;
@@ -916,6 +935,34 @@ int main() {
 
         ReplayResult diskReplay = RunReplay(renderer, decoded);
         CheckHashSequence("win disk replay", rec.liveHashes, diskReplay.hashes);
+    }
+
+    // --- Skip shot: fire the next bubble, recorded as fire=2 ----------------
+    {
+        GameSettings* gs = GameSettings::Instance();
+        const SDL_Scancode savedNext = gs->player1Keys.fireNext;
+        gs->player1Keys.fireNext = VirtualScancode(0, SDL_GAMEPAD_BUTTON_WEST);
+        std::vector<StepScript> script = FireThenCoast(PI / 2.0f);
+        // Aim with the mouse, fire with the key -- on the second step, since
+        // a round starts with the fire interlock set (NewGame) and only a
+        // step with the key up clears it.
+        script[0].fire = false;
+        script[1].aim = true;
+        script[1].angle = PI / 2.0f;
+        script[1].fireNext = true;
+        CapturedRecording rec = RunLiveRound(renderer, solo, 20261004u, SetupSkipShotBoard, script);
+        gs->player1Keys.fireNext = savedNext;
+        virtualKeyState[VirtualScancode(0, SDL_GAMEPAD_BUTTON_WEST) - CTRL_SC_BASE] = false;
+
+        CHECK(rec.liveGameWon == true);
+        CHECK(rec.steps.size() > 1 && rec.steps[0].fire == 0 && rec.steps[1].fire == 2);
+
+        CapturedRecording decoded;
+        CHECK(DecodeRecording(EncodeRecording(rec), decoded, rec.playerCount));
+        CHECK(decoded.steps.size() > 1 && decoded.steps[1].fire == 2);
+        ReplayResult replay = RunReplay(renderer, decoded);
+        CHECK(replay.outcome == kReplayOutcomeWin);
+        CheckHashSequence("skip shot replay", rec.liveHashes, replay.hashes);
     }
 
     // --- Round 2: loss via danger zone after a wall/ceiling hit -------------
