@@ -38,14 +38,16 @@ These four share a settings row or two and are all render- or audio-only.
    accounts, `hiscores.c` boards, the UTC day math from `weeklystats.c`. Needs
    a new board number, a menu entry and a rule for what counts as an attempt.
    Best candidate for bringing players back.
-6. **Swap with the next bubble** (Bust-a-Move style). Started as **Skip
-   shot** instead: a second fire key that shoots the next bubble in one press
-   (same outcome as swap-then-fire). Done for keyboard/gamepad in 1-player
-   games, kept off the boards through `RunCountsForScores()`, recorded in
-   replays as `fire = 2`. Mouse: right click. Touch: a touch let go in the
-   strip around the launcher. Network play too (the launched colour rides
-   the `f` message after a `;`), with a first-run hint. Still open: local
-   multiplayer, where only player 1 has a key.
+6. **Swap with the next bubble** (Bust-a-Move style). Shipped in v2.4.140 as
+   **Skip shot** (a second fire key that shot the next bubble in one press),
+   then reworked into **Swap**, a pocket (user's design): the first press
+   pockets the loaded bubble, every press after that shoots the pocketed one
+   and pockets the loaded one. Keyboard/gamepad, right click, a touch in the
+   strip around the launcher; 1-player and network games, counting for the
+   boards like any other shot, recorded in replays as `fire = 3` (`2`, the
+   old skip shot, still plays back). A hint at the start of every run and a
+   How to play page. Still open: local multiplayer, where only player 1 has
+   a key.
 7. **Achievements.** Examples: clear a level in under 10 s, drop 20 bubbles
    at once, reach level 50, win an online match. Kept with the account;
    Google Play Games could mirror them later.

@@ -104,7 +104,6 @@ struct BubbleGameTestAccess {
     }
     static bool continuePrompt(const BubbleGame& game) { return game.continuePrompt; }
     static int& runShots(BubbleGame& game) { return game.runShots; }
-    static bool runUsedFireNext(const BubbleGame& game) { return game.runUsedFireNext; }
     static bool runCounts(const BubbleGame& game) { return game.RunCountsForScores(); }
     static void apply(BubbleGame& game, int idx, const PlayerControls& c) {
         game.ApplyPlayerControls(game.bubbleArrays[idx], c, 1.f);
@@ -1323,9 +1322,10 @@ int main() {
     }
 
     // ---- Fire next (1-player) ------------------------------------------
-    // The second trigger launches the next bubble, keeps the loaded one in
-    // the launcher, and draws a new next. Bound here to a pad button's
-    // virtual scancode, the one key state a headless test can hold down.
+    // The swap button: the first press pockets the loaded bubble and brings
+    // the next one up, firing nothing; every press after that fires the
+    // pocketed bubble and pockets the loaded one. Bound here to a pad
+    // button's virtual scancode, the one key state a headless test can hold.
     {
         GameSettings* gs = GameSettings::Instance();
         const PlayerKeys savedKeys = gs->player1Keys;
@@ -1344,37 +1344,68 @@ int main() {
         p.newShoot = true;
         CHECK(BubbleGameTestAccess::runCounts(game));
 
+        CHECK(p.pocketColor == -1);
+
+        // First press: pocket the 1, the 2 comes up, a new next is drawn.
+        hold(nextKey, true);
+        BubbleGameTestAccess::penguin(game, 0);
+        CHECK(singleBubbles.empty());
+        CHECK(p.pocketColor == 1);
+        CHECK(p.curLaunch == 2);
+        CHECK(p.nextBubble == 5);
+        CHECK(p.newShoot);
+        CHECK(p.lastControls.fire && p.lastControls.fireNext);
+
+        // Still held: the release interlock covers the swap button too.
+        BubbleGameTestAccess::penguin(game, 0);
+        CHECK(singleBubbles.empty());
+        CHECK(p.pocketColor == 1);
+        hold(nextKey, false);
+        BubbleGameTestAccess::penguin(game, 0);
+
+        // Second press: fire the pocketed 1; the loaded 2 takes the pocket
+        // and the 5 comes up.
         hold(nextKey, true);
         BubbleGameTestAccess::penguin(game, 0);
         CHECK(singleBubbles.size() == 1);
-        if (!singleBubbles.empty()) CHECK(singleBubbles.back().bubbleId == 2);
-        CHECK(p.curLaunch == 1);
-        CHECK(p.nextBubble == 5);
-        CHECK(p.lastControls.fire && p.lastControls.fireNext);
-        CHECK(BubbleGameTestAccess::runUsedFireNext(game));
-        CHECK(!BubbleGameTestAccess::runCounts(game));
-
-        // Still held once the shot has landed: the release interlock covers
-        // the second trigger too, so nothing fires again.
+        if (!singleBubbles.empty()) CHECK(singleBubbles.back().bubbleId == 1);
+        CHECK(p.pocketColor == 2);
+        CHECK(p.curLaunch == 5);
+        // It counts for highscores like any other shot (user decision).
+        CHECK(BubbleGameTestAccess::runCounts(game));
+        hold(nextKey, false);
         singleBubbles.clear();
         p.newShoot = true;
         BubbleGameTestAccess::penguin(game, 0);
-        CHECK(singleBubbles.empty());
-        hold(nextKey, false);
-        BubbleGameTestAccess::penguin(game, 0);
-        CHECK(singleBubbles.empty());
 
-        // The ordinary trigger still fires the loaded bubble.
+        // The ordinary trigger fires the loaded bubble and leaves the pocket.
         hold(fireKey, true);
         BubbleGameTestAccess::penguin(game, 0);
         CHECK(singleBubbles.size() == 1);
-        if (!singleBubbles.empty()) CHECK(singleBubbles.back().bubbleId == 1);
+        if (!singleBubbles.empty()) CHECK(singleBubbles.back().bubbleId == 5);
+        CHECK(p.pocketColor == 2);
         CHECK(!p.lastControls.fireNext);
         hold(fireKey, false);
 
-        // Mouse and touch: a right click, or a touch let go in the bottom
-        // half of the screen, is a skip shot; a left click or a high touch
-        // is not.
+        // A v2.4.140 replay's skip shot still fires the next bubble and keeps
+        // the loaded one, so old recordings play back as they were.
+        {
+            singleBubbles.clear();
+            p.curLaunch = 1;
+            p.nextBubble = 2;
+            p.newShoot = true;
+            PlayerControls c;
+            c.fire = c.fireNext = c.skipShotLegacy = true;
+            BubbleGameTestAccess::apply(game, 0, c);
+            CHECK(singleBubbles.size() == 1);
+            if (!singleBubbles.empty()) CHECK(singleBubbles.back().bubbleId == 2);
+            CHECK(p.curLaunch == 1);
+            CHECK(p.pocketColor == 2);   // untouched
+        }
+
+        // Mouse and touch: a right click, or a touch let go in the strip
+        // around the launcher, is the swap button; a left click or a high
+        // touch is not. With a 3 pocketed, the swap button fires the 3.
         BubbleGameTestAccess::settings(game).mouseEnabled = true;
         CHECK(game.RightClickIsSkipShot());
         p.shooterSprite.rect = {SCREEN_CENTER_X - 50, 480 - 123, 100, 100};   // the 1-player launcher
@@ -1382,19 +1413,20 @@ int main() {
         CHECK(!game.TouchIsSkipShot(391.f));
         CHECK(game.TouchIsSkipShot(392.f));
         struct { bool fromTouch, skip; int expect; } clicks[] = {
-            {false, true, 2}, {true, true, 2}, {false, false, 1}, {true, false, 1},
+            {false, true, 3}, {true, true, 3}, {false, false, 1}, {true, false, 1},
         };
         for (const auto& c : clicks) {
             singleBubbles.clear();
             p.curLaunch = 1;
             p.nextBubble = 2;
+            p.pocketColor = 3;
             p.newShoot = true;
             game.HandleMouseFire(c.fromTouch, c.skip);
             BubbleGameTestAccess::penguin(game, 0);
             CHECK(singleBubbles.size() == 1);
             if (!singleBubbles.empty()) CHECK(singleBubbles.back().bubbleId == c.expect);
             CHECK(p.lastControls.firedByMouse);
-            CHECK(p.lastControls.fireNext == (c.expect == 2));
+            CHECK(p.lastControls.fireNext == (c.expect == 3));
         }
         BubbleGameTestAccess::settings(game).mouseEnabled = false;
         CHECK(!game.RightClickIsSkipShot());   // no mouse aim: right click leaves, as before
@@ -1406,6 +1438,7 @@ int main() {
             BubbleArray& n = BubbleGameTestAccess::player(g, 0);
             n.curLaunch = 1;
             n.nextBubble = 2;
+            n.pocketColor = 3;
             n.newShoot = true;
             PlayerControls c;
             c.fire = c.fireNext = true;
@@ -1415,7 +1448,7 @@ int main() {
             return id;
         };
         BubbleGameTestAccess::reset(game, 2, true, false);
-        CHECK(skipFires(game) == 2);
+        CHECK(skipFires(game) == 3);
         BubbleGameTestAccess::settings(game).mouseEnabled = true;
         CHECK(game.RightClickIsSkipShot());
 

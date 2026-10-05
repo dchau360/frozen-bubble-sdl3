@@ -48,6 +48,21 @@ struct BubbleGameTestAccess {
     static bool modern(const BubbleGame& game) { return game.UsesModernHud(); }
     static bool pauseHit(const BubbleGame& game, float x, float y) { return game.PauseButtonHit(x, y); }
     static BubbleArray& player(BubbleGame& game) { return game.bubbleArrays[0]; }
+    // A swap press's slides, frozen `ms` into their run.
+    static void pocketSlides(BubbleGame& g, bool fire, Uint64 ms) {
+        BubbleArray& b = g.bubbleArrays[0];
+        g.pocketSlides.clear();
+        const SDL_Rect pocket = BubbleGame::PocketRect(b);
+        if (fire) {
+            g.StartPocketSlide(b.curLaunch, pocket, b.curLaunchRct, BubbleGame::PocketSlide::kNone, true);
+            g.StartPocketSlide(b.pocketColor, b.curLaunchRct, pocket, BubbleGame::PocketSlide::kPocket);
+        } else {
+            g.StartPocketSlide(b.pocketColor, b.curLaunchRct, pocket, BubbleGame::PocketSlide::kPocket);
+            g.StartPocketSlide(b.curLaunch, b.nextBubbleRct, b.curLaunchRct, BubbleGame::PocketSlide::kLauncher);
+        }
+        for (auto& s : g.pocketSlides) s.startMs = SDL_GetTicks() - ms;
+    }
+    static size_t slideCount(const BubbleGame& g) { return g.pocketSlides.size(); }
     static void finish(BubbleGame& game, bool won, bool prompt) {
         game.gameFinish = true;
         game.gameWon = won;
@@ -126,27 +141,46 @@ int main() {
         BubbleGameTestAccess::player(game).score = 1234;
         BubbleGameTestAccess::setRun(game, 17);
         BubbleGameTestAccess::popups(game);
-        // The Skip shot hint comes with a run until the player has used it.
+        // The Swap hint comes with every run.
         CHECK(BubbleGameTestAccess::skipHintPending(game));
         BubbleGameTestAccess::draw(game);
         BubbleGameTestAccess::skipHintShownFor(game, 1000);
         BubbleGameTestAccess::draw(game);
         Dump(renderer, "1d-skip-hint");
         CHECK(game.SkipShotHintLine().find("Right Shift") != std::string::npos);
+        CHECK(game.SkipShotHintLine().find("Swap") == 0);
         BubbleGameTestAccess::skipHintShownFor(game, BubbleGame::kSkipShotHintMs);
         for (int i = 0; i < 40; ++i) BubbleGameTestAccess::draw(game);  // let the score count up
         CHECK(!BubbleGameTestAccess::skipHintPending(game));   // timed out
         Dump(renderer, "1-playing");
+        // A bubble in the swap pocket, beside the next one.
+        BubbleGameTestAccess::player(game).pocketColor = 3;
+        BubbleGameTestAccess::draw(game);
+        Dump(renderer, "1e-pocket");
+        // Pocketing, part way: the loaded bubble on its way down-left into the
+        // pocket, the next one on its way up into the launcher.
+        for (Uint64 ms : {40, 90}) {
+            BubbleGameTestAccess::pocketSlides(game, false, ms);
+            BubbleGameTestAccess::draw(game);
+            Dump(renderer, ("1f-pocketing-" + std::to_string(ms)).c_str());
+        }
+        // Firing the pocket: the pocketed bubble darts up into the shot.
+        for (Uint64 ms : {40, 90}) {
+            BubbleGameTestAccess::pocketSlides(game, true, ms);
+            BubbleGameTestAccess::draw(game);
+            Dump(renderer, ("1g-pocket-fire-" + std::to_string(ms)).c_str());
+        }
+        BubbleGameTestAccess::pocketSlides(game, false, BubbleGame::kPocketSlideMs);
+        BubbleGameTestAccess::draw(game);
+        CHECK(BubbleGameTestAccess::slideCount(game) == 0);   // over, and dropped
+        BubbleGameTestAccess::player(game).pocketColor = -1;
 
-        // Once a skip shot has been fired, no run shows it again.
-        settings->MarkSkipShotLearned();
+        // The next run shows it again (user decision: no "learned" switch).
         {
             BubbleGame again(renderer);
             again.NewGame(setup);
-            CHECK(!BubbleGameTestAccess::skipHintPending(again));
+            CHECK(BubbleGameTestAccess::skipHintPending(again));
         }
-        settings->ReadSettings();
-        CHECK(settings->skipShotLearned());   // and it was saved
 
         // The pause button, top right; the board itself is not part of it.
         CHECK(BubbleGameTestAccess::pauseHit(game, 616, 24));

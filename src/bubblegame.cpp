@@ -169,6 +169,10 @@ BubbleGame::BubbleGame(const SDL_Renderer *renderer)
     skipShotHintText.UpdateStyle(14, TTF_STYLE_BOLD);
     skipShotHintText.UpdateColor({255, 255, 255, 255}, {0, 0, 0, 0});
 
+    pocketLabelText.LoadFont(ASSET("/gfx/DroidSans.ttf").c_str(), 9);
+    pocketLabelText.UpdateStyle(9, TTF_STYLE_BOLD);
+    pocketLabelText.UpdateColor(modernui::kInk, {0, 0, 0, 0});
+
     scorePopupText.LoadFont(ASSET("/gfx/DroidSans.ttf").c_str(), 20);
     scorePopupText.UpdateAlignment(TTF_HORIZONTAL_ALIGN_CENTER);
     scorePopupText.UpdateStyle(20, TTF_STYLE_BOLD);
@@ -373,6 +377,7 @@ static void ResetRoundInputState(BubbleArray &player) {
     player.mpFirePending = false;
     player.pendingAngle = PI / 2.0f;
     player.pendingLaunchColor = -1;
+    player.pocketColor = -1;   // the swap pocket starts every level empty
     player.mpStickPending = false;
     player.stickCx = player.stickCy = player.stickCol = 0;
     player.stickAnimActive = false;
@@ -489,10 +494,9 @@ void BubbleGame::NewGame(SetupSettings setup) {
     hudShownScore = 0;
     curLevel = setup.startLevel;
     runShots = 0;
-    runUsedFireNext = false;
-    skipShotHintPending = setup.playerCount == 1 && !setup.networkGame && !setup.localMultiplayer &&
-                          !GameSettings::Instance()->skipShotLearned();
+    skipShotHintPending = setup.playerCount == 1 && !setup.networkGame && !setup.localMultiplayer;
     skipShotHintStartMs = 0;
+    pocketSlides.clear();
     runEligibleForWorld = !setup.networkGame && setup.playerCount == 1 && !setup.randomLevels &&
                           !setup.mpTraining && !setup.localMultiplayer && setup.startLevel == 1;
     connectedPlayerCount = setup.playerCount;  // Reset connected count for new game

@@ -24,6 +24,7 @@
 #include <vector>
 
 #include "platform.h"
+#include "sdl3_compat.h"
 
 namespace modernui {
 
@@ -309,6 +310,33 @@ void DrawPopup(SDL_Renderer* rend, TTFText& text, const std::string& label, int 
     SDL_FRect fr = {x - w / 2, y - h / 2 - 32 * t, w, h};
     SDL_RenderTexture(rend, tex, nullptr, &fr);
     SDL_SetTextureAlphaMod(tex, 255);
+}
+
+void DrawPocketWell(SDL_Renderer* rend, TTFText& tag, SDL_FRect r, SDL_Texture* bubble, bool lit) {
+    const float cx = r.x + r.w / 2.f, cy = r.y + r.h / 2.f, rad = r.w / 2.f + 3;
+    const SDL_FRect well = {cx - rad, cy - rad, 2 * rad, 2 * rad};
+
+    // A round well: a soft shadow, a dark bowl with a lighter lip along its
+    // bottom, and an ice rim that brightens when a bubble is held, so the
+    // slot reads as a place even while it is empty.
+    SDL_SetRenderDrawBlendMode(rend, SDL_BLENDMODE_BLEND);
+    FillRoundRect(rend, {well.x, well.y + 2, well.w, well.h}, rad, {0, 0, 0, 90});
+    FillRoundRect(rend, well, rad, {10, 22, 44, 225});
+    FillRoundRect(rend, {well.x + 3, well.y + 3, well.w - 6, well.h - 6}, rad - 3, {22, 44, 78, 200});
+    FillRoundRect(rend, {well.x + 3, well.y + 2, well.w - 6, well.h - 9}, rad - 4, {6, 14, 30, 210});
+    if (bubble) SDL_RenderTexture(rend, bubble, nullptr, &r);
+    StrokeRoundRect(rend, well, rad, 2, {kIce.r, kIce.g, kIce.b, (Uint8)(lit ? 255 : 160)});
+
+    // "SWAP" on a tag across the top of the rim.
+    tag.UpdateText(rend, "SWAP", 0);
+    if (SDL_Texture* tex = tag.Texture()) {
+        const SDL_Rect* c = tag.Coords();
+        const SDL_FRect t = {cx - c->w / 2.f - 5, well.y - c->h / 2.f - 2, c->w + 10.f, (float)c->h + 2};
+        FillRoundRect(rend, t, t.h / 2, lit ? kIce : SDL_Color{127, 214, 255, 210});
+        tag.UpdatePosition({(int)(cx - c->w / 2.f), (int)(t.y + 1)});
+        SDL_FRect fr = ToFRect(*tag.Coords());
+        SDL_RenderTexture(rend, tex, nullptr, &fr);
+    }
 }
 
 }  // namespace modernui

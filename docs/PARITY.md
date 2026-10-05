@@ -81,7 +81,7 @@ twenty, which needed new UI to be playable at all:
 | 17 | **Shot count** — the run's shots under the score, kept with each high-score record and on the online Level board | v2.4.128 |
 | 18 | **Run time on screen** — the whole run's clock, the one the high-score tables use: TIME in the modern theme's panel (v2.4.133), "Time: 3'07"" under the shots in the original theme (next release) | v2.4.133 |
 | 19 | **1-player aim guide** — the bounce line for your shot; a run played with it on is kept out of every high-score table, and START offers to turn it off first | v2.4.132 |
-| 20 | **Skip shot** (1-player and online) — a second fire key (or a right click, or a touch on the strip around the launcher) that shoots the next bubble at once and keeps the loaded one, Bust-a-Move's swap and shot in one press; a run that uses it is kept out of every high-score table | — |
+| 20 | **Swap pocket** (1-player and online) — a second button (or a right click, or a touch on the strip around the launcher) and a pocket beside the next bubble: the first press pockets the loaded bubble, each press after that shoots the pocketed one and pockets the loaded one. It counts for the high-score tables like any other shot. Shipped in v2.4.140 as Skip shot, which shot the next bubble in one press | v2.4.140 |
 | 21 | **Name prompt** — START asks for a name when online highscores are on and none is set, so runs don't reach the board as `unnamed` | v2.4.124 |
 
 ### Look and feel

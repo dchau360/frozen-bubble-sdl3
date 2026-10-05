@@ -231,8 +231,9 @@ static std::vector<int> CollectBubbleIds(BubbleGame& game, int seat) {
 // in the top row, with the launcher holding a third of the same color. The
 // fired bubble lands as the third member of the group, CheckPossibleDestroy
 // pops all three, and CheckGameState sees allClear() -> gameWon.
-// A skip shot is the only way to clear this board on the first shot: the
-// loaded bubble does not match, the next one does.
+// The swap button is the only way to clear this board with the first shot:
+// the loaded bubble does not match, the next one does, and pocketing the
+// loaded one brings the next one up.
 static void SetupSkipShotBoard(BubbleGame& game) {
     BubbleArray& p = BubbleGameTestAccess::player(game, 0);
     ClearBoard(p);
@@ -662,7 +663,8 @@ static ReplayResult RunReplay(SDL_Renderer* renderer, const CapturedRecording& r
                 c.right = s.right != 0;
                 c.center = s.center != 0;
                 c.fire = s.fire != 0;
-                c.fireNext = s.fire == 2;
+                c.fireNext = s.fire == 2 || s.fire == 3;
+                c.skipShotLegacy = s.fire == 2;
                 c.firedByMouse = s.firedByMouse != 0;
                 c.mouseAngle = s.mouseAngle;
                 BubbleGameTestAccess::player(game, (int)s.seatId).lastControls = c;
@@ -941,7 +943,7 @@ int main() {
         CheckHashSequence("win disk replay", rec.liveHashes, diskReplay.hashes);
     }
 
-    // --- Skip shot: fire the next bubble, recorded as fire=2 ----------------
+    // --- Swap: pocket the loaded bubble (fire=3), then fire the next one ----
     {
         GameSettings* gs = GameSettings::Instance();
         const SDL_Scancode savedNext = gs->player1Keys.fireNext;
@@ -951,22 +953,24 @@ int main() {
         // a round starts with the fire interlock set (NewGame) and only a
         // step with the key up clears it.
         script[0].fire = false;
-        script[1].aim = true;
-        script[1].angle = PI / 2.0f;
-        script[1].fireNext = true;
+        script[1].fireNext = true;     // pockets the 2; the 5 comes up
+        script[3].aim = true;
+        script[3].angle = PI / 2.0f;
+        script[3].fire = true;         // fires the 5
         CapturedRecording rec = RunLiveRound(renderer, solo, 20261004u, SetupSkipShotBoard, script);
         gs->player1Keys.fireNext = savedNext;
         virtualKeyState[VirtualScancode(0, SDL_GAMEPAD_BUTTON_WEST) - CTRL_SC_BASE] = false;
 
         CHECK(rec.liveGameWon == true);
-        CHECK(rec.steps.size() > 1 && rec.steps[0].fire == 0 && rec.steps[1].fire == 2);
+        CHECK(rec.steps.size() > 3 && rec.steps[0].fire == 0 && rec.steps[1].fire == 3 &&
+              rec.steps[3].fire == 1);
 
         CapturedRecording decoded;
         CHECK(DecodeRecording(EncodeRecording(rec), decoded, rec.playerCount));
-        CHECK(decoded.steps.size() > 1 && decoded.steps[1].fire == 2);
+        CHECK(decoded.steps.size() > 1 && decoded.steps[1].fire == 3);
         ReplayResult replay = RunReplay(renderer, decoded);
         CHECK(replay.outcome == kReplayOutcomeWin);
-        CheckHashSequence("skip shot replay", rec.liveHashes, replay.hashes);
+        CheckHashSequence("swap replay", rec.liveHashes, replay.hashes);
     }
 
     // --- Round 2: loss via danger zone after a wall/ceiling hit -------------
@@ -1540,10 +1544,11 @@ int main() {
         CHECK(disk.networkSends == 0);
     }
 
-    // --- Skip shot in a network round ---------------------------------------
-    // Seat 0 skip-shoots: its 'f' carries the launched colour after a ';'
-    // (older readers stop before it). The remote peer's 'f' carries one too,
-    // and that colour -- not whatever seat 1 had loaded here -- is what flies.
+    // --- Swap in a network round ---------------------------------------------
+    // Seat 0 pockets its loaded bubble, then fires the pocket: its 'f' carries
+    // the launched colour after a ';' (older readers stop before it). The
+    // remote peer's 'f' carries one too, and that colour -- not whatever seat
+    // 1 had loaded here -- is what flies.
     {
         GameSettings* gs = GameSettings::Instance();
         const SDL_Scancode savedNext = gs->player1Keys.fireNext;
@@ -1558,9 +1563,10 @@ int main() {
             BubbleGameTestAccess::player(g, 1).curLaunch = 4;
         };
         std::vector<StepScript> script = IdleFor(40);
-        script[1].aim = true;
-        script[1].angle = PI / 2.0f;
-        script[1].fireNext = true;   // step 0 clears the round-start interlock
+        script[1].fireNext = true;   // step 0 clears the round-start interlock; pockets the 1
+        script[3].aim = true;
+        script[3].angle = PI / 2.0f;
+        script[3].fireNext = true;   // fires the pocketed 1, pockets the 2
         script[5].inboundWire.push_back("GAMEMSG:1:f1.571:3;6");
         script[10].inboundWire.push_back("GAMEMSG:1:s2:0:6:1 2 3 4 5 6 7 0");
         NetworkClient::Instance()->testGameDataLog.clear();
@@ -1568,15 +1574,16 @@ int main() {
         gs->player1Keys.fireNext = savedNext;
         virtualKeyState[VirtualScancode(0, SDL_GAMEPAD_BUTTON_WEST) - CTRL_SC_BASE] = false;
 
-        CHECK(rec.steps.size() > 2 && rec.steps[2].seatId == 0 && rec.steps[2].fire == 2);
+        CHECK(rec.steps.size() > 6 && rec.steps[2].seatId == 0 && rec.steps[2].fire == 3 &&
+              rec.steps[6].seatId == 0 && rec.steps[6].fire == 3);
         std::string sentFire;
         for (const std::string& m : NetworkClient::Instance()->testGameDataLog)
             if (!m.empty() && m[0] == 'f') { sentFire = m; break; }
         CHECK(!sentFire.empty());
-        // The launched colour is the one that was next (2); the loaded one (1)
-        // stays, so the new next is what comes after the ':'.
+        // The launched colour is the pocketed one (1). Pocketing alone sent
+        // nothing, so this is the round's first 'f'.
         const size_t semi = sentFire.find(';');
-        CHECK(semi != std::string::npos && sentFire.substr(semi) == ";2");
+        CHECK(semi != std::string::npos && sentFire.substr(semi) == ";1");
         CHECK(rec.liveSeat1LaunchId == 6);
 
         RunAndCompare(renderer, "net-skip-shot", rec);

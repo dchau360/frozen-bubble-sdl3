@@ -896,10 +896,11 @@ StepRecord CaptureStep(const BubbleGame &game, int seatId) {
     s.left = p.lastControls.left ? 1 : 0;
     s.right = p.lastControls.right ? 1 : 0;
     s.center = p.lastControls.center ? 1 : 0;
-    // 2 = fire the next bubble (PlayerControls::fireNext). An older build
-    // reads any nonzero byte as a plain shot, so it would fire the loaded
-    // bubble and drift from such a recording.
-    s.fire = !p.lastControls.fire ? 0 : p.lastControls.fireNext ? 2 : 1;
+    // 3 = the swap button (PlayerControls::fireNext); 2 was v2.4.140's skip
+    // shot, still read back by ReplayPlayer but never written. An older
+    // build reads any nonzero byte as a plain shot, so it would drift from
+    // such a recording.
+    s.fire = !p.lastControls.fire ? 0 : p.lastControls.fireNext ? 3 : 1;
     s.firedByMouse = p.lastControls.firedByMouse ? 1 : 0;
     s.mouseAngle = p.lastControls.mouseAngle;
     // The step's inbound network payloads are a property of the step, not of

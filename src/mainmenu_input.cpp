@@ -56,6 +56,7 @@ void MainMenu::HandleInput(SDL_Event *e){
     if (TournamentPanelKey(e)) return;
     if (WeeklyPanelKey(e)) return;
     if (AccountPanelKey(e)) return;
+    if (HowToKey(e)) return;
     if (SPAimPromptKey(e)) return;
     if (SPNamePromptKey(e)) return;
     switch(e->type) {
@@ -856,6 +857,8 @@ bool MainMenu::KeysPanelKey(SDL_Event *e) {
                                 AudioMixer::Instance()->PlaySFX("menu_selected");
                             }
 #endif
+                        } else if (keyConfigIndex == kKeyRowHowTo) {
+                            OpenHowTo();
                         } else if (keyConfigIndex == kKeyRowReplays) {
                             // Open the full-screen Replays page
                             // (mainmenu_replays.cpp). The CONTROLS & SETTINGS

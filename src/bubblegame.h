@@ -410,6 +410,12 @@ struct BubbleArray {
     // Launched instead of this board's own curLaunch: a skip shot fires the
     // next bubble, and a peer has no other way to know.
     int pendingLaunchColor = -1;
+    // The swap pocket (PlayerControls::fireNext): -1 empty, else the colour
+    // held there. The first press pockets the loaded bubble; every press
+    // after that fires the pocketed one and pockets the loaded one instead.
+    // Emptied at every level/round start (ResetRoundInputState). Only the
+    // local player's board ever fills it: a peer's pocket is not on the wire.
+    int pocketColor = -1;
     bool mpStickPending = false; // Set to true when we receive 's' message, cleared after sticking
     int stickCx = 0, stickCy = 0, stickCol = 0;  // Stick position and color from 's' message
 
@@ -726,21 +732,14 @@ public:
     bool continuePrompt = false;
     bool continueFocusStartOver = false;
     SDL_Rect continueBtnRect{}, startOverBtnRect{};
-    // False for a run played with the aim guide on, or one that has fired
-    // the next bubble (runUsedFireNext): it reaches no highscore table,
-    // local or online (SubmitScore, RecordWorldLife, MP training).
-    bool RunCountsForScores() const { return !bubbleArrays[0].aimGuideEnabled && !runUsedFireNext; }
-    // The "fire next" key (PlayerKeys::fireNext): one-player, non-network
-    // games only. A network peer launches its own copy of the shooter's
-    // loaded bubble from the 'f' message, so firing the next one there would
-    // put a different colour on each screen.
+    // False for a run played with the aim guide on: it reaches no highscore
+    // table, local or online (SubmitScore, RecordWorldLife, MP training).
+    // Skip shot does not affect this (user decision): it counts like any
+    // other shot.
+    bool RunCountsForScores() const { return !bubbleArrays[0].aimGuideEnabled; }
+    // Skip shot (PlayerKeys::fireNext, a right click, a low touch): one-player
+    // and network games, not local multiplayer. See the definition.
     bool FireNextAllowed() const;
-    // Set the first time the run fires the next bubble; zeroed with
-    // runShots (NewGame, START OVER) and kept through CONTINUE. A run that
-    // has used it no longer counts for highscores (user-facing rule: it is a
-    // new way to shoot the original game never had, so it would not be a
-    // fair comparison with runs on the same boards without it).
-    bool runUsedFireNext = false;
     bool ArcadeContinueApplies() const;
     void ResolveContinuePrompt(bool startOver);
     void RenderContinuePrompt(SDL_Renderer *rend);
@@ -1007,15 +1006,40 @@ private:
 
     TTFText scorePopupText;
     // The Skip shot hint: one line over the bottom of the board for the
-    // first seconds of a 1-player run, naming this player's own controls,
-    // until they have fired a skip shot once (GameSettings::skipShotLearned).
+    // first seconds of every 1-player run (level 1 and Start over), naming
+    // this player's own controls; firing a skip shot puts it away early.
     // Display only, like the score popups.
     TTFText skipShotHintText;
+    TTFText pocketLabelText;   // the "SWAP" tag on the pocket (DrawPocket)
+    // A bubble sliding between the launcher, the next slot and the pocket
+    // when the swap button is pressed, kPocketSlideMs long. Display only, like
+    // the score popups: the swap itself has already happened in the
+    // simulation, and while a slide is headed for the launcher or the pocket
+    // the bubble resting there is not drawn. Player 1's board only.
+    struct PocketSlide {
+        enum { kNone, kPocket, kLauncher };
+        int color;
+        SDL_Rect from, to;
+        Uint64 startMs;
+        int into;
+        bool fade;   // the pocketed bubble heading into the shot it becomes
+    };
+    std::vector<PocketSlide> pocketSlides;
+    void StartPocketSlide(int color, SDL_Rect from, SDL_Rect to, int into, bool fade = false);
+    bool PocketSlideInto(int into) const;
+    void DrawPocketSlides(SDL_Renderer *rend, SDL_Texture **bubbles);
     bool skipShotHintPending = false;
     Uint64 skipShotHintStartMs = 0;
     void DrawSkipShotHint(SDL_Renderer *rend);
+    // The swap pocket (BubbleArray::pocketColor), drawn beside the next
+    // bubble on the local player's board whenever FireNextAllowed().
+    void DrawPocket(SDL_Renderer *rend, const BubbleArray &b, SDL_Texture **bubbles);
+public:
+    static SDL_Rect PocketRect(const BubbleArray &b);
+private:
 public:
     static constexpr Uint64 kSkipShotHintMs = 7000;
+    static constexpr Uint64 kPocketSlideMs = 150;
     std::string SkipShotHintLine() const;
 private:
     TTFText clearStatsText;  // the classic win panel's time/bonus and score lines

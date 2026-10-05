@@ -67,6 +67,10 @@
 // a bare 5 so SPPanelRender and press()/up()/down() (mainmenu.cpp) can't
 // drift apart.
 #define kSPRowWorldScores 5
+// Opens the How to play page (mainmenu_howto.cpp). It took the slot of
+// Local multiplayer, which the title screen's 2P button already opens (user
+// decision).
+#define kSPRowHowTo 4
 // The 1-player aim guide toggle (GameSettings::spAimGuideEnabled()). A run
 // played with it on never reaches any highscore table -- local or online --
 // and START asks to turn it off first (mainmenu_spaim.cpp).
@@ -668,6 +672,22 @@ private:
     bool spNamePromptAsked = false;  // this session; never asked twice
     int spNameFocus = 0;             // 0 Save and play, 1 Skip
     char spNameInput[16] = "";
+
+    // How to play (mainmenu_howto.cpp): a full-screen page with a picture
+    // of the launcher, the next bubble and the Swap pocket, each labelled
+    // with this player's own control, and how a swap goes. Opened from the
+    // 1-player menu (kSPRowHowTo) and from CONTROLS & SETTINGS
+    // (kKeyRowHowTo); like the account screen it draws in place of the panel
+    // that opened it, which stays open behind it.
+    void OpenHowTo();
+    void CloseHowTo();
+    void HowToRender();
+    bool HowToKey(SDL_Event* e);
+    void FreeHowTo();
+    bool showingHowTo = false;
+    int howToSelection = 0;       // the one tap row, Done
+    struct HowToText;
+    HowToText* howTo = nullptr;   // fonts and textures, made on first draw
 
     void OpenAccountPanel();
     void CloseAccountPanel();

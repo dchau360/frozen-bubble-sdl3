@@ -276,6 +276,7 @@ MainMenu::~MainMenu() {
         SDL_DestroyTexture(spLabelActive[i]);
     }
     FreeSPModern();
+    FreeHowTo();
     FreeSettingsModern();
     FreeRoomModern();
 }
@@ -379,15 +380,7 @@ void MainMenu::press() {
         else if (activeSPIdx == 1) BeginSoloStart(5);
         else if (activeSPIdx == 2) ShowPanel(1);
         else if (activeSPIdx == 3) BeginSoloStart(6);
-        else if (activeSPIdx == 4) {
-            // Local multiplayer: open sub-panel to pick player count
-            showingSPPanel = false;
-            showingLocalMPPanel = true;
-            localMPMenuIndex = 0;
-            localMPPlayerCount = 2;
-            localMPCR = true;
-            runDelay = false;
-        }
+        else if (activeSPIdx == kSPRowHowTo) OpenHowTo();
         else if (activeSPIdx == kSPRowWorldScores) {
             // Either direction is a plain flip: the setting only stops or
             // resumes sending, and the privacy policy is where it is described.

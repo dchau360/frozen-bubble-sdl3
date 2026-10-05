@@ -213,16 +213,6 @@ bool GameSettings::DefaultMouseEnabled()
 #endif
 }
 
-void GameSettings::MarkSkipShotLearned()
-{
-    if (skipShotLearnedFlag) return;
-    skipShotLearnedFlag = true;
-    if (!optDict) return;
-    iniparser_set(optDict, "Game", NULL);   // the dump writes only sections with a header
-    iniparser_set(optDict, "Game:SkipShotLearned", "true");
-    SaveSettings();
-}
-
 void GameSettings::ResetToDefaults()
 {
     // Rewrite the file, then read it back rather than assigning defaults to the
@@ -307,7 +297,6 @@ void GameSettings::ReadSettings()
     showFps = iniparser_getboolean(optDict, "GFX:ShowFPS", false);
     worldHighscores = iniparser_getboolean(optDict, "Stats:WorldHighscores", true);
     spAimGuide = iniparser_getboolean(optDict, "Game:SPAimGuide", false);
-    skipShotLearnedFlag = iniparser_getboolean(optDict, "Game:SkipShotLearned", false);
     // Both inputs until the player picks: one list, each entry badged.
     scoreTrackMask = iniparser_getint(optDict, "Stats:ScoreTracks", 3);
     if (scoreTrackMask < 1 || scoreTrackMask > 3) scoreTrackMask = 3;

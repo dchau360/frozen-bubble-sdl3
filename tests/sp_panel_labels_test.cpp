@@ -30,7 +30,7 @@
 // TTF_RenderText_Blended call fails silently into a null texture, which
 // SPPanelRender already tolerates by skipping the draw, so a blank row would
 // not otherwise be caught here); and rows 3 and 4 (Multiplayer training,
-// Local multiplayer) render to different widths, which is what the original
+// then Local multiplayer, now How to play) render to different widths, which is what the original
 // duplicate-asset bug looked like at the pixel level -- both baked PNGs were
 // 193x38, because they were the same file.
 
@@ -91,7 +91,8 @@ int main() {
         CHECK(size.y > 0);
     }
 
-    // Row 3 (Multiplayer training) and row 4 (Local multiplayer): the two
+    // Row 3 (Multiplayer training) and row 4 (Local multiplayer then, How to
+    // play now): the two
     // that shared one baked asset before this fix. Different wording at the
     // same font/size has to measure differently -- a regression that
     // reintroduces the old duplicate (whether by asset or by copy-pasted

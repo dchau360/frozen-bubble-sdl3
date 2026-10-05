@@ -60,6 +60,7 @@ struct MainMenuTestAccess {
     static int Player(const MainMenu& m) { return m.keyConfigPlayer; }
     static bool Awaiting(const MainMenu& m) { return m.awaitKp; }
     static bool Armed(const MainMenu& m) { return m.resetAllArmed; }
+    static bool HowTo(const MainMenu& m) { return m.showingHowTo; }
     static bool IsOpen(const MainMenu& m) { return m.showingKeysPanel; }
     static void Render(MainMenu& m) { m.KeysPanelRender(); }
     static void Key(MainMenu& m, SDL_Keycode key, SDL_Scancode sc = SDL_SCANCODE_UNKNOWN) {
@@ -207,10 +208,20 @@ int main() {
         CHECK(MainMenuTestAccess::Selected(*menu) != kKeyRowFireNext);
         MainMenuTestAccess::Key(*menu, SDLK_1);
 
+        // How to play (y 264..300): the second tap opens the page over the
+        // panel, ESC closes it back to the panel.
+        MainMenuTestAccess::Tap(*menu, 400, 284);
+        CHECK(MainMenuTestAccess::Selected(*menu) == kKeyRowHowTo);
+        MainMenuTestAccess::Tap(*menu, 400, 284);
+        CHECK(MainMenuTestAccess::HowTo(*menu));
+        MainMenuTestAccess::Key(*menu, SDLK_ESCAPE);
+        CHECK(!MainMenuTestAccess::HowTo(*menu));
+        CHECK(MainMenuTestAccess::IsOpen(*menu));
+
         // Reset all settings: the second tap only arms it.
-        MainMenuTestAccess::Tap(*menu, 400, 324);
+        MainMenuTestAccess::Tap(*menu, 400, 364);
         CHECK(MainMenuTestAccess::Selected(*menu) == kKeyRowResetAll);
-        MainMenuTestAccess::Tap(*menu, 400, 324);
+        MainMenuTestAccess::Tap(*menu, 400, 364);
         CHECK(MainMenuTestAccess::Armed(*menu));
         CHECK(settings->player1Keys.fire == SDL_SCANCODE_SPACE);
         SDL_DestroySurface(Draw(renderer, *menu, "settings-modern-reset"));

@@ -371,6 +371,27 @@ void BubbleGame::ApplyPlayerControls(BubbleArray &bArray, const PlayerControls &
     // For remote players (mp_fire), fire immediately regardless of newShoot state
     // For local players, only fire if newShoot is true (no bubble currently in flight)
     if(bArray.mpFirePending || (!localMalusInFlight && bArray.shooterAction == true && bArray.newShoot == true)) {
+        // The swap button with the pocket empty: the loaded bubble goes into
+        // the pocket and the next one comes up, and nothing is fired. Not
+        // through PickNextBubble, which also rotates nextColors -- that queue
+        // moves once per shot, and its 's' copy keeps peers' root rows right.
+        if (controls.fireNext && !controls.skipShotLegacy && !bArray.mpFirePending &&
+            FireNextAllowed() && bArray.pocketColor < 0) {
+            if (&bArray == &bubbleArrays[0]) {
+                StartPocketSlide(bArray.curLaunch, bArray.curLaunchRct, PocketRect(bArray), PocketSlide::kPocket);
+                StartPocketSlide(bArray.nextBubble, bArray.nextBubbleRct, bArray.curLaunchRct, PocketSlide::kLauncher);
+            }
+            bArray.pocketColor = bArray.curLaunch;
+            bArray.curLaunch = bArray.nextBubble;
+            const std::vector<int> remaining = bArray.remainingBubbles();
+            if (!remaining.empty())
+                bArray.nextBubble = remaining[rng.Range(1, remaining.size()) - 1];
+            if (EffectsEnabled()) skipShotHintPending = false;   // the hint has done its job
+            PlaySFX("menu_change");
+            bArray.shooterAction = false;
+            bArray.suppressFireUntilRelease = true;
+            return;
+        }
         penguin.sleeping = 0;
         if(penguin.curAnimation != 1) penguin.PlayAnimation(1);
 
@@ -410,16 +431,22 @@ void BubbleGame::ApplyPlayerControls(BubbleArray &bArray, const PlayerControls &
                 scoringInputMethod = ScoringInputMethod::Keyboard;
         }
 
-        // Fire next: launch the next bubble and keep the loaded one, which
-        // LaunchBubble's PickNextBubble then moves back into the launcher
-        // with a new next drawn behind it -- Bust-a-Move's swap-then-fire
-        // in one press.
+        // The swap button with a bubble pocketed: fire the pocketed one and
+        // pocket the loaded one; LaunchBubble's PickNextBubble then brings
+        // the next bubble up as usual. A v2.4.140 replay's skip shot fires
+        // the next bubble instead and keeps the loaded one.
         if (controls.fireNext && !bArray.mpFirePending && FireNextAllowed()) {
-            std::swap(bArray.curLaunch, bArray.nextBubble);
-            runUsedFireNext = true;
-            if (EffectsEnabled()) {
-                GameSettings::Instance()->MarkSkipShotLearned();
-                skipShotHintPending = false;   // the hint has done its job
+            if (controls.skipShotLegacy)
+                std::swap(bArray.curLaunch, bArray.nextBubble);
+            else {
+                // On screen the pocketed bubble darts up into the shot and
+                // the loaded one drops into the pocket.
+                if (&bArray == &bubbleArrays[0]) {
+                    StartPocketSlide(bArray.pocketColor, PocketRect(bArray), bArray.curLaunchRct,
+                                     PocketSlide::kNone, true);
+                    StartPocketSlide(bArray.curLaunch, bArray.curLaunchRct, PocketRect(bArray), PocketSlide::kPocket);
+                }
+                std::swap(bArray.curLaunch, bArray.pocketColor);
             }
         }
         LaunchBubble(bArray);
