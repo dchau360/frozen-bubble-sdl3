@@ -6,59 +6,24 @@
   logo (`share/gfx/menu/fblogo.png`) and bubble sprites (`share/gfx/balls/`),
   composited on a gradient echoing the title screen's two glass panels.
   Meets Play's feature graphic spec exactly.
-- **`screenshot-3-round-stats.png`** (640×480, 24-bit RGB, no alpha) — a real
-  capture from a live build (same source as the one in
-  [`docs/screenshots/`](../screenshots), alpha-flattened for Play's
-  requirements). Landscape, not portrait: the game is TV/landscape-first
-  and this is honest to how it actually looks, which is fine — Play doesn't
-  require portrait screenshots, just 2–8 images between 320px and 3840px per
-  side with an aspect ratio no more extreme than 2:1. Recaptured 2026-09-05
-  on the same tablet/local-server rig as the game-room and Set Teams shots,
-  from a 5-player room with two players on teams — the stats table now
-  shows a **TEAM TOTALS** section (Team 2, Team 5) rolling up Win/Fire/Pop/
-  Sent/Rcv/Blk/KO for each team underneath the per-player rows, confirming
-  the round-stats team aggregation renders correctly. The previous capture
-  had no teams in play and only showed the per-player rows.
-- **`screenshot-1-follow-server.png`**, **`screenshot-4-local-2player.png`**,
-  **`screenshot-6-net-5player.png`** (800×600, 24-bit RGB) — gameplay/menu
-  captures taken on a real Android tablet with `adb screenrecord`/`screencap`,
-  cropped to the game viewport (the app renders 4:3 letterboxed inside the
-  device's landscape screen, so the status and navigation bars are cropped
-  away). The 5-player shot is a live network game against four headless
-  `tools/net_bots.py` clients, captured after the long-nickname roster fix in
-  `37e0237c` — an earlier capture of the same scene showed a phantom sixth
-  player and is not the one checked in here. The follow-server shot was
-  recaptured after the full-screen `menulist`-based menu redesign
-  (`src/menulist.h`/`.cpp`): a locally hosted `fb-server` reached over
-  `adb reverse tcp:1511 tcp:<port>`, same rig as the promo-video steps below.
-  Superseded a previous 640×480 WASM-canvas capture, which still showed the
-  old wood-popup panels.
-- **`screenshot-2-game-room.png`** (800×600, 24-bit RGB) — the game room a
-  host sees before starting a match: 5 players (host + 4 bots), the **Set
-  Teams** button in the players panel header, and the **Team** row now
-  present in the match-rules table. Recaptured 2026-09-05 on the same
-  tablet/local-server rig, after teams became a per-player setting available
-  in every mode (`db4b580c`) rather than a separate "Team Mode" — the
-  previous capture predated that and still showed the old mode-only rules
-  table with no Team row or Set Teams button.
-- **`screenshot-5-set-teams.png`** (800×600, 24-bit RGB) — new: the
-  full-screen **Set Teams** picker (per-player team assignment, plus the
-  host's Auto 2/3/4/5 round-robin buttons), captured mid-Auto-3 so the team
-  colors are visible. Same capture session as the game-room shot above. This
-  page had a real rendering bug at capture time — it never painted its own
-  backdrop before drawing its translucent panel, unlike every other
-  full-screen page (`HelpPanelRender`, etc.), so the game room it was opened
-  from showed straight through and its header text ("SET TEAMS") visibly
-  merged with the room header's ("GAME ROOM") underneath. Fixed in
-  `f41bcac3` (`TeamsPanelRender` now calls `menulist::DrawWorldMapBackdrop`
-  first, same as every sibling page) before this screenshot was taken.
-- **`screenshot-7-main-menu.png`** (640×480, 24-bit RGB, no alpha) — the
-  title screen, captured straight off the canvas (`canvas.toDataURL()`) of a
-  locally served WASM build (`tools/serve-wasm.py`) rather than a device
-  screenshot, since there's no letterboxing or OS chrome to crop out that
-  way. Recaptured 2026-09-03 after the MENU STYLE row (`260dc1db`) and the
-  runtime-rendered SETTINGS label fix (`028e4e9c`) — the previous capture
-  predated both and still showed the old wood-popup panel look.
+- **`screenshot-1-gameplay.png`** … **`screenshot-8-title-menu.png`**
+  (24-bit RGB, no alpha; 960×720 except the 640×480 round-stats shot) —
+  Play's phone/tablet screenshots, in upload order. Each is a copy of an
+  image in [`docs/screenshots/`](../screenshots) (the ones the
+  README and the website use), converted to PNG with the alpha flattened.
+  Most come from `tests/modern_theme_render_test.cpp`'s `FB_DUMP_DIR`
+  dumps, so regenerate them from there rather than from device captures.
+  Landscape is fine: Play only needs 2–8 images, 320–3840px a side, no
+  more extreme than 2:1. Replaced 2026-10-05 (v2.4.141); the set before
+  that predated the modern theme and menus.
+  1. `gameplay`: a 1-player level in the modern theme, mid-drop.
+  2. `how-to-play`: the How to play page (loaded, next and pocket bubbles).
+  3. `two-player-win`: a 2-player round won, its stats above.
+  4. `game-room`: an online game room in the modern menu style.
+  5. `round-stats`: the post-round stats table with team totals.
+  6. `level-cleared`: the level-cleared card with the time bonus.
+  7. `local-4player`: four players on one machine, original theme.
+  8. `title-menu`: the title screen.
 
 - **`icon-512.png`** (512×512, 24-bit RGB) — Play's high-res store icon. A
   resize of `share/icons/frozen-bubble-icon-1024x1024.png`, the single
