@@ -138,6 +138,7 @@ struct StepScript {
 
 struct CapturedRecording {
     RoundStartRecord start;
+    int liveSeat1LaunchId = -1;   // colour of seat 1's first launched bubble
     int playerCount = 1;
     std::vector<StepRecord> steps;                 // playerCount records per simStep
     std::vector<uint64_t> liveHashes;              // one per simStep
@@ -465,8 +466,11 @@ static void CaptureLiveSteps(BubbleGame& game, int playerCount,
         for (int seat = 0; seat < playerCount; ++seat)
             rec.steps.push_back(CaptureStep(game, seat));
         rec.liveHashes.push_back(CaptureCanonicalStateHash(game));
-        for (const SingleBubble& sb : singleBubbles)
+        for (const SingleBubble& sb : singleBubbles) {
             if (sb.chainExists) rec.liveSawChain = true;
+            if (sb.launching && sb.assignedArray == 1 && rec.liveSeat1LaunchId < 0)
+                rec.liveSeat1LaunchId = sb.bubbleId;
+        }
         if (BubbleGameTestAccess::gameFinish(game)) {
             if (rec.liveFirstFinishStep < 0)
                 rec.liveFirstFinishStep = static_cast<int>(rec.liveHashes.size()) - 1;
@@ -1534,6 +1538,52 @@ int main() {
         ReplayResult disk = RunReplay(renderer, decoded);
         CheckHashSequence("net-fire-stick disk", rec.liveHashes, disk.hashes);
         CHECK(disk.networkSends == 0);
+    }
+
+    // --- Skip shot in a network round ---------------------------------------
+    // Seat 0 skip-shoots: its 'f' carries the launched colour after a ';'
+    // (older readers stop before it). The remote peer's 'f' carries one too,
+    // and that colour -- not whatever seat 1 had loaded here -- is what flies.
+    {
+        GameSettings* gs = GameSettings::Instance();
+        const SDL_Scancode savedNext = gs->player1Keys.fireNext;
+        gs->player1Keys.fireNext = VirtualScancode(0, SDL_GAMEPAD_BUTTON_WEST);
+        SetupSettings setup = MakeNetworkSetup();
+        auto init = [](BubbleGame& g) {
+            ShapeNetworkBoard(g, 0);
+            ShapeNetworkBoard(g, 1);
+            BubbleArray& me = BubbleGameTestAccess::player(g, 0);
+            me.curLaunch = 1;
+            me.nextBubble = 2;
+            BubbleGameTestAccess::player(g, 1).curLaunch = 4;
+        };
+        std::vector<StepScript> script = IdleFor(40);
+        script[1].aim = true;
+        script[1].angle = PI / 2.0f;
+        script[1].fireNext = true;   // step 0 clears the round-start interlock
+        script[5].inboundWire.push_back("GAMEMSG:1:f1.571:3;6");
+        script[10].inboundWire.push_back("GAMEMSG:1:s2:0:6:1 2 3 4 5 6 7 0");
+        NetworkClient::Instance()->testGameDataLog.clear();
+        CapturedRecording rec = RunLiveNetworkRound(renderer, setup, 6107u, init, script);
+        gs->player1Keys.fireNext = savedNext;
+        virtualKeyState[VirtualScancode(0, SDL_GAMEPAD_BUTTON_WEST) - CTRL_SC_BASE] = false;
+
+        CHECK(rec.steps.size() > 2 && rec.steps[2].seatId == 0 && rec.steps[2].fire == 2);
+        std::string sentFire;
+        for (const std::string& m : NetworkClient::Instance()->testGameDataLog)
+            if (!m.empty() && m[0] == 'f') { sentFire = m; break; }
+        CHECK(!sentFire.empty());
+        // The launched colour is the one that was next (2); the loaded one (1)
+        // stays, so the new next is what comes after the ':'.
+        const size_t semi = sentFire.find(';');
+        CHECK(semi != std::string::npos && sentFire.substr(semi) == ";2");
+        CHECK(rec.liveSeat1LaunchId == 6);
+
+        RunAndCompare(renderer, "net-skip-shot", rec);
+        CapturedRecording decoded;
+        CHECK(DecodeRecording(EncodeRecording(rec), decoded, 2));
+        ReplayResult disk = RunReplay(renderer, decoded);
+        CheckHashSequence("net-skip-shot disk", rec.liveHashes, disk.hashes);
     }
 
     // --- R6a: 2-peer network round -- malus both directions ----------------

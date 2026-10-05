@@ -33,6 +33,9 @@ static int failures = 0;
 } while (false)
 
 struct BubbleGameTestAccess {
+    static bool skipHintPending(const BubbleGame& g) { return g.skipShotHintPending; }
+    // Shown one second ago: past the fade-in, so the dump shows it at full strength.
+    static void skipHintShownFor(BubbleGame& g, Uint64 ms) { g.skipShotHintStartMs = SDL_GetTicks() - ms; }
     static void ready(BubbleGame& game) {
         // Skip the level transition (a blocking effect) and the drop-in, so
         // the frame shows the whole board.
@@ -123,8 +126,27 @@ int main() {
         BubbleGameTestAccess::player(game).score = 1234;
         BubbleGameTestAccess::setRun(game, 17);
         BubbleGameTestAccess::popups(game);
+        // The Skip shot hint comes with a run until the player has used it.
+        CHECK(BubbleGameTestAccess::skipHintPending(game));
+        BubbleGameTestAccess::draw(game);
+        BubbleGameTestAccess::skipHintShownFor(game, 1000);
+        BubbleGameTestAccess::draw(game);
+        Dump(renderer, "1d-skip-hint");
+        CHECK(game.SkipShotHintLine().find("Right Shift") != std::string::npos);
+        BubbleGameTestAccess::skipHintShownFor(game, BubbleGame::kSkipShotHintMs);
         for (int i = 0; i < 40; ++i) BubbleGameTestAccess::draw(game);  // let the score count up
+        CHECK(!BubbleGameTestAccess::skipHintPending(game));   // timed out
         Dump(renderer, "1-playing");
+
+        // Once a skip shot has been fired, no run shows it again.
+        settings->MarkSkipShotLearned();
+        {
+            BubbleGame again(renderer);
+            again.NewGame(setup);
+            CHECK(!BubbleGameTestAccess::skipHintPending(again));
+        }
+        settings->ReadSettings();
+        CHECK(settings->skipShotLearned());   // and it was saved
 
         // The pause button, top right; the board itself is not part of it.
         CHECK(BubbleGameTestAccess::pauseHit(game, 616, 24));

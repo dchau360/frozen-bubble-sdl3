@@ -743,6 +743,7 @@ bool NetworkClient::SendOptions(bool chainReaction, bool continueWhenLeave, bool
 bool NetworkClient::SendGameData(const char* data) {
 #ifdef FROZEN_BUBBLE_TEST_ACCESS
     ++testGameDataSendCount;
+    testGameDataLog.push_back(data);
 #endif
     // Game messages use binary protocol: {myid byte}{data}\n
     // NOT the FB/1.2 prefix format!
