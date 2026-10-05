@@ -169,6 +169,10 @@ BubbleGame::BubbleGame(const SDL_Renderer *renderer)
     skipShotHintText.UpdateStyle(14, TTF_STYLE_BOLD);
     skipShotHintText.UpdateColor({255, 255, 255, 255}, {0, 0, 0, 0});
 
+    swapTagText.LoadFont(ASSET("/gfx/DroidSans.ttf").c_str(), 13);
+    swapTagText.UpdateStyle(13, TTF_STYLE_BOLD);
+    swapTagText.UpdateColor(modernui::kInk, {0, 0, 0, 0});
+
     pocketLabelText.LoadFont(ASSET("/gfx/DroidSans.ttf").c_str(), 9);
     pocketLabelText.UpdateStyle(9, TTF_STYLE_BOLD);
     pocketLabelText.UpdateColor(modernui::kInk, {0, 0, 0, 0});
@@ -497,6 +501,7 @@ void BubbleGame::NewGame(SetupSettings setup) {
     skipShotHintPending = setup.playerCount == 1 && !setup.networkGame && !setup.localMultiplayer;
     skipShotHintStartMs = 0;
     pocketSlides.clear();
+    swapTagStartMs = 0;
     runEligibleForWorld = !setup.networkGame && setup.playerCount == 1 && !setup.randomLevels &&
                           !setup.mpTraining && !setup.localMultiplayer && setup.startLevel == 1;
     connectedPlayerCount = setup.playerCount;  // Reset connected count for new game

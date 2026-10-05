@@ -347,6 +347,52 @@ void BubbleGame::DrawPocketSlides(SDL_Renderer *rend, SDL_Texture **bubbles) {
     }
 }
 
+void BubbleGame::DrawSwapShotRing(SDL_Renderer *rend, SDL_FRect r) {
+    if (!EffectsEnabled()) return;
+    // An ice ring a few pixels out from the bubble, pulsing, so the shot
+    // that came out of the pocket reads as one all the way up.
+    const float pulse = 0.5f + 0.5f * SDL_sinf(SDL_GetTicks() / 60.f);
+    const float grow = 3.f + 1.5f * pulse;
+    const SDL_FRect ring = {r.x - grow, r.y - grow, r.w + 2 * grow, r.h + 2 * grow};
+    const SDL_FRect edge = {ring.x - 1.5f, ring.y - 1.5f, ring.w + 3, ring.h + 3};
+    SDL_SetRenderDrawBlendMode(rend, SDL_BLENDMODE_BLEND);
+    // A dark edge under the ice so it shows over the pale backgrounds too.
+    modernui::StrokeRoundRect(rend, edge, edge.w / 2, 6.f, {modernui::kInk.r, modernui::kInk.g, modernui::kInk.b, 170});
+    modernui::StrokeRoundRect(rend, ring, ring.w / 2, 3.f,
+                              {modernui::kIce.r, modernui::kIce.g, modernui::kIce.b, (Uint8)(200 + 55 * pulse)});
+}
+
+void BubbleGame::DrawSwapShotTag(SDL_Renderer *rend) {
+    if (!swapTagStartMs) return;
+    const Uint64 age = SDL_GetTicks() - swapTagStartMs;
+    if (age >= kSwapTagMs || !EffectsEnabled()) { swapTagStartMs = 0; return; }
+    swapTagText.UpdateText(rend, "SWAP!", 0);
+    SDL_Texture* tex = swapTagText.Texture();
+    if (!tex) return;
+
+    // Pops in over 80ms, rises 34px, fades over its last 300ms. Real time,
+    // so it reads the same at every game speed.
+    const float t = (float)age / kSwapTagMs;
+    float a = 1.f;
+    if (age < 80) a = age / 80.f;
+    else if (age > kSwapTagMs - 300) a = (kSwapTagMs - age) / 300.f;
+    const float rise = 34.f * (1.f - (1.f - t) * (1.f - t));
+
+    const SDL_Rect* c = swapTagText.Coords();
+    const float cx = swapTagFrom.x + swapTagFrom.w / 2.f;
+    const float top = swapTagFrom.y - c->h - 12 - rise;
+    const SDL_FRect pill = {cx - c->w / 2.f - 8, top, c->w + 16.f, c->h + 4.f};
+    SDL_SetRenderDrawBlendMode(rend, SDL_BLENDMODE_BLEND);
+    modernui::FillRoundRect(rend, {pill.x, pill.y + 2, pill.w, pill.h}, pill.h / 2, {0, 0, 0, (Uint8)(90 * a)});
+    modernui::FillRoundRect(rend, pill, pill.h / 2,
+                            {modernui::kIce.r, modernui::kIce.g, modernui::kIce.b, (Uint8)(255 * a)});
+    swapTagText.UpdatePosition({(int)(cx - c->w / 2.f), (int)(top + 2)});
+    SDL_SetTextureAlphaMod(tex, (Uint8)(255 * a));
+    SDL_FRect fr = ToFRect(*swapTagText.Coords());
+    SDL_RenderTexture(rend, tex, nullptr, &fr);
+    SDL_SetTextureAlphaMod(tex, 255);
+}
+
 void BubbleGame::DrawSkipShotHint(SDL_Renderer *rend) {
     if (!skipShotHintPending || !EffectsEnabled() || gameFinish || !FireNextAllowed()) return;
     const Uint64 now = SDL_GetTicks();
@@ -1697,7 +1743,10 @@ void BubbleGame::Draw() {
         }
 
         if (singleBubbles.size() > 0) {
-            for (SingleBubble &bubble : singleBubbles) bubble.Render(rend, useBubbles);
+            for (SingleBubble &bubble : singleBubbles) {
+                bubble.Render(rend, useBubbles);
+                if (bubble.swapShot && bubble.launching) DrawSwapShotRing(rend, ToFRect(bubble.rect));
+            }
         }
 
         // Render malus bubbles in mp_training mode
@@ -1721,6 +1770,7 @@ void BubbleGame::Draw() {
         // the loaded bubble's color hard to see while aiming.
         if (!PocketSlideInto(PocketSlide::kLauncher)) { SDL_FRect fr = ToFRect(curArray.curLaunchRct); SDL_RenderTexture(rend, gameFinish && !gameWon ? imgBubbleFrozen : useBubbles[curArray.curLaunch], nullptr, &fr); }
         DrawPocketSlides(rend, useBubbles);
+        DrawSwapShotTag(rend);
         if (curArray.aimGuideEnabled && !gameFinish) {
             bool isMini = (currentSettings.playerCount >= 3 && curArray.playerAssigned >= 1);
             DrawAimGuide(rend, curArray, isMini, stepDeltaScale);
@@ -1863,7 +1913,7 @@ void BubbleGame::Draw() {
                     SDL_FRect fr = ToFRect(curArray.curLaunchRct);
                     SDL_RenderTexture(rend, gameFinish && !curArray.mpWinner ? useFrozen : useBubbles[curArray.curLaunch], nullptr, &fr);
                 }
-                if (ownBoard && !useMini) DrawPocketSlides(rend, useBubbles);
+                if (ownBoard && !useMini) { DrawPocketSlides(rend, useBubbles); DrawSwapShotTag(rend); }
                 if (curArray.aimGuideEnabled && !gameFinish &&
                     curArray.playerState == BubbleArray::PlayerState::ALIVE) {
                     bool isMini = (currentSettings.playerCount >= 3 && curArray.playerAssigned >= 1);
@@ -2029,6 +2079,7 @@ void BubbleGame::Draw() {
                 // view page. Physics (UpdatePosition) already ran unconditionally above.
                 if (!bubbleArrays[bubble.assignedArray].boardVisible) continue;
                 bubble.Render(rend, useBubbles);
+                if (bubble.swapShot && bubble.launching) DrawSwapShotRing(rend, ToFRect(bubble.rect));
             }
         }
 

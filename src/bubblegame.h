@@ -1028,6 +1028,15 @@ private:
     void StartPocketSlide(int color, SDL_Rect from, SDL_Rect to, int into, bool fade = false);
     bool PocketSlideInto(int into) const;
     void DrawPocketSlides(SDL_Renderer *rend, SDL_Texture **bubbles);
+    // The swap shot indicator: a "SWAP!" tag that rises off the launcher for
+    // kSwapTagMs of real time when the swap button fires (DrawSwapShotTag),
+    // and an ice ring round that bubble until it sticks (DrawSwapShotRing,
+    // via SingleBubble::swapShot). Player 1's board only, display only.
+    TTFText swapTagText;
+    Uint64 swapTagStartMs = 0;
+    SDL_Rect swapTagFrom = {};
+    void DrawSwapShotTag(SDL_Renderer *rend);
+    void DrawSwapShotRing(SDL_Renderer *rend, SDL_FRect bubbleRect);
     bool skipShotHintPending = false;
     Uint64 skipShotHintStartMs = 0;
     void DrawSkipShotHint(SDL_Renderer *rend);
@@ -1040,6 +1049,7 @@ private:
 public:
     static constexpr Uint64 kSkipShotHintMs = 7000;
     static constexpr Uint64 kPocketSlideMs = 150;
+    static constexpr Uint64 kSwapTagMs = 700;
     std::string SkipShotHintLine() const;
 private:
     TTFText clearStatsText;  // the classic win panel's time/bonus and score lines
