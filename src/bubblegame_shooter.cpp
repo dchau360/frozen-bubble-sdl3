@@ -37,8 +37,11 @@
 #include "bubbleai.h"
 
 bool BubbleGame::FireNextAllowed() const {
-    return currentSettings.playerCount == 1 && !currentSettings.networkGame &&
-           !currentSettings.localMultiplayer;
+    // Not local multiplayer: only player 1 has a skip-shot key. Network play
+    // is fine -- every board's 's' carries the colour that stuck, and its 'f'
+    // the colour launched (SendNetworkBubbleShot).
+    return !currentSettings.localMultiplayer &&
+           (currentSettings.networkGame || currentSettings.playerCount == 1);
 }
 
 void BubbleGame::LaunchBubble(BubbleArray &bArray) {
@@ -374,6 +377,9 @@ void BubbleGame::ApplyPlayerControls(BubbleArray &bArray, const PlayerControls &
         // For remote players with mp_fire, use the angle from the network message
         if (bArray.mpFirePending) {
             angle = bArray.pendingAngle;
+            // The colour the shooter really fired, when its 'f' said so.
+            if (bArray.pendingLaunchColor >= 0) bArray.curLaunch = bArray.pendingLaunchColor;
+            bArray.pendingLaunchColor = -1;
             SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION,
                          "Launching remote player %d bubble with angle %.3f from network",
                          bArray.playerAssigned, angle);
@@ -411,6 +417,10 @@ void BubbleGame::ApplyPlayerControls(BubbleArray &bArray, const PlayerControls &
         if (controls.fireNext && !bArray.mpFirePending && FireNextAllowed()) {
             std::swap(bArray.curLaunch, bArray.nextBubble);
             runUsedFireNext = true;
+            if (EffectsEnabled()) {
+                GameSettings::Instance()->MarkSkipShotLearned();
+                skipShotHintPending = false;   // the hint has done its job
+            }
         }
         LaunchBubble(bArray);
         bArray.shooterAction = false;

@@ -164,6 +164,11 @@ BubbleGame::BubbleGame(const SDL_Renderer *renderer)
 
     modernFonts.Load();
 
+    skipShotHintText.LoadFont(ASSET("/gfx/DroidSans.ttf").c_str(), 14);
+    skipShotHintText.UpdateAlignment(TTF_HORIZONTAL_ALIGN_CENTER);
+    skipShotHintText.UpdateStyle(14, TTF_STYLE_BOLD);
+    skipShotHintText.UpdateColor({255, 255, 255, 255}, {0, 0, 0, 0});
+
     scorePopupText.LoadFont(ASSET("/gfx/DroidSans.ttf").c_str(), 20);
     scorePopupText.UpdateAlignment(TTF_HORIZONTAL_ALIGN_CENTER);
     scorePopupText.UpdateStyle(20, TTF_STYLE_BOLD);
@@ -367,6 +372,7 @@ static void ResetRoundInputState(BubbleArray &player) {
     player.suppressFireUntilRelease = true;
     player.mpFirePending = false;
     player.pendingAngle = PI / 2.0f;
+    player.pendingLaunchColor = -1;
     player.mpStickPending = false;
     player.stickCx = player.stickCy = player.stickCol = 0;
     player.stickAnimActive = false;
@@ -484,6 +490,9 @@ void BubbleGame::NewGame(SetupSettings setup) {
     curLevel = setup.startLevel;
     runShots = 0;
     runUsedFireNext = false;
+    skipShotHintPending = setup.playerCount == 1 && !setup.networkGame && !setup.localMultiplayer &&
+                          !GameSettings::Instance()->skipShotLearned();
+    skipShotHintStartMs = 0;
     runEligibleForWorld = !setup.networkGame && setup.playerCount == 1 && !setup.randomLevels &&
                           !setup.mpTraining && !setup.localMultiplayer && setup.startLevel == 1;
     connectedPlayerCount = setup.playerCount;  // Reset connected count for new game

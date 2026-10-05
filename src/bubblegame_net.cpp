@@ -96,12 +96,19 @@ void BubbleGame::SendNetworkBubbleShot(BubbleArray &bArray) {
     // Send shot in original protocol format: f{angle}:{nextcolor}
     // The color sent is the player's NEW next bubble (what will come after current)
     // This matches original frozen-bubble line 2163: gsend(sprintf("f%.3f:$pdata{$::p}{nextcolor}", $angle{$::p}))
+    //
+    // Then ";{launched}", the colour actually fired, which a skip shot makes
+    // something other than the bubble a peer thinks is loaded. Behind a ';'
+    // so every older reader still gets the next colour: this game's own
+    // sscanf("%f:%d") stops at it, and the original Perl client's greedy
+    // /(.+):(.+)/ (bin/frozen-bubble:1404) numifies "3;5" to 3.
     for (const SingleBubble &sBubble : singleBubbles) {
         if (sBubble.launching && sBubble.assignedArray == bArray.playerAssigned) {
             char shotData[128];
-            snprintf(shotData, sizeof(shotData), "f%.3f:%d",
+            snprintf(shotData, sizeof(shotData), "f%.3f:%d;%d",
                 sBubble.direction,
-                bArray.nextBubble);  // Send the NEW next bubble color, not the launched bubble's color
+                bArray.nextBubble,  // Send the NEW next bubble color, not the launched bubble's color
+                sBubble.bubbleId);
             SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION,
                          "Sending shot: angle=%.3f, nextBubble=%d (launched=%d)",
                     sBubble.direction, bArray.nextBubble, sBubble.bubbleId);
@@ -256,7 +263,8 @@ void BubbleGame::ApplyInboundGameMessage(int senderId, const std::string &gameDa
             // This matches original frozen-bubble line 1404: ($angle{$player}, $pdata{$player}{nextcolor}) = $params
             float angle;
             int opponentNewNextColor;
-            if (sscanf(gameData.c_str() + 1, "%f:%d", &angle, &opponentNewNextColor) == 2) {
+            int launchedColor = -1;
+            if (sscanf(gameData.c_str() + 1, "%f:%d;%d", &angle, &opponentNewNextColor, &launchedColor) >= 2) {
                 // Find which player array this sender is using (original: $actions{$player}{mp_fire} = 1)
                 int opponentIdx = -1;
                 for (int i = 0; i < currentSettings.playerCount; i++) {
@@ -296,6 +304,10 @@ void BubbleGame::ApplyInboundGameMessage(int senderId, const std::string &gameDa
                 opponentArray.pendingAngle = angle;
                 opponentArray.shooterSprite.angle = angle;  // Update shooter angle for visual display
                 opponentArray.nextBubble = opponentNewNextColor;  // Update their next bubble color
+                // -1 from an older peer. It indexes the bubble textures, so
+                // anything a modified client sends outside them is dropped.
+                opponentArray.pendingLaunchColor =
+                    (launchedColor >= 0 && launchedColor < BUBBLE_STYLES) ? launchedColor : -1;
 
                 SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION,
                         "Received fire command from player %d (array %d): angle=%.3f, nextColor=%d",

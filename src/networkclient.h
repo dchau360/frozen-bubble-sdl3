@@ -606,6 +606,9 @@ public:
     // test is). Lets a test pin that a live session reaches the socket path
     // while a Playback session is stopped at BubbleGame::SendGameDataFor.
     int testGameDataSendCount = 0;
+    // Every SendGameData payload, in order, for a test that needs the wire
+    // text itself (the skip-shot 'f' tail).
+    std::vector<std::string> testGameDataLog;
 private:
 #endif
 
