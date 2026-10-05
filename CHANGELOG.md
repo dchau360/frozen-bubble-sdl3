@@ -1,5 +1,12 @@
 # Changelog
 
+## v2.4.141
+
+- **Swap replaces Skip shot.** A pocket now sits beside the next bubble. Press Swap (Right Shift, a right click, or a tap below the board) to put the loaded bubble in it and bring the next one up; press it again to shoot the pocketed bubble, and the loaded one takes its place. Fire still shoots the loaded bubble. The pocket empties every level.
+- **Swap counts for high scores.** Runs that use it now go on every high score table, local and online.
+- **How to play.** A new page in the 1-player menu and in Controls & Settings shows the launcher, next bubble and pocket with your own controls. It replaces Local multiplayer in the 1-player menu; that's still on the title screen's 2P button.
+- The Swap hint now shows at the start of every run.
+
 ## v2.4.140
 
 - **Skip shot.** A second fire button that shoots your next bubble straight away and keeps the loaded one in the launcher: a bubble swap and a shot in one press. Right Shift on the keyboard (change it in Controls & Settings), right click with the mouse, or a tap on the strip around the launcher on a touchscreen. It works in 1-player and online games. A 1-player run that uses it is kept off the high score tables. A short hint at the start of a run shows your control until you've used it.

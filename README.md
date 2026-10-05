@@ -54,6 +54,12 @@ Every mode plays the same whether you're local or online, and the host can adjus
 
 **Single player** — 100 levels of classic bubble-popping, with scoring and chain reactions. Clear a level fast for a time bonus, Bust-a-Move style: 5,000 points within 5 seconds, 84 fewer per second after that, nothing from 65 seconds. A shot counter and the run's total time sit under the score. Lose a level and you're asked whether to **Continue** (retry that level, score back to 0, the run's clock and shot count keep going) or **Start over** from level 1. Your best runs are kept on the **High Scores** screen, each with its level, time and shot count.
 
+**Swap.** A pocket beside the next bubble. Press Swap (Right Shift, a right click, or a tap below the board) and the loaded bubble goes into the pocket while the next one comes up; press it again and the pocketed bubble is shot, with the loaded one taking its place. Fire always shoots the loaded bubble, and the pocket empties at every new level. It works in 1-player and online games, and **How to play** (in the 1-player menu and in Controls & Settings) shows it with your own controls.
+
+<p align="center">
+  <img src="docs/screenshots/how-to-play.jpg" alt="The How to play page: the launcher, next bubble and Swap pocket labelled with their controls, and a swap in three steps" width="400">
+</p>
+
 **Modern in-game theme** (on by default; switch it under **In-game theme** in the 1-player menu). In a 1-player game: a score panel down the left (level, score counting up, shots, time), cards for level cleared, game over and pause, the next level dropping in row by row, and an "N DROPPED!" when a shot cuts bubbles loose. The background, penguin, launcher, sounds and scoring stay as they were; **Original** brings back the classic look. The glossy candy bubbles are a separate switch, **Bubbles** (CANDY / CLASSIC, also on by default), so either set goes with either look; they apply in every mode, multiplayer included.
 
 <p align="center">
@@ -65,7 +71,7 @@ Every mode plays the same whether you're local or online, and the host can adjus
 
 <p align="center">
   <img src="docs/screenshots/title-menu.jpg" alt="The title screen in the Modern menu style" width="400">
-  <img src="docs/screenshots/one-player-menu.jpg" alt="The 1-player menu in the Modern menu style: five modes with a line each, and switches for the settings" width="400">
+  <img src="docs/screenshots/one-player-menu.jpg" alt="The 1-player menu in the Modern menu style: four modes and How to play with a line each, and switches for the settings" width="400">
 </p>
 
 **Online highscores.** Classic runs from level 1 go on an online board shared by everyone playing this port: **most points** in one life, and **furthest level** cleared (faster time breaks ties, so the fastest finish of all 100 levels is #1; each run also shows its shot count), each split keyboard/gamepad vs mouse/touch (a level where you used both counts as mouse/touch), all-time and this week. See it in the game under **High Scores → POINTS / LEVEL**, or on the web at [fb.servequake.com/scores](https://fb.servequake.com/scores/). Runs are sent under your anonymous account once you're back in a menu; turn off **Online highscores** in the 1-player menu to stop sending. Scores aren't verified yet.
