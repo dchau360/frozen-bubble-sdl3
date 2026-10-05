@@ -405,6 +405,11 @@ struct BubbleArray {
     // Network game action flags (original: $actions{$player}{mp_fire} and {mp_stick})
     bool mpFirePending = false;  // Set to true when we receive 'f' message, cleared after firing
     float pendingAngle = 0.0f;   // The angle from the 'f' message
+    // The colour the shooter actually launched, from the 'f' message's
+    // optional ";{color}" tail (-1 from an older peer, which never sends it).
+    // Launched instead of this board's own curLaunch: a skip shot fires the
+    // next bubble, and a peer has no other way to know.
+    int pendingLaunchColor = -1;
     bool mpStickPending = false; // Set to true when we receive 's' message, cleared after sticking
     int stickCx = 0, stickCy = 0, stickCol = 0;  // Stick position and color from 's' message
 
@@ -561,17 +566,24 @@ public:
     // mouse call sites (and tests) read unchanged.
     // skipShot: fire the next bubble instead (PlayerControls::fireNext) --
     // a right click, or a touch released on the strip around the launcher
-    // (kSkipShotTouchY). Ignored where FireNextAllowed() is false.
+    // (SkipShotTouchY). Ignored where FireNextAllowed() is false.
     void HandleMouseFire(bool fromTouch = false, bool skipShot = false);
-    // Touches released at or below this canvas y are skip shots, above it
-    // ordinary shots (1-player only): the strip around the launcher, just
-    // under the deepest bubble a live board can hold (row 11 ends at
-    // 51 + 11 * 28 + 32 = 391, and compression moves the danger row up as it
-    // moves the board down, so that never changes). Every bubble can still
-    // be touched for an ordinary shot. It was half the screen (240) at
-    // first, which turned a touch on a low bubble into a skip shot.
-    static constexpr float kSkipShotTouchY = 392.f;
-    bool TouchIsSkipShot(float y) const { return FireNextAllowed() && y >= kSkipShotTouchY; }
+    // Touches released this far above the local launcher's centre, or
+    // lower, are skip shots; higher up, ordinary shots. That is the strip
+    // around the launcher, just under the deepest bubble a live board can
+    // hold in every layout: the launcher's centre is at y 406-407 in all of
+    // them, and a board's lowest bubble ends at 391 (1 player: row 11 is
+    // 51 + 11 * 28 + 32; compression moves the danger row up as it moves the
+    // board down, so that never changes), 371 (2) or 384 (3 and more). So
+    // every bubble can still be touched for an ordinary shot. It was half
+    // the screen (y 240) at first, which made a touch on a low bubble a skip
+    // shot.
+    static constexpr float kSkipShotAboveLauncher = 15.f;
+    float SkipShotTouchY() const {
+        const SDL_Rect& r = bubbleArrays[0].shooterSprite.rect;
+        return r.y + r.h * 0.5f - kSkipShotAboveLauncher;
+    }
+    bool TouchIsSkipShot(float y) const { return FireNextAllowed() && y >= SkipShotTouchY(); }
     // A right click in a game is a skip shot where one is possible with the
     // mouse, and leaves the game (ESC) everywhere else, as it always did.
     bool RightClickIsSkipShot() const { return FireNextAllowed() && currentSettings.mouseEnabled; }
@@ -994,6 +1006,18 @@ private:
     std::unique_ptr<TTF_Font, FontCloser> statsPanelFont16;
 
     TTFText scorePopupText;
+    // The Skip shot hint: one line over the bottom of the board for the
+    // first seconds of a 1-player run, naming this player's own controls,
+    // until they have fired a skip shot once (GameSettings::skipShotLearned).
+    // Display only, like the score popups.
+    TTFText skipShotHintText;
+    bool skipShotHintPending = false;
+    Uint64 skipShotHintStartMs = 0;
+    void DrawSkipShotHint(SDL_Renderer *rend);
+public:
+    static constexpr Uint64 kSkipShotHintMs = 7000;
+    std::string SkipShotHintLine() const;
+private:
     TTFText clearStatsText;  // the classic win panel's time/bonus and score lines
     TTFText inGameText, winsP1Text, winsP2Text, comboText, finalScoreText, mpTrainText, continueText;
     // Round-end winner banner, shown for every mode ("Board Cleared! <Name>

@@ -764,6 +764,13 @@ int main() {
         CHECK(remote.pendingAngle == 0.1f);
         BubbleGameTestAccess::inbound(game, 7, "f1.2:5");
         CHECK(remote.pendingAngle == 1.2f);
+        BubbleGameTestAccess::inbound(game, 7, "f1.2:5;99");
+        CHECK(remote.pendingLaunchColor == -1);
+        BubbleGameTestAccess::inbound(game, 7, "f1.2:5;-2");
+        CHECK(remote.pendingLaunchColor == -1);
+        BubbleGameTestAccess::inbound(game, 7, "f1.2:5;3");
+        CHECK(remote.pendingLaunchColor == 3);
+        remote.pendingLaunchColor = -1;
         remote.mpFirePending = false;
 
         // 's': position kept, colour deferred to the bubble in flight, and a
@@ -1370,8 +1377,10 @@ int main() {
         // is not.
         BubbleGameTestAccess::settings(game).mouseEnabled = true;
         CHECK(game.RightClickIsSkipShot());
-        CHECK(!game.TouchIsSkipShot(BubbleGame::kSkipShotTouchY - 1.f));
-        CHECK(game.TouchIsSkipShot(BubbleGame::kSkipShotTouchY));
+        p.shooterSprite.rect = {SCREEN_CENTER_X - 50, 480 - 123, 100, 100};   // the 1-player launcher
+        CHECK(game.SkipShotTouchY() == 392.f);
+        CHECK(!game.TouchIsSkipShot(391.f));
+        CHECK(game.TouchIsSkipShot(392.f));
         struct { bool fromTouch, skip; int expect; } clicks[] = {
             {false, true, 2}, {true, true, 2}, {false, false, 1}, {true, false, 1},
         };
@@ -1390,22 +1399,33 @@ int main() {
         BubbleGameTestAccess::settings(game).mouseEnabled = false;
         CHECK(!game.RightClickIsSkipShot());   // no mouse aim: right click leaves, as before
 
-        // Network play never fires next, even from a forged control record:
-        // peers launch their own copy of the loaded bubble.
-        singleBubbles.clear();
+        // A network game allows it (the wire carries the launched colour;
+        // see the net-skip-shot case in bubblegame_replay_test.cpp).
+        auto skipFires = [&](BubbleGame& g) {
+            singleBubbles.clear();
+            BubbleArray& n = BubbleGameTestAccess::player(g, 0);
+            n.curLaunch = 1;
+            n.nextBubble = 2;
+            n.newShoot = true;
+            PlayerControls c;
+            c.fire = c.fireNext = true;
+            BubbleGameTestAccess::apply(g, 0, c);
+            const int id = singleBubbles.empty() ? -1 : singleBubbles.back().bubbleId;
+            singleBubbles.clear();
+            return id;
+        };
         BubbleGameTestAccess::reset(game, 2, true, false);
-        BubbleArray& n = BubbleGameTestAccess::player(game, 0);
-        n.curLaunch = 1;
-        n.nextBubble = 2;
-        n.newShoot = true;
-        PlayerControls c;
-        c.fire = c.fireNext = true;
-        BubbleGameTestAccess::apply(game, 0, c);
-        CHECK(singleBubbles.size() == 1);
-        if (!singleBubbles.empty()) CHECK(singleBubbles.back().bubbleId == 1);
-        singleBubbles.clear();
-        // ...and there a low touch is an ordinary shot, a right click leaves.
+        CHECK(skipFires(game) == 2);
         BubbleGameTestAccess::settings(game).mouseEnabled = true;
+        CHECK(game.RightClickIsSkipShot());
+
+        // Local multiplayer never does, even from a forged control record:
+        // only player 1 has a skip-shot key. There a low touch is an
+        // ordinary shot and a right click leaves.
+        BubbleGameTestAccess::reset(game, 2, false, false);
+        BubbleGameTestAccess::settings(game).localMultiplayer = true;
+        BubbleGameTestAccess::settings(game).mouseEnabled = true;
+        CHECK(skipFires(game) == 1);
         CHECK(!game.TouchIsSkipShot(400.f));
         CHECK(!game.RightClickIsSkipShot());
 

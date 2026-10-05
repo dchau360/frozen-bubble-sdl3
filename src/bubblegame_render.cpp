@@ -292,6 +292,74 @@ int BubbleGame::DrawLiveBadges(int x, int y) {
 
 // A 1-player game of any kind but multiplayer training, which has its own
 // timer-and-score line.
+// Defined with the settings panel (mainmenu_panels.cpp): "Right Shift", or
+// "Ctrl1:X" for a pad button.
+std::string ControllerScancodeName(SDL_Scancode sc);
+
+std::string BubbleGame::SkipShotHintLine() const {
+    bool touch = false;
+#if defined(__IOS_PORT__)
+    touch = true;
+#elif defined(__ANDROID__)
+    touch = DeviceHasTouchscreen();
+#elif defined(__WASM_PORT__)
+    touch = WasmHasTouch();
+#endif
+    if (touch && currentSettings.mouseEnabled)
+        return "Skip shot: tap below the board to fire the next bubble";
+    std::string key;
+    const SDL_Scancode sc = GameSettings::Instance()->player1Keys.fireNext;
+    if (sc != SDL_SCANCODE_UNKNOWN) {
+        key = ControllerScancodeName(sc);
+        const size_t colon = key.find(':');   // a pad: just the button
+        if (IsVirtualScancode(sc) && colon != std::string::npos) key = key.substr(colon + 1);
+    }
+    if (currentSettings.mouseEnabled)
+        key = key.empty() ? "Right click" : key + " or right click";
+    if (key.empty()) return "";
+    return "Skip shot: " + key + " fires the next bubble";
+}
+
+void BubbleGame::DrawSkipShotHint(SDL_Renderer *rend) {
+    if (!skipShotHintPending || !EffectsEnabled() || gameFinish || !FireNextAllowed()) return;
+    const Uint64 now = SDL_GetTicks();
+    if (!skipShotHintStartMs) {
+        if (!firstRenderDone) return;   // not over the transition's captured frame
+        skipShotHintStartMs = now;
+    }
+    const Uint64 age = now - skipShotHintStartMs;
+    if (age >= kSkipShotHintMs) { skipShotHintPending = false; return; }
+    const std::string line = SkipShotHintLine();
+    if (line.empty()) { skipShotHintPending = false; return; }
+
+    // In 300ms, out over the last second.
+    float a = 1.f;
+    if (age < 300) a = age / 300.f;
+    else if (age > kSkipShotHintMs - 1000) a = (kSkipShotHintMs - age) / 1000.f;
+
+    // Wrapped to the board's width, centred over it, its foot just above the
+    // launcher strip it points at.
+    const BubbleArray& b = bubbleArrays[0];
+    const int boardW = b.rightLimit - b.leftLimit;
+    skipShotHintText.UpdateText(renderer, line.c_str(), boardW - 36);
+    SDL_Texture* tex = skipShotHintText.Texture();
+    if (!tex) return;
+    const SDL_Rect* c = skipShotHintText.Coords();
+    const int cx = (b.leftLimit + b.rightLimit) / 2;
+    const int bottom = (int)SkipShotTouchY() - 10;
+    const SDL_FRect box = {(float)(cx - c->w / 2 - 12), (float)(bottom - c->h - 12),
+                           (float)(c->w + 24), (float)(c->h + 12)};
+    SDL_SetRenderDrawBlendMode(rend, SDL_BLENDMODE_BLEND);
+    modernui::FillRoundRect(rend, box, 12, {8, 22, 44, (Uint8)(225 * a)});
+    modernui::StrokeRoundRect(rend, box, 12, 1.5f,
+                              {modernui::kIce.r, modernui::kIce.g, modernui::kIce.b, (Uint8)(255 * a)});
+    skipShotHintText.UpdatePosition({cx - c->w / 2, bottom - c->h - 6});
+    SDL_SetTextureAlphaMod(tex, (Uint8)(255 * a));
+    SDL_FRect fr = ToFRect(*skipShotHintText.Coords());
+    SDL_RenderTexture(rend, tex, nullptr, &fr);
+    SDL_SetTextureAlphaMod(tex, 255);
+}
+
 bool BubbleGame::ShowsScorePopups() const {
     return currentSettings.playerCount == 1 && !currentSettings.networkGame;
 }
@@ -1694,6 +1762,8 @@ void BubbleGame::Draw() {
             SDL_RenderTexture(rend, tex, nullptr, &fr);
             SDL_SetTextureAlphaMod(tex, 255);
         }
+
+        DrawSkipShotHint(rend);
 
         if (ShowsPauseButton()) modernui::DrawPauseButton(rend, kPauseBtnRect, false);
 

@@ -43,9 +43,9 @@ These four share a settings row or two and are all render- or audio-only.
    (same outcome as swap-then-fire). Done for keyboard/gamepad in 1-player
    games, kept off the boards through `RunCountsForScores()`, recorded in
    replays as `fire = 2`. Mouse: right click. Touch: a touch let go in the
-   strip around the launcher. Still open: network play
-   (needs a new opcode, since peers launch their own copy of the loaded
-   bubble).
+   strip around the launcher. Network play too (the launched colour rides
+   the `f` message after a `;`), with a first-run hint. Still open: local
+   multiplayer, where only player 1 has a key.
 7. **Achievements.** Examples: clear a level in under 10 s, drop 20 bubbles
    at once, reach level 50, win an online match. Kept with the account;
    Google Play Games could mirror them later.
