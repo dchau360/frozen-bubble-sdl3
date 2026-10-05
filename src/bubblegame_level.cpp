@@ -236,6 +236,10 @@ bool BubbleGame::SyncNetworkLevel() {
                     SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Bubble position mismatch! Expected (%d,%d) got (%d,%d)",
                                 cx, cy, recv_cx, recv_cy);
                 }
+                if (!IsValidBubbleColor(recv_id)) {
+                    SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Out-of-range bubble colour %d at cx=%d cy=%d", recv_id, cx, cy);
+                    return false;
+                }
                 bubbleId = recv_id;
             }
 
@@ -310,6 +314,11 @@ bool BubbleGame::SyncNetworkLevel() {
         }
         if (!netClient->WaitForTobeBubble(tobeBubbleId)) {
             SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to receive tobe bubble");
+            return false;
+        }
+        if (!IsValidBubbleColor(nextBubbleId) || !IsValidBubbleColor(tobeBubbleId)) {
+            SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Out-of-range next/tobe colour %d/%d",
+                         nextBubbleId, tobeBubbleId);
             return false;
         }
     }
