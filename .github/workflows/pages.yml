@@ -25,6 +25,7 @@ on:
       - 'docs/PRIVACY_POLICY.md'
       - 'site/**'
       - 'tools/build-site.py'
+      - 'docs/screenshots/**'
       - 'share/gfx/DroidSans.ttf'
       - 'share/gfx/Baloo2-ExtraBold.ttf'
       - '.github/workflows/pages.yml'

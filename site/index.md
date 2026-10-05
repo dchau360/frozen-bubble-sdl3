@@ -12,7 +12,7 @@ Android, and in the browser**.
 [Source](https://github.com/dchau360/frozen-bubble-sdl3) ·
 [Privacy policy](https://dchau360.github.io/frozen-bubble-sdl3/privacy/)
 
-![A network game room with several players](screenshots/game-room.png)
+![A 1-player game in the modern theme: score panel, shot count and time, and a 3 DROPPED! popup](screenshots/modern-gameplay.jpg)
 
 ## Download
 
@@ -53,11 +53,15 @@ To play on an iPhone, use the browser build.
 
 ## Screens
 
-![The main menu](screenshots/main-menu.png)
+![The title menu in the Modern style](screenshots/title-menu.jpg)
 
-![A local two-player game](screenshots/local-2player.png)
+![How to play: the launcher, the next bubble and the Swap pocket, each labelled with its control](screenshots/how-to-play.jpg)
 
-![The post-round statistics table](screenshots/round-stats.png)
+![The end of a two-player round: You Win! with the round's stats along the top](screenshots/two-player-win.jpg)
+
+![An online game room: match rules, players, bots and chat](screenshots/game-room-modern.jpg)
+
+![The post-round statistics table in a five-player game](screenshots/round-stats.png)
 
 ## Playing online
 
