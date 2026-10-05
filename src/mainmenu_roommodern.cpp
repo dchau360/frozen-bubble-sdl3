@@ -236,7 +236,8 @@ void MainMenu::NetPanelRoomRenderModern() {
         const char* labels[4] = {"Max colors", "Row collapse", "Aim guide", "Team"};
         auto value = [&](int row, int p, char* out) {
             if (row == 0) snprintf(out, 8, "%d", playerColorCounts[p]);
-            else if (row == 1) snprintf(out, 8, "%s", playerNoCompress[p] ? "off" : "on");
+            else if (row == 1 && playerNoCompress[p]) snprintf(out, 8, "off");
+            else if (row == 1) snprintf(out, 8, "%d", playerNewRowShots[p]);
             else if (row == 2) snprintf(out, 8, "%s", playerAimGuide[p] ? "on" : "off");
             else if (netPlayerTeams[p] == kNoTeam) snprintf(out, 8, "-");
             else snprintf(out, 8, "%d", netPlayerTeams[p]);

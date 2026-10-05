@@ -312,7 +312,7 @@ void DrawPopup(SDL_Renderer* rend, TTFText& text, const std::string& label, int 
     SDL_SetTextureAlphaMod(tex, 255);
 }
 
-void DrawPocketWell(SDL_Renderer* rend, TTFText& tag, SDL_FRect r, SDL_Texture* bubble, bool lit) {
+void DrawPocketWell(SDL_Renderer* rend, TTFText& tag, SDL_FRect r, SDL_Texture* bubble, bool lit, bool tagged) {
     const float cx = r.x + r.w / 2.f, cy = r.y + r.h / 2.f, rad = r.w / 2.f + 3;
     const SDL_FRect well = {cx - rad, cy - rad, 2 * rad, 2 * rad};
 
@@ -327,7 +327,9 @@ void DrawPocketWell(SDL_Renderer* rend, TTFText& tag, SDL_FRect r, SDL_Texture* 
     if (bubble) SDL_RenderTexture(rend, bubble, nullptr, &r);
     StrokeRoundRect(rend, well, rad, 2, {kIce.r, kIce.g, kIce.b, (Uint8)(lit ? 255 : 160)});
 
-    // "SWAP" on a tag across the top of the rim.
+    // "SWAP" on a tag across the top of the rim (not on a mini board's well,
+    // which it would cover).
+    if (!tagged) return;
     tag.UpdateText(rend, "SWAP", 0);
     if (SDL_Texture* tex = tag.Texture()) {
         const SDL_Rect* c = tag.Coords();

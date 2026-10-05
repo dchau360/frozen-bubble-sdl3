@@ -43,9 +43,8 @@ enum KeyConfigRow {
     kKeyRowRight     = 1,
     kKeyRowFire      = 2,
     kKeyRowCenter    = 3,
-    // Player 1 only (PlayerKeys::fireNext): skipped by the panel's UP/DOWN
-    // and not drawn while another player's keys are shown. Every row below
-    // was renumbered by one when it went in.
+    // Swap (PlayerKeys::fireNext), every player's. Every row below was
+    // renumbered by one when it went in.
     kKeyRowFireNext  = 4,
     kKeyRowResetCtrl = 5,
     kKeyRowSpeed     = 6,
@@ -104,7 +103,7 @@ static const int kKeyPlayerTapBase = 900;
 // key name otherwise. Shared by both styles of the settings panel.
 std::string ControllerScancodeName(SDL_Scancode sc);
 
-// The settings label for player 1's fire-next key (kKeyRowFireNext), shared
+// The settings label for the Swap key (kKeyRowFireNext), shared
 // by both styles of the panel. Its feature name lives only here.
 inline constexpr const char* kFireNextLabel = "Swap";
 

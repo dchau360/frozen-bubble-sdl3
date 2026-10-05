@@ -718,10 +718,8 @@ bool MainMenu::KeysPanelKey(SDL_Event *e) {
                     // keep their indices so the enum stays fixed, so navigation
                     // has to step over them or the highlight vanishes for two
                     // presses on a row that isn't drawn.
-                    // Fire next is player 1's alone, so its row is not
-                    // drawn for anyone else and navigation skips it too.
-                    auto skippableRow = [this](int row) {
-                        if (row == kKeyRowFireNext && keyConfigPlayer != 1) return true;
+                    auto skippableRow = [&](int row) {
+                        (void)row;
 #ifdef __ANDROID__
                         return (row == kKeyRowRemoveAdsMonth ||
                                 row == kKeyRowRemoveAdsYear ||
@@ -806,11 +804,10 @@ bool MainMenu::KeysPanelKey(SDL_Event *e) {
                             keys.right  = (SDL_Scancode)(CTRL_SC_BASE + slot * 20 + SDL_GAMEPAD_BUTTON_DPAD_RIGHT);
                             keys.fire   = (SDL_Scancode)(CTRL_SC_BASE + slot * 20 + SDL_GAMEPAD_BUTTON_SOUTH);
                             keys.center = (SDL_Scancode)(CTRL_SC_BASE + slot * 20 + SDL_GAMEPAD_BUTTON_DPAD_DOWN);
-                            // X / Square: in a 1-player game it is otherwise
-                            // unused (it opens chat only in network games,
-                            // where fire next is off).
-                            if (slot == 0)
-                                keys.fireNext = (SDL_Scancode)(CTRL_SC_BASE + SDL_GAMEPAD_BUTTON_WEST);
+                            // X / Square is Swap. In a network game it also
+                            // opens chat; a local game reads the pad's West
+                            // button for Swap directly as well.
+                            keys.fireNext = (SDL_Scancode)(CTRL_SC_BASE + slot * 20 + SDL_GAMEPAD_BUTTON_WEST);
                             gs->SaveKeys();
                             AudioMixer::Instance()->PlaySFX("typewriter");
                         } else if (keyConfigIndex == kKeyRowSpeed) {
@@ -1068,8 +1065,9 @@ bool MainMenu::LocalMPPanelKey(SDL_Event *e) {
                     } else if (localMPMenuIndex == 1) {
                         localMPCR = !localMPCR;
                         AudioMixer::Instance()->PlaySFX("menu_change");
-                    } else if (localMPMenuIndex == 2) {
-                        localMPNoCompress = !localMPNoCompress;
+                    } else if (localMPMenuIndex == kLocalMPRowCollapse) {
+                        StepNewRowSetting(localMPNoCompress, localMPNewRowShots,
+                                          e->key.key != SDLK_LEFT);
                         AudioMixer::Instance()->PlaySFX("menu_change");
                     } else if (localMPMenuIndex == kLocalMPRowMode) {
                         StepLocalMPGameMode(e->key.key != SDLK_LEFT);
@@ -1139,8 +1137,8 @@ bool MainMenu::LocalMPPanelKey(SDL_Event *e) {
                     } else if (localMPMenuIndex == 1) {
                         localMPCR = !localMPCR;
                         AudioMixer::Instance()->PlaySFX("menu_change");
-                    } else if (localMPMenuIndex == 2) {
-                        localMPNoCompress = !localMPNoCompress;
+                    } else if (localMPMenuIndex == kLocalMPRowCollapse) {
+                        StepNewRowSetting(localMPNoCompress, localMPNewRowShots, true);
                         AudioMixer::Instance()->PlaySFX("menu_change");
                     } else if (localMPMenuIndex == kLocalMPRowMode) {
                         StepLocalMPGameMode(true);
@@ -1827,14 +1825,16 @@ void MainMenu::GameRoomHostReturn(NetworkClient *netClient, GameRoom *currentGam
         AudioMixer::Instance()->PlaySFX("menu_change");
         settingChanged = true;
     } else if (selectedActionIndex == kRoomRows) {
-        // Toggle per-player compression; col 0 = ALL (set all to majority opposite)
+        // Step per-player new rows (off, then every 12, 15 or 20 shots); col 0 = ALL,
+        // which steps from the first player's setting and gives it to all.
         int np = (int)currentGame->players.size();
         if (np < 1) np = 1; if (np > 5) np = 5;
         int lo = (currentPlayerCol == 0) ? 0 : currentPlayerCol - 1;
         int hi = (currentPlayerCol == 0) ? np : currentPlayerCol;
-        bool allOn = true;
-        for (int i = lo; i < hi; i++) if (playerNoCompress[i]) allOn = false;
-        for (int i = lo; i < hi; i++) playerNoCompress[i] = allOn;
+        bool off = playerNoCompress[lo];
+        int shots = playerNewRowShots[lo];
+        StepNewRowSetting(off, shots, true);
+        for (int i = lo; i < hi; i++) { playerNoCompress[i] = off; playerNewRowShots[i] = shots; }
         AudioMixer::Instance()->PlaySFX("menu_change");
         settingChanged = true;
     } else if (selectedActionIndex == kRoomAim) {

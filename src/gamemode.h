@@ -96,6 +96,42 @@ inline GameMode ClampGameMode(int raw) {
 inline bool GameModeForcesNoCompression(GameMode m) { return m == GameMode::Clear; }
 inline bool GameModeForcesAttacksOff(GameMode m)    { return m == GameMode::Clear; }
 
+// Multiplayer's new row: a fresh row of bubbles pushes the board down every
+// this many shots. 12 is the original's (bin/frozen-bubble, newroot) and the
+// fewest offered (user decision: never faster than the original); the room's
+// and the local panel's Rows setting picks one of the choices below, or off
+// (disableCompression). 1-player's ceiling keeps its own 9.
+inline constexpr int kNewRowShotsDefault = 12;
+inline constexpr int kNewRowShotsChoices[] = {12, 15, 20};
+inline constexpr int kNewRowShotsChoiceCount =
+    (int)(sizeof(kNewRowShotsChoices) / sizeof(kNewRowShotsChoices[0]));
+
+// 0 (unset) and anything out of range -- fewer than the original's 12
+// included -- come back as the default: the value also arrives from another
+// client's SETOPTIONS and from a replay file.
+inline int ClampNewRowShots(int n) {
+    return (n < kNewRowShotsDefault || n > 99) ? kNewRowShotsDefault : n;
+}
+
+// The Rows setting as one cycle -- off, then each choice -- stepped from the
+// current (off, shots) pair. A shot count that is not one of the choices
+// (another build's) steps from the default.
+inline void StepNewRowSetting(bool& off, int& shots, bool forward) {
+    int pos = 0;  // 0 = off, 1..count = choice pos-1
+    if (!off) {
+        int match = -1, def = 0;
+        for (int i = 0; i < kNewRowShotsChoiceCount; ++i) {
+            if (kNewRowShotsChoices[i] == shots) match = i;
+            if (kNewRowShotsChoices[i] == kNewRowShotsDefault) def = i;
+        }
+        pos = 1 + (match >= 0 ? match : def);
+    }
+    const int n = kNewRowShotsChoiceCount + 1;
+    pos = (pos + (forward ? 1 : n - 1)) % n;
+    off = pos == 0;
+    if (!off) shots = kNewRowShotsChoices[pos - 1];
+}
+
 // True when the mode ranks players by how many bubbles they popped -- which is
 // also exactly when the round can end without anyone dying, and so when the
 // live popped counts have to be synced every shot rather than once at the end.

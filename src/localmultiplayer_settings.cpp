@@ -92,11 +92,13 @@ LocalMultiplayerOptions BuildLocalMultiplayerOptions(
     int botCount,
     int botSkill,
     int raceTargetIndex,
-    int timedSecondsIndex) {
+    int timedSecondsIndex,
+    int newRowShots) {
     LocalMultiplayerOptions options;
     options.playerCount = playerCount;
     options.chainReaction = chainReaction;
     options.noCompression = noCompression;
+    options.newRowShots = ClampNewRowShots(newRowShots);
     options.gameMode = gameMode;
     options.raceTargetIndex = raceTargetIndex;
     options.timedSecondsIndex = timedSecondsIndex;
@@ -143,6 +145,7 @@ SetupSettings BuildLocalMultiplayerSettings(
         settings.playerTeams[i] = options.teamMode ? (i % 2) + 1 : kNoTeam;
         settings.playerColors[i] = options.colors[i];
         settings.disableCompression[i] = options.noCompression;
+        settings.newRowShots[i] = options.newRowShots;
         settings.aimGuide[i] = options.aimGuide[i];
     }
 

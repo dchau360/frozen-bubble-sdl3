@@ -1088,7 +1088,7 @@ void BubbleGame::CheckGameState(BubbleArray &bArray, bool countForRoot) {
             }
             else {
                 ExpandNewLane(bArray);
-                bArray.turnsToCompress = 12;
+                bArray.turnsToCompress = bArray.newRowShots;
                 PlaySFX("newroot");
             }
         }

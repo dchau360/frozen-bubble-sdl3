@@ -492,6 +492,10 @@ private:
     int victoriesLimitIndex = 5; // 0=none, 1=1, 2=2, 3=3, 4=4, 5=5, etc.
     int playerColorCounts[5] = {8, 8, 8, 8, 8};  // Per-player color count (5-8)
     bool playerNoCompress[5] = {false, false, false, false, false};  // Per-player: disable row compression
+    // Per-player shots between new rows while on (NEWROW_Pn); the Rows cell
+    // steps off, then each of kNewRowShotsChoices (12, 15, 20).
+    int playerNewRowShots[5] = {kNewRowShotsDefault, kNewRowShotsDefault, kNewRowShotsDefault,
+                                kNewRowShotsDefault, kNewRowShotsDefault};
     bool playerAimGuide[5] = {false, false, false, false, false};  // Per-player: show aim guide
     int currentPlayerCol = 0;  // Focused player column when navigating per-player grid settings
     bool netRoomMouseEnabled = false;  // Per-session mouse/touch for network games (defaults OFF)
@@ -744,6 +748,7 @@ private:
     int localMPBotSkill = 1;        // 0 easy, 1 normal, 2 hard
     bool localMPCR = true;          // Chain reaction enabled
     bool localMPNoCompress = false;  // Disable row compression for all players
+    int localMPNewRowShots = kNewRowShotsDefault;  // Shots between new rows while on
     GameMode localMPGameMode = GameMode::Classic;  // Round rules (see gamemode.h)
     int localMPRaceTargetIndex = kRaceTargetDefaultIndex;
     int localMPTimedSecondsIndex = kTimedSecondsDefaultIndex;

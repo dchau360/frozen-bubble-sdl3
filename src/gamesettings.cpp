@@ -504,24 +504,28 @@ void GameSettings::LoadDefaultKeys()
     player2Keys.right = LoadScancode(optDict, "Keys:P2Right", SDL_SCANCODE_V);
     player2Keys.fire = LoadScancode(optDict, "Keys:P2Fire", SDL_SCANCODE_C);
     player2Keys.center = LoadScancode(optDict, "Keys:P2Center", SDL_SCANCODE_D);
+    player2Keys.fireNext = LoadScancode(optDict, "Keys:P2FireNext", SDL_SCANCODE_B);
 
     // P3: WASD
     player3Keys.left = LoadScancode(optDict, "Keys:P3Left", SDL_SCANCODE_A);
     player3Keys.right = LoadScancode(optDict, "Keys:P3Right", SDL_SCANCODE_D);
     player3Keys.fire = LoadScancode(optDict, "Keys:P3Fire", SDL_SCANCODE_W);
     player3Keys.center = LoadScancode(optDict, "Keys:P3Center", SDL_SCANCODE_S);
+    player3Keys.fireNext = LoadScancode(optDict, "Keys:P3FireNext", SDL_SCANCODE_Q);
 
     // P4: IJKL
     player4Keys.left = LoadScancode(optDict, "Keys:P4Left", SDL_SCANCODE_J);
     player4Keys.right = LoadScancode(optDict, "Keys:P4Right", SDL_SCANCODE_L);
     player4Keys.fire = LoadScancode(optDict, "Keys:P4Fire", SDL_SCANCODE_I);
     player4Keys.center = LoadScancode(optDict, "Keys:P4Center", SDL_SCANCODE_K);
+    player4Keys.fireNext = LoadScancode(optDict, "Keys:P4FireNext", SDL_SCANCODE_U);
 
     // P5: Numpad 4/6/8/5
     player5Keys.left = LoadScancode(optDict, "Keys:P5Left", SDL_SCANCODE_KP_4);
     player5Keys.right = LoadScancode(optDict, "Keys:P5Right", SDL_SCANCODE_KP_6);
     player5Keys.fire = LoadScancode(optDict, "Keys:P5Fire", SDL_SCANCODE_KP_8);
     player5Keys.center = LoadScancode(optDict, "Keys:P5Center", SDL_SCANCODE_KP_5);
+    player5Keys.fireNext = LoadScancode(optDict, "Keys:P5FireNext", SDL_SCANCODE_KP_7);
 }
 
 void GameSettings::SaveKeys()
@@ -549,21 +553,25 @@ void GameSettings::SaveKeys()
     iniparser_set(optDict, "Keys:P2Right", std::to_string(player2Keys.right).c_str());
     iniparser_set(optDict, "Keys:P2Fire", std::to_string(player2Keys.fire).c_str());
     iniparser_set(optDict, "Keys:P2Center", std::to_string(player2Keys.center).c_str());
+    iniparser_set(optDict, "Keys:P2FireNext", std::to_string(player2Keys.fireNext).c_str());
 
     iniparser_set(optDict, "Keys:P3Left", std::to_string(player3Keys.left).c_str());
     iniparser_set(optDict, "Keys:P3Right", std::to_string(player3Keys.right).c_str());
     iniparser_set(optDict, "Keys:P3Fire", std::to_string(player3Keys.fire).c_str());
     iniparser_set(optDict, "Keys:P3Center", std::to_string(player3Keys.center).c_str());
+    iniparser_set(optDict, "Keys:P3FireNext", std::to_string(player3Keys.fireNext).c_str());
 
     iniparser_set(optDict, "Keys:P4Left", std::to_string(player4Keys.left).c_str());
     iniparser_set(optDict, "Keys:P4Right", std::to_string(player4Keys.right).c_str());
     iniparser_set(optDict, "Keys:P4Fire", std::to_string(player4Keys.fire).c_str());
     iniparser_set(optDict, "Keys:P4Center", std::to_string(player4Keys.center).c_str());
+    iniparser_set(optDict, "Keys:P4FireNext", std::to_string(player4Keys.fireNext).c_str());
 
     iniparser_set(optDict, "Keys:P5Left", std::to_string(player5Keys.left).c_str());
     iniparser_set(optDict, "Keys:P5Right", std::to_string(player5Keys.right).c_str());
     iniparser_set(optDict, "Keys:P5Fire", std::to_string(player5Keys.fire).c_str());
     iniparser_set(optDict, "Keys:P5Center", std::to_string(player5Keys.center).c_str());
+    iniparser_set(optDict, "Keys:P5FireNext", std::to_string(player5Keys.fireNext).c_str());
 
     SaveBlockedPlayers();
 

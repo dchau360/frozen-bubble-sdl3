@@ -395,13 +395,54 @@ struct NetworkClientTestAccess {
     static void SetGameList(NetworkClient& nc, std::vector<GameRoom> games) {
         nc.gameList = std::move(games);
     }
+    // A server push, as HandleServerResponse hands it on ("OPTIONS: ...").
+    static void Push(NetworkClient& nc, const std::string& msg) { nc.HandlePushMessage(msg); }
 };
+
+// The room's per-player new-row counts go out as NEWROW_Pn beside the
+// NOCOMPRESS_Pn that still says "off", and come back on a joiner unchanged; a
+// host that sends none (an older build) is the original's 12, and so is a
+// value under 12 or one no build offers.
+static void TestNewRowOptionsRoundTrip() {
+    NetworkClient* nc = NetworkClient::Instance();
+    const int colors[5] = {8, 8, 8, 8, 8};
+    const bool noCompress[5] = {false, true, false, false, false};
+    const bool aim[5] = {};
+    const int teams[5] = {};
+    const int rows[5] = {15, 12, 20, 15, 12};
+    const std::string blob = NetworkClient::BuildOptionsBlob(
+        true, true, false, 5, colors, noCompress, aim, false, GameMode::Classic,
+        kRaceTargetDefault, kTimedSecondsDefault, AttackMode::On, teams, 2, rows);
+    CHECK(blob.find(",NOCOMPRESS_P2:1") != std::string::npos);
+    CHECK(blob.find(",NEWROW_P1:15") != std::string::npos);
+    CHECK(blob.find(",NEWROW_P3:20") != std::string::npos);
+
+    NetworkClientTestAccess::Push(*nc, "OPTIONS: " + blob);
+    int got[5] = {};
+    nc->GetReceivedNewRowShots(got);
+    for (int i = 0; i < 5; ++i) CHECK(got[i] == rows[i]);
+
+    // No NEWROW keys at all, and a hostile one: both the default.
+    NetworkClientTestAccess::Push(*nc, "OPTIONS: CHAINREACTION:1,NOCOMPRESS_P1:0");
+    nc->GetReceivedNewRowShots(got);
+    for (int i = 0; i < 5; ++i) CHECK(got[i] == kNewRowShotsDefault);
+    // Faster than the original's 12 is not on offer either.
+    NetworkClientTestAccess::Push(*nc, "OPTIONS: NEWROW_P1:4,NEWROW_P2:9999999999,NEWROW_P3:x");
+    nc->GetReceivedNewRowShots(got);
+    CHECK(got[0] == kNewRowShotsDefault && got[1] == kNewRowShotsDefault &&
+          got[2] == kNewRowShotsDefault);
+    // Leave no pending OPTIONS behind for the tests that follow.
+    bool cr, cl, st, nc5[5], ag[5], me; int vl, pc[5], rt, ts, pt[5], tc;
+    GameMode gm; AttackMode am;
+    nc->GetAndClearPendingOptions(cr, cl, st, vl, pc, nc5, ag, me, gm, rt, ts, am, pt, tc);
+}
 
 int main() {
     SDL_SetEnvironmentVariable(SDL_GetEnvironment(), "SDL_VIDEODRIVER", "dummy", true);
     SDL_Init(SDL_INIT_VIDEO);
     TTF_Init();
     InitDataDir();
+    TestNewRowOptionsRoundTrip();
     // Menu taps save settings; keep them out of the player's real pref dir.
     const auto prefDir = std::filesystem::temp_directory_path() /
         ("frozen-bubble-menu-touch-gesture-test-" + std::to_string(

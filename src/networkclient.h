@@ -355,7 +355,7 @@ public:
     bool IsPendingNick() const { return pendingNick; }
 
     // Send game options to other players (host only)
-    bool SendOptions(bool chainReaction, bool continueWhenLeave, bool singleTarget, int victoriesLimit, const int playerColors[5], const bool noCompress[5], const bool aimGuide[5], bool mouseEnabled, GameMode gameMode, int raceTarget, int timedSeconds, AttackMode attackMode, const int playerTeams[5], int teamCount);
+    bool SendOptions(bool chainReaction, bool continueWhenLeave, bool singleTarget, int victoriesLimit, const int playerColors[5], const bool noCompress[5], const bool aimGuide[5], bool mouseEnabled, GameMode gameMode, int raceTarget, int timedSeconds, AttackMode attackMode, const int playerTeams[5], int teamCount, const int newRowShots[5] = nullptr);
 
     // The same comma-separated KEY:value ruleset blob SendOptions() sends
     // after "SETOPTIONS ", built standalone (no leading command word, no
@@ -364,7 +364,7 @@ public:
     // "TOUR CREATE " -- can reuse the exact same encoding instead of
     // duplicating this format string. See server/tournament.c's
     // tournament_create() and game_tournament_start() for what reads it.
-    static std::string BuildOptionsBlob(bool chainReaction, bool continueWhenLeave, bool singleTarget, int victoriesLimit, const int playerColors[5], const bool noCompress[5], const bool aimGuide[5], bool mouseEnabled, GameMode gameMode, int raceTarget, int timedSeconds, AttackMode attackMode, const int playerTeams[5], int teamCount);
+    static std::string BuildOptionsBlob(bool chainReaction, bool continueWhenLeave, bool singleTarget, int victoriesLimit, const int playerColors[5], const bool noCompress[5], const bool aimGuide[5], bool mouseEnabled, GameMode gameMode, int raceTarget, int timedSeconds, AttackMode attackMode, const int playerTeams[5], int teamCount, const int newRowShots[5] = nullptr);
 
     // Received options from host (updated when SETOPTIONS push arrives)
     bool pendingOptions = false;
@@ -374,6 +374,10 @@ public:
     int rcvVictoriesLimit = 5;
     int rcvPlayerColors[5] = {7, 7, 7, 7, 7};
     bool rcvNoCompress[5] = {false, false, false, false, false};
+    // NEWROW_Pn, shots between new rows; a host that predates it sends none,
+    // which is the original's 12 (kNewRowShotsDefault).
+    int rcvNewRowShots[5] = {kNewRowShotsDefault, kNewRowShotsDefault, kNewRowShotsDefault,
+                             kNewRowShotsDefault, kNewRowShotsDefault};
     bool rcvAimGuide[5] = {false, false, false, false, false};
     bool rcvMouseEnabled = false;
     GameMode rcvGameMode = GameMode::Classic;
@@ -387,6 +391,11 @@ public:
     // room starts every player on now.
     int rcvPlayerTeams[5] = {0, 0, 0, 0, 0};
     int rcvTeamCount = 2;
+    // The last OPTIONS push's NEWROW_Pn. Read alongside
+    // GetAndClearPendingOptions(), which predates it.
+    void GetReceivedNewRowShots(int out[5]) const {
+        for (int i = 0; i < 5; i++) out[i] = rcvNewRowShots[i];
+    }
     // Returns true (and clears flag) if new options arrived since last call
     bool GetAndClearPendingOptions(bool& cr, bool& cl, bool& st, int& vl, int pc[5], bool nc[5], bool ag[5], bool& me, GameMode& gm, int& rt, int& ts, AttackMode& dm, int pt[5], int& tc) {
         if (!pendingOptions) return false;

@@ -304,38 +304,49 @@ std::string BubbleGame::SkipShotHintLine() const {
 }
 
 SDL_Rect BubbleGame::PocketRect(const BubbleArray &b) {
-    // Beside the next bubble, on the side away from the penguin.
+    // Beside the next bubble, on the side away from the penguin (right in
+    // one player, left on the centre board of a local game). A narrow side
+    // board has a smaller well tucked in close, clear of its F-key label.
     SDL_Rect r = b.nextBubbleRct;
-    r.x -= r.w + r.w * 7 / 16;
+    const SDL_Rect& pg = b.penguinSprite.rect;
+    const bool penguinRight = pg.w <= 0 || pg.x + pg.w / 2 > r.x + r.w / 2;
+    if (b.rightLimit - b.leftLimit < 200) {
+        const int s = 24;
+        r = {penguinRight ? r.x - s - 4 : r.x + r.w + 4, r.y + (r.h - s) / 2, s, s};
+        return r;
+    }
+    r.x += penguinRight ? -(r.w + r.w * 7 / 16) : r.w + r.w * 7 / 16;
     return r;
 }
 
-void BubbleGame::DrawPocket(SDL_Renderer *rend, const BubbleArray &b, SDL_Texture **bubbles) {
+void BubbleGame::DrawPocket(SDL_Renderer *rend, const BubbleArray &b, SDL_Texture **bubbles, bool tagged) {
+    const int board = (int)(&b - bubbleArrays);
     const bool full = b.pocketColor >= 0 && b.pocketColor < BUBBLE_STYLES &&
-                      !PocketSlideInto(PocketSlide::kPocket);
+                      !PocketSlideInto(board, PocketSlide::kPocket);
     modernui::DrawPocketWell(rend, pocketLabelText, ToFRect(PocketRect(b)),
                              full ? bubbles[b.pocketColor] : nullptr,
-                             b.pocketColor >= 0);
+                             b.pocketColor >= 0, tagged);
 }
 
-void BubbleGame::StartPocketSlide(int color, SDL_Rect from, SDL_Rect to, int into, bool fade) {
+void BubbleGame::StartPocketSlide(int board, int color, SDL_Rect from, SDL_Rect to, int into, bool fade) {
     if (!EffectsEnabled() || color < 0 || color >= BUBBLE_STYLES) return;
-    pocketSlides.push_back({color, from, to, SDL_GetTicks(), into, fade});
+    pocketSlides.push_back({board, color, from, to, SDL_GetTicks(), into, fade});
 }
 
-bool BubbleGame::PocketSlideInto(int into) const {
+bool BubbleGame::PocketSlideInto(int board, int into) const {
     const Uint64 now = SDL_GetTicks();
     for (const PocketSlide& s : pocketSlides)
-        if (s.into == into && now - s.startMs < kPocketSlideMs) return true;
+        if (s.board == board && s.into == into && now - s.startMs < kPocketSlideMs) return true;
     return false;
 }
 
-void BubbleGame::DrawPocketSlides(SDL_Renderer *rend, SDL_Texture **bubbles) {
+void BubbleGame::DrawPocketSlides(SDL_Renderer *rend, SDL_Texture **bubbles, int board) {
     const Uint64 now = SDL_GetTicks();
     pocketSlides.erase(std::remove_if(pocketSlides.begin(), pocketSlides.end(),
                            [&](const PocketSlide& s) { return now - s.startMs >= kPocketSlideMs; }),
                        pocketSlides.end());
     for (const PocketSlide& s : pocketSlides) {
+        if (s.board != board) continue;
         const float t = (float)(now - s.startMs) / kPocketSlideMs;
         const float e = 1.f - (1.f - t) * (1.f - t) * (1.f - t);   // ease out
         const SDL_FRect r = {s.from.x + (s.to.x - s.from.x) * e, s.from.y + (s.to.y - s.from.y) * e,
@@ -362,10 +373,12 @@ void BubbleGame::DrawSwapShotRing(SDL_Renderer *rend, SDL_FRect r) {
                               {modernui::kIce.r, modernui::kIce.g, modernui::kIce.b, (Uint8)(200 + 55 * pulse)});
 }
 
-void BubbleGame::DrawSwapShotTag(SDL_Renderer *rend) {
-    if (!swapTagStartMs) return;
-    const Uint64 age = SDL_GetTicks() - swapTagStartMs;
-    if (age >= kSwapTagMs || !EffectsEnabled()) { swapTagStartMs = 0; return; }
+void BubbleGame::DrawSwapShotTag(SDL_Renderer *rend, int board) {
+    Uint64& startMs = swapTagStartMs[board];
+    if (!startMs) return;
+    const Uint64 age = SDL_GetTicks() - startMs;
+    if (age >= kSwapTagMs || !EffectsEnabled()) { startMs = 0; return; }
+    const SDL_Rect& from = swapTagFrom[board];
     swapTagText.UpdateText(rend, "SWAP!", 0);
     SDL_Texture* tex = swapTagText.Texture();
     if (!tex) return;
@@ -379,8 +392,8 @@ void BubbleGame::DrawSwapShotTag(SDL_Renderer *rend) {
     const float rise = 34.f * (1.f - (1.f - t) * (1.f - t));
 
     const SDL_Rect* c = swapTagText.Coords();
-    const float cx = swapTagFrom.x + swapTagFrom.w / 2.f;
-    const float top = swapTagFrom.y - c->h - 12 - rise;
+    const float cx = from.x + from.w / 2.f;
+    const float top = from.y - c->h - 12 - rise;
     const SDL_FRect pill = {cx - c->w / 2.f - 8, top, c->w + 16.f, c->h + 4.f};
     SDL_SetRenderDrawBlendMode(rend, SDL_BLENDMODE_BLEND);
     modernui::FillRoundRect(rend, {pill.x, pill.y + 2, pill.w, pill.h}, pill.h / 2, {0, 0, 0, (Uint8)(90 * a)});
@@ -1756,10 +1769,10 @@ void BubbleGame::Draw() {
             }
         }
 
-        if (!PocketSlideInto(PocketSlide::kLauncher)) { SDL_FRect fr = ToFRect(curArray.curLaunchRct); SDL_RenderTexture(rend, gameFinish && !gameWon ? imgBubbleFrozen : useBubbles[curArray.curLaunch], nullptr, &fr); }
+        if (!PocketSlideInto(0, PocketSlide::kLauncher)) { SDL_FRect fr = ToFRect(curArray.curLaunchRct); SDL_RenderTexture(rend, gameFinish && !gameWon ? imgBubbleFrozen : useBubbles[curArray.curLaunch], nullptr, &fr); }
         { SDL_FRect fr = ToFRect(curArray.nextBubbleRct); SDL_RenderTexture(rend, useBubbles[curArray.nextBubble], nullptr, &fr); }
         { SDL_FRect fr = ToFRect(curArray.onTopRct); SDL_RenderTexture(rend, onTopTexture, nullptr, &fr); }
-        if (FireNextAllowed()) DrawPocket(rend, curArray, useBubbles);
+        if (ShowsPocket(curArray)) DrawPocket(rend, curArray, useBubbles);
         if (gameFinish && !gameWon) { SDL_FRect fr = ToFRect(curArray.frozenBottomRct); SDL_RenderTexture(rend, imgBubbleFrozen, nullptr, &fr); }
 
         DrawHurryWarning(rend, curArray);
@@ -1768,9 +1781,9 @@ void BubbleGame::Draw() {
         // Redraw the current bubble on top of the shooter/cannon sprite -- the
         // cannon graphic is large enough to cover most of it, otherwise making
         // the loaded bubble's color hard to see while aiming.
-        if (!PocketSlideInto(PocketSlide::kLauncher)) { SDL_FRect fr = ToFRect(curArray.curLaunchRct); SDL_RenderTexture(rend, gameFinish && !gameWon ? imgBubbleFrozen : useBubbles[curArray.curLaunch], nullptr, &fr); }
-        DrawPocketSlides(rend, useBubbles);
-        DrawSwapShotTag(rend);
+        if (!PocketSlideInto(0, PocketSlide::kLauncher)) { SDL_FRect fr = ToFRect(curArray.curLaunchRct); SDL_RenderTexture(rend, gameFinish && !gameWon ? imgBubbleFrozen : useBubbles[curArray.curLaunch], nullptr, &fr); }
+        DrawPocketSlides(rend, useBubbles, 0);
+        DrawSwapShotTag(rend, 0);
         if (curArray.aimGuideEnabled && !gameFinish) {
             bool isMini = (currentSettings.playerCount >= 3 && curArray.playerAssigned >= 1);
             DrawAimGuide(rend, curArray, isMini, stepDeltaScale);
@@ -1866,7 +1879,11 @@ void BubbleGame::Draw() {
             // No-op for <=5-player games since ApplyNetViewPage() marks everything visible.
             if (curArray.boardVisible) {
                 SDL_Rect rct;
-                for (int i = 1; i < 13; i++) {
+                // One dot a shot to the next new row, at most the original's
+                // 12 (all the frame has room for; a longer count lights its
+                // dot once it is 12 away).
+                const int dots = std::min(curArray.newRowShots, kNewRowShotsDefault);
+                for (int i = 1; i <= dots; i++) {
                     rct.x = curArray.rightLimit;
                     rct.y = 104 - (7 * i) - i;
                     rct.w = rct.h = 7;
@@ -1876,14 +1893,15 @@ void BubbleGame::Draw() {
                 // Don't render shooter bubbles for LOST players (prevents crashes from invalid bubble indices)
                 // In network games, losing players become spectators and shouldn't have active bubbles
                 if (curArray.playerState != BubbleArray::PlayerState::LOST) {
-                    const bool sliding = &curArray == &bubbleArrays[0] && PocketSlideInto(PocketSlide::kLauncher);
+                    const bool sliding = PocketSlideInto(i, PocketSlide::kLauncher);
                     if (!sliding) { SDL_FRect fr = ToFRect(curArray.curLaunchRct); SDL_RenderTexture(rend, gameFinish && !curArray.mpWinner ? useFrozen : useBubbles[curArray.curLaunch], nullptr, &fr); }
                     { SDL_FRect fr = ToFRect(curArray.nextBubbleRct); SDL_RenderTexture(rend, useBubbles[curArray.nextBubble], nullptr, &fr); }
                     { SDL_FRect fr = ToFRect(curArray.onTopRct); SDL_RenderTexture(rend, onTopTexture, nullptr, &fr); }
-                    // Only this player's own board has a pocket to show:
-                    // a peer's pocket is not on the wire.
-                    if (&curArray == &bubbleArrays[0] && !useMini && !curArray.isBot && FireNextAllowed())
-                        DrawPocket(rend, curArray, useBubbles);
+                    // Only boards played here have a pocket to show: a
+                    // peer's pocket is not on the wire. A mini board's well
+                    // has no room for the SWAP tag.
+                    if (ShowsPocket(curArray))
+                        DrawPocket(rend, curArray, useBubbles, !useMini);
                 }
                 if ((gameFinish && !curArray.mpWinner) || curArray.playerState == BubbleArray::PlayerState::LOST) { SDL_FRect fr = ToFRect(curArray.frozenBottomRct); SDL_RenderTexture(rend, useFrozen, nullptr, &fr); }
             }
@@ -1907,13 +1925,12 @@ void BubbleGame::Draw() {
                 // Redraw the current bubble on top of the shooter/cannon sprite -- the
                 // cannon graphic is large enough to cover most of it, otherwise making
                 // the loaded bubble's color hard to see while aiming.
-                const bool ownBoard = &curArray == &bubbleArrays[0];
                 if (curArray.playerState != BubbleArray::PlayerState::LOST &&
-                    !(ownBoard && PocketSlideInto(PocketSlide::kLauncher))) {
+                    !PocketSlideInto(i, PocketSlide::kLauncher)) {
                     SDL_FRect fr = ToFRect(curArray.curLaunchRct);
                     SDL_RenderTexture(rend, gameFinish && !curArray.mpWinner ? useFrozen : useBubbles[curArray.curLaunch], nullptr, &fr);
                 }
-                if (ownBoard && !useMini) { DrawPocketSlides(rend, useBubbles); DrawSwapShotTag(rend); }
+                if (ShowsPocket(curArray)) { DrawPocketSlides(rend, useBubbles, i); DrawSwapShotTag(rend, i); }
                 if (curArray.aimGuideEnabled && !gameFinish &&
                     curArray.playerState == BubbleArray::PlayerState::ALIVE) {
                     bool isMini = (currentSettings.playerCount >= 3 && curArray.playerAssigned >= 1);

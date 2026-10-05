@@ -49,6 +49,19 @@ struct MainMenuTestAccess {
         return menu.lastLocalMPPanelText;
     }
 
+    // The Row collapse row, selected, with its two halves of state.
+    static void SelectCollapseRow(MainMenu& menu) {
+        menu.showingLocalMPPanel = true;
+        menu.runDelay = false;
+        menu.localMPMenuIndex = kLocalMPRowCollapse;
+    }
+    static bool NoCompress(const MainMenu& menu) { return menu.localMPNoCompress; }
+    static int NewRowShots(const MainMenu& menu) { return menu.localMPNewRowShots; }
+    static std::string RenderPanel(MainMenu& menu) {
+        menu.LocalMPPanelRender();
+        return menu.lastLocalMPPanelText;
+    }
+
     static void SelectAttackRow(MainMenu& menu, AttackMode mode) {
         menu.showingLocalMPPanel = true;
         menu.runDelay = false;
@@ -608,6 +621,55 @@ int main() {
         CHECK(MainMenuTestAccess::RowCount(*menu) == 0);
         CHECK(!MainMenuTestAccess::Tap(*menu, 150.f, 205.f));
         SDL_FlushEvent(SDL_EVENT_KEY_DOWN);
+    }
+
+    // Row collapse steps off, then a new row every 12, 15 or 20 shots --
+    // never fewer than the original's 12; LEFT/RIGHT both ways round the
+    // cycle, ENTER forward.
+    {
+        bool off = false;
+        int shots = kNewRowShotsDefault;
+        StepNewRowSetting(off, shots, true);
+        CHECK(!off && shots == 15);
+        StepNewRowSetting(off, shots, true);
+        CHECK(!off && shots == 20);
+        StepNewRowSetting(off, shots, true);
+        CHECK(off);
+        StepNewRowSetting(off, shots, true);
+        CHECK(!off && shots == 12);
+        StepNewRowSetting(off, shots, false);
+        CHECK(off);
+        shots = 7;  // not a choice (another build's): steps from the default
+        off = false;
+        StepNewRowSetting(off, shots, false);
+        CHECK(off);
+        CHECK(ClampNewRowShots(0) == 12 && ClampNewRowShots(8) == 12 &&
+              ClampNewRowShots(500) == 12 && ClampNewRowShots(15) == 15);
+
+        MainMenuTestAccess::ConfigureLocalGame(
+            *menu, true, false, GameMode::Classic, AttackMode::On, false);
+        MainMenuTestAccess::SelectCollapseRow(*menu);
+        CHECK(MainMenuTestAccess::RenderPanel(*menu).find(
+                  "Row collapse: EVERY 12 SHOTS") != std::string::npos);
+        CHECK(MainMenuTestAccess::PressKey(*menu, SDLK_LEFT));
+        CHECK(MainMenuTestAccess::NoCompress(*menu));
+        CHECK(MainMenuTestAccess::RenderPanel(*menu).find(
+                  "Row collapse: OFF") != std::string::npos);
+        CHECK(MainMenuTestAccess::PressKey(*menu, SDLK_LEFT));
+        CHECK(!MainMenuTestAccess::NoCompress(*menu));
+        CHECK(MainMenuTestAccess::NewRowShots(*menu) == 20);
+        CHECK(MainMenuTestAccess::RenderPanel(*menu).find(
+                  "Row collapse: EVERY 20 SHOTS") != std::string::npos);
+        bool captured = false;
+        SetupSettings started = MainMenuTestAccess::StartLocalGame(*menu, captured);
+        CHECK(captured);
+        CHECK(!started.disableCompression[0]);
+        CHECK(started.newRowShots[0] == 20 && started.newRowShots[3] == 20);
+        CHECK(MainMenuTestAccess::PressKey(*menu, SDLK_RETURN));
+        CHECK(MainMenuTestAccess::NoCompress(*menu));
+        CHECK(MainMenuTestAccess::PressKey(*menu, SDLK_RETURN));
+        CHECK(!MainMenuTestAccess::NoCompress(*menu));
+        CHECK(MainMenuTestAccess::NewRowShots(*menu) == 12);
     }
 
     for (int enabledField = 0; enabledField < 5; ++enabledField) {

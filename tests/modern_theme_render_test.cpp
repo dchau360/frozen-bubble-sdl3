@@ -55,21 +55,27 @@ struct BubbleGameTestAccess {
         g.pocketSlides.clear();
         const SDL_Rect pocket = BubbleGame::PocketRect(b);
         if (fire) {
-            g.StartPocketSlide(b.curLaunch, pocket, b.curLaunchRct, BubbleGame::PocketSlide::kNone, true);
-            g.StartPocketSlide(b.pocketColor, b.curLaunchRct, pocket, BubbleGame::PocketSlide::kPocket);
+            g.StartPocketSlide(0, b.curLaunch, pocket, b.curLaunchRct, BubbleGame::PocketSlide::kNone, true);
+            g.StartPocketSlide(0, b.pocketColor, b.curLaunchRct, pocket, BubbleGame::PocketSlide::kPocket);
         } else {
-            g.StartPocketSlide(b.pocketColor, b.curLaunchRct, pocket, BubbleGame::PocketSlide::kPocket);
-            g.StartPocketSlide(b.curLaunch, b.nextBubbleRct, b.curLaunchRct, BubbleGame::PocketSlide::kLauncher);
+            g.StartPocketSlide(0, b.pocketColor, b.curLaunchRct, pocket, BubbleGame::PocketSlide::kPocket);
+            g.StartPocketSlide(0, b.curLaunch, b.nextBubbleRct, b.curLaunchRct, BubbleGame::PocketSlide::kLauncher);
         }
         for (auto& s : g.pocketSlides) s.startMs = SDL_GetTicks() - ms;
     }
     static size_t slideCount(const BubbleGame& g) { return g.pocketSlides.size(); }
     // The swap shot indicator, `ms` after the shot left the launcher.
     static void swapTag(BubbleGame& g, Uint64 ms) {
-        g.swapTagFrom = g.bubbleArrays[0].curLaunchRct;
-        g.swapTagStartMs = SDL_GetTicks() - ms;
+        g.swapTagFrom[0] = g.bubbleArrays[0].curLaunchRct;
+        g.swapTagStartMs[0] = SDL_GetTicks() - ms;
     }
-    static bool swapTagShowing(const BubbleGame& g) { return g.swapTagStartMs != 0; }
+    static bool swapTagShowing(const BubbleGame& g) { return g.swapTagStartMs[0] != 0; }
+    static bool showsPocket(const BubbleGame& g, int i) { return g.ShowsPocket(g.bubbleArrays[i]); }
+    static BubbleArray& board(BubbleGame& g, int i) { return g.bubbleArrays[i]; }
+    static void swapTagOn(BubbleGame& g, int i, Uint64 ms) {
+        g.swapTagFrom[i] = g.bubbleArrays[i].curLaunchRct;
+        g.swapTagStartMs[i] = SDL_GetTicks() - ms;
+    }
     static void finish(BubbleGame& game, bool won, bool prompt) {
         game.gameFinish = true;
         game.gameWon = won;
@@ -282,6 +288,39 @@ int main() {
         game.NewGame(setup);
         CHECK(!BubbleGameTestAccess::modern(game));
         CHECK(!BubbleGameTestAccess::pauseHit(game, 616, 24));  // no pause button either
+    }
+
+    // Local multiplayer: every human board has a swap pocket, the small side
+    // boards too (without the SWAP tag); a bot's board has none.
+    {
+        BubbleGame game(renderer);
+        SetupSettings setup;
+        setup.playerCount = 4;
+        setup.localMultiplayer = true;
+        setup.randomLevels = true;
+        setup.playerIsBot[3] = true;
+        game.NewGame(setup);
+        BubbleGameTestAccess::ready(game);
+        for (int i = 0; i < 3; ++i) CHECK(BubbleGameTestAccess::showsPocket(game, i));
+        CHECK(!BubbleGameTestAccess::showsPocket(game, 3));
+        BubbleGameTestAccess::board(game, 0).pocketColor = 3;
+        BubbleGameTestAccess::board(game, 1).pocketColor = 5;
+        BubbleGameTestAccess::swapTagOn(game, 2, 250);
+        BubbleGameTestAccess::draw(game);
+        Dump(renderer, "8-local-pockets");
+    }
+    {
+        BubbleGame game(renderer);
+        SetupSettings setup;
+        setup.playerCount = 2;
+        setup.localMultiplayer = true;
+        setup.randomLevels = true;
+        game.NewGame(setup);
+        BubbleGameTestAccess::ready(game);
+        CHECK(BubbleGameTestAccess::showsPocket(game, 0) && BubbleGameTestAccess::showsPocket(game, 1));
+        BubbleGameTestAccess::board(game, 1).pocketColor = 2;
+        BubbleGameTestAccess::draw(game);
+        Dump(renderer, "8b-local-2p-pockets");
     }
 
     SDL_DestroyRenderer(renderer);

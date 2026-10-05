@@ -37,11 +37,19 @@
 #include "bubbleai.h"
 
 bool BubbleGame::FireNextAllowed() const {
-    // Not local multiplayer: only player 1 has a skip-shot key. Network play
-    // is fine -- every board's 's' carries the colour that stuck, and its 'f'
-    // the colour launched (SendNetworkBubbleShot).
-    return !currentSettings.localMultiplayer &&
-           (currentSettings.networkGame || currentSettings.playerCount == 1);
+    // Local multiplayer: every player has a swap key (PlayerKeys::fireNext)
+    // and a pad's West button. Network play is fine -- every board's 's'
+    // carries the colour that stuck, and its 'f' the colour launched
+    // (SendNetworkBubbleShot).
+    return currentSettings.localMultiplayer || currentSettings.networkGame ||
+           currentSettings.playerCount == 1;
+}
+
+bool BubbleGame::ShowsPocket(const BubbleArray &b) const {
+    // A peer's pocket is not on the wire, and a bot never swaps: only the
+    // boards played on this machine, by a person.
+    return FireNextAllowed() && !b.isBot &&
+           (&b == &bubbleArrays[0] || currentSettings.localMultiplayer);
 }
 
 void BubbleGame::LaunchBubble(BubbleArray &bArray) {
@@ -196,18 +204,27 @@ PlayerControls BubbleGame::ResolvePlayerControls(BubbleArray &bArray, float delt
                 // Note: on Android TV, opening SDL_Gamepad can suppress d-pad
                 // keyboard events, so keyboard must be read unconditionally first.
                 int idx = bArray.playerAssigned;
+                SDL_Gamepad* pad = (idx < numControllersOpen) ? controllers[idx] : nullptr;
+                // Swap: this player's own key, or the pad's West button. A
+                // second trigger under the same release interlock as fire.
+                const bool fireHeld = IsKeyPressed(keys.fire) || controllerInputs[idx].fire ||
+                    (pad && (SDL_GetGamepadButton(pad, SDL_GAMEPAD_BUTTON_SOUTH) ||
+                             SDL_GetGamepadButton(pad, SDL_GAMEPAD_BUTTON_DPAD_UP)));
+                const bool nextHeld = FireNextAllowed() &&
+                    (IsKeyPressed(keys.fireNext) || (pad && SDL_GetGamepadButton(pad, SDL_GAMEPAD_BUTTON_WEST)));
                 // IsKeyPressed() handles real keyboard and virtual controller scancodes.
                 // Also OR with controllerInputs[] which frozenbubble.cpp writes directly
                 // (SDL_GetKeyboardState ignores synthetic SDL_PushEvent KEYDOWN events).
                 bArray.shooterLeft   = IsKeyPressed(keys.left)   || controllerInputs[idx].left;
                 bArray.shooterRight  = IsKeyPressed(keys.right)  || controllerInputs[idx].right;
                 bArray.shooterCenter = IsKeyPressed(keys.center) || controllerInputs[idx].center;
-                bArray.shooterAction = IsKeyPressed(keys.fire)   || controllerInputs[idx].fire;
+                bArray.shooterAction = IsKeyPressed(keys.fire)   || controllerInputs[idx].fire || nextHeld;
+                fireNext = nextHeld && !fireHeld;
                 if (bArray.suppressFireUntilRelease) {
-                    if (!IsKeyPressed(keys.fire) && !controllerInputs[idx].fire) bArray.suppressFireUntilRelease = false;
+                    if (!IsKeyPressed(keys.fire) && !controllerInputs[idx].fire && !nextHeld) bArray.suppressFireUntilRelease = false;
                     else bArray.shooterAction = false;
                 }
-                if (idx < numControllersOpen && controllers[idx]) {
+                if (pad) {
                     SDL_Gamepad* ctrl = controllers[idx];
                     bArray.shooterLeft   = bArray.shooterLeft   || SDL_GetGamepadButton(ctrl, SDL_GAMEPAD_BUTTON_DPAD_LEFT)  != 0;
                     bArray.shooterRight  = bArray.shooterRight  || SDL_GetGamepadButton(ctrl, SDL_GAMEPAD_BUTTON_DPAD_RIGHT) != 0;
@@ -377,9 +394,10 @@ void BubbleGame::ApplyPlayerControls(BubbleArray &bArray, const PlayerControls &
         // moves once per shot, and its 's' copy keeps peers' root rows right.
         if (controls.fireNext && !controls.skipShotLegacy && !bArray.mpFirePending &&
             FireNextAllowed() && bArray.pocketColor < 0) {
-            if (&bArray == &bubbleArrays[0]) {
-                StartPocketSlide(bArray.curLaunch, bArray.curLaunchRct, PocketRect(bArray), PocketSlide::kPocket);
-                StartPocketSlide(bArray.nextBubble, bArray.nextBubbleRct, bArray.curLaunchRct, PocketSlide::kLauncher);
+            if (ShowsPocket(bArray)) {
+                const int board = (int)(&bArray - bubbleArrays);
+                StartPocketSlide(board, bArray.curLaunch, bArray.curLaunchRct, PocketRect(bArray), PocketSlide::kPocket);
+                StartPocketSlide(board, bArray.nextBubble, bArray.nextBubbleRct, bArray.curLaunchRct, PocketSlide::kLauncher);
             }
             bArray.pocketColor = bArray.curLaunch;
             bArray.curLaunch = bArray.nextBubble;
@@ -441,20 +459,22 @@ void BubbleGame::ApplyPlayerControls(BubbleArray &bArray, const PlayerControls &
             else {
                 // On screen the pocketed bubble darts up into the shot and
                 // the loaded one drops into the pocket.
-                if (&bArray == &bubbleArrays[0]) {
-                    StartPocketSlide(bArray.pocketColor, PocketRect(bArray), bArray.curLaunchRct,
+                if (ShowsPocket(bArray)) {
+                    const int board = (int)(&bArray - bubbleArrays);
+                    StartPocketSlide(board, bArray.pocketColor, PocketRect(bArray), bArray.curLaunchRct,
                                      PocketSlide::kNone, true);
-                    StartPocketSlide(bArray.curLaunch, bArray.curLaunchRct, PocketRect(bArray), PocketSlide::kPocket);
+                    StartPocketSlide(board, bArray.curLaunch, bArray.curLaunchRct, PocketRect(bArray), PocketSlide::kPocket);
                 }
                 std::swap(bArray.curLaunch, bArray.pocketColor);
             }
         }
         const bool swapShot = controls.fireNext && !controls.skipShotLegacy && !bArray.mpFirePending &&
-                              FireNextAllowed() && &bArray == &bubbleArrays[0];
+                              ShowsPocket(bArray);
         LaunchBubble(bArray);
         if (swapShot && !singleBubbles.empty()) {
             singleBubbles.back().swapShot = true;
-            if (EffectsEnabled()) { swapTagStartMs = SDL_GetTicks(); swapTagFrom = bArray.curLaunchRct; }
+            const int board = (int)(&bArray - bubbleArrays);
+            if (EffectsEnabled()) { swapTagStartMs[board] = SDL_GetTicks(); swapTagFrom[board] = bArray.curLaunchRct; }
         }
         bArray.shooterAction = false;
         bArray.mpFirePending = false;  // Clear mp_fire flag (original line 2165)

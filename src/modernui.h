@@ -69,7 +69,8 @@ void DrawPill(SDL_Renderer* rend, TTFText& t, const char* s, SDL_Rect r, bool pr
 // (any small bold font, dark text). `lit` brightens the rim and tag, for a
 // held bubble. The board (BubbleGame::DrawPocket) and the How to play page
 // both draw it here.
-void DrawPocketWell(SDL_Renderer* rend, TTFText& tag, SDL_FRect r, SDL_Texture* bubble, bool lit);
+void DrawPocketWell(SDL_Renderer* rend, TTFText& tag, SDL_FRect r, SDL_Texture* bubble, bool lit,
+                    bool tagged = true);
 // The card every Modern menu screen is built from.
 void DrawCard(SDL_Renderer* rend, SDL_Rect r, float radius = 14);
 

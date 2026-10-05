@@ -43,11 +43,11 @@ These four share a settings row or two and are all render- or audio-only.
    then reworked into **Swap**, a pocket (user's design): the first press
    pockets the loaded bubble, every press after that shoots the pocketed one
    and pockets the loaded one. Keyboard/gamepad, right click, a touch in the
-   strip around the launcher; 1-player and network games, counting for the
-   boards like any other shot, recorded in replays as `fire = 3` (`2`, the
-   old skip shot, still plays back). A hint at the start of every run and a
-   How to play page. Still open: local multiplayer, where only player 1 has
-   a key.
+   strip around the launcher; 1-player, network and local multiplayer
+   games (every local player has a key, and a pad's West button), counting
+   for the boards like any other shot, recorded in replays as `fire = 3`
+   (`2`, the old skip shot, still plays back). A hint at the start of every
+   run and a How to play page.
 7. **Achievements.** Examples: clear a level in under 10 s, drop 20 bubbles
    at once, reach level 50, win an online match. Kept with the account;
    Google Play Games could mirror them later.
