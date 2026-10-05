@@ -124,11 +124,17 @@
 #   actually enforces the N-week spacing ($INTERVAL_DAYS below), self-timed
 #   off its own last successful completion rather than off the calendar:
 #
-#     0 1 * * * /home/YOURUSER/update-server.sh --if-due yourdomain.com >> /home/YOURUSER/update-server.log 2>&1
+#     0 1 * * * FROZEN_BUBBLE_REPO=/home/YOURUSER/gr/frozen-bubble-sdl3 /home/YOURUSER/update-server.sh --if-due yourdomain.com >> /home/YOURUSER/update-server.log 2>&1
 #
 #   in root's crontab (`sudo crontab -e`) -- root's, not the repo owner's,
 #   since this script requires root regardless of who invokes it, and a
 #   cron command cannot interactively answer a sudo password prompt.
+#
+#   FROZEN_BUBBLE_REPO is required there: root's cron has no $USER to derive
+#   the checkout's path from. And create the log file as YOURUSER before the
+#   first run (`touch /home/YOURUSER/update-server.log` as YOURUSER): cron
+#   opens it as root for the `>>`, so if it is missing it is created
+#   root-owned in YOURUSER's home. An existing file keeps its owner.
 #
 #   This also self-heals a missed run: if the host is down or busy at the
 #   scheduled time on the day it was due, --if-due simply runs the very next
@@ -177,7 +183,15 @@ log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"; }
 
 [ -n "$DOMAIN" ] || die "no domain given -- pass one as an argument or set FB_DOMAIN (e.g. $0 yourdomain.com)"
 
-REPO_DIR="${FROZEN_BUBBLE_REPO:-/home/${SUDO_USER:-$USER}/gr/frozen-bubble-sdl3}"
+# Root's cron sets neither SUDO_USER nor (on Debian/Ubuntu) USER, and this
+# script runs under `set -u`, so a bare $USER here used to kill every cron run
+# on this line before it did anything -- certificate renewal included. Stop
+# with the actual fix instead.
+RUN_AS="${SUDO_USER:-${USER:-}}"
+if [ -z "${FROZEN_BUBBLE_REPO:-}" ] && { [ -z "$RUN_AS" ] || [ "$RUN_AS" = root ]; }; then
+    die "set FROZEN_BUBBLE_REPO to your checkout (e.g. FROZEN_BUBBLE_REPO=/home/you/gr/frozen-bubble-sdl3 in the crontab line) -- running as root with no user to derive it from"
+fi
+REPO_DIR="${FROZEN_BUBBLE_REPO:-/home/$RUN_AS/gr/frozen-bubble-sdl3}"
 COMPOSE_DIR="$REPO_DIR/docker"
 LINK_CERTS="$REPO_DIR/tools/link-fb-certs.sh"
 

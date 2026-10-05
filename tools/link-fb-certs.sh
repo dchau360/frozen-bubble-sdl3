@@ -115,6 +115,10 @@ for f in fullchain.pem privkey.pem; do
     # Remove whatever is there (stale copy, old symlink, stray dir) and relink.
     rm -rf -- "$dst"
     ln -s "$src" "$dst"
+    # Owned like the directory it sits in (the checkout's owner), not root:
+    # this runs as root, and a root-owned entry in someone's checkout needs
+    # sudo to move or delete.
+    chown -h "$(stat -c '%u:%g' "$SSL_DIR")" "$dst"
     echo "linked:    $dst -> $src"
 done
 
@@ -124,5 +128,7 @@ done
 # symlinks. Force a recreate so the mount re-resolves to the new file.
 cd "$COMPOSE_DIR"
 echo "recreating nginx to pick up the current cert..."
-docker compose up -d --force-recreate nginx
+# --no-deps: nginx depends on fb-server, so without it compose recreates the
+# game server too and drops every connected player.
+docker compose up -d --force-recreate --no-deps nginx
 echo "done."
