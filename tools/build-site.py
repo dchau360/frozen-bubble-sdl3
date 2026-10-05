@@ -65,18 +65,12 @@ PAGES = [
 #
 # docs/ is not published wholesale -- only what this list names -- so a new
 # screenshot on the landing page has to be added here or it renders as a
-# broken image. The store-assets copies are the same bytes as their
-# docs/screenshots counterparts where both exist; main-menu and local-2player
-# have no docs/screenshots copy, so they come from store-assets directly.
+# broken image. They are the README's own screenshots, so the two stay in
+# step when one is retaken.
 ASSETS = [
-    (os.path.join(ROOT, "docs", "screenshots", "game-room.png"),
-     os.path.join("screenshots", "game-room.png")),
-    (os.path.join(ROOT, "docs", "store-assets", "screenshot-7-main-menu.png"),
-     os.path.join("screenshots", "main-menu.png")),
-    (os.path.join(ROOT, "docs", "store-assets", "screenshot-4-local-2player.png"),
-     os.path.join("screenshots", "local-2player.png")),
-    (os.path.join(ROOT, "docs", "screenshots", "round-stats.png"),
-     os.path.join("screenshots", "round-stats.png")),
+    *[(os.path.join(ROOT, "docs", "screenshots", name), os.path.join("screenshots", name))
+      for name in ("modern-gameplay.jpg", "title-menu.jpg", "how-to-play.jpg",
+                   "two-player-win.jpg", "game-room-modern.jpg", "round-stats.png")],
     # Google's official "Get it on Google Play" badge, served from here rather
     # than hotlinked so opening the page makes no request to Google.
     (os.path.join(SITE, "img", "google-play-badge.png"),
