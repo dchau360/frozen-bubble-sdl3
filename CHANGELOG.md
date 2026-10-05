@@ -1,5 +1,10 @@
 # Changelog
 
+## v2.4.140
+
+- **Skip shot.** A second fire button that shoots your next bubble straight away and keeps the loaded one in the launcher: a bubble swap and a shot in one press. Right Shift on the keyboard (change it in Controls & Settings), right click with the mouse, or a tap on the strip around the launcher on a touchscreen. It works in 1-player and online games. A 1-player run that uses it is kept off the high score tables. A short hint at the start of a run shows your control until you've used it.
+- **Safer online games.** Bubble colours sent by other players are now checked before they're drawn, so a modified game can no longer make yours misbehave.
+
 ## v2.4.139
 
 - **Modern lobby, settings and Set Teams.** With the Modern menu style, the online lobby, the Controls & Settings screen and the Set Teams page now use the same cards as the rest of the menus. The lobby lists every room with its players, and your key bindings show as keys.
