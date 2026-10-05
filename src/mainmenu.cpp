@@ -232,7 +232,7 @@ void MainMenu::SyncRoomOptions() {
         singlePlayerTargetting, vLimits[victoriesLimitIndex], playerColorCounts,
         playerNoCompress, playerAimGuide, netRoomMouseEnabled, netGameMode,
         RaceTargetAt(netRaceTargetIndex), TimedSecondsAt(netTimedSecondsIndex),
-        netAttackMode, netPlayerTeams, netTeamCount);
+        netAttackMode, netPlayerTeams, netTeamCount, playerNewRowShots);
     SaveHostDefaults();
 }
 
@@ -624,6 +624,7 @@ void MainMenu::SetupNewGame(int mode) {
                 for (int i = 0; i < 5; i++) {
                     ns.playerColors[i] = playerColorCounts[i];
                     ns.disableCompression[i] = playerNoCompress[i];
+                    ns.newRowShots[i] = playerNewRowShots[i];
                     ns.aimGuide[i] = playerAimGuide[i];
                 }
                 // Gate on the room's cap (maxPlayers), not how many players
@@ -731,7 +732,8 @@ void MainMenu::SetupNewGame(int mode) {
                 localMPBotCount,
                 localMPBotSkill,
                 localMPRaceTargetIndex,
-                localMPTimedSecondsIndex);
+                localMPTimedSecondsIndex,
+                localMPNewRowShots);
             StartLocalGame(BuildLocalMultiplayerSettings(options));
             break;
         }

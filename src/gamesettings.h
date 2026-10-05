@@ -175,9 +175,9 @@ struct PlayerKeys {
     SDL_Scancode right = SDL_SCANCODE_UNKNOWN;
     SDL_Scancode fire = SDL_SCANCODE_UNKNOWN;
     SDL_Scancode center = SDL_SCANCODE_UNKNOWN;
-    // Fires the next bubble instead of the loaded one. Player 1 only, and
-    // only in a 1-player game (BubbleGame::FireNextAllowed); the other
-    // players' entries stay UNKNOWN and are neither drawn nor saved.
+    // Swap: pockets the loaded bubble, or fires the pocketed one
+    // (BubbleGame::FireNextAllowed). Every player has one; in local
+    // multiplayer a pad's West button works too.
     SDL_Scancode fireNext = SDL_SCANCODE_UNKNOWN;
 };
 

@@ -25,6 +25,7 @@ struct LocalMultiplayerOptions {
     int playerCount = 2;
     bool chainReaction = true;
     bool noCompression = false;
+    int newRowShots = kNewRowShotsDefault;  // shots between new rows while on
     GameMode gameMode = GameMode::Classic;
     // Indices into kRaceTargets / kTimedSeconds (gamemode.h), not the values
     // themselves: these ride straight off the stepped menu rows, and an index
@@ -190,7 +191,8 @@ LocalMultiplayerOptions BuildLocalMultiplayerOptions(
     int botCount = 0,
     int botSkill = 1,
     int raceTargetIndex = kRaceTargetDefaultIndex,
-    int timedSecondsIndex = kTimedSecondsDefaultIndex);
+    int timedSecondsIndex = kTimedSecondsDefaultIndex,
+    int newRowShots = kNewRowShotsDefault);
 
 // Bots fill the highest player slots. Returns how many the given player count
 // can actually take, which is one fewer than the players in the game.

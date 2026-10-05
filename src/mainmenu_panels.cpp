@@ -521,7 +521,10 @@ void MainMenu::LocalMPPanelRender() {
     list.Header("Match rules");
     row(kLocalMPRowPlayers, "Players", std::to_string(localMPPlayerCount), true, true);
     row(kLocalMPRowChain, "Chain reaction", localMPCR ? "ON" : "OFF", localMPCR);
-    row(kLocalMPRowCollapse, "Row collapse", localMPNoCompress ? "OFF" : "ON", !localMPNoCompress);
+    // Stepped like Mode: off, then a new row every 12, 15 or 20 shots.
+    row(kLocalMPRowCollapse, "Row collapse",
+        localMPNoCompress ? "OFF" : "EVERY " + std::to_string(localMPNewRowShots) + " SHOTS",
+        !localMPNoCompress, true);
     // Stepped, not a toggle: four modes now, and a row a tap flips is fine
     // for on/off but not for a cycle.
     row(kLocalMPRowMode, "Mode", GameModeName(localMPGameMode), true, true);
@@ -768,7 +771,6 @@ void MainMenu::KeysPanelRender() {
     snprintf(header, sizeof(header), "Player %d keys", keyConfigPlayer);
     list.Header(header);
 
-    // Fire next is player 1's alone (PlayerKeys::fireNext).
     struct { int idx; const char* label; SDL_Scancode sc; } keyRows[5] = {
         {kKeyRowLeft,     "Turn left",    pk.left},
         {kKeyRowRight,    "Turn right",   pk.right},
@@ -777,7 +779,6 @@ void MainMenu::KeysPanelRender() {
         {kKeyRowFireNext, kFireNextLabel, pk.fireNext},
     };
     for (auto& row : keyRows) {
-        if (row.idx == kKeyRowFireNext && keyConfigPlayer != 1) continue;
         bool awaitingThis = awaitKp && keyConfigIndex == row.idx;
         list.Row(row.idx, row.label,
                  awaitingThis ? "Press a key..." : ControllerScancodeName(row.sc), true);

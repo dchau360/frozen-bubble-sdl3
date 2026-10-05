@@ -216,6 +216,7 @@ struct DecodedBoard {
     std::vector<int> nextColors;
     std::vector<int> malusQueue;
     std::string nickname;  // v3: lobby nickname for this seat (network replay)
+    int newRowShots = kNewRowShotsDefault;  // optional trailing byte, see below
 };
 
 // Rebuilds the exact starting board as a self-describing blob. Only the
@@ -277,6 +278,11 @@ std::vector<uint8_t> EncodeBoardBlob(const BubbleGame &game, int seat) {
     // from driving a large allocation on decode; real nicks are <= 10 chars.
     AppendU16(buf, static_cast<uint16_t>(p.playerNickname.size()));
     buf.insert(buf.end(), p.playerNickname.begin(), p.playerNickname.end());
+    // Shots between new rows, after everything a v3 decoder reads: an older
+    // build's decoder stops at the nickname and never looks further, and a
+    // blob without it reads back as the default 12 it was recorded with. So
+    // this is an addition to v3, not a v4.
+    AppendU8(buf, static_cast<uint8_t>(p.newRowShots));
     return buf;
 }
 
@@ -361,6 +367,8 @@ bool DecodeBoardBlob(const std::vector<uint8_t> &blob, DecodedBoard &out) {
     if (r.size - r.pos < nickLen) return false;
     out.nickname.assign(reinterpret_cast<const char *>(r.data + r.pos), nickLen);
     r.pos += nickLen;
+    uint8_t newRowShots = 0;
+    if (r.ReadU8(newRowShots)) out.newRowShots = ClampNewRowShots(newRowShots);
     return true;
 }
 
@@ -778,6 +786,7 @@ void RestoreRoundStart(BubbleGame &game, const RoundStartRecord &record) {
     for (int i = 0; i < players; ++i) {
         setup.playerColors[i] = boards[i].numColors;
         setup.disableCompression[i] = boards[i].compressionDisabled;
+        setup.newRowShots[i] = boards[i].newRowShots;
         setup.aimGuide[i] = boards[i].aimGuide;
         setup.playerIsBot[i] = boards[i].isBot;
         setup.playerTeams[i] = record.seatTeam[i];
@@ -843,6 +852,7 @@ void RestoreRoundStart(BubbleGame &game, const RoundStartRecord &record) {
         p.mpDone = false;
         p.lastControls = PlayerControls{};
         p.compressionDisabled = board.compressionDisabled;
+        p.newRowShots = board.newRowShots;
         p.aimGuideEnabled = board.aimGuide;
         p.isBot = board.isBot;
         // Reconstruct the lobby identity ApplyInboundGameMessage() uses to map

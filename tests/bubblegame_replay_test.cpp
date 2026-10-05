@@ -1028,6 +1028,34 @@ int main() {
         RunAndCompare(renderer, "local-mp-bots", rec);
     }
 
+    // --- New rows at other than the original's 12, per board: the count
+    // rides each seat's board blob, so the replay's rows come in on the same
+    // shots as the live round's (turnsToCompress is in the hashed state) ---
+    {
+        LocalMultiplayerOptions options;
+        options.playerCount = 3;
+        options.botCount = 2;
+        options.botSkill = 1;
+        options.chainReaction = false;
+        options.gameMode = GameMode::Classic;
+        options.attackMode = AttackMode::On;
+        options.newRowShots = 20;
+        SetupSettings setup = BuildLocalMultiplayerSettings(options);
+        setup.newRowShots[2] = 15;
+
+        // A row two shots away on each bot's board, so one lands inside this
+        // short round and the countdown restarts from 20 / 15, not 12.
+        CapturedRecording rec = RunLiveRound(
+            renderer, setup, 31337u,
+            [](BubbleGame& game) {
+                BubbleGameTestAccess::player(game, 1).turnsToCompress = 2;
+                BubbleGameTestAccess::player(game, 2).turnsToCompress = 2;
+            },
+            FireThenCoast(PI / 2.0f));
+        CHECK(rec.liveRFired[1] >= 2 && rec.liveRFired[2] >= 2);
+        RunAndCompare(renderer, "local-mp-new-rows", rec);
+    }
+
     // --- R4d bug fix regression: local 2-player (no network) replay must not
     // hijack FrozenBubble's top-level state, and must restore a populated
     // board -----------------------------------------------------------------

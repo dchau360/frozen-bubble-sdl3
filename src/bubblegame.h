@@ -45,7 +45,6 @@
 #include <algorithm>
 
 #pragma region "BubbleGame Defines"
-#define TIME_APPEARS_NEW_ROOT_MP 11
 // Original Perl (bin/frozen-bubble ~line 3300-3302, TARGET_ANIM_SPEED=20ms -> 50fps) default
 // hurry timer: warn=250 frames/5.0s, force-fire=375 frames/7.5s, used for every mode except
 // the classic numbered single-player campaign. Scaled to this port's 60fps baseline:
@@ -289,6 +288,8 @@ struct SetupSettings {
     bool localMultiplayer = false;  // True for local controller-based multiplayer
     int playerColors[MAX_NET_PLAYERS] = {8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8};  // Per-player color count (5-8)
     bool disableCompression[MAX_NET_PLAYERS] = {};  // Per-player: skip row compression
+    // Per-player shots between new rows (multiplayer); 0 = kNewRowShotsDefault.
+    int newRowShots[MAX_NET_PLAYERS] = {};
     bool aimGuide[MAX_NET_PLAYERS] = {};  // Per-player: show aim trajectory guide
     int victoriesLimit = 0;  // 0 = unlimited; >0 = first to reach this wins the match
     bool mouseEnabled = false;  // Mouse/touchscreen aim+fire for player 1
@@ -388,6 +389,7 @@ struct BubbleArray {
     std::vector<MalusAlert> malusAlerts;
     int numColors = 8;  // Number of bubble colors for this player (5-8)
     bool compressionDisabled = false;  // If true, rows never drop down for this player
+    int newRowShots = kNewRowShotsDefault;  // Multiplayer: shots between new rows
     bool aimGuideEnabled = false;      // If true, draw aim trajectory guide for this player
 
     bool suppressFireUntilRelease = false;  // Block fire key for one frame after round transition
@@ -737,9 +739,12 @@ public:
     // Skip shot does not affect this (user decision): it counts like any
     // other shot.
     bool RunCountsForScores() const { return !bubbleArrays[0].aimGuideEnabled; }
-    // Skip shot (PlayerKeys::fireNext, a right click, a low touch): one-player
-    // and network games, not local multiplayer. See the definition.
+    // Swap (PlayerKeys::fireNext, a pad's West button, a right click, a low
+    // touch): one-player, network and local multiplayer games. See the definition.
     bool FireNextAllowed() const;
+    // This board has a pocket to show: one played on this machine by a
+    // person (player 1's, or every human board in local multiplayer).
+    bool ShowsPocket(const BubbleArray &b) const;
     bool ArcadeContinueApplies() const;
     void ResolveContinuePrompt(bool startOver);
     void RenderContinuePrompt(SDL_Renderer *rend);
@@ -1015,9 +1020,10 @@ private:
     // when the swap button is pressed, kPocketSlideMs long. Display only, like
     // the score popups: the swap itself has already happened in the
     // simulation, and while a slide is headed for the launcher or the pocket
-    // the bubble resting there is not drawn. Player 1's board only.
+    // the bubble resting there is not drawn. Every board that ShowsPocket().
     struct PocketSlide {
         enum { kNone, kPocket, kLauncher };
+        int board;
         int color;
         SDL_Rect from, to;
         Uint64 startMs;
@@ -1025,24 +1031,25 @@ private:
         bool fade;   // the pocketed bubble heading into the shot it becomes
     };
     std::vector<PocketSlide> pocketSlides;
-    void StartPocketSlide(int color, SDL_Rect from, SDL_Rect to, int into, bool fade = false);
-    bool PocketSlideInto(int into) const;
-    void DrawPocketSlides(SDL_Renderer *rend, SDL_Texture **bubbles);
+    void StartPocketSlide(int board, int color, SDL_Rect from, SDL_Rect to, int into, bool fade = false);
+    bool PocketSlideInto(int board, int into) const;
+    void DrawPocketSlides(SDL_Renderer *rend, SDL_Texture **bubbles, int board);
     // The swap shot indicator: a "SWAP!" tag that rises off the launcher for
     // kSwapTagMs of real time when the swap button fires (DrawSwapShotTag),
     // and an ice ring round that bubble until it sticks (DrawSwapShotRing,
-    // via SingleBubble::swapShot). Player 1's board only, display only.
+    // via SingleBubble::swapShot). Per board, every board that ShowsPocket();
+    // display only.
     TTFText swapTagText;
-    Uint64 swapTagStartMs = 0;
-    SDL_Rect swapTagFrom = {};
-    void DrawSwapShotTag(SDL_Renderer *rend);
+    Uint64 swapTagStartMs[MAX_NET_PLAYERS] = {};
+    SDL_Rect swapTagFrom[MAX_NET_PLAYERS] = {};
+    void DrawSwapShotTag(SDL_Renderer *rend, int board);
     void DrawSwapShotRing(SDL_Renderer *rend, SDL_FRect bubbleRect);
     bool skipShotHintPending = false;
     Uint64 skipShotHintStartMs = 0;
     void DrawSkipShotHint(SDL_Renderer *rend);
     // The swap pocket (BubbleArray::pocketColor), drawn beside the next
-    // bubble on the local player's board whenever FireNextAllowed().
-    void DrawPocket(SDL_Renderer *rend, const BubbleArray &b, SDL_Texture **bubbles);
+    // bubble on every board that ShowsPocket(); a mini board's has no tag.
+    void DrawPocket(SDL_Renderer *rend, const BubbleArray &b, SDL_Texture **bubbles, bool tagged = true);
 public:
     static SDL_Rect PocketRect(const BubbleArray &b);
 private:

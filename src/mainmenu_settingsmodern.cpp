@@ -154,7 +154,6 @@ void MainMenu::KeysPanelRenderModern() {
         AddPanelTapRow(kKeyPlayerTapBase + p, tab, -1, false, SDLK_1 + (p - 1));
     }
 
-    // Fire next is player 1's alone (PlayerKeys::fireNext).
     struct { int idx; const char* label; SDL_Scancode sc; } keyRows[5] = {
         {kKeyRowLeft,     "Turn left",    pk.left},
         {kKeyRowRight,    "Turn right",   pk.right},
@@ -164,7 +163,6 @@ void MainMenu::KeysPanelRenderModern() {
     };
     int y = kControls.y + 66;
     for (auto& k : keyRows) {
-        if (k.idx == kKeyRowFireNext && keyConfigPlayer != 1) continue;
         const SDL_Rect r = {innerX, y, innerW, kKeyH};
         const int cy = row(k.idx, r, k.label, kFrost);
         if (awaitKp && keyConfigIndex == k.idx) {

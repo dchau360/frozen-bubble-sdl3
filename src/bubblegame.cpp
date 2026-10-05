@@ -427,7 +427,7 @@ static void ApplyMiniSlotGeometry(BubbleArray& b, int slot, SDL_Renderer* rend,
     b.curLaunchRct = g.curLaunch; b.nextBubbleRct = g.nextBubble;
     b.onTopRct = g.onTop; b.frozenBottomRct = g.frozenBottom;
     b.numSeparators = 0;
-    b.turnsToCompress = 12;
+    b.turnsToCompress = b.newRowShots;
 }
 
 
@@ -501,7 +501,7 @@ void BubbleGame::NewGame(SetupSettings setup) {
     skipShotHintPending = setup.playerCount == 1 && !setup.networkGame && !setup.localMultiplayer;
     skipShotHintStartMs = 0;
     pocketSlides.clear();
-    swapTagStartMs = 0;
+    for (Uint64& t : swapTagStartMs) t = 0;
     runEligibleForWorld = !setup.networkGame && setup.playerCount == 1 && !setup.randomLevels &&
                           !setup.mpTraining && !setup.localMultiplayer && setup.startLevel == 1;
     connectedPlayerCount = setup.playerCount;  // Reset connected count for new game
@@ -541,6 +541,7 @@ void BubbleGame::NewGame(SetupSettings setup) {
         nc = (nc < 5) ? 5 : (nc > 8) ? 8 : nc;
         bubbleArrays[i].numColors = nc;
         bubbleArrays[i].compressionDisabled = setup.disableCompression[i];
+        bubbleArrays[i].newRowShots = ClampNewRowShots(setup.newRowShots[i]);
         bubbleArrays[i].aimGuideEnabled = setup.aimGuide[i];
         bubbleArrays[i].isBot = setup.playerIsBot[i];
         bubbleArrays[i].botSkill = setup.botSkill;
@@ -621,7 +622,7 @@ void BubbleGame::NewGame(SetupSettings setup) {
             bubbleArrays[0].hurryRct = {SCREEN_CENTER_X + 40, 480 - 214, 244, 102};
             bubbleArrays[0].numSeparators = 0;
             bubbleArrays[0].playerAssigned = 0;
-            bubbleArrays[0].turnsToCompress = 12;
+            bubbleArrays[0].turnsToCompress = bubbleArrays[0].newRowShots;
             bubbleArrays[0].mpWinner = false;
             bubbleArrays[0].mpDone = false;
             bubbleArrays[0].playerState = BubbleArray::PlayerState::ALIVE;
@@ -640,7 +641,7 @@ void BubbleGame::NewGame(SetupSettings setup) {
             bubbleArrays[1].hurryRct = {36, 480 - 214, 244, 102};
             bubbleArrays[1].numSeparators = 0;
             bubbleArrays[1].playerAssigned = 1;
-            bubbleArrays[1].turnsToCompress = 12;
+            bubbleArrays[1].turnsToCompress = bubbleArrays[1].newRowShots;
             bubbleArrays[1].mpWinner = false;
             bubbleArrays[1].mpDone = false;
             bubbleArrays[1].playerState = BubbleArray::PlayerState::ALIVE;
@@ -674,7 +675,7 @@ void BubbleGame::NewGame(SetupSettings setup) {
             bubbleArrays[0].frozenBottomRct = {298, 437, 39, 39};
             bubbleArrays[0].numSeparators = 0;
             bubbleArrays[0].playerAssigned = 0;
-            bubbleArrays[0].turnsToCompress = 12;
+            bubbleArrays[0].turnsToCompress = bubbleArrays[0].newRowShots;
             bubbleArrays[0].mpWinner = false;
             bubbleArrays[0].mpDone = false;
             bubbleArrays[0].playerState = BubbleArray::PlayerState::ALIVE;
@@ -700,7 +701,7 @@ void BubbleGame::NewGame(SetupSettings setup) {
             bubbleArrays[1].frozenBottomRct = {74, 214, 39, 39};
             bubbleArrays[1].numSeparators = 0;
             bubbleArrays[1].playerAssigned = 1;
-            bubbleArrays[1].turnsToCompress = 12;
+            bubbleArrays[1].turnsToCompress = bubbleArrays[1].newRowShots;
             bubbleArrays[1].mpWinner = false;
             bubbleArrays[1].mpDone = false;
             bubbleArrays[1].playerState = BubbleArray::PlayerState::ALIVE;
@@ -726,7 +727,7 @@ void BubbleGame::NewGame(SetupSettings setup) {
             bubbleArrays[2].frozenBottomRct = {546, 214, 39, 39};
             bubbleArrays[2].numSeparators = 0;
             bubbleArrays[2].playerAssigned = 2;
-            bubbleArrays[2].turnsToCompress = 12;
+            bubbleArrays[2].turnsToCompress = bubbleArrays[2].newRowShots;
             bubbleArrays[2].mpWinner = false;
             bubbleArrays[2].mpDone = false;
             bubbleArrays[2].playerState = BubbleArray::PlayerState::ALIVE;
@@ -758,7 +759,7 @@ void BubbleGame::NewGame(SetupSettings setup) {
             bubbleArrays[0].frozenBottomRct = {298, 437, 39, 39};
             bubbleArrays[0].numSeparators = 0;
             bubbleArrays[0].playerAssigned = 0;
-            bubbleArrays[0].turnsToCompress = 12;
+            bubbleArrays[0].turnsToCompress = bubbleArrays[0].newRowShots;
             bubbleArrays[0].mpWinner = false;
             bubbleArrays[0].mpDone = false;
             bubbleArrays[0].playerState = BubbleArray::PlayerState::ALIVE;
@@ -781,7 +782,7 @@ void BubbleGame::NewGame(SetupSettings setup) {
             bubbleArrays[1].frozenBottomRct = {74, 214, 39, 39};
             bubbleArrays[1].numSeparators = 0;
             bubbleArrays[1].playerAssigned = 1;
-            bubbleArrays[1].turnsToCompress = 12;
+            bubbleArrays[1].turnsToCompress = bubbleArrays[1].newRowShots;
             bubbleArrays[1].mpWinner = false;
             bubbleArrays[1].mpDone = false;
             bubbleArrays[1].playerState = BubbleArray::PlayerState::ALIVE;
@@ -804,7 +805,7 @@ void BubbleGame::NewGame(SetupSettings setup) {
             bubbleArrays[2].frozenBottomRct = {546, 214, 39, 39};
             bubbleArrays[2].numSeparators = 0;
             bubbleArrays[2].playerAssigned = 2;
-            bubbleArrays[2].turnsToCompress = 12;
+            bubbleArrays[2].turnsToCompress = bubbleArrays[2].newRowShots;
             bubbleArrays[2].mpWinner = false;
             bubbleArrays[2].mpDone = false;
             bubbleArrays[2].playerState = BubbleArray::PlayerState::ALIVE;
@@ -828,7 +829,7 @@ void BubbleGame::NewGame(SetupSettings setup) {
             bubbleArrays[3].frozenBottomRct = {74, 443, 39, 39};
             bubbleArrays[3].numSeparators = 0;
             bubbleArrays[3].playerAssigned = 3;
-            bubbleArrays[3].turnsToCompress = 12;
+            bubbleArrays[3].turnsToCompress = bubbleArrays[3].newRowShots;
             bubbleArrays[3].mpWinner = false;
             bubbleArrays[3].mpDone = false;
             bubbleArrays[3].playerState = BubbleArray::PlayerState::ALIVE;
@@ -860,7 +861,7 @@ void BubbleGame::NewGame(SetupSettings setup) {
             bubbleArrays[0].frozenBottomRct = {298, 437, 39, 39};
             bubbleArrays[0].numSeparators = 0;
             bubbleArrays[0].playerAssigned = 0;
-            bubbleArrays[0].turnsToCompress = 12;
+            bubbleArrays[0].turnsToCompress = bubbleArrays[0].newRowShots;
             bubbleArrays[0].mpWinner = false;
             bubbleArrays[0].mpDone = false;
             bubbleArrays[0].playerState = BubbleArray::PlayerState::ALIVE;
@@ -883,7 +884,7 @@ void BubbleGame::NewGame(SetupSettings setup) {
             bubbleArrays[1].frozenBottomRct = {74, 214, 39, 39};
             bubbleArrays[1].numSeparators = 0;
             bubbleArrays[1].playerAssigned = 1;
-            bubbleArrays[1].turnsToCompress = 12;
+            bubbleArrays[1].turnsToCompress = bubbleArrays[1].newRowShots;
             bubbleArrays[1].mpWinner = false;
             bubbleArrays[1].mpDone = false;
             bubbleArrays[1].playerState = BubbleArray::PlayerState::ALIVE;
@@ -906,7 +907,7 @@ void BubbleGame::NewGame(SetupSettings setup) {
             bubbleArrays[2].frozenBottomRct = {546, 214, 39, 39};
             bubbleArrays[2].numSeparators = 0;
             bubbleArrays[2].playerAssigned = 2;
-            bubbleArrays[2].turnsToCompress = 12;
+            bubbleArrays[2].turnsToCompress = bubbleArrays[2].newRowShots;
             bubbleArrays[2].mpWinner = false;
             bubbleArrays[2].mpDone = false;
             bubbleArrays[2].playerState = BubbleArray::PlayerState::ALIVE;
@@ -929,7 +930,7 @@ void BubbleGame::NewGame(SetupSettings setup) {
             bubbleArrays[3].frozenBottomRct = {74, 443, 39, 39};
             bubbleArrays[3].numSeparators = 0;
             bubbleArrays[3].playerAssigned = 3;
-            bubbleArrays[3].turnsToCompress = 12;
+            bubbleArrays[3].turnsToCompress = bubbleArrays[3].newRowShots;
             bubbleArrays[3].mpWinner = false;
             bubbleArrays[3].mpDone = false;
             bubbleArrays[3].playerState = BubbleArray::PlayerState::ALIVE;
@@ -954,7 +955,7 @@ void BubbleGame::NewGame(SetupSettings setup) {
             bubbleArrays[4].frozenBottomRct = {546, 443, 39, 39};
             bubbleArrays[4].numSeparators = 0;
             bubbleArrays[4].playerAssigned = 4;
-            bubbleArrays[4].turnsToCompress = 12;
+            bubbleArrays[4].turnsToCompress = bubbleArrays[4].newRowShots;
             bubbleArrays[4].mpWinner = false;
             bubbleArrays[4].mpDone = false;
             bubbleArrays[4].playerState = BubbleArray::PlayerState::ALIVE;
@@ -984,7 +985,7 @@ void BubbleGame::NewGame(SetupSettings setup) {
             bubbleArrays[0].frozenBottomRct = {298, 437, 39, 39};
             bubbleArrays[0].numSeparators = 0;
             bubbleArrays[0].playerAssigned = 0;
-            bubbleArrays[0].turnsToCompress = 12;
+            bubbleArrays[0].turnsToCompress = bubbleArrays[0].newRowShots;
             bubbleArrays[0].mpWinner = false;
             bubbleArrays[0].mpDone = false;
             bubbleArrays[0].playerState = BubbleArray::PlayerState::ALIVE;
@@ -1083,6 +1084,8 @@ void BubbleGame::NewGame(SetupSettings setup) {
                             nc = (nc < 5) ? 5 : (nc > 8) ? 8 : nc;
                             bubbleArrays[arr].numColors = nc;
                             bubbleArrays[arr].compressionDisabled = currentSettings.disableCompression[slot];
+                            bubbleArrays[arr].newRowShots = ClampNewRowShots(currentSettings.newRowShots[slot]);
+                            bubbleArrays[arr].turnsToCompress = bubbleArrays[arr].newRowShots;
                             bubbleArrays[arr].aimGuideEnabled = currentSettings.aimGuide[slot];
                             remappedTeams[arr] = currentSettings.playerTeams[slot];
                             SDL_Log("Remapped slot %d ('%s') -> array %d: colors=%d compress=%d aim=%d team=%d",
@@ -1285,12 +1288,12 @@ void BubbleGame::ReloadGame(int level) {
         case 2:
             bubbleArrays[0].shooterSprite.angle = PI/2.0f;
             bubbleArrays[0].bubbleOffset = {354, 40};
-            bubbleArrays[0].turnsToCompress = 12;
+            bubbleArrays[0].turnsToCompress = bubbleArrays[0].newRowShots;
             bubbleArrays[0].numSeparators = 0;
 
             bubbleArrays[1].shooterSprite.angle = PI/2.0f;
             bubbleArrays[1].bubbleOffset = {31, 40};
-            bubbleArrays[1].turnsToCompress = 12;
+            bubbleArrays[1].turnsToCompress = bubbleArrays[1].newRowShots;
             bubbleArrays[1].numSeparators = 0;
             break;
         case 1:
@@ -1311,26 +1314,26 @@ void BubbleGame::ReloadGame(int level) {
             // (and one-pixel-drifted) launcher carried into every later round.
             bubbleArrays[0].shooterSprite.angle = PI/2.0f;
             bubbleArrays[0].bubbleOffset = {190, 44};
-            bubbleArrays[0].turnsToCompress = 12;
+            bubbleArrays[0].turnsToCompress = bubbleArrays[0].newRowShots;
             bubbleArrays[0].numSeparators = 0;
             bubbleArrays[0].curLaunchRct = {302, 390, 32, 32};
 
             bubbleArrays[1].shooterSprite.angle = PI/2.0f;
             bubbleArrays[1].bubbleOffset = {20, 19};
-            bubbleArrays[1].turnsToCompress = 12;
+            bubbleArrays[1].turnsToCompress = bubbleArrays[1].newRowShots;
             bubbleArrays[1].numSeparators = 0;
             bubbleArrays[1].curLaunchRct = {68, 192, 32, 32};
 
             bubbleArrays[2].shooterSprite.angle = PI/2.0f;
             bubbleArrays[2].bubbleOffset = {492, 19};
-            bubbleArrays[2].turnsToCompress = 12;
+            bubbleArrays[2].turnsToCompress = bubbleArrays[2].newRowShots;
             bubbleArrays[2].numSeparators = 0;
             bubbleArrays[2].curLaunchRct = {540, 192, 32, 32};
             break;
         case 4:
             bubbleArrays[0].shooterSprite.angle = PI/2.0f;
             bubbleArrays[0].bubbleOffset = {190, 44};
-            bubbleArrays[0].turnsToCompress = 12;
+            bubbleArrays[0].turnsToCompress = bubbleArrays[0].newRowShots;
             bubbleArrays[0].numSeparators = 0;
             bubbleArrays[0].curLaunchRct = {302, 390, 32, 32};
             bubbleArrays[0].nextBubbleRct = {302, 440, 32, 32};
@@ -1339,7 +1342,7 @@ void BubbleGame::ReloadGame(int level) {
 
             bubbleArrays[1].shooterSprite.angle = PI/2.0f;
             bubbleArrays[1].bubbleOffset = {20, 19};
-            bubbleArrays[1].turnsToCompress = 12;
+            bubbleArrays[1].turnsToCompress = bubbleArrays[1].newRowShots;
             bubbleArrays[1].numSeparators = 0;
             bubbleArrays[1].curLaunchRct = {68, 192, 32, 32};
             bubbleArrays[1].nextBubbleRct = {76, 216, 32, 32};
@@ -1348,7 +1351,7 @@ void BubbleGame::ReloadGame(int level) {
 
             bubbleArrays[2].shooterSprite.angle = PI/2.0f;
             bubbleArrays[2].bubbleOffset = {492, 19};
-            bubbleArrays[2].turnsToCompress = 12;
+            bubbleArrays[2].turnsToCompress = bubbleArrays[2].newRowShots;
             bubbleArrays[2].numSeparators = 0;
             bubbleArrays[2].curLaunchRct = {540, 192, 32, 32};
             bubbleArrays[2].nextBubbleRct = {548, 216, 32, 32};
@@ -1357,7 +1360,7 @@ void BubbleGame::ReloadGame(int level) {
 
             bubbleArrays[3].shooterSprite.angle = PI/2.0f;
             bubbleArrays[3].bubbleOffset = {20, 247};
-            bubbleArrays[3].turnsToCompress = 12;
+            bubbleArrays[3].turnsToCompress = bubbleArrays[3].newRowShots;
             bubbleArrays[3].numSeparators = 0;
             bubbleArrays[3].curLaunchRct = {68, 420, 32, 32};
             bubbleArrays[3].nextBubbleRct = {76, 445, 32, 32};
@@ -1367,7 +1370,7 @@ void BubbleGame::ReloadGame(int level) {
         case 5:
             bubbleArrays[0].shooterSprite.angle = PI/2.0f;
             bubbleArrays[0].bubbleOffset = {190, 44};
-            bubbleArrays[0].turnsToCompress = 12;
+            bubbleArrays[0].turnsToCompress = bubbleArrays[0].newRowShots;
             bubbleArrays[0].numSeparators = 0;
             bubbleArrays[0].curLaunchRct = {302, 390, 32, 32};
             bubbleArrays[0].nextBubbleRct = {302, 440, 32, 32};
@@ -1376,7 +1379,7 @@ void BubbleGame::ReloadGame(int level) {
 
             bubbleArrays[1].shooterSprite.angle = PI/2.0f;
             bubbleArrays[1].bubbleOffset = {20, 19};
-            bubbleArrays[1].turnsToCompress = 12;
+            bubbleArrays[1].turnsToCompress = bubbleArrays[1].newRowShots;
             bubbleArrays[1].numSeparators = 0;
             bubbleArrays[1].curLaunchRct = {68, 192, 32, 32};
             bubbleArrays[1].nextBubbleRct = {76, 216, 32, 32};
@@ -1385,7 +1388,7 @@ void BubbleGame::ReloadGame(int level) {
 
             bubbleArrays[2].shooterSprite.angle = PI/2.0f;
             bubbleArrays[2].bubbleOffset = {492, 19};
-            bubbleArrays[2].turnsToCompress = 12;
+            bubbleArrays[2].turnsToCompress = bubbleArrays[2].newRowShots;
             bubbleArrays[2].numSeparators = 0;
             bubbleArrays[2].curLaunchRct = {540, 192, 32, 32};
             bubbleArrays[2].nextBubbleRct = {548, 216, 32, 32};
@@ -1394,7 +1397,7 @@ void BubbleGame::ReloadGame(int level) {
 
             bubbleArrays[3].shooterSprite.angle = PI/2.0f;
             bubbleArrays[3].bubbleOffset = {20, 247};
-            bubbleArrays[3].turnsToCompress = 12;
+            bubbleArrays[3].turnsToCompress = bubbleArrays[3].newRowShots;
             bubbleArrays[3].numSeparators = 0;
             bubbleArrays[3].curLaunchRct = {68, 420, 32, 32};
             bubbleArrays[3].nextBubbleRct = {76, 445, 32, 32};
@@ -1403,7 +1406,7 @@ void BubbleGame::ReloadGame(int level) {
 
             bubbleArrays[4].shooterSprite.angle = PI/2.0f;
             bubbleArrays[4].bubbleOffset = {492, 247};
-            bubbleArrays[4].turnsToCompress = 12;
+            bubbleArrays[4].turnsToCompress = bubbleArrays[4].newRowShots;
             bubbleArrays[4].numSeparators = 0;
             bubbleArrays[4].curLaunchRct = {540, 420, 32, 32};
             bubbleArrays[4].nextBubbleRct = {548, 445, 32, 32};
@@ -1414,7 +1417,7 @@ void BubbleGame::ReloadGame(int level) {
             // Player 0: identical to case 5's bubbleArrays[0] reload block
             bubbleArrays[0].shooterSprite.angle = PI/2.0f;
             bubbleArrays[0].bubbleOffset = {190, 44};
-            bubbleArrays[0].turnsToCompress = 12;
+            bubbleArrays[0].turnsToCompress = bubbleArrays[0].newRowShots;
             bubbleArrays[0].numSeparators = 0;
             bubbleArrays[0].curLaunchRct = {302, 390, 32, 32};
             bubbleArrays[0].nextBubbleRct = {302, 440, 32, 32};
@@ -1435,7 +1438,7 @@ void BubbleGame::ReloadGame(int level) {
                 int slot = (i - 1) % 4;
                 b.shooterSprite.angle = PI/2.0f;
                 b.bubbleOffset = kSlotOffset[slot];
-                b.turnsToCompress = 12;
+                b.turnsToCompress = b.newRowShots;
                 b.numSeparators = 0;
                 b.curLaunchRct = kSlotCurLaunch[slot];
                 b.nextBubbleRct = kSlotNextBubble[slot];

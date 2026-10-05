@@ -317,6 +317,7 @@ void MainMenu::NetPanelRender() {
                 victoriesLimitIndex = 5; // default
                 for (int i = 0; i < 18; i++) { if (vLimits[i] == vl) { victoriesLimitIndex = i; break; } }
                 for (int i = 0; i < 5; i++) { playerColorCounts[i] = pc[i]; playerNoCompress[i] = nc[i]; playerAimGuide[i] = ag[i]; }
+                netClient->GetReceivedNewRowShots(playerNewRowShots);
                 netRoomMouseEnabled = me;
                 netGameMode = gm;
                 // The host's room carries a value, not a step, so a joiner
@@ -1031,8 +1032,11 @@ void MainMenu::NetPanelLobbyActionsRender() {
                         else snprintf(cellText, sizeof(cellText), "-");
                     } else if (row == 1) {
                         bool same = true;
-                        for (int i = 1; i < numPlayers; i++) if (playerNoCompress[i] != playerNoCompress[0]) { same = false; break; }
-                        if (same) snprintf(cellText, sizeof(cellText), "%s", playerNoCompress[0] ? "off" : "on");
+                        for (int i = 1; i < numPlayers; i++)
+                            if (playerNoCompress[i] != playerNoCompress[0] ||
+                                (!playerNoCompress[i] && playerNewRowShots[i] != playerNewRowShots[0])) { same = false; break; }
+                        if (same && playerNoCompress[0]) snprintf(cellText, sizeof(cellText), "off");
+                        else if (same) snprintf(cellText, sizeof(cellText), "%d", playerNewRowShots[0]);
                         else snprintf(cellText, sizeof(cellText), "-");
                     } else if (row == 2) {
                         bool same = true;
@@ -1073,7 +1077,8 @@ void MainMenu::NetPanelLobbyActionsRender() {
                     if (row == 0) {
                         snprintf(cellText, sizeof(cellText), "%d", playerColorCounts[pi]);
                     } else if (row == 1) {
-                        snprintf(cellText, sizeof(cellText), "%s", playerNoCompress[pi] ? "off" : "on");
+                        if (playerNoCompress[pi]) snprintf(cellText, sizeof(cellText), "off");
+                        else snprintf(cellText, sizeof(cellText), "%d", playerNewRowShots[pi]);
                     } else if (row == 2) {
                         snprintf(cellText, sizeof(cellText), "%s", playerAimGuide[pi] ? "on" : "off");
                     } else {

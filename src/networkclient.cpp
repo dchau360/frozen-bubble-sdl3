@@ -680,7 +680,7 @@ bool NetworkClient::KickPlayer(const char* nick) {
     return SendCommand(cmd);
 }
 
-std::string NetworkClient::BuildOptionsBlob(bool chainReaction, bool continueWhenLeave, bool singleTarget, int victoriesLimit, const int playerColors[5], const bool noCompress[5], const bool aimGuide[5], bool mouseEnabled, GameMode gameMode, int raceTarget, int timedSeconds, AttackMode attackMode, const int playerTeams[5], int teamCount) {
+std::string NetworkClient::BuildOptionsBlob(bool chainReaction, bool continueWhenLeave, bool singleTarget, int victoriesLimit, const int playerColors[5], const bool noCompress[5], const bool aimGuide[5], bool mouseEnabled, GameMode gameMode, int raceTarget, int timedSeconds, AttackMode attackMode, const int playerTeams[5], int teamCount, const int newRowShots[5]) {
     // Format: CHAINREACTION:0/1,...,NUMCOLORS_P1:N,...,NUMCOLORS_P5:N
     // (SendOptions below prefixes this with "SETOPTIONS "; a caller sending
     // it as a TOUR CREATE argument instead prefixes "CREATE ".)
@@ -726,14 +726,27 @@ std::string NetworkClient::BuildOptionsBlob(bool chainReaction, bool continueWhe
              attackMode == AttackMode::Off ? 1 : 0,
              attackMode == AttackMode::Canceling ? 1 : 0,
              teamCount, playerTeams[0], playerTeams[1], playerTeams[2], playerTeams[3], playerTeams[4]);
-    return cmd;
+    // Shots between new rows, per player. Appended rather than folded into
+    // NOCOMPRESS_Pn, which keeps meaning "off" so an older build still reads
+    // an off board as off. An older build finds no NEWROW key and keeps its
+    // fixed 12: in a room set to anything else its boards add rows at a
+    // different time from everyone else's -- the same kind of mixed-version
+    // rule difference MALUSCANCEL and GAMEMODE accept above.
+    std::string blob = cmd;
+    for (int i = 0; i < 5; i++) {
+        char kv[32];
+        snprintf(kv, sizeof(kv), ",NEWROW_P%d:%d", i + 1,
+                 newRowShots ? ClampNewRowShots(newRowShots[i]) : kNewRowShotsDefault);
+        blob += kv;
+    }
+    return blob;
 }
 
-bool NetworkClient::SendOptions(bool chainReaction, bool continueWhenLeave, bool singleTarget, int victoriesLimit, const int playerColors[5], const bool noCompress[5], const bool aimGuide[5], bool mouseEnabled, GameMode gameMode, int raceTarget, int timedSeconds, AttackMode attackMode, const int playerTeams[5], int teamCount) {
+bool NetworkClient::SendOptions(bool chainReaction, bool continueWhenLeave, bool singleTarget, int victoriesLimit, const int playerColors[5], const bool noCompress[5], const bool aimGuide[5], bool mouseEnabled, GameMode gameMode, int raceTarget, int timedSeconds, AttackMode attackMode, const int playerTeams[5], int teamCount, const int newRowShots[5]) {
     // Send game options using SETOPTIONS command (original line 4468-4474)
     std::string blob = BuildOptionsBlob(chainReaction, continueWhenLeave, singleTarget, victoriesLimit,
         playerColors, noCompress, aimGuide, mouseEnabled, gameMode, raceTarget, timedSeconds,
-        attackMode, playerTeams, teamCount);
+        attackMode, playerTeams, teamCount, newRowShots);
     std::string cmd = "SETOPTIONS " + blob;
     SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION, "Sending game options: %s", cmd.c_str());
     return SendCommand(cmd.c_str());
@@ -1588,6 +1601,11 @@ void NetworkClient::HandlePushMessage(const std::string& pushMsg) {
         rcvNoCompress[2] = parseVal("NOCOMPRESS_P3", 0) != 0;
         rcvNoCompress[3] = parseVal("NOCOMPRESS_P4", 0) != 0;
         rcvNoCompress[4] = parseVal("NOCOMPRESS_P5", 0) != 0;
+        for (int i = 0; i < 5; i++) {
+            char key[16];
+            snprintf(key, sizeof(key), "NEWROW_P%d", i + 1);
+            rcvNewRowShots[i] = ClampNewRowShots(parseVal(key, kNewRowShotsDefault));
+        }
         rcvAimGuide[0] = parseVal("AIMGUIDE_P1", 0) != 0;
         rcvAimGuide[1] = parseVal("AIMGUIDE_P2", 0) != 0;
         rcvAimGuide[2] = parseVal("AIMGUIDE_P3", 0) != 0;

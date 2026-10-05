@@ -1177,8 +1177,19 @@ int main() {
         settings.playerTeams[1] = 2;
         settings.playerTeams[2] = 3;
         for (int i = 0; i < 5; ++i) settings.playerColors[i] = 8;
+        // New rows, slot-indexed like the teams: host 15, bot_b 12, bot_a 20.
+        settings.newRowShots[0] = 15;
+        settings.newRowShots[1] = 12;
+        settings.newRowShots[2] = 20;
 
         game.NewGame(settings);
+
+        // Remapped by nick with the rest, and the countdown starts from it.
+        CHECK(BubbleGameTestAccess::player(game, 0).newRowShots == 15);
+        CHECK(BubbleGameTestAccess::player(game, 1).newRowShots == 20);  // bot_a
+        CHECK(BubbleGameTestAccess::player(game, 2).newRowShots == 12);  // bot_b
+        CHECK(BubbleGameTestAccess::player(game, 1).turnsToCompress == 20);
+        CHECK(BubbleGameTestAccess::player(game, 2).turnsToCompress == 12);
 
         // Seating landed where AssignRemoteSeats' id-ascending order says it
         // should -- confirms the mismatch this test is built around is real,
@@ -1452,15 +1463,45 @@ int main() {
         BubbleGameTestAccess::settings(game).mouseEnabled = true;
         CHECK(game.RightClickIsSkipShot());
 
-        // Local multiplayer never does, even from a forged control record:
-        // only player 1 has a skip-shot key. There a low touch is an
-        // ordinary shot and a right click leaves.
+        // Local multiplayer too: every player has a swap key, and player 1's
+        // right click and low touch work there as well.
         BubbleGameTestAccess::reset(game, 2, false, false);
         BubbleGameTestAccess::settings(game).localMultiplayer = true;
         BubbleGameTestAccess::settings(game).mouseEnabled = true;
-        CHECK(skipFires(game) == 1);
-        CHECK(!game.TouchIsSkipShot(400.f));
-        CHECK(!game.RightClickIsSkipShot());
+        CHECK(skipFires(game) == 3);
+        CHECK(game.TouchIsSkipShot(400.f));
+        CHECK(game.RightClickIsSkipShot());
+
+        // Player 2 swaps with their own key: pocket, then fire the pocket.
+        {
+            const PlayerKeys savedP2 = gs->player2Keys;
+            const SDL_Scancode next2 = VirtualScancode(1, SDL_GAMEPAD_BUTTON_WEST);
+            gs->player2Keys.fireNext = next2;
+            BubbleGameTestAccess::reset(game, 2, false, false);
+            BubbleGameTestAccess::settings(game).localMultiplayer = true;
+            BubbleArray& q = BubbleGameTestAccess::player(game, 1);
+            q.curLaunch = 1;
+            q.nextBubble = 2;
+            q.pocketColor = -1;
+            q.newShoot = true;
+            q.suppressFireUntilRelease = false;
+            singleBubbles.clear();
+            hold(next2, true);
+            BubbleGameTestAccess::penguin(game, 1);
+            CHECK(singleBubbles.empty());
+            CHECK(q.pocketColor == 1);
+            CHECK(q.curLaunch == 2);
+            hold(next2, false);
+            BubbleGameTestAccess::penguin(game, 1);
+            hold(next2, true);
+            BubbleGameTestAccess::penguin(game, 1);
+            CHECK(singleBubbles.size() == 1);
+            if (!singleBubbles.empty()) CHECK(singleBubbles.back().bubbleId == 1);
+            CHECK(q.pocketColor == 2);
+            hold(next2, false);
+            singleBubbles.clear();
+            gs->player2Keys = savedP2;
+        }
 
         gs->player1Keys = savedKeys;
     }
@@ -2014,6 +2055,40 @@ int main() {
         // Don't leak this fake assignment into any test that runs after this one.
         nc->tournaments.Reset();
         nc->tournamentError.clear();
+    }
+
+    // --- New rows: each local board drops a row every its own number of
+    // shots (the Rows setting), the original's 12 when unset. ---
+    {
+        BubbleGame game(renderer);
+        LocalMultiplayerOptions options;
+        options.playerCount = 2;
+        options.newRowShots = 15;
+        SetupSettings settings = BuildLocalMultiplayerSettings(options);
+        CHECK(settings.newRowShots[0] == 15 && settings.newRowShots[1] == 15);
+        settings.newRowShots[1] = 8;  // under the original's 12: the default
+        game.NewGame(settings);
+        BubbleArray& p0 = BubbleGameTestAccess::player(game, 0);
+        BubbleArray& p1 = BubbleGameTestAccess::player(game, 1);
+        CHECK(p0.newRowShots == 15 && p0.turnsToCompress == 15);
+        CHECK(p1.newRowShots == kNewRowShotsDefault && p1.turnsToCompress == 12);
+
+        auto filled = [](const BubbleArray& b) {
+            int n = 0;
+            for (const auto& row : b.bubbleMap)
+                for (const Bubble& c : row) if (c.bubbleId >= 0) ++n;
+            return n;
+        };
+        const int before = filled(p0);
+        for (int shot = 1; shot <= 14; ++shot) {
+            BubbleGameTestAccess::check(game, 0);
+            CHECK(p0.turnsToCompress == 15 - shot);
+        }
+        BubbleGameTestAccess::check(game, 0);  // the 15th: a new row, count restarts
+        CHECK(p0.turnsToCompress == 15);
+        CHECK(filled(p0) > before);  // a whole new row came in on top
+        BubbleGameTestAccess::check(game, 1);
+        CHECK(p1.turnsToCompress == 11);
     }
 
     SDL_DestroyRenderer(renderer);
