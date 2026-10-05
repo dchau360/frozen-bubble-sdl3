@@ -53,6 +53,8 @@ struct MainMenuTestAccess {
     static void OpenSP(MainMenu& m) { m.showingSPPanel = true; m.activeSPIdx = 0; }
     static int SPIdx(const MainMenu& m) { return m.activeSPIdx; }
     static bool Account(const MainMenu& m) { return m.showingAccount; }
+    static bool HowTo(const MainMenu& m) { return m.showingHowTo; }
+    static bool SPOpen(const MainMenu& m) { return m.showingSPPanel; }
     static void RenderMenu(MainMenu& m) { m.Render(); }
     // A second tap pushes the key it stands for; deliver it as the game would.
     static bool Tap(MainMenu& m, float x, float y) {
@@ -166,6 +168,32 @@ int main() {
         CHECK(!MainMenuTestAccess::Account(*menu));
         Key(*menu, SDLK_RETURN);
         CHECK(MainMenuTestAccess::Account(*menu));
+    }
+
+    // How to play, row 4 (y 232..272), where Local multiplayer was: a tap
+    // selects it and a second opens the page; its Done button closes it,
+    // back to the menu. The keyboard reaches it too, and ESC closes it.
+    {
+        auto menu = MainMenuTestAccess::Create(renderer);
+        MainMenuTestAccess::OpenSP(*menu);
+        MainMenuTestAccess::RenderMenu(*menu);
+        MainMenuTestAccess::Tap(*menu, 300, 252);
+        CHECK(MainMenuTestAccess::SPIdx(*menu) == kSPRowHowTo);
+        CHECK(!MainMenuTestAccess::HowTo(*menu));
+        MainMenuTestAccess::Tap(*menu, 300, 252);
+        CHECK(MainMenuTestAccess::HowTo(*menu));
+        EdgeIsIce(renderer, *menu, 0, "howto");
+        Key(*menu, SDLK_DOWN);   // nothing behind the page moves
+        CHECK(MainMenuTestAccess::SPIdx(*menu) == kSPRowHowTo);
+        MainMenuTestAccess::Tap(*menu, 558, 414);   // Done
+        CHECK(!MainMenuTestAccess::HowTo(*menu));
+        CHECK(MainMenuTestAccess::SPOpen(*menu));
+
+        Key(*menu, SDLK_RETURN);
+        CHECK(MainMenuTestAccess::HowTo(*menu));
+        Key(*menu, SDLK_ESCAPE);
+        CHECK(!MainMenuTestAccess::HowTo(*menu));
+        CHECK(MainMenuTestAccess::SPOpen(*menu));
     }
 
     MenuThemeShutdown();

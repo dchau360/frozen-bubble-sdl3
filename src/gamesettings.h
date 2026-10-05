@@ -227,10 +227,6 @@ public:
     // 1-player aim guide (Game:SPAimGuide, default off). While on, a solo run
     // draws the trajectory line and counts on no highscore table.
     bool spAimGuideEnabled() { return spAimGuide; }
-    // Game:SkipShotLearned: set the first time the player fires a skip shot,
-    // after which the hint at the start of a 1-player run stops showing.
-    bool skipShotLearned() { return skipShotLearnedFlag; }
-    void MarkSkipShotLearned();
 
     // Which inputs the High Scores screen shows, as toggles: bit 0 keyboard/
     // gamepad, bit 1 mouse/touch, never 0. Both on shows one merged list with
@@ -393,7 +389,6 @@ private:
     bool showFps = false;
     bool worldHighscores = true;
     bool spAimGuide = false;
-    bool skipShotLearnedFlag = false;
     int scoreTrackMask = 3;
     std::string lastCountryCode;
     // Replay library keep count. In-class default so a harness or a failed load

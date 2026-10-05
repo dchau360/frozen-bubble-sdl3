@@ -36,7 +36,7 @@ constexpr Mode kModes[kBigRows] = {
     {"PICK LEVELSET AND LEVEL", "Any set, any level you have reached.", 3},
     {"RANDOM LEVELS", "A new board every level, endless.", 4},
     {"MULTIPLAYER TRAINING", "Practise against the clock, attack bubbles on.", 5},
-    {"LOCAL MULTIPLAYER", "2 to 5 players on this device, bots welcome.", 6},
+    {"HOW TO PLAY", "Aim, shoot, and the Swap pocket.", 6},
 };
 }  // namespace
 

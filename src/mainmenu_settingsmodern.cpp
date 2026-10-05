@@ -124,7 +124,7 @@ void MainMenu::KeysPanelRenderModern() {
         + 1
 #endif
         ;
-    int gameRows = 1 + switchCount + 2;   // speed, switches, Replays, Reset all
+    int gameRows = 1 + switchCount + 3;   // speed, switches, How to play, Replays, Reset all
     int gameExtra = 20;                   // the MORE heading
 #ifdef __ANDROID__
     const bool adsRemoved = AdsRemoved();
@@ -266,6 +266,14 @@ void MainMenu::KeysPanelRenderModern() {
     y += 8;
     sectionLabel("MORE", kGame.x + 16, y);
     y += 12;
+    {
+        const SDL_Rect r = {gx, y, gw, rowH};
+        const int cy = row(kKeyRowHowTo, r, "How to play", kFrost);
+        DrawTextLine(rend, T.Take(T.chat), "swap, aim, shoot", kLabel, kNoShadow, r.x + r.w - 24, cy, 2);
+        DrawTextLine(rend, T.Take(T.body), "\xE2\x80\xBA", kIce, kNoShadow, r.x + r.w - 12, cy - 1, 1);
+        AddPanelTapRow(kKeyRowHowTo, r);
+        y += pitch;
+    }
     {
         const SDL_Rect r = {gx, y, gw, rowH};
         const int cy = row(kKeyRowReplays, r, "Replays", kFrost);

@@ -64,6 +64,12 @@ int DrawChip(SDL_Renderer* rend, TTFText& t, const char* s, int x, int cy, SDL_C
 // A rounded button: `primary` is solid ice, otherwise a faint outline;
 // `focused` adds the white ring keyboard focus is shown with.
 void DrawPill(SDL_Renderer* rend, TTFText& t, const char* s, SDL_Rect r, bool primary, bool focused);
+// The Swap pocket: a round well around the bubble rect `r`, holding `bubble`
+// (null draws it empty), with a "SWAP" tag across its rim drawn with `tag`
+// (any small bold font, dark text). `lit` brightens the rim and tag, for a
+// held bubble. The board (BubbleGame::DrawPocket) and the How to play page
+// both draw it here.
+void DrawPocketWell(SDL_Renderer* rend, TTFText& tag, SDL_FRect r, SDL_Texture* bubble, bool lit);
 // The card every Modern menu screen is built from.
 void DrawCard(SDL_Renderer* rend, SDL_Rect r, float radius = 14);
 

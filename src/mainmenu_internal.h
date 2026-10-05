@@ -61,6 +61,10 @@ enum KeyConfigRow {
     // point is a row on this panel. Inserted directly above kKeyRowResetAll
     // so the destructive "reset all" stays the panel's last row; every row
     // from there down was renumbered by one.
+    //
+    // kKeyRowHowTo opens the How to play page (mainmenu_howto.cpp), the same
+    // one the 1-player menu's row opens; inserted above Replays, which with
+    // Reset all moved down by one.
 #ifndef __WASM_PORT__
     // The browser build has no fullscreen row: an SDL fullscreen flag blacks out
     // the canvas there, so the CSS shell does the scaling instead.
@@ -73,15 +77,18 @@ enum KeyConfigRow {
     kKeyRowRemoveAdsMonth   = 10,
     kKeyRowRemoveAdsYear    = 11,
     kKeyRowRemoveAdsForever = 12,
-    kKeyRowReplays    = 13,
-    kKeyRowResetAll   = 14,
+    kKeyRowHowTo      = 13,
+    kKeyRowReplays    = 14,
+    kKeyRowResetAll   = 15,
 # else
-    kKeyRowReplays    = 10,
-    kKeyRowResetAll   = 11,
+    kKeyRowHowTo      = 10,
+    kKeyRowReplays    = 11,
+    kKeyRowResetAll   = 12,
 # endif
 #else
-    kKeyRowReplays    = 9,
-    kKeyRowResetAll   = 10,
+    kKeyRowHowTo      = 9,
+    kKeyRowReplays    = 10,
+    kKeyRowResetAll   = 11,
 #endif
     kKeyRowLast = kKeyRowResetAll
 };
@@ -99,7 +106,7 @@ std::string ControllerScancodeName(SDL_Scancode sc);
 
 // The settings label for player 1's fire-next key (kKeyRowFireNext), shared
 // by both styles of the panel. Its feature name lives only here.
-inline constexpr const char* kFireNextLabel = "Skip shot";
+inline constexpr const char* kFireNextLabel = "Swap";
 
 // Row indices for the game room's action list (selectedActionIndex). The list
 // is built positionally in mainmenu_netpanel.cpp and acted on by index in

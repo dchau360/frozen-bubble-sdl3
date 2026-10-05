@@ -59,7 +59,8 @@ PlayerControls ControlsFromRecord(const StepRecord &s) {
     c.right = s.right != 0;
     c.center = s.center != 0;
     c.fire = s.fire != 0;
-    c.fireNext = s.fire == 2;
+    c.fireNext = s.fire == 2 || s.fire == 3;
+    c.skipShotLegacy = s.fire == 2;
     c.firedByMouse = s.firedByMouse != 0;
     c.mouseAngle = s.mouseAngle;
     return c;

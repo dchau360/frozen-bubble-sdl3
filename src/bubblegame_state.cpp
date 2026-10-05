@@ -511,7 +511,8 @@ void BubbleGame::ResolveContinuePrompt(bool startOver) {
         FrozenBubble::Instance()->startTime = SDL_GetTicks();
         runEligibleForWorld = true;
         runShots = 0;
-        runUsedFireNext = false;
+        skipShotHintPending = true;   // a new run opens with the hint again
+        skipShotHintStartMs = 0;
     }
     // Continue leaves startTime and runShots alone: the run keeps counting.
     ReloadGame(curLevel);

@@ -14,10 +14,15 @@ struct PlayerControls {
     // >=0: mouse/touch aim active this frame. Same sentinel as
     // BubbleArray::mouseTargetAngle, which this is captured from.
     float mouseAngle = -1.f;
-    // This frame's fire launches the NEXT bubble instead of the loaded one
-    // (the 1-player "fire next" key): the loaded bubble stays in the
-    // launcher and a new next is drawn. Only meaningful with fire set.
+    // This frame's fire is the swap button (Keys:P1FireNext, a right click,
+    // a low touch): with the pocket empty it pockets the loaded bubble and
+    // shoots nothing; with a bubble pocketed it fires that one and pockets
+    // the loaded one. Only meaningful with fire set.
     bool fireNext = false;
+    // A v2.4.140 replay's skip shot (StepRecord::fire == 2): fire the next
+    // bubble and keep the loaded one, the rule that build had. Only ever set
+    // by ReplayPlayer, so an old replay still plays back as it was recorded.
+    bool skipShotLegacy = false;
 };
 
 #endif

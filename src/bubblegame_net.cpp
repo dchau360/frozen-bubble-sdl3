@@ -97,7 +97,7 @@ void BubbleGame::SendNetworkBubbleShot(BubbleArray &bArray) {
     // The color sent is the player's NEW next bubble (what will come after current)
     // This matches original frozen-bubble line 2163: gsend(sprintf("f%.3f:$pdata{$::p}{nextcolor}", $angle{$::p}))
     //
-    // Then ";{launched}", the colour actually fired, which a skip shot makes
+    // Then ";{launched}", the colour actually fired, which the swap pocket makes
     // something other than the bubble a peer thinks is loaded. Behind a ';'
     // so every older reader still gets the next colour: this game's own
     // sscanf("%f:%d") stops at it, and the original Perl client's greedy

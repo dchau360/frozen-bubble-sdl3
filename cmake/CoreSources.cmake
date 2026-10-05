@@ -34,6 +34,8 @@ set(FROZEN_BUBBLE_CORE_SOURCES
     ${FB_SRC}/mainmenu_spname.cpp
     ${FB_SRC}/mainmenu_spaim.cpp
     ${FB_SRC}/mainmenu_spmodern.cpp
+    ${FB_SRC}/mainmenu_howto.cpp
+    ${FB_SRC}/controlhints.cpp
     ${FB_SRC}/mainmenu_roommodern.cpp
     ${FB_SRC}/mainmenu_settingsmodern.cpp
     ${FB_SRC}/mainmenu_netpanel.cpp

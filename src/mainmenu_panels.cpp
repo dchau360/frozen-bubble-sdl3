@@ -253,7 +253,9 @@ constexpr const char *kSPLabel[SP_OPT] = {
     "PICK LEVELSET AND START LEVEL",
     "PLAY RANDOM LEVELS",
     "MULTIPLAYER TRAINING",
-    "LOCAL MULTIPLAYER",
+    // Opens the How to play page; Local multiplayer used to sit here, and
+    // is still the title screen's 2P button.
+    "HOW TO PLAY",
     // A toggle, not navigation -- SPPanelRender draws an ON/OFF badge next
     // to it (not baked into this cached label texture, so it can change
     // without a re-render) and gives it a description in the panel's header
@@ -304,6 +306,7 @@ void MainMenu::SPPanelRender() {
     // The account screen is full-screen and takes over until it is closed,
     // back to this panel.
     if (showingAccount) { AccountPanelRender(); return; }
+    if (showingHowTo) { HowToRender(); return; }
     if (GameSettings::Instance()->menuTheme() == MENU_THEME_MODERN) {
         SPPanelRenderModern();
         if (spAimPrompt) SPAimPromptRender();
@@ -725,6 +728,7 @@ void MainMenu::LevelPanelRender() {
 
 void MainMenu::KeysPanelRender() {
     if (!showingKeysPanel) return;
+    if (showingHowTo) { HowToRender(); return; }
 
     BeginPanelTapRows(&keyConfigIndex);
     if (GameSettings::Instance()->menuTheme() == MENU_THEME_MODERN) {
@@ -827,6 +831,10 @@ void MainMenu::KeysPanelRender() {
         }
     }
 #endif
+
+    list.Header("Help");
+    // The How to play page (mainmenu_howto.cpp), also on the 1-player menu.
+    list.Row(kKeyRowHowTo, "How to play", "swap, aim, shoot", true);
 
     list.Header("Replays");
     // Opens the full-screen Replays page (mainmenu_replays.cpp): the library
