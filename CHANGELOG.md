@@ -1,5 +1,10 @@
 # Changelog
 
+## v2.4.143
+
+- **Swap in local multiplayer.** Every player on a shared screen now has a Swap pocket and their own Swap key: B for player 2, Q for player 3, U for player 4, keypad 7 for player 5, and X on a gamepad. Change them in Controls & Settings.
+- **Choose when new rows drop.** In multiplayer a new row still drops onto your board every 12 shots by default, as in the original. Now the room's Rows setting and the local game's Row collapse can make it every 15 or 20 shots, or turn it off, for each player.
+
 ## v2.4.142
 
 - **Swap shots stand out.** A bubble shot from the Swap pocket now has a glowing ring round it all the way up, and a "SWAP!" tag pops up over the launcher, at every game speed.
