@@ -1,7 +1,7 @@
 # Google Play listing — draft content
 
 Everything here is text/config you paste into Play Console yourself — account
-creation, AdMob signup, and the console forms are all things only you can do.
+creation, Appodeal signup, and the console forms are all things only you can do.
 This is the drafted content so you're not starting from a blank form.
 
 ---
@@ -171,10 +171,20 @@ answer key. Last checked against the submitted form's CSV export on
 | **Photos/videos/audio/files** | No | — | — | — | — |  |
 | **Calendar / Contacts** | No | — | — | — | — |  |
 | **App activity** — Other actions (gameplay) | **Yes** (from the release with Online highscores) | **Yes — with other users** (listed publicly on the online board, in-game and on the web) | **No** | **Optional** (the "Online highscores" toggle in the 1-player menu, on by default) | App functionality | The best classic single-player run (furthest level, time, input type) and best single-life score (points, level reached), sent with the nickname to fb.servequake.com under the anonymous account. Weekly best cleared Mondays; all-time kept until removal is requested. No analytics SDK; nothing else about gameplay is reported |
-| **App activity** — app interactions, in-app search history, etc. | No | — | — | — | — | No analytics SDK |
+| **App activity** — app interactions | **Yes** (Android, via Appodeal and its ad networks) | Yes — with Appodeal and the ad networks | **No** | Required | Advertising or marketing, Analytics, Fraud prevention | Ad impressions and clicks, which Appodeal's own Data safety page lists. The game itself still has no analytics SDK |
+| **App activity** — in-app search history, installed apps, etc. | No | — | — | — | — |  |
 | **Web browsing** | No | — | — | — | — |  |
-| **App info & performance** (crash logs, diagnostics) | No | — | — | — | — | No crash-reporting SDK |
-| **Device or other IDs** — advertising ID | Yes (Android, via AdMob SDK) | Yes — with Google/AdMob | **No** | Required | Collected and shared: Advertising or marketing, Analytics, Fraud prevention/security/compliance (the purposes Google lists for the Mobile Ads SDK) | Not collected directly by the developer; handled inside Google's SDK. Declared shared as well as collected to stay on the safe side. Required, not optional: "Remove Ads" is a purchase, not a data-collection toggle |
+| **App info & performance** — diagnostics, other performance data | **Yes** (Android, via Appodeal and its ad networks) | Yes — with Appodeal and the ad networks | **No** | Required | Advertising or marketing, Analytics | Device model, memory, storage and user agent, per Appodeal's Data safety page. Crash logs: No (no crash-reporting SDK) |
+| **Device or other IDs** — advertising ID | Yes (Android, via Appodeal and its ad networks) | Yes — with Appodeal and the ad networks | **No** | Required | Collected and shared: Advertising or marketing, Analytics, Fraud prevention/security/compliance | Advertising ID, IP address, MCC-MNC and network type, per Appodeal's Data safety page. Not collected directly by the developer. Required, not optional: "Remove Ads" is a purchase, not a data-collection toggle |
+
+The three ad rows above come from
+[Appodeal's Data safety page](https://docs.appodeal.com/android/data-protection/app-privacy-details),
+which covers the Appodeal SDK only. Each network in `android/app/build.gradle`
+(BidMachine, AppLovin, Unity Ads, Vungle, Mintegral, Meta, InMobi, DT
+Exchange) publishes its own; read each before submitting the form. Several
+also derive **approximate location** from the IP address, which the Location
+row above already declares as collected and shared, so add "Advertising or
+marketing" to that row's purposes.
 
 **Data deletion:** The anonymous account counts as an account for Play's
 deletion policy (it follows the player across devices), so answer that
@@ -206,7 +216,7 @@ offers one:
 - **Browser/WASM clients — encrypted**, when connecting through a server
   that terminates TLS on its WebSocket endpoint (the official server does;
   a self-hosted one might not).
-- **First-party SDK traffic (AdMob, Play Billing, Firebase, APNs) —
+- **First-party SDK traffic (Appodeal, Play Billing, Firebase, APNs) —
   encrypted.** All HTTPS/TLS by platform requirement, not something the
   app controls either way.
 - **Geolocation lookup — mostly encrypted, one gap.** `ipinfo.io/loc` is
@@ -217,25 +227,33 @@ paths, but "no" is still the accurate answer to a blanket yes/no question.
 
 ---
 
-## AdMob — done
+## Ads: Appodeal (replaced AdMob, 2026-10-06)
 
-Account created 2026-08-24, real IDs wired in (commit `710cd088`):
+AdMob turned the account down with no policy named (no Policy center entry,
+no email), so ads now go through Appodeal's mediation instead. The AdMob
+account and its IDs (`ca-app-pub-7736855769799322~9200045587`, interstitial
+`ca-app-pub-7736855769799322/5410693019`) are no longer used by the app.
 
-| | |
-|---|---|
-| App ID | `ca-app-pub-7736855769799322~9200045587` (in `AndroidManifest.xml`) |
-| Interstitial ad unit | `ca-app-pub-7736855769799322/5410693019` (in `AdsManager.java`) |
+To switch it on:
 
-**The account is still pending Google's approval** — a new-account review,
-separate from Play Console verification. Until it clears, ad requests fail
-with `Account not approved yet`, which is expected and not a bug.
+1. Sign up at appodeal.com and add the app (Android, package
+   `org.frozenbubble`, linked to the Play listing).
+2. Paste the app key from the app's page into `appodealAppKeyDefault` in
+   `android/app/build.gradle`. It is not a secret: it ships inside every APK.
+   Until it is set, the app makes no ad requests at all.
+3. Replace `site/app-ads.txt` with the app-ads.txt list from Appodeal's
+   dashboard, and the copy in the `dchau360.github.io` repo too. The old
+   AdMob line can go: that account sells nothing for this app now.
+4. Update the Data safety form (rows above) and publish the updated privacy
+   policy before the build that carries Appodeal goes live.
+5. Set up payouts in Appodeal (the LLC's payment details and tax form, as
+   for AdMob).
 
-The owner's test tablet is registered as an AdMob test device via
-`admob.testDeviceId` in `android/local.properties` (git-ignored), so local
-builds always get safe test creatives rather than real impressions — tapping
-your own live ads is invalid traffic and can get a new account flagged. To
-register another device, run a debug build, watch logcat for the SDK's
-"Use RequestConfiguration..." line, and add that hash to that file.
+Debug builds always run Appodeal in test mode (`Appodeal.setTesting`), so
+no device needs registering as a test device, and the old
+`admob.testDeviceId` line in `android/local.properties` does nothing now.
+Appodeal shows its own consent form where the law asks for one (GDPR/UK and
+US state privacy laws), the first time an ad would load.
 
 ---
 

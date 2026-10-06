@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
     package="org.frozenbubble">
 
     <uses-permission android:name="android.permission.INTERNET" />
@@ -7,6 +8,12 @@
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
     <!-- Required for Google Play Billing -->
     <uses-permission android:name="com.android.vending.BILLING" />
+    <!-- Asked for by ad network SDKs (old creative caching), not by the game,
+         which writes only to its own app-private directories. Stripped so the
+         APK requests no storage access, which Play reviews as a sensitive
+         permission and no ad here needs on Android 7+. -->
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" tools:node="remove" />
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" tools:node="remove" />
 
     <!-- Android TV requirements -->
     <uses-feature android:name="android.software.leanback" android:required="false" />
@@ -23,28 +30,11 @@
         android:banner="@drawable/tv_banner"
         android:roundIcon="@mipmap/ic_launcher"
         android:isGame="true"
-        android:theme="@android:style/Theme.NoTitleBar.Fullscreen">
-
-        <!-- AdMob App ID. ${admobAppId} is the real Frozen Bubble app ID
-             (created in AdMob 2026-08-24) for a release build, and Google's
-             own published always-test App ID for a debug build; see
-             build.gradle buildTypes. A debug build (every local/CI build a
-             developer runs, on however many devices) must never be able to
-             generate a live ad request at all: per-device whitelisting via
-             admob.testDeviceId is a second, redundant safety net, not the
-             only one. -->
-        <meta-data
-            android:name="com.google.android.gms.ads.APPLICATION_ID"
-            android:value="${admobAppId}"/>
-
-        <!-- Disable AdMob auto-init ContentProvider: MobileAds.initialize() called on SDL
-             surfaces conflicts with HWUI thread pool (CommonPool), causing a destroyed-mutex
-             crash in hwuiTask threads. Init is deferred until MSG_SHOW_AD is received. -->
-        <provider
-            android:name="com.google.android.gms.ads.MobileAdsInitProvider"
-            android:authorities="${applicationId}.mobileadsinitprovider"
-            android:enabled="false"
-            android:exported="false" />
+        android:theme="@android:style/Theme.NoTitleBar.Fullscreen"
+        android:networkSecurityConfig="@xml/network_security_config"
+        tools:replace="android:allowBackup">
+        <!-- tools:replace: the Appodeal SDK's manifest sets allowBackup to
+             true, which would otherwise fail the merge; this app keeps it off. -->
 
         <!-- Main activity, for TV boxes and phones alike.
 

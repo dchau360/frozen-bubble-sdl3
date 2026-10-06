@@ -1,6 +1,6 @@
 # Privacy Policy — Frozen Bubble: SDL3
 
-**Effective date:** October 1, 2026
+**Effective date:** October 6, 2026
 
 Frozen Bubble: SDL3 ("the app") is a free, open-source game
 ([GPLv2 licensed](https://github.com/dchau360/frozen-bubble-sdl3/blob/main/COPYING), source at
@@ -161,13 +161,21 @@ that is between you and Discord, under
 [Discord's own privacy policy](https://discord.com/privacy). Nothing is
 sent if you never select the row.
 
-**Advertising identifiers (Android only).** The Android build shows an
-interstitial ad via Google AdMob when entering the multiplayer lobby.
-AdMob's SDK collects device and advertising identifiers under Google's own
-policies — see
-[Google's Privacy Policy](https://policies.google.com/privacy) and
-[How Google uses information from sites or apps that use our services](https://policies.google.com/technologies/partner-sites).
-The developer does not separately collect or receive this data.
+**Advertising (Android only).** The Android build shows an interstitial ad
+when you enter the multiplayer lobby. Ads come through Appodeal, an ad
+mediation service, which picks an ad from one of several ad networks:
+BidMachine, AppLovin, Unity Ads, Liftoff (Vungle), Mintegral, Meta Audience
+Network, InMobi and Digital Turbine (DT Exchange). Appodeal and the network
+that serves an ad collect your device's advertising ID and IP address,
+technical details about the device (model, operating system, network type),
+and which ads you saw and tapped, to choose ads, measure them and prevent
+fraud. Each does so under its own privacy policy, listed under "Third-party
+services" below. Where the law requires your consent first (for example in
+the EU and the UK), Appodeal asks for it the first time an ad would load,
+and you can say no. You can also reset or delete your advertising ID in
+Android's settings. The developer does not separately collect or receive
+this data. The app grants no location permission, so ad networks never get
+your GPS location.
 
 **Purchase data (Android only).** The two ad-removal purchases — a yearly
 subscription and a one-time permanent unlock — are processed entirely by
@@ -201,13 +209,22 @@ or analytics SDK, so none is collected by the developer.
   the online highscore boards,
   in the game and on the web (see "Online highscores"). Not posted to
   Discord.
-- Advertising identifiers: handled entirely within Google's AdMob SDK to
-  select and measure ads; not accessed by the developer directly.
+- Advertising ID, IP address, device details and ad interactions: handled
+  entirely within the Appodeal SDK and the ad networks it uses, to select
+  and measure ads; not accessed by the developer directly.
 - Purchase token: to keep the "ads removed" state accurate on your device.
 
 ## Third-party services
 
-- [Google AdMob](https://policies.google.com/privacy) — ads (Android)
+- [Appodeal](https://appodeal.com/privacy-policy/) — ad mediation (Android),
+  serving ads from [BidMachine](https://www.bidmachine.com/privacy-policy),
+  [AppLovin](https://legal.applovin.com/privacy/),
+  [Unity Ads](https://unity.com/legal/game-player-and-app-user-privacy-policy),
+  [Liftoff (Vungle)](https://liftoff.ai/privacy-policy/),
+  [Mintegral](https://www.mintegral.com/en/privacy),
+  [Meta Audience Network](https://www.facebook.com/privacy/policy/),
+  [InMobi](https://advertising.inmobi.com/privacy-policy) and
+  [Digital Turbine](https://www.digitalturbine.com/legal/privacy-policy)
 - [Google Play Billing](https://policies.google.com/privacy) — in-app
   purchases (Android)
 - [ipinfo.io](https://ipinfo.io/privacy-policy) / [ip-api.com](https://ip-api.com/docs/legal) —

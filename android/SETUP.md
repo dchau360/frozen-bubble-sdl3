@@ -9,9 +9,11 @@
 | NDK | **25.2.9519653** | pinned in `app/build.gradle` (`ndkVersion`) |
 | CMake | **3.22.1** | pinned in `app/build.gradle`; install via the SDK Manager |
 
-`minSdk` is 23 (Android 6.0). SDL3 itself supports 21, but Google's AdMob,
-Play Billing and AndroidX releases all require 23 — see the comment on
-`minSdk` in `app/build.gradle`. The APK is built for `arm64-v8a`,
+`minSdk` is 24 (Android 7.0). SDL3 itself supports 21; the Appodeal ad SDK
+requires 24 — see the comment on `minSdk` in `app/build.gradle`. Ads stay off
+until `appodealAppKeyDefault` in `app/build.gradle` (or `appodeal.appKey` in
+`local.properties`) holds the app key from the Appodeal dashboard; a debug
+build always runs Appodeal in test mode. The APK is built for `arm64-v8a`,
 `armeabi-v7a` and `x86_64`.
 
 ## SDL3 sources
