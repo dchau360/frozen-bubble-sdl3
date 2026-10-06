@@ -153,6 +153,15 @@ Local multiplayer controller input uses a virtual scancode system: physical game
 
 Assets live in `share/` (gfx, snd, data, fonts) and are referenced via `ASSET("/gfx/...")`. In WASM they're preloaded at `/share` via Emscripten's `--preload-file`.
 
+### Brands
+
+One engine builds two games, picked by CMake's `FB_BRAND`: `frozenbubble` (default, unchanged) and `boba` (Boba Buster, a reskin). The code stays here under the GPL; Boba Buster's art does not -- it lives in a separate private repo, `boba-buster-assets`, under its own license (user decision: new art drawn from scratch can be licensed apart from the GPL code; anything derived from Frozen Bubble's art cannot, so never edit an original image into a Boba one). Build it with:
+```bash
+cmake -B build-boba -G Ninja -DFB_BRAND=boba -DFB_BRAND_ASSETS=/path/to/boba-buster-assets
+cmake --build build-boba --parallel
+```
+`FB_BRAND_ASSETS`'s `share/` mirrors this repo's `share/`: a file there replaces the one with the same path, everything else falls through to Frozen Bubble's. The `fb-brand-assets` target (`cmake/StageBrandAssets.cmake`) merges the two into `<build>/brand-share` every build and `ASSET_PATH` points there, so `DATA_DIR`, the WASM preload, the iOS bundle copy, `install()` and the tests all get the brand's art without knowing about it. So a reskin is mostly new files at existing paths -- the pearls are `gfx/balls/modern/bubble-N.png`, a mascot would be the `gfx/pinguins/` frames -- and new code only where a brand needs to behave differently. `FB_BRAND=boba` without `FB_BRAND_ASSETS` builds with Frozen Bubble's art and warns; it exists so the Boba code paths build and test without the private repo. Names live in `src/brand.h` (`kBrandName`, `kBrandWindowTitle`, `kBrandReplayFilterName`, and `kBrandPrefDir`, which keeps each game's settings, account code and replays in its own folder); put any new player-visible game name there rather than writing "Frozen Bubble" in a string. Not yet brand-aware: the Android build (`android/app/CMakeLists.txt`, gradle app name and assets), the iOS/macOS bundle names and icons, the web shell, the executable name, and the servers, Discord and website constants in `platform.cpp` (both games share them for now).
+
 ### Network protocol
 
 Server is the original `fb-server` (C, in `server/`). Protocol is line-based text over TCP/WebSocket:

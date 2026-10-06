@@ -18,6 +18,7 @@
  */
 
 #include "platform.h"
+#include "brand.h"
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_dialog.h>
 #include <cstdlib>
@@ -580,7 +581,7 @@ SDL_Window *ReplayDialogWindow(SDL_Renderer *renderer) {
 }
 
 const SDL_DialogFileFilter kReplayFileFilters[] = {
-    {"Frozen Bubble replay", "fbr"},
+    {kBrandReplayFilterName, "fbr"},
 };
 } // namespace
 
@@ -981,7 +982,7 @@ SDL_Window *ReplayDialogWindow(SDL_Renderer *renderer) {
 }
 
 const SDL_DialogFileFilter kReplayFileFilters[] = {
-    {"Frozen Bubble replay", "fbr"},
+    {kBrandReplayFilterName, "fbr"},
 };
 } // namespace
 

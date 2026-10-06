@@ -18,6 +18,7 @@
  */
 
 #include "gamesettings.h"
+#include "brand.h"
 #include "platform.h"
 #include <sys/stat.h>
 #include <sys/types.h>
@@ -37,7 +38,7 @@ static bool IsCountryCode(const std::string& c) {
 
 void GameSettings::InitPrefPath() {
     if (!prefPath)
-        prefPath = SDL_GetPrefPath("", "frozen-bubble");
+        prefPath = SDL_GetPrefPath("", kBrandPrefDir);
 }
 
 GameSettings::~GameSettings() {

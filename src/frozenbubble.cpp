@@ -18,6 +18,7 @@
  */
 
 #include "frozenbubble.h"
+#include "brand.h"
 #include "worldscores.h"
 #include "logger.h"
 #include "platform.h"
@@ -110,7 +111,7 @@ FrozenBubble::FrozenBubble() {
     // a relative path logs fine under test and then silently stops on hardware.
     // Use the same writable container the settings file already goes to.
     std::string iosLogPath;
-    if (const char* pref = SDL_GetPrefPath("", "frozen-bubble")) {
+    if (const char* pref = SDL_GetPrefPath("", kBrandPrefDir)) {
         iosLogPath = std::string(pref) + "frozen-bubble.log";
         logFilename = iosLogPath.c_str();
     }
@@ -198,7 +199,7 @@ FrozenBubble::FrozenBubble() {
     // Not on the web build, whose canvas is pinned at 640x480 below.
     fullscreen |= SDL_WINDOW_HIGH_PIXEL_DENSITY;
 #endif
-    window = SDL_CreateWindow("Frozen-Bubble: SDL3", resolution.x, resolution.y, fullscreen);
+    window = SDL_CreateWindow(kBrandWindowTitle, resolution.x, resolution.y, fullscreen);
     // SDL3: texture scale mode is set per-texture, not globally via hint.
     // Linear scaling will be applied when textures are created.
 

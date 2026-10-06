@@ -18,6 +18,7 @@
  */
 
 #include "mainmenu.h"
+#include "brand.h"
 #include "netteams.h"
 #include "audiomixer.h"
 #include "frozenbubble.h"
@@ -1781,8 +1782,9 @@ void MainMenu::NetPanelConnectionScreensRender() {
 
         // Title and status
         offset += snprintf(lobbyText + offset, sizeof(lobbyText) - offset,
-            "=== Frozen Bubble Network Lobby ===\n\n"
+            "=== %s Network Lobby ===\n\n"
             "Player: %s  |  Status: %s%s\n\n",
+            kBrandName,
             netClient->GetPlayerNick().c_str(),
             stateStr,
             serverHosting ? "  |  Hosting" : "");
