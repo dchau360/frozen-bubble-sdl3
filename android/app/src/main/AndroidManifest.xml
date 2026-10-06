@@ -36,6 +36,16 @@
         <!-- tools:replace: the Appodeal SDK's manifest sets allowBackup to
              true, which would otherwise fail the merge; this app keeps it off. -->
 
+        <!-- AdMob App ID, read only by Google's consent SDK (UMP), which
+             Appodeal uses for the GDPR and US state privacy forms when its
+             dashboard is set to Google's consent management; the forms
+             themselves are set up in AdMob's Privacy & messaging. No AdMob
+             ad SDK ships in this app (see build.gradle); without this line UMP
+             refuses to load any form at all. -->
+        <meta-data
+            android:name="com.google.android.gms.ads.APPLICATION_ID"
+            android:value="ca-app-pub-7736855769799322~9200045587"/>
+
         <!-- Main activity, for TV boxes and phones alike.
 
              screenOrientation is deliberately not pinned to landscape. One APK
