@@ -15,7 +15,7 @@ if (localPropsFile.exists()) {
 // initializes the SDK, so a fork that never signs up for Appodeal ships a
 // build with no ad requests instead of one that fails them. local.properties'
 // appodeal.appKey, when set, overrides it for a local build.
-def appodealAppKeyDefault = ''   // paste the dashboard's app key here
+def appodealAppKeyDefault = '6f4d95943e00283a2adff5eab27c0f1799413b0d792a9ed3'
 def appodealAppKey = localProps.getProperty('appodeal.appKey', appodealAppKeyDefault)
 
 // Version string, shared by the APK's versionName and by the native build's
