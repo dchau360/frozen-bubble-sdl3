@@ -22,7 +22,8 @@
   4. `game-room`: an online game room in the modern menu style.
   5. `round-stats`: the post-round stats table with team totals.
   6. `level-cleared`: the level-cleared card with the time bonus.
-  7. `local-4player`: four players on one machine, original theme.
+  7. `local-4player`: four players on one machine, original theme, each
+     with a Swap pocket (re-captured 2026-10-06 from a piloted game).
   8. `title-menu`: the title screen.
 
 - **`icon-512.png`** (512×512, 24-bit RGB) — Play's high-res store icon. A

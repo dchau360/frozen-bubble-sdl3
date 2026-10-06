@@ -48,7 +48,7 @@ Every mode plays the same whether you're local or online, and the host can adjus
 > [CHANGELOG.md](CHANGELOG.md)); the mode has not had a full pass since.
 
 <p align="center">
-  <img src="docs/screenshots/local-4player.jpg" alt="A four-player local game: player 1's board in the middle, three opponents around it" width="400">
+  <img src="docs/screenshots/local-4player.jpg" alt="A four-player local game: player 1's board in the middle, three opponents around it, each with a Swap pocket" width="400">
   <img src="docs/screenshots/two-player-win.jpg" alt="The end of a 2-player round: You Win! with the round's stats along the top" width="400">
 </p>
 
