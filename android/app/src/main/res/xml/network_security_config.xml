@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Appodeal asks for cleartext to be allowed: some of the ad networks it
+     mediates still fetch creatives and tracking pixels over plain http, and
+     Android 9+ blocks that by default, so those ads fail to render. The game's
+     own traffic does not depend on this: the native protocol is a raw TCP
+     socket, which this config does not govern. -->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+</network-security-config>

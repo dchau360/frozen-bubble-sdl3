@@ -723,7 +723,8 @@ bool MainMenu::KeysPanelKey(SDL_Event *e) {
 #ifdef __ANDROID__
                         return (row == kKeyRowRemoveAdsMonth ||
                                 row == kKeyRowRemoveAdsYear ||
-                                row == kKeyRowRemoveAdsForever) && AdsRemoved();
+                                row == kKeyRowRemoveAdsForever ||
+                                row == kKeyRowAdPrivacy) && AdsRemoved();
 #else
                         return false;
 #endif
@@ -851,6 +852,11 @@ bool MainMenu::KeysPanelKey(SDL_Event *e) {
                                         : keyConfigIndex == kKeyRowRemoveAdsYear   ? 0x8002
                                                                                    : 0x8003;
                                 SDL_SendAndroidMessage(msg, 0);
+                                AudioMixer::Instance()->PlaySFX("menu_selected");
+                            }
+                        } else if (keyConfigIndex == kKeyRowAdPrivacy) {
+                            if (!AdsRemoved()) {
+                                SDL_SendAndroidMessage(0x8005, 0);
                                 AudioMixer::Instance()->PlaySFX("menu_selected");
                             }
 #endif

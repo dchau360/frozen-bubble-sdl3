@@ -76,9 +76,14 @@ enum KeyConfigRow {
     kKeyRowRemoveAdsMonth   = 10,
     kKeyRowRemoveAdsYear    = 11,
     kKeyRowRemoveAdsForever = 12,
-    kKeyRowHowTo      = 13,
-    kKeyRowReplays    = 14,
-    kKeyRowResetAll   = 15,
+    // Opens the ad SDK's privacy options form (consent choices, and the
+    // opt-out of sale/sharing US state laws require an app to offer at any
+    // time). Android-only like the purchases, and skipped with them once ads
+    // are removed, since no ad SDK runs then.
+    kKeyRowAdPrivacy  = 13,
+    kKeyRowHowTo      = 14,
+    kKeyRowReplays    = 15,
+    kKeyRowResetAll   = 16,
 # else
     kKeyRowHowTo      = 10,
     kKeyRowReplays    = 11,

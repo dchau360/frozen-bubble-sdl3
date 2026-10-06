@@ -13,97 +13,100 @@ import android.app.Activity;
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.util.Log;
+import android.widget.Toast;
 
-import com.google.android.gms.ads.AdError;
-import com.google.android.gms.ads.AdRequest;
-import com.google.android.gms.ads.FullScreenContentCallback;
-import com.google.android.gms.ads.LoadAdError;
-import com.google.android.gms.ads.MobileAds;
-import com.google.android.gms.ads.RequestConfiguration;
-import com.google.android.gms.ads.interstitial.InterstitialAd;
-import com.google.android.gms.ads.interstitial.InterstitialAdLoadCallback;
-
-import androidx.annotation.NonNull;
-
-import java.util.ArrayList;
-import java.util.List;
+import com.appodeal.ads.Appodeal;
+import com.appodeal.ads.InterstitialCallbacks;
+import com.appodeal.consent.ConsentInfoUpdateCallback;
+import com.appodeal.consent.ConsentManager;
+import com.appodeal.consent.ConsentManagerError;
+import com.appodeal.consent.ConsentUpdateRequestParameters;
+import com.appodeal.consent.PrivacyOptionsRequirementStatus;
 
 /**
- * Manages AdMob interstitial ads and the "ads removed" preference.
+ * Manages Appodeal interstitial ads and the "ads removed" preference.
  *
  * Usage:
- *   AdsManager.init(activity);
  *   AdsManager.showLobbyAd(activity);   // call when lobby screen appears
- *   AdsManager.setAdsRemoved(activity); // call after successful IAP
+ *   AdsManager.showPrivacyOptions(activity); // the settings' Ad privacy row
+ *   AdsManager.setAdsRemoved(activity, removed); // from BillingManager
  */
 public class AdsManager {
     private static final String TAG = "FBubble.Ads";
     private static final String PREFS_NAME  = "FrozenBubblePrefs";
     private static final String KEY_NO_ADS  = "ads_removed";
 
-    // Real interstitial ad unit ID (Frozen Bubble app, created in AdMob 2026-08-24).
-    // Used only in a release build (see AD_UNIT_ID below) -- the build that
-    // actually ships to GitHub Releases or a store, where a real user
-    // organically viewing/clicking an ad is exactly the traffic AdMob is
-    // for, not a policy risk.
-    private static final String REAL_AD_UNIT_ID =
-            "ca-app-pub-7736855769799322/5410693019";
-
-    // Google's own published always-test interstitial ad unit ID (see
-    // https://developers.google.com/admob/android/test-ads). Every debug
-    // build -- this developer's own devices, CI, anyone building from
-    // source -- must never be able to request a live ad at all, on however
-    // many physical devices it ends up installed on. Per-device whitelisting
-    // via admob.testDeviceId (configureTestDeviceIfNeeded below) is a second,
-    // redundant safety net on top of this, not the only one.
-    private static final String TEST_AD_UNIT_ID =
-            "ca-app-pub-3940256099942544/1033173712";
-
-    private static final String AD_UNIT_ID = BuildConfig.DEBUG ? TEST_AD_UNIT_ID : REAL_AD_UNIT_ID;
-
-    private static InterstitialAd sInterstitial = null;
     private static boolean sInitialized = false;
-    private static boolean sTestDeviceConfigured = false;
-
-    /**
-     * Not called from anywhere in this app today -- this app reaches ads only
-     * via showLobbyAd() when C++ sends MSG_SHOW_AD, and loadAd() initializes
-     * the SDK on demand. Left here because it is a reasonable entry point for
-     * a caller embedding this class elsewhere; it delegates rather than
-     * duplicating the init sequence, so there is only ever one of those.
-     */
-    public static void init(final Activity activity) {
-        if (isAdsRemoved(activity)) {
-            Log.d(TAG, "Ads have been removed by user purchase — skipping init");
-            return;
-        }
-        loadAd(activity);
-    }
 
     /** Show an interstitial ad if one is ready and ads haven't been removed. */
     public static void showLobbyAd(final Activity activity) {
         if (isAdsRemoved(activity)) return;
+        if (BuildConfig.APPODEAL_APP_KEY.isEmpty()) return;
 
         activity.runOnUiThread(() -> {
-            if (sInterstitial != null) {
-                sInterstitial.setFullScreenContentCallback(new FullScreenContentCallback() {
-                    @Override
-                    public void onAdDismissedFullScreenContent() {
-                        sInterstitial = null;
-                        loadAd(activity); // preload next ad
-                    }
-                    @Override
-                    public void onAdFailedToShowFullScreenContent(@NonNull AdError e) {
-                        sInterstitial = null;
-                        loadAd(activity);
-                    }
-                });
-                sInterstitial.show(activity);
+            if (!sInitialized) {
+                // First lobby entry of the process: start the SDK, which
+                // caches an interstitial on its own (auto-cache is on by
+                // default), so the next entry has one to show -- the same
+                // first-entry-shows-nothing behavior the AdMob version had.
+                initialize(activity);
+                Log.d(TAG, "No ad ready yet");
+                return;
+            }
+            if (Appodeal.isLoaded(Appodeal.INTERSTITIAL)) {
+                Appodeal.show(activity, Appodeal.INTERSTITIAL);
             } else {
                 Log.d(TAG, "No ad ready yet");
-                loadAd(activity); // try to load for next time
             }
         });
+    }
+
+    /**
+     * Opens Appodeal's privacy options form, where a player reviews or
+     * changes the consent the ad networks act on -- the GDPR choices in the
+     * EU and UK, and the opt-out of sale/sharing that US state privacy laws
+     * require an app to offer at any time, not just at first launch.
+     *
+     * Asks Appodeal for the player's consent status first rather than relying
+     * on initialize() having done so: the row is reachable before the first
+     * lobby entry ever starts the SDK. Where no form applies the player is
+     * told so, instead of the tap doing nothing.
+     */
+    public static void showPrivacyOptions(final Activity activity) {
+        if (BuildConfig.APPODEAL_APP_KEY.isEmpty()) {
+            toast(activity, "This build shows no ads.");
+            return;
+        }
+        activity.runOnUiThread(() -> ConsentManager.requestConsentInfoUpdate(
+                new ConsentUpdateRequestParameters(activity, BuildConfig.APPODEAL_APP_KEY),
+                new ConsentInfoUpdateCallback() {
+                    @Override public void onUpdated() {
+                        activity.runOnUiThread(() -> {
+                            PrivacyOptionsRequirementStatus status =
+                                    ConsentManager.getPrivacyOptionsRequirementStatus();
+                            Log.d(TAG, "Privacy options requirement: " + status
+                                    + ", consent status: " + ConsentManager.getStatus());
+                            if (status != PrivacyOptionsRequirementStatus.Required) {
+                                toast(activity, "No ad privacy choices apply where you are.");
+                                return;
+                            }
+                            ConsentManager.showPrivacyOptionsForm(activity, error -> {
+                                if (error != null) {
+                                    Log.w(TAG, "Privacy options form failed: " + error);
+                                    toast(activity, "Ad privacy choices could not be opened. Try again later.");
+                                }
+                            });
+                        });
+                    }
+                    @Override public void onFailed(ConsentManagerError error) {
+                        Log.w(TAG, "Consent info update failed: " + error);
+                        toast(activity, "Ad privacy choices could not be loaded. Check your connection.");
+                    }
+                }));
+    }
+
+    private static void toast(final Activity activity, final String text) {
+        activity.runOnUiThread(() -> Toast.makeText(activity, text, Toast.LENGTH_LONG).show());
     }
 
     /**
@@ -120,12 +123,9 @@ public class AdsManager {
                 .getSharedPreferences(PREFS_NAME, Activity.MODE_PRIVATE).edit();
         ed.putBoolean(KEY_NO_ADS, removed);
         ed.apply();
-        if (removed) {
-            sInterstitial = null; // discard any loaded ad
-            Log.d(TAG, "Ads removed");
-        } else {
-            Log.d(TAG, "Ads enabled (no active entitlement)");
-        }
+        // Nothing to discard on removal: showLobbyAd() checks the flag before
+        // it ever shows, and an ad the SDK already cached just goes unused.
+        Log.d(TAG, removed ? "Ads removed" : "Ads enabled (no active entitlement)");
     }
 
     /**
@@ -145,79 +145,47 @@ public class AdsManager {
     // --- private helpers ---
 
     /**
-     * Registers this device as an AdMob test device, if android/local.properties
-     * (git-ignored) set one or more -- see build.gradle. Must run before the
-     * *first* ad request of the process, since RequestConfiguration only
-     * affects requests made after it's set. This is the actual call path that
-     * runs in this app (init() above does not -- see its comment), reached
-     * lazily via loadAd() rather than eagerly in onCreate() for the same
-     * HWUI-thread reason MobileAds.initialize() itself is deferred there.
+     * Starts the Appodeal SDK. Caller must be on the UI thread.
      *
-     * ADMOB_TEST_DEVICE_ID holds a comma-separated list rather than one
-     * device: this app gets tested on more than one physical device over its
-     * life, and each of them needs to keep serving test ads on every future
-     * build, not just whichever one is newest in local.properties.
-     */
-    private static void configureTestDeviceIfNeeded() {
-        if (sTestDeviceConfigured) return;
-        sTestDeviceConfigured = true;
-        if (!BuildConfig.ADMOB_TEST_DEVICE_ID.isEmpty()) {
-            List<String> testDeviceIds = new ArrayList<>();
-            for (String id : BuildConfig.ADMOB_TEST_DEVICE_ID.split(",")) {
-                String trimmed = id.trim();
-                if (!trimmed.isEmpty()) testDeviceIds.add(trimmed);
-            }
-            RequestConfiguration config = new RequestConfiguration.Builder()
-                    .setTestDeviceIds(testDeviceIds)
-                    .build();
-            MobileAds.setRequestConfiguration(config);
-            Log.d(TAG, "AdMob test device(s) configured: " + testDeviceIds.size());
-        }
-    }
-
-    /**
-     * Loads an interstitial, initializing the Mobile Ads SDK first if this is
-     * the first request of the process.
+     * Lazy, on the first lobby entry, rather than in onCreate(): the AdMob
+     * SDK this replaced crashed SDL at startup when initialized there (its
+     * worker threads hit a destroyed mutex in HWUI's CommonPool while SDL
+     * was bringing up its EGL surface), and the networks Appodeal mediates
+     * start the same kind of threads. Initializing after the game is
+     * already running keeps that out of startup altogether.
      *
-     * MobileAds.initialize() genuinely has to run: the manifest disables
-     * AdMob's own MobileAdsInitProvider (its ContentProvider init collides with
-     * SDL's EGL surface on the HWUI thread and crashes at startup), so nothing
-     * else will do it. This is the deferred init the manifest comment refers
-     * to -- lazy, off the startup path, but real. Requesting an ad against an
-     * uninitialized SDK happens to work through its own internal lazy init,
-     * which is not something to depend on, and leaves the first request -- the
-     * one the test-device allow-list exists to make safe -- outside any
-     * guarantee that the configuration applied.
+     * Testing mode is on in every debug build -- this developer's devices,
+     * CI, anyone building from source -- so those get Appodeal's test ads
+     * and can never produce live traffic, on however many devices a debug
+     * APK ends up installed on. It has to be set before initialize().
+     *
+     * Appodeal shows its own consent form here where the law asks for one
+     * (GDPR/UK, US state privacy laws), so there is no separate consent step.
      */
-    private static void loadAd(final Activity activity) {
-        activity.runOnUiThread(() -> {
-            configureTestDeviceIfNeeded();
-            if (!sInitialized) {
-                sInitialized = true;
-                MobileAds.initialize(activity, initStatus -> {
-                    Log.d(TAG, "AdMob initialized");
-                    requestInterstitial(activity);
-                });
-                return;
-            }
-            requestInterstitial(activity);
-        });
-    }
-
-    /** Issues the actual ad request. Caller must be on the UI thread. */
-    private static void requestInterstitial(final Activity activity) {
-        AdRequest req = new AdRequest.Builder().build();
-        InterstitialAd.load(activity, AD_UNIT_ID, req,
-                new InterstitialAdLoadCallback() {
-            @Override
-            public void onAdLoaded(@NonNull InterstitialAd ad) {
-                sInterstitial = ad;
+    private static void initialize(final Activity activity) {
+        sInitialized = true;
+        Appodeal.setTesting(BuildConfig.DEBUG);
+        Appodeal.setInterstitialCallbacks(new InterstitialCallbacks() {
+            @Override public void onInterstitialLoaded(boolean isPrecache) {
                 Log.d(TAG, "Ad loaded");
             }
-            @Override
-            public void onAdFailedToLoad(@NonNull LoadAdError e) {
-                sInterstitial = null;
-                Log.w(TAG, "Ad failed to load: " + e.getMessage());
+            @Override public void onInterstitialFailedToLoad() {
+                Log.w(TAG, "Ad failed to load");
+            }
+            @Override public void onInterstitialShown() {}
+            @Override public void onInterstitialShowFailed() {
+                Log.w(TAG, "Ad failed to show");
+            }
+            @Override public void onInterstitialClicked() {}
+            @Override public void onInterstitialClosed() {}
+            @Override public void onInterstitialExpired() {}
+        });
+        Appodeal.initialize(activity, BuildConfig.APPODEAL_APP_KEY,
+                Appodeal.INTERSTITIAL, errors -> {
+            if (errors == null || errors.isEmpty()) {
+                Log.d(TAG, "Appodeal initialized");
+            } else {
+                Log.w(TAG, "Appodeal initialized with errors: " + errors);
             }
         });
     }

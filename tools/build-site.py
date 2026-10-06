@@ -95,14 +95,14 @@ ASSETS = [
 # bytes and filename or the site stops being verified.
 #
 # app-ads.txt authorizes who may sell ad inventory for the Android build, and
-# AdMob's crawler looks for it at the ROOT of whatever developer website the
-# app declares. It is served at the apex of dchau360.github.io from a separate
+# ad networks' crawlers look for it at the ROOT of whatever developer website
+# the app declares. It is served at the apex of dchau360.github.io from a separate
 # repo (that domain's root, which this project's Pages site is only a
 # subdirectory of), and shipping a copy here puts it at the root of the
 # fb.servequake.com deployment too -- so naming either origin as the developer
-# website satisfies the check. The line is the AdMob publisher ID and changes
-# essentially never; if it ever does, the copy in the dchau360.github.io repo
-# has to change with it.
+# website satisfies the check. Its contents come from the ad mediator's
+# dashboard (Appodeal's list, one line per network seller); whenever it
+# changes, the copy in the dchau360.github.io repo has to change with it.
 VERBATIM = ["google034c4b2cf8d147df.html", "app-ads.txt"]
 
 # This generator's output is deployed byte-for-byte identical to three

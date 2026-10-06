@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- **New ad provider on Android.** Ads now come through Appodeal instead of Google AdMob. As before, a full-screen ad can show when you enter the online lobby, and Remove Ads still turns them off for good.
+- **Ad privacy choices.** A new row in Controls & Settings on Android lets you review or change how ads use your data, where the law gives you that choice.
+- **Android 7.0 or newer.** The Android version now needs Android 7.0; Android 6.0 is no longer supported.
+
 ## v2.4.144
 
 - **Easier to read online on a phone.** The online lobby, game room, Set Teams and server lists use bigger text and taller rows. Long lists scroll inside their card: swipe, use the arrow keys or the mouse wheel, or tap a half-shown row. Chat still shows four lines. In the game room, Bots and Bot skill moved to the end of the rules list.

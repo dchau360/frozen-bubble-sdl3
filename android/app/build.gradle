@@ -2,24 +2,21 @@ plugins {
     id 'com.android.application'
 }
 
-// Optional AdMob test-device ID(s), read from local.properties (git-ignored,
-// same file `sdk.dir` already lives in) rather than hardcoded into source.
-// Each one hashes to a specific physical device -- committing them here
-// would tie a public GPL repo to a maintainer's real devices for no benefit,
-// since nothing else needs it. Google's Mobile Ads SDK logs the exact hash
-// to Logcat once an ad is requested from a device not yet on this list; add
-// it as `admob.testDeviceId=<hash>` in android/local.properties to always
-// get safe test ads on that device even with the real ad unit ID below.
-// Comma-separate multiple hashes to whitelist more than one device (see
-// AdsManager.configureTestDeviceIfNeeded). Absent -> compiles to an empty
-// string, which AdsManager treats as "no test device configured" and serves
-// real ads -- the correct default for CI and for a real release build.
 def localProps = new Properties()
 def localPropsFile = rootProject.file('local.properties')
 if (localPropsFile.exists()) {
     localPropsFile.withInputStream { localProps.load(it) }
 }
-def admobTestDeviceId = localProps.getProperty('admob.testDeviceId', '')
+
+// Appodeal app key, from the app's page in the Appodeal dashboard. Not a
+// secret -- it ships inside every APK -- so it is committed here rather than
+// kept in local.properties, and CI's release build picks it up with no secret
+// to configure. Empty means no ads at all: AdsManager checks for it and never
+// initializes the SDK, so a fork that never signs up for Appodeal ships a
+// build with no ad requests instead of one that fails them. local.properties'
+// appodeal.appKey, when set, overrides it for a local build.
+def appodealAppKeyDefault = '6f4d95943e00283a2adff5eab27c0f1799413b0d792a9ed3'
+def appodealAppKey = localProps.getProperty('appodeal.appKey', appodealAppKeyDefault)
 
 // Version string, shared by the APK's versionName and by the native build's
 // APP_VERSION (see android/app/CMakeLists.txt). Android does not build through
@@ -38,21 +35,17 @@ android {
 
     defaultConfig {
         applicationId "org.frozenbubble"
-        // 23 (Android 6.0), not SDL3's own floor of 21: Google moved its
-        // entire SDK ecosystem to minSdk 23 in one wave, and every library
-        // here is past that line -- play-services-ads at 24.0.0, billing at
-        // 9.0.0, androidx.fragment at 1.9.0. Staying on 21 means pinning all
-        // three to their last minSdk-21 release and collecting Play Console
-        // SDK Index warnings as they age out, which is what prompted this.
-        // The cost is Android 5.0/5.1, roughly 2% of devices and none of
-        // this app's, since it had not gone public on Play when this changed.
-        minSdk 23
+        // 24 (Android 7.0): Appodeal SDK 4.x's floor. It was 23 before, for
+        // Google's own SDKs (billing 9.0.0, androidx.fragment 1.9.0); 21 is
+        // SDL3's. The step from 23 costs Android 6.0, well under 1% of
+        // active devices.
+        minSdk 24
         targetSdk 36
         ndkVersion "25.2.9519653"
         versionCode 127
         versionName appVersionName
 
-        buildConfigField "String", "ADMOB_TEST_DEVICE_ID", "\"${admobTestDeviceId}\""
+        buildConfigField "String", "APPODEAL_APP_KEY", "\"${appodealAppKey}\""
 
         externalNativeBuild {
             cmake {
@@ -96,24 +89,10 @@ android {
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt')
-            // The real AdMob App ID -- see AndroidManifest.xml. This is what
-            // ships to GitHub Releases and any store: real users installing
-            // and organically viewing/clicking ads is exactly the traffic
-            // AdMob exists for, not a policy risk.
-            manifestPlaceholders = [admobAppId: "ca-app-pub-7736855769799322~9200045587"]
         }
         debug {
             debuggable true
             jniDebuggable true
-            // Google's own published always-test AdMob App ID (see
-            // https://developers.google.com/admob/android/test-ads), paired
-            // with AdsManager's debug-only test ad unit ID below. Every
-            // debug build -- this developer's own devices, CI, anyone
-            // building from source -- gets guaranteed test ads no matter
-            // which physical device it lands on, instead of relying on each
-            // one being individually whitelisted via admob.testDeviceId
-            // first.
-            manifestPlaceholders = [admobAppId: "ca-app-pub-3940256099942544~3347511713"]
         }
     }
 
@@ -139,11 +118,29 @@ android {
 
 dependencies {
     testImplementation 'junit:junit:4.13.2'
-    // Google AdMob
-    implementation 'com.google.android.gms:play-services-ads:25.4.0'
+    // Appodeal (ad mediation). Core plus a short list of networks, chosen
+    // over the long list Appodeal's demo app pulls in: each adapter adds its
+    // own SDK to the APK and its own data collection to the Play Data safety
+    // form, and the nested mediation stacks (applovin_max, level_play, bidon)
+    // would each bring a second copy of most of these. No AdMob adapter: it
+    // needs an AdMob account of our own, and that account is the thing that
+    // was not approved. No Meta adapter either: Appodeal can't serve Meta
+    // Audience Network through its own accounts, only through an approved
+    // Meta account of ours, which there isn't. No analytics adapters (adjust, appsflyer, firebase,
+    // facebook_analytics, sentry): this game has no analytics. Versions are
+    // the set Appodeal's own demo builds against core 4.4.0.
+    implementation 'com.appodeal.ads.sdk:core:4.4.0'
+    implementation 'com.appodeal.ads.sdk.adapters:iab:1.8.1.1'
+    implementation 'com.appodeal.ads.sdk.adapters:bidmachine:3.7.1.0'
+    implementation 'com.appodeal.ads.sdk.adapters:applovin:13.6.3.0'
+    implementation 'com.appodeal.ads.sdk.adapters:unity_ads:4.17.0.0'
+    implementation 'com.appodeal.ads.sdk.adapters:vungle:7.7.4.0'
+    implementation 'com.appodeal.ads.sdk.adapters:mintegral:17.1.61.0'
+    implementation 'com.appodeal.ads.sdk.adapters:inmobi:11.3.0.0'
+    implementation 'com.appodeal.ads.sdk.adapters:dt_exchange:8.4.6.0'
     // Not a transitive dependency we happen to want newer -- this line is
-    // load-bearing. play-services-basement (pulled in by both the AdMob and
-    // Play Billing SDKs) declares androidx.fragment:fragment:1.1.0 as its
+    // load-bearing. play-services-basement (pulled in by the Play Billing SDK,
+    // and by several ad networks') declares androidx.fragment:fragment:1.1.0 as its
     // own floor, and still does in its current release: a POM's declared
     // version is a minimum, not what ships. Nothing else in the graph asks
     // for anything newer, so with this line removed the whole app resolves

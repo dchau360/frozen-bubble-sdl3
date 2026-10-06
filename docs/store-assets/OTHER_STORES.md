@@ -21,9 +21,9 @@ Submit the APK as-is through the
 [Amazon Developer Console](https://developer.amazon.com/apps-and-games).
 
 **Known limitation, accepted as-is:** Amazon Fire OS devices ship without
-Google Play Services — no Play Store app, no Play Billing, and AdMob's ad
-SDK is unreliable without it. Concretely, on Fire OS:
-- Ads (`AdsManager.java`, AdMob) may not load/show.
+Google Play Services — no Play Store app and no Play Billing. Concretely, on Fire OS:
+- Ads (`AdsManager.java`, Appodeal) load with less demand: no Google
+  advertising ID, so networks that rely on it fill less often.
 - The "Remove Ads" in-app purchase (Google Play Billing) will not work at
   all — Play Billing requires the Play Store app to process a purchase.
 
