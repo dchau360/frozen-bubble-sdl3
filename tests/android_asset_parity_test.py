@@ -66,7 +66,7 @@ class AndroidAssetParityTest(unittest.TestCase):
         self.assertIn("data/levels.txt", result.stdout)
 
     def test_unexpected_packaged_asset_fails(self) -> None:
-        """An asset absent from share reports its relative path."""
+        """An asset absent from share, inside a game directory, reports its relative path."""
         with tempfile.TemporaryDirectory() as temporary_directory:
             root = pathlib.Path(temporary_directory)
             source = self.make_source(root)
@@ -75,14 +75,35 @@ class AndroidAssetParityTest(unittest.TestCase):
                 {
                     "gfx/bubble.png": b"blue bubble",
                     "data/levels.txt": b"level one\n",
-                    "extra.txt": b"not in share",
+                    "gfx/extra.png": b"not in share",
                 },
             )
 
             result = self.run_checker(apk, source)
 
         self.assertNotEqual(result.returncode, 0)
-        self.assertIn("extra.txt", result.stdout)
+        self.assertIn("gfx/extra.png", result.stdout)
+
+    def test_library_assets_outside_game_directories_pass(self) -> None:
+        """Assets a dependency packages outside share's directories are listed, not failed."""
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = pathlib.Path(temporary_directory)
+            source = self.make_source(root)
+            apk = self.make_apk(
+                root,
+                {
+                    "gfx/bubble.png": b"blue bubble",
+                    "data/levels.txt": b"level one\n",
+                    "dexopt/baseline.prof": b"profile",
+                    "template/metadata.json": b"{}",
+                    "fyb_static_endcard_tmpl.html": b"<html>",
+                },
+            )
+
+            result = self.run_checker(apk, source)
+
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("template/metadata.json", result.stdout)
 
     def test_changed_packaged_asset_fails(self) -> None:
         """Different asset bytes report the affected relative path."""
