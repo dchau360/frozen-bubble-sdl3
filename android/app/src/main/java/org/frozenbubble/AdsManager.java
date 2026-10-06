@@ -82,8 +82,11 @@ public class AdsManager {
                 new ConsentInfoUpdateCallback() {
                     @Override public void onUpdated() {
                         activity.runOnUiThread(() -> {
-                            if (ConsentManager.getPrivacyOptionsRequirementStatus()
-                                    != PrivacyOptionsRequirementStatus.Required) {
+                            PrivacyOptionsRequirementStatus status =
+                                    ConsentManager.getPrivacyOptionsRequirementStatus();
+                            Log.d(TAG, "Privacy options requirement: " + status
+                                    + ", consent status: " + ConsentManager.getStatus());
+                            if (status != PrivacyOptionsRequirementStatus.Required) {
                                 toast(activity, "No ad privacy choices apply where you are.");
                                 return;
                             }
