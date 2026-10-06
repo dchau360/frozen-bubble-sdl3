@@ -158,47 +158,68 @@ This maps directly from [PRIVACY_POLICY.md](../PRIVACY_POLICY.md). Play's
 categories change their exact wording occasionally, so treat this as a
 strong draft to check against the live form rather than a copy-paste-blind
 answer key. Last checked against the submitted form's CSV export on
-2026-09-29 (v2.4.119).
+2026-10-06 (the Appodeal build). Play Console's Data safety page can export
+and import the form as CSV, which is quicker than clicking through it: export,
+change the `Response value` column, import, and review the summary.
 
 | Play category | Collected? | Shared? | Ephemeral? | Required? | Purpose | Notes |
 |---|---|---|---|---|---|---|
-| **Location** | **Yes — approximate location** | **Yes, with other users** | **No** | Required | App functionality (shown on a world map in the lobby) | Derived from IP address via ipinfo.io/ip-api.com, not GPS or a device location permission. Cached to one decimal place (~city/region accuracy). See the content-rating section above for detail. Not ephemeral: the lobby map's coordinates are held only while connected, but the country code from the same lookup is posted to a server's Discord, which keeps it |
+| **Location** | **Yes — approximate location** | **Yes, with other users** | **No** | Required | Collected and shared: App functionality (shown on a world map in the lobby), Advertising or marketing, Analytics, Fraud prevention/security/compliance | Derived from IP address via ipinfo.io/ip-api.com, not GPS or a device location permission. Cached to one decimal place (~city/region accuracy). See the content-rating section above for detail. Not ephemeral: the lobby map's coordinates are held only while connected, but the country code from the same lookup is posted to a server's Discord, which keeps it. The ad purposes are the ad networks': Unity Ads, Liftoff/Vungle and DT Exchange all derive approximate location from the IP address |
 | **Personal info** — name, email, address, phone | No | — | — | — | — | Nickname is free-text, unverified, not linked to real identity — Google's own guidance treats this as not requiring declaration here |
 | **Personal info** — User IDs | **Yes** (when you play online) | **Yes — with other players, the server's operator, and its Discord channel** (the short `#xxxx` tag beside your name) | **No** | Required | Collected: App functionality, Account management. Shared: App functionality | The anonymous account (v2.4.118+): servers receive a public key derived from the on-device recovery code and store a 16-hex account id with that week's counts; the first 4 hex digits appear as `name#xxxx` in rankings and Discord posts. Not linked to name, email, device ID or ad ID. Declared under User IDs rather than Device IDs because the same code works on every device the player enters it on |
-| **Financial info** | No (by the app) | — | — | — | — | Google Play Billing handles the purchase; the app never receives payment details, only a purchase token |
+| **Financial info** — payment info, credit score | No | — | — | — | — | Google Play Billing handles the purchase; the app never receives payment details, only a purchase token |
+| **Financial info** — purchase history | **Yes** (Android, via Unity Ads) | Yes — with the ad networks | **No** | Required | Collected and shared: Advertising or marketing, Analytics | Unity Ads declares it. The game itself never passes purchases to Appodeal (`trackInAppPurchase` is not called) |
 | **Health & fitness** | No | — | — | — | — |  |
 | **Messages** (in-app messaging) | Yes | Yes — with other players in your match, and the server you're connected to | Yes | Required | App functionality | Only while playing network multiplayer; not stored by the developer |
 | **Photos/videos/audio/files** | No | — | — | — | — |  |
 | **Calendar / Contacts** | No | — | — | — | — |  |
-| **App activity** — Other actions (gameplay) | **Yes** (from the release with Online highscores) | **Yes — with other users** (listed publicly on the online board, in-game and on the web) | **No** | **Optional** (the "Online highscores" toggle in the 1-player menu, on by default) | App functionality | The best classic single-player run (furthest level, time, input type) and best single-life score (points, level reached), sent with the nickname to fb.servequake.com under the anonymous account. Weekly best cleared Mondays; all-time kept until removal is requested. No analytics SDK; nothing else about gameplay is reported |
-| **App activity** — app interactions | **Yes** (Android, via Appodeal and its ad networks) | Yes — with Appodeal and the ad networks | **No** | Required | Advertising or marketing, Analytics, Fraud prevention | Ad impressions and clicks, which Appodeal's own Data safety page lists. The game itself still has no analytics SDK |
+| **App activity** — Other actions (gameplay) | **Yes** (online highscores; missing from the live form until 2026-10-06) | **Yes — with other users** (listed publicly on the online board, in-game and on the web) | **No** | **Optional** (the "Online highscores" toggle in the 1-player menu, on by default) | App functionality | The best classic single-player run (furthest level, time, input type) and best single-life score (points, level reached), sent with the nickname to fb.servequake.com under the anonymous account. Weekly best cleared Mondays; all-time kept until removal is requested. No analytics SDK; nothing else about gameplay is reported |
+| **App activity** — app interactions | **Yes** (Android, via Appodeal and its ad networks) | Yes — with Appodeal and the ad networks | **No** | Required | Collected and shared: Advertising or marketing, Analytics, Fraud prevention/security/compliance | Ad impressions and clicks (Appodeal, Unity Ads, DT Exchange). The game itself still has no analytics SDK |
 | **App activity** — in-app search history, installed apps, etc. | No | — | — | — | — |  |
 | **Web browsing** | No | — | — | — | — |  |
-| **App info & performance** — diagnostics, other performance data | **Yes** (Android, via Appodeal and its ad networks) | Yes — with Appodeal and the ad networks | **No** | Required | Advertising or marketing, Analytics | Device model, memory, storage and user agent, per Appodeal's Data safety page. Crash logs: No (no crash-reporting SDK) |
-| **Device or other IDs** — advertising ID | Yes (Android, via Appodeal and its ad networks) | Yes — with Appodeal and the ad networks | **No** | Required | Collected and shared: Advertising or marketing, Analytics, Fraud prevention/security/compliance | Advertising ID, IP address, MCC-MNC and network type, per Appodeal's Data safety page. Not collected directly by the developer. Required, not optional: "Remove Ads" is a purchase, not a data-collection toggle |
+| **App info & performance** — diagnostics, other performance data | **Yes** (Android, via Appodeal and its ad networks) | Yes — with Appodeal and the ad networks | **No** | Required | Collected and shared: App functionality, Analytics, Advertising or marketing | Device model, memory, storage and user agent (Appodeal); ad response times and display status (DT Exchange) |
+| **App info & performance** — crash logs | **Yes** (Android, via DT Exchange) | No | **No** | Required | Collected: App functionality, Analytics | DT Exchange collects crashes in its own SDK. The game has no crash-reporting SDK of its own |
+| **Device or other IDs** — advertising ID | Yes (Android, via Appodeal and its ad networks) | Yes — with Appodeal and the ad networks | **No** | Required | Collected and shared: App functionality, Advertising or marketing, Analytics, Fraud prevention/security/compliance | Advertising ID, IP address, MCC-MNC and network type (Appodeal); App functionality is Unity Ads' and DT Exchange's frequency capping and user counts. Not collected directly by the developer. Required, not optional: "Remove Ads" is a purchase, not a data-collection toggle |
 
-The three ad rows above come from
-[Appodeal's Data safety page](https://docs.appodeal.com/android/data-protection/app-privacy-details),
-which covers the Appodeal SDK only. Each network in `android/app/build.gradle`
-(BidMachine, AppLovin, Unity Ads, Vungle, Mintegral, InMobi, DT Exchange) publishes its own; read each before submitting the form. Several
-also derive **approximate location** from the IP address, which the Location
-row above already declares as collected and shared, so add "Advertising or
-marketing" to that row's purposes.
+The ad rows above are the union of
+[Appodeal's Data safety page](https://docs.appodeal.com/android/data-protection/app-privacy-details)
+(the Appodeal SDK only) and the pages the networks in
+`android/app/build.gradle` publish:
+[Unity Ads](https://docs.unity.com/en-us/grow/ads/privacy/google-data-safety),
+[DT Exchange](https://docs.digitalturbine.com/dt-exchange/getting-started-with-dt-exchange/privacy/google-data-safety-form),
+[BidMachine](https://developers.bidmachine.io/sdk/general/android/app-privacy-details-on-the-google-play)
+and [Liftoff/Vungle](https://support.vungle.com/hc/en-us/articles/5035287250331-Google-Play-data-safety-Questionnaire-for-Vungle).
+AppLovin, Mintegral and InMobi publish none that could be found (2026-10-06).
+Appodeal's "optional" lines (precise location, user IDs, purchase history)
+apply only when the app grants a location permission, calls `setUserId` or
+calls `trackInAppPurchase`; this one does none of those. Adding or removing an
+adapter means checking that network's page against these rows again.
+
+**Advertising ID** (App content, a separate form): **Yes**, the app uses it,
+for Advertising or marketing, Analytics and Fraud prevention/security/
+compliance. The release build's merged manifest carries
+`com.google.android.gms.permission.AD_ID` from the ad SDKs, and Play rejects
+a release whose manifest and this answer disagree.
 
 **Data deletion:** The anonymous account counts as an account for Play's
-deletion policy (it follows the player across devices), so answer that
-users *can* request deletion:
+deletion policy (it follows the player across devices):
 
-- **In app:** NET GAME (or LAN GAME) → **Account code** → **New account**.
-  That erases the recovery code from the device, and without it nobody can
-  sign in as that account again. Clearing app data or uninstalling does the
-  same.
-- **Web link** (the "delete account URL" field):
-  `https://dchau360.github.io/frozen-bubble-sdl3/privacy/#delete-account`
-- **What's deleted / kept:** servers keep only that week's ranking line
-  (account id, last nickname, counts), deleted automatically at the next
-  Monday 00:00 UTC reset; earlier removal on request via the issue tracker.
-  Discord messages already posted in a server's channel stay there.
+- **Account creation method:** Other ("An anonymous account is created
+  automatically on first online play...").
+- **In app:** NET GAME (or LAN GAME) → **Account code** → **Delete account**
+  (v2.4.126+). It removes the account's highscore and weekly lines from
+  this port's server, then starts a new account on the device. **New
+  account** alone only replaces the code on the device.
+- **Delete account URL:** `https://llmfinder.net/privacy/#delete-account`,
+  the same site as the listing's privacy policy URL.
+- **"Request that their data is deleted" (without deleting the account):**
+  the live form answers **No**. Yes would also be defensible (the
+  highscores can be removed on request through the issue tracker), with the
+  same URL as the delete data URL.
+- **What's deleted / kept:** other servers' weekly lines age out at their
+  Monday 00:00 UTC reset. Discord messages already posted in a server's
+  channel stay there. The ad networks hold their own data under their own
+  policies; the advertising ID can be reset from Android's settings.
 
 **Encryption in transit:** Not uniformly — answer **No** on "is all user
 data encrypted in transit," or use the per-category breakdown if the form
@@ -230,8 +251,11 @@ paths, but "no" is still the accurate answer to a blanket yes/no question.
 
 AdMob turned the account down with no policy named (no Policy center entry,
 no email), so ads now go through Appodeal's mediation instead. The AdMob
-account and its IDs (`ca-app-pub-7736855769799322~9200045587`, interstitial
-`ca-app-pub-7736855769799322/5410693019`) are no longer used by the app.
+interstitial unit (`ca-app-pub-7736855769799322/5410693019`) is no longer
+used. The AdMob App ID (`ca-app-pub-7736855769799322~9200045587`) is still in
+`AndroidManifest.xml`: Appodeal's consent goes through Google's UMP SDK, which
+reads it, and the consent messages themselves are published in AdMob's
+Privacy & messaging.
 
 To switch it on:
 
@@ -239,20 +263,24 @@ To switch it on:
    `org.frozenbubble`, linked to the Play listing).
 2. Paste the app key from the app's page into `appodealAppKeyDefault` in
    `android/app/build.gradle`. It is not a secret: it ships inside every APK.
-   Until it is set, the app makes no ad requests at all.
+   Until it is set, the app makes no ad requests at all. (Done.)
 3. Replace `site/app-ads.txt` with the app-ads.txt list from Appodeal's
-   dashboard, and the copy in the `dchau360.github.io` repo too. The old
-   AdMob line can go: that account sells nothing for this app now.
-4. Update the Data safety form (rows above) and publish the updated privacy
-   policy before the build that carries Appodeal goes live.
+   dashboard, and the copy in the `dchau360.github.io` repo too, keeping the
+   `google.com, pub-7736855769799322` line Appodeal's list leaves as a
+   placeholder. (Done.)
+4. Update the Data safety form (rows above) and the Advertising ID
+   declaration, and publish the updated privacy policy, before the build
+   that carries Appodeal goes live. Set the privacy policy URL
+   (`https://llmfinder.net/privacy/`) in Appodeal's dashboard too.
 5. Set up payouts in Appodeal (the LLC's payment details and tax form, as
    for AdMob).
 
 Debug builds always run Appodeal in test mode (`Appodeal.setTesting`), so
 no device needs registering as a test device, and the old
 `admob.testDeviceId` line in `android/local.properties` does nothing now.
-Appodeal shows its own consent form where the law asks for one (GDPR/UK and
-US state privacy laws), the first time an ad would load.
+Google's UMP consent form shows where the law asks for one (GDPR/UK and US
+state privacy laws), the first time an ad would load, and the **Ad privacy
+choices** row in Controls & Settings reopens it.
 
 ---
 
