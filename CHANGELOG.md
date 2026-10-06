@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v2.4.145
 
 - **New ad provider on Android.** Ads now come through Appodeal instead of Google AdMob. As before, a full-screen ad can show when you enter the online lobby, and Remove Ads still turns them off for good.
 - **Ad privacy choices.** A new row in Controls & Settings on Android lets you review or change how ads use your data, where the law gives you that choice.
