@@ -1,0 +1,82 @@
+<!doctype html>
+<!-- The app icon's master drawing (share/icons/frozen-bubble-icon-1024x1024.png).
+     The bubble is the in-game Candy gloss bubble. Render and regenerate:
+       "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --headless=new \
+         --hide-scrollbars --force-device-scale-factor=1 --window-size=1024,1024 \
+         --screenshot=icon.png "file://$PWD/tools/app-icon.html"
+     then save icon.png as RGB over the master and run tools/make-app-icons.py. --><html><head><style>html,body{margin:0;background:#000}canvas{display:block}</style></head><body>
+<canvas id=c width=1024 height=1024></canvas>
+<script>
+const HUES = {
+  graphite:{ base:"#4b5264", light:"#a4adc2", dark:"#171a22"},
+  pearl:{ base:"#e3e9f2", light:"#ffffff", dark:"#8c97aa"},
+  blue:{ base:"#2f6bff", light:"#9cbcff", dark:"#0b2a80"},
+  green:{ base:"#1cbf59", light:"#9af2b8", dark:"#09642c"},
+  yellow:{ base:"#ffc61a", light:"#fff2a8", dark:"#a86f00"},
+  purple:{ base:"#a246f0", light:"#dcb0ff", dark:"#4f1a8a"},
+  red:{ base:"#ee3449", light:"#ffa1ac", dark:"#871022"},
+  orange:{ base:"#ff8619", light:"#ffc890", dark:"#a14400"},
+};
+function rgba(hex,a){const n=parseInt(hex.slice(1),16);return `rgba(${n>>16&255},${n>>8&255},${n&255},${a})`;}
+function circle(ctx,x,y,r){ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);}
+// The game's Candy gloss bubble, drawn at any size centred on (x,y).
+function bubble(ctx,x,y,size,h,shadow=true){
+  ctx.save(); ctx.translate(x-size/2,y-size/2);
+  const s=size,r=s*0.47,c=s/2;
+  if(shadow){ctx.save();circle(ctx,c,c+s*0.04,r);ctx.fillStyle="rgba(0,10,30,.35)";ctx.filter=`blur(${s*0.04}px)`;ctx.fill();ctx.restore();}
+  let g=ctx.createRadialGradient(c,s*0.62,r*0.1,c,c,r);
+  g.addColorStop(0,h.light);g.addColorStop(0.35,h.base);g.addColorStop(1,h.dark);
+  circle(ctx,c,c,r);ctx.fillStyle=g;ctx.fill();
+  ctx.lineWidth=s*0.045;ctx.strokeStyle=h.dark;circle(ctx,c,c,r-s*0.02);ctx.stroke();
+  g=ctx.createLinearGradient(0,s*0.1,0,s*0.5);
+  g.addColorStop(0,"rgba(255,255,255,.9)");g.addColorStop(1,"rgba(255,255,255,.12)");
+  ctx.beginPath();ctx.ellipse(c,s*0.31,r*0.68,r*0.4,0,0,Math.PI*2);ctx.fillStyle=g;ctx.fill();
+  ctx.beginPath();ctx.arc(c,c,r*0.72,Math.PI*0.2,Math.PI*0.8);
+  ctx.lineWidth=s*0.04;ctx.strokeStyle=rgba(h.light,0.6);ctx.stroke();
+  ctx.restore();
+}
+function bg(ctx,S){
+  let g=ctx.createRadialGradient(S*0.5,S*0.35,0,S*0.5,S*0.5,S*0.8);
+  g.addColorStop(0,"#1f6fb8");g.addColorStop(0.55,"#0c3a66");g.addColorStop(1,"#06223a");
+  ctx.fillStyle=g;ctx.fillRect(0,0,S,S);
+}
+function sparkle(ctx,x,y,r,a=0.9){
+  ctx.save();ctx.translate(x,y);ctx.fillStyle=`rgba(220,245,255,${a})`;
+  ctx.beginPath();
+  for(let k=0;k<8;k++){const an=k*Math.PI/4,rr=k%2?r*0.22:r;ctx.lineTo(Math.cos(an)*rr,Math.sin(an)*rr);}
+  ctx.closePath();ctx.fill();ctx.restore();
+}
+function iceBand(ctx,S,y){ // frosted ceiling the cluster hangs from
+  let g=ctx.createLinearGradient(0,0,0,y);
+  g.addColorStop(0,"#e8f8ff");g.addColorStop(1,"#7fd6ff");
+  ctx.fillStyle=g;ctx.beginPath();ctx.moveTo(0,0);ctx.lineTo(S,0);ctx.lineTo(S,y);
+  const n=8;for(let i=n;i>=0;i--){const x=S*i/n;ctx.lineTo(x,y+(i%2?S*0.025:-S*0.0));}
+  ctx.closePath();ctx.fill();
+}
+const S=1024, ctx=document.getElementById('c').getContext('2d');
+const v='aim';
+bg(ctx,S);
+if(v==='aim'){
+  // The loaded red bubble on the launcher, aim line up to the reds it will pop.
+  const d=172, top=S*0.085;
+  iceBand(ctx,S,top);
+  const cl=[["blue","red","blue","green","purple"],["red","red","yellow","green"]];
+  const pos=(ri,i,n)=>[(S-n*d)/2+d/2+i*d, top+d*0.47+ri*d*0.87];
+  cl.forEach((row,ri)=>row.forEach((h,i)=>{const [x,y]=pos(ri,i,row.length);bubble(ctx,x,y,d,HUES[h]);}));
+  // Landing spot: under the two reds of row 2.
+  const [ax]=pos(1,0,4),[bx]=pos(1,1,4);
+  const tx=(ax+bx)/2, ty=top+d*0.47+2*d*0.87;
+  const lx=S*0.5, ly=S*0.785;
+  const ang=Math.atan2(ty-ly,tx-lx), r0=d*0.98, r1=d*0.55;
+  ctx.save();ctx.setLineDash([34,30]);ctx.lineCap="round";ctx.lineWidth=22;ctx.strokeStyle="rgba(127,214,255,.95)";
+  ctx.beginPath();ctx.moveTo(lx+Math.cos(ang)*r0,ly+Math.sin(ang)*r0);ctx.lineTo(tx-Math.cos(ang)*r1,ty-Math.sin(ang)*r1);ctx.stroke();ctx.restore();
+  // ghost of where it lands
+  circle(ctx,tx,ty,d*0.44);ctx.lineWidth=12;ctx.setLineDash([22,18]);ctx.strokeStyle="rgba(127,214,255,.7)";ctx.stroke();ctx.setLineDash([]);
+  // launcher ring with a pointer toward the aim
+  circle(ctx,lx,ly,d*0.92);ctx.lineWidth=30;ctx.strokeStyle="rgba(127,214,255,.95)";ctx.stroke();
+  ctx.save();ctx.translate(lx,ly);ctx.rotate(ang);ctx.fillStyle="rgba(127,214,255,.95)";
+  ctx.beginPath();ctx.moveTo(d*1.22,0);ctx.lineTo(d*0.86,-d*0.24);ctx.lineTo(d*0.86,d*0.24);ctx.closePath();ctx.fill();ctx.restore();
+  bubble(ctx,lx,ly,d*1.45,HUES.red);
+  sparkle(ctx,S*0.14,S*0.66,34);sparkle(ctx,S*0.86,S*0.56,24);sparkle(ctx,S*0.82,S*0.90,18,0.7);
+}
+</script></body></html>

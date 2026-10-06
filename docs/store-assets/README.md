@@ -27,18 +27,16 @@
 
 - **`icon-512.png`** (512×512, 24-bit RGB) — Play's high-res store icon. A
   resize of `share/icons/frozen-bubble-icon-1024x1024.png`, the single
-  master every platform's app icon now derives from — two in-game penguins
-  against an icy background, originally an iOS-icon screenshot crop.
+  master every platform's app icon now derives from — the loaded red candy
+  bubble in the launcher, aimed with a dashed line at the reds in a cluster
+  hanging from an ice ceiling, drawn at full size by `tools/app-icon.html`
+  (render steps in its header comment). It replaced a crop of two
+  original-theme penguins in v2.4.144.
   Regenerate every derived icon at once, this file included, with
   `python3 tools/make-app-icons.py` (see its docstring for the full list
   of outputs, including the `android/app/src/main/res/mipmap-hdpi/
   ic_launcher.png` fallback used by local/Android-Studio builds that skip
   CI's own icon-generation step).
-
-There's still headroom for a proper redraw or vector source at some point —
-this is a crop of one in-game render, not custom-made icon art, and soft at
-full size since the crop itself is small relative to 1024px — but it's real
-game art and on-brand rather than a generic stock image or made-up gradient.
 
 
 ## Promo video
