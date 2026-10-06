@@ -1,5 +1,11 @@
 # Changelog
 
+## v2.4.144
+
+- **Easier to read online on a phone.** The online lobby, game room, Set Teams and server lists use bigger text and taller rows. Long lists scroll inside their card: swipe, use the arrow keys or the mouse wheel, or tap a half-shown row. Chat still shows four lines. In the game room, Bots and Bot skill moved to the end of the rules list.
+- **Modern server lists.** The NET GAME and LAN GAME lists now match the Modern menu style, with each server's ping shown as a coloured chip.
+- **New app icon.** A candy bubble in the launcher, aimed at the bubbles above.
+
 ## v2.4.143
 
 - **Swap in local multiplayer.** Every player on a shared screen now has a Swap pocket and their own Swap key: B for player 2, Q for player 3, U for player 4, keypad 7 for player 5, and X on a gamepad. Change them in Controls & Settings.
