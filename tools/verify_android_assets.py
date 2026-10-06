@@ -17,27 +17,30 @@ def source_hashes(root: pathlib.Path) -> dict[str, str]:
     }
 
 
-# assets/ is not ours alone: AGP writes the baseline profile here too, as
-# dexopt/baseline.prof and .profm. Those arrive the moment any dependency
-# brings in androidx.profileinstaller -- androidx.fragment does -- and they
-# are wanted, since they carry the AOT hints that speed up a cold start.
-# They are build-tool output rather than game assets, so this check has no
-# source-tree copy to compare them against and skips them by name. The
-# prefix is deliberately narrow: the point of this script is to catch the
-# asset-deployment pipeline packaging the wrong thing, and widening this
-# would blunt that.
-BUILD_TOOL_ASSET_PREFIXES = ("dexopt/",)
+# assets/ is not ours alone. AGP writes the baseline profile here
+# (dexopt/baseline.prof and .profm, from androidx.profileinstaller), and the
+# ad SDKs ship their own files (Mintegral's template/ and rv_binddatas.xml,
+# BidMachine's bm_networks/, IAB's ad-viewer/, DT Exchange's fyb_*.html,
+# InMobi's ia_*.txt, ...). None of those have a copy in share/ to compare
+# against, and the list changes with every SDK update. So the check covers
+# the game's own part of assets/: every path under one of share/'s top-level
+# entries (data/, gfx/, icons/, locale/, snd/) must match exactly, in both
+# directions, and anything outside them is reported but not failed. Packaging
+# the wrong tree still fails, as missing files; a stray file inside a game
+# directory still fails, as unexpected.
 
 
 def apk_hashes(apk: pathlib.Path) -> dict[str, str]:
     with zipfile.ZipFile(apk) as archive:
         return {
-            name: sha256(archive.read(info)).hexdigest()
+            info.filename.removeprefix("assets/"): sha256(archive.read(info)).hexdigest()
             for info in archive.infolist()
             if info.filename.startswith("assets/") and not info.is_dir()
-            and not (name := info.filename.removeprefix("assets/")).startswith(
-                BUILD_TOOL_ASSET_PREFIXES)
         }
+
+
+def is_game_path(path: str, top_level: set[str]) -> bool:
+    return path.split("/", 1)[0] in top_level
 
 
 def main() -> int:
@@ -49,7 +52,10 @@ def main() -> int:
     arguments = parser.parse_args()
 
     source = source_hashes(arguments.source)
-    packaged = apk_hashes(arguments.apk)
+    top_level = {path.name for path in arguments.source.iterdir()}
+    all_packaged = apk_hashes(arguments.apk)
+    packaged = {p: h for p, h in all_packaged.items() if is_game_path(p, top_level)}
+    others = sorted(all_packaged.keys() - packaged.keys())
     missing = sorted(source.keys() - packaged.keys())
     unexpected = sorted(packaged.keys() - source.keys())
     mismatched = sorted(
@@ -72,6 +78,10 @@ def main() -> int:
         return 1
 
     print(f"APK assets match source: {len(source)} files with matching SHA-256 hashes.")
+    if others:
+        print(f"Not checked, outside {sorted(top_level)} (library assets): {len(others)} files")
+        for path in others:
+            print(f"  {path}")
     return 0
 
 
