@@ -33,6 +33,7 @@ import java.net.URL;
  *   0x8002 — buy the yearly ad-removal subscription
  *   0x8003 — buy permanent ad removal
  *   0x8004 — buy the monthly ad-removal subscription
+ *   0x8005 — open the ad privacy options form (Controls & Settings)
  */
 public class FrozenBubbleActivity extends SDLActivity {
 
@@ -41,6 +42,7 @@ public class FrozenBubbleActivity extends SDLActivity {
     private static final int MSG_BUY_ADS_YEAR      = 0x8002;
     private static final int MSG_BUY_ADS_FOREVER   = 0x8003;
     private static final int MSG_BUY_ADS_MONTH     = 0x8004;
+    private static final int MSG_AD_PRIVACY        = 0x8005;
 
     /** Extracted asset directory path — read by C++ InitDataDir() via JNI. */
     public static String sExtractedDataDir = "";
@@ -96,6 +98,9 @@ public class FrozenBubbleActivity extends SDLActivity {
             case MSG_BUY_ADS_FOREVER:
                 runOnUiThread(() ->
                         mBillingManager.launchPurchaseFlow(BillingManager.PRODUCT_FOREVER));
+                return true;
+            case MSG_AD_PRIVACY:
+                AdsManager.showPrivacyOptions(this);
                 return true;
             case MSG_BUY_ADS_MONTH:
                 runOnUiThread(() ->

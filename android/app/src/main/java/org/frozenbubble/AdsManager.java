@@ -13,15 +13,22 @@ import android.app.Activity;
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.util.Log;
+import android.widget.Toast;
 
 import com.appodeal.ads.Appodeal;
 import com.appodeal.ads.InterstitialCallbacks;
+import com.appodeal.consent.ConsentInfoUpdateCallback;
+import com.appodeal.consent.ConsentManager;
+import com.appodeal.consent.ConsentManagerError;
+import com.appodeal.consent.ConsentUpdateRequestParameters;
+import com.appodeal.consent.PrivacyOptionsRequirementStatus;
 
 /**
  * Manages Appodeal interstitial ads and the "ads removed" preference.
  *
  * Usage:
  *   AdsManager.showLobbyAd(activity);   // call when lobby screen appears
+ *   AdsManager.showPrivacyOptions(activity); // the settings' Ad privacy row
  *   AdsManager.setAdsRemoved(activity, removed); // from BillingManager
  */
 public class AdsManager {
@@ -52,6 +59,51 @@ public class AdsManager {
                 Log.d(TAG, "No ad ready yet");
             }
         });
+    }
+
+    /**
+     * Opens Appodeal's privacy options form, where a player reviews or
+     * changes the consent the ad networks act on -- the GDPR choices in the
+     * EU and UK, and the opt-out of sale/sharing that US state privacy laws
+     * require an app to offer at any time, not just at first launch.
+     *
+     * Asks Appodeal for the player's consent status first rather than relying
+     * on initialize() having done so: the row is reachable before the first
+     * lobby entry ever starts the SDK. Where no form applies the player is
+     * told so, instead of the tap doing nothing.
+     */
+    public static void showPrivacyOptions(final Activity activity) {
+        if (BuildConfig.APPODEAL_APP_KEY.isEmpty()) {
+            toast(activity, "This build shows no ads.");
+            return;
+        }
+        activity.runOnUiThread(() -> ConsentManager.requestConsentInfoUpdate(
+                new ConsentUpdateRequestParameters(activity, BuildConfig.APPODEAL_APP_KEY),
+                new ConsentInfoUpdateCallback() {
+                    @Override public void onUpdated() {
+                        activity.runOnUiThread(() -> {
+                            if (ConsentManager.getPrivacyOptionsRequirementStatus()
+                                    != PrivacyOptionsRequirementStatus.Required) {
+                                toast(activity, "No ad privacy choices apply where you are.");
+                                return;
+                            }
+                            ConsentManager.showPrivacyOptionsForm(activity, error -> {
+                                if (error != null) {
+                                    Log.w(TAG, "Privacy options form failed: " + error);
+                                    toast(activity, "Ad privacy choices could not be opened. Try again later.");
+                                }
+                            });
+                        });
+                    }
+                    @Override public void onFailed(ConsentManagerError error) {
+                        Log.w(TAG, "Consent info update failed: " + error);
+                        toast(activity, "Ad privacy choices could not be loaded. Check your connection.");
+                    }
+                }));
+    }
+
+    private static void toast(final Activity activity, final String text) {
+        activity.runOnUiThread(() -> Toast.makeText(activity, text, Toast.LENGTH_LONG).show());
     }
 
     /**

@@ -128,7 +128,7 @@ void MainMenu::KeysPanelRenderModern() {
     int gameExtra = 20;                   // the MORE heading
 #ifdef __ANDROID__
     const bool adsRemoved = AdsRemoved();
-    gameRows += adsRemoved ? 1 : 3;
+    gameRows += adsRemoved ? 1 : 4;   // the three purchases and Ad privacy
     gameExtra += adsRemoved ? 20 : 32;    // the STORE heading, the renewal line
 #endif
     const int firstRowY = kCardTop + 26;
@@ -258,6 +258,13 @@ void MainMenu::KeysPanelRenderModern() {
                                                                     : nullptr;
         if (terms) DrawTextLine(rend, T.Take(T.chat), terms, kLabel, kNoShadow, gx + 10, y + 4);
         y += 12;
+        // The ad SDK's privacy options form (AdsManager.showPrivacyOptions).
+        const SDL_Rect r = {gx, y, gw, rowH};
+        const int cy = row(kKeyRowAdPrivacy, r, "Ad privacy choices", kFrost);
+        DrawTextLine(rend, T.Take(T.chat), "review / change", kLabel, kNoShadow, r.x + r.w - 24, cy, 2);
+        DrawTextLine(rend, T.Take(T.body), "\xE2\x80\xBA", kIce, kNoShadow, r.x + r.w - 12, cy - 1, 1);
+        AddPanelTapRow(kKeyRowAdPrivacy, r);
+        y += pitch;
     }
 #endif
 

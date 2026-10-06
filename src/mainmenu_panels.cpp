@@ -830,6 +830,8 @@ void MainMenu::KeysPanelRender() {
         } else if (keyConfigIndex == kKeyRowRemoveAdsYear) {
             list.Row(-1, "renews yearly, cancel in Play", "");
         }
+        // The ad SDK's privacy options form (AdsManager.showPrivacyOptions).
+        list.Row(kKeyRowAdPrivacy, "Ad privacy choices", "review / change", true);
     }
 #endif
 
