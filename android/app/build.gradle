@@ -124,7 +124,9 @@ dependencies {
     // form, and the nested mediation stacks (applovin_max, level_play, bidon)
     // would each bring a second copy of most of these. No AdMob adapter: it
     // needs an AdMob account of our own, and that account is the thing that
-    // was not approved. No analytics adapters (adjust, appsflyer, firebase,
+    // was not approved. No Meta adapter either: Appodeal can't serve Meta
+    // Audience Network through its own accounts, only through an approved
+    // Meta account of ours, which there isn't. No analytics adapters (adjust, appsflyer, firebase,
     // facebook_analytics, sentry): this game has no analytics. Versions are
     // the set Appodeal's own demo builds against core 4.4.0.
     implementation 'com.appodeal.ads.sdk:core:4.4.0'
@@ -134,7 +136,6 @@ dependencies {
     implementation 'com.appodeal.ads.sdk.adapters:unity_ads:4.17.0.0'
     implementation 'com.appodeal.ads.sdk.adapters:vungle:7.7.4.0'
     implementation 'com.appodeal.ads.sdk.adapters:mintegral:17.1.61.0'
-    implementation 'com.appodeal.ads.sdk.adapters:meta:6.21.0.0'
     implementation 'com.appodeal.ads.sdk.adapters:inmobi:11.3.0.0'
     implementation 'com.appodeal.ads.sdk.adapters:dt_exchange:8.4.6.0'
     // Not a transitive dependency we happen to want newer -- this line is

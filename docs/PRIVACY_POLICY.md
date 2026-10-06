@@ -164,8 +164,8 @@ sent if you never select the row.
 **Advertising (Android only).** The Android build shows an interstitial ad
 when you enter the multiplayer lobby. Ads come through Appodeal, an ad
 mediation service, which picks an ad from one of several ad networks:
-BidMachine, AppLovin, Unity Ads, Liftoff (Vungle), Mintegral, Meta Audience
-Network, InMobi and Digital Turbine (DT Exchange). Appodeal and the network
+BidMachine, AppLovin, Unity Ads, Liftoff (Vungle), Mintegral, InMobi and
+Digital Turbine (DT Exchange). Appodeal and the network
 that serves an ad collect your device's advertising ID and IP address,
 technical details about the device (model, operating system, network type),
 and which ads you saw and tapped, to choose ads, measure them and prevent
@@ -222,7 +222,6 @@ or analytics SDK, so none is collected by the developer.
   [Unity Ads](https://unity.com/legal/game-player-and-app-user-privacy-policy),
   [Liftoff (Vungle)](https://liftoff.ai/privacy-policy/),
   [Mintegral](https://www.mintegral.com/en/privacy),
-  [Meta Audience Network](https://www.facebook.com/privacy/policy/),
   [InMobi](https://advertising.inmobi.com/privacy-policy) and
   [Digital Turbine](https://www.digitalturbine.com/legal/privacy-policy)
 - [Google Play Billing](https://policies.google.com/privacy) — in-app

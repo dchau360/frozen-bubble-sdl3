@@ -180,8 +180,7 @@ answer key. Last checked against the submitted form's CSV export on
 The three ad rows above come from
 [Appodeal's Data safety page](https://docs.appodeal.com/android/data-protection/app-privacy-details),
 which covers the Appodeal SDK only. Each network in `android/app/build.gradle`
-(BidMachine, AppLovin, Unity Ads, Vungle, Mintegral, Meta, InMobi, DT
-Exchange) publishes its own; read each before submitting the form. Several
+(BidMachine, AppLovin, Unity Ads, Vungle, Mintegral, InMobi, DT Exchange) publishes its own; read each before submitting the form. Several
 also derive **approximate location** from the IP address, which the Location
 row above already declares as collected and shared, so add "Advertising or
 marketing" to that row's purposes.
