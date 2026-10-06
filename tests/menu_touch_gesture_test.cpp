@@ -717,8 +717,10 @@ int main() {
     // list. This drives the real ServerListPanelRender with two different
     // server counts and checks that the section's position does not move
     // with the content above it, and that its bottom edge lines up with the
-    // shared panel's own bottom edge (menulist::kListFull).
+    // shared panel's own bottom edge (menulist::kListFull). The classic
+    // list: the Modern style draws its own (room_modern_test.cpp).
     {
+        GameSettings::Instance()->SetValue("Menu:Theme", "");  // Modern -> Classic
         auto setNameRowY = [&](int serverCount) -> int {
             std::unique_ptr<MainMenu> menu = MainMenuTestAccess::Create(renderer);
             std::vector<ServerInfo> servers;
@@ -754,6 +756,7 @@ int main() {
         // some other constant a future refactor could drift away from the
         // visible bottom without this test noticing.
         CHECK(yFewServers + 2 * menulist::kRowH == menulist::kListFull.y + menulist::kListFull.h);
+        GameSettings::Instance()->SetValue("Menu:Theme", "-1");  // back to Modern
     }
 
     // --- "Set name" must activate on tap, not step left/right ------------

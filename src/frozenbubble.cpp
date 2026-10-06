@@ -1018,11 +1018,15 @@ void FrozenBubble::HandleInput(SDL_Event *e) {
                         }
                         break;
                     case MenuSwipeGesture::Up:
-                        injectKey(SDLK_UP);
+                    case MenuSwipeGesture::Down: {
+                        // On the online screens' long lists a longer swipe
+                        // moves further, about a row per 44 units travelled.
+                        const int rows = mainMenu->NetListsShowing()
+                            ? std::clamp((int)(fabsf(dy) / 44.f), 1, 6) : 1;
+                        for (int i = 0; i < rows; i++)
+                            injectKey(dy < 0 ? SDLK_UP : SDLK_DOWN);
                         break;
-                    case MenuSwipeGesture::Down:
-                        injectKey(SDLK_DOWN);
-                        break;
+                    }
                     case MenuSwipeGesture::None:
                         // Real vertical drift (see HandlePanelTap) so a
                         // touch that traveled and fell back onto the row it
@@ -1074,6 +1078,16 @@ void FrozenBubble::HandleInput(SDL_Event *e) {
             if (e->button.which == SDL_TOUCH_MOUSEID) return;
 #endif
             injectKey(SDLK_ESCAPE);
+        } else if (e->type == SDL_EVENT_MOUSE_WHEEL && mainMenu->NetListsShowing()) {
+            // The online screens' long lists scroll by moving the selection
+            // (mainmenu_roommodern.cpp), so a wheel notch is an UP/DOWN.
+            // Fractional trackpad deltas add up to whole notches.
+            static float wheelNotches = 0.f;
+            float dy = e->wheel.y;
+            if (e->wheel.direction == SDL_MOUSEWHEEL_FLIPPED) dy = -dy;
+            wheelNotches += dy;
+            while (wheelNotches >= 1.f) { injectKey(SDLK_UP); wheelNotches -= 1.f; }
+            while (wheelNotches <= -1.f) { injectKey(SDLK_DOWN); wheelNotches += 1.f; }
         }
     }
     if(currentState == MainGame) {

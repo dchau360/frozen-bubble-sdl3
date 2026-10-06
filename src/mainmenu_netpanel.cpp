@@ -1507,13 +1507,13 @@ void MainMenu::NetPanelChatDockRender(bool expanded) {
 
     // Display chat messages in the dock's message area.
     const int chatStatusX = 22;
-    const int chatStatusY = modern ? 418 : 426;
-    const int chatLineHeight = modern ? 15 : 16;
+    const int chatStatusY = modern ? 378 : 426;
+    const int chatLineHeight = modern ? 22 : 16;
     // Bottom line stays at chatStatusY either way, so the log grows upward into
     // the space the expanded dock just claimed. The cap keeps the topmost line
     // clear of the dock's own header.
     const int maxChatLines = expanded ? ((chatStatusY - (dockTop + 24)) / chatLineHeight) + 1
-                                      : (modern ? 3 : 5);
+                                      : (modern ? 4 : 5);
     std::vector<ChatMessage> chatMsgs = netClient->GetChatMessages();
 
     // >5-cap rooms: every client (not just the host) applies !team:<nick>:<n>
@@ -1911,6 +1911,11 @@ void MainMenu::ServerListPanelRender(bool isLAN) {
         }
     }
 #endif
+
+    if (GameSettings::Instance()->menuTheme() == MENU_THEME_MODERN) {
+        ServerListPanelRenderModern(isLAN);
+        return;
+    }
 
     // Same world-map backdrop the lobby/room screens use -- see
     // kMapFillAlpha below and menulist::DrawWorldMapBackdrop's own comment.

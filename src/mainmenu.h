@@ -117,6 +117,10 @@ public:
     // call site in FrozenBubble::HandleInput for why that competition is real.
     bool IsSteppedRowAt(float lx, float ly) const;
     bool IsAwaitingKeyBind() const { return showingKeysPanel && awaitKp; }
+    // The online screens -- the server lists, the lobby, a room, Set Teams --
+    // whose long lists scroll by moving the selection: there a wheel notch is
+    // an UP/DOWN, and a long swipe moves several rows (FrozenBubble::HandleInput).
+    bool NetListsShowing() const { return showingNetPanel || showingTeamsPanel; }
     bool IsTextEditActive() const { return networkFieldEditing; }
     bool HasAnyPanelOpen() const {
         return showingKeysPanel || showingSPPanel || showingOptPanel
@@ -587,6 +591,12 @@ private:
     void NetPanelLobbyRenderModern();
     void NetChatDockModern(bool expanded);
     void NetChatLineModern(const ChatMessage& cm, int y);
+    // The server lists in the Modern style (mainmenu_roommodern.cpp): the
+    // same rows, indices and status text as ServerListPanelRender.
+    void ServerListPanelRenderModern(bool isLAN);
+    // Pixel scroll of the Modern lists that are taller than their card: each
+    // moves only as far as keeps the selected row in view (ScrollToShow).
+    int lobbyRoomsScroll = 0, roomRulesScroll = 0, teamsScroll = 0, serverListScroll = 0;
     void NetPanelConnectionScreensRender(); // Pre-login screens: LAN list, manual entry, public list
     // LAN discovery (mode 7) and the public Net list (mode 10) are the same
     // screen shape -- a scrolling server list plus a details sidebar -- with
