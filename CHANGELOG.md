@@ -1,5 +1,10 @@
 # Changelog
 
+## v2.4.148
+
+- **Online high scores from the continue screen.** After losing a level, the CONTINUE? card has an ONLINE HIGH SCORES button under Continue and Start over. It opens the high scores page and leaves the choice waiting for you.
+- **Exit and Discord when a match ends.** Once an online match is won, the stats screen has EXIT, back to the lobby, and DISCORD RESULTS, which opens the #net-games channel where the match is posted. D or a gamepad's Y opens it too.
+
 ## v2.4.147
 
 - **The new game screen for everyone.** Every 1-player game now has the score card (level, score, shots and time), the level cleared, game over and pause cards, the level dropping in row by row and "N DROPPED!". The In-game theme setting is gone; the Bubbles setting (Candy or Classic) still picks the bubbles.
