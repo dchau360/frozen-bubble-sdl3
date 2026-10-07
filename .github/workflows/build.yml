@@ -589,77 +589,19 @@ jobs:
             exit 1
           fi
 
-      - name: Create .app bundle
-        run: |
-          APP="dist/FrozenBubble.app/Contents"
-          mkdir -p "$APP/MacOS" "$APP/Resources"
-
-          cp build/frozen-bubble-sdl3 "$APP/MacOS/frozen-bubble-sdl3"
-          cp -r share "$APP/Resources/share"
-
-          dylibbundler -od -b \
-            -x "$APP/MacOS/frozen-bubble-sdl3" \
-            -d "$APP/Frameworks" \
-            -p @executable_path/../Frameworks/ \
-            -s /usr/local/lib \
-            -s /opt/homebrew/lib
-
-          # .icns is a macOS-only format, built from an iconset directory by
-          # iconutil -- not something the cross-platform tools/make-app-icons.py
-          # (Pillow) can produce, so it's assembled here instead, on the one
-          # runner that actually has iconutil. Source is the same 1024 master
-          # every other platform's icon derives from.
-          ICONSET="$RUNNER_TEMP/FrozenBubble.iconset"
-          mkdir -p "$ICONSET"
-          SRC="share/icons/frozen-bubble-icon-1024x1024.png"
-          for spec in "16:icon_16x16" "32:icon_16x16@2x" "32:icon_32x32" \
-                      "64:icon_32x32@2x" "128:icon_128x128" "256:icon_128x128@2x" \
-                      "256:icon_256x256" "512:icon_256x256@2x" \
-                      "512:icon_512x512" "1024:icon_512x512@2x"; do
-            size="${spec%%:*}"
-            name="${spec##*:}"
-            sips -z "$size" "$size" "$SRC" --out "$ICONSET/$name.png" >/dev/null
-          done
-          iconutil -c icns "$ICONSET" -o "$APP/Resources/FrozenBubble.icns"
-
-          cat > "$APP/Info.plist" << 'EOF'
-          <?xml version="1.0" encoding="UTF-8"?>
-          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
-            "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-          <plist version="1.0"><dict>
-            <key>CFBundleName</key><string>Frozen Bubble</string>
-            <key>CFBundleDisplayName</key><string>Frozen Bubble</string>
-            <key>CFBundleIdentifier</key><string>org.frozenbubble.sdl3</string>
-            <key>CFBundleVersion</key><string>${{ steps.package_version.outputs.value }}</string>
-            <key>CFBundleShortVersionString</key><string>${{ steps.package_version.outputs.value }}</string>
-            <key>CFBundleExecutable</key><string>frozen-bubble-sdl3</string>
-            <key>CFBundleIconFile</key><string>FrozenBubble</string>
-            <key>CFBundlePackageType</key><string>APPL</string>
-            <key>NSHighResolutionCapable</key><true/>
-          </dict></plist>
-          EOF
-
-      - name: Ad-hoc sign app bundle
-        run: |
-          find dist/FrozenBubble.app/Contents/Frameworks -name "*.dylib" \
-            -exec codesign --sign - --force {} \;
-          codesign --sign - --force --deep dist/FrozenBubble.app
-
-      - name: Create DMG
-        run: |
-          create-dmg \
-            --volname "Frozen Bubble" \
-            --window-size 540 380 \
-            --icon-size 128 \
-            --icon "FrozenBubble.app" 140 190 \
-            --app-drop-link 400 190 \
-            "frozen-bubble-macos-arm64.dmg" \
-            "dist/"
+      # The .app (executable, art, bundled Homebrew dylibs, icon, Info.plist,
+      # ad-hoc signature) and the DMG come from tools/package-macos-app.sh, the
+      # same script used to package a build by hand, so the two cannot drift.
+      # It names the app after the build's FB_BRAND; the version is the tag's.
+      - name: Package .app and DMG
+        env:
+          FB_APP_VERSION: ${{ steps.package_version.outputs.value }}
+        run: tools/package-macos-app.sh build --dmg
 
       - uses: actions/upload-artifact@v4
         with:
           name: macOS
-          path: frozen-bubble-macos-arm64.dmg
+          path: build/frozen-bubble-macos-arm64.dmg
 
   # ────────────────────────────────────────────────────────────────
   # Windows → NSIS installer (.exe)
