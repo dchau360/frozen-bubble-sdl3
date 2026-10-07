@@ -134,7 +134,7 @@ int main() {
         Key(*menu, SDLK_LEFT);
         CHECK(MainMenuTestAccess::SPIdx(*menu) == 1);
 
-        // A tap on the Aim guide row (y 327..352) selects it; a second flips it.
+        // A tap on the Aim guide row (y 330..358) selects it; a second flips it.
         const bool aim = settings->spAimGuideEnabled();
         CHECK(MainMenuTestAccess::Tap(*menu, 300, 340));
         CHECK(MainMenuTestAccess::SPIdx(*menu) == kSPRowAimGuide);
@@ -151,18 +151,18 @@ int main() {
         Key(*menu, SDLK_RIGHT);
         CHECK(settings->spAimGuideEnabled() == aim);
 
-        // The theme row: a two-value stepper, focused with its arrows.
+        // The Bubbles row (y 360..388): a two-value stepper, focused with
+        // its arrows.
         Key(*menu, SDLK_DOWN);
-        CHECK(MainMenuTestAccess::SPIdx(*menu) == kSPRowTheme);
-        const bool modern = settings->modernTheme();
+        CHECK(MainMenuTestAccess::SPIdx(*menu) == kSPRowBubbles);
+        const bool candy = settings->modernBubbles();
         Key(*menu, SDLK_RIGHT);
-        CHECK(settings->modernTheme() != modern);
+        CHECK(settings->modernBubbles() != candy);
         Key(*menu, SDLK_LEFT);
-        CHECK(settings->modernTheme() == modern);
-        CHECK(EdgeIsIce(renderer, *menu, 367, "sp-modern-theme"));
+        CHECK(settings->modernBubbles() == candy);
+        CHECK(EdgeIsIce(renderer, *menu, 374, "sp-modern-bubbles"));
 
         // The account row opens only on ENTER, not on LEFT/RIGHT.
-        Key(*menu, SDLK_DOWN);
         Key(*menu, SDLK_DOWN);
         CHECK(MainMenuTestAccess::SPIdx(*menu) == kSPRowAccount);
         Key(*menu, SDLK_RIGHT);

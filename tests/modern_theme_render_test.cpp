@@ -1,9 +1,8 @@
-// The modern in-game theme (GameSettings::modernTheme(), BubbleGame::
-// UsesModernHud()) draws a 1-player game's screens headlessly without
+// The modern HUD (BubbleGame::UsesModernHud(), every 1-player game but
+// multiplayer training) draws a 1-player game's screens headlessly without
 // tripping over anything, and its lost card hands real button rects to the
-// tap hit-test (HandleFinishedTap) the way RenderContinuePrompt() does in the
-// original theme -- a card drawn without them would leave CONTINUE / START
-// OVER keyboard-only.
+// tap hit-test (HandleFinishedTap) -- a card drawn without them would leave
+// CONTINUE / START OVER keyboard-only.
 //
 // The 1-player pause button (ShowsPauseButton) is checked here too.
 //
@@ -17,6 +16,7 @@
 #include "bubblegame_internal.h"
 #include "gamesettings.h"
 #include "mainmenu.h"
+#include "menutheme.h"
 #include "platform.h"
 
 #include <chrono>
@@ -96,7 +96,7 @@ struct BubbleGameTestAccess {
     static void clearButtons(BubbleGame& game) { game.continueBtnRect = game.startOverBtnRect = {}; }
 };
 
-// The 1-player menu, with its In-game theme and Bubbles rows.
+// The 1-player menu, with its Bubbles row.
 struct MainMenuTestAccess {
     static void DrawSP(const SDL_Renderer* renderer, int row) {
         MainMenu menu(renderer, MainMenu::HeadlessTestTag{});
@@ -140,7 +140,6 @@ int main() {
     GameSettings* settings = GameSettings::Instance();
     settings->prefPath = prefPath.c_str();
     settings->ReadSettings();
-    CHECK(settings->modernTheme());  // on by default
 
     {
         BubbleGame game(renderer);
@@ -260,23 +259,21 @@ int main() {
         settings->SetValue("GFX:ModernBubbles", "");
         BubbleGameTestAccess::finish(game, false, true);
         BubbleGameTestAccess::draw(game);
-
-        // Original theme: the same prompt still sets its own rects.
-        settings->SetValue("GFX:ModernTheme", "");
-        CHECK(!settings->modernTheme());
-        CHECK(!BubbleGameTestAccess::modern(game));
-        BubbleGameTestAccess::clearButtons(game);
-        BubbleGameTestAccess::draw(game);
-        CHECK(OnScreen(BubbleGameTestAccess::continueBtn(game)));
-        Dump(renderer, "5-original-continue");
-        settings->SetValue("GFX:ModernTheme", "");
-        CHECK(settings->modernTheme());
     }
 
     SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
     SDL_RenderClear(renderer);
     MainMenuTestAccess::DrawSP(renderer, kSPRowBubbles);
     Dump(renderer, "7-sp-menu");
+    // The other menu styles draw the wood panel, one slim row shorter now.
+    settings->SetValue("Menu:Theme", "");   // Modern wraps round to Classic
+    CHECK(settings->menuTheme() != MENU_THEME_MODERN);
+    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
+    SDL_RenderClear(renderer);
+    MainMenuTestAccess::DrawSP(renderer, kSPRowBubbles);
+    Dump(renderer, "7b-sp-menu-wood");
+    settings->SetValue("Menu:Theme", "-1");
+    CHECK(settings->menuTheme() == MENU_THEME_MODERN);
 
     // Local multiplayer keeps the original screens: only the bubbles change.
     {

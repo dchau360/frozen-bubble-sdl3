@@ -692,20 +692,21 @@ public:
     // spawned in CheckPossibleDestroy, aged once per simulation step like
     // comboDisplayTimer, drawn by Draw(); never part of replay state.
     // `dropped` > 0 marks an "N DROPPED!" entry (the bubbles a shot cut
-    // loose) instead of a "+N": pushed in either theme, drawn only by the
-    // modern one (UsesModernHud).
+    // loose) instead of a "+N": pushed in every 1-player game, drawn only
+    // where the modern HUD is (UsesModernHud).
     struct ScorePopup { int x, y; int points; int age; int dropped = 0; };
     static constexpr int kScorePopupFrames = 60;
     std::vector<ScorePopup> scorePopups;
     bool ShowsScorePopups() const;
 
-    // The modern in-game theme (GameSettings::modernTheme()) beyond its
-    // bubbles: the score panel, the cleared/lost/paused cards, the level
-    // drop-in and "N DROPPED!". Classic 1-player games only (ShowsShotCount).
-    // All of it is drawing; none of it is simulation or replay state.
+    // The modern HUD: the score panel, the cleared/lost/paused cards, the
+    // level drop-in and "N DROPPED!". Every 1-player game but multiplayer
+    // training (ShowsShotCount); it used to be a setting, GFX:ModernTheme,
+    // with an ORIGINAL look, removed (user decision). All of it is drawing;
+    // none of it is simulation or replay state.
     bool UsesModernHud() const;
-    // The pause button in the top-right corner of a 1-player game (either
-    // theme), the tap/click way to pause; the PAUSE key and a pad's Start
+    // The pause button in the top-right corner of a 1-player game, the
+    // tap/click way to pause; the PAUSE key and a pad's Start
     // still work. FrozenBubble's event pump hit-tests it before a click
     // would fire, and any tap resumes a paused game.
     static constexpr SDL_Rect kPauseBtnRect = {600, 8, 32, 32};
@@ -720,13 +721,13 @@ public:
     void DrawModernHud(SDL_Renderer *rend, BubbleArray &bArray);
     // The run's clock as the highscore tables time it (from NewGame, through
     // CONTINUE, less any pause), held still once the level is finished.
-    // Both themes show it; 0 outside a live game.
+    // 0 outside a live game.
     Uint64 RunClockMs();
     void DrawModernResultCard(SDL_Renderer *rend, BubbleArray &bArray);
 
     // The CONTINUE? prompt: after a death in a classic solo game, the first ENTER / tap
     // on the game-over panel opens it instead of retrying straight away.
-    // Continue retries the level died on -- the score is already back to 0
+    // Drawn by DrawModernResultCard. Continue retries the level died on -- the score is already back to 0
     // (a new life) and the run clock keeps going; Start over goes back to
     // level 1 as a new run, clock and all. LEFT/RIGHT/TAB move focus between
     // the two buttons, ENTER / A / fire activates the focused one, a tap on
@@ -747,7 +748,6 @@ public:
     bool ShowsPocket(const BubbleArray &b) const;
     bool ArcadeContinueApplies() const;
     void ResolveContinuePrompt(bool startOver);
-    void RenderContinuePrompt(SDL_Renderer *rend);
 
     bool IsGameFinished() const { return gameFinish; }
     // The inbound gameplay payloads applied during the most recent step, in
@@ -1059,8 +1059,7 @@ public:
     static constexpr Uint64 kSwapTagMs = 700;
     std::string SkipShotHintLine() const;
 private:
-    TTFText clearStatsText;  // the classic win panel's time/bonus and score lines
-    TTFText inGameText, winsP1Text, winsP2Text, comboText, finalScoreText, mpTrainText, continueText;
+    TTFText inGameText, winsP1Text, winsP2Text, comboText, finalScoreText, mpTrainText;
     // Round-end winner banner, shown for every mode ("Board Cleared! <Name>
     // Wins!" / "First to Pop! <Name> Wins!" / "Time's Up! <Name> Wins!" /
     // plain "<Name> Wins!" for an ordinary elimination win).
@@ -1070,8 +1069,6 @@ private:
     // each player's text differs would invalidate and re-render every single call
     // even when nothing about that player's own line changed frame to frame.
     TTFText scoreText[2];     // "Score: N" / "Nickname[: N]", indexed by player slot (single-player and 2P only)
-    TTFText shotsText;        // "Shots: N" under the 1-player score
-    TTFText runTimeText;      // "Time: 3'07"" under it (original theme)
     TTFText playerNameWinText[MAX_NET_PLAYERS];  // "PlayerName: WinCount" for each player (3-5 player mode)
     // Live popped-bubble count per player, drawn to the right of that
     // player's own "next bubble" preview slot. Shown in every multiplayer

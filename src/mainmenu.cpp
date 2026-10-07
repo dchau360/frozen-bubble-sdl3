@@ -389,10 +389,6 @@ void MainMenu::press() {
             GameSettings::Instance()->SetValue("Game:SPAimGuide", "");
             AudioMixer::Instance()->PlaySFX("menu_change");
         }
-        else if (activeSPIdx == kSPRowTheme) {
-            GameSettings::Instance()->SetValue("GFX:ModernTheme", "");
-            AudioMixer::Instance()->PlaySFX("menu_change");
-        }
         else if (activeSPIdx == kSPRowBubbles) {
             GameSettings::Instance()->SetValue("GFX:ModernBubbles", "");
             AudioMixer::Instance()->PlaySFX("menu_change");

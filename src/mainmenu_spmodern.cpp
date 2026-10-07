@@ -22,10 +22,10 @@ namespace {
 using namespace modernui;
 
 constexpr int kBigRows = 5, kSlimRows = SP_OPT - kBigRows;
-constexpr SDL_Rect kCard = {150, 8, 340, 436};
+constexpr SDL_Rect kCard = {150, 8, 340, 421};
 constexpr int kRowX = 166, kRowW = 308;
 constexpr int kBigTop = 52, kBigPitch = 45, kBigH = 40;
-constexpr int kSlimTop = 300, kSlimPitch = 27, kSlimH = 25;
+constexpr int kSlimTop = 300, kSlimPitch = 30, kSlimH = 28;
 
 
 struct Mode { const char* label; const char* sub; int ball; };
@@ -142,8 +142,6 @@ void MainMenu::SPPanelRenderModern() {
     case kSPRowWorldScores: hint = "Send runs to the online board"; break;
     case kSPRowAimGuide: hint = gs->spAimGuideEnabled() ? "On: runs do not count for scores"
                                                         : "Off: runs count for highscores"; break;
-    case kSPRowTheme: hint = gs->modernTheme() ? "Score panel and new cards"
-                                               : "The classic game screen"; break;
     case kSPRowBubbles: hint = gs->modernBubbles() ? "Glossy bubbles, every mode"
                                                    : "The original bubbles"; break;
     case kSPRowAccount: hint = "View, copy or change your account"; break;
@@ -155,7 +153,6 @@ void MainMenu::SPPanelRenderModern() {
     const Slim slims[kSlimRows] = {
         {kSPRowWorldScores, "Online highscores", kSwitch, gs->worldHighscoresEnabled(), nullptr},
         {kSPRowAimGuide, "Aim guide", kSwitch, gs->spAimGuideEnabled(), nullptr},
-        {kSPRowTheme, "In-game theme", kValueRow, false, gs->modernTheme() ? "MODERN" : "ORIGINAL"},
         {kSPRowBubbles, "Bubbles", kValueRow, false, gs->modernBubbles() ? "CANDY" : "CLASSIC"},
         {kSPRowAccount, "Account code", kArrow, false, nullptr},
     };

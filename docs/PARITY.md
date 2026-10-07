@@ -80,7 +80,7 @@ twenty, which needed new UI to be playable at all:
 | 16 | **Time bonus for a clear**, Bust-a-Move style — 5,000 points for a level cleared in 5 seconds or less, 84 less per second after, nothing from 65 seconds; the level-cleared panel shows the level's time and its bonus | v2.4.134 |
 | 17 | **"+N" where a shot lands** — the points each scoring shot earned, floating up from where it hit | v2.4.132 |
 | 18 | **Shot count** — the run's shots under the score, kept with each high-score record and on the online Level board | v2.4.128 |
-| 19 | **Run time on screen** — the whole run's clock, the one the high-score tables use: TIME in the modern theme's panel (v2.4.133), "Time: 3'07"" under the shots in the original theme (next release) | v2.4.133 |
+| 19 | **Run time on screen** — the whole run's clock, the one the high-score tables use: TIME in the score panel (v2.4.133) | v2.4.133 |
 | 20 | **1-player aim guide** — the bounce line for your shot; a run played with it on is kept out of every high-score table, and START offers to turn it off first | v2.4.132 |
 | 21 | **Swap pocket** (1-player, online and local multiplayer, every player with their own key) — a second button (or a right click, or a touch on the strip around the launcher) and a pocket beside the next bubble: the first press pockets the loaded bubble, each press after that shoots the pocketed one and pockets the loaded one. It counts for the high-score tables like any other shot. Shipped in v2.4.140 as Skip shot, which shot the next bubble in one press | v2.4.140 |
 | 22 | **Name prompt** — START asks for a name when online highscores are on and none is set, so runs don't reach the board as `unnamed` | v2.4.124 |
@@ -89,8 +89,8 @@ twenty, which needed new UI to be playable at all:
 
 | # | Feature | Added |
 |---|---|---|
-| 23 | **Modern in-game theme** (default; **Original** brings back the classic screen) — in a 1-player game, a score panel with level, score counting up, shots and time; cards for level cleared, game over and pause; the next level dropping in row by row; and "N DROPPED!" when a shot cuts bubbles loose | v2.4.133 |
-| 24 | **Candy bubbles** — a glossy redraw of the eight colours and their colour-blind versions, as their own setting (**Bubbles: Candy / Classic**), so either set goes with either theme, in every mode | v2.4.133 |
+| 23 | **Modern in-game screens** — in a 1-player game (all of them since the next release, when the **Original** option was removed), a score panel with level, score counting up, shots and time; cards for level cleared, game over and pause; the next level dropping in row by row; and "N DROPPED!" when a shot cuts bubbles loose | v2.4.133 |
+| 24 | **Candy bubbles** — a glossy redraw of the eight colours and their colour-blind versions, as their own setting (**Bubbles: Candy / Classic**), in every mode | v2.4.133 |
 | 25 | **Menu styles** — six looks for the title screen: Classic (the original artwork), Clear, Slate, Ice, Pop and Modern, the in-game theme's dark cards with a candy bubble on the selected row and the default, with every existing player moved to it once; in Modern the 1-player menu is a card too, with a line saying what each mode does and switches for its settings, while the online screens and the settings panel keep the classic look in every style | v2.4.65 |
 | 26 | **On-screen pause button** in 1-player games, for touch screens; **P** pauses too, since most keyboards have no Pause key (next release). The original paused on the Pause key only | v2.4.133 |
 | 27 | **Sharp text** — on a big monitor, a TV, a Retina Mac or a phone, words are drawn at the screen's own resolution instead of being stretched up from the 640×480 game screen, so scores, cards, popups and menus stay crisp; the board keeps its pixel art. GRAPHICS set to Low brings back the stretched text. Not in the browser build | next release |
