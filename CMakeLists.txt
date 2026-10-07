@@ -132,6 +132,14 @@ endif()
 set(RES_FILES "")
 if(WIN32 OR MINGW)
     set(RES_FILES share/icons/fb.rc)
+    # A brand with its own icon gets an .rc pointing at it; windres resolves
+    # the source fb.rc's relative path beside it, which is always ours.
+    if(FB_BRAND_OVERLAY AND EXISTS "${FB_BRAND_OVERLAY}/icons/frozen-bubble.ico")
+        file(TO_CMAKE_PATH "${FB_BRAND_OVERLAY}/icons/frozen-bubble.ico" FB_BRAND_ICO)
+        file(WRITE "${CMAKE_BINARY_DIR}/fb-brand.rc"
+             "IDI_ICON1 ICON DISCARDABLE \"${FB_BRAND_ICO}\"\n")
+        set(RES_FILES "${CMAKE_BINARY_DIR}/fb-brand.rc")
+    endif()
     set(CMAKE_RC_COMPILER_INIT windres)
     ENABLE_LANGUAGE(RC)
 endif()
@@ -161,6 +169,11 @@ add_executable(frozen-bubble-sdl3
 )
 
 set_property(TARGET frozen-bubble-sdl3 PROPERTY CXX_STANDARD 17)
+# Boba Buster's desktop executable carries its own name. iOS names its binary
+# below, and the web build keeps its file name for the page shell.
+if(FB_BRAND STREQUAL "boba" AND NOT IOS AND NOT EMSCRIPTEN)
+    set_target_properties(frozen-bubble-sdl3 PROPERTIES OUTPUT_NAME boba-buster)
+endif()
 set_property(TARGET frozen-bubble-sdl3 PROPERTY CXX_EXTENSIONS OFF)
 
 if(EMSCRIPTEN)
@@ -812,6 +825,11 @@ endif()
 # Nothing to install on iOS: the deliverable is the .app bundle itself, which
 # already carries its assets, and CMake rejects a MACOSX_BUNDLE target given a
 # RUNTIME destination anyway.
+if(FB_BRAND STREQUAL "boba")
+    set(FB_INSTALL_DATA_NAME boba-buster)
+else()
+    set(FB_INSTALL_DATA_NAME frozen-bubble)
+endif()
 if(NOT IOS)
     # Install executable
     install(TARGETS frozen-bubble-sdl3
@@ -821,7 +839,7 @@ if(NOT IOS)
 
     # Install game assets
     install(DIRECTORY ${ASSET_PATH}/
-        DESTINATION share/frozen-bubble
+        DESTINATION share/${FB_INSTALL_DATA_NAME}
         COMPONENT assets
         PATTERN ".DS_Store" EXCLUDE
         PATTERN "*.md" EXCLUDE
@@ -830,7 +848,7 @@ endif()
 
 # Set asset path for installed version
 if(CMAKE_INSTALL_PREFIX)
-    set(INSTALLED_ASSET_PATH "${CMAKE_INSTALL_PREFIX}/share/frozen-bubble")
+    set(INSTALLED_ASSET_PATH "${CMAKE_INSTALL_PREFIX}/share/${FB_INSTALL_DATA_NAME}")
     message(STATUS "Installed assets will be at: ${INSTALLED_ASSET_PATH}")
 endif()
 
