@@ -1,5 +1,10 @@
 # Changelog
 
+## v2.4.147
+
+- **The new game screen for everyone.** Every 1-player game now has the score card (level, score, shots and time), the level cleared, game over and pause cards, the level dropping in row by row and "N DROPPED!". The In-game theme setting is gone; the Bubbles setting (Candy or Classic) still picks the bubbles.
+- **Controls & Settings looks the same in every menu style.** The Modern style now shows the classic settings screen, like the online screens.
+
 ## v2.4.146
 
 - **Online screens back to their classic look.** The NET GAME and LAN GAME server lists, the online lobby, the game room with its chat, and Set Teams are drawn the classic way again in every menu style, Modern included. The Modern style still dresses the title screen, the 1-player menu and Controls & Settings.
