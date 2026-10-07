@@ -226,11 +226,6 @@ void MainMenu::TeamsPanelRender() {
         return;
     }
 
-    if (GameSettings::Instance()->menuTheme() == MENU_THEME_MODERN) {
-        TeamsPanelRenderModern();
-        return;
-    }
-
     SDL_Renderer* rend = const_cast<SDL_Renderer*>(renderer);
     // Every other full-screen panel (HelpPanelRender, NetSetupPanelRender...)
     // paints a fresh opaque backdrop before drawing its own translucent UI on

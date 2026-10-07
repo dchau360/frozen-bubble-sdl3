@@ -574,29 +574,11 @@ private:
     // a bare input box -- which matters most on a phone, where composing raises
     // a keyboard over the bottom half of the screen.
     void NetPanelChatDockRender(bool expanded = false);
-    // The game room in the Modern menu style (mainmenu_roommodern.cpp):
-    // drawing only, over the same GameRoomRow rows and tap handling. The
-    // chat dock keeps its own message handling and calls the two chat
-    // helpers for its card and lines.
-    struct RoomModernText;
-    RoomModernText *roomModern = nullptr;
-    RoomModernText &RoomModern();
-    void FreeRoomModern();
     // CONTROLS & SETTINGS in the Modern menu style (mainmenu_settingsmodern.cpp).
     struct SettingsModernText;
     SettingsModernText *settingsModern = nullptr;
     void KeysPanelRenderModern();
     void FreeSettingsModern();
-    void NetPanelRoomRenderModern();
-    void NetPanelLobbyRenderModern();
-    void NetChatDockModern(bool expanded);
-    void NetChatLineModern(const ChatMessage& cm, int y);
-    // The server lists in the Modern style (mainmenu_roommodern.cpp): the
-    // same rows, indices and status text as ServerListPanelRender.
-    void ServerListPanelRenderModern(bool isLAN);
-    // Pixel scroll of the Modern lists that are taller than their card: each
-    // moves only as far as keeps the selected row in view (ScrollToShow).
-    int lobbyRoomsScroll = 0, roomRulesScroll = 0, teamsScroll = 0, serverListScroll = 0;
     void NetPanelConnectionScreensRender(); // Pre-login screens: LAN list, manual entry, public list
     // LAN discovery (mode 7) and the public Net list (mode 10) are the same
     // screen shape -- a scrolling server list plus a details sidebar -- with
@@ -827,9 +809,6 @@ private:
     // own row, since that is the one row everybody can always change.
     void OpenTeamsPanel(int slot = -1);
     void TeamsPanelRender();
-    // The same page in the Modern menu style (mainmenu_teammodern.cpp),
-    // publishing the same tap rects as the classic one.
-    void TeamsPanelRenderModern();
     // Auto: every occupied seat across `teamCount` teams, or no team for
     // kNoTeam. Host only; the Auto buttons and their keyboard row share it.
     void ApplyAutoTeams(int teamCount);

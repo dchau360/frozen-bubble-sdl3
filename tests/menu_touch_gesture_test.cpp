@@ -681,11 +681,8 @@ int main() {
     // fixes it by confining the L/R split to the drawn value block itself,
     // leaving the label its own tap zone that still creates the room. This
     // drives the real lobby render and checks the row now has all three
-    // zones, left-to-right, in the right order. The classic lobby: the Modern
-    // menu style (the default) draws its own (room_modern_test.cpp), so this
-    // block picks Classic and puts the default back after.
+    // zones, left-to-right, in the right order.
     {
-        GameSettings::Instance()->SetValue("Menu:Theme", "");  // Modern -> Classic
         std::unique_ptr<MainMenu> menu = MainMenuTestAccess::Create(renderer);
         MainMenuTestAccess::RenderLobbyActions(*menu);
 
@@ -703,7 +700,6 @@ int main() {
             CHECK(rects[0].x + rects[0].w == rects[1].x);
             CHECK(rects[1].x + rects[1].w == rects[2].x);
         }
-        GameSettings::Instance()->SetValue("Menu:Theme", "-1");  // back to Modern
     }
 
     // --- ServerListPanelRender: "Set name" pinned to the panel's own
@@ -717,10 +713,8 @@ int main() {
     // list. This drives the real ServerListPanelRender with two different
     // server counts and checks that the section's position does not move
     // with the content above it, and that its bottom edge lines up with the
-    // shared panel's own bottom edge (menulist::kListFull). The classic
-    // list: the Modern style draws its own (room_modern_test.cpp).
+    // shared panel's own bottom edge (menulist::kListFull).
     {
-        GameSettings::Instance()->SetValue("Menu:Theme", "");  // Modern -> Classic
         auto setNameRowY = [&](int serverCount) -> int {
             std::unique_ptr<MainMenu> menu = MainMenuTestAccess::Create(renderer);
             std::vector<ServerInfo> servers;
@@ -756,7 +750,6 @@ int main() {
         // some other constant a future refactor could drift away from the
         // visible bottom without this test noticing.
         CHECK(yFewServers + 2 * menulist::kRowH == menulist::kListFull.y + menulist::kListFull.h);
-        GameSettings::Instance()->SetValue("Menu:Theme", "-1");  // back to Modern
     }
 
     // --- "Set name" must activate on tap, not step left/right ------------
@@ -1502,11 +1495,7 @@ int main() {
     // order. This proves an unchanged cell's texture survives a second,
     // otherwise-identical render, and that changing one player's value does
     // not disturb an unrelated cell's cached texture.
-    // The classic room's grid: the Modern menu style (the default) draws the
-    // room with its own text pool (mainmenu_roommodern.cpp), so this block
-    // picks Classic and puts the default back after.
     {
-        GameSettings::Instance()->SetValue("Menu:Theme", "");  // Modern -> Classic
         std::unique_ptr<MainMenu> menu = MainMenuTestAccess::Create(renderer);
 
         NetworkClient* nc = NetworkClient::Instance();
@@ -1555,7 +1544,6 @@ int main() {
             MainMenuTestAccess::NetGridCellTexture(*menu, 4)), marker, false));
 
         NetworkClientTestAccess::SetCurrentGame(*nc, nullptr);
-        GameSettings::Instance()->SetValue("Menu:Theme", "-1");  // back to Modern
     }
 
     // --- Online lobby sidebar: "Tournaments" / "Join Discord server" row

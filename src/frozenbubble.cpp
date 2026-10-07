@@ -1080,8 +1080,8 @@ void FrozenBubble::HandleInput(SDL_Event *e) {
 #endif
             injectKey(SDLK_ESCAPE);
         } else if (e->type == SDL_EVENT_MOUSE_WHEEL && mainMenu->NetListsShowing()) {
-            // The online screens' long lists scroll by moving the selection
-            // (mainmenu_roommodern.cpp), so a wheel notch is an UP/DOWN.
+            // The online screens' long lists scroll by moving the selection,
+            // so a wheel notch is an UP/DOWN.
             // Fractional trackpad deltas add up to whole notches.
             static float wheelNotches = 0.f;
             float dy = e->wheel.y;

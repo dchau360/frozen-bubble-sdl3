@@ -278,7 +278,6 @@ MainMenu::~MainMenu() {
     FreeSPModern();
     FreeHowTo();
     FreeSettingsModern();
-    FreeRoomModern();
 }
 
 
