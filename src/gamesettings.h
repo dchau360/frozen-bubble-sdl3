@@ -210,13 +210,10 @@ public:
     bool soundEnabled() { return playMusic && playSfx; }
     void setSoundEnabled(bool on);
     bool colorBlind() { return colorblindBubbles; }
-    // The in-game look (GFX:ModernTheme, default on): in a 1-player game the
-    // score panel, the new level-cleared/lost/paused cards, the level
-    // drop-in and the dropped count. Off is the original look. Menus have
-    // their own Menu:Theme.
-    bool modernTheme() { return modernGameTheme; }
-    // The bubbles, separately (GFX:ModernBubbles, default on): Candy gloss
-    // in every mode, or the original ones -- either goes with either theme.
+    // The bubbles (GFX:ModernBubbles, default on): Candy gloss in every
+    // mode, or the original ones. (GFX:ModernTheme, the in-game look beside
+    // it, is gone and no longer read: the modern HUD is the only one now,
+    // BubbleGame::UsesModernHud.)
     bool modernBubbles() { return modernBubbleSet; }
     bool showFpsOverlay() { return showFps; }
 
@@ -384,7 +381,7 @@ private:
     // rendering path the game takes. Defaults here match CreateDefaultSettings().
     int gfxQuality = 1, windowWidth = 640, windowHeight = 480;
     int menuThemeId = kMenuThemeDefault;
-    bool useFullscreen = false, colorblindBubbles = false, modernGameTheme = true, modernBubbleSet = true;
+    bool useFullscreen = false, colorblindBubbles = false, modernBubbleSet = true;
     bool playMusic = true, playSfx = true, classicSound = false;
     bool showFps = false;
     bool worldHighscores = true;

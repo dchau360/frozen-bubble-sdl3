@@ -125,7 +125,6 @@ void GameSettings::CreateDefaultSettings()
         EvalIniResult(rval, dict, "GFX:WindowWidth", "640");
         EvalIniResult(rval, dict, "GFX:WindowHeight", "480");
         EvalIniResult(rval, dict, "GFX:ColorblindBubbles", "false");
-        EvalIniResult(rval, dict, "GFX:ModernTheme", "true");
         EvalIniResult(rval, dict, "GFX:ModernBubbles", "true");
         EvalIniResult(rval, dict, "GFX:ShowFPS", "false");
 
@@ -293,7 +292,6 @@ void GameSettings::ReadSettings()
     windowWidth = iniparser_getint(optDict, "GFX:WindowWidth", 640);
     windowHeight = iniparser_getint(optDict, "GFX:WindowHeight", 480);
     colorblindBubbles = iniparser_getboolean(optDict, "GFX:ColorblindBubbles", false);
-    modernGameTheme = iniparser_getboolean(optDict, "GFX:ModernTheme", true);
     modernBubbleSet = iniparser_getboolean(optDict, "GFX:ModernBubbles", true);
     showFps = iniparser_getboolean(optDict, "GFX:ShowFPS", false);
     worldHighscores = iniparser_getboolean(optDict, "Stats:WorldHighscores", true);
@@ -737,13 +735,6 @@ void GameSettings::SetValue(const char* option, const char* value)
     else if (strcmp(option, "GFX:ColorblindBubbles") == 0) {
         colorblindBubbles = (strcmp(value, "true") == 0);
         iniparser_set(optDict, option, value);
-        SaveSettings();
-        return;
-    }
-    else if (strcmp(option, "GFX:ModernTheme") == 0) {
-        // The 1-player menu's "In-game theme" row; a flip.
-        modernGameTheme = !modernGameTheme;
-        iniparser_set(optDict, option, modernGameTheme ? "true" : "false");
         SaveSettings();
         return;
     }
