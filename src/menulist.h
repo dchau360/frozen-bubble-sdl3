@@ -58,7 +58,33 @@ constexpr int kRowH    = 32;
 // Lifted directly from the game room's own drawPanel/drawLabel/drawSelection,
 // which was already the best-looking screen in the game -- the point of this
 // widget is that every screen now looks like that one, not a new fourth
-// language.
+// language. Switched by brand (see "Brands" in CLAUDE.md) like modernui.h's:
+// plum, teal and gold for Frozen Bubble, chocolate, caramel and strawberry
+// for Boba Buster. Every classic-style screen draws from these names, so add
+// a name here rather than writing a colour into a screen.
+#if defined(FB_BRAND_BOBA)
+constexpr SDL_Color kText        = {255, 243, 226, 255};
+constexpr SDL_Color kMuted       = {226, 196, 166, 255};
+constexpr SDL_Color kGold        = {255, 190, 120, 255};
+constexpr SDL_Color kBad         = {255, 128, 128, 255};
+constexpr SDL_Color kEdge        = {227, 168, 104, 225};
+constexpr SDL_Color kSelFill     = {255, 122, 162, 72};
+constexpr SDL_Color kSelEdge     = {255, 149, 182, 240};
+constexpr SDL_Color kListFill    = {43, 23, 13, 222};
+constexpr SDL_Color kSidebarFill = {74, 43, 27, 225};
+constexpr SDL_Color kHeaderFill  = {58, 30, 18, 235};
+// Buttons, chips and row backings drawn over those fills.
+constexpr SDL_Color kDeepFill    = {30, 16, 9, 255};
+constexpr SDL_Color kDialogFill  = {43, 23, 13, 255};
+constexpr SDL_Color kButtonFill  = {74, 43, 27, 255};
+constexpr SDL_Color kButtonFocus = {138, 58, 82, 255};
+constexpr SDL_Color kRowStripe   = {58, 34, 20, 255};
+constexpr SDL_Color kRowMine     = {110, 50, 70, 255};
+constexpr SDL_Color kRowEdge     = {150, 100, 70, 255};
+constexpr SDL_Color kRowRim      = {150, 100, 70, 255};
+constexpr SDL_Color kGridLine    = {226, 196, 166, 220};
+constexpr SDL_Color kChatFill    = {36, 19, 11, 238};
+#else
 constexpr SDL_Color kText        = {248, 250, 239, 255};
 constexpr SDL_Color kMuted       = {174, 211, 202, 255};
 constexpr SDL_Color kGold        = {255, 218, 92, 255};
@@ -69,6 +95,17 @@ constexpr SDL_Color kSelEdge     = {255, 218, 92, 240};
 constexpr SDL_Color kListFill    = {26, 18, 48, 222};
 constexpr SDL_Color kSidebarFill = {18, 55, 65, 225};
 constexpr SDL_Color kHeaderFill  = {38, 20, 57, 235};
+constexpr SDL_Color kDeepFill    = {10, 38, 48, 255};
+constexpr SDL_Color kDialogFill  = {17, 26, 45, 255};
+constexpr SDL_Color kButtonFill  = {35, 69, 76, 255};
+constexpr SDL_Color kButtonFocus = {94, 69, 76, 255};
+constexpr SDL_Color kRowStripe   = {31, 47, 70, 255};
+constexpr SDL_Color kRowMine     = {75, 60, 70, 255};
+constexpr SDL_Color kRowEdge     = {83, 117, 140, 255};
+constexpr SDL_Color kRowRim      = {83, 117, 92, 255};
+constexpr SDL_Color kGridLine    = {180, 180, 200, 220};
+constexpr SDL_Color kChatFill    = {29, 13, 43, 238};
+#endif
 // A lower-opacity variant of the three fills above, for the two screens
 // that sit over the world-map backdrop (the joined-server lobby and the
 // game room) rather than the busier main-menu artwork every other screen
@@ -77,7 +114,18 @@ constexpr SDL_Color kHeaderFill  = {38, 20, 57, 235};
 // server lists are not (found live: dropping every screen's opacity together
 // made those three hard to read, so only the map-backed two get it).
 constexpr Uint8 kMapFillAlpha = 150;
+#if defined(FB_BRAND_BOBA)
+constexpr SDL_Color kTextShadow  = {26, 13, 7, 255};
+#else
 constexpr SDL_Color kTextShadow  = {20, 12, 32, 255};
+#endif
+
+constexpr SDL_Color WithAlpha(SDL_Color c, Uint8 a) { return SDL_Color{c.r, c.g, c.b, a}; }
+
+// Sets the draw colour to c at alpha a (c's own alpha by default).
+inline void SetDrawColor(SDL_Renderer* rend, SDL_Color c, int a = -1) {
+    SDL_SetRenderDrawColor(rend, c.r, c.g, c.b, a < 0 ? c.a : (Uint8)a);
+}
 
 // Forwards to MainMenu::AddPanelTapRow's signature exactly, so a caller's
 // lambda is just `[&](int i, const SDL_Rect& r, int s, bool sa, SDL_Keycode k)

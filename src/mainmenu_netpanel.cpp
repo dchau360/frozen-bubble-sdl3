@@ -598,7 +598,7 @@ TTFText &MainMenu::NetGridCell(size_t idx) {
             // "on"/"off" should be (found live: "the section that shows auto
             // aim is black"). Set once here rather than at every call site --
             // nothing in this grid needs a per-cell color today.
-            netGridCellPool[j].UpdateColor({230, 235, 225, 255}, {20, 12, 32, 255});
+            netGridCellPool[j].UpdateColor({230, 235, 225, 255}, menulist::kTextShadow);
         }
     }
     return netGridCellPool[idx];
@@ -631,24 +631,24 @@ void MainMenu::NetPanelLobbyActionsRender() {
         SDL_RenderRect(roomRenderer, &fr);
     };
     auto drawLabel = [&](const char* text, int x, int y, SDL_Color color) {
-        panelText.UpdateColor(color, {20, 12, 32, 255});
+        panelText.UpdateColor(color, menulist::kTextShadow);
         panelText.UpdateText(roomRenderer, text, 0);
         panelText.UpdatePosition({x, y});
         SDL_FRect fr = ToFRect(*panelText.Coords());
         SDL_RenderTexture(roomRenderer, panelText.Texture(), nullptr, &fr);
     };
     auto drawSelection = [&](const SDL_Rect& rect) {
-        SDL_SetRenderDrawColor(roomRenderer, 255, 196, 64, 72);
+        menulist::SetDrawColor(roomRenderer, menulist::kSelFill, 72);
         SDL_FRect fr = ToFRect(rect);
         SDL_RenderFillRect(roomRenderer, &fr);
-        SDL_SetRenderDrawColor(roomRenderer, 255, 218, 92, 240);
+        menulist::SetDrawColor(roomRenderer, menulist::kSelEdge, 240);
         SDL_RenderRect(roomRenderer, &fr);
     };
 
-    const SDL_Color panelEdge = {255, 190, 46, 225};
-    const SDL_Color textMain  = {248, 250, 239, 255};
-    const SDL_Color textMuted = {174, 211, 202, 255};
-    const SDL_Color textGold  = {255, 218, 92, 255};
+    const SDL_Color panelEdge = menulist::kEdge;
+    const SDL_Color textMain  = menulist::kText;
+    const SDL_Color textMuted = menulist::kMuted;
+    const SDL_Color textGold  = menulist::kGold;
     // Team colors — shared with the in-gameplay team indicators so a team
     // reads the same color everywhere.
     const SDL_Color *teamColors = kTeamColors;
@@ -778,7 +778,7 @@ void MainMenu::NetPanelLobbyActionsRender() {
             // alpha than the other hand-rolled panels in this branch --
             // see kMapFillAlpha -- so the world map behind it actually
             // shows through instead of being fully hidden.
-            drawPanel({10, 8, 620, 28}, {38, 20, 57, menulist::kMapFillAlpha}, panelEdge);
+            drawPanel({10, 8, 620, 28}, menulist::WithAlpha(menulist::kHeaderFill, menulist::kMapFillAlpha), panelEdge);
             char title[160];
             snprintf(title, sizeof(title), "ONLINE LOBBY   |   %s", netClient->GetPlayerNick().c_str());
             drawLabel(title, 20, 14, textGold);
@@ -935,7 +935,7 @@ void MainMenu::NetPanelLobbyActionsRender() {
             // Draw grid lines
             {
                 SDL_Renderer* rend = const_cast<SDL_Renderer*>(renderer);
-                SDL_SetRenderDrawColor(rend, 180, 180, 200, 220);
+                menulist::SetDrawColor(rend, menulist::kGridLine);
 
                 int totalCols = numPlayers + 1; // ALL + P1..PN
                 int gridLeft  = actionStartX - 2;
@@ -1109,7 +1109,7 @@ void MainMenu::NetPanelLobbyActionsRender() {
             const int panelX = bigRoom ? 354 : 450;
             const int panelY = 42;
             const int panelW = bigRoom ? 276 : 180;
-            drawPanel({panelX, panelY, panelW, 286}, {18, 55, 65, menulist::kMapFillAlpha}, panelEdge);
+            drawPanel({panelX, panelY, panelW, 286}, menulist::WithAlpha(menulist::kSidebarFill, menulist::kMapFillAlpha), panelEdge);
 
             char hdr[32];
             if (bigRoom)
@@ -1145,7 +1145,7 @@ void MainMenu::NetPanelLobbyActionsRender() {
                 SDL_Rect stRect = {stX, stY, stW, stH};
                 const bool stSel = (selectedActionIndex == kRoomSetTeamsTapIndex);
                 SDL_SetRenderDrawBlendMode(roomRenderer, SDL_BLENDMODE_BLEND);
-                SDL_SetRenderDrawColor(roomRenderer, 255, 196, 64, stSel ? 90 : 40);
+                menulist::SetDrawColor(roomRenderer, menulist::kSelFill, stSel ? 90 : 40);
                 { SDL_FRect fr = ToFRect(stRect); SDL_RenderFillRect(roomRenderer, &fr); }
                 SDL_SetRenderDrawColor(roomRenderer, menulist::kSelEdge.r, menulist::kSelEdge.g,
                                        menulist::kSelEdge.b, stSel ? 240 : 150);
@@ -1173,7 +1173,7 @@ void MainMenu::NetPanelLobbyActionsRender() {
                     int rowX = panelX + 7 + col * (colW2 + 3);
                     int rowY = panelY + 30 + row * rowH2;
                     SDL_Rect rowBox = {rowX, rowY, colW2 - 3, rowH2 - 3};
-                    SDL_SetRenderDrawColor(roomRenderer, 10, 38, 48, 185);
+                    menulist::SetDrawColor(roomRenderer, menulist::kDeepFill, 185);
                     { SDL_FRect fr = ToFRect(rowBox); SDL_RenderFillRect(roomRenderer, &fr); }
 
                     if (pi < (int)currentGame->players.size()) {
@@ -1225,7 +1225,7 @@ void MainMenu::NetPanelLobbyActionsRender() {
                 for (int pi = 0; pi < 5; pi++) {
                     int rowY = panelY + 30 + pi * rowH;
                     SDL_Rect rowBox = {panelX + 7, rowY, panelW - 14, rowH - 5};
-                    SDL_SetRenderDrawColor(roomRenderer, 10, 38, 48, 185);
+                    menulist::SetDrawColor(roomRenderer, menulist::kDeepFill, 185);
                     { SDL_FRect fr = ToFRect(rowBox); SDL_RenderFillRect(roomRenderer, &fr); }
 
                     char slot[8];
@@ -1277,7 +1277,7 @@ void MainMenu::NetPanelLobbyActionsRender() {
                 SDL_Rect helpRect = {helpX, helpY, helpW, helpH};
                 const bool helpSel = (selectedActionIndex == kRoomHelpTapIndex);
                 SDL_SetRenderDrawBlendMode(roomRenderer, SDL_BLENDMODE_BLEND);
-                SDL_SetRenderDrawColor(roomRenderer, 255, 196, 64, helpSel ? 90 : 40);
+                menulist::SetDrawColor(roomRenderer, menulist::kSelFill, helpSel ? 90 : 40);
                 { SDL_FRect fr = ToFRect(helpRect); SDL_RenderFillRect(roomRenderer, &fr); }
                 SDL_SetRenderDrawColor(roomRenderer, menulist::kSelEdge.r, menulist::kSelEdge.g,
                                        menulist::kSelEdge.b, helpSel ? 240 : 150);
@@ -1456,24 +1456,24 @@ void MainMenu::NetPanelChatDockRender(bool expanded) {
         SDL_RenderRect(roomRenderer, &fr);
     };
     auto drawLabel = [&](const char* text, int x, int y, SDL_Color color) {
-        panelText.UpdateColor(color, {20, 12, 32, 255});
+        panelText.UpdateColor(color, menulist::kTextShadow);
         panelText.UpdateText(roomRenderer, text, 0);
         panelText.UpdatePosition({x, y});
         SDL_FRect fr = ToFRect(*panelText.Coords());
         SDL_RenderTexture(roomRenderer, panelText.Texture(), nullptr, &fr);
     };
     auto drawSelection = [&](const SDL_Rect& rect) {
-        SDL_SetRenderDrawColor(roomRenderer, 255, 196, 64, 72);
+        menulist::SetDrawColor(roomRenderer, menulist::kSelFill, 72);
         SDL_FRect fr = ToFRect(rect);
         SDL_RenderFillRect(roomRenderer, &fr);
-        SDL_SetRenderDrawColor(roomRenderer, 255, 218, 92, 240);
+        menulist::SetDrawColor(roomRenderer, menulist::kSelEdge, 240);
         SDL_RenderRect(roomRenderer, &fr);
     };
 
-    const SDL_Color panelEdge = {255, 190, 46, 225};
-    const SDL_Color textMain  = {248, 250, 239, 255};
-    const SDL_Color textMuted = {174, 211, 202, 255};
-    const SDL_Color textGold  = {255, 218, 92, 255};
+    const SDL_Color panelEdge = menulist::kEdge;
+    const SDL_Color textMain  = menulist::kText;
+    const SDL_Color textMuted = menulist::kMuted;
+    const SDL_Color textGold  = menulist::kGold;
 
     // Persistent chat dock: its own background panel, always-visible message
     // area, with the input row's focus box only shown while Chat is selected.
@@ -1487,7 +1487,7 @@ void MainMenu::NetPanelChatDockRender(bool expanded) {
     const int dockHeight = expanded ? 412 : 138;
     if (modern) NetChatDockModern(expanded);
     else {
-        drawPanel({10, dockTop, 620, dockHeight}, {29, 13, 43, 238}, panelEdge);
+        drawPanel({10, dockTop, 620, dockHeight}, menulist::kChatFill, panelEdge);
         drawLabel(expanded ? "CHAT  --  ENTER sends, ESC cancels" : "CHAT",
                   20, dockTop + 6, textGold);
         // Action index 0 is Chat, whose row lives here rather than in the action

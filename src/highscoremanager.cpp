@@ -614,17 +614,17 @@ void HighscoreManager::RenderScoreScreen() {
             bool active = ShowsTrack(track);
 
             SDL_SetRenderDrawBlendMode(rend, SDL_BLENDMODE_BLEND);
-            if (active) SDL_SetRenderDrawColor(rend, 255, 196, 64, 90);
-            else        SDL_SetRenderDrawColor(rend, 20, 12, 32, 150);
+            if (active) menulist::SetDrawColor(rend, menulist::kSelFill, 90);
+            else        menulist::SetDrawColor(rend, menulist::kTextShadow, 150);
             { SDL_FRect fr = ToFRect(box); SDL_RenderFillRect(rend, &fr); }
 
-            if (active) SDL_SetRenderDrawColor(rend, 255, 218, 92, 240);
-            else        SDL_SetRenderDrawColor(rend, 174, 211, 202, 140);
+            if (active) menulist::SetDrawColor(rend, menulist::kSelEdge, 240);
+            else        menulist::SetDrawColor(rend, menulist::kMuted, 140);
             { SDL_FRect fr = ToFRect(box); SDL_RenderRect(rend, &fr); }
 
             trackLabelText.UpdateStyle(13, active ? TTF_STYLE_BOLD : TTF_STYLE_NORMAL);
-            trackLabelText.UpdateColor(active ? SDL_Color{255, 218, 92, 255} : SDL_Color{174, 211, 202, 255},
-                                        {20, 12, 32, 255});
+            trackLabelText.UpdateColor(active ? menulist::kGold : menulist::kMuted,
+                                        menulist::kTextShadow);
             trackLabelText.UpdateText(rend, track == (int)InputMethod::Mouse ? "MOUSE/TOUCH" : "KEYBOARD", 0);
             trackLabelText.UpdatePosition({box.x + box.w/2 - trackLabelText.Coords()->w/2,
                                            box.y + box.h/2 - trackLabelText.Coords()->h/2});
@@ -637,11 +637,11 @@ void HighscoreManager::RenderScoreScreen() {
                 SDL_Rect box = ScoreScopeTabRect(tab);
                 bool active = (tab == ScopeTab());
                 SDL_SetRenderDrawBlendMode(rend, SDL_BLENDMODE_BLEND);
-                if (active) SDL_SetRenderDrawColor(rend, 255, 196, 64, 90);
-                else        SDL_SetRenderDrawColor(rend, 20, 12, 32, 150);
+                if (active) menulist::SetDrawColor(rend, menulist::kSelFill, 90);
+                else        menulist::SetDrawColor(rend, menulist::kTextShadow, 150);
                 { SDL_FRect fr = ToFRect(box); SDL_RenderFillRect(rend, &fr); }
-                if (active) SDL_SetRenderDrawColor(rend, 255, 218, 92, 240);
-                else        SDL_SetRenderDrawColor(rend, 174, 211, 202, 140);
+                if (active) menulist::SetDrawColor(rend, menulist::kSelEdge, 240);
+                else        menulist::SetDrawColor(rend, menulist::kMuted, 140);
                 { SDL_FRect fr = ToFRect(box); SDL_RenderRect(rend, &fr); }
                 trackLabelText.UpdateStyle(12, active ? TTF_STYLE_BOLD : TTF_STYLE_NORMAL);
                 trackLabelText.UpdateColor(active ? menulist::kGold : menulist::kMuted, menulist::kTextShadow);
@@ -743,7 +743,7 @@ void HighscoreManager::RenderWorldBoard() {
     const Column cols[2] = {{"ALL-TIME", &mergedAll}, {"THIS WEEK", &mergedWeek}};
     for (int c = 0; c < 2; ++c) {
         const int x = 22 + c * 304, w = 292;
-        SDL_SetRenderDrawColor(rend, 20, 12, 32, 170);
+        menulist::SetDrawColor(rend, menulist::kTextShadow, 170);
         SDL_FRect box{(float)x, 72.f, (float)w, 262.f};
         SDL_RenderFillRect(rend, &box);
         text(cols[c].title, x + 10, 76, menulist::kGold, 13, TTF_STYLE_BOLD);
@@ -857,7 +857,7 @@ void HighscoreManager::RenderWorldBoard() {
         if (!HasWorldButton(b)) continue;
         const SDL_Rect r = WorldButtonRect(b, twoButtons);
         const bool focused = b == worldButtonFocus;
-        SDL_SetRenderDrawColor(rend, focused ? 94 : 35, 69, 76, 230);
+        menulist::SetDrawColor(rend, focused ? menulist::kButtonFocus : menulist::kButtonFill, 230);
         { SDL_FRect fr = ToFRect(r); SDL_RenderFillRect(rend, &fr); }
         if (focused) {
             SDL_SetRenderDrawColor(rend, menulist::kGold.r, menulist::kGold.g, menulist::kGold.b, 255);

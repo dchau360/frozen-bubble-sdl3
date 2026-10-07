@@ -163,7 +163,7 @@ void DrawOverlayButton(SDL_Renderer *rend, TTFText &text, const SDL_Rect &r,
                        const char *label, bool gold, bool filled,
                        bool disabled = false) {
     SDL_SetRenderDrawBlendMode(rend, SDL_BLENDMODE_BLEND);
-    SDL_SetRenderDrawColor(rend, 10, 38, 48, (filled && !disabled) ? 210 : 130);
+    menulist::SetDrawColor(rend, menulist::kDeepFill, (filled && !disabled) ? 210 : 130);
     { SDL_FRect fr = ToFRect(r); SDL_RenderFillRect(rend, &fr); }
     const SDL_Color edge = (gold && !disabled) ? menulist::kGold : menulist::kMuted;
     SDL_SetRenderDrawColor(rend, edge.r, edge.g, edge.b,
@@ -491,7 +491,7 @@ void MainMenu::DrawReplayConfirmDialog(SDL_Renderer *rend, const char *title,
     const bool yesFocused = !confirmDialogFocusNo;
     auto dialogButton = [&](const SDL_Rect &r, const char *label, bool focused) {
         SDL_SetRenderDrawBlendMode(rend, SDL_BLENDMODE_BLEND);
-        SDL_SetRenderDrawColor(rend, 10, 38, 48, 210);
+        menulist::SetDrawColor(rend, menulist::kDeepFill, 210);
         { SDL_FRect fr = ToFRect(r); SDL_RenderFillRect(rend, &fr); }
         const SDL_Color edge = focused ? menulist::kGold : menulist::kMuted;
         SDL_SetRenderDrawColor(rend, edge.r, edge.g, edge.b, 255);
