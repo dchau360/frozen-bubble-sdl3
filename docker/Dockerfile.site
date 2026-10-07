@@ -29,7 +29,17 @@ COPY docs/store-assets/ docs/store-assets/
 COPY share/gfx/DroidSans.ttf share/gfx/DroidSans.ttf
 COPY share/gfx/Baloo2-ExtraBold.ttf share/gfx/Baloo2-ExtraBold.ttf
 
-RUN python3 tools/build-site.py /out
+# Boba Buster's pages, rendered under /bb/ (see build-site.py's
+# render_brand_site). They come from the private boba-buster-assets repo
+# through the compose file's `bb` build context, which is FB_BB_SITE when the
+# host has that repo checked out and an empty directory otherwise; with no
+# index.md there, the site is Frozen Bubble's alone, as before.
+COPY --from=bb . brand-sites/bb/
+RUN if [ -f brand-sites/bb/index.md ]; then \
+        python3 tools/build-site.py /out --brand-site brand-sites/bb bb; \
+    else \
+        python3 tools/build-site.py /out; \
+    fi
 
 # Only /out crosses into the final image, so the unpublished docs/ material the
 # builder stage pulled in (audit notes, the 4096x2304 store header) is not
