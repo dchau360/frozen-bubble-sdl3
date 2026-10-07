@@ -1,5 +1,9 @@
 # Changelog
 
+## v2.4.146
+
+- **Online screens back to their classic look.** The NET GAME and LAN GAME server lists, the online lobby, the game room with its chat, and Set Teams are drawn the classic way again in every menu style, Modern included. The Modern style still dresses the title screen, the 1-player menu and Controls & Settings.
+
 ## v2.4.145
 
 - **New ad provider on Android.** Ads now come through Appodeal instead of Google AdMob. As before, a full-screen ad can show when you enter the online lobby, and Remove Ads still turns them off for good.
