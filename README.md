@@ -12,7 +12,7 @@ The original was written in Perl; this is a full rewrite in C++. Core gameplay a
 **▶ [Play in your browser](https://dchau360.itch.io/frozenbubble2)** (no install, works on phones) · **[Download](#download)** for Linux, macOS, Windows, Android · **[Join the Discord](https://discord.gg/uE4dq8fqGW)** to find opponents. Online rooms hold up to 20 players.
 
 <p align="center">
-  <a href="docs/media/frozen-bubble-promo.mp4"><img src="docs/media/promo-preview.gif" width="480" alt="A clip of a 1-player game in the modern theme: a shot drops ten bubbles"></a><br>
+  <a href="docs/media/frozen-bubble-promo.mp4"><img src="docs/media/promo-preview.gif" width="480" alt="A clip of a 1-player game: a shot drops ten bubbles"></a><br>
   <sub><a href="docs/media/frozen-bubble-promo.mp4">▶ Watch the 1-minute trailer</a>: 1-player, a 4-player battle, and a 2-player round to the win</sub>
 </p>
 
@@ -60,14 +60,14 @@ Every mode plays the same whether you're local or online, and the host can adjus
   <img src="docs/screenshots/how-to-play.jpg" alt="The How to play page: the launcher, next bubble and Swap pocket labelled with their controls, and a swap in three steps" width="400">
 </p>
 
-**Modern in-game theme** (on by default; switch it under **In-game theme** in the 1-player menu). In a 1-player game: a score panel down the left (level, score counting up, shots, time), cards for level cleared, game over and pause, the next level dropping in row by row, and an "N DROPPED!" when a shot cuts bubbles loose. The background, penguin, launcher, sounds and scoring stay as they were; **Original** brings back the classic look. The glossy candy bubbles are a separate switch, **Bubbles** (CANDY / CLASSIC, also on by default), so either set goes with either look; they apply in every mode, multiplayer included.
+**The 1-player game screen.** A score panel down the left (level, score counting up, shots, time), cards for level cleared, game over and pause, the next level dropping in row by row, and an "N DROPPED!" when a shot cuts bubbles loose. The background, penguin, launcher, sounds and scoring stay as they were. The glossy candy bubbles are a switch, **Bubbles** in the 1-player menu (CANDY / CLASSIC, CANDY by default), and apply in every mode, multiplayer included.
 
 <p align="center">
-  <img src="docs/screenshots/modern-gameplay.jpg" alt="A 1-player game in the modern theme: score panel with level, score, shots and time, a +170 popup and 3 DROPPED!" width="400">
-  <img src="docs/screenshots/level-cleared.jpg" alt="The modern theme's level-cleared card: time 33s, time bonus +2,648, score 3,188" width="400">
+  <img src="docs/screenshots/modern-gameplay.jpg" alt="A 1-player game: score panel with level, score, shots and time, a +170 popup and 3 DROPPED!" width="400">
+  <img src="docs/screenshots/level-cleared.jpg" alt="The level-cleared card: time 33s, time bonus +2,648, score 3,188" width="400">
 </p>
 
-**Modern menus.** The menus match the modern theme too: dark rounded cards, with a candy bubble on the selected row. The 1-player menu explains each mode in a line and has switches for its settings, and the online lobby, game room, Set Teams and Settings screens are cards as well. The original looks are still there: pick another **STYLE** on the title screen.
+**Modern menus.** The title screen and the 1-player menu match the game screen: dark rounded cards, with a candy bubble on the selected row, and the 1-player menu explains each mode in a line and has switches for its settings. The online screens (server lists, lobby, game room, Set Teams) and Controls & Settings keep their classic look in every style. The original title screen is still there: pick another **STYLE** on the title screen.
 
 <p align="center">
   <img src="docs/screenshots/title-menu.jpg" alt="The title screen in the Modern menu style" width="400">
@@ -79,7 +79,7 @@ Every mode plays the same whether you're local or online, and the host can adjus
 **Attack bubbles** is a three-way setting, host-controlled in the room and per-player in local multiplayer: **ON** sends every malus you earn straight at your opponents, **OFF** turns attacks off entirely, and **Blockable** has the malus you earn pay down whatever is still queued against you first, sending only the surplus — it can't go negative, so blocking more than you owe just empties your queue rather than banking credit. A HELP button next to Bot skill (or **F1**/gamepad **Y** anytime) opens a full settings guide covering this and everything else on the panel, including how malus targeting differs once a room has 6 or more players alive.
 
 <p align="center">
-  <img src="docs/screenshots/game-room-modern.jpg" alt="Game room in the Modern menu style: match rules, each player's settings, the players and chat" width="480">
+  <img src="docs/screenshots/game-room.jpg" alt="An online game room over the world map: match rules, each player's settings, the players and chat" width="480">
   <img src="docs/screenshots/net-5player.png" alt="Live 5-player network game: one full board in the centre, four opponent boards in the corners" width="480">
 </p>
 
