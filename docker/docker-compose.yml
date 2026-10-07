@@ -114,6 +114,12 @@ services:
     build:
       context: ..          # repo root — Dockerfile.site reads site/ and docs/
       dockerfile: docker/Dockerfile.site
+      # Boba Buster's pages for /bb/: FB_BB_SITE in docker/.env points at the
+      # site/ directory of a boba-buster-assets checkout (a private repo).
+      # Unset, this empty directory stands in and only Frozen Bubble's pages
+      # are built.
+      additional_contexts:
+        bb: ${FB_BB_SITE:-./no-brand-site}
     restart: unless-stopped
     logging: *default-logging
     ports:

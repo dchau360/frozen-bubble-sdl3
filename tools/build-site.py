@@ -8,7 +8,11 @@ policy silently fell behind the source -- it was still describing the app
 before the two ad-removal products existed, which is exactly the sort of thing
 a store review reads. Generating it removes the chance to forget.
 
-Usage: tools/build-site.py <output-dir>
+Usage: tools/build-site.py <output-dir> [--brand-site <dir> <prefix>]
+
+--brand-site adds another game's pages under /<prefix>/ -- Boba Buster's at
+/bb/, from site/ in the private boba-buster-assets repo (its art is not GPL,
+so its pages live with its art, not here). See render_brand_site().
 """
 import os
 import shutil
@@ -118,10 +122,54 @@ VERBATIM = ["google034c4b2cf8d147df.html", "app-ads.txt"]
 CANONICAL_BASE = "https://llmfinder.net"
 
 
+def render_brand_site(src_dir, prefix, out):
+    """Render a second game's pages under /<prefix>/ of the same site.
+
+    By convention rather than a list like PAGES, so the brand's repo needs no
+    change here to add a page: <src_dir>/index.md is /<prefix>/, any other
+    <name>.md is /<prefix>/<name>/, each page's <title> is its first "# "
+    heading, and <src_dir>/template.html wraps them all (same {{TITLE}},
+    {{ROOT}}, {{CANONICAL}} and {{CONTENT}} slots as ours, {{ROOT}} being the
+    brand's own root). Its img/ and fonts/ directories are copied as they are.
+    Frozen Bubble's root pages are untouched, and app-ads.txt stays at the
+    domain root, which is the only place ad crawlers look for it.
+    """
+    template = open(os.path.join(src_dir, "template.html"), encoding="utf-8").read()
+    for name in sorted(os.listdir(src_dir)):
+        if not name.endswith(".md") or name == "README.md":
+            continue
+        stem = name[:-3]
+        sub_path = "" if stem == "index" else stem + "/"
+        text = open(os.path.join(src_dir, name), encoding="utf-8").read()
+        title = next((line[2:].strip() for line in text.splitlines()
+                      if line.startswith("# ")), stem)
+        body = markdown.markdown(text, extensions=["extra", "sane_lists"])
+        html = (template
+                .replace("{{TITLE}}", title)
+                .replace("{{ROOT}}", "../" if sub_path else "./")
+                .replace("{{CANONICAL}}", "%s/%s/%s" % (CANONICAL_BASE, prefix, sub_path))
+                .replace("{{CONTENT}}", body))
+        dest = os.path.join(out, prefix, sub_path, "index.html")
+        os.makedirs(os.path.dirname(dest), exist_ok=True)
+        with open(dest, "w", encoding="utf-8") as f:
+            f.write(html)
+        print("rendered %s -> %s/%sindex.html (%d bytes)" % (name, prefix, sub_path, len(html)))
+    for sub in ("img", "fonts"):
+        if os.path.isdir(os.path.join(src_dir, sub)):
+            shutil.copytree(os.path.join(src_dir, sub), os.path.join(out, prefix, sub),
+                            dirs_exist_ok=True)
+            print("copied   %s/ -> %s/%s/" % (sub, prefix, sub))
+
+
 def main():
-    if len(sys.argv) != 2:
-        sys.exit("usage: build-site.py <output-dir>")
-    out = sys.argv[1]
+    args = sys.argv[1:]
+    brand = None
+    if len(args) == 4 and args[1] == "--brand-site":
+        brand = (args[2], args[3])
+        args = args[:1]
+    if len(args) != 1:
+        sys.exit("usage: build-site.py <output-dir> [--brand-site <dir> <prefix>]")
+    out = args[0]
     os.makedirs(out, exist_ok=True)
 
     templates = {}
@@ -168,6 +216,9 @@ def main():
     for name in VERBATIM:
         shutil.copyfile(os.path.join(SITE, name), os.path.join(out, name))
         print("copied   %s" % name)
+
+    if brand:
+        render_brand_site(brand[0], brand[1], out)
 
 
 if __name__ == "__main__":

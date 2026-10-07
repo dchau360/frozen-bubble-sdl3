@@ -230,6 +230,14 @@ if [ "$DO_PULL" -eq 1 ]; then
     # operator runs by hand (no sudo) fail with "dubious ownership" or a
     # permission error on whatever root just touched.
     sudo -u "$REPO_OWNER" git -C "$REPO_DIR" pull --ff-only origin main
+    # Boba Buster's pages (/bb/), when this host builds them: FB_BB_SITE in
+    # docker/.env names the site/ directory of a boba-buster-assets checkout
+    # (see SetupServer.md, "The Website on Port 443").
+    BB_SITE=$(sed -n 's/^FB_BB_SITE=//p' "$COMPOSE_DIR/.env" 2>/dev/null | tail -1)
+    if [ -n "$BB_SITE" ] && [ -d "$BB_SITE/../.git" ]; then
+        log "== pulling Boba Buster's pages =="
+        sudo -u "$REPO_OWNER" git -C "$BB_SITE/.." pull --ff-only
+    fi
 else
     log "== skipping git pull (--no-pull) =="
 fi

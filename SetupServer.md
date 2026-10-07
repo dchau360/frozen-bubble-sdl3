@@ -190,6 +190,20 @@ drift apart.
    sends runs to (below). For `/weekly/` it means your domain shows
    **fb.servequake.com's** weekly rankings, not your own server's; your
    players still see your server's board in the in-game lobby.
+4. **Boba Buster's pages (`/bb/`) are optional and off by default.** They
+   live in a private repository (`boba-buster-assets`) with the rest of that
+   game's art, so a host without it builds Frozen Bubble's site alone, exactly
+   as before. The production host has that repository checked out beside this
+   one and sets, in `docker/.env`:
+
+   ```
+   FB_BB_SITE=/home/ubuntu/gr/boba-buster-assets/site
+   ```
+
+   The compose file passes that directory to `Dockerfile.site` as a second
+   build context, and `tools/build-site.py --brand-site` renders it under
+   `/bb/`. To ship a change to those pages, `git pull` that repository too
+   before the `--build`.
 
 ---
 
