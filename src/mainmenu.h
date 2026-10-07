@@ -572,11 +572,6 @@ private:
     // a bare input box -- which matters most on a phone, where composing raises
     // a keyboard over the bottom half of the screen.
     void NetPanelChatDockRender(bool expanded = false);
-    // CONTROLS & SETTINGS in the Modern menu style (mainmenu_settingsmodern.cpp).
-    struct SettingsModernText;
-    SettingsModernText *settingsModern = nullptr;
-    void KeysPanelRenderModern();
-    void FreeSettingsModern();
     void NetPanelConnectionScreensRender(); // Pre-login screens: LAN list, manual entry, public list
     // LAN discovery (mode 7) and the public Net list (mode 10) are the same
     // screen shape -- a scrolling server list plus a details sidebar -- with
