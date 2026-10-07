@@ -116,7 +116,7 @@ twenty, which needed new UI to be playable at all:
 | 37 | **Anonymous player accounts** — a recovery code on the device, signed in by challenge-response, so rankings and highscores belong to a player rather than a name. The code can be copied to another device, replaced, or the account deleted from the game | v2.4.118 |
 | 38 | **Discord alerts** (server operator's choice) — a post when a player joins, and per round the result, its length, a win-count chart and bubbles popped, threaded per room | v2.4.101 |
 | 39 | **Follow a server** — star a server in the LAN or Net list and be notified when someone joins it | v2.4.37 |
-| 40 | **Join our Discord** — a row on the server list and in the lobby that opens the community Discord | — |
+| 40 | **Join our Discord** — a row on the server list and in the lobby that opens the community Discord, and a DISCORD RESULTS button (beside EXIT) on the stats panel once an online match is over (next release) | — |
 | 41 | **Website** — a landing page, privacy policy, the online highscores and the weekly rankings, served by the same nginx as the game's WebSocket proxy and on GitHub Pages | v2.4.116 |
 
 ### Players and moderation

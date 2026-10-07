@@ -1151,7 +1151,8 @@ void BubbleGame::UpdateRoundStats() {
             : (waitingForOpponentNewGame
                 ? "T / X: CHAT    WAITING FOR PLAYERS"
                 : (gameMatchOver
-                    ? "T / X: CHAT    ENTER: LOBBY"
+                    ? (statsDiscordBtn.w > 0 ? "T / X: CHAT    D / Y: DISCORD    ENTER: LOBBY"
+                                             : "T / X: CHAT    ENTER: LOBBY")
                     : "T / X: CHAT    ENTER / FIRE: NEXT ROUND"));
         cell(hint, colName, y, hdr);
         if (discordAlertsApply) {
@@ -1169,6 +1170,14 @@ void BubbleGame::UpdateRoundStats() {
             roundStatsOps.push_back({RoundStatsOpKind::BracketBtn, 0, statsTournamentBtn, {}});
             cell("BRACKET", statsTournamentBtn.x + 20,
                  statsTournamentBtn.y + 4, hdr);
+        }
+        if (statsExitBtn.w > 0) {
+            roundStatsOps.push_back({RoundStatsOpKind::LinkBtn, 0, statsExitBtn, {}});
+            cell("EXIT", statsExitBtn.x + 28, statsExitBtn.y + 4, hdr);
+        }
+        if (statsDiscordBtn.w > 0) {
+            roundStatsOps.push_back({RoundStatsOpKind::LinkBtn, 0, statsDiscordBtn, {}});
+            cell("DISCORD RESULTS", statsDiscordBtn.x + 14, statsDiscordBtn.y + 4, hdr);
         }
     }
 }
@@ -1210,7 +1219,8 @@ void BubbleGame::DrawRoundStats(SDL_Renderer *rend) {
             SDL_SetRenderDrawBlendMode(rend, SDL_BLENDMODE_NONE);
             break;
         }
-        case RoundStatsOpKind::BracketBtn: {
+        case RoundStatsOpKind::BracketBtn:
+        case RoundStatsOpKind::LinkBtn: {
             SDL_SetRenderDrawBlendMode(rend, SDL_BLENDMODE_BLEND);
             menulist::SetDrawColor(rend, menulist::kSelEdge, 200);
             { SDL_FRect fr = ToFRect(op.rect); SDL_RenderRect(rend, &fr); }
@@ -1236,10 +1246,23 @@ void BubbleGame::UpdateRoundStatsHitRects() {
         } else {
             statsTournamentBtn = {0, 0, 0, 0};
         }
+        if (ShowsMatchOverButtons()) {
+            statsExitBtn = {statsChatBtn.x + statsChatBtn.w + 8, statsChatBtn.y, 88, statsChatBtn.h};
+            statsDiscordBtn = HasDiscordInvite()
+                ? SDL_Rect{statsExitBtn.x + statsExitBtn.w + 8, statsChatBtn.y, 150, statsChatBtn.h}
+                : SDL_Rect{0, 0, 0, 0};
+        } else {
+            statsExitBtn = statsDiscordBtn = {0, 0, 0, 0};
+        }
     } else {
         statsChatBtn = {0, 0, 0, 0};
         statsTournamentBtn = {0, 0, 0, 0};
+        statsExitBtn = statsDiscordBtn = {0, 0, 0, 0};
     }
+}
+
+bool BubbleGame::ShowsMatchOverButtons() const {
+    return currentSettings.networkGame && gameFinish && gameMatchOver && !IsTournamentRound();
 }
 
 void BubbleGame::RenderMultiplayerResultPanel(SDL_Renderer *rend) {

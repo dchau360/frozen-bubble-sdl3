@@ -48,6 +48,17 @@ bool BubbleGame::HandleFinishedTap(float lx, float ly) {
         return true;
     }
     if (!currentSettings.networkGame || !gameFinish) return false;
+    auto inside = [&](const SDL_Rect& r) {
+        return r.w > 0 && lx >= r.x && lx < r.x + r.w && ly >= r.y && ly < r.y + r.h;
+    };
+    if (ShowsMatchOverButtons()) {
+        if (inside(statsExitBtn)) { QuitToTitle(); return true; }
+        if (inside(statsDiscordBtn)) {
+            PlaySFX("menu_selected");
+            openDiscord();
+            return true;
+        }
+    }
     if (statsTournamentBtn.w > 0 &&
         lx >= statsTournamentBtn.x && lx < statsTournamentBtn.x + statsTournamentBtn.w &&
         ly >= statsTournamentBtn.y && ly < statsTournamentBtn.y + statsTournamentBtn.h) {
@@ -215,6 +226,10 @@ void BubbleGame::HandleInput(SDL_Event *e) {
             case SDL_GAMEPAD_BUTTON_EAST:       fake.key = SDLK_ESCAPE; break;
             case SDL_GAMEPAD_BUTTON_START:      fake.key = SDLK_P; break;
             case SDL_GAMEPAD_BUTTON_WEST:       fake.key = SDLK_T; break; // X=Chat
+            case SDL_GAMEPAD_BUTTON_NORTH:      // Y=Discord results, once the match is over
+                if (!ShowsMatchOverButtons()) return;
+                fake.key = SDLK_D;
+                break;
             default: return;
         }
         SDL_Event fakeEvent;
@@ -295,6 +310,18 @@ void BubbleGame::HandleInput(SDL_Event *e) {
                 case SDLK_T:
                     if (currentSettings.networkGame) StartInGameChat();
                     break;
+                case SDLK_D: {
+                    // Not when D is one of the player's own game keys.
+                    const PlayerKeys& k = GameSettings::Instance()->player1Keys;
+                    const SDL_Scancode sc = e->key.scancode;
+                    const bool bound = sc != SDL_SCANCODE_UNKNOWN &&
+                        (sc == k.left || sc == k.right || sc == k.fire || sc == k.center || sc == k.fireNext);
+                    if (!bound && ShowsMatchOverButtons() && HasDiscordInvite()) {
+                        PlaySFX("menu_selected");
+                        openDiscord();
+                    }
+                    break;
+                }
                 case SDLK_LEFT:
                 case SDLK_RIGHT:
                     if (continuePrompt) {
