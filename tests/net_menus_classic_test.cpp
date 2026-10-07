@@ -17,11 +17,11 @@
  */
 
 // The online screens -- the NET GAME list, the lobby, a game room with its
-// chat, and Set Teams -- draw the classic way in every menu style: the Modern
-// style (the default) used to give them their own cards and was reverted
-// (user decision), so each is drawn under Modern and under Classic here and
-// the two frames must match pixel for pixel. Also that Set Teams' Auto
-// buttons stay a keyboard row.
+// chat, and Set Teams -- and CONTROLS & SETTINGS draw the classic way in
+// every menu style: the Modern style (the default) used to give them their
+// own cards and was reverted (user decision), so each is drawn under Modern
+// and under Classic here and the two frames must match pixel for pixel.
+// Also that Set Teams' Auto buttons stay a keyboard row.
 //
 // Set FB_DUMP_DIR to a directory to also get the screens as PNGs.
 
@@ -82,6 +82,12 @@ struct MainMenuTestAccess {
         m.netMenuIndex = 0;
     }
     static void RenderNetList(MainMenu& m) { m.NetPanelConnectionScreensRender(); }
+    static void OpenSettings(MainMenu& m, int player, int row) {
+        m.showingKeysPanel = true;
+        m.keyConfigPlayer = player;
+        m.keyConfigIndex = row;
+    }
+    static void RenderSettings(MainMenu& m) { m.KeysPanelRender(); }
     static void Render(MainMenu& m) {
         m.NetPanelLobbyActionsRender();
         m.NetPanelChatDockRender();
@@ -184,6 +190,13 @@ int main() {
     NetworkClientTestAccess::PushChat(*nc, "snowfox", "glhf");
 
     const auto render = [](MainMenu& m) { MainMenuTestAccess::Render(m); };
+
+    // CONTROLS & SETTINGS, on a game row and on a player's key row.
+    for (int row : {kKeyRowMouse, kKeyRowFire}) {
+        ExpectClassic(row == kKeyRowMouse ? "settings" : "settings-keys",
+            [row](MainMenu& m) { MainMenuTestAccess::OpenSettings(m, 2, row); },
+            [](MainMenu& m) { MainMenuTestAccess::RenderSettings(m); });
+    }
 
     // The NET GAME list.
     ExpectClassic("netlist",

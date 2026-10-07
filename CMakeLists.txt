@@ -534,11 +534,6 @@ if(BUILD_TESTING AND NOT EMSCRIPTEN AND NOT ANDROID AND NOT IOS)
     target_link_libraries(net-menus-classic-test PRIVATE frozen-bubble-core-test)
     add_test(NAME net-menus-classic-test COMMAND net-menus-classic-test)
 
-    add_executable(settings-modern-test tests/settings_modern_test.cpp)
-    set_property(TARGET settings-modern-test PROPERTY CXX_STANDARD 17)
-    set_property(TARGET settings-modern-test PROPERTY CXX_EXTENSIONS OFF)
-    target_link_libraries(settings-modern-test PRIVATE frozen-bubble-core-test)
-    add_test(NAME settings-modern-test COMMAND settings-modern-test)
 
     add_executable(ttftext-cache-test
         tests/ttftext_cache_test.cpp

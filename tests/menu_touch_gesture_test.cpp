@@ -576,12 +576,9 @@ int main() {
     // "decrease" increased instead. This drives the real KeysPanelRender,
     // at the real current speedMultiplier, and checks where the boundary
     // menulist::List actually drew it landed -- not a hand-built stand-in.
-    // The classic panel: the Modern menu style (the default) draws its own
-    // (mainmenu_settingsmodern.cpp, see settings_modern_test.cpp), so this
-    // block picks Classic and puts the default back after.
+    // Every menu style draws this panel (net_menus_classic_test.cpp).
     {
         GameSettings* gs = GameSettings::Instance();
-        gs->SetValue("Menu:Theme", "");  // Modern -> Classic
         gs->speedMultiplier = 3.0f;  // pinned rather than trusting a local settings file
 
         std::unique_ptr<MainMenu> menu = MainMenuTestAccess::Create(renderer);
@@ -664,7 +661,6 @@ int main() {
             CHECK(SDL_PollEvent(&ev) && ev.type == SDL_EVENT_KEY_DOWN);
             CHECK(ev.key.key == SDLK_LEFT);
         }
-        gs->SetValue("Menu:Theme", "-1");  // back to Modern
     }
 
     // --- NetPanelLobbyActionsRender: "Create Game Room" is touch-adjustable

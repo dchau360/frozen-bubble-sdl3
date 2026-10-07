@@ -733,11 +733,9 @@ void MainMenu::KeysPanelRender() {
     if (!showingKeysPanel) return;
     if (showingHowTo) { HowToRender(); return; }
 
+    // Drawn the classic way in every menu style (user decision); the Modern
+    // style's own version (mainmenu_settingsmodern.cpp) was removed.
     BeginPanelTapRows(&keyConfigIndex);
-    if (GameSettings::Instance()->menuTheme() == MENU_THEME_MODERN) {
-        KeysPanelRenderModern();
-        return;
-    }
 
 #ifdef __ANDROID__
     const bool adsRemoved = AdsRemoved();
