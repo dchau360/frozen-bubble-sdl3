@@ -611,11 +611,6 @@ void MainMenu::NetPanelLobbyActionsRender() {
     // The lobby and the game room are one screen with two selection axes: the
     // action/room list, and the player column for the per-player grid rows.
     BeginPanelTapRows(&selectedActionIndex, &currentPlayerCol);
-    if (GameSettings::Instance()->menuTheme() == MENU_THEME_MODERN) {
-        if (netClient->GetCurrentGame()) NetPanelRoomRenderModern();
-        else NetPanelLobbyRenderModern();
-        return;
-    }
 
     // Card/panel drawing primitives shared by every box in this revamped
     // layout (header bar, match-rules panel, room cards, player sidebar,
@@ -1479,14 +1474,9 @@ void MainMenu::NetPanelChatDockRender(bool expanded) {
     // area, with the input row's focus box only shown while Chat is selected.
     // Grown upward while composing; the input row stays put at the bottom so
     // the caret does not move under the finger that just opened the keyboard.
-    // In the Modern menu style (room and lobby) the card, the input line and
-    // each message are drawn by NetChatDockModern/NetChatLineModern instead
-    // (mainmenu_roommodern.cpp); the message handling below is shared.
-    const bool modern = GameSettings::Instance()->menuTheme() == MENU_THEME_MODERN;
     const int dockTop = expanded ? 60 : 334;
     const int dockHeight = expanded ? 412 : 138;
-    if (modern) NetChatDockModern(expanded);
-    else {
+    {
         drawPanel({10, dockTop, 620, dockHeight}, menulist::kChatFill, panelEdge);
         drawLabel(expanded ? "CHAT  --  ENTER sends, ESC cancels" : "CHAT",
                   20, dockTop + 6, textGold);
@@ -1508,13 +1498,13 @@ void MainMenu::NetPanelChatDockRender(bool expanded) {
 
     // Display chat messages in the dock's message area.
     const int chatStatusX = 22;
-    const int chatStatusY = modern ? 378 : 426;
-    const int chatLineHeight = modern ? 22 : 16;
+    const int chatStatusY = 426;
+    const int chatLineHeight = 16;
     // Bottom line stays at chatStatusY either way, so the log grows upward into
     // the space the expanded dock just claimed. The cap keeps the topmost line
     // clear of the dock's own header.
     const int maxChatLines = expanded ? ((chatStatusY - (dockTop + 24)) / chatLineHeight) + 1
-                                      : (modern ? 4 : 5);
+                                      : 5;
     std::vector<ChatMessage> chatMsgs = netClient->GetChatMessages();
 
     // >5-cap rooms: every client (not just the host) applies !team:<nick>:<n>
@@ -1607,9 +1597,8 @@ void MainMenu::NetPanelChatDockRender(bool expanded) {
         }
 
         int yPos = chatStatusY - (maxChatLines - 1 - chatLine) * chatLineHeight;
-        if (modern) NetChatLineModern(cm, yPos);
-        else drawLabel(chatLineText, chatStatusX, yPos,
-                       cm.nick == "Server" ? textMuted : textMain);
+        drawLabel(chatLineText, chatStatusX, yPos,
+                  cm.nick == "Server" ? textMuted : textMain);
         chatLine++;
     }
 }
@@ -1913,11 +1902,6 @@ void MainMenu::ServerListPanelRender(bool isLAN) {
         }
     }
 #endif
-
-    if (GameSettings::Instance()->menuTheme() == MENU_THEME_MODERN) {
-        ServerListPanelRenderModern(isLAN);
-        return;
-    }
 
     // Same world-map backdrop the lobby/room screens use -- see
     // kMapFillAlpha below and menulist::DrawWorldMapBackdrop's own comment.
