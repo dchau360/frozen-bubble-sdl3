@@ -500,6 +500,19 @@ bool BubbleGame::ArcadeContinueApplies() const {
            !currentSettings.mpTraining;
 }
 
+bool BubbleGame::ContinueHasHighscores() const {
+    return worldscores::WebUrl()[0] != '\0';
+}
+
+void BubbleGame::OpenOnlineHighscores() {
+    // The furthest-level board, both inputs: the one a campaign run that has
+    // just ended is ranked on. The prompt stays up for when the player is back.
+    PlaySFX("menu_selected");
+    const std::string url = std::string(worldscores::WebUrl()) + "#level";
+    if (!openUrl(url.c_str()))
+        SDL_Log("Continue prompt: SDL_OpenURL failed: %s", SDL_GetError());
+}
+
 void BubbleGame::ResolveContinuePrompt(bool startOver) {
     continuePrompt = false;
     bubbleArrays[0].score = 0;

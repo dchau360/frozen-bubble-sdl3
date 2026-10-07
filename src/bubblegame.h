@@ -729,12 +729,20 @@ public:
     // on the game-over panel opens it instead of retrying straight away.
     // Drawn by DrawModernResultCard. Continue retries the level died on -- the score is already back to 0
     // (a new life) and the run clock keeps going; Start over goes back to
-    // level 1 as a new run, clock and all. LEFT/RIGHT/TAB move focus between
-    // the two buttons, ENTER / A / fire activates the focused one, a tap on
-    // either button picks it (HandleFinishedTap), ESC still leaves the game.
+    // level 1 as a new run, clock and all. Under them, when this build has a
+    // web board (worldscores::WebUrl), ONLINE HIGH SCORES opens it in the
+    // browser and leaves the prompt up. LEFT/RIGHT move between the top two,
+    // DOWN/UP to and from the one under them, TAB cycles all of them, ENTER
+    // / A / fire activates the focused one, a tap on any button picks it
+    // (HandleFinishedTap), ESC still leaves the game.
     bool continuePrompt = false;
-    bool continueFocusStartOver = false;
-    SDL_Rect continueBtnRect{}, startOverBtnRect{};
+    enum { kContinueFocusContinue, kContinueFocusStartOver, kContinueFocusHighscores };
+    int continueFocus = kContinueFocusContinue;
+    SDL_Rect continueBtnRect{}, startOverBtnRect{}, highscoresBtnRect{};
+    bool ContinueHasHighscores() const;
+    void OpenOnlineHighscores();
+    // SDL_OpenURL, swapped out by tests so they never start a browser.
+    bool (*openUrl)(const char*) = SDL_OpenURL;
     // False for a run played with the aim guide on: it reaches no highscore
     // table, local or online (SubmitScore, RecordWorldLife, MP training).
     // Skip shot does not affect this (user decision): it counts like any

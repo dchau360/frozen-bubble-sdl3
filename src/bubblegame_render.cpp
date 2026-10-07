@@ -521,17 +521,22 @@ void BubbleGame::DrawModernResultCard(SDL_Renderer *rend, BubbleArray &bArray) {
             card.buttons[0] = "CONTINUE";
             card.buttons[1] = "START OVER";
             card.buttonCount = 2;
-            card.focus = continueFocusStartOver ? 1 : 0;
+            if (ContinueHasHighscores()) {
+                card.buttons[2] = "ONLINE HIGH SCORES";
+                card.buttonCount = 3;
+            }
+            card.focus = continueFocus;
             card.note = "Score goes back to 0; the clock keeps running.";
         } else {
             card.note = "ENTER or tap to go on";
         }
     }
-    SDL_Rect btn[2];
+    SDL_Rect btn[3];
     modernui::DrawCard(rend, modernFonts, card, appear, btn);
     if (continuePrompt && !gameWon) {
         continueBtnRect = btn[0];
         startOverBtnRect = btn[1];
+        highscoresBtnRect = btn[2];
     }
 }
 
@@ -2311,7 +2316,7 @@ void BubbleGame::RenderPaused() {
         card.stats[2] = {"SHOTS", modernui::FormatNumber(runShots)};
         card.statCount = 3;
         card.note = "Press P or tap to resume";
-        SDL_Rect btn[2];
+        SDL_Rect btn[3];
         modernui::DrawCard(rend, modernFonts, card, (float)(SDL_GetTicks() - modernPauseStartMs) / 380.0f, btn);
     } else {
         SDL_Rect pauseRct = {SCREEN_CENTER_X - 95, SCREEN_CENTER_Y - 72, 190, 143};
