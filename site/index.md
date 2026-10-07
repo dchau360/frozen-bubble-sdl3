@@ -12,7 +12,7 @@ Android, and in the browser**.
 [Source](https://github.com/dchau360/frozen-bubble-sdl3) ·
 [Privacy policy](https://dchau360.github.io/frozen-bubble-sdl3/privacy/)
 
-![A 1-player game in the modern theme: score panel, shot count and time, and a 3 DROPPED! popup](screenshots/modern-gameplay.jpg)
+![A 1-player game: score panel, shot count and time, and a 3 DROPPED! popup](screenshots/modern-gameplay.jpg)
 
 ## Download
 
@@ -59,7 +59,7 @@ To play on an iPhone, use the browser build.
 
 ![The end of a two-player round: You Win! with the round's stats along the top](screenshots/two-player-win.jpg)
 
-![An online game room: match rules, players, bots and chat](screenshots/game-room-modern.jpg)
+![An online game room: match rules, players, bots and chat](screenshots/game-room.jpg)
 
 ![The post-round statistics table in a five-player game](screenshots/round-stats.png)
 

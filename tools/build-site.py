@@ -74,7 +74,7 @@ PAGES = [
 ASSETS = [
     *[(os.path.join(ROOT, "docs", "screenshots", name), os.path.join("screenshots", name))
       for name in ("modern-gameplay.jpg", "title-menu.jpg", "how-to-play.jpg",
-                   "two-player-win.jpg", "game-room-modern.jpg", "round-stats.png")],
+                   "two-player-win.jpg", "game-room.jpg", "round-stats.png")],
     # Google's official "Get it on Google Play" badge, served from here rather
     # than hotlinked so opening the page makes no request to Google.
     (os.path.join(SITE, "img", "google-play-badge.png"),

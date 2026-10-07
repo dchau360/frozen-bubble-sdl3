@@ -15,14 +15,18 @@
   dumps, so regenerate them from there rather than from device captures.
   Landscape is fine: Play only needs 2–8 images, 320–3840px a side, no
   more extreme than 2:1. Replaced 2026-10-05 (v2.4.141); the set before
-  that predated the modern theme and menus.
-  1. `gameplay`: a 1-player level in the modern theme, mid-drop.
+  that predated the modern theme and menus. `game-room` was retaken
+  2026-10-07 (v2.4.147), when the online screens went back to the classic
+  look in every menu style: rendered at 960×720 with sharp text by
+  `tests/net_menus_classic_test.cpp`'s room case (window 960×720, logical
+  presentation 640×480, `SetTextRenderScale(1.5f)`).
+  1. `gameplay`: a 1-player level, mid-drop.
   2. `how-to-play`: the How to play page (loaded, next and pocket bubbles).
   3. `two-player-win`: a 2-player round won, its stats above.
-  4. `game-room`: an online game room in the modern menu style.
+  4. `game-room`: an online game room, over the world map.
   5. `round-stats`: the post-round stats table with team totals.
   6. `level-cleared`: the level-cleared card with the time bonus.
-  7. `local-4player`: four players on one machine, original theme, each
+  7. `local-4player`: four players on one machine, each
      with a Swap pocket (re-captured 2026-10-06 from a piloted game).
   8. `title-menu`: the title screen.
 
