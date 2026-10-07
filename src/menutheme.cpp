@@ -93,10 +93,11 @@ const MenuThemeStyle kStyles[MENU_THEME_COUNT] = {
     // which the label steps right to make room for.
     {
         "/gfx/Baloo2-ExtraBold.ttf", 15, 14, 0, false,
-        C(219, 232, 251), C(255, 255, 255),
+        modernui::kFrost, C(255, 255, 255),
         C(0, 0, 0, 110), C(0, 0, 0, 130),
-        C(12, 24, 48, 235), C(12, 24, 48, 235), C(127, 214, 255, 72),
-        C(18, 36, 70, 245), C(18, 36, 70, 245), C(127, 214, 255, 255),
+        modernui::Alpha(modernui::kCardFill, 235), modernui::Alpha(modernui::kCardFill, 235),
+        modernui::Alpha(modernui::kIce, 72),
+        modernui::kCardRaised, modernui::kCardRaised, modernui::kIce,
         {}, {},
         true, 20
     },

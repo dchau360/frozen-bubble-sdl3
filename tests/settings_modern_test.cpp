@@ -24,6 +24,7 @@
 //
 // Set FB_DUMP_DIR to a directory to also get the screens as PNGs.
 
+#include "test_palette.h"
 #include "gamesettings.h"
 #include "mainmenu.h"
 #include "mainmenu_internal.h"
@@ -101,7 +102,7 @@ static bool IceAt(SDL_Surface* frame, int x0, int x1, int y) {
     for (int x = x0; x <= x1; ++x) {
         Uint8 r = 0, g = 0, b = 0, a = 0;
         SDL_ReadSurfacePixel(frame, x, y, &r, &g, &b, &a);
-        if (b > 200 && g > 160 && r > 90) return true;
+        if (IsAccent(r, g, b)) return true;
     }
     return false;
 }

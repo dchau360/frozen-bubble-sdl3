@@ -513,7 +513,7 @@ void MainMenu::NetChatDockModern(bool expanded) {
     if (!expanded) AddPanelTapRow(kRoomChat, input);
     const bool focused = expanded || selectedActionIndex == kRoomChat;
     FillRoundRect(rend, ToFRect(input), 18, {5, 10, 22, 180});
-    StrokeRoundRect(rend, ToFRect(input), 18, focused ? 2.f : 1.f, focused ? kIce : SDL_Color{127, 214, 255, 72});
+    StrokeRoundRect(rend, ToFRect(input), 18, focused ? 2.f : 1.f, focused ? kIce : Alpha(kIce, 72));
     const int cy = input.y + input.h / 2;
     const size_t len = strlen(networkChatInput);
     if (len == 0) {
@@ -594,8 +594,8 @@ void MainMenu::TeamsPanelRenderModern() {
         for (int b = 0; b < kMaxTeams; b++) {
             const SDL_Rect r = {x, cy - 15, b == 0 ? 66 : 40, 30};
             const bool f = teamsAutoFocus == b;
-            FillRoundRect(rend, ToFRect(r), 15, f ? kIce : SDL_Color{127, 214, 255, 26});
-            if (!f) StrokeRoundRect(rend, ToFRect(r), 15, 1.5f, SDL_Color{127, 214, 255, 110});
+            FillRoundRect(rend, ToFRect(r), 15, f ? kIce : Alpha(kIce, 26));
+            if (!f) StrokeRoundRect(rend, ToFRect(r), 15, 1.5f, Alpha(kIce, 110));
             DrawTextLine(rend, T.TakeTeam(T.small), labels[b], f ? kInk : kFrost, kNoShadow,
                          r.x + r.w / 2, cy, 1);
             teamAutoBalanceTaps.push_back({r, b == 0 ? kNoTeam : b + 1});
@@ -665,7 +665,7 @@ void MainMenu::TeamsPanelRenderModern() {
             const SDL_Color col = t == kNoTeam ? kLabel : kTeamColors[t - 1];
             const bool on = t == current;
             const SDL_FRect fb = ToFRect(b);
-            FillRoundRect(rend, fb, 8, on ? col : SDL_Color{127, 214, 255, 13});
+            FillRoundRect(rend, fb, 8, on ? col : Alpha(kIce, 13));
             if (on) StrokeRoundRect(rend, fb, 8, 2, kValue);
             else StrokeRoundRect(rend, fb, 8, 1.5f, {col.r, col.g, col.b, (Uint8)(editable ? 140 : 50)});
             DrawTextLine(rend, T.TakeTeam(T.small), t == kNoTeam ? "-" : std::to_string(t).c_str(),

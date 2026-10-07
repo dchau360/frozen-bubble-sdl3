@@ -130,7 +130,7 @@ int DrawTextLine(SDL_Renderer* rend, TTFText& t, const char* s, SDL_Color fg, SD
 
 void DrawSwitch(SDL_Renderer* rend, int x, int cy, bool on) {
     FillRoundRect(rend, {(float)x, (float)cy - 8, 30, 16}, 8,
-                  on ? SDL_Color{95, 224, 160, 255} : SDL_Color{58, 75, 108, 255});
+                  on ? SDL_Color{95, 224, 160, 255} : kSwitchOff);
     FillRoundRect(rend, {(float)(on ? x + 16 : x + 2), (float)cy - 6, 12, 12}, 6, kValue);
 }
 
@@ -147,8 +147,8 @@ int DrawChip(SDL_Renderer* rend, TTFText& t, const char* s, int x, int cy, SDL_C
 void DrawPill(SDL_Renderer* rend, TTFText& t, const char* s, SDL_Rect r, bool primary, bool focused) {
     const SDL_FRect f = {(float)r.x, (float)r.y, (float)r.w, (float)r.h};
     const float rad = f.h / 2;
-    FillRoundRect(rend, f, rad, primary ? kIce : SDL_Color{127, 214, 255, 26});
-    if (!primary) StrokeRoundRect(rend, f, rad, 1, SDL_Color{127, 214, 255, 72});
+    FillRoundRect(rend, f, rad, primary ? kIce : Alpha(kIce, 26));
+    if (!primary) StrokeRoundRect(rend, f, rad, 1, Alpha(kIce, 72));
     if (focused) StrokeRoundRect(rend, {f.x - 3, f.y - 3, f.w + 6, f.h + 6}, rad + 3, 2, kValue);
     DrawTextLine(rend, t, s, primary ? kInk : kFrost, kNoShadow, r.x + r.w / 2, r.y + r.h / 2, 1);
 }
@@ -156,8 +156,8 @@ void DrawPill(SDL_Renderer* rend, TTFText& t, const char* s, SDL_Rect r, bool pr
 void DrawCard(SDL_Renderer* rend, SDL_Rect r, float radius) {
     const SDL_FRect f = {(float)r.x, (float)r.y, (float)r.w, (float)r.h};
     FillRoundRect(rend, {f.x, f.y + 4, f.w, f.h}, radius, {0, 0, 0, 77});
-    FillRoundRect(rend, f, radius, {12, 24, 48, 235});
-    StrokeRoundRect(rend, f, radius, 1.5f, {127, 214, 255, 72});
+    FillRoundRect(rend, f, radius, Alpha(kCardFill, 235));
+    StrokeRoundRect(rend, f, radius, 1.5f, Alpha(kIce, 72));
 }
 
 std::string FormatTime(Uint64 ms) {
@@ -188,9 +188,9 @@ void Fonts::Load() {
     for (TTFText& t : button) t.LoadFont(display.c_str(), 16);
     note.LoadFont(body.c_str(), 12);
     popup.LoadFont(display.c_str(), 20);
-    popup.UpdateRing({6, 20, 40, 230}, 2);
+    popup.UpdateRing(kRing, 2);
     dropped.LoadFont(display.c_str(), 30);
-    dropped.UpdateRing({6, 20, 40, 230}, 2);
+    dropped.UpdateRing(kRing, 2);
 }
 
 void DrawHud(SDL_Renderer* rend, Fonts& f, const std::string& level, int score, int shots, Uint64 timeMs) {
@@ -224,7 +224,7 @@ void DrawCard(SDL_Renderer* rend, Fonts& f, const Card& card, float appear, SDL_
     const Uint8 alpha = (Uint8)(255 * std::min(1.f, appear * 1.6f));
 
     SDL_SetRenderDrawBlendMode(rend, SDL_BLENDMODE_BLEND);
-    SDL_SetRenderDrawColor(rend, 3, 8, 20, (Uint8)(110 * ease));
+    SDL_SetRenderDrawColor(rend, kDim.r, kDim.g, kDim.b, (Uint8)(110 * ease));
     SDL_FRect dim = {0, 0, 640, 480};
     SDL_RenderFillRect(rend, &dim);
 
@@ -270,7 +270,7 @@ void DrawCard(SDL_Renderer* rend, Fonts& f, const Card& card, float appear, SDL_
     for (int i = 0; i < card.buttonCount; ++i) {
         const SDL_FRect b = {320 - total / 2 + i * (bw + gap), cursor + 2, bw, 36};
         const bool on = i == card.focus;
-        FillRoundRect(rend, b, 18, WithAlpha(on ? kIce : SDL_Color{127, 214, 255, 30}, k));
+        FillRoundRect(rend, b, 18, WithAlpha(on ? kIce : Alpha(kIce, 30), k));
         StrokeRoundRect(rend, b, 18, on ? 2.f : 1.5f, WithAlpha(on ? SDL_Color{255, 255, 255, 220} : kEdge, k));
         SetText(rend, f.button[i], card.buttons[i], on ? kInk : kValue);
         Blit(rend, f.button[i], (int)(b.x + b.w / 2 - f.button[i].Coords()->w / 2.f),
@@ -282,7 +282,7 @@ void DrawCard(SDL_Renderer* rend, Fonts& f, const Card& card, float appear, SDL_
 void DrawPauseButton(SDL_Renderer* rend, SDL_Rect r, bool paused) {
     const SDL_FRect box = {(float)r.x, (float)r.y, (float)r.w, (float)r.h};
     const float radius = box.w / 2;
-    FillRoundRect(rend, box, radius, {12, 24, 48, 200});
+    FillRoundRect(rend, box, radius, Alpha(kCardFill, 200));
     StrokeRoundRect(rend, box, radius, 2, kEdge);
     const float cx = box.x + box.w / 2, cy = box.y + box.h / 2;
     SDL_SetRenderDrawBlendMode(rend, SDL_BLENDMODE_BLEND);
@@ -321,9 +321,9 @@ void DrawPocketWell(SDL_Renderer* rend, TTFText& tag, SDL_FRect r, SDL_Texture* 
     // slot reads as a place even while it is empty.
     SDL_SetRenderDrawBlendMode(rend, SDL_BLENDMODE_BLEND);
     FillRoundRect(rend, {well.x, well.y + 2, well.w, well.h}, rad, {0, 0, 0, 90});
-    FillRoundRect(rend, well, rad, {10, 22, 44, 225});
-    FillRoundRect(rend, {well.x + 3, well.y + 3, well.w - 6, well.h - 6}, rad - 3, {22, 44, 78, 200});
-    FillRoundRect(rend, {well.x + 3, well.y + 2, well.w - 6, well.h - 9}, rad - 4, {6, 14, 30, 210});
+    FillRoundRect(rend, well, rad, kWellOuter);
+    FillRoundRect(rend, {well.x + 3, well.y + 3, well.w - 6, well.h - 6}, rad - 3, kWellRim);
+    FillRoundRect(rend, {well.x + 3, well.y + 2, well.w - 6, well.h - 9}, rad - 4, kWellDeep);
     if (bubble) SDL_RenderTexture(rend, bubble, nullptr, &r);
     StrokeRoundRect(rend, well, rad, 2, {kIce.r, kIce.g, kIce.b, (Uint8)(lit ? 255 : 160)});
 
@@ -334,7 +334,7 @@ void DrawPocketWell(SDL_Renderer* rend, TTFText& tag, SDL_FRect r, SDL_Texture* 
     if (SDL_Texture* tex = tag.Texture()) {
         const SDL_Rect* c = tag.Coords();
         const SDL_FRect t = {cx - c->w / 2.f - 5, well.y - c->h / 2.f - 2, c->w + 10.f, (float)c->h + 2};
-        FillRoundRect(rend, t, t.h / 2, lit ? kIce : SDL_Color{127, 214, 255, 210});
+        FillRoundRect(rend, t, t.h / 2, lit ? kIce : Alpha(kIce, 210));
         tag.UpdatePosition({(int)(cx - c->w / 2.f), (int)(t.y + 1)});
         SDL_FRect fr = ToFRect(*tag.Coords());
         SDL_RenderTexture(rend, tex, nullptr, &fr);

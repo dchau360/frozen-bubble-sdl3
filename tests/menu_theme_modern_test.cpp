@@ -9,6 +9,7 @@
 #include <SDL3_image/SDL_image.h>
 #include <SDL3_ttf/SDL_ttf.h>
 
+#include "test_palette.h"
 #include "gamesettings.h"
 #include "menubutton.h"
 #include "menutheme.h"
@@ -94,12 +95,13 @@ int main() {
     SDL_Surface* frame = SDL_RenderReadPixels(renderer, nullptr);
     CHECK(frame != nullptr);
     if (frame) {
-        // The left edge of a card, halfway down: ice blue on the selected
-        // row (y = 14 + 56 + 23), only a faint line on the one above it.
+        // The left edge of a card, halfway down: the accent (ice blue, or
+        // caramel in Boba Buster) on the selected row (y = 14 + 56 + 23), only
+        // a faint line on the one above it.
         const SDL_Color selected = Pixel(frame, 92, 93);
         const SDL_Color idle = Pixel(frame, 92, 37);
-        CHECK(selected.b > 200 && selected.g > 160);
-        CHECK(idle.b < selected.b - 40);
+        CHECK(IsAccent(selected.r, selected.g, selected.b));
+        CHECK(!IsAccent(idle.r, idle.g, idle.b));
 
         if (const char* dump = SDL_getenv("FB_DUMP_DIR"))
             IMG_SavePNG(frame, (std::string(dump) + "/title-modern.png").c_str());
