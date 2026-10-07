@@ -23,6 +23,7 @@
 //
 // Set FB_DUMP_DIR to a directory to also get the menu as PNGs.
 
+#include "test_palette.h"
 #include "gamesettings.h"
 #include "mainmenu.h"
 #include "menutheme.h"
@@ -87,7 +88,7 @@ static bool EdgeIsIce(SDL_Renderer* rend, MainMenu& menu, int y, const char* dum
     for (int x = 166; x <= 168; ++x) {
         Uint8 r = 0, g = 0, b = 0, a = 0;
         SDL_ReadSurfacePixel(frame, x, y, &r, &g, &b, &a);
-        ice = ice || (b > 200 && g > 160 && r > 90);
+        ice = ice || IsAccent(r, g, b);
     }
     if (const char* dump = SDL_getenv("FB_DUMP_DIR"))
         IMG_SavePNG(frame, (std::string(dump) + "/" + dumpName + ".png").c_str());

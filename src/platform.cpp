@@ -18,6 +18,7 @@
  */
 
 #include "platform.h"
+#include "brand.h"
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_dialog.h>
 #include <cstdlib>
@@ -121,7 +122,7 @@ void InitDataDir() {
                 return;
             }
             // Not a bundle: an installed build sits at <prefix>/bin, with assets
-            // at <prefix>/share/frozen-bubble (see install(DIRECTORY …) in
+            // at <prefix>/share/frozen-bubble, or boba-buster (see install(DIRECTORY …) in
             // CMakeLists.txt). Without this, macOS fell through to the compiled-in
             // DATA_DIR, which points at the *build machine's* source tree — so an
             // installed copy resolved assets to a path that does not exist on any
@@ -129,7 +130,7 @@ void InitDataDir() {
             // recover a prefix this way; macOS was the gap.
             size_t bin = b.rfind("/bin/");
             if (bin != std::string::npos) {
-                std::string candidate = b.substr(0, bin) + "/share/frozen-bubble";
+                std::string candidate = b.substr(0, bin) + kBrandShareDir;
                 struct stat st;
                 if (stat(candidate.c_str(), &st) == 0 && S_ISDIR(st.st_mode)) {
                     g_dataDir = candidate;
@@ -149,7 +150,7 @@ void InitDataDir() {
         // Strip "bin/frozen-bubble-sdl3" → get prefix, append share path
         size_t bin = dir.rfind("/bin/");
         if (bin != std::string::npos) {
-            g_dataDir = dir.substr(0, bin) + "/share/frozen-bubble";
+            g_dataDir = dir.substr(0, bin) + kBrandShareDir;
             return;
         }
     }
@@ -580,7 +581,7 @@ SDL_Window *ReplayDialogWindow(SDL_Renderer *renderer) {
 }
 
 const SDL_DialogFileFilter kReplayFileFilters[] = {
-    {"Frozen Bubble replay", "fbr"},
+    {kBrandReplayFilterName, "fbr"},
 };
 } // namespace
 
@@ -981,7 +982,7 @@ SDL_Window *ReplayDialogWindow(SDL_Renderer *renderer) {
 }
 
 const SDL_DialogFileFilter kReplayFileFilters[] = {
-    {"Frozen Bubble replay", "fbr"},
+    {kBrandReplayFilterName, "fbr"},
 };
 } // namespace
 

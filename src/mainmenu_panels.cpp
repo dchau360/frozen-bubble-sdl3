@@ -594,7 +594,7 @@ void MainMenu::LocalMPPanelRender() {
         bool isBot = pi >= localMPPlayerCount - botCount;
         SDL_Rect rowRect = {sb.x + 10, sy, sb.w - 20, 26};
         SDL_SetRenderDrawBlendMode(rend, SDL_BLENDMODE_BLEND);
-        SDL_SetRenderDrawColor(rend, 10, 38, 48, isBot ? 90 : 170);
+        menulist::SetDrawColor(rend, menulist::kDeepFill, isBot ? 90 : 170);
         { SDL_FRect fr = ToFRect(rowRect); SDL_RenderFillRect(rend, &fr); }
 
         char pname[8];
@@ -644,7 +644,7 @@ void MainMenu::LocalMPPanelRender() {
 void MainMenu::DrawYesNoButtons(SDL_Renderer* rend, const SDL_Rect& yes, const SDL_Rect& no) {
     auto drawButton = [&](const SDL_Rect& r, const char* label, bool gold) {
         SDL_SetRenderDrawBlendMode(rend, SDL_BLENDMODE_BLEND);
-        SDL_SetRenderDrawColor(rend, 10, 38, 48, 210);
+        menulist::SetDrawColor(rend, menulist::kDeepFill, 210);
         { SDL_FRect fr = ToFRect(r); SDL_RenderFillRect(rend, &fr); }
         SDL_Color edge = gold ? menulist::kGold : menulist::kMuted;
         SDL_SetRenderDrawColor(rend, edge.r, edge.g, edge.b, 255);
@@ -875,7 +875,7 @@ void MainMenu::KeysPanelRender() {
             { SDL_FRect fr = ToFRect(rowRect); SDL_RenderRect(rend, &fr); }
         } else {
             SDL_SetRenderDrawBlendMode(rend, SDL_BLENDMODE_BLEND);
-            SDL_SetRenderDrawColor(rend, 10, 38, 48, isCurrent ? 170 : 90);
+            menulist::SetDrawColor(rend, menulist::kDeepFill, isCurrent ? 170 : 90);
             { SDL_FRect fr = ToFRect(rowRect); SDL_RenderFillRect(rend, &fr); }
         }
         char label[16];

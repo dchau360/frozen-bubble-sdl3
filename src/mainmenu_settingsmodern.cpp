@@ -173,7 +173,7 @@ void MainMenu::KeysPanelRenderModern() {
             int w = 0;
             if (T.value) TTF_GetStringSize(T.value, name.c_str(), 0, &w, nullptr);
             const SDL_FRect cap = {(float)(r.x + r.w - 32 - w), (float)(cy - 11), (float)(w + 20), 22};
-            FillRoundRect(rend, cap, 6, {127, 214, 255, 20});
+            FillRoundRect(rend, cap, 6, Alpha(kIce, 20));
             StrokeRoundRect(rend, cap, 6, 1, kEdge);
             DrawTextLine(rend, T.Take(T.value), name.c_str(), kValue, kNoShadow, r.x + r.w - 22, cy, 2);
         }

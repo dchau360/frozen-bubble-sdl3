@@ -85,7 +85,7 @@ void MainMenu::SPNamePromptRender() {
     SDL_RenderFillRect(rend, nullptr);
 
     const SDL_Rect box = {110, 120, 420, 220};
-    SDL_SetRenderDrawColor(rend, 17, 26, 45, 245);
+    menulist::SetDrawColor(rend, menulist::kDialogFill, 245);
     SDL_FRect fbox = ToFRect(box);
     SDL_RenderFillRect(rend, &fbox);
     SDL_SetRenderDrawColor(rend, menulist::kGold.r, menulist::kGold.g, menulist::kGold.b, 255);
@@ -114,7 +114,7 @@ void MainMenu::SPNamePromptRender() {
         const bool sel = i == spNameFocus;
         // A Save with nothing typed would do nothing, so it is drawn dimmed.
         const bool dead = i == kSave && spNameInput[0] == '\0';
-        SDL_SetRenderDrawColor(rend, sel ? 94 : 35, 69, 76, 255);
+        menulist::SetDrawColor(rend, sel ? menulist::kButtonFocus : menulist::kButtonFill, 255);
         SDL_FRect fr = ToFRect(r);
         SDL_RenderFillRect(rend, &fr);
         if (sel) {

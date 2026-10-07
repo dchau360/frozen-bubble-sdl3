@@ -541,7 +541,7 @@ void BubbleGame::RenderContinuePrompt(SDL_Renderer *rend) {
     continueBtnRect = {box.x + 16, box.y + box.h - 38, 136, 28};
     startOverBtnRect = {box.x + box.w - 16 - 136, box.y + box.h - 38, 136, 28};
     auto button = [&](const SDL_Rect& r, const char* label, bool focused) {
-        SDL_SetRenderDrawColor(rend, 10, 38, 48, 220);
+        menulist::SetDrawColor(rend, menulist::kDeepFill, 220);
         { SDL_FRect fr = ToFRect(r); SDL_RenderFillRect(rend, &fr); }
         const SDL_Color edge = focused ? menulist::kGold : menulist::kMuted;
         SDL_SetRenderDrawColor(rend, edge.r, edge.g, edge.b, 255);

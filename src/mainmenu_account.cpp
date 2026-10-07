@@ -73,7 +73,7 @@ void MainMenu::CloseAccountPanel() {
 
 void MainMenu::AccountPanelRender() {
     auto* rend = const_cast<SDL_Renderer*>(renderer);
-    SDL_SetRenderDrawColor(rend, 17, 26, 45, 255);
+    menulist::SetDrawColor(rend, menulist::kDialogFill, 255);
     SDL_RenderClear(rend);
     auto text = [&](const std::string& label, int x, int y, SDL_Color color = menulist::kText,
                     int size = 13) {
@@ -160,7 +160,7 @@ void MainMenu::AccountPanelRender() {
         for (int i = 0; i < count; ++i) {
             SDL_Rect r = {18 + i * (w + kGap), 396, w, 26};
             const bool sel = i == accountSelection;
-            SDL_SetRenderDrawColor(rend, sel ? 94 : 35, 69, 76, 255);
+            menulist::SetDrawColor(rend, sel ? menulist::kButtonFocus : menulist::kButtonFill, 255);
             auto fr = ToFRect(r);
             SDL_RenderFillRect(rend, &fr);
             panelText.UpdateStyle(13, TTF_STYLE_NORMAL);

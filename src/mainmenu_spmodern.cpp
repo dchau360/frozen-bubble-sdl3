@@ -106,8 +106,8 @@ void MainMenu::SPPanelRenderModern() {
 
     const SDL_FRect card = ToFRect(kCard);
     FillRoundRect(rend, {card.x, card.y + 4, card.w, card.h}, 18, {0, 0, 0, 77});
-    FillRoundRect(rend, card, 18, {12, 24, 48, 242});
-    StrokeRoundRect(rend, {card.x + 1, card.y + 1, card.w - 2, card.h - 2}, 17, 2, {127, 214, 255, 128});
+    FillRoundRect(rend, card, 18, Alpha(kCardFill, 242));
+    StrokeRoundRect(rend, {card.x + 1, card.y + 1, card.w - 2, card.h - 2}, 17, 2, Alpha(kIce, 128));
     DrawTextLine(rend, s.titleText, "1 PLAYER", kValue, kTextShadow, kCard.x + 20, kCard.y + 26);
     DrawTextLine(rend, s.back, "ESC  BACK", kLabel, kNoShadow, kCard.x + kCard.w - 20, kCard.y + 26, 2);
 

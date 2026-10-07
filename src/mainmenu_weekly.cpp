@@ -35,7 +35,7 @@ void MainMenu::WeeklyPanelRender() {
     auto* net = NetworkClient::Instance();
     if (!net->IsConnected()) { showingWeekly = false; return; }
     auto* rend = const_cast<SDL_Renderer*>(renderer);
-    SDL_SetRenderDrawColor(rend, 17, 26, 45, 255);
+    menulist::SetDrawColor(rend, menulist::kDialogFill, 255);
     SDL_RenderClear(rend);
     panelText.UpdateStyle(13, TTF_STYLE_NORMAL);
     auto text = [&](const std::string& label, int x, int y, SDL_Color color = menulist::kText) {
@@ -79,7 +79,7 @@ void MainMenu::WeeklyPanelRender() {
                                 {"Bubbles popped", &b.popped}};
         for (int c = 0; c < 3; ++c) {
             const int x = 18 + c * 208, w = 196;
-            SDL_SetRenderDrawColor(rend, 31, 47, 70, 255);
+            menulist::SetDrawColor(rend, menulist::kRowStripe, 255);
             SDL_FRect box{(float)x - 6, 68.f, (float)w, 272.f};
             SDL_RenderFillRect(rend, &box);
             text(cols[c].title, x, 72, menulist::kGold);
@@ -116,7 +116,7 @@ void MainMenu::WeeklyPanelRender() {
     for (int i = 0; i < kWeeklyButtonCount; ++i) {
         SDL_Rect r = {18 + i * 153, 396, 146, 26};
         const bool sel = i == weeklySelection;
-        SDL_SetRenderDrawColor(rend, sel ? 94 : 35, 69, 76, 255);
+        menulist::SetDrawColor(rend, sel ? menulist::kButtonFocus : menulist::kButtonFill, 255);
         auto fr = ToFRect(r);
         SDL_RenderFillRect(rend, &fr);
         text(kLabels[i], r.x + 7, r.y + 3, sel ? menulist::kGold : menulist::kText);

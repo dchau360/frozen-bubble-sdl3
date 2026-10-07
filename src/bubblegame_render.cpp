@@ -21,6 +21,7 @@
 #include "bubblegame.h"
 #include "audiomixer.h"
 #include "highscoremanager.h"
+#include "menulist.h"
 #include "transitionmanager.h"
 #include "gamesettings.h"
 #include "platform.h"
@@ -1211,7 +1212,7 @@ void BubbleGame::DrawRoundStats(SDL_Renderer *rend) {
         }
         case RoundStatsOpKind::BracketBtn: {
             SDL_SetRenderDrawBlendMode(rend, SDL_BLENDMODE_BLEND);
-            SDL_SetRenderDrawColor(rend, 255, 218, 92, 200);
+            menulist::SetDrawColor(rend, menulist::kSelEdge, 200);
             { SDL_FRect fr = ToFRect(op.rect); SDL_RenderRect(rend, &fr); }
             SDL_SetRenderDrawBlendMode(rend, SDL_BLENDMODE_NONE);
             break;

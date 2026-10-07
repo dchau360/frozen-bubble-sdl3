@@ -55,7 +55,7 @@ void MainMenu::TournamentPanelRender() {
     auto* net = NetworkClient::Instance();
     if (!net->IsConnected()) { showingTournament = false; return; }
     auto* rend = const_cast<SDL_Renderer*>(renderer);
-    SDL_SetRenderDrawColor(rend, 17, 26, 45, 255);
+    menulist::SetDrawColor(rend, menulist::kDialogFill, 255);
     SDL_RenderClear(rend);
     panelText.UpdateStyle(13, TTF_STYLE_NORMAL);
     auto text = [&](const std::string& label, int x, int y, SDL_Color color = menulist::kText) {
@@ -118,10 +118,10 @@ void MainMenu::TournamentPanelRender() {
         } else {
             auto card = [&](const TournamentMatch& m, int x, int y, int w) {
                 const bool mine = s->self && (m.a == s->self || m.b == s->self);
-                SDL_SetRenderDrawColor(rend, mine ? 75 : 31, mine ? 60 : 47, 70, 255);
+                menulist::SetDrawColor(rend, mine ? menulist::kRowMine : menulist::kRowStripe, 255);
                 SDL_FRect r{static_cast<float>(x), static_cast<float>(y), static_cast<float>(w), 61};
                 SDL_RenderFillRect(rend, &r);
-                SDL_SetRenderDrawColor(rend, mine ? 255 : 83, mine ? 218 : 117, 92, 255);
+                menulist::SetDrawColor(rend, mine ? menulist::kGold : menulist::kRowRim, 255);
                 SDL_RenderRect(rend, &r);
                 text(s->Name(m.a) + " " + std::to_string(m.winsA) + " : " + std::to_string(m.winsB) + " " + s->Name(m.b), x + 7, y + 5, mine ? menulist::kGold : menulist::kText);
                 text("#" + std::to_string(m.id) + " · " + m.state, x + 7, y + 29, menulist::kMuted);
@@ -144,7 +144,7 @@ void MainMenu::TournamentPanelRender() {
                         const int y = 108 + (row++ * 2 + 1) * 264 / (count * 2) - 30;
                         card(m, 12 + stage * 207, y, 198);
                         if (stage < numStages - 1) {
-                            SDL_SetRenderDrawColor(rend, 83, 117, 140, 255);
+                            menulist::SetDrawColor(rend, menulist::kRowEdge, 255);
                             SDL_RenderLine(rend, 210 + stage * 207, y + 30, 219 + stage * 207, y + 30);
                         }
                     }
@@ -172,7 +172,7 @@ void MainMenu::TournamentPanelRender() {
         tournamentButtons = TournamentActions(s, net->tournaments.ActiveId() && net->tournaments.ActiveId() != s->id);
     }
     if (tournamentConfirm) {
-        SDL_SetRenderDrawColor(rend, 17, 26, 45, 255);
+        menulist::SetDrawColor(rend, menulist::kDialogFill, 255);
         SDL_FRect overlay{8, 90, 624, 354}; SDL_RenderFillRect(rend, &overlay);
         text("Withdraw from this tournament?", 100, 180, menulist::kGold);
         text("An active match will be forfeited.", 100, 214);
@@ -184,7 +184,7 @@ void MainMenu::TournamentPanelRender() {
         SDL_Rect r;
         if (!s && !tournamentConfirm) r = {18, 87 + static_cast<int>(i) * 30, 604, 27};
         else r = {18 + static_cast<int>(i % 4) * 153, 396 + static_cast<int>(i / 4) * 29, 146, 26};
-        SDL_SetRenderDrawColor(rend, i == static_cast<size_t>(tournamentSelection) ? 94 : 35, 69, 76, 255);
+        menulist::SetDrawColor(rend, i == static_cast<size_t>(tournamentSelection) ? menulist::kButtonFocus : menulist::kButtonFill, 255);
         auto fr = ToFRect(r); SDL_RenderFillRect(rend, &fr);
         text(tournamentButtons[i].label, r.x + 7, r.y + 3, i == static_cast<size_t>(tournamentSelection) ? menulist::kGold : menulist::kText);
         AddPanelTapRow(static_cast<int>(i), r);

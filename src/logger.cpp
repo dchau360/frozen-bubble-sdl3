@@ -18,6 +18,7 @@
  */
 
 #include "logger.h"
+#include "brand.h"
 #include <string.h>
 #include <sys/stat.h>
 
@@ -107,7 +108,7 @@ bool Logger::Initialize(const char* logFilePath) {
 
     fprintf(logFile, "\n");
     fprintf(logFile, "========================================\n");
-    fprintf(logFile, "Frozen Bubble Session Started: %s\n", timestamp);
+    fprintf(logFile, "%s Session Started: %s\n", kBrandName, timestamp);
     fprintf(logFile, "========================================\n");
     fflush(logFile);
 
@@ -144,7 +145,7 @@ void Logger::Shutdown() {
         strftime(timestamp, sizeof(timestamp), "%Y-%m-%d %H:%M:%S", timeinfo);
 
         fprintf(logFile, "========================================\n");
-        fprintf(logFile, "Frozen Bubble Session Ended: %s\n", timestamp);
+        fprintf(logFile, "%s Session Ended: %s\n", kBrandName, timestamp);
         fprintf(logFile, "========================================\n\n");
         fflush(logFile);
 

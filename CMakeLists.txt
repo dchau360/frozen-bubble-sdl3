@@ -46,6 +46,51 @@ if (("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU") OR ("${CMAKE_CXX_COMPILER_ID}" MA
     add_compile_options(-Wall -Wextra -pedantic -Wno-pointer-arith)
 endif()
 
+# Which game to build. One engine ships as two games: Frozen Bubble (the
+# default, all of its art in share/) and Boba Buster, whose art is not in this
+# repository -- it lives in a separate private repo (boba-buster-assets) under
+# its own license, laid over share/ at build time. FB_BRAND_ASSETS points at a
+# checkout of it; its share/ mirrors this repo's share/, and any file there
+# replaces the one here with the same path, everything else falling through to
+# Frozen Bubble's. src/brand.h holds the names. See "Brands" in CLAUDE.md.
+set(FB_BRAND "frozenbubble" CACHE STRING "Game to build: frozenbubble or boba")
+set_property(CACHE FB_BRAND PROPERTY STRINGS frozenbubble boba)
+set(FB_BRAND_ASSETS "" CACHE PATH
+    "Checkout of the brand's art repo, whose share/ is laid over share/")
+if(NOT FB_BRAND STREQUAL "frozenbubble" AND NOT FB_BRAND STREQUAL "boba")
+    message(FATAL_ERROR "FB_BRAND must be frozenbubble or boba, not '${FB_BRAND}'")
+endif()
+if(FB_BRAND STREQUAL "boba")
+    add_compile_definitions(FB_BRAND_BOBA)
+endif()
+message(STATUS "Brand: ${FB_BRAND}")
+
+set(FB_BRAND_OVERLAY "")
+if(FB_BRAND_ASSETS)
+    if(NOT IS_DIRECTORY "${FB_BRAND_ASSETS}/share")
+        message(FATAL_ERROR "FB_BRAND_ASSETS has no share/ directory: ${FB_BRAND_ASSETS}")
+    endif()
+    set(FB_BRAND_OVERLAY "${FB_BRAND_ASSETS}/share")
+elseif(FB_BRAND STREQUAL "boba")
+    # Lets anyone without the private art build and test the Boba code paths;
+    # never ship this.
+    message(WARNING "FB_BRAND=boba without FB_BRAND_ASSETS: building Boba Buster "
+                    "with Frozen Bubble's art")
+endif()
+
+# Where the game finds its assets. With an overlay that is a merged copy in the
+# build tree (staged by the fb-brand-assets target below), so every consumer of
+# ASSET_PATH -- DATA_DIR, the WASM preload, the iOS bundle copy, install() and
+# the tests -- picks up the brand's art without knowing it exists.
+if(NOT DEFINED ASSET_PATH)
+    if(FB_BRAND_OVERLAY)
+        set(ASSET_PATH ${CMAKE_BINARY_DIR}/brand-share)
+    else()
+        set(ASSET_PATH ${CMAKE_SOURCE_DIR}/share)
+    endif()
+endif()
+message("Asset path is: ${ASSET_PATH}")
+
 if(IOS)
     # No system SDL exists for iOS, and a find_package() here would happily match
     # the host's macOS Homebrew build. Compile it from the pinned submodules.
@@ -87,6 +132,14 @@ endif()
 set(RES_FILES "")
 if(WIN32 OR MINGW)
     set(RES_FILES share/icons/fb.rc)
+    # A brand with its own icon gets an .rc pointing at it; windres resolves
+    # the source fb.rc's relative path beside it, which is always ours.
+    if(FB_BRAND_OVERLAY AND EXISTS "${FB_BRAND_OVERLAY}/icons/frozen-bubble.ico")
+        file(TO_CMAKE_PATH "${FB_BRAND_OVERLAY}/icons/frozen-bubble.ico" FB_BRAND_ICO)
+        file(WRITE "${CMAKE_BINARY_DIR}/fb-brand.rc"
+             "IDI_ICON1 ICON DISCARDABLE \"${FB_BRAND_ICO}\"\n")
+        set(RES_FILES "${CMAKE_BINARY_DIR}/fb-brand.rc")
+    endif()
     set(CMAKE_RC_COMPILER_INIT windres)
     ENABLE_LANGUAGE(RC)
 endif()
@@ -116,6 +169,11 @@ add_executable(frozen-bubble-sdl3
 )
 
 set_property(TARGET frozen-bubble-sdl3 PROPERTY CXX_STANDARD 17)
+# Boba Buster's desktop executable carries its own name. iOS names its binary
+# below, and the web build keeps its file name for the page shell.
+if(FB_BRAND STREQUAL "boba" AND NOT IOS AND NOT EMSCRIPTEN)
+    set_target_properties(frozen-bubble-sdl3 PROPERTIES OUTPUT_NAME boba-buster)
+endif()
 set_property(TARGET frozen-bubble-sdl3 PROPERTY CXX_EXTENSIONS OFF)
 
 if(EMSCRIPTEN)
@@ -145,17 +203,25 @@ if(EMSCRIPTEN)
         "SHELL:-sSDL3_IMAGE_FORMATS=['png','gif']"
         "SHELL:-sSDL3_MIXER_FORMATS=['ogg']"
         "SHELL:--pre-js ${CMAKE_SOURCE_DIR}/web/persistence.js"
-        "SHELL:--preload-file ${CMAKE_SOURCE_DIR}/share@/share"
+        "SHELL:--preload-file ${ASSET_PATH}@/share"
         "SHELL:-sEXPORTED_RUNTIME_METHODS=['cwrap','ccall','setValue','getValue','UTF8ToString','stringToUTF8','FS']"
         "SHELL:--shell-file ${CMAKE_SOURCE_DIR}/web/shell.html"
     )
 endif()
 
-if(NOT DEFINED ASSET_PATH)
-    set(ASSET_PATH ${CMAKE_SOURCE_DIR}/share)
+if(FB_BRAND_OVERLAY)
+    # Re-run every build, so an edit in either tree reaches the next one; the
+    # script copies only files whose timestamps changed.
+    add_custom_target(fb-brand-assets ALL
+        COMMAND ${CMAKE_COMMAND}
+                -DSRC=${CMAKE_SOURCE_DIR}/share
+                -DOVERLAY=${FB_BRAND_OVERLAY}
+                -DDST=${ASSET_PATH}
+                -P ${CMAKE_SOURCE_DIR}/cmake/StageBrandAssets.cmake
+        COMMENT "Laying ${FB_BRAND} art over share/"
+        VERBATIM)
+    add_dependencies(frozen-bubble-sdl3 fb-brand-assets)
 endif()
-
-message("Asset path is: ${ASSET_PATH}")
 
 if(ANDROID)
     # Android TV build configuration
@@ -250,7 +316,7 @@ if(IOS)
     add_custom_command(TARGET frozen-bubble-sdl3 POST_BUILD
         COMMAND "${CMAKE_SOURCE_DIR}/tools/ios-copy-assets.sh"
                 "${CMAKE_COMMAND}"
-                "${CMAKE_SOURCE_DIR}/share"
+                "${ASSET_PATH}"
                 "$<TARGET_BUNDLE_CONTENT_DIR:frozen-bubble-sdl3>"
         COMMENT "Copying game assets into the app bundle"
         VERBATIM)
@@ -759,6 +825,11 @@ endif()
 # Nothing to install on iOS: the deliverable is the .app bundle itself, which
 # already carries its assets, and CMake rejects a MACOSX_BUNDLE target given a
 # RUNTIME destination anyway.
+if(FB_BRAND STREQUAL "boba")
+    set(FB_INSTALL_DATA_NAME boba-buster)
+else()
+    set(FB_INSTALL_DATA_NAME frozen-bubble)
+endif()
 if(NOT IOS)
     # Install executable
     install(TARGETS frozen-bubble-sdl3
@@ -767,8 +838,8 @@ if(NOT IOS)
     )
 
     # Install game assets
-    install(DIRECTORY ${CMAKE_SOURCE_DIR}/share/
-        DESTINATION share/frozen-bubble
+    install(DIRECTORY ${ASSET_PATH}/
+        DESTINATION share/${FB_INSTALL_DATA_NAME}
         COMPONENT assets
         PATTERN ".DS_Store" EXCLUDE
         PATTERN "*.md" EXCLUDE
@@ -777,7 +848,7 @@ endif()
 
 # Set asset path for installed version
 if(CMAKE_INSTALL_PREFIX)
-    set(INSTALLED_ASSET_PATH "${CMAKE_INSTALL_PREFIX}/share/frozen-bubble")
+    set(INSTALLED_ASSET_PATH "${CMAKE_INSTALL_PREFIX}/share/${FB_INSTALL_DATA_NAME}")
     message(STATUS "Installed assets will be at: ${INSTALLED_ASSET_PATH}")
 endif()
 
