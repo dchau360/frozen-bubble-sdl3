@@ -1115,7 +1115,7 @@ private:
     int royaleHudCellCount = 0;
     struct MalusAlertDrawOp { size_t poolIdx = 0; SDL_Rect rect{}; Uint8 alpha = 255; };
     std::vector<MalusAlertDrawOp> malusAlertDrawOps;
-    enum class RoundStatsOpKind { Text, Chip, ChatBtn, BracketBtn };
+    enum class RoundStatsOpKind { Text, Chip, ChatBtn, BracketBtn, LinkBtn };
     struct RoundStatsOp {
         RoundStatsOpKind kind = RoundStatsOpKind::Text;
         size_t poolIdx = 0;
@@ -1148,6 +1148,15 @@ private:
     TTFText chatInputText;      // Input line ("Say: {text}_")
     SDL_Rect statsChatBtn = {0, 0, 0, 0}; // Tappable CHAT button on the round-end stats panel
     SDL_Rect statsTournamentBtn = {0, 0, 0, 0};
+    // Once an online match is over (gameMatchOver, not a tournament): EXIT
+    // back to the lobby (what ENTER does) and DISCORD RESULTS, which opens
+    // the community Discord's invite -- it lands on #net-games, where the
+    // relay posts the match. D (a pad's Y) is DISCORD RESULTS' key.
+    SDL_Rect statsExitBtn = {0, 0, 0, 0};
+    SDL_Rect statsDiscordBtn = {0, 0, 0, 0};
+    bool ShowsMatchOverButtons() const;
+    // OpenDiscordInvite, swapped out by tests so they never start a browser.
+    bool (*openDiscord)() = OpenDiscordInvite;
 
     std::vector<std::array<std::vector<int>, 10>> loadedLevels;
     BubbleArray bubbleArrays[MAX_NET_PLAYERS]; //custom arrays wtih different players

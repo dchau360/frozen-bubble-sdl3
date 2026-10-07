@@ -27,7 +27,9 @@
 #include "bubblegame.h"
 #include "platform.h"
 
+#include <SDL3_image/SDL_image.h>
 #include <cstdio>
+#include <string>
 #include <cstring>
 
 static int failures = 0;
@@ -54,6 +56,18 @@ struct BubbleGameTestAccess {
     static void updateRoundStatsHitRects(BubbleGame& game) { game.UpdateRoundStatsHitRects(); }
     static SDL_Rect& statsChatBtn(BubbleGame& game) { return game.statsChatBtn; }
     static SDL_Rect& statsTournamentBtn(BubbleGame& game) { return game.statsTournamentBtn; }
+    static SDL_Rect& statsExitBtn(BubbleGame& game) { return game.statsExitBtn; }
+    static SDL_Rect& statsDiscordBtn(BubbleGame& game) { return game.statsDiscordBtn; }
+    static void matchOver(BubbleGame& game) { game.gameFinish = game.gameMatchOver = true; }
+    static void stubDiscord(BubbleGame& game, bool (*fn)()) { game.openDiscord = fn; }
+    static bool tapFinished(BubbleGame& game, float x, float y) { return game.HandleFinishedTap(x, y); }
+    static void key(BubbleGame& game, SDL_Keycode k) {
+        SDL_Event e{};
+        e.type = SDL_EVENT_KEY_DOWN;
+        e.key.key = k;
+        e.key.down = true;
+        game.HandleInput(&e);
+    }
     static bool& tournamentRound(BubbleGame& game) { return game.tournamentRound; }
     static SetupSettings& settings(BubbleGame& game) { return game.currentSettings; }
     static BubbleArray& player(BubbleGame& game, int idx) { return game.bubbleArrays[idx]; }
@@ -385,6 +399,50 @@ int main() {
         CHECK(bracket.y == 102);
         CHECK(bracket.w == 112);
         CHECK(bracket.h == 24);
+    }
+
+    // Once an online match is over: EXIT and DISCORD RESULTS beside CHAT, a
+    // tap on DISCORD RESULTS or the D key opens the Discord invite, and
+    // neither button exists before the match is over or in a tournament.
+    {
+        static int discordOpens = 0;
+        discordOpens = 0;
+        BubbleGame game(renderer);
+        SetupSettings& settings = BubbleGameTestAccess::settings(game);
+        settings.playerCount = 2;
+        settings.networkGame = true;
+        BubbleGameTestAccess::stubDiscord(game, [] { ++discordOpens; return true; });
+        BubbleGameTestAccess::updateRoundStatsHitRects(game);
+        CHECK(BubbleGameTestAccess::statsExitBtn(game).w == 0);
+        CHECK(BubbleGameTestAccess::statsDiscordBtn(game).w == 0);
+
+        BubbleGameTestAccess::matchOver(game);
+        BubbleGameTestAccess::updateRoundStatsHitRects(game);
+        // CHAT {48, 118, 88, 24}, then EXIT and DISCORD RESULTS 8px apart.
+        const SDL_Rect exitBtn = BubbleGameTestAccess::statsExitBtn(game);
+        const SDL_Rect discord = BubbleGameTestAccess::statsDiscordBtn(game);
+        CHECK(exitBtn.x == 144 && exitBtn.y == 118 && exitBtn.w == 88 && exitBtn.h == 24);
+        CHECK(discord.x == 240 && discord.y == 118 && discord.w == 150 && discord.h == 24);
+        CHECK(discord.x + discord.w <= 640);
+        BubbleGameTestAccess::renderRoundStats(game, renderer);
+        if (const char* dir = SDL_getenv("FB_DUMP_DIR")) {
+            if (SDL_Surface* s = SDL_RenderReadPixels(renderer, nullptr)) {
+                IMG_SavePNG(s, (std::string(dir) + "/match-over-buttons.png").c_str());
+                SDL_DestroySurface(s);
+            }
+        }
+
+        CHECK(BubbleGameTestAccess::tapFinished(game, 300.f, 130.f));
+        CHECK(discordOpens == 1);
+        BubbleGameTestAccess::key(game, SDLK_D);
+        CHECK(discordOpens == 2);
+
+        BubbleGameTestAccess::tournamentRound(game) = true;
+        BubbleGameTestAccess::updateRoundStatsHitRects(game);
+        CHECK(BubbleGameTestAccess::statsExitBtn(game).w == 0);
+        CHECK(BubbleGameTestAccess::statsDiscordBtn(game).w == 0);
+        BubbleGameTestAccess::key(game, SDLK_D);
+        CHECK(discordOpens == 2);
     }
 
     // A local (non-network) game zeroes both rects, so HandleFinishedTap()
