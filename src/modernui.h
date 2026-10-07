@@ -17,10 +17,9 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
-// Drawing for the modern in-game theme (GameSettings::modernTheme()): the
-// 1-player score panel and the level-cleared / lost / paused card. Pure
-// drawing -- nothing here reads or changes game state, so the original look
-// and replays are untouched by it.
+// Drawing for the modern HUD (BubbleGame::UsesModernHud()): the 1-player
+// score panel and the level-cleared / lost / paused card. Pure drawing --
+// nothing here reads or changes game state, so replays are untouched by it.
 
 #ifndef MODERNUI_H
 #define MODERNUI_H

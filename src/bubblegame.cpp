@@ -155,12 +155,6 @@ BubbleGame::BubbleGame(const SDL_Renderer *renderer)
         scoreText[i].UpdateAlignment(TTF_HORIZONTAL_ALIGN_LEFT);
         scoreText[i].UpdateColor({255, 255, 255, 255}, {0, 0, 0, 255});
     }
-    shotsText.LoadFont(ASSET("/gfx/DroidSans.ttf").c_str(), 18);
-    shotsText.UpdateAlignment(TTF_HORIZONTAL_ALIGN_LEFT);
-    shotsText.UpdateColor({255, 255, 255, 255}, {0, 0, 0, 255});
-    runTimeText.LoadFont(ASSET("/gfx/DroidSans.ttf").c_str(), 18);
-    runTimeText.UpdateAlignment(TTF_HORIZONTAL_ALIGN_LEFT);
-    runTimeText.UpdateColor({255, 255, 255, 255}, {0, 0, 0, 255});
 
     modernFonts.Load();
 
@@ -195,14 +189,8 @@ BubbleGame::BubbleGame(const SDL_Renderer *renderer)
 
     // Smaller than finalScoreText: the win panel's art leaves one ~49px strip
     // at the bottom, which has to hold two lines here.
-    clearStatsText.LoadFont(ASSET("/gfx/DroidSans.ttf").c_str(), 17);
-    clearStatsText.UpdateAlignment(TTF_HORIZONTAL_ALIGN_CENTER);
-    clearStatsText.UpdateStyle(17, TTF_STYLE_BOLD);
-    clearStatsText.UpdateColor({255, 255, 255, 255}, {0, 0, 0, 255});
-    clearStatsText.UpdateRing({0, 0, 0, 255}, 2);
 
     finalScoreText.LoadFont(ASSET("/gfx/DroidSans.ttf").c_str(), 28);
-    continueText.LoadFont(ASSET("/gfx/DroidSans.ttf").c_str(), 14);
     finalScoreText.UpdateAlignment(TTF_HORIZONTAL_ALIGN_CENTER);
     finalScoreText.UpdateColor({255, 255, 255, 255}, {0, 0, 0, 255});
 

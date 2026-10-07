@@ -165,39 +165,10 @@ int main() {
     settings->SetValue("GFX:ShowFPS", "");
     CHECK(iniHasKeyValue(settingsPath, "showfps", "true"));
 
-    // In-game theme: modern by default, and switching it back to original
-    // in the 1-player menu has to survive a restart -- including for a
-    // settings.ini from before the setting existed, which has no key for it.
-    CHECK(settings->modernTheme());
-    settings->SetValue("GFX:ModernTheme", "");
-    CHECK(!settings->modernTheme());
-    CHECK(iniHasKeyValue(settingsPath, "moderntheme", "false"));
-    settings->ReadSettings();
-    CHECK(!settings->modernTheme());
-    {
-        std::ifstream in(settingsPath);
-        std::string ini((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
-        in.close();
-        const size_t at = ini.find("\nmoderntheme");
-        CHECK(at != std::string::npos);
-        if (at != std::string::npos) ini.erase(at + 1, ini.find('\n', at + 1) - at);
-        std::ofstream(settingsPath) << ini;
-    }
-    settings->ReadSettings();
-    CHECK(settings->modernTheme());  // no key: the default
-    settings->SetValue("GFX:ModernTheme", "");
-    settings->ReadSettings();
-    CHECK(!settings->modernTheme());
-    CHECK(iniHasKeyValue(settingsPath, "moderntheme", "false"));
-    settings->SetValue("GFX:ModernTheme", "");
-    settings->ReadSettings();
-    CHECK(settings->modernTheme());
-
-    // Bubbles are their own setting, saved the same way.
+    // Bubbles: CANDY / CLASSIC, kept across a restart.
     CHECK(settings->modernBubbles());
     settings->SetValue("GFX:ModernBubbles", "");
     CHECK(!settings->modernBubbles());
-    CHECK(settings->modernTheme());
     settings->ReadSettings();
     CHECK(!settings->modernBubbles());
     CHECK(iniHasKeyValue(settingsPath, "modernbubbles", "false"));
@@ -298,7 +269,7 @@ int main() {
         std::ifstream in(settingsPath);
         std::string ini((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
         in.close();
-        // The line that starts with the key: "moderntheme" (GFX) comes first.
+        // The line that starts with the key, not one that only ends in it.
         size_t at = ini.find("\ntheme");
         CHECK(at != std::string::npos);
         if (at != std::string::npos) at++;

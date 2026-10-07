@@ -457,7 +457,7 @@ bool BubbleGame::ShowsShotCount() const {
 }
 
 bool BubbleGame::UsesModernHud() const {
-    return GameSettings::Instance()->modernTheme() && ShowsShotCount();
+    return ShowsShotCount();
 }
 
 bool BubbleGame::ShowsPauseButton() const {
@@ -1726,33 +1726,17 @@ void BubbleGame::Draw() {
                 finalScoreText.UpdateText(renderer, finalScore, 0);
                 finalScoreText.UpdatePosition({SCREEN_CENTER_X - (finalScoreText.Coords()->w / 2), panelRct.y + panelRct.h - 40});
                 { SDL_FRect fr = ToFRect(*finalScoreText.Coords()); SDL_RenderTexture(rend, finalScoreText.Texture(), nullptr, &fr); }
-                if (continuePrompt) RenderContinuePrompt(rend);
             }
             else if (gameWon) {
                 { SDL_FRect fr = ToFRect(panelRct); SDL_RenderTexture(rend, soloStatePanels[1], nullptr, &fr); }
-                if (currentSettings.mpTraining) {
-                    char finalScore[64];
-                    snprintf(finalScore, sizeof(finalScore), "Training Score: %d", mpTrainScore);
-                    finalScoreText.UpdateText(renderer, finalScore, 0);
-                    finalScoreText.UpdatePosition({SCREEN_CENTER_X - (finalScoreText.Coords()->w / 2), panelRct.y + panelRct.h - 40});
-                    SDL_FRect fr = ToFRect(*finalScoreText.Coords());
-                    SDL_RenderTexture(rend, finalScoreText.Texture(), nullptr, &fr);
-                } else {
-                    // The level's time and the bonus it earned, then the points
-                    // the level scored, in the strip under the panel's art.
-                    const std::string lines[2] = {
-                        "Time: " + std::to_string(levelClearMs / 1000) + "s   Time bonus: +" +
-                            modernui::FormatNumber(levelTimeBonus),
-                        "Score: " + modernui::FormatNumber(levelPoints)};
-                    int y = panelRct.y + panelRct.h - 49;
-                    for (const std::string& line : lines) {
-                        clearStatsText.UpdateText(renderer, line.c_str(), 0);
-                        clearStatsText.UpdatePosition({SCREEN_CENTER_X - (clearStatsText.Coords()->w / 2), y});
-                        SDL_FRect fr = ToFRect(*clearStatsText.Coords());
-                        SDL_RenderTexture(rend, clearStatsText.Texture(), nullptr, &fr);
-                        y += clearStatsText.Coords()->h - 4;
-                    }
-                }
+                // Multiplayer training is the only 1-player game drawn this
+                // way; every other one gets the modern card (UsesModernHud).
+                char finalScore[64];
+                snprintf(finalScore, sizeof(finalScore), "Training Score: %d", mpTrainScore);
+                finalScoreText.UpdateText(renderer, finalScore, 0);
+                finalScoreText.UpdatePosition({SCREEN_CENTER_X - (finalScoreText.Coords()->w / 2), panelRct.y + panelRct.h - 40});
+                SDL_FRect fr = ToFRect(*finalScoreText.Coords());
+                SDL_RenderTexture(rend, finalScoreText.Texture(), nullptr, &fr);
             }
         }
 
@@ -1796,22 +1780,6 @@ void BubbleGame::Draw() {
         UpdateScoreText(curArray, 0);
         if (modern) DrawModernHud(rend, curArray);
         else DrawScoreText(0);
-        if (ShowsShotCount() && !modern) {
-            const std::string shots = "Shots: " + std::to_string(runShots);
-            shotsText.UpdateText(renderer, shots.c_str(), 0);
-            const SDL_Rect* score = scoreText[0].Coords();
-            shotsText.UpdatePosition({score->x, score->y + score->h});
-            SDL_FRect fr = ToFRect(*shotsText.Coords());
-            SDL_RenderTexture(rend, shotsText.Texture(), nullptr, &fr);
-            // The whole run's time, the same clock as the modern panel's.
-            const std::string time = "Time: " + modernui::FormatTime(RunClockMs());
-            runTimeText.UpdateText(renderer, time.c_str(), 0);
-            const SDL_Rect* shotsRect = shotsText.Coords();
-            runTimeText.UpdatePosition({shotsRect->x, shotsRect->y + shotsRect->h});
-            SDL_FRect tr = ToFRect(*runTimeText.Coords());
-            SDL_RenderTexture(rend, runTimeText.Texture(), nullptr, &tr);
-        }
-
         // Multiplayer training: show countdown timer and training score
         if (currentSettings.mpTraining && mpTrainStartTime > 0) {
             const Uint32 TRAIN_DURATION = 120 * 1000;
