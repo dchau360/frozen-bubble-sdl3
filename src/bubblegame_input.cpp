@@ -43,6 +43,10 @@ bool BubbleGame::HandleFinishedTap(float lx, float ly) {
         };
         if (hit(continueBtnRect)) ResolveContinuePrompt(false);
         else if (hit(startOverBtnRect)) ResolveContinuePrompt(true);
+        else if (hit(highscoresBtnRect)) {
+            continueFocus = kContinueFocusHighscores;
+            OpenOnlineHighscores();
+        }
         // A tap anywhere else picks neither: the prompt is a real choice, so
         // it is never answered by a stray tap the way the panel before it is.
         return true;
@@ -211,6 +215,16 @@ void BubbleGame::HandleInput(SDL_Event *e) {
         switch (e->gbutton.button) {
             case SDL_GAMEPAD_BUTTON_DPAD_LEFT:  fake.key = SDLK_LEFT; break;
             case SDL_GAMEPAD_BUTTON_DPAD_RIGHT: fake.key = SDLK_RIGHT; break;
+            // Up/down only mean something on the CONTINUE? prompt, where
+            // they move to and from ONLINE HIGH SCORES.
+            case SDL_GAMEPAD_BUTTON_DPAD_UP:
+                if (!continuePrompt) return;
+                fake.key = SDLK_UP;
+                break;
+            case SDL_GAMEPAD_BUTTON_DPAD_DOWN:
+                if (!continuePrompt) return;
+                fake.key = SDLK_DOWN;
+                break;
             case SDL_GAMEPAD_BUTTON_SOUTH:      fake.key = SDLK_SPACE; break;
             case SDL_GAMEPAD_BUTTON_EAST:       fake.key = SDLK_ESCAPE; break;
             case SDL_GAMEPAD_BUTTON_START:      fake.key = SDLK_P; break;
@@ -298,13 +312,27 @@ void BubbleGame::HandleInput(SDL_Event *e) {
                 case SDLK_LEFT:
                 case SDLK_RIGHT:
                     if (continuePrompt) {
-                        continueFocusStartOver = e->key.key == SDLK_RIGHT;
+                        continueFocus = e->key.key == SDLK_RIGHT ? kContinueFocusStartOver
+                                                                 : kContinueFocusContinue;
+                        PlaySFX("menu_change");
+                    }
+                    break;
+                case SDLK_DOWN:
+                    if (continuePrompt && ContinueHasHighscores() &&
+                        continueFocus != kContinueFocusHighscores) {
+                        continueFocus = kContinueFocusHighscores;
+                        PlaySFX("menu_change");
+                    }
+                    break;
+                case SDLK_UP:
+                    if (continuePrompt && continueFocus == kContinueFocusHighscores) {
+                        continueFocus = kContinueFocusContinue;
                         PlaySFX("menu_change");
                     }
                     break;
                 case SDLK_TAB:
                     if (continuePrompt) {
-                        continueFocusStartOver = !continueFocusStartOver;
+                        continueFocus = (continueFocus + 1) % (ContinueHasHighscores() ? 3 : 2);
                         PlaySFX("menu_change");
                         break;
                     }
@@ -486,10 +514,12 @@ void BubbleGame::HandleInput(SDL_Event *e) {
                             if (ArcadeContinueApplies()) {
                                 if (!continuePrompt) {
                                     continuePrompt = true;
-                                    continueFocusStartOver = false;
+                                    continueFocus = kContinueFocusContinue;
                                     PlaySFX("menu_selected");
+                                } else if (continueFocus == kContinueFocusHighscores) {
+                                    OpenOnlineHighscores();
                                 } else {
-                                    ResolveContinuePrompt(continueFocusStartOver);
+                                    ResolveContinuePrompt(continueFocus == kContinueFocusStartOver);
                                 }
                                 break;
                             }

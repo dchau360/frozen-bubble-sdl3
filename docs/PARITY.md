@@ -164,7 +164,7 @@ look) aren't counted again.
 
 | # | Difference | Original | Here |
 |---|---|---|---|
-| 60 | **Losing a classic level** | The level restarts straight away | Asked first: **Continue** retries that level with the score back to 0 while the run's clock and shots keep counting, or **Start over** goes back to level 1 (v2.4.120) |
+| 60 | **Losing a classic level** | The level restarts straight away | Asked first: **Continue** retries that level with the score back to 0 while the run's clock and shots keep counting, or **Start over** goes back to level 1 (v2.4.120); a third button opens the online high scores page (next release) |
 | 61 | **Highscores** | One table: furthest level, then time | Furthest level and most points in one life, kept separately for keyboard/gamepad and mouse/touch (a level where both were used counts as mouse/touch, v2.4.130), each record with its shot count |
 | 62 | **Replays** | Recorded on Print Screen (or every game with `--auto-record`) to a file, played back with `--replay` from the command line | Every finished round recorded automatically to a rolling library on the device and played back from the Replays page (v2.4.108) |
 | 63 | **Continue when players leave** | A room setting | Always on (v2.4.36) |

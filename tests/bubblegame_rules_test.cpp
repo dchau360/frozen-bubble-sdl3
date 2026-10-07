@@ -128,10 +128,19 @@ struct BubbleGameTestAccess {
     static void inbound(BubbleGame& game, int senderId, const std::string& data) {
         game.ApplyInboundGameMessage(senderId, data);
     }
-    static bool focusStartOver(const BubbleGame& game) { return game.continueFocusStartOver; }
-    static void setContinueButtons(BubbleGame& game, SDL_Rect cont, SDL_Rect startOver) {
+    static bool focusStartOver(const BubbleGame& game) {
+        return game.continueFocus == BubbleGame::kContinueFocusStartOver;
+    }
+    static bool focusHighscores(const BubbleGame& game) {
+        return game.continueFocus == BubbleGame::kContinueFocusHighscores;
+    }
+    static bool hasHighscores(const BubbleGame& game) { return game.ContinueHasHighscores(); }
+    static void stubOpenUrl(BubbleGame& game, bool (*fn)(const char*)) { game.openUrl = fn; }
+    static void setContinueButtons(BubbleGame& game, SDL_Rect cont, SDL_Rect startOver,
+                                   SDL_Rect highscores = {}) {
         game.continueBtnRect = cont;
         game.startOverBtnRect = startOver;
+        game.highscoresBtnRect = highscores;
     }
     static bool tapFinished(BubbleGame& game, float x, float y) { return game.HandleFinishedTap(x, y); }
     static void finishAsDraw(BubbleGame& game) { game.FinishRoundAsDraw(); }
@@ -1784,6 +1793,46 @@ int main() {
         CHECK(BubbleGameTestAccess::reloadLevel(game) == -1);
         CHECK(BubbleGameTestAccess::tapFinished(game, 350.f, 410.f));
         CHECK(BubbleGameTestAccess::reloadLevel(game) == 1);
+    }
+
+    // ONLINE HIGH SCORES, under the two: DOWN focuses it, ENTER opens the
+    // web board's level page and leaves the prompt up, UP goes back to
+    // Continue, TAB cycles all three; a tap on it opens the page too.
+    {
+        static std::string opened;
+        static int opens = 0;
+        opened.clear();
+        opens = 0;
+        BubbleGame game(renderer);
+        BubbleGameTestAccess::stubOpenUrl(game, [](const char* url) { opened = url; ++opens; return true; });
+        BubbleGameTestAccess::reset(game, 1, false, false);
+        BubbleGameTestAccess::setLevel(game, 5);
+        BubbleGameTestAccess::setGameOverState(game, true, true);
+        BubbleGameTestAccess::capturePostRoundTransition(game);
+        BubbleGameTestAccess::pressContinue(game);
+        CHECK(BubbleGameTestAccess::hasHighscores(game));
+        BubbleGameTestAccess::pressKey(game, SDLK_DOWN);
+        CHECK(BubbleGameTestAccess::focusHighscores(game));
+        BubbleGameTestAccess::pressContinue(game);
+        CHECK(opens == 1);
+        CHECK(opened.find("#level") != std::string::npos);
+        CHECK(BubbleGameTestAccess::continuePrompt(game));
+        CHECK(BubbleGameTestAccess::reloadLevel(game) == -1);
+        BubbleGameTestAccess::pressKey(game, SDLK_UP);
+        CHECK(!BubbleGameTestAccess::focusHighscores(game));
+        CHECK(!BubbleGameTestAccess::focusStartOver(game));
+        BubbleGameTestAccess::pressKey(game, SDLK_TAB);
+        BubbleGameTestAccess::pressKey(game, SDLK_TAB);
+        CHECK(BubbleGameTestAccess::focusHighscores(game));
+        BubbleGameTestAccess::pressKey(game, SDLK_TAB);
+        CHECK(!BubbleGameTestAccess::focusHighscores(game) && !BubbleGameTestAccess::focusStartOver(game));
+        BubbleGameTestAccess::setContinueButtons(game, {100, 400, 100, 30}, {300, 400, 100, 30},
+                                                 {100, 440, 300, 30});
+        CHECK(BubbleGameTestAccess::tapFinished(game, 250.f, 450.f));
+        CHECK(opens == 2);
+        CHECK(BubbleGameTestAccess::continuePrompt(game));
+        CHECK(BubbleGameTestAccess::tapFinished(game, 150.f, 410.f));   // Continue
+        CHECK(BubbleGameTestAccess::reloadLevel(game) == 5);
     }
 
     // Other solo modes (random levels here) keep the plain retry: no prompt.

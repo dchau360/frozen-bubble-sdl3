@@ -93,7 +93,10 @@ struct BubbleGameTestAccess {
     }
     static SDL_Rect continueBtn(const BubbleGame& game) { return game.continueBtnRect; }
     static SDL_Rect startOverBtn(const BubbleGame& game) { return game.startOverBtnRect; }
-    static void clearButtons(BubbleGame& game) { game.continueBtnRect = game.startOverBtnRect = {}; }
+    static SDL_Rect highscoresBtn(const BubbleGame& game) { return game.highscoresBtnRect; }
+    static void clearButtons(BubbleGame& game) {
+        game.continueBtnRect = game.startOverBtnRect = game.highscoresBtnRect = {};
+    }
 };
 
 // The 1-player menu, with its Bubbles row.
@@ -247,6 +250,11 @@ int main() {
         CHECK(OnScreen(cont));
         CHECK(OnScreen(over));
         CHECK(cont.x + cont.w <= over.x);  // side by side, CONTINUE on the left
+        // ONLINE HIGH SCORES on its own row under them, as wide as the pair.
+        const SDL_Rect web = BubbleGameTestAccess::highscoresBtn(game);
+        CHECK(OnScreen(web));
+        CHECK(web.y >= cont.y + cont.h);
+        CHECK(web.x == cont.x && web.x + web.w == over.x + over.w);
         Dump(renderer, "4-continue");
 
         // Modern screens with the classic bubbles.

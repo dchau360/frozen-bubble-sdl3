@@ -114,7 +114,7 @@ std::string FormatNumber(int n);
 // re-renders only itself.
 struct Fonts {
     TTFText hudLabel[4], hudValue[4];
-    TTFText title, statLabel[3], statValue[3], button[2], note, popup, dropped;
+    TTFText title, statLabel[3], statValue[3], button[3], note, popup, dropped;
     void Load();
 };
 
@@ -124,21 +124,22 @@ void DrawHud(SDL_Renderer* rend, Fonts& f, const std::string& level, int score, 
 struct Stat { std::string label, value; };
 
 // One card for level cleared, lost and paused. `appear` runs 0..1 as it
-// comes in (it rises and fades in). Buttons: 0, 1 or 2; `focus` is the one
-// drawn highlighted, and their rects come back in btnOut for tap hit-tests.
+// comes in (it rises and fades in). Buttons: 0 to 3, the third on a row of
+// its own under the first two; `focus` is the one drawn highlighted, and
+// their rects come back in btnOut for tap hit-tests.
 // `art`, when given, is drawn under the title (the pause penguin).
 struct Card {
     std::string title;
     SDL_Color titleColor = kIce;
     Stat stats[3];
     int statCount = 0;
-    std::string buttons[2];
+    std::string buttons[3];
     int buttonCount = 0;
     int focus = 0;
     std::string note;
     SDL_Texture* art = nullptr;
 };
-void DrawCard(SDL_Renderer* rend, Fonts& f, const Card& card, float appear, SDL_Rect btnOut[2]);
+void DrawCard(SDL_Renderer* rend, Fonts& f, const Card& card, float appear, SDL_Rect btnOut[3]);
 
 // The on-screen pause button (BubbleGame::ShowsPauseButton): two bars, or a
 // play triangle while the game is paused.

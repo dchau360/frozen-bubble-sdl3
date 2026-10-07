@@ -218,7 +218,7 @@ void DrawHud(SDL_Renderer* rend, Fonts& f, const std::string& level, int score, 
     }
 }
 
-void DrawCard(SDL_Renderer* rend, Fonts& f, const Card& card, float appear, SDL_Rect btnOut[2]) {
+void DrawCard(SDL_Renderer* rend, Fonts& f, const Card& card, float appear, SDL_Rect btnOut[3]) {
     appear = std::clamp(appear, 0.f, 1.f);
     const float ease = 1 - (1 - appear) * (1 - appear) * (1 - appear);
     const Uint8 alpha = (Uint8)(255 * std::min(1.f, appear * 1.6f));
@@ -229,7 +229,8 @@ void DrawCard(SDL_Renderer* rend, Fonts& f, const Card& card, float appear, SDL_
     SDL_RenderFillRect(rend, &dim);
 
     const float artH = card.art ? 80.f : 0.f;
-    const float w = 316, h = 150 + artH + (card.buttonCount ? 48.f : 0.f) + (card.note.empty() ? 0.f : 18.f);
+    const float w = 316, h = 150 + artH + (card.buttonCount ? 48.f : 0.f) +
+                             (card.buttonCount > 2 ? 44.f : 0.f) + (card.note.empty() ? 0.f : 18.f);
     const float x = 320 - w / 2, y = 238 - h / 2 + (1 - ease) * 18;
     const float k = alpha / 255.f;
     FillRoundRect(rend, {x, y + 5, w, h}, 18, WithAlpha({0, 0, 0, 90}, k));
@@ -264,11 +265,14 @@ void DrawCard(SDL_Renderer* rend, Fonts& f, const Card& card, float appear, SDL_
         cursor += 18;
     }
 
-    for (int i = 0; i < 2; ++i) btnOut[i] = {0, 0, 0, 0};
-    const float bw = card.buttonCount == 1 ? 170 : 134, gap = 14;
-    const float total = card.buttonCount * bw + (card.buttonCount - 1) * gap;
+    for (int i = 0; i < 3; ++i) btnOut[i] = {0, 0, 0, 0};
+    const int rowCount = std::min(card.buttonCount, 2);
+    const float bw = rowCount == 1 ? 170 : 134, gap = 14;
+    const float total = rowCount * bw + (rowCount - 1) * gap;
     for (int i = 0; i < card.buttonCount; ++i) {
-        const SDL_FRect b = {320 - total / 2 + i * (bw + gap), cursor + 2, bw, 36};
+        // A third button spans the row under the first two.
+        const SDL_FRect b = i < 2 ? SDL_FRect{320 - total / 2 + i * (bw + gap), cursor + 2, bw, 36}
+                                  : SDL_FRect{320 - total / 2, cursor + 46, total, 36};
         const bool on = i == card.focus;
         FillRoundRect(rend, b, 18, WithAlpha(on ? kIce : Alpha(kIce, 30), k));
         StrokeRoundRect(rend, b, 18, on ? 2.f : 1.5f, WithAlpha(on ? SDL_Color{255, 255, 255, 220} : kEdge, k));
