@@ -13,6 +13,7 @@
 #include <SDL3_ttf/SDL_ttf.h>
 
 #include "bubblegame.h"
+#include "frozenbubble.h"
 #include "bubblegame_internal.h"
 #include "gamesettings.h"
 #include "mainmenu.h"
@@ -48,6 +49,13 @@ struct BubbleGameTestAccess {
     static void midDrop(BubbleGame& game) { game.levelIntroStartMs = SDL_GetTicks() - 200; }
     static bool modern(const BubbleGame& game) { return game.UsesModernHud(); }
     static bool pauseHit(const BubbleGame& game, float x, float y) { return game.PauseButtonHit(x, y); }
+    static bool menuHit(const BubbleGame& game, float x, float y) { return game.MenuButtonHit(x, y); }
+    static bool menuOpen(const BubbleGame& game) { return game.gameMenuOpen; }
+    static void openMenu(BubbleGame& game) { game.OpenGameMenu(); game.gameMenuStartMs = 1; }
+    static void menuKey(BubbleGame& game, SDL_Keycode k) { game.GameMenuKey(k); }
+    static void menuTap(BubbleGame& game, float x, float y) { game.GameMenuTap(x, y); }
+    static int menuFocus(const BubbleGame& game) { return game.gameMenuFocus; }
+    static SDL_Rect menuBtn(const BubbleGame& game, int i) { return game.gameMenuBtn[i]; }
     static BubbleArray& player(BubbleGame& game) { return game.bubbleArrays[0]; }
     // A swap press's slides, frozen `ms` into their run.
     static void pocketSlides(BubbleGame& g, bool fire, Uint64 ms) {
@@ -223,6 +231,34 @@ int main() {
 
         BubbleGameTestAccess::paused(game);
         Dump(renderer, "1b-paused");
+        FrozenBubble::Instance()->CallGamePause();   // back out of the pause above
+
+        // The menu button, top left, over the score panel's corner; the
+        // board itself is not part of it.
+        CHECK(BubbleGameTestAccess::menuHit(game, 24, 24));
+        CHECK(!BubbleGameTestAccess::menuHit(game, 318, 200));
+        // Opening it pauses a local game, and its card replaces PAUSED.
+        BubbleGameTestAccess::openMenu(game);
+        CHECK(BubbleGameTestAccess::menuOpen(game));
+        CHECK(FrozenBubble::Instance()->GamePaused());
+        CHECK(!BubbleGameTestAccess::menuHit(game, 24, 24));   // hidden while open
+        BubbleGameTestAccess::paused(game);
+        Dump(renderer, "1i-menu");
+        const SDL_Rect resume = BubbleGameTestAccess::menuBtn(game, 0);
+        const SDL_Rect quit = BubbleGameTestAccess::menuBtn(game, 1);
+        CHECK(OnScreen(resume) && OnScreen(quit));
+        CHECK(resume.x + resume.w <= quit.x);   // RESUME on the left
+        // Keys move between the two; ESC resumes, as does tapping RESUME.
+        CHECK(BubbleGameTestAccess::menuFocus(game) == 0);
+        BubbleGameTestAccess::menuKey(game, SDLK_RIGHT);
+        CHECK(BubbleGameTestAccess::menuFocus(game) == 1);
+        BubbleGameTestAccess::menuKey(game, SDLK_ESCAPE);
+        CHECK(!BubbleGameTestAccess::menuOpen(game));
+        CHECK(!FrozenBubble::Instance()->GamePaused());
+        BubbleGameTestAccess::openMenu(game);
+        BubbleGameTestAccess::menuTap(game, resume.x + 4.f, resume.y + 4.f);
+        CHECK(!BubbleGameTestAccess::menuOpen(game));
+        CHECK(!FrozenBubble::Instance()->GamePaused());
         BubbleGameTestAccess::midDrop(game);
         BubbleGameTestAccess::draw(game);
         Dump(renderer, "1c-dropping");
@@ -326,6 +362,17 @@ int main() {
         BubbleGameTestAccess::board(game, 1).pocketColor = 2;
         BubbleGameTestAccess::draw(game);
         Dump(renderer, "8b-local-2p-pockets");
+
+        // The menu over a local game: QUIT from the keyboard leaves it, and
+        // leaves nothing paused behind.
+        CHECK(BubbleGameTestAccess::menuHit(game, 24, 24));
+        BubbleGameTestAccess::openMenu(game);
+        BubbleGameTestAccess::paused(game);
+        Dump(renderer, "8c-local-menu");
+        BubbleGameTestAccess::menuKey(game, SDLK_TAB);
+        BubbleGameTestAccess::menuKey(game, SDLK_RETURN);
+        CHECK(!BubbleGameTestAccess::menuOpen(game));
+        CHECK(!FrozenBubble::Instance()->GamePaused());
     }
 
     SDL_DestroyRenderer(renderer);

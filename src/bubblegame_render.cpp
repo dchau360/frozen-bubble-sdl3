@@ -465,6 +465,36 @@ bool BubbleGame::ShowsPauseButton() const {
            sessionMode == SessionMode::Live && !gameFinish;
 }
 
+bool BubbleGame::ShowsMenuButton() const {
+    return sessionMode == SessionMode::Live && !gameMenuOpen;
+}
+
+bool BubbleGame::MenuButtonHit(float x, float y) const {
+    if (!ShowsMenuButton()) return false;
+    // A little bigger than the drawn button, for fingers, like the pause one.
+    const SDL_Rect& r = kMenuBtnRect;
+    return x >= r.x - 8 && x < r.x + r.w + 8 && y >= r.y - 8 && y < r.y + r.h + 8;
+}
+
+void BubbleGame::DrawGameMenu(SDL_Renderer* rend) {
+    modernui::Card card;
+    card.title = "MENU";
+    // A 1-player run's standing, as the PAUSED card shows it.
+    if (ShowsShotCount()) {
+        card.stats[0] = {"LEVEL", currentSettings.randomLevels ? "RANDOM" : std::to_string(curLevel)};
+        card.stats[1] = {"SCORE", modernui::FormatNumber(bubbleArrays[0].score)};
+        card.stats[2] = {"SHOTS", modernui::FormatNumber(runShots)};
+        card.statCount = 3;
+    }
+    card.buttons[0] = "RESUME";
+    card.buttons[1] = "QUIT";
+    card.buttonCount = 2;
+    card.focus = gameMenuFocus;
+    card.note = currentSettings.networkGame ? "The game keeps going while this is open"
+                                            : "The game is paused";
+    modernui::DrawCard(rend, modernFonts, card, (float)(SDL_GetTicks() - gameMenuStartMs) / 380.0f, gameMenuBtn);
+}
+
 bool BubbleGame::PauseButtonHit(float x, float y) const {
     if (!ShowsPauseButton()) return false;
     // A little bigger than the drawn button, for fingers.
@@ -2274,6 +2304,9 @@ void BubbleGame::Draw() {
         }
     }
 
+    if (ShowsMenuButton()) modernui::DrawMenuButton(rend, kMenuBtnRect);
+    if (gameMenuOpen) DrawGameMenu(rend);
+
     if (!firstRenderDone) {
         TransitionManager::Instance()->TakeSnipOut(rend);
         firstRenderDone = true;
@@ -2316,6 +2349,12 @@ void BubbleGame::RenderPaused() {
     SDL_SetRenderDrawColor(rend, 0, 0, 0, 255);
     SDL_RenderClear(rend);
     SDL_RenderTexture(rend, prePauseBackground, nullptr, nullptr);
+    if (gameMenuOpen) {
+        // The in-game menu paused this game: its card instead of PAUSED.
+        DrawGameMenu(rend);
+        timePaused = SDL_GetTicks();
+        return;
+    }
     const bool modern = UsesModernHud();
     if (!modern) SDL_RenderTexture(rend, pauseBackground, nullptr, nullptr);
 

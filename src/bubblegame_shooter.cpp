@@ -174,7 +174,7 @@ PlayerControls BubbleGame::ResolvePlayerControls(BubbleArray &bArray, float delt
         // Don't accept input if player has lost or game is finished (except local player 0 in finished state)
         // Original: checks if $pdata{state} eq 'game'
         bool acceptInput = (bArray.playerState == BubbleArray::PlayerState::ALIVE)
-            && !(chattingMode && currentSettings.networkGame && bArray.playerAssigned == 0)
+            && !((chattingMode || gameMenuOpen) && currentSettings.networkGame && bArray.playerAssigned == 0)
             // Timed mode, buzzer gone but the winner not announced yet: the
             // count we just reported is final, so a shot landing in that
             // window would pop bubbles nobody is counting any more. Freezing

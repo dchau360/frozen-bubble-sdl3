@@ -50,7 +50,7 @@ void MainMenu::WeeklyPanelRender() {
         text(label, right - panelText.Coords()->w, y, color);
     };
 
-    text("WEEKLY RANKINGS", 18, 14, menulist::kGold);
+    text("WEEKLY RANKINGS", menulist::kBackBtn.x + menulist::kBackBtn.w + 12, 14, menulist::kGold);
 
     const WeeklyBoard& b = net->weekly;
     if (!net->WeeklySupported()) {

@@ -154,7 +154,7 @@ void MainMenu::HowToRender() {
     SDL_SetRenderDrawColor(rend, 5, 10, 22, 170);
     SDL_RenderFillRect(rend, nullptr);
     DrawCard(rend, kCard, 18);
-    DrawTextLine(rend, h.Take(h.title), "HOW TO PLAY", kValue, kTextShadow, kCard.x + 20, kCard.y + 26);
+    DrawTextLine(rend, h.Take(h.title), "HOW TO PLAY", kValue, kTextShadow, menulist::kBackBtn.x + menulist::kBackBtn.w + 16, kCard.y + 26);
     DrawTextLine(rend, h.Take(h.small), "ESC  BACK", kLabel, kNoShadow, kCard.x + kCard.w - 20, kCard.y + 26, 2);
 
     // ---- The picture -------------------------------------------------------

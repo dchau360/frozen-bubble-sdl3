@@ -132,6 +132,7 @@ public:
     void CallNetLobbyReturn() { mainMenu->ReturnToNetLobby(); };
     void CallGameQuit() { IsGameQuit = true; };
     void CallGamePause() { IsGamePause = !IsGamePause; };
+    bool GamePaused() const { return IsGamePause; }
 
     uint8_t RunForEver();
     void RunOneFrame();
@@ -194,6 +195,9 @@ private:
     // playfield, displacing every tap by the width of a bar. Phones are never
     // 4:3, and in portrait the error is larger than the canvas is tall.
     void TouchToLogical(const SDL_Event *e, float *lx, float *ly) const;
+    // The in-game menu (BubbleGame::OpenGameMenu): opens it on a tap of its
+    // button, and while it is up takes every key, pad button and tap.
+    bool HandleGameMenuInput(SDL_Event *e);
 
     // ---- F3 performance overlay ----------------------------------------
     // Toggled by F3, persisted as GFX:ShowFPS. Draws bottom-right over every

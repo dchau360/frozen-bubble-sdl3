@@ -45,7 +45,10 @@
 namespace menulist {
 
 // ---- shared geometry ---------------------------------------------------
-constexpr SDL_Rect kHeaderBar     = {10, 8, 620, 28};
+// The Back button every menu screen shows at the top left (DrawBackButton),
+// with the header bar starting just right of it.
+constexpr SDL_Rect kBackBtn       = {10, 8, 70, 28};
+constexpr SDL_Rect kHeaderBar     = {86, 8, 544, 28};
 constexpr SDL_Rect kListFull      = {10, 44, 404, 400};
 constexpr SDL_Rect kSidebarFull   = {422, 44, 208, 400};
 // Leaves room for NetPanelChatDockRender()'s dock, which starts at y=334.
@@ -150,6 +153,10 @@ void DrawHeaderBar(SDL_Renderer* rend, TTFText& text, const SDL_Rect& bar,
 // overrides kSidebarFill's own alpha when >= 0 -- see kMapFillAlpha.
 int DrawSidebarHeader(SDL_Renderer* rend, TTFText& text, const SDL_Rect& sidebar,
                        const char* title, int fillAlpha = -1);
+
+// The top-left Back button (kBackBtn): a chevron and "Back", highlighted
+// while focused.
+void DrawBackButton(SDL_Renderer* rend, TTFText& text, bool focused);
 
 // One footer hint line, shared style, at the fixed y every screen uses.
 void DrawFooterHint(SDL_Renderer* rend, TTFText& text, const char* hint);

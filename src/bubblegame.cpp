@@ -486,6 +486,7 @@ void BubbleGame::NewGame(SetupSettings setup) {
     hudShownScore = 0;
     curLevel = setup.startLevel;
     runShots = 0;
+    gameMenuOpen = false;
     skipShotHintPending = setup.playerCount == 1 && !setup.networkGame && !setup.localMultiplayer;
     skipShotHintStartMs = 0;
     pocketSlides.clear();
