@@ -72,7 +72,8 @@ void MainMenu::TournamentPanelRender() {
         s = net->tournaments.Find(tournamentViewId);
     }
     tournamentButtons.clear();
-    text(tournamentConfiguring ? "CREATE TOURNAMENT" : s ? "TOURNAMENT #" + std::to_string(s->id) : "ONLINE TOURNAMENTS", 18, 14, menulist::kGold);
+    text(tournamentConfiguring ? "CREATE TOURNAMENT" : s ? "TOURNAMENT #" + std::to_string(s->id) : "ONLINE TOURNAMENTS",
+         menulist::kBackBtn.x + menulist::kBackBtn.w + 12, 14, menulist::kGold);
     if (tournamentConfiguring) {
         text("Choose a ruleset -- locked in for every match once created", 18, 45);
         char modeText[48], malusText[48], chainText[48], aimText[48], colorsText[48];

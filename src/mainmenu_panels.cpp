@@ -95,6 +95,7 @@ void MainMenu::Render(void) {
     // Opened from the High Scores screen: nothing of the menu behind it.
     if (showingAccount && accountFromHighscores) {
         AccountPanelRender();
+        menulist::DrawBackButton(const_cast<SDL_Renderer*>(renderer), panelText, false);
         return;
     }
 
@@ -127,6 +128,8 @@ void MainMenu::Render(void) {
     // BeginPanelTapRows must be the one that survives the frame so a tap
     // cannot reach the room list underneath.
     HelpPanelRender();
+    if (BackButtonShowing())
+        menulist::DrawBackButton(const_cast<SDL_Renderer*>(renderer), panelText, false);
 }
 
 

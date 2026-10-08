@@ -144,6 +144,9 @@ void DrawCard(SDL_Renderer* rend, Fonts& f, const Card& card, float appear, SDL_
 // The on-screen pause button (BubbleGame::ShowsPauseButton): two bars, or a
 // play triangle while the game is paused.
 void DrawPauseButton(SDL_Renderer* rend, SDL_Rect r, bool paused);
+// The in-game menu button (BubbleGame::kMenuBtnRect): the same round button
+// with three bars.
+void DrawMenuButton(SDL_Renderer* rend, SDL_Rect r);
 
 // A floating score: "+N" over the pop (small) or "N DROPPED!" (big),
 // `t` running 0..1 over its life.

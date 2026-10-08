@@ -26,6 +26,7 @@
 #include "transitionmanager.h"
 #include "networkclient.h"
 #include "platform.h"
+#include "menulist.h"
 
 #include <SDL3_image/SDL_image.h>
 #include <cstring>
@@ -492,6 +493,20 @@ bool MainMenu::HandlePanelTap(float lx, float ly, float verticalDrift) {
     // own buttons (Done, per-row Play/Delete, confirm dialogs) and returns
     // false only to let its registered rows below do the select-then-activate
     // dance, so this must fall through rather than return outright.
+    // The top-left Back button (drawn last by Render(), over every screen
+    // but the replay viewer) is ESC, the same as a swipe back: a second ESC
+    // when a text field is open, the first only closing its keyboard.
+    if (BackButtonShowing() && lx >= menulist::kBackBtn.x &&
+        lx < menulist::kBackBtn.x + menulist::kBackBtn.w &&
+        ly >= menulist::kBackBtn.y && ly < menulist::kBackBtn.y + menulist::kBackBtn.h) {
+        const bool editing = IsTextEditActive();
+        SDL_Event ev = {};
+        ev.type = SDL_EVENT_KEY_DOWN;
+        ev.key.key = SDLK_ESCAPE;
+        HandleInput(&ev);
+        if (editing) HandleInput(&ev);
+        return true;
+    }
     if (playingReplay) return HandleReplayPlaybackTap(lx, ly);
     if (showingReplaysPanel && HandleReplaysPanelTap(lx, ly)) return true;
 

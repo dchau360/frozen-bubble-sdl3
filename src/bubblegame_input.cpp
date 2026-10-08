@@ -196,6 +196,62 @@ void BubbleGame::FinishInGameChat(bool sendMessage) {
     SDL_Log("In-game chat closed (sent=%d)", sendMessage);
 }
 
+void BubbleGame::OpenGameMenu() {
+    if (gameMenuOpen) return;
+    if (chattingMode) FinishInGameChat(false);
+    gameMenuOpen = true;
+    gameMenuFocus = 0;
+    gameMenuStartMs = SDL_GetTicks();
+    PlaySFX("menu_selected");
+    if (!currentSettings.networkGame && !FrozenBubble::Instance()->GamePaused())
+        FrozenBubble::Instance()->CallGamePause();
+}
+
+void BubbleGame::CloseGameMenu(bool quit) {
+    if (!gameMenuOpen) return;
+    gameMenuOpen = false;
+    FrozenBubble* fb = FrozenBubble::Instance();
+    if (!currentSettings.networkGame && fb->GamePaused()) fb->CallGamePause();
+    if (quit) {
+        // Leaving from a pause: nothing is left to resume, and a later game
+        // must not inherit this one's pause (AdvanceSimulation would move its
+        // clocks on by however long this one sat paused).
+        playedPause = false;
+        modernPauseStartMs = 0;
+        QuitToTitle();
+    }
+}
+
+void BubbleGame::GameMenuKey(SDL_Keycode key) {
+    switch (key) {
+        case SDLK_LEFT: case SDLK_RIGHT: case SDLK_UP: case SDLK_DOWN: case SDLK_TAB:
+            gameMenuFocus = 1 - gameMenuFocus;
+            PlaySFX("menu_change");
+            break;
+        case SDLK_RETURN: case SDLK_KP_ENTER: case SDLK_SPACE:
+            PlaySFX("menu_selected");
+            CloseGameMenu(gameMenuFocus == 1);
+            break;
+        case SDLK_ESCAPE: case SDLK_AC_BACK: case SDLK_P: case SDLK_PAUSE:
+            CloseGameMenu(false);
+            break;
+        default:
+            break;
+    }
+}
+
+void BubbleGame::GameMenuTap(float x, float y) {
+    for (int i = 0; i < 2; ++i) {
+        const SDL_Rect& r = gameMenuBtn[i];
+        if (r.w > 0 && x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h) {
+            gameMenuFocus = i;
+            PlaySFX("menu_selected");
+            CloseGameMenu(i == 1);
+            return;
+        }
+    }
+}
+
 void BubbleGame::HandleInput(SDL_Event *e) {
     // Map gamepad/D-pad to keyboard-equivalent actions
     if (e->type == SDL_EVENT_GAMEPAD_BUTTON_DOWN) {

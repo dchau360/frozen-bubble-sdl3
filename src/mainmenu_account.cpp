@@ -85,7 +85,7 @@ void MainMenu::AccountPanelRender() {
         SDL_RenderTexture(rend, panelText.Texture(), nullptr, &r);
     };
 
-    text("YOUR ACCOUNT", 18, 14, menulist::kGold);
+    text("YOUR ACCOUNT", menulist::kBackBtn.x + menulist::kBackBtn.w + 12, 14, menulist::kGold);
 
     int y = 48;
     if (accountMode == 1) {

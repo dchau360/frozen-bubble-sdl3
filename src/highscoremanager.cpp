@@ -673,6 +673,11 @@ void HighscoreManager::RenderScoreScreen() {
         }
     }
 
+    // The menus' top-left Back button. A tap there misses every tab and
+    // button, so HandleInput already takes it back to the title like ESC.
+    if (!awaitKeyType && curMode == 0)
+        menulist::DrawBackButton(rend, trackLabelText, false);
+
     // Show name entry panel on top when awaiting input
     if (awaitKeyType) {
         RenderPanel();
@@ -1073,8 +1078,9 @@ void HighscoreManager::HandleInput(SDL_Event *e){
                 // to leave this screen on a touch-only device at all: this
                 // screen never got the swipe-back gesture other panels have
                 // (FrozenBubble::HandleInput returns right after forwarding
-                // to HandleInput for the Highscores state), and there is no
-                // on-screen back button either.
+                // to HandleInput for the Highscores state), and there was
+                // no on-screen back button either. The menus' Back button,
+                // drawn at the top left since, lands here too.
                 if (!TapScoreTrackTab(lx, ly) && !TapWorldControls(lx, ly))
                     FrozenBubble::Instance()->currentState = TitleScreen;
             }

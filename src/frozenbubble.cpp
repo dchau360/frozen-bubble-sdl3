@@ -850,7 +850,64 @@ bool IsWithinMenuTapDebounce(Uint32 nowMs, Uint32 lastMenuTapMs) {
     return nowMs - lastMenuTapMs < kMenuTapDebounceMs;
 }
 
+bool FrozenBubble::HandleGameMenuInput(SDL_Event *e) {
+    // Where a press lands, for the presses that count as a tap: a real mouse
+    // click (native skips the one SDL makes from a touch, which arrives as
+    // FINGER_UP; WASM gets mouse events only), as the game's own fire does.
+    float lx = 0.f, ly = 0.f;
+    bool tap = false;
+    if (e->type == SDL_EVENT_MOUSE_BUTTON_DOWN && e->button.button == SDL_BUTTON_LEFT) {
+#ifndef __WASM_PORT__
+        if (e->button.which != SDL_TOUCH_MOUSEID)
+#endif
+        {
+            SDL_RenderCoordinatesFromWindow(renderer, e->button.x, e->button.y, &lx, &ly);
+            tap = true;
+        }
+    }
+#ifndef __WASM_PORT__
+    else if (e->type == SDL_EVENT_FINGER_UP) {
+        TouchToLogical(e, &lx, &ly);
+        tap = true;
+    }
+#endif
+    if (!mainGame->GameMenuOpen()) {
+        if (!tap || !mainGame->MenuButtonHit(lx, ly)) return false;
+        mainGame->OpenGameMenu();
+        return true;
+    }
+    if (tap) {
+        mainGame->GameMenuTap(lx, ly);
+        return true;
+    }
+    switch (e->type) {
+        case SDL_EVENT_KEY_DOWN:
+            if (!e->key.repeat) mainGame->GameMenuKey(e->key.key);
+            return true;
+        case SDL_EVENT_GAMEPAD_BUTTON_DOWN:
+            switch (e->gbutton.button) {
+                case SDL_GAMEPAD_BUTTON_DPAD_LEFT: case SDL_GAMEPAD_BUTTON_DPAD_RIGHT:
+                case SDL_GAMEPAD_BUTTON_DPAD_UP: case SDL_GAMEPAD_BUTTON_DPAD_DOWN:
+                    mainGame->GameMenuKey(SDLK_TAB); break;
+                case SDL_GAMEPAD_BUTTON_SOUTH: mainGame->GameMenuKey(SDLK_RETURN); break;
+                case SDL_GAMEPAD_BUTTON_EAST: case SDL_GAMEPAD_BUTTON_START:
+                    mainGame->GameMenuKey(SDLK_ESCAPE); break;
+                default: break;
+            }
+            return true;
+        // Nothing under the card moves while it is up: no aiming, no shot
+        // from a press or a release.
+        case SDL_EVENT_MOUSE_MOTION: case SDL_EVENT_MOUSE_BUTTON_DOWN: case SDL_EVENT_MOUSE_BUTTON_UP:
+        case SDL_EVENT_FINGER_DOWN: case SDL_EVENT_FINGER_MOTION: case SDL_EVENT_FINGER_UP:
+        case SDL_EVENT_TEXT_INPUT:
+            return true;
+        default:
+            return false;
+    }
+}
+
 void FrozenBubble::HandleInput(SDL_Event *e) {
+    if (currentState == MainGame && mainGame && HandleGameMenuInput(e)) return;
     switch(e->type) {
         case SDL_EVENT_WINDOW_CLOSE_REQUESTED:
         {

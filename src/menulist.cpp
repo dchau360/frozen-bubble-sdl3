@@ -121,6 +121,20 @@ void DrawHeaderBar(SDL_Renderer* rend, TTFText& text, const SDL_Rect& bar,
     }
 }
 
+void DrawBackButton(SDL_Renderer* rend, TTFText& text, bool focused) {
+    const SDL_Rect& r = kBackBtn;
+    DrawPanel(rend, r, focused ? kButtonFocus : kHeaderFill, focused ? kSelEdge : kEdge);
+    // The chevron is drawn, not a glyph: the menu fonts have no arrow.
+    SDL_Color c = focused ? kGold : kText;
+    SDL_SetRenderDrawColor(rend, c.r, c.g, c.b, c.a);
+    const float cx = (float)r.x + 11.0f, cy = (float)r.y + r.h / 2.0f;
+    for (int t = 0; t < 2; ++t) {
+        SDL_RenderLine(rend, cx + 6 + t, cy - 7, cx + t, cy);
+        SDL_RenderLine(rend, cx + t, cy, cx + 6 + t, cy + 7);
+    }
+    DrawText(rend, text, "Back", 18, TTF_STYLE_BOLD, c, r.x + 24, r.y + 4, true);
+}
+
 int DrawSidebarHeader(SDL_Renderer* rend, TTFText& text, const SDL_Rect& sidebar,
                        const char* title, int fillAlpha) {
     SDL_Color fill = kSidebarFill;

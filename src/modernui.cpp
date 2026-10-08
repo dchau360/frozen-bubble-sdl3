@@ -194,9 +194,11 @@ void Fonts::Load() {
 }
 
 void DrawHud(SDL_Renderer* rend, Fonts& f, const std::string& level, int score, int shots, Uint64 timeMs) {
-    // Runs off the left edge, so only its right corners show round. Tall and
-    // wide enough to cover the wooden sign the original level name sits on.
-    const SDL_FRect box = {-16, 14, 182, 196};
+    // Runs off the left and top edges, so only its bottom right corner shows
+    // round. Tall and wide enough to cover the wooden sign the original level
+    // name sits on, with the in-game menu button (BubbleGame::kMenuBtnRect)
+    // in its top corner above the rows.
+    const SDL_FRect box = {-16, -16, 182, 262};
     FillRoundRect(rend, {box.x, box.y + 4, box.w, box.h}, 16, {0, 0, 0, 70});  // soft drop shadow
     FillRoundRect(rend, box, 16, kCardFill);
     StrokeRoundRect(rend, box, 16, 2, kEdge);
@@ -205,7 +207,7 @@ void DrawHud(SDL_Renderer* rend, Fonts& f, const std::string& level, int score, 
     const std::string values[4] = {level, FormatNumber(score), FormatNumber(shots), FormatTime(timeMs)};
     SDL_SetRenderDrawBlendMode(rend, SDL_BLENDMODE_BLEND);
     for (int i = 0; i < 4; ++i) {
-        const int y = (int)box.y + 12 + i * 45;
+        const int y = 58 + i * 45;
         if (i) {
             SDL_SetRenderDrawColor(rend, kIce.r, kIce.g, kIce.b, 40);
             SDL_FRect line = {14, (float)y - 5, box.w - 46, 1};
@@ -229,7 +231,9 @@ void DrawCard(SDL_Renderer* rend, Fonts& f, const Card& card, float appear, SDL_
     SDL_RenderFillRect(rend, &dim);
 
     const float artH = card.art ? 80.f : 0.f;
-    const float w = 316, h = 150 + artH + (card.buttonCount ? 48.f : 0.f) +
+    // A card with no stats (the in-game menu) closes up their row.
+    const float statsH = card.statCount ? 70.f : 0.f;
+    const float w = 316, h = 80 + statsH + artH + (card.buttonCount ? 48.f : 0.f) +
                              (card.buttonCount > 2 ? 44.f : 0.f) + (card.note.empty() ? 0.f : 18.f);
     const float x = 320 - w / 2, y = 238 - h / 2 + (1 - ease) * 18;
     const float k = alpha / 255.f;
@@ -257,7 +261,7 @@ void DrawCard(SDL_Renderer* rend, Fonts& f, const Card& card, float appear, SDL_
         SetText(rend, f.statValue[i], card.stats[i].value, kValue);
         Blit(rend, f.statValue[i], cx - f.statValue[i].Coords()->w / 2, (int)cursor + 18, alpha);
     }
-    cursor += 70;
+    cursor += statsH;
 
     if (!card.note.empty()) {
         SetText(rend, f.note, card.note, kLabel);
@@ -298,6 +302,17 @@ void DrawPauseButton(SDL_Renderer* rend, SDL_Rect r, bool paused) {
         FillRoundRect(rend, {cx - 7, cy - 8, 5, 16}, 1.5f, kValue);
         FillRoundRect(rend, {cx + 2, cy - 8, 5, 16}, 1.5f, kValue);
     }
+}
+
+void DrawMenuButton(SDL_Renderer* rend, SDL_Rect r) {
+    const SDL_FRect box = {(float)r.x, (float)r.y, (float)r.w, (float)r.h};
+    const float radius = box.w / 2;
+    FillRoundRect(rend, box, radius, Alpha(kCardFill, 200));
+    StrokeRoundRect(rend, box, radius, 2, kEdge);
+    const float cx = box.x + box.w / 2, cy = box.y + box.h / 2;
+    SDL_SetRenderDrawBlendMode(rend, SDL_BLENDMODE_BLEND);
+    for (int i = -1; i <= 1; ++i)
+        FillRoundRect(rend, {cx - 8, cy + i * 6 - 1.5f, 16, 3}, 1.5f, kValue);
 }
 
 void DrawPopup(SDL_Renderer* rend, TTFText& text, const std::string& label, int x, int y, float t, bool big) {

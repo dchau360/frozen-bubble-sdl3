@@ -534,6 +534,12 @@ if(BUILD_TESTING AND NOT EMSCRIPTEN AND NOT ANDROID AND NOT IOS)
     target_link_libraries(net-menus-classic-test PRIVATE frozen-bubble-core-test)
     add_test(NAME net-menus-classic-test COMMAND net-menus-classic-test)
 
+    add_executable(menu-back-button-test tests/menu_back_button_test.cpp)
+    set_property(TARGET menu-back-button-test PROPERTY CXX_STANDARD 17)
+    set_property(TARGET menu-back-button-test PROPERTY CXX_EXTENSIONS OFF)
+    target_link_libraries(menu-back-button-test PRIVATE frozen-bubble-core-test)
+    add_test(NAME menu-back-button-test COMMAND menu-back-button-test)
+
 
     add_executable(ttftext-cache-test
         tests/ttftext_cache_test.cpp

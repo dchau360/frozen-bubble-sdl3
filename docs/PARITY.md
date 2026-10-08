@@ -8,13 +8,13 @@ in [`server/`](../server/).
 
 ## The count
 
-**72 differences from the original**, numbered 1–72 below:
+**73 differences from the original**, numbered 1–73 below:
 
 | Section | Numbers | How many |
 |---|---|---|
-| [Features added](#features-added) | 1–59 | 59 |
-| [Plays differently](#plays-differently) | 60–64 | 5 |
-| [Fixes to the original server](#fixes-to-the-original-server) | 65–72 | 8 |
+| [Features added](#features-added) | 1–60 | 60 |
+| [Plays differently](#plays-differently) | 61–65 | 5 |
+| [Fixes to the original server](#fixes-to-the-original-server) | 66–73 | 8 |
 
 Numbers run on from one table to the next, so the last row of the last table
 is the total. When a difference is added, give it the next free number in its
@@ -137,6 +137,7 @@ twenty, which needed new UI to be playable at all:
 | 48 | **Frame-rate-independent movement**, so the game runs at the same speed regardless of display refresh | v2.4.9 |
 | 49 | **Touch gestures** — tap-to-select in list panels, swipe left to go back or to leave a round | v2.4.35 |
 | 50 | **Sound toggle**, **fullscreen toggle**, **saved nickname** | v2.4.15, v2.4.24, v2.4.16 |
+| 51 | **On-screen Back and Menu buttons** — every menu screen has a Back button at the top left that does what ESC does, and every game a menu button there with Resume and Quit (a local game pauses while it is open), so a touch screen always has a way back and out. The original left screens and games by the Escape key only | — |
 
 ### Platforms
 
@@ -144,15 +145,15 @@ The original was Linux-only.
 
 | # | Platform | Notes |
 |---|---|---|
-| 51 | **macOS** (Apple Silicon) | Native build |
-| 52 | **Windows** | Native build, installer |
-| 53 | **Linux AppImage** | Single-file build that runs on most distributions |
-| 54 | **Android** (phones, tablets, TV) | One APK; controller-first on TV, rotates freely on a phone or tablet; on Google Play |
-| 55 | **Android ads, removable** | The Play build shows ads, removable by a yearly subscription or a one-time unlock (v2.4.40) |
-| 56 | **Browser** (WebAssembly) | Runs on desktop and mobile, including iPhone. Browser clients reach the same server as native ones over WebSocket, so they play together |
-| 57 | **Browser saves** | Settings, key bindings, level history and high scores persist across a reload via IndexedDB (v2.4.34) |
-| 58 | **iOS** (experimental) | Builds and runs, unsigned; not distributed — see [IOS.md](IOS.md) (v2.4.35) |
-| 59 | **Server in Docker** | `fb-server` plus an nginx TLS/WebSocket front end in one compose stack — see [SetupServer.md](../SetupServer.md) |
+| 52 | **macOS** (Apple Silicon) | Native build |
+| 53 | **Windows** | Native build, installer |
+| 54 | **Linux AppImage** | Single-file build that runs on most distributions |
+| 55 | **Android** (phones, tablets, TV) | One APK; controller-first on TV, rotates freely on a phone or tablet; on Google Play |
+| 56 | **Android ads, removable** | The Play build shows ads, removable by a yearly subscription or a one-time unlock (v2.4.40) |
+| 57 | **Browser** (WebAssembly) | Runs on desktop and mobile, including iPhone. Browser clients reach the same server as native ones over WebSocket, so they play together |
+| 58 | **Browser saves** | Settings, key bindings, level history and high scores persist across a reload via IndexedDB (v2.4.34) |
+| 59 | **iOS** (experimental) | Builds and runs, unsigned; not distributed — see [IOS.md](IOS.md) (v2.4.35) |
+| 60 | **Server in Docker** | `fb-server` plus an nginx TLS/WebSocket front end in one compose stack — see [SetupServer.md](../SetupServer.md) |
 
 ---
 
@@ -164,11 +165,11 @@ look) aren't counted again.
 
 | # | Difference | Original | Here |
 |---|---|---|---|
-| 60 | **Losing a classic level** | The level restarts straight away | Asked first: **Continue** retries that level with the score back to 0 while the run's clock and shots keep counting, or **Start over** goes back to level 1 (v2.4.120); a third button opens the online high scores page (next release) |
-| 61 | **Highscores** | One table: furthest level, then time | Furthest level and most points in one life, kept separately for keyboard/gamepad and mouse/touch (a level where both were used counts as mouse/touch, v2.4.130), each record with its shot count |
-| 62 | **Replays** | Recorded on Print Screen (or every game with `--auto-record`) to a file, played back with `--replay` from the command line | Every finished round recorded automatically to a rolling library on the device and played back from the Replays page (v2.4.108) |
-| 63 | **Continue when players leave** | A room setting | Always on (v2.4.36) |
-| 64 | **Title screen** | The original menu artwork | The Slate menu style by default; **Classic** keeps the original (v2.4.67) |
+| 61 | **Losing a classic level** | The level restarts straight away | Asked first: **Continue** retries that level with the score back to 0 while the run's clock and shots keep counting, or **Start over** goes back to level 1 (v2.4.120); a third button opens the online high scores page (next release) |
+| 62 | **Highscores** | One table: furthest level, then time | Furthest level and most points in one life, kept separately for keyboard/gamepad and mouse/touch (a level where both were used counts as mouse/touch, v2.4.130), each record with its shot count |
+| 63 | **Replays** | Recorded on Print Screen (or every game with `--auto-record`) to a file, played back with `--replay` from the command line | Every finished round recorded automatically to a rolling library on the device and played back from the Replays page (v2.4.108) |
+| 64 | **Continue when players leave** | A room setting | Always on (v2.4.36) |
+| 65 | **Title screen** | The original menu artwork | The Slate menu style by default; **Classic** keeps the original (v2.4.67) |
 
 ---
 
@@ -178,14 +179,14 @@ All of these are in original `fb-server` code and are still present upstream.
 
 | # | Fixed | What was wrong | Release |
 |---|---|---|---|
-| 65 | **Crash on simultaneous disconnects** | Tearing down a room recursively freed the game while an outer frame was still using it (`game.c`). On a normal build this corrupted whichever branch it read next and could write a bogus win to the stats file; under a sanitizer it aborted the whole process, taking every unrelated room down with it | v2.4.28 |
-| 66 | **Player impersonation** | The server relayed each in-game message with the sender byte exactly as the client wrote it, so any client could claim to be any other player in its room — or the room leader. Every relayed message is now stamped with the seat the server assigned | v2.4.29 |
-| 67 | **One stray message could kill the server** | A connection left in a room that had closed or kicked it could terminate the entire server process with its next in-game message. Only that connection closes now | v2.4.29 |
-| 68 | **Malformed LAN discovery packet** | A full-length discovery datagram made the server read past the end of its receive buffer | v2.4.28 |
-| 69 | **Silent privilege-drop failure** | Started with `-u`, a failed switch to the requested user was ignored and the daemon carried on with full privileges, keeping its supplementary groups. It now refuses to start | v2.4.29 |
-| 70 | **Unchecked master-server reply** | A hostile or broken master-server response could steer the server's own buffer arithmetic; the length is range-checked before use | v2.4.29 |
-| 71 | **Busy discovery port aborted startup** | If anything else held the LAN discovery port the server refused to start at all. It now serves games normally and reports only that broadcast discovery is unavailable | v2.4.31 |
-| 72 | **Lobby free-player count** | `LIST` reported a `free:` count that contradicted the open-player list in the same message, counting players seated in not-yet-started rooms as free | — |
+| 66 | **Crash on simultaneous disconnects** | Tearing down a room recursively freed the game while an outer frame was still using it (`game.c`). On a normal build this corrupted whichever branch it read next and could write a bogus win to the stats file; under a sanitizer it aborted the whole process, taking every unrelated room down with it | v2.4.28 |
+| 67 | **Player impersonation** | The server relayed each in-game message with the sender byte exactly as the client wrote it, so any client could claim to be any other player in its room — or the room leader. Every relayed message is now stamped with the seat the server assigned | v2.4.29 |
+| 68 | **One stray message could kill the server** | A connection left in a room that had closed or kicked it could terminate the entire server process with its next in-game message. Only that connection closes now | v2.4.29 |
+| 69 | **Malformed LAN discovery packet** | A full-length discovery datagram made the server read past the end of its receive buffer | v2.4.28 |
+| 70 | **Silent privilege-drop failure** | Started with `-u`, a failed switch to the requested user was ignored and the daemon carried on with full privileges, keeping its supplementary groups. It now refuses to start | v2.4.29 |
+| 71 | **Unchecked master-server reply** | A hostile or broken master-server response could steer the server's own buffer arithmetic; the length is range-checked before use | v2.4.29 |
+| 72 | **Busy discovery port aborted startup** | If anything else held the LAN discovery port the server refused to start at all. It now serves games normally and reports only that broadcast discovery is unavailable | v2.4.31 |
+| 73 | **Lobby free-player count** | `LIST` reported a `free:` count that contradicted the open-player list in the same message, counting players seated in not-yet-started rooms as free | — |
 
 ---
 

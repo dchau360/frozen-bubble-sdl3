@@ -762,7 +762,7 @@ void MainMenu::NetPanelLobbyActionsRender() {
         if (currentGame) {
             char title[160];
             bool isHost = currentGame->creator == netClient->GetPlayerNick();
-            snprintf(title, sizeof(title), "%.24s's GAME ROOM   |   %s   |   %d players",
+            snprintf(title, sizeof(title), "%.24s's GAME ROOM  |  %s  |  %d players",
                      currentGame->creator.c_str(), isHost ? "HOST" : "GUEST",
                      (int)currentGame->players.size());
             menulist::DrawHeaderBar(roomRenderer, panelText, menulist::kHeaderBar, title,
@@ -773,10 +773,10 @@ void MainMenu::NetPanelLobbyActionsRender() {
             // alpha than the other hand-rolled panels in this branch --
             // see kMapFillAlpha -- so the world map behind it actually
             // shows through instead of being fully hidden.
-            drawPanel({10, 8, 620, 28}, menulist::WithAlpha(menulist::kHeaderFill, menulist::kMapFillAlpha), panelEdge);
+            drawPanel(menulist::kHeaderBar, menulist::WithAlpha(menulist::kHeaderFill, menulist::kMapFillAlpha), panelEdge);
             char title[160];
             snprintf(title, sizeof(title), "ONLINE LOBBY   |   %s", netClient->GetPlayerNick().c_str());
-            drawLabel(title, 20, 14, textGold);
+            drawLabel(title, menulist::kHeaderBar.x + 10, 14, textGold);
         }
 
         // Lobby room browser, as a menulist::List -- same widget, same

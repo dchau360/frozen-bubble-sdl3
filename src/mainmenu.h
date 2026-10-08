@@ -120,6 +120,11 @@ public:
     // an UP/DOWN, and a long swipe moves several rows (FrozenBubble::HandleInput).
     bool NetListsShowing() const { return showingNetPanel || showingTeamsPanel; }
     bool IsTextEditActive() const { return networkFieldEditing; }
+    // Every screen past the title menu shows a Back button at the top left
+    // (menulist::kBackBtn); tapping it is ESC.
+    bool BackButtonShowing() const {
+        return !playingReplay && (HasAnyPanelOpen() || showingReplaysPanel);
+    }
     bool HasAnyPanelOpen() const {
         return showingKeysPanel || showingSPPanel || showingOptPanel
             || showingNetPanel || showingLevelPanel || showingLocalMPPanel
