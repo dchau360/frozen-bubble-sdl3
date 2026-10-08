@@ -111,6 +111,25 @@ class ServerBotCapDefaultTest(ServerBotCapTestBase):
         self.assertNotIn(b"BOT_LIMIT_REACHED", both)
 
 
+    def test_bot_joins_host_whose_name_ended_in_a_space(self):
+        # A host who typed "Huy " got the room "Huy" (the server cuts a nick
+        # at its first space), but an older client kept the trailing space
+        # locally and sent its bots "JOIN Huy  bot1-med". The server used to
+        # read the nick after the first space, " bot1-med", and answer
+        # INVALID_NICK -- "invalid bot name" in the game.
+        host = self.connect()
+        host.sendall(b"FB/1.3 NICK Huy \nFB/1.3 CREATE Huy  5\n")
+        self.assertIn(b"CREATE: OK", recv_until(host, b"CREATE:"))
+        bot = self.connect()
+        bot.sendall(b"FB/1.3 NICK bot1-med\nFB/1.3 BOT\n"
+                    b"FB/1.3 JOIN Huy  bot1-med\n")
+        self.assertIn(b"JOIN: OK", recv_until(bot, b"JOIN:"))
+        # A trailing space after the nick is cut too, not kept in it.
+        bot2 = self.connect()
+        bot2.sendall(b"FB/1.3 NICK bot2-med\nFB/1.3 JOIN Huy bot2-med \n")
+        self.assertIn(b"JOIN: OK", recv_until(bot2, b"JOIN:"))
+
+
 class ServerBotCapZeroTest(ServerBotCapTestBase):
     """-b 0 disables bots entirely, and must be distinguishable from a typo
     that would otherwise silently fall back to the same value."""
