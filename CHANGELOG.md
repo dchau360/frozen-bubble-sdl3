@@ -1,5 +1,11 @@
 # Changelog
 
+## v2.4.149
+
+- **Back button on every menu screen.** A Back button now sits at the top left of every screen past the title menu, from the 1-player menu and settings to the server lists, lobby, game room and High Scores. Tapping it does the same as ESC.
+- **In-game menu.** A menu button at the top left of every game opens RESUME and QUIT, so a touch screen always has a way out. Games on your own device pause while it is open; online games keep going. ESC still quits straight away.
+- **Bots join rooms again.** If your name ended in a space, adding a bot to your online room failed with "invalid bot name". Names are now trimmed, and the server accepts it either way.
+
 ## v2.4.148
 
 - **Online high scores from the continue screen.** After losing a level, the CONTINUE? card has an ONLINE HIGH SCORES button under Continue and Start over. It opens the high scores page and leaves the choice waiting for you.
