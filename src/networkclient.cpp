@@ -487,7 +487,14 @@ bool NetworkClient::SendNick(const char* nickname) {
     // Clamp to what the server will actually keep, before storing or
     // sending: the roster it echoes back is truncated, and an untruncated
     // local copy fails to match it (see MAX_NICK_LENGTH in networkclient.h).
-    std::string originalNick = std::string(nickname).substr(0, MAX_NICK_LENGTH);
+    // The server keeps only what comes before the first space, so a name
+    // typed with a trailing (or inner) space is cut the same way here; a
+    // local copy that still ended in a space put two spaces in this host's
+    // bots' "JOIN <creator> <bot>", which the server read as INVALID_NICK.
+    std::string originalNick(nickname);
+    originalNick.erase(0, originalNick.find_first_not_of(" \t"));
+    originalNick = originalNick.substr(0, originalNick.find_first_of(" \t"));
+    originalNick = originalNick.substr(0, MAX_NICK_LENGTH);
     char cmd[128];
     snprintf(cmd, sizeof(cmd), "NICK %s", originalNick.c_str());
 

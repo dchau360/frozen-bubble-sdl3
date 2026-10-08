@@ -1664,7 +1664,14 @@ int process_msg(int fd, char* msg)
                         struct game * g;
                         char* joinnick = ptr + 1;
                         *ptr = '\0';
-                        if ((ptr2 = strchr(ptr, ' ')))
+                        /* A client whose own name ended in a space sent
+                         * "JOIN Huy  bot1-med" for its bots: skip the extra
+                         * spaces rather than reading " bot1-med" as the nick.
+                         * The strchr below used to search from ptr, the '\0'
+                         * just written, so it never cut anything. */
+                        while (*joinnick == ' ')
+                                joinnick++;
+                        if ((ptr2 = strchr(joinnick, ' ')))
                                 *ptr2 = '\0';
                         if (strlen(joinnick) > 10)
                                 joinnick[10] = '\0';
