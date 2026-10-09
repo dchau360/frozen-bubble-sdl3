@@ -230,6 +230,20 @@ shots than levels cleared (every clear takes at least one; a game too old
 to count shots sends none and isn't checked). Such a run is answered
 `IMPLAUSIBLE`, logged with its account id, and never stored.
 
+#### Account PINs
+
+Players can link a second device to their account with a name and a PIN
+instead of the 16-character code (protocol 1.8, `SETPIN`/`LINKPIN`, see
+`server/links.h`). The server keeps them in `links.dat` beside
+`hiscores.dat` (or the file `FB_SERVER_LINKS_FILE` names): one `pin` line per
+account (lower-cased name, account id, salt and hash) and one `link` line per
+linked device (its own id, then the id it now signs in as). A link folds the
+device's own hiscore and weekly lines into the account's at that moment, and
+from then on the device signs in as that account everywhere this server
+counts anything. Deleting a `link` line by hand (server stopped) makes that
+device itself again, with an empty line. Wrong PINs are limited to five an
+hour per name, in memory only.
+
 #### Banning an account
 
 To take a cheater off the board, add their account id to `banned.txt` beside

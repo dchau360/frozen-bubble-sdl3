@@ -60,6 +60,9 @@ void weekly_save(void);
 /* Drop the account's line (DELETEACCOUNT), saving if there was one. Returns
  * 1 if there was a line, else 0. */
 int weekly_forget(const char* id);
+/* Adds `from`'s counts to `into`'s and drops `from`'s line, for an account
+ * linked to another (links.h). 1 when there was anything. */
+int weekly_merge(const char* from, const char* into);
 
 /* The account's six numbers as "W,L,P,rankW,rankL,rankP" (a rank is 0 when
  * that count is 0), or "" if it has no line this week. */

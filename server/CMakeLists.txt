@@ -55,6 +55,7 @@ add_executable(fb-server
     hiscores.c
     snapshot.c
     account.c
+    links.c
     discordalert.c
     ws.c
 )

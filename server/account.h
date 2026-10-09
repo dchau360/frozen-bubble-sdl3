@@ -32,7 +32,10 @@
  * one connection. What this does not stop, since port 1511 is plaintext, is
  * someone on the path taking over a connection *after* it authenticated, or a
  * malicious server relaying another server's challenge to its own players;
- * the stakes (a weekly ranking) do not justify a TLS stack in fb-server. */
+ * the stakes (a weekly ranking) do not justify a TLS stack in fb-server.
+ *
+ * account_id() is the account a connection signs in *as*: a device linked to
+ * another account with a PIN (links.h) gets that account's id, not its own. */
 
 #define ACCOUNT_SIGNED_PREFIX "frozen-bubble account v1 "
 #define ACCOUNT_ID_HEX_LEN 16
@@ -49,6 +52,9 @@ int account_begin(int fd, const char* pubkey_hex, char* reply, size_t replysz);
  * challenge is spent either way, so a wrong guess cannot be retried against
  * it. Returns 1 on success, after which account_id(fd) is set. */
 int account_finish(int fd, const char* sig_hex);
+
+/* LINKPIN: the connection now signs in as `id` (16 hex), see links.h. */
+void account_set_id(int fd, const char* id);
 
 /* The connection's verified account id (16 hex), or "" when it has none. */
 const char* account_id(int fd);
