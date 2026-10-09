@@ -58,6 +58,11 @@ services:
       # src/platform.cpp) ever receives runs; any other server just keeps an
       # empty board.
       - FB_SERVER_HISCORE_FILE=/var/lib/fb-server/hiscores.dat
+      # One entry per name on that board: a player who ends up with a second
+      # account (a browser that forgot its code) shows once, with their best.
+      # Lists only; the file keeps every account, so 0 brings them back. A
+      # stranger using the same name joins that entry too. See SetupServer.md.
+      - FB_SERVER_HISCORE_MERGE_NICKS=${FB_SERVER_HISCORE_MERGE_NICKS:-1}
     volumes:
       - fb-data:/var/lib/fb-server
     depends_on:
