@@ -106,6 +106,10 @@ int hiscore_forget(const char* id);
 
 /* The account's competition rank in that board, or 0 when it has no run
  * there. */
+/* Folds `from`'s runs into `into` (best of each), for an account linked to
+ * another (links.h), and drops `from`'s line. 1 when there was anything. */
+int hiscore_merge(const char* from, const char* into);
+
 int hiscore_rank(const char* id, int board, enum hiscore_scope scope);
 
 /* Up to n "nick#tag=level/time_ms/points[/CC]" entries (CC the account's

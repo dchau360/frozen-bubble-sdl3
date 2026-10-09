@@ -61,6 +61,8 @@ const std::string& LastError();
 // The name runs are listed under: "nick#tag", nick being the saved network
 // nickname cut to what the server accepts ("unnamed" if none). Just the nick
 // while sending is off, so looking at the board never creates an account.
+// The tag is the account the server last signed this device in as, which is
+// another account's once the device is linked with a PIN.
 std::string ShownName();
 std::string SubmitNick();
 
@@ -81,6 +83,23 @@ DeleteStatus DeleteAccountStatus();
 const std::string& DeleteAccountError();
 // Back to Idle once the screen has shown the result.
 void ClearDeleteAccountStatus();
+
+// Account PINs (protocol 1.8, server/links.h): instead of typing the
+// 16-character code on another device, the player sets a PIN under their
+// name on the device that has the account, and "links" any other device with
+// the name and PIN. The server then signs that device in as the PIN's
+// account and folds in whatever it had recorded as its own; the device keeps
+// its own code, so nothing changes locally. SetPin uses SubmitNick() as the
+// name. One request at a time, like delete; PinRequestMessage() is what the
+// screen shows once it is Done or Failed.
+enum class PinStatus { Idle, Working, Done, Failed };
+void RequestSetPin(const std::string& pin);
+void RequestLinkPin(const std::string& name, const std::string& pin);
+PinStatus PinRequestStatus();
+const std::string& PinRequestMessage();
+void ClearPinRequestStatus();
+// 4-8 digits, what the server accepts.
+bool PinShapeOk(const std::string& pin);
 
 // Call once per frame. inGame suppresses sending pending runs mid-run (they
 // go once the player is back in a menu); an explicit RequestBoards() always

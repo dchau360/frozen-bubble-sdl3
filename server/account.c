@@ -16,6 +16,7 @@
 #include <string.h>
 
 #include "account.h"
+#include "links.h"
 #include "monocypher.h"
 
 typedef struct {
@@ -115,7 +116,19 @@ int account_finish(int fd, const char* sig_hex)
         if (!ok) return 0;
         crypto_blake2b(hash, sizeof(hash), st->pubkey, sizeof(st->pubkey));
         tohex(hash, sizeof(hash), st->id);
+        /* A device linked with a PIN signs in as the account it joined. */
+        {
+                const char* canon = links_resolve(st->id);
+                if (canon != st->id && strlen(canon) == ACCOUNT_ID_HEX_LEN)
+                        memcpy(st->id, canon, ACCOUNT_ID_HEX_LEN + 1);
+        }
         return 1;
+}
+
+void account_set_id(int fd, const char* id)
+{
+        if (fd < 0 || fd >= 256 || !id || strlen(id) != ACCOUNT_ID_HEX_LEN) return;
+        memcpy(state[fd].id, id, ACCOUNT_ID_HEX_LEN + 1);
 }
 
 const char* account_id(int fd)

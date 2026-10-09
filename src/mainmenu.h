@@ -690,8 +690,9 @@ private:
     bool showingAccount = false;
     bool accountFromHighscores = false;  // close returns to the High Scores screen
     int accountSelection = 0;     // focused button in the current mode
-    int accountMode = 0;          // 0 view, 1 typing a code, 2 confirm new account
+    int accountMode = 0;          // 0 view, 1 typing a code, 2 confirm new account (more in mainmenu_account.cpp)
     char accountCodeInput[24] = "";
+    char accountLinkName[16] = "";  // Link with PIN: the name typed before the PIN
     std::string accountMessage;   // result of the last action, under the code
     bool accountMessageBad = false;
     bool showingTournament = false, tournamentConfirm = false;

@@ -46,6 +46,7 @@
 #include "stats.h"
 #include "weeklystats.h"
 #include "hiscores.h"
+#include "links.h"
 #include "discordalert.h"
 #include "tournament.h"
 
@@ -632,8 +633,83 @@ static void deleteaccount_command(int fd, char* msg_orig)
         }
         w = weekly_forget(id);
         h = hiscore_forget(id);
+        links_forget(id);
         l3(OUTPUT_TYPE_INFO, "Account %.4s deleted (weekly line %d, hiscores %d)", id, w, h);
         send_line_log(fd, "OK", msg_orig);
+}
+
+/* SETPIN / LINKPIN (protocol 1.8): tie a second device to an account with
+ * a name and a short PIN instead of its 16-character code -- see links.h.
+ * Both need the connection signed in, like HISCORE, and come over the same
+ * short connection the game's world-score submits use.
+ *   SETPIN <pin> <name>  -> SETPIN: OK | NOT_SIGNED_IN | INVALID | NAME_TAKEN
+ *   LINKPIN <name> <pin> -> LINKPIN: OK <id> | NOT_SIGNED_IN | INVALID
+ *                           | WRONG_PIN | TOO_MANY_TRIES
+ * On OK, LINKPIN folds what the connection's account had recorded into the
+ * PIN's account and the connection carries on signed in as that one. */
+static void setpin_command(int fd, char* args, char* msg_orig)
+{
+        char pin[16], name[32];
+        const char* id = account_id(fd);
+        if (!id || !*id) {
+                send_line_log(fd, "NOT_SIGNED_IN", msg_orig);
+                return;
+        }
+        if (!args || sscanf(args, "%15s %31s", pin, name) != 2 || !is_nick_ok(name)) {
+                send_line_log(fd, "INVALID", msg_orig);
+                return;
+        }
+        switch (links_set_pin(id, name, pin)) {
+        case LINKS_OK:
+                l2(OUTPUT_TYPE_INFO, "Account %.4s set a PIN for %s", id, name);
+                send_line_log(fd, "OK", msg_orig);
+                break;
+        case LINKS_NAME_TAKEN:
+                send_line_log(fd, "NAME_TAKEN", msg_orig);
+                break;
+        default:
+                send_line_log(fd, "INVALID", msg_orig);
+                break;
+        }
+}
+
+static void linkpin_command(int fd, char* args, char* msg_orig)
+{
+        char pin[16], name[32], canon[ACCOUNT_ID_HEX_LEN + 1], self[ACCOUNT_ID_HEX_LEN + 1];
+        char* line;
+        const char* id = account_id(fd);
+        if (!id || !*id) {
+                send_line_log(fd, "NOT_SIGNED_IN", msg_orig);
+                return;
+        }
+        if (!args || sscanf(args, "%31s %15s", name, pin) != 2 || !is_nick_ok(name)) {
+                send_line_log(fd, "INVALID", msg_orig);
+                return;
+        }
+        snprintf(self, sizeof(self), "%s", id);
+        switch (links_link(self, name, pin, canon)) {
+        case LINKS_OK:
+                break;
+        case LINKS_WRONG_PIN:
+                send_line_log(fd, "WRONG_PIN", msg_orig);
+                return;
+        case LINKS_TOO_MANY_TRIES:
+                send_line_log(fd, "TOO_MANY_TRIES", msg_orig);
+                return;
+        default:
+                send_line_log(fd, "INVALID", msg_orig);
+                return;
+        }
+        if (strcmp(self, canon) != 0) {
+                int h = hiscore_merge(self, canon);
+                int w = weekly_merge(self, canon);
+                account_set_id(fd, canon);
+                l4(OUTPUT_TYPE_INFO, "Account %.4s linked to %.4s by PIN (hiscores %d, weekly %d)",
+                   self, canon, h, w);
+        }
+        line = asprintf_("OK %s", canon);
+        send_line_log(fd, line, msg_orig);
+        free(line);
 }
 
 /* Game list is of the following scheme:
@@ -1797,6 +1873,11 @@ int process_msg(int fd, char* msg)
                 hiscores_command(fd, args, msg_orig);
         } else if (streq(current_command, "DELETEACCOUNT")) {
                 deleteaccount_command(fd, msg_orig);
+        } else if (streq(current_command, "SETPIN")) {
+                /* Logged without its arguments: debug output never shows a PIN. */
+                setpin_command(fd, args, (char*)"SETPIN ...");
+        } else if (streq(current_command, "LINKPIN")) {
+                linkpin_command(fd, args, (char*)"LINKPIN ...");
         } else if (streq(current_command, "STATUS")) {  // 1.0 command
                 if (!already_in_game(fd)) {
                         send_line_log(fd, wn_not_in_game, msg_orig);

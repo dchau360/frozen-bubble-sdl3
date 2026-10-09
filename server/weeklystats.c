@@ -171,6 +171,30 @@ int weekly_forget(const char* id)
         return 1;
 }
 
+static void rollover_if_needed(void);
+
+int weekly_merge(const char* from, const char* into)
+{
+        WeeklyLine* src;
+        WeeklyLine* dst;
+        int c;
+        if (!table || !from || !into || !*from || !*into || !strcmp(from, into)) return 0;
+        rollover_if_needed();
+        src = g_hash_table_lookup(table, from);
+        if (!src) return 0;
+        dst = g_hash_table_lookup(table, into);
+        if (!dst) {
+                dst = g_new0(WeeklyLine, 1);
+                *dst = *src;
+                g_hash_table_insert(table, g_strdup(into), dst);
+        } else {
+                for (c = 0; c < 3; c++) dst->counts[c] += src->counts[c];
+        }
+        g_hash_table_remove(table, from);
+        weekly_save();
+        return 1;
+}
+
 void weekly_save(void)
 {
         GHashTableIter iter;

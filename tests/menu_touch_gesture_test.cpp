@@ -806,15 +806,23 @@ int main() {
         MainMenuTestAccess::OpenAccount(*menu);
         CHECK(MainMenuTestAccess::ShowingAccount(*menu));
         MainMenuTestAccess::RenderAccount(*menu);
-        // Five buttons, each a tap target, focus starting on the first.
-        for (int i = 0; i < 5; i++)
+        // Seven buttons in two rows, each a tap target, focus starting on
+        // the first.
+        for (int i = 0; i < 7; i++)
             CHECK(MainMenuTestAccess::RectsForIndex(*menu, i).size() == 1);
+        CHECK(MainMenuTestAccess::RectsForIndex(*menu, 0)[0].y
+              < MainMenuTestAccess::RectsForIndex(*menu, 4)[0].y);
         CHECK(MainMenuTestAccess::AccountSelection(*menu) == 0);
         MainMenuTestAccess::AccountKey(*menu, SDLK_RIGHT);
         CHECK(MainMenuTestAccess::AccountSelection(*menu) == 1);
         MainMenuTestAccess::AccountKey(*menu, SDLK_LEFT);
         MainMenuTestAccess::AccountKey(*menu, SDLK_LEFT);
-        CHECK(MainMenuTestAccess::AccountSelection(*menu) == 4);  // wraps to Back
+        CHECK(MainMenuTestAccess::AccountSelection(*menu) == 6);  // wraps to Back
+        // UP/DOWN cross between the rows.
+        MainMenuTestAccess::AccountKey(*menu, SDLK_UP);
+        CHECK(MainMenuTestAccess::AccountSelection(*menu) == 2);
+        MainMenuTestAccess::AccountKey(*menu, SDLK_DOWN);
+        CHECK(MainMenuTestAccess::AccountSelection(*menu) == 6);
 
         // Delete account asks first too, with Cancel focused.
         MainMenuTestAccess::AccountKey(*menu, SDLK_LEFT);          // Delete account
@@ -823,7 +831,7 @@ int main() {
         CHECK(MainMenuTestAccess::AccountSelection(*menu) == 1);
         MainMenuTestAccess::AccountKey(*menu, SDLK_RETURN);        // Cancel
         CHECK(MainMenuTestAccess::AccountMode(*menu) == 0);
-        CHECK(MainMenuTestAccess::AccountSelection(*menu) == 3);
+        CHECK(MainMenuTestAccess::AccountSelection(*menu) == 5);
         CHECK(playeraccount::Code() == "7K3M9QX2HD4RB8TN");
 
         // New account asks first, with Cancel focused; ESC backs out of it.
@@ -838,7 +846,7 @@ int main() {
         // Tapping the focused "New account" confirm button makes a new one.
         MainMenuTestAccess::AccountKey(*menu, SDLK_LEFT);          // Back -> Delete
         MainMenuTestAccess::AccountKey(*menu, SDLK_LEFT);          // -> New account
-        CHECK(MainMenuTestAccess::AccountSelection(*menu) == 2);
+        CHECK(MainMenuTestAccess::AccountSelection(*menu) == 4);
         MainMenuTestAccess::AccountKey(*menu, SDLK_RETURN);
         MainMenuTestAccess::RenderAccount(*menu);
         {
@@ -879,6 +887,23 @@ int main() {
         MainMenuTestAccess::AccountKey(*menu, SDLK_RETURN);
         CHECK(MainMenuTestAccess::AccountMode(*menu) == 0);
         CHECK(playeraccount::Code() == "7K3M9QX2HD4RB8TN");
+
+        // Link with PIN: a name, then a PIN, each only taking what the
+        // server would; a short PIN is refused there, before anything is
+        // sent, and ESC backs out to the view.
+        while (MainMenuTestAccess::AccountSelection(*menu) != 3)
+            MainMenuTestAccess::AccountKey(*menu, SDLK_RIGHT);
+        MainMenuTestAccess::AccountKey(*menu, SDLK_RETURN);
+        CHECK(MainMenuTestAccess::AccountMode(*menu) == 6);
+        MainMenuTestAccess::AccountText(*menu, "dc:hau");
+        MainMenuTestAccess::AccountKey(*menu, SDLK_RETURN);
+        CHECK(MainMenuTestAccess::AccountMode(*menu) == 7);
+        MainMenuTestAccess::AccountText(*menu, "12ab");
+        MainMenuTestAccess::AccountKey(*menu, SDLK_RETURN);
+        CHECK(MainMenuTestAccess::AccountMode(*menu) == 7);
+        CHECK(MainMenuTestAccess::AccountMessage(*menu) == "A PIN is 4 to 8 digits.");
+        MainMenuTestAccess::AccountKey(*menu, SDLK_ESCAPE);
+        CHECK(MainMenuTestAccess::AccountMode(*menu) == 0);
 
         // ESC from the main view closes the screen.
         MainMenuTestAccess::AccountKey(*menu, SDLK_ESCAPE);

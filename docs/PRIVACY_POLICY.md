@@ -35,6 +35,19 @@ on the LAN GAME and NET GAME screens, in the 1-player menu, and on the High
 Scores screen's online tabs; copy it, enter it on another device to move your
 account there, start a new account, or delete the account.
 
+**Account PIN (optional).** Instead of typing the code on another device, you
+can choose **Set PIN** on that screen: fb.servequake.com then keeps your
+nickname, a 4-to-8-digit PIN you pick, and which account they belong to.
+Choosing **Link with PIN** on another device and entering the same nickname
+and PIN makes that device play as your account on fb.servequake.com, and
+adds whatever it had recorded under its own account to yours. The PIN is
+stored salted and hashed, but a PIN is short, travels unencrypted like the
+rest of the game's traffic to port 1511, and could be guessed from a copy of
+the server's file, so don't reuse a PIN you use for anything else; after
+five wrong guesses for a name the server refuses that name for an hour.
+Nothing about the PIN leaves the server, and the device that linked keeps its
+own code.
+
 **Network connection data.** Playing network multiplayer means connecting
 to a game server over TCP — your IP address is visible to that server the
 same way it is for any internet connection, and the reference server
@@ -202,6 +215,8 @@ or analytics SDK, so none is collected by the developer.
   both messages.
 - Account public key: to recognise the same player across visits, so that
   weekly rankings belong to an account rather than to whoever uses a name.
+- Nickname and PIN, if you set one: to let another device you link with them
+  play as the same account (see "Account PIN").
 - Nickname and round results: counted into the server's weekly rankings,
   shown in the lobby and, if the server runs the relay, on Discord (see
   above).
@@ -244,13 +259,14 @@ account" above). Servers keep nothing about an account except its weekly
 ranking line (the short account tag, the nickname last played under, and
 that week's counts) and, on fb.servequake.com, its online highscore line (the
 same tag and nickname, the country last sent, and the account's best run
-all-time and this week).
+all-time and this week), plus its PIN and the devices linked to it with that
+PIN, if you set one.
 
 To delete your account, open **Account code** (in the 1-player menu, on the
 High Scores screen's online tabs, or on the LAN GAME / NET GAME screens) and
 choose **Delete account**. The game signs in to fb.servequake.com as that
 account one last time and asks it to delete the account's online highscore
-line and weekly ranking line there, then erases the code from your device
+line, weekly ranking line, PIN and links there, then erases the code from your device
 and gives it a new one, so nobody can sign in as the old account again. If
 the server can't be reached, nothing is changed and you can try again.
 
