@@ -384,6 +384,34 @@ int hiscore_forget(const char* id)
         return 1;
 }
 
+int hiscore_merge(const char* from, const char* into)
+{
+        HiscoreLine* src;
+        HiscoreLine* dst;
+        int s, b;
+        if (!table || !from || !into || !*from || !*into || !strcmp(from, into)) return 0;
+        rollover_if_needed();
+        src = g_hash_table_lookup(table, from);
+        if (!src) return 0;
+        dst = g_hash_table_lookup(table, into);
+        if (!dst) {
+                dst = g_new0(HiscoreLine, 1);
+                *dst = *src;
+                g_hash_table_insert(table, g_strdup(into), dst);
+        } else {
+                for (s = 0; s < 2; s++)
+                        for (b = 0; b < HISCORE_BOARDS; b++) {
+                                const Run* r = &src->best[s][b];
+                                if (r->level && (!dst->best[s][b].level || better(b, r, &dst->best[s][b])))
+                                        dst->best[s][b] = *r;
+                        }
+                if (!dst->country[0]) memcpy(dst->country, src->country, sizeof(dst->country));
+        }
+        g_hash_table_remove(table, from);
+        save();
+        return 1;
+}
+
 int hiscore_rank(const char* id, int board, enum hiscore_scope scope)
 {
         GHashTableIter iter;

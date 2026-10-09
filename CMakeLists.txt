@@ -793,6 +793,11 @@ if(BUILD_TESTING AND NOT EMSCRIPTEN AND NOT ANDROID AND NOT IOS)
         add_test(NAME server-hiscore-test
             COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tests/server_hiscore_test.py $<TARGET_FILE:fb-server>
                     $<TARGET_FILE:account-sign-tool>)
+        # Account PINs (server/links.c): SETPIN, LINKPIN folding a device's
+        # account into the PIN's, the wrong-guess limit, DELETEACCOUNT.
+        add_test(NAME server-links-test
+            COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tests/server_links_test.py $<TARGET_FILE:fb-server>
+                    $<TARGET_FILE:account-sign-tool>)
         # Binds the hardcoded UDP discovery port, so it cannot run concurrently
         # with another fb-server; it skips when that port is already in use.
         add_test(NAME server-udp-probe-test

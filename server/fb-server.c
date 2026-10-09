@@ -29,6 +29,7 @@
 #include "stats.h"
 #include "weeklystats.h"
 #include "hiscores.h"
+#include "links.h"
 #include "discordalert.h"
 
 static void cleanup_atexit(void)
@@ -56,6 +57,7 @@ int main(int argc, char **argv)
         stats_init();
         weekly_init();
         hiscore_init();
+        links_init();
         setup_signal_handlers();
 
         create_server(argc, argv);

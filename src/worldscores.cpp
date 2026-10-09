@@ -32,8 +32,9 @@ constexpr int kNativePort = 1511;
 constexpr Uint64 kSessionTimeoutMs = 12000;
 // After a failed send, wait this long before trying again on our own.
 constexpr Uint64 kRetryAfterMs = 60000;
-// The server's own protocol minor that has HISCORE/HISCORES.
+// The server's own protocol minor that has HISCORE/HISCORES, and SETPIN/LINKPIN.
 constexpr int kMinProtoMinor = 7;
+constexpr int kPinProtoMinor = 8;
 
 struct Run {
     int level = 0;
@@ -62,6 +63,20 @@ Status status = Status::Idle;
 DeleteStatus deleteStatus = DeleteStatus::Idle;
 std::string deleteError;
 bool deleteWanted = false;  // asked while another session was in flight
+enum class PinAction { None, Set, Link };
+PinStatus pinStatus = PinStatus::Idle;
+std::string pinMessage;
+PinAction pinWanted = PinAction::None;  // asked while another session was in flight
+std::string pinName, pinCode;
+// The id the server last answered AUTHSIG with: this device's own, or the
+// account a PIN linked it to. Empty until a session has signed in.
+// signedInFor is this device's own id at the time, so a code typed in or a
+// new account since then makes it stale.
+std::string signedInId, signedInFor;
+void NoteSignedIn(const std::string& id) {
+    signedInId = id;
+    signedInFor = playeraccount::AccountIdHex();
+}
 std::string lastError;
 bool boardsWanted = false;
 Uint64 retryAt = 0;
@@ -324,6 +339,8 @@ struct Session {
     bool fetchBoards = false;
     bool deleteAccount = false;  // DELETEACCOUNT instead of HISCORE/HISCORES
     bool deleted = false;        // ...and the server said OK
+    PinAction pin = PinAction::None;  // SETPIN/LINKPIN instead of HISCORE/HISCORES
+    bool pinOk = false;               // ...and the server said OK
     Run submitting[kBoards];
     int awaiting = 0;          // replies still owed
     bool sentRequests = false;
@@ -351,6 +368,16 @@ void SendRequests(Session& s) {
     s.sentRequests = true;
     if (s.deleteAccount) {
         s.transport->Send("FB/1.3 DELETEACCOUNT");
+        ++s.awaiting;
+        return;
+    }
+    if (s.pin == PinAction::Set) {
+        s.transport->Send("FB/1.3 SETPIN " + pinCode + " " + SubmitNick());
+        ++s.awaiting;
+        return;
+    }
+    if (s.pin == PinAction::Link) {
+        s.transport->Send("FB/1.3 LINKPIN " + pinName + " " + pinCode);
         ++s.awaiting;
         return;
     }
@@ -387,6 +414,11 @@ void HandleLine(Session& s, const std::string& line) {
             s.error = "The online board server needs an update.";
             return;
         }
+        if (s.pin != PinAction::None && minor < kPinProtoMinor) {
+            s.failed = true;
+            s.error = "The server can't do PINs yet. Try again after it is updated.";
+            return;
+        }
         if (s.signIn) s.transport->Send("FB/1.3 AUTH " + playeraccount::PublicKeyHex());
         else SendRequests(s);
     } else if (ReplyTo(line, "AUTH", payload)) {
@@ -404,6 +436,7 @@ void HandleLine(Session& s, const std::string& line) {
             s.error = "Couldn't sign in.";
             return;
         }
+        NoteSignedIn(payload.substr(3, 16));
         SendRequests(s);
     } else if (ReplyTo(line, "HISCORE", payload)) {
         // OK, or INVALID (which a retry would only repeat): either way the
@@ -426,6 +459,23 @@ void HandleLine(Session& s, const std::string& line) {
                 ? "The server can't delete accounts yet. Try again after it is updated."
                 : "The server couldn't delete the account.";
         }
+    } else if (ReplyTo(line, "SETPIN", payload) || ReplyTo(line, "LINKPIN", payload)) {
+        --s.awaiting;
+        if (payload.compare(0, 2, "OK") == 0) {
+            s.pinOk = true;
+            if (s.pin == PinAction::Link && payload.size() >= 3 + 16) NoteSignedIn(payload.substr(3, 16));
+        } else {
+            s.failed = true;
+            s.error = payload.compare(0, 10, "NAME_TAKEN") == 0
+                ? "Another account already has a PIN under this name. Pick another name."
+                : payload.compare(0, 9, "WRONG_PIN") == 0
+                ? "That name and PIN don't match."
+                : payload.compare(0, 14, "TOO_MANY_TRIES") == 0
+                ? "Too many wrong PINs for this name. Try again in an hour."
+                : payload.compare(0, 15, "UNKNOWN_COMMAND") == 0
+                ? "The server can't do PINs yet. Try again after it is updated."
+                : "The server refused that PIN.";
+        }
     } else if (ReplyTo(line, "HISCORES", payload)) {
         const int b = s.boardOrder++;
         if (b < kBoards && s.gotBoards[b].Parse(payload)) s.gotBoard[b] = true;
@@ -433,16 +483,20 @@ void HandleLine(Session& s, const std::string& line) {
     }
 }
 
-void Start(bool withBoards, bool deleteAccount = false) {
+void Start(bool withBoards, bool deleteAccount = false, PinAction pin = PinAction::None) {
     const std::string host = Host();
     if (host.empty()) return;
     auto s = std::make_unique<Session>();
     s->deleteAccount = deleteAccount;
+    s->pin = pin;
+    const bool accountAction = deleteAccount || pin != PinAction::None;
     // Deleting needs the account's own signature whatever the setting says,
     // and sends nothing else: unsent runs belong to the account being deleted.
-    s->signIn = deleteAccount || SendingEnabled();
-    s->fetchBoards = withBoards && !deleteAccount;
-    if (s->signIn && !deleteAccount)
+    // A PIN request likewise; the runs go in the next ordinary session, by
+    // then under whichever account the device signs in as.
+    s->signIn = accountAction || SendingEnabled();
+    s->fetchBoards = withBoards && !accountAction;
+    if (s->signIn && !accountAction)
         for (int b = 0; b < kBoards; ++b) s->submitting[b] = pending[b];
     const int port = testMode ? testPort : 0;
 #ifdef __WASM_PORT__
@@ -474,6 +528,22 @@ void Finish() {
             deleteStatus = DeleteStatus::Failed;
             deleteError = !s.error.empty() ? s.error : "Couldn't reach the server to delete the account.";
         }
+        session.reset();
+        return;
+    }
+    if (s.pin != PinAction::None) {
+        if (complete && s.pinOk) {
+            pinStatus = PinStatus::Done;
+            pinMessage = s.pin == PinAction::Set
+                ? "PIN set. On another device, pick Link with PIN and enter " + SubmitNick() + " and this PIN."
+                : "Linked. This device now plays as " + pinName + "'s account.";
+            // A link changes which account the boards' "you" line is.
+            if (s.pin == PinAction::Link) status = Status::Idle;
+        } else {
+            pinStatus = PinStatus::Failed;
+            pinMessage = !s.error.empty() ? s.error : "Couldn't reach the server.";
+        }
+        pinCode.clear();
         session.reset();
         return;
     }
@@ -549,6 +619,40 @@ void RequestDeleteAccount() {
     else Start(false, true);
 }
 
+namespace {
+void RequestPin(PinAction a, const std::string& name, const std::string& pin) {
+    if (pinStatus == PinStatus::Working) return;
+    if (!Available()) {
+        pinStatus = PinStatus::Failed;
+        pinMessage = "This build has no account server.";
+        return;
+    }
+    pinName = name;
+    pinCode = pin;
+    pinStatus = PinStatus::Working;
+    pinMessage.clear();
+    if (session) pinWanted = a;  // after the one in flight
+    else Start(false, false, a);
+}
+}  // namespace
+
+bool PinShapeOk(const std::string& pin) {
+    if (pin.size() < 4 || pin.size() > 8) return false;
+    for (char c : pin)
+        if (c < '0' || c > '9') return false;
+    return true;
+}
+
+void RequestSetPin(const std::string& pin) { RequestPin(PinAction::Set, "", pin); }
+void RequestLinkPin(const std::string& name, const std::string& pin) {
+    RequestPin(PinAction::Link, name, pin);
+}
+PinStatus PinRequestStatus() { return pinStatus; }
+const std::string& PinRequestMessage() { return pinMessage; }
+void ClearPinRequestStatus() {
+    if (pinStatus != PinStatus::Working) pinStatus = PinStatus::Idle;
+}
+
 DeleteStatus DeleteAccountStatus() { return deleteStatus; }
 const std::string& DeleteAccountError() { return deleteError; }
 void ClearDeleteAccountStatus() {
@@ -573,7 +677,8 @@ std::string ShownName() {
     // Sending off means no account is needed, and working out the tag would
     // create one (playeraccount::Code() makes one on first use).
     if (!SendingEnabled()) return SubmitNick();
-    const std::string id = playeraccount::AccountIdHex();
+    const std::string own = playeraccount::AccountIdHex();
+    const std::string id = !signedInId.empty() && signedInFor == own ? signedInId : own;
     return id.size() >= 4 ? SubmitNick() + "#" + id.substr(0, 4) : SubmitNick();
 }
 
@@ -596,6 +701,10 @@ void Pump(bool inGame) {
             if (deleteWanted) {
                 deleteWanted = false;
                 Start(false, true);
+            } else if (pinWanted != PinAction::None) {
+                const PinAction a = pinWanted;
+                pinWanted = PinAction::None;
+                Start(false, false, a);
             } else if (boardsWanted) {
                 boardsWanted = false;
                 Start(true);
@@ -620,6 +729,11 @@ void SetServerForTest(const std::string& host, int port) {
     deleteStatus = DeleteStatus::Idle;
     deleteError.clear();
     deleteWanted = false;
+    pinStatus = PinStatus::Idle;
+    pinMessage.clear();
+    pinWanted = PinAction::None;
+    signedInId.clear();
+    signedInFor.clear();
 }
 
 int PendingCountForTest() {
