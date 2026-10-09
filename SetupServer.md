@@ -249,6 +249,19 @@ Lines starting with `#` are comments. A ban covers the online board only, not
 the weekly rankings. A banned player can still start a new account; ban that
 one too when it shows up.
 
+#### One entry per name
+
+`docker-compose.yml` sets `FB_SERVER_HISCORE_MERGE_NICKS=1`, which lists each
+name once on the online board, with the best run any account played under it
+(upper and lower case count as the same name), and ranks each name once. It
+is for a small board where one player ends up with several accounts -- a
+browser that forgot its account code, a new phone -- and would otherwise fill
+the list with copies of themselves. Only the lists and ranks change:
+`hiscores.dat` keeps every account apart, so setting it to `0` in
+`docker/.env` brings the separate lines back. The cost is that anyone who
+picks the same name joins that entry, and the best run under the name is the
+one shown, whoever set it. The weekly rankings are not merged.
+
 #### Weekly backups, and removing a cheater
 
 Every Monday 00:00 UTC, just before a finished week is cleared, `fb-server`

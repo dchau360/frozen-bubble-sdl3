@@ -43,6 +43,14 @@ static GHashTable* table = NULL;   /* account id -> HiscoreLine* */
 static char* file_path = NULL;
 static long week_start_day = 0;    /* UTC day index of this week's Monday */
 
+/* FB_SERVER_HISCORE_MERGE_NICKS: list one entry per name, the best of every
+ * account that played under it (case ignored). For a small board where the
+ * same player ends up with several accounts -- a browser that forgot its
+ * code, a new phone -- rather than several lines. Lists and ranks only: the
+ * file still keeps every account apart, so turning it off brings them back.
+ * The cost is that a stranger using the same name joins that line too. */
+static int merge_nicks = 0;
+
 static GHashTable* banned = NULL;  /* account id -> unused, from the ban file */
 static char* banned_path = NULL;
 static gint64 banned_mtime = -1;   /* -1 = not read yet; 0 = no file */
@@ -143,6 +151,12 @@ void hiscore_init(void)
                 g_free(dir);
         }
         l1(OUTPUT_TYPE_INFO, "Hiscores file: %s", file_path);
+        {
+                const char* m = getenv("FB_SERVER_HISCORE_MERGE_NICKS");
+                merge_nicks = m && *m && strcmp(m, "0") != 0;
+                if (merge_nicks)
+                        l0(OUTPUT_TYPE_INFO, "Hiscores: one entry per name (FB_SERVER_HISCORE_MERGE_NICKS)");
+        }
         {
                 const char* explicit_bans = getenv("FB_SERVER_BANNED_FILE");
                 char* dir = g_path_get_dirname(file_path);
@@ -384,6 +398,25 @@ int hiscore_rank(const char* id, int board, enum hiscore_scope scope)
         hl = g_hash_table_lookup(table, id);
         if (!hl || hl->best[scope][board].level == 0) return 0;
         mine = &hl->best[scope][board];
+        if (merge_nicks) {
+                /* Names above, each once; this name's own other accounts are
+                 * the same entry, not above it. */
+                GHashTable* seen = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, NULL);
+                char* me = g_ascii_strdown(hl->nick, -1);
+                g_hash_table_add(seen, me);
+                g_hash_table_iter_init(&iter, table);
+                while (g_hash_table_iter_next(&iter, &key, &value)) {
+                        const HiscoreLine* other = value;
+                        const Run* r = &other->best[scope][board];
+                        char* name;
+                        if (!r->level || is_banned(key) || !better(board, r, mine)) continue;
+                        name = g_ascii_strdown(other->nick, -1);
+                        if (g_hash_table_contains(seen, name)) g_free(name);
+                        else { g_hash_table_add(seen, name); above++; }
+                }
+                g_hash_table_destroy(seen);
+                return above + 1;
+        }
         g_hash_table_iter_init(&iter, table);
         while (g_hash_table_iter_next(&iter, &key, &value)) {
                 const Run* r = &((HiscoreLine*)value)->best[scope][board];
@@ -459,6 +492,23 @@ void hiscore_top_csv(int board, enum hiscore_scope scope, int n, char* out, size
         }
         sort_board = board;
         qsort(entries, used, sizeof(Entry), entry_cmp);
+        if (merge_nicks) {
+                /* Best first, so the first entry under a name is its best:
+                 * keep that one, drop the rest. */
+                GHashTable* seen = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, NULL);
+                guint kept = 0;
+                for (i = 0; i < used; i++) {
+                        char* name = g_ascii_strdown(entries[i].line->nick, -1);
+                        if (g_hash_table_contains(seen, name)) {
+                                g_free(name);
+                                continue;
+                        }
+                        g_hash_table_add(seen, name);
+                        entries[kept++] = entries[i];
+                }
+                g_hash_table_destroy(seen);
+                used = kept;
+        }
         for (i = 0; i < used && (int)i < n; i++) {
                 int w = snprintf(out + len, outsz - len, "%s%s#%.*s=%d/%d/%d%s%s",
                                  i ? "," : "", entries[i].line->nick, WEEKLY_TAG_LEN,

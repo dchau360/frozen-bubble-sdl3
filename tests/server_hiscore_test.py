@@ -270,6 +270,37 @@ class HiscoreTest(WeeklyTestBase):
                    extra_env={"FB_SERVER_SNAPSHOTS": "0"})
         self.board(self.session(), 0)
         self.assertEqual(list(self.hiscore_file.parent.glob("*.dat.????-??-??")), [])
+    def test_merge_nicks_lists_one_entry_per_name(self):
+        """FB_SERVER_HISCORE_MERGE_NICKS: a player whose browser forgot its
+        account code plays on under a second one with the same name; the
+        board shows that name once, with its best run, and ranks count it
+        once. Off (the default) both lines stay."""
+        def run(merge):
+            self.start(extra_env={"FB_SERVER_HISCORE_MERGE_NICKS": "1"} if merge else None)
+            old, new, bob = self.session("alice"), self.session("alice-phone"), self.session("bob")
+            self.submit(old, 0, 40, 900000, "alice")
+            self.submit(new, 0, 12, 300000, "Alice")   # case ignored
+            self.submit(bob, 0, 20, 400000, "bob")
+            return old, new, bob
+        tag = lambda acct, nick: f"{nick}#{self.acct.id(acct)[:4]}"
+
+        old, new, bob = run(merge=True)
+        _, alltime, week, me = self.board(bob, 0)
+        self.assertEqual(alltime, [f"{tag('alice', 'alice')}=40/900000/0",
+                                   f"{tag('bob', 'bob')}=20/400000/0"])
+        self.assertEqual(week, alltime)
+        self.assertEqual(me, "2,20,400000,0,2,20,400000,0")
+        # The weaker account's own run is ranked among names: behind bob, and
+        # not behind its own name's better run.
+        self.assertEqual(self.board(new, 0)[3], "2,12,300000,0,2,12,300000,0")
+        _, alltime, _, _ = self.board(self.session(), 0)
+        self.assertEqual(len(alltime), 2)
+        # The file keeps both accounts apart: off again, both lines are back.
+        self.server.kill()
+        self.server.wait(timeout=5)
+        self.start()
+        self.assertEqual(len(self.board(self.session(), 0)[1]), 3)
+
     def test_impossible_runs_are_refused(self):
         self.start()
         a = self.session("alice")
