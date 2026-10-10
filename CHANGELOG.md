@@ -1,5 +1,10 @@
 # Changelog
 
+## v2.4.150
+
+- **Account PIN.** Instead of typing your 16-character account code on another device, open Account code and choose Set PIN to pick a 4-to-8-digit PIN under your name. On the other device, choose Link with PIN and enter the same name and PIN: it then plays as your account on the online high scores, and its own scores are added to yours.
+- **One entry per name on the online high scores.** If you ended up with several accounts under the same name, the board now shows only your best one.
+
 ## v2.4.149
 
 - **Back button on every menu screen.** A Back button now sits at the top left of every screen past the title menu, from the 1-player menu and settings to the server lists, lobby, game room and High Scores. Tapping it does the same as ESC.
