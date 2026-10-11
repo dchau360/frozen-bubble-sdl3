@@ -648,6 +648,18 @@ void GameSettings::setSoundEnabled(bool on) {
     SaveSettings();
 }
 
+void GameSettings::setMusicEnabled(bool on) {
+    playMusic = on;
+    iniparser_set(optDict, "Sound:EnableMusic", on ? "true" : "false");
+    SaveSettings();
+}
+
+void GameSettings::setSfxEnabled(bool on) {
+    playSfx = on;
+    iniparser_set(optDict, "Sound:EnableSFX", on ? "true" : "false");
+    SaveSettings();
+}
+
 void GameSettings::SaveHostSettings(bool chainReactions, bool singlePlayerTargetting,
                                     int victoriesLimitIndex, int gameMode,
                                     int raceTargetIndex, int timedSecondsIndex, int attackMode,

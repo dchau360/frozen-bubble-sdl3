@@ -52,7 +52,13 @@ struct BubbleGameTestAccess {
     static bool menuHit(const BubbleGame& game, float x, float y) { return game.MenuButtonHit(x, y); }
     static bool menuOpen(const BubbleGame& game) { return game.gameMenuOpen; }
     static void openMenu(BubbleGame& game) { game.OpenGameMenu(); game.gameMenuStartMs = 1; }
-    static void menuKey(BubbleGame& game, SDL_Keycode k) { game.GameMenuKey(k); }
+    static void menuKey(BubbleGame& game, SDL_Keycode k, SDL_Scancode sc = SDL_SCANCODE_UNKNOWN) {
+        game.GameMenuKey(k, sc);
+    }
+    static int menuRows(const BubbleGame& game) { return game.GameMenuRowCount(); }
+    static bool menuOnPage(const BubbleGame& game, int page) { return (int)game.gameMenuPage == page; }
+    static bool awaitingBind(const BubbleGame& game) { return game.GameMenuAwaitingBind(); }
+    static int curLevel(const BubbleGame& game) { return game.curLevel; }
     static void menuTap(BubbleGame& game, float x, float y) { game.GameMenuTap(x, y); }
     static int menuFocus(const BubbleGame& game) { return game.gameMenuFocus; }
     static SDL_Rect menuBtn(const BubbleGame& game, int i) { return game.gameMenuBtn[i]; }
@@ -132,6 +138,8 @@ static bool OnScreen(const SDL_Rect& r) {
 
 int main() {
     SDL_SetEnvironmentVariable(SDL_GetEnvironment(), "SDL_VIDEODRIVER", "dummy", true);
+    // Silent: the in-game menu's MUSIC switch below really starts the music.
+    SDL_SetEnvironmentVariable(SDL_GetEnvironment(), "SDL_AUDIO_DRIVER", "dummy", true);
     SDL_Init(SDL_INIT_VIDEO);
     TTF_Init();
     InitDataDir();
@@ -244,18 +252,74 @@ int main() {
         CHECK(!BubbleGameTestAccess::menuHit(game, 24, 24));   // hidden while open
         BubbleGameTestAccess::paused(game);
         Dump(renderer, "1i-menu");
+        // RESUME, RESTART LEVEL, START OVER, SOUND, MUSIC, CONTROLS, QUIT:
+        // a column, every row on screen.
+        CHECK(BubbleGameTestAccess::menuRows(game) == 7);
         const SDL_Rect resume = BubbleGameTestAccess::menuBtn(game, 0);
-        const SDL_Rect quit = BubbleGameTestAccess::menuBtn(game, 1);
+        const SDL_Rect quit = BubbleGameTestAccess::menuBtn(game, 6);
         CHECK(OnScreen(resume) && OnScreen(quit));
-        CHECK(resume.x + resume.w <= quit.x);   // RESUME on the left
-        // Keys move between the two; ESC resumes, as does tapping RESUME.
+        CHECK(resume.y + resume.h <= quit.y);   // RESUME on top
+        // UP/DOWN move down the column and wrap; ESC resumes, as does
+        // tapping RESUME.
         CHECK(BubbleGameTestAccess::menuFocus(game) == 0);
-        BubbleGameTestAccess::menuKey(game, SDLK_RIGHT);
+        BubbleGameTestAccess::menuKey(game, SDLK_DOWN);
+        CHECK(BubbleGameTestAccess::menuFocus(game) == 1);
+        BubbleGameTestAccess::menuKey(game, SDLK_UP);
+        BubbleGameTestAccess::menuKey(game, SDLK_UP);
+        CHECK(BubbleGameTestAccess::menuFocus(game) == 6);
+
+        // SOUND and MUSIC flip their settings, and flip back.
+        GameSettings* gs = GameSettings::Instance();
+        const bool sfxBefore = gs->canPlaySFX(), musicBefore = gs->canPlayMusic();
+        BubbleGameTestAccess::menuTap(game, BubbleGameTestAccess::menuBtn(game, 3).x + 4.f,
+                                      BubbleGameTestAccess::menuBtn(game, 3).y + 4.f);
+        CHECK(gs->canPlaySFX() == !sfxBefore);
+        BubbleGameTestAccess::menuTap(game, BubbleGameTestAccess::menuBtn(game, 3).x + 4.f,
+                                      BubbleGameTestAccess::menuBtn(game, 3).y + 4.f);
+        CHECK(gs->canPlaySFX() == sfxBefore);
+        CHECK(BubbleGameTestAccess::menuFocus(game) == 3);   // a tap focuses its row
+        BubbleGameTestAccess::menuKey(game, SDLK_DOWN);      // MUSIC
+        BubbleGameTestAccess::menuKey(game, SDLK_RETURN);
+        CHECK(gs->canPlayMusic() == !musicBefore);
+        BubbleGameTestAccess::menuKey(game, SDLK_RETURN);
+        CHECK(gs->canPlayMusic() == musicBefore);
+        CHECK(BubbleGameTestAccess::menuOpen(game));
+
+        // CONTROLS: a page of the player's keys; ENTER waits for a key, the
+        // next one becomes the binding, ESC backs out to the menu.
+        BubbleGameTestAccess::menuKey(game, SDLK_DOWN);   // CONTROLS
+        BubbleGameTestAccess::menuKey(game, SDLK_RETURN);
+        CHECK(BubbleGameTestAccess::menuOnPage(game, 2));
+        CHECK(BubbleGameTestAccess::menuRows(game) == 6);   // five keys and DONE
+        BubbleGameTestAccess::paused(game);
+        Dump(renderer, "1j-menu-controls");
+        const SDL_Scancode leftBefore = gs->player1Keys.left;
+        BubbleGameTestAccess::menuKey(game, SDLK_RETURN);
+        CHECK(BubbleGameTestAccess::awaitingBind(game));
+        BubbleGameTestAccess::menuKey(game, SDLK_J, SDL_SCANCODE_J);
+        CHECK(!BubbleGameTestAccess::awaitingBind(game));
+        CHECK(gs->player1Keys.left == SDL_SCANCODE_J);
+        gs->player1Keys.left = leftBefore;
+        BubbleGameTestAccess::menuKey(game, SDLK_ESCAPE);
+        CHECK(BubbleGameTestAccess::menuOnPage(game, 0));
+        CHECK(BubbleGameTestAccess::menuFocus(game) == 5);   // back on CONTROLS
+        CHECK(BubbleGameTestAccess::menuOpen(game));
+
+        // RESTART LEVEL asks first, CANCEL focused, and CANCEL goes back.
+        BubbleGameTestAccess::menuTap(game, BubbleGameTestAccess::menuBtn(game, 1).x + 4.f,
+                                      BubbleGameTestAccess::menuBtn(game, 1).y + 4.f);
+        CHECK(BubbleGameTestAccess::menuOnPage(game, 1));
+        CHECK(BubbleGameTestAccess::menuFocus(game) == 1);
+        BubbleGameTestAccess::paused(game);
+        Dump(renderer, "1k-menu-restart");
+        BubbleGameTestAccess::menuKey(game, SDLK_RETURN);
+        CHECK(BubbleGameTestAccess::menuOnPage(game, 0));
         CHECK(BubbleGameTestAccess::menuFocus(game) == 1);
         BubbleGameTestAccess::menuKey(game, SDLK_ESCAPE);
         CHECK(!BubbleGameTestAccess::menuOpen(game));
         CHECK(!FrozenBubble::Instance()->GamePaused());
         BubbleGameTestAccess::openMenu(game);
+        BubbleGameTestAccess::paused(game);   // lays the main page's rows out again
         BubbleGameTestAccess::menuTap(game, resume.x + 4.f, resume.y + 4.f);
         CHECK(!BubbleGameTestAccess::menuOpen(game));
         CHECK(!FrozenBubble::Instance()->GamePaused());
@@ -369,7 +433,17 @@ int main() {
         BubbleGameTestAccess::openMenu(game);
         BubbleGameTestAccess::paused(game);
         Dump(renderer, "8c-local-menu");
-        BubbleGameTestAccess::menuKey(game, SDLK_TAB);
+        // No RESTART LEVEL / START OVER outside the campaign: RESUME,
+        // SOUND, MUSIC, CONTROLS, QUIT. The controls page picks a player.
+        CHECK(BubbleGameTestAccess::menuRows(game) == 5);
+        BubbleGameTestAccess::menuKey(game, SDLK_UP);
+        BubbleGameTestAccess::menuKey(game, SDLK_UP);    // CONTROLS
+        BubbleGameTestAccess::menuKey(game, SDLK_RETURN);
+        CHECK(BubbleGameTestAccess::menuRows(game) == 7);   // PLAYER, five keys, DONE
+        BubbleGameTestAccess::paused(game);
+        Dump(renderer, "8d-local-controls");
+        BubbleGameTestAccess::menuKey(game, SDLK_ESCAPE);
+        BubbleGameTestAccess::menuKey(game, SDLK_DOWN);   // QUIT
         BubbleGameTestAccess::menuKey(game, SDLK_RETURN);
         CHECK(!BubbleGameTestAccess::menuOpen(game));
         CHECK(!FrozenBubble::Instance()->GamePaused());

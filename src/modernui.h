@@ -115,6 +115,7 @@ std::string FormatNumber(int n);
 struct Fonts {
     TTFText hudLabel[4], hudValue[4];
     TTFText title, statLabel[3], statValue[3], button[3], note, popup, dropped;
+    TTFText rowLabel[8], rowValue[8];  // ListCard
     void Load();
 };
 
@@ -140,6 +141,22 @@ struct Card {
     SDL_Texture* art = nullptr;
 };
 void DrawCard(SDL_Renderer* rend, Fonts& f, const Card& card, float appear, SDL_Rect btnOut[3]);
+
+// A card with a column of up to kListRows rows (the in-game menu and its
+// controls page): each a button with a label and, when given, a value on its
+// right ("SOUND" / "ON"). `focus` is drawn highlighted; the rows' rects come
+// back in rowOut for tap hit-tests. Stats and note as on Card.
+constexpr int kListRows = 8;
+struct ListCard {
+    std::string title;
+    Stat stats[3];
+    int statCount = 0;
+    std::string labels[kListRows], values[kListRows];
+    int rowCount = 0;
+    int focus = 0;
+    std::string note;
+};
+void DrawListCard(SDL_Renderer* rend, Fonts& f, const ListCard& card, float appear, SDL_Rect rowOut[kListRows]);
 
 // The on-screen pause button (BubbleGame::ShowsPauseButton): two bars, or a
 // play triangle while the game is paused.

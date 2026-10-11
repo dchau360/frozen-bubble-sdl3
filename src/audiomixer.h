@@ -38,6 +38,10 @@ public:
     void PauseMusic();
     void ResumeMusic();
     void MuteAll(bool enable = false);
+    // GameSettings' music switch just changed: off pauses the track, on
+    // brings it back -- the one last asked for, if music was off when it was
+    // asked for. paused: the game is paused, so leave it for the unpause.
+    void MusicSwitched(bool on, bool paused);
     bool IsHalted() { return haltedMixer; };
 
 #ifdef FROZEN_BUBBLE_TEST_ACCESS
@@ -66,6 +70,7 @@ private:
     MIX_Mixer* mixer = nullptr;
     MIX_Track* musicTrack = nullptr;
     MIX_Audio* curMusicAudio = nullptr;
+    std::string requestedMusic;   // the last PlayMusic track, played or not
     std::vector<MIX_Track*> sfxTracks;
 };
 
