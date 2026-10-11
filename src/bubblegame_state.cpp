@@ -523,11 +523,16 @@ void BubbleGame::ResolveContinuePrompt(bool startOver) {
         curLevel = 1;
         FrozenBubble::Instance()->startTime = SDL_GetTicks();
         runEligibleForWorld = true;
+        runUsedContinue = false;
         runShots = 0;
         skipShotHintPending = true;   // a new run opens with the hint again
         skipShotHintStartMs = 0;
+    } else {
+        // Continue leaves startTime and runShots alone: the run keeps
+        // counting, but no longer for the highscore tables
+        // (RunCountsForScores).
+        runUsedContinue = true;
     }
-    // Continue leaves startTime and runShots alone: the run keeps counting.
     ReloadGame(curLevel);
 }
 

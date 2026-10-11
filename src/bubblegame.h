@@ -781,11 +781,15 @@ public:
     void OpenOnlineHighscores();
     // SDL_OpenURL, swapped out by tests so they never start a browser.
     bool (*openUrl)(const char*) = SDL_OpenURL;
-    // False for a run played with the aim guide on: it reaches no highscore
-    // table, local or online (SubmitScore, RecordWorldLife, MP training).
-    // Skip shot does not affect this (user decision): it counts like any
-    // other shot.
-    bool RunCountsForScores() const { return !bubbleArrays[0].aimGuideEnabled; }
+    // False for a run played with the aim guide on, or one that has used a
+    // continue (CONTINUE after a death, or the in-game menu's RESTART LEVEL;
+    // user decision): it reaches no highscore table, local or online
+    // (SubmitScore, RecordWorldLife, MP training). What it recorded before
+    // the continue stands, the life that just ended included. START OVER
+    // begins a new run that counts again. Skip shot does not affect this
+    // (user decision): it counts like any other shot.
+    bool RunCountsForScores() const { return !bubbleArrays[0].aimGuideEnabled && !runUsedContinue; }
+    bool runUsedContinue = false;
     // Swap (PlayerKeys::fireNext, a pad's West button, a right click, a low
     // touch): one-player, network and local multiplayer games. See the definition.
     bool FireNextAllowed() const;

@@ -488,7 +488,7 @@ void BubbleGame::DrawGameMenu(SDL_Renderer* rend) {
         card.title = leave ? "LEAVE THE MATCH?" : startOver ? "START OVER?" : "RESTART LEVEL?";
         card.note = leave ? "The round counts as a loss for you."
                   : startOver ? "Back to level 1, with a new clock and shot count."
-                              : "Score goes back to 0; the clock keeps running.";
+                              : "Score back to 0; no high scores for this run.";
         card.labels[0] = leave ? "LEAVE" : startOver ? "START OVER" : "RESTART LEVEL";
         card.labels[1] = leave ? "STAY" : "CANCEL";
         card.rowCount = 2;
@@ -608,7 +608,7 @@ void BubbleGame::DrawModernResultCard(SDL_Renderer *rend, BubbleArray &bArray) {
                 card.buttonCount = 3;
             }
             card.focus = continueFocus;
-            card.note = "Score goes back to 0; the clock keeps running.";
+            card.note = "Score back to 0; no high scores for this run.";
         } else {
             card.note = "ENTER or tap to go on";
         }

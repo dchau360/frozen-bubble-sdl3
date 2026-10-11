@@ -1718,10 +1718,14 @@ int main() {
         // ENTER again takes the focused default, Continue: retries the level
         // just lost on, not level 1 -- curLevel already means "the level
         // just lost on" everywhere else that reads it.
+        CHECK(BubbleGameTestAccess::runCounts(game));
         BubbleGameTestAccess::pressContinue(game);
         CHECK(BubbleGameTestAccess::reloadLevel(game) == 4);
         CHECK(BubbleGameTestAccess::player(game, 0).score == 0);
         CHECK(!BubbleGameTestAccess::continuePrompt(game));
+        // A continued run no longer reaches any highscore table (user
+        // decision), for the rest of the run.
+        CHECK(!BubbleGameTestAccess::runCounts(game));
     }
 
     // The run's shot count: every shot from the local board counts, and it
@@ -1753,6 +1757,7 @@ int main() {
         BubbleGameTestAccess::pressContinue(game);  // Start over
         CHECK(BubbleGameTestAccess::reloadLevel(game) == 1);
         CHECK(BubbleGameTestAccess::runShots(game) == 0);
+        CHECK(BubbleGameTestAccess::runCounts(game));   // a new run counts
     }
 
     // CONTINUE? prompt: RIGHT moves focus to Start over, and taking it goes
