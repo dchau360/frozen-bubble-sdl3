@@ -130,6 +130,7 @@ void AudioMixer::Dispose(){
 
 void AudioMixer::PlayMusic(const char *track)
 {
+    if (track) requestedMusic = track;
     if(mixerEnabled == false || !gameSettings->canPlayMusic() || haltedMixer == true) return;
 
     // Stop current music
@@ -224,8 +225,24 @@ void AudioMixer::PauseMusic(){
 }
 
 void AudioMixer::ResumeMusic(){
-    if (!musicTrack) return;
+    if (!musicTrack || !gameSettings->canPlayMusic()) return;
     MIX_ResumeTrack(musicTrack);
+}
+
+void AudioMixer::MusicSwitched(bool on, bool paused) {
+    if (!on) {
+        PauseMusic();
+        return;
+    }
+    if (haltedMixer) return;
+    if (!curMusicAudio) {
+        // Music was off when this track was asked for, so nothing is loaded.
+        if (requestedMusic.empty()) return;
+        PlayMusic(requestedMusic.c_str());
+        if (paused) PauseMusic();
+    } else if (!paused) {
+        ResumeMusic();
+    }
 }
 
 void AudioMixer::MuteAll(bool enable){

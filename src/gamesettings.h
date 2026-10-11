@@ -209,6 +209,10 @@ public:
     bool useClassicAudio() { return classicSound; }
     bool soundEnabled() { return playMusic && playSfx; }
     void setSoundEnabled(bool on);
+    // The in-game menu's two separate switches (the settings panel's Sound
+    // row sets both).
+    void setMusicEnabled(bool on);
+    void setSfxEnabled(bool on);
     bool colorBlind() { return colorblindBubbles; }
     // The bubbles (GFX:ModernBubbles, default on): Candy gloss in every
     // mode, or the original ones. (GFX:ModernTheme, the in-game look beside

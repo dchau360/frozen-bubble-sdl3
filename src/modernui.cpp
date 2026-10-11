@@ -186,6 +186,8 @@ void Fonts::Load() {
     for (TTFText& t : statLabel) { t.LoadFont(body.c_str(), 10); t.UpdateStyle(10, TTF_STYLE_BOLD); }
     for (TTFText& t : statValue) t.LoadFont(display.c_str(), 22);
     for (TTFText& t : button) t.LoadFont(display.c_str(), 16);
+    for (TTFText& t : rowLabel) t.LoadFont(display.c_str(), 15);
+    for (TTFText& t : rowValue) t.LoadFont(display.c_str(), 15);
     note.LoadFont(body.c_str(), 12);
     popup.LoadFont(display.c_str(), 20);
     popup.UpdateRing(kRing, 2);
@@ -284,6 +286,67 @@ void DrawCard(SDL_Renderer* rend, Fonts& f, const Card& card, float appear, SDL_
         Blit(rend, f.button[i], (int)(b.x + b.w / 2 - f.button[i].Coords()->w / 2.f),
              (int)(b.y + b.h / 2 - f.button[i].Coords()->h / 2.f), alpha);
         btnOut[i] = {(int)b.x, (int)b.y, (int)b.w, (int)b.h};
+    }
+}
+
+void DrawListCard(SDL_Renderer* rend, Fonts& f, const ListCard& card, float appear, SDL_Rect rowOut[kListRows]) {
+    appear = std::clamp(appear, 0.f, 1.f);
+    const float ease = 1 - (1 - appear) * (1 - appear) * (1 - appear);
+    const Uint8 alpha = (Uint8)(255 * std::min(1.f, appear * 1.6f));
+
+    SDL_SetRenderDrawBlendMode(rend, SDL_BLENDMODE_BLEND);
+    SDL_SetRenderDrawColor(rend, kDim.r, kDim.g, kDim.b, (Uint8)(110 * ease));
+    SDL_FRect dim = {0, 0, 640, 480};
+    SDL_RenderFillRect(rend, &dim);
+
+    const int rows = std::clamp(card.rowCount, 0, kListRows);
+    constexpr float kRowH = 32, kRowGap = 5;
+    const float statsH = card.statCount ? 62.f : 0.f;
+    const float noteH = card.note.empty() ? 0.f : 18.f;
+    const float w = 300, h = 58 + statsH + noteH + rows * (kRowH + kRowGap) + 10;
+    const float x = 320 - w / 2, y = 240 - h / 2 + (1 - ease) * 18;
+    const float k = alpha / 255.f;
+    FillRoundRect(rend, {x, y + 5, w, h}, 18, WithAlpha({0, 0, 0, 90}, k));
+    FillRoundRect(rend, {x, y, w, h}, 18, WithAlpha(kCardFill, k));
+    StrokeRoundRect(rend, {x, y, w, h}, 18, 2, WithAlpha(kEdge, k));
+
+    SetText(rend, f.title, card.title, kIce);
+    Blit(rend, f.title, (int)(320 - f.title.Coords()->w / 2), (int)y + 10, alpha);
+    float cursor = y + 54;
+
+    const float colW = card.statCount ? w / card.statCount : w;
+    for (int i = 0; i < card.statCount; ++i) {
+        const int cx = (int)(x + colW * (i + 0.5f));
+        SetText(rend, f.statLabel[i], card.stats[i].label, kLabel);
+        Blit(rend, f.statLabel[i], cx - f.statLabel[i].Coords()->w / 2, (int)cursor + 2, alpha);
+        SetText(rend, f.statValue[i], card.stats[i].value, kValue);
+        Blit(rend, f.statValue[i], cx - f.statValue[i].Coords()->w / 2, (int)cursor + 14, alpha);
+    }
+    cursor += statsH;
+    if (noteH > 0) {
+        SetText(rend, f.note, card.note, kLabel);
+        Blit(rend, f.note, (int)(320 - f.note.Coords()->w / 2), (int)cursor - 4, alpha);
+        cursor += noteH;
+    }
+
+    for (int i = 0; i < kListRows; ++i) rowOut[i] = {0, 0, 0, 0};
+    for (int i = 0; i < rows; ++i) {
+        const SDL_FRect b = {x + 22, cursor, w - 44, kRowH};
+        const bool on = i == card.focus;
+        FillRoundRect(rend, b, 16, WithAlpha(on ? kIce : Alpha(kIce, 30), k));
+        StrokeRoundRect(rend, b, 16, on ? 2.f : 1.5f, WithAlpha(on ? SDL_Color{255, 255, 255, 220} : kEdge, k));
+        const SDL_Color ink = on ? kInk : kValue;
+        SetText(rend, f.rowLabel[i], card.labels[i], ink);
+        const int ty = (int)(b.y + b.h / 2 - f.rowLabel[i].Coords()->h / 2.f);
+        if (card.values[i].empty()) {
+            Blit(rend, f.rowLabel[i], (int)(b.x + b.w / 2 - f.rowLabel[i].Coords()->w / 2.f), ty, alpha);
+        } else {
+            Blit(rend, f.rowLabel[i], (int)b.x + 16, ty, alpha);
+            SetText(rend, f.rowValue[i], card.values[i], on ? kInk : kGold);
+            Blit(rend, f.rowValue[i], (int)(b.x + b.w - 16 - f.rowValue[i].Coords()->w), ty, alpha);
+        }
+        rowOut[i] = {(int)b.x, (int)b.y, (int)b.w, (int)b.h};
+        cursor += kRowH + kRowGap;
     }
 }
 

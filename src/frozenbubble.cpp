@@ -728,6 +728,29 @@ void FrozenBubble::HandleControllerEvent(SDL_Event *e) {
         bool down = (e->type == SDL_EVENT_GAMEPAD_BUTTON_DOWN);
         int btn = e->gbutton.button;
 
+        // The in-game menu takes the pad while it is up: the D-pad moves, A
+        // picks, B/Start/Back backs out, and on its controls page a press
+        // waiting to be bound becomes that pad's virtual scancode.
+        if (down && currentState == MainGame && mainGame && mainGame->GameMenuOpen()) {
+            if (mainGame->GameMenuAwaitingBind()) {
+                mainGame->GameMenuBind(VirtualScancode(playerIdx, btn));
+                return;
+            }
+            SDL_Keycode k = SDLK_UNKNOWN;
+            switch (btn) {
+                case SDL_GAMEPAD_BUTTON_DPAD_UP: k = SDLK_UP; break;
+                case SDL_GAMEPAD_BUTTON_DPAD_DOWN: k = SDLK_DOWN; break;
+                case SDL_GAMEPAD_BUTTON_DPAD_LEFT: k = SDLK_LEFT; break;
+                case SDL_GAMEPAD_BUTTON_DPAD_RIGHT: k = SDLK_RIGHT; break;
+                case SDL_GAMEPAD_BUTTON_SOUTH: k = SDLK_RETURN; break;
+                case SDL_GAMEPAD_BUTTON_EAST: case SDL_GAMEPAD_BUTTON_START: case SDL_GAMEPAD_BUTTON_BACK:
+                    k = SDLK_ESCAPE; break;
+                default: break;
+            }
+            if (k != SDLK_UNKNOWN) mainGame->GameMenuKey(k);
+            return;
+        }
+
         // If the Keys panel is waiting for a binding, emit a virtual scancode
         if (down && mainMenu->IsAwaitingKeyBind()) {
             SDL_Scancode vsc = VirtualScancode(playerIdx, btn);
@@ -882,19 +905,9 @@ bool FrozenBubble::HandleGameMenuInput(SDL_Event *e) {
     }
     switch (e->type) {
         case SDL_EVENT_KEY_DOWN:
-            if (!e->key.repeat) mainGame->GameMenuKey(e->key.key);
+            if (!e->key.repeat) mainGame->GameMenuKey(e->key.key, e->key.scancode);
             return true;
-        case SDL_EVENT_GAMEPAD_BUTTON_DOWN:
-            switch (e->gbutton.button) {
-                case SDL_GAMEPAD_BUTTON_DPAD_LEFT: case SDL_GAMEPAD_BUTTON_DPAD_RIGHT:
-                case SDL_GAMEPAD_BUTTON_DPAD_UP: case SDL_GAMEPAD_BUTTON_DPAD_DOWN:
-                    mainGame->GameMenuKey(SDLK_TAB); break;
-                case SDL_GAMEPAD_BUTTON_SOUTH: mainGame->GameMenuKey(SDLK_RETURN); break;
-                case SDL_GAMEPAD_BUTTON_EAST: case SDL_GAMEPAD_BUTTON_START:
-                    mainGame->GameMenuKey(SDLK_ESCAPE); break;
-                default: break;
-            }
-            return true;
+        // Pad buttons reach the menu through HandleControllerEvent instead.
         // Nothing under the card moves while it is up: no aiming, no shot
         // from a press or a release.
         case SDL_EVENT_MOUSE_MOTION: case SDL_EVENT_MOUSE_BUTTON_DOWN: case SDL_EVENT_MOUSE_BUTTON_UP:

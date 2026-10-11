@@ -137,7 +137,7 @@ twenty, which needed new UI to be playable at all:
 | 48 | **Frame-rate-independent movement**, so the game runs at the same speed regardless of display refresh | v2.4.9 |
 | 49 | **Touch gestures** — tap-to-select in list panels, swipe left to go back or to leave a round | v2.4.35 |
 | 50 | **Sound toggle**, **fullscreen toggle**, **saved nickname** | v2.4.15, v2.4.24, v2.4.16 |
-| 51 | **On-screen Back and Menu buttons** — every menu screen has a Back button at the top left that does what ESC does, and every game a menu button there with Resume and Quit (a local game pauses while it is open), so a touch screen always has a way back and out. The original left screens and games by the Escape key only | — |
+| 51 | **On-screen Back and Menu buttons** — every menu screen has a Back button at the top left that does what ESC does, and every game a menu button there with Resume and Quit (a local game pauses while it is open), so a touch screen always has a way back and out. The menu also holds sound and music switches and the player's own key bindings, and in a classic 1-player game Restart level and Start over (next release). The original left screens and games by the Escape key only | — |
 
 ### Platforms
 

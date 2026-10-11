@@ -713,22 +713,42 @@ public:
     bool ShowsPauseButton() const;
     bool PauseButtonHit(float x, float y) const;
     // The in-game menu: a button in the top-left corner of every live game
-    // (kMenuBtnRect), the tap/click way out, opening a card with RESUME and
-    // QUIT. A local game pauses under it (FrozenBubble's own pause); an
-    // online one keeps running and only the local player's controls stop.
-    // ESC still quits straight away, as it always has.
+    // (kMenuBtnRect), the tap/click way out, opening a card of rows
+    // (GameMenuItems): RESUME; RESTART LEVEL and START OVER in the classic
+    // campaign; SOUND and MUSIC switches; CONTROLS, a page rebinding the
+    // player's own keys; and QUIT (LEAVE online). A local game pauses under
+    // it (FrozenBubble's own pause); an online one keeps running and only the
+    // local player's controls stop. RESTART LEVEL, START OVER and LEAVE ask
+    // first, Cancel focused. ESC still quits straight away, as it always has.
     static constexpr SDL_Rect kMenuBtnRect = {8, 8, 32, 32};
+    enum class GameMenuItem { Resume, RestartLevel, StartOver, Sound, Music, Controls, Quit };
+    enum class GameMenuPage { Main, Confirm, Controls };
+    std::vector<GameMenuItem> GameMenuItems() const;
     bool ShowsMenuButton() const;
     bool MenuButtonHit(float x, float y) const;
     bool GameMenuOpen() const { return gameMenuOpen; }
+    // The controls page is waiting for a key or pad button to bind;
+    // FrozenBubble then hands it a pad press as its virtual scancode.
+    bool GameMenuAwaitingBind() const { return gameMenuOpen && gameMenuAwaitBind; }
+    void GameMenuBind(SDL_Scancode sc);
     void OpenGameMenu();
     void CloseGameMenu(bool quit);
-    void GameMenuKey(SDL_Keycode key);
+    void GameMenuKey(SDL_Keycode key, SDL_Scancode sc = SDL_SCANCODE_UNKNOWN);
     void GameMenuTap(float x, float y);
     void DrawGameMenu(SDL_Renderer* rend);
+    void ActivateGameMenuRow(int row);
+    int GameMenuRowCount() const;
+    // The controls page's rows: [PLAYER n in local multiplayer], the five
+    // keys, DONE. Which PlayerKeys they edit.
+    int ControlsFirstKeyRow() const { return currentSettings.localMultiplayer ? 1 : 0; }
+    PlayerKeys& ControlsKeys() const;
     bool gameMenuOpen = false;
-    int gameMenuFocus = 0;              // 0 RESUME, 1 QUIT
-    SDL_Rect gameMenuBtn[3] = {};
+    GameMenuPage gameMenuPage = GameMenuPage::Main;
+    GameMenuItem gameMenuConfirm = GameMenuItem::Quit;   // what the Confirm page asks about
+    int gameMenuFocus = 0;              // focused row on the current page
+    int gameMenuControlsPlayer = 1;     // 1-5, the controls page's player
+    bool gameMenuAwaitBind = false;
+    SDL_Rect gameMenuBtn[modernui::kListRows] = {};
     Uint64 gameMenuStartMs = 0;
     modernui::Fonts modernFonts;
     int hudShownScore = 0;           // the HUD's score, counting up to the real one

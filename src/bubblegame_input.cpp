@@ -196,11 +196,43 @@ void BubbleGame::FinishInGameChat(bool sendMessage) {
     SDL_Log("In-game chat closed (sent=%d)", sendMessage);
 }
 
+std::vector<BubbleGame::GameMenuItem> BubbleGame::GameMenuItems() const {
+    std::vector<GameMenuItem> items = {GameMenuItem::Resume};
+    // The classic campaign's own two, where "level" and "start over" mean
+    // what the continue prompt means by them (ArcadeContinueApplies).
+    if (ArcadeContinueApplies() && !gameFinish) {
+        items.push_back(GameMenuItem::RestartLevel);
+        items.push_back(GameMenuItem::StartOver);
+    }
+    items.push_back(GameMenuItem::Sound);
+    items.push_back(GameMenuItem::Music);
+    items.push_back(GameMenuItem::Controls);
+    items.push_back(GameMenuItem::Quit);
+    return items;
+}
+
+int BubbleGame::GameMenuRowCount() const {
+    switch (gameMenuPage) {
+        case GameMenuPage::Confirm: return 2;
+        case GameMenuPage::Controls: return ControlsFirstKeyRow() + 5 + 1;
+        default: return (int)GameMenuItems().size();
+    }
+}
+
+PlayerKeys& BubbleGame::ControlsKeys() const {
+    GameSettings* gs = GameSettings::Instance();
+    PlayerKeys* all[5] = {&gs->player1Keys, &gs->player2Keys, &gs->player3Keys,
+                          &gs->player4Keys, &gs->player5Keys};
+    return *all[std::clamp(gameMenuControlsPlayer, 1, 5) - 1];
+}
+
 void BubbleGame::OpenGameMenu() {
     if (gameMenuOpen) return;
     if (chattingMode) FinishInGameChat(false);
     gameMenuOpen = true;
+    gameMenuPage = GameMenuPage::Main;
     gameMenuFocus = 0;
+    gameMenuAwaitBind = false;
     gameMenuStartMs = SDL_GetTicks();
     PlaySFX("menu_selected");
     if (!currentSettings.networkGame && !FrozenBubble::Instance()->GamePaused())
@@ -210,6 +242,9 @@ void BubbleGame::OpenGameMenu() {
 void BubbleGame::CloseGameMenu(bool quit) {
     if (!gameMenuOpen) return;
     gameMenuOpen = false;
+    gameMenuAwaitBind = false;
+    if (gameMenuPage == GameMenuPage::Controls) GameSettings::Instance()->SaveKeys();
+    gameMenuPage = GameMenuPage::Main;
     FrozenBubble* fb = FrozenBubble::Instance();
     if (!currentSettings.networkGame && fb->GamePaused()) fb->CallGamePause();
     if (quit) {
@@ -222,18 +257,159 @@ void BubbleGame::CloseGameMenu(bool quit) {
     }
 }
 
-void BubbleGame::GameMenuKey(SDL_Keycode key) {
+void BubbleGame::GameMenuBind(SDL_Scancode sc) {
+    if (!GameMenuAwaitingBind()) return;
+    PlayerKeys& keys = ControlsKeys();
+    switch (gameMenuFocus - ControlsFirstKeyRow()) {
+        case 0: keys.left = sc; break;
+        case 1: keys.right = sc; break;
+        case 2: keys.fire = sc; break;
+        case 3: keys.center = sc; break;
+        case 4: keys.fireNext = sc; break;
+        default: break;
+    }
+    gameMenuAwaitBind = false;
+    GameSettings::Instance()->SaveKeys();
+    PlaySFX("typewriter");
+}
+
+void BubbleGame::ActivateGameMenuRow(int row) {
+    gameMenuFocus = row;
+    if (gameMenuPage == GameMenuPage::Confirm) {
+        if (row != 0) {   // Cancel: back to the row that asked
+            PlaySFX("cancel");
+            const std::vector<GameMenuItem> items = GameMenuItems();
+            gameMenuPage = GameMenuPage::Main;
+            gameMenuFocus = (int)(std::find(items.begin(), items.end(), gameMenuConfirm) - items.begin());
+            return;
+        }
+        PlaySFX("menu_selected");
+        const GameMenuItem what = gameMenuConfirm;
+        if (what == GameMenuItem::Quit) {
+            CloseGameMenu(true);
+        } else {
+            // Unpause first: ReloadGame starts the level's own clocks. The
+            // unpause moves the run's clock on by the time spent paused when
+            // the next frame runs, which a restarted level wants (its run
+            // keeps going) and a new run, whose clock starts now, does not.
+            CloseGameMenu(false);
+            ResolveContinuePrompt(what == GameMenuItem::StartOver);
+            if (what == GameMenuItem::StartOver && playedPause) {
+                playedPause = false;
+                modernPauseStartMs = 0;
+                if (!audMixer->IsHalted()) audMixer->ResumeMusic();
+            }
+        }
+        return;
+    }
+    if (gameMenuPage == GameMenuPage::Controls) {
+        const int first = ControlsFirstKeyRow();
+        if (row == GameMenuRowCount() - 1) {   // DONE
+            PlaySFX("menu_selected");
+            GameSettings::Instance()->SaveKeys();
+            gameMenuPage = GameMenuPage::Main;
+            const std::vector<GameMenuItem> items = GameMenuItems();
+            gameMenuFocus = (int)(std::find(items.begin(), items.end(), GameMenuItem::Controls) - items.begin());
+        } else if (row < first) {   // PLAYER n: steps on, like RIGHT
+            gameMenuControlsPlayer = gameMenuControlsPlayer % currentSettings.playerCount + 1;
+            PlaySFX("menu_change");
+        } else {
+            gameMenuAwaitBind = true;
+            PlaySFX("menu_selected");
+        }
+        return;
+    }
+    const std::vector<GameMenuItem> items = GameMenuItems();
+    if (row < 0 || row >= (int)items.size()) return;
+    GameSettings* gs = GameSettings::Instance();
+    switch (items[row]) {
+        case GameMenuItem::Resume:
+            PlaySFX("menu_selected");
+            CloseGameMenu(false);
+            break;
+        case GameMenuItem::RestartLevel:
+        case GameMenuItem::StartOver:
+            PlaySFX("menu_selected");
+            gameMenuConfirm = items[row];
+            gameMenuPage = GameMenuPage::Confirm;
+            gameMenuFocus = 1;   // the choice that throws something away is never the default
+            break;
+        case GameMenuItem::Quit:
+            PlaySFX("menu_selected");
+            if (currentSettings.networkGame) {
+                gameMenuConfirm = GameMenuItem::Quit;
+                gameMenuPage = GameMenuPage::Confirm;
+                gameMenuFocus = 1;
+            } else {
+                CloseGameMenu(true);
+            }
+            break;
+        case GameMenuItem::Sound:
+            gs->setSfxEnabled(!gs->canPlaySFX());
+            PlaySFX("menu_change");   // heard only when it was just turned on
+            break;
+        case GameMenuItem::Music: {
+            const bool on = !gs->canPlayMusic();
+            gs->setMusicEnabled(on);
+            // A local game is paused under the menu, so the music comes back
+            // when it resumes; online it carries on now.
+            audMixer->MusicSwitched(on, !currentSettings.networkGame);
+            PlaySFX("menu_change");
+            break;
+        }
+        case GameMenuItem::Controls:
+            PlaySFX("menu_selected");
+            gameMenuPage = GameMenuPage::Controls;
+            gameMenuFocus = ControlsFirstKeyRow();
+            if (!currentSettings.localMultiplayer) gameMenuControlsPlayer = 1;
+            break;
+    }
+}
+
+void BubbleGame::GameMenuKey(SDL_Keycode key, SDL_Scancode sc) {
+    if (GameMenuAwaitingBind()) {
+        // ESC gives up on this one; anything else becomes the binding.
+        if (key == SDLK_ESCAPE || key == SDLK_AC_BACK) {
+            gameMenuAwaitBind = false;
+            PlaySFX("cancel");
+        } else if (sc != SDL_SCANCODE_UNKNOWN) {
+            GameMenuBind(sc);
+        }
+        return;
+    }
+    const int count = GameMenuRowCount();
+    const bool playerRow = gameMenuPage == GameMenuPage::Controls && gameMenuFocus < ControlsFirstKeyRow();
     switch (key) {
-        case SDLK_LEFT: case SDLK_RIGHT: case SDLK_UP: case SDLK_DOWN: case SDLK_TAB:
-            gameMenuFocus = 1 - gameMenuFocus;
+        case SDLK_LEFT: case SDLK_RIGHT:
+            if (playerRow) {
+                const int n = currentSettings.playerCount;
+                gameMenuControlsPlayer = (gameMenuControlsPlayer - 1 + (key == SDLK_RIGHT ? 1 : n - 1)) % n + 1;
+                PlaySFX("menu_change");
+                break;
+            }
+            if (gameMenuPage == GameMenuPage::Confirm) {
+                gameMenuFocus = 1 - gameMenuFocus;
+                PlaySFX("menu_change");
+            }
+            break;
+        case SDLK_UP:
+            gameMenuFocus = (gameMenuFocus + count - 1) % count;
+            PlaySFX("menu_change");
+            break;
+        case SDLK_DOWN: case SDLK_TAB:
+            gameMenuFocus = (gameMenuFocus + 1) % count;
             PlaySFX("menu_change");
             break;
         case SDLK_RETURN: case SDLK_KP_ENTER: case SDLK_SPACE:
-            PlaySFX("menu_selected");
-            CloseGameMenu(gameMenuFocus == 1);
+            ActivateGameMenuRow(gameMenuFocus);
             break;
         case SDLK_ESCAPE: case SDLK_AC_BACK: case SDLK_P: case SDLK_PAUSE:
-            CloseGameMenu(false);
+            if (gameMenuPage != GameMenuPage::Main) {
+                // Back to the main page, from the row that opened this one.
+                ActivateGameMenuRow(gameMenuPage == GameMenuPage::Confirm ? 1 : count - 1);
+            } else {
+                CloseGameMenu(false);
+            }
             break;
         default:
             break;
@@ -241,12 +417,16 @@ void BubbleGame::GameMenuKey(SDL_Keycode key) {
 }
 
 void BubbleGame::GameMenuTap(float x, float y) {
-    for (int i = 0; i < 2; ++i) {
+    if (GameMenuAwaitingBind()) {   // a tap gives up on the binding
+        gameMenuAwaitBind = false;
+        PlaySFX("cancel");
+        return;
+    }
+    const int count = GameMenuRowCount();
+    for (int i = 0; i < count && i < modernui::kListRows; ++i) {
         const SDL_Rect& r = gameMenuBtn[i];
         if (r.w > 0 && x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h) {
-            gameMenuFocus = i;
-            PlaySFX("menu_selected");
-            CloseGameMenu(i == 1);
+            ActivateGameMenuRow(i);
             return;
         }
     }

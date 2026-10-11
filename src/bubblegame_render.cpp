@@ -476,23 +476,75 @@ bool BubbleGame::MenuButtonHit(float x, float y) const {
     return x >= r.x - 8 && x < r.x + r.w + 8 && y >= r.y - 8 && y < r.y + r.h + 8;
 }
 
+// controlhints.cpp, mainmenu_panels.cpp: a key or pad button's name.
+std::string ControllerScancodeName(SDL_Scancode sc);
+
 void BubbleGame::DrawGameMenu(SDL_Renderer* rend) {
-    modernui::Card card;
-    card.title = "MENU";
-    // A 1-player run's standing, as the PAUSED card shows it.
-    if (ShowsShotCount()) {
-        card.stats[0] = {"LEVEL", currentSettings.randomLevels ? "RANDOM" : std::to_string(curLevel)};
-        card.stats[1] = {"SCORE", modernui::FormatNumber(bubbleArrays[0].score)};
-        card.stats[2] = {"SHOTS", modernui::FormatNumber(runShots)};
-        card.statCount = 3;
+    modernui::ListCard card;
+    GameSettings* gs = GameSettings::Instance();
+    if (gameMenuPage == GameMenuPage::Confirm) {
+        const bool leave = gameMenuConfirm == GameMenuItem::Quit;
+        const bool startOver = gameMenuConfirm == GameMenuItem::StartOver;
+        card.title = leave ? "LEAVE THE MATCH?" : startOver ? "START OVER?" : "RESTART LEVEL?";
+        card.note = leave ? "The round counts as a loss for you."
+                  : startOver ? "Back to level 1, with a new clock and shot count."
+                              : "Score goes back to 0; the clock keeps running.";
+        card.labels[0] = leave ? "LEAVE" : startOver ? "START OVER" : "RESTART LEVEL";
+        card.labels[1] = leave ? "STAY" : "CANCEL";
+        card.rowCount = 2;
+    } else if (gameMenuPage == GameMenuPage::Controls) {
+        card.title = "CONTROLS";
+        card.note = gameMenuAwaitBind ? "Press a key or pad button (ESC: cancel)"
+                                      : "ENTER or tap a row, then press the new key";
+        int r = 0;
+        if (currentSettings.localMultiplayer) {
+            card.labels[r] = "PLAYER";
+            card.values[r++] = "< " + std::to_string(gameMenuControlsPlayer) + " >";
+        }
+        const PlayerKeys& k = ControlsKeys();
+        const struct { const char* label; SDL_Scancode sc; } rows[5] = {
+            {"TURN LEFT", k.left}, {"TURN RIGHT", k.right}, {"FIRE", k.fire},
+            {"CENTER", k.center}, {"SWAP", k.fireNext}};
+        for (const auto& row : rows) {
+            const bool waiting = gameMenuAwaitBind && gameMenuFocus == r;
+            card.labels[r] = row.label;
+            card.values[r++] = waiting ? "..." : ControllerScancodeName(row.sc);
+        }
+        card.labels[r++] = "DONE";
+        card.rowCount = r;
+    } else {
+        card.title = "MENU";
+        // A 1-player run's standing, as the PAUSED card shows it.
+        if (ShowsShotCount()) {
+            card.stats[0] = {"LEVEL", currentSettings.randomLevels ? "RANDOM" : std::to_string(curLevel)};
+            card.stats[1] = {"SCORE", modernui::FormatNumber(bubbleArrays[0].score)};
+            card.stats[2] = {"SHOTS", modernui::FormatNumber(runShots)};
+            card.statCount = 3;
+        }
+        const std::vector<GameMenuItem> items = GameMenuItems();
+        for (size_t i = 0; i < items.size() && (int)i < modernui::kListRows; ++i) {
+            switch (items[i]) {
+                case GameMenuItem::Resume: card.labels[i] = "RESUME"; break;
+                case GameMenuItem::RestartLevel: card.labels[i] = "RESTART LEVEL"; break;
+                case GameMenuItem::StartOver: card.labels[i] = "START OVER"; break;
+                case GameMenuItem::Sound:
+                    card.labels[i] = "SOUND";
+                    card.values[i] = gs->canPlaySFX() ? "ON" : "OFF";
+                    break;
+                case GameMenuItem::Music:
+                    card.labels[i] = "MUSIC";
+                    card.values[i] = gs->canPlayMusic() ? "ON" : "OFF";
+                    break;
+                case GameMenuItem::Controls: card.labels[i] = "CONTROLS"; break;
+                case GameMenuItem::Quit: card.labels[i] = currentSettings.networkGame ? "LEAVE" : "QUIT"; break;
+            }
+            card.rowCount = (int)i + 1;
+        }
+        card.note = currentSettings.networkGame ? "The game keeps going while this is open"
+                                                : "The game is paused";
     }
-    card.buttons[0] = "RESUME";
-    card.buttons[1] = "QUIT";
-    card.buttonCount = 2;
     card.focus = gameMenuFocus;
-    card.note = currentSettings.networkGame ? "The game keeps going while this is open"
-                                            : "The game is paused";
-    modernui::DrawCard(rend, modernFonts, card, (float)(SDL_GetTicks() - gameMenuStartMs) / 380.0f, gameMenuBtn);
+    modernui::DrawListCard(rend, modernFonts, card, (float)(SDL_GetTicks() - gameMenuStartMs) / 380.0f, gameMenuBtn);
 }
 
 bool BubbleGame::PauseButtonHit(float x, float y) const {
