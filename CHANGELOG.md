@@ -1,5 +1,10 @@
 # Changelog
 
+## v2.4.151
+
+- **More in the in-game menu.** The menu button at the top left now has Restart level and Start over in a classic 1-player game (each asks first), Sound and Music switches, and Controls, where you can change your keys or gamepad buttons without leaving the game. Online, Quit is now Leave and asks first, since the round counts as a loss.
+- **Gamepads work in the in-game menu.** The D-pad, A and B/Start now move around it, pick and back out.
+
 ## v2.4.150
 
 - **Account PIN.** Instead of typing your 16-character account code on another device, open Account code and choose Set PIN to pick a 4-to-8-digit PIN under your name. On the other device, choose Link with PIN and enter the same name and PIN: it then plays as your account on the online high scores, and its own scores are added to yours.
