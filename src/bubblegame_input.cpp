@@ -786,6 +786,9 @@ void BubbleGame::HandleInput(SDL_Event *e) {
                                 }
                                 break;
                             }
+                            // A plain retry is a continue too: the run stops
+                            // counting for the highscore tables.
+                            runUsedContinue = true;
                             ReloadGame(curLevel);
                         }
                     }
