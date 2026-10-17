@@ -10,6 +10,11 @@
 int     ws_is_websocket(int fd);
 void    ws_reset(int fd);
 
+/* The visitor's address from a trusted reverse proxy's X-Forwarded-For on this
+ * WebSocket connection, or "" (never NULL) when there was none or the peer
+ * was not a local/private address. */
+const char* ws_forwarded_ip(int fd);
+
 /* After accept(): sniff for HTTP upgrade; upgrade the fd if WS.
  * Returns 1 if upgraded, 0 if plain TCP (leaves fd untouched). */
 int     ws_detect_and_upgrade(int fd);

@@ -31,6 +31,8 @@
 #include "hiscores.h"
 #include "links.h"
 #include "discordalert.h"
+#include "geoip.h"
+#include "log.h"
 
 static void cleanup_atexit(void)
 {
@@ -71,6 +73,20 @@ int main(int argc, char **argv)
         // module's startup diagnostic is the operator's only feedback that
         // the feature is wired up.
         discordalert_init();
+        // Country for browser players, from the address nginx forwards (geoip.h).
+        // Optional, like the Discord relay: unset means no country for them.
+        {
+                const char* geoip_file = getenv("FB_SERVER_GEOIP_FILE");
+                if (geoip_file && *geoip_file) {
+                        int ranges = geoip_load(geoip_file);
+                        if (ranges > 0)
+                                l1(OUTPUT_TYPE_INFO, "GeoIP: %d address ranges loaded; browser players get a country", ranges);
+                        else
+                                l1(OUTPUT_TYPE_ERROR, "GeoIP: could not read %s; browser players get no country", geoip_file);
+                } else {
+                        l0(OUTPUT_TYPE_INFO, "FB_SERVER_GEOIP_FILE not set; browser players get no country");
+                }
+        }
         connections_manager();
 
         return 0;

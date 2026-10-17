@@ -669,6 +669,32 @@ read the report log.
 
 ---
 
+## Optional — Private Visit Log and Browser-Player Countries
+
+nginx writes one log file per UTC day to `docker/visits/` (gitignored, never
+served): time, visitor IP, request, status, whether it was a WebSocket
+handshake, referrer and user agent. The same data feeds a country for browser
+players, who otherwise reach `fb-server` as nginx's own address: nginx sets
+`X-Forwarded-For`, `fb-server` trusts it only from a private/loopback peer, and
+looks it up in DB-IP's country CSV (`FB_SERVER_GEOIP_FILE`). That country then
+shows in the highscores and Discord alerts exactly like a native player's.
+
+```bash
+cd ~/frozen-bubble-sdl3
+tools/update-geoip.sh                      # DB-IP Lite country CSV + city mmdb into docker/geoip/ (monthly)
+cd docker && sudo docker compose up -d --build nginx fb-server
+pip install maxminddb                      # optional, for city names in the report
+tools/visits.py                            # who visited in the last 7 days, and where
+tools/visits.py --days 30 --raw            # every request
+tools/visits.py --prune 90                 # delete logs older than 90 days (the privacy policy says 90)
+```
+
+Without the CSV, browser players get no country and nothing else changes. IP
+data is DB-IP.com Lite (CC BY 4.0). Run `--prune 90` from cron to match the
+privacy policy. Update `docs/PRIVACY_POLICY.md` if you change what is kept.
+
+---
+
 ## Updating the Server
 
 A one-off update — pull the latest code, rebuild, and restart — is just:

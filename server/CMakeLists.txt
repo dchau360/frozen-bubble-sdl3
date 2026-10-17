@@ -57,6 +57,7 @@ add_executable(fb-server
     account.c
     links.c
     discordalert.c
+    geoip.c
     ws.c
 )
 

@@ -60,3 +60,8 @@ _site/
 # Scratch working notes for in-progress feature work (superpowers SDD
 # ledgers) -- internal process artifacts, not project documentation.
 .superpowers/
+
+# Private server data that must never be checked in: the nginx visit log
+# (visitor IPs) and the downloaded DB-IP GeoIP files.
+/docker/visits/
+/docker/geoip/
