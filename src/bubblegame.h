@@ -781,6 +781,12 @@ public:
     void OpenOnlineHighscores();
     // SDL_OpenURL, swapped out by tests so they never start a browser.
     bool (*openUrl)(const char*) = SDL_OpenURL;
+    // Asks the platform for an interstitial ad at the moment a player picks
+    // CONTINUE after a death (an ad break the player chose to take, user
+    // request). Android hands it to AdsManager; every other build does
+    // nothing. Swapped out by tests, which count the calls.
+    static void ShowContinueAd();
+    void (*continueAd)() = ShowContinueAd;
     // False for a run played with the aim guide on, or one that has used a
     // continue (CONTINUE after a death, or the in-game menu's RESTART LEVEL;
     // user decision): it reaches no highscore table, local or online

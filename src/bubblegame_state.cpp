@@ -513,7 +513,16 @@ void BubbleGame::OpenOnlineHighscores() {
         SDL_Log("Continue prompt: SDL_OpenURL failed: %s", SDL_GetError());
 }
 
+void BubbleGame::ShowContinueAd() {
+#ifdef __ANDROID__
+    SDL_SendAndroidMessage(0x8001, 0);   // AdsManager.showLobbyAd: honours "ads removed"
+#endif
+}
+
 void BubbleGame::ResolveContinuePrompt(bool startOver) {
+    // The in-game menu's RESTART LEVEL comes through here too, with no prompt
+    // up: only a CONTINUE chosen on the death card is an ad break.
+    const bool afterDeath = continuePrompt;
     continuePrompt = false;
     bubbleArrays[0].score = 0;
     PlaySFX("menu_selected");
@@ -532,6 +541,7 @@ void BubbleGame::ResolveContinuePrompt(bool startOver) {
         // counting, but no longer for the highscore tables
         // (RunCountsForScores).
         runUsedContinue = true;
+        if (afterDeath) continueAd();
     }
     ReloadGame(curLevel);
 }
