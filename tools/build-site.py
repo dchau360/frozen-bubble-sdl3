@@ -107,7 +107,10 @@ ASSETS = [
 # website satisfies the check. Its contents come from the ad mediator's
 # dashboard (Appodeal's list, one line per network seller); whenever it
 # changes, the copy in the dchau360.github.io repo has to change with it.
-VERBATIM = ["google034c4b2cf8d147df.html", "app-ads.txt"]
+#
+# ads.txt is the website-side counterpart AdSense checks for the site
+# llmfinder.net: one Google DIRECT line for the shared AdMob/AdSense publisher.
+VERBATIM = ["google034c4b2cf8d147df.html", "app-ads.txt", "ads.txt"]
 
 # This generator's output is deployed byte-for-byte identical to three
 # origins -- llmfinder.net and fb.servequake.com (both via docker/Dockerfile.site,
