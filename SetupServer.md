@@ -669,6 +669,24 @@ read the report log.
 
 ---
 
+## Optional — Countries for Browser Players
+
+Browser players reach `fb-server` as nginx's own address, so nginx sets
+`X-Forwarded-For` and `fb-server` trusts it only from a private/loopback peer,
+looking it up in DB-IP's country CSV (`FB_SERVER_GEOIP_FILE`). That country
+then shows in the highscores and Discord alerts exactly like a native player's.
+
+```bash
+cd ~/frozen-bubble-sdl3
+tools/update-geoip.sh                      # DB-IP Lite country CSV into docker/geoip/ (monthly)
+cd docker && sudo docker compose up -d --build nginx fb-server
+```
+
+Without the CSV, browser players get no country and nothing else changes. IP
+data is DB-IP.com Lite (CC BY 4.0).
+
+---
+
 ## Updating the Server
 
 A one-off update — pull the latest code, rebuild, and restart — is just:

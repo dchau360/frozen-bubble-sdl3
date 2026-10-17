@@ -63,6 +63,12 @@ repo). The developer only controls the logging behavior of the reference
 server code; a third-party server operator's own practices are outside this
 policy's scope.
 
+**Browser players' country.** A browser player's country is worked out on
+the server from their IP address using DB-IP's offline country database (no
+request is sent anywhere), and shown as a flag next to their online highscores
+and in a server's Discord alerts, the same way native players' country is. The
+address itself is not shown to anyone.
+
 **Approximate location.** On startup the app asks a third-party IP-geolocation
 service (ipinfo.io, falling back to ip-api.com) for a rough position derived
 from your IP address — not GPS, and not anything requiring a location
@@ -245,6 +251,9 @@ or analytics SDK, so none is collected by the developer.
   approximate location and country from your IP address, for the network
   lobby's world map and, for the country only, a server's Discord alerts
   and the online highscores
+- [DB-IP](https://db-ip.com) — IP-to-location data (Lite, CC BY 4.0), used
+  offline on the server to find a browser player's country; nothing is sent
+  to DB-IP
 - [Discord](https://discord.com/privacy) — some servers relay an alert when
   you connect, and another at the end of each round (nickname(s), server
   name, game mode/outcome, and platform/input/country badges only), to a

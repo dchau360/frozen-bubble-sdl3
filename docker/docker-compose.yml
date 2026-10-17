@@ -63,8 +63,13 @@ services:
       # Lists only; the file keeps every account, so 0 brings them back. A
       # stranger using the same name joins that entry too. See SetupServer.md.
       - FB_SERVER_HISCORE_MERGE_NICKS=${FB_SERVER_HISCORE_MERGE_NICKS:-1}
+      # Country for browser players, from the address nginx forwards, looked
+      # up in DB-IP's free country CSV (tools/update-geoip.sh downloads it
+      # into docker/geoip/). Missing file: browser players just get no country.
+      - FB_SERVER_GEOIP_FILE=/etc/fb-geoip/dbip-country-lite.csv
     volumes:
       - fb-data:/var/lib/fb-server
+      - ./geoip:/etc/fb-geoip:ro
     depends_on:
       - discord-relay
 

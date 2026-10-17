@@ -764,6 +764,10 @@ if(BUILD_TESTING AND NOT EMSCRIPTEN AND NOT ANDROID AND NOT IOS)
         # predates either tag has to stay indistinguishable from before.
         add_test(NAME server-platform-input-test
             COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tests/server_platform_input_test.py $<TARGET_FILE:fb-server>)
+        # Browser players' country, from the X-Forwarded-For nginx adds and the
+        # DB-IP CSV in FB_SERVER_GEOIP_FILE (server/geoip.c, ws.c).
+        add_test(NAME server-web-country-test
+            COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tests/server_web_country_test.py $<TARGET_FILE:fb-server>)
         # Weekly rankings (server/weeklystats.c): what a round records, bots
         # excluded; the WEEKLY lobby command; the weekly line on the Discord
         # JOIN datagram; and the daily / Monday-rollover LEADERBOARD post.

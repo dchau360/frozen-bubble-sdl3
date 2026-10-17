@@ -57,6 +57,7 @@
 #include "log.h"
 #include "net.h"
 #include "ws.h"
+#include "geoip.h"
 
 /* this is set in game.c and used here for answering with
  * the requested command without passing this additional arg */
@@ -513,6 +514,11 @@ static void handle_incoming_data_generic(gpointer data, gpointer user_data, int 
                                 ws_pending[fd] = 0;
                                 ws_pending_count--;
                                 incoming_data_buffers_count[fd] = 0;
+                                /* A browser player's country, from the address nginx
+                                 * forwarded. Only the two-letter code is kept; a
+                                 * COUNTRY the client sends later still replaces it. */
+                                if (ws_forwarded_ip(fd)[0])
+                                        geoip_lookup(ws_forwarded_ip(fd), country_tag[fd]);
                                 send_line_log_push(fd, get_greets_msg());
                                 if (total > result) {
                                         memcpy(ws_raw_frame_buf[fd],

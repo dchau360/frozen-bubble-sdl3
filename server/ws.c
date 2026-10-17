@@ -22,13 +22,71 @@
 #include <string.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <ctype.h>
+#include <strings.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
 
 /* ── Per-connection WebSocket flag ───────────────────────────────────────── */
 
 static int is_ws[256];
 
+/* The visitor's own address, as the reverse proxy reported it in
+ * X-Forwarded-For, for a WebSocket connection that came in through a proxy we
+ * trust; empty otherwise. */
+static char forwarded_ip[256][46];
+
 int ws_is_websocket(int fd) { return (fd >= 0 && fd < 256) ? is_ws[fd] : 0; }
-void ws_reset(int fd)       { if (fd >= 0 && fd < 256) is_ws[fd] = 0; }
+void ws_reset(int fd)       { if (fd >= 0 && fd < 256) { is_ws[fd] = 0; forwarded_ip[fd][0] = '\0'; } }
+const char* ws_forwarded_ip(int fd) { return (fd >= 0 && fd < 256) ? forwarded_ip[fd] : ""; }
+
+/* Whether the TCP peer is on this machine or a private network -- nginx in the
+ * compose stack, which reaches fb-server over docker's bridge. Only then is
+ * X-Forwarded-For believed: a browser or script connecting to port 1511
+ * directly from the internet could put any address it likes in that header. */
+static int peer_is_trusted_proxy(int fd)
+{
+        struct sockaddr_storage ss;
+        socklen_t sl = sizeof(ss);
+        if (getpeername(fd, (struct sockaddr*)&ss, &sl) != 0) return 0;
+        if (ss.ss_family == AF_INET) {
+                const unsigned char* b = (const unsigned char*)&((struct sockaddr_in*)&ss)->sin_addr;
+                return b[0] == 127 || b[0] == 10 || (b[0] == 172 && b[1] >= 16 && b[1] <= 31) ||
+                       (b[0] == 192 && b[1] == 168);
+        }
+        if (ss.ss_family == AF_INET6) {
+                const unsigned char* b = ((struct sockaddr_in6*)&ss)->sin6_addr.s6_addr;
+                static const unsigned char loop[16] = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1};
+                return memcmp(b, loop, 16) == 0 || (b[0] & 0xfe) == 0xfc;
+        }
+        return 0;
+}
+
+/* Reads X-Forwarded-For out of the handshake's headers [hdr, end). nginx sets
+ * it to $remote_addr (not an appended chain), so the whole value is the
+ * address; only characters an address can contain are accepted. */
+static void remember_forwarded_ip(int fd, const char* hdr, const char* end)
+{
+        forwarded_ip[fd][0] = '\0';
+        const char* h = hdr;
+        while (h < end) {
+                const char* eol = memchr(h, '\n', (size_t)(end - h));
+                const char* next = eol ? eol + 1 : end;
+                if ((size_t)(next - h) > 16 && strncasecmp(h, "X-Forwarded-For:", 16) == 0) {
+                        const char* v = h + 16;
+                        while (v < next && (*v == ' ' || *v == '\t')) v++;
+                        size_t n = 0;
+                        char buf[46];
+                        while (v < next && n < sizeof(buf) - 1 &&
+                               (isxdigit((unsigned char)*v) || *v == '.' || *v == ':')) buf[n++] = *v++;
+                        buf[n] = '\0';
+                        if (n > 0 && peer_is_trusted_proxy(fd)) memcpy(forwarded_ip[fd], buf, n + 1);
+                        return;
+                }
+                h = next;
+        }
+}
 
 /* ── SHA-1 (FIPS 180-4) ─────────────────────────────────────────────────────
  * Minimal public-domain implementation, sufficient for WebSocket handshake.  */
@@ -136,6 +194,7 @@ int ws_detect_and_upgrade(int fd)
     ssize_t n = recv(fd, req, sizeof(req)-1, 0);
     if (n <= 0) return 0;
     req[n] = '\0';
+    remember_forwarded_ip(fd, req, req + n);
 
     /* Locate Sec-WebSocket-Key header */
     const char* key_hdr = strstr(req, "Sec-WebSocket-Key:");
@@ -188,6 +247,7 @@ int ws_try_upgrade_from_data(int fd, const char* data, int len)
     if (!end)
         return -1;  /* incomplete — caller must accumulate more data */
     end += 4;  /* include the terminator */
+    remember_forwarded_ip(fd, data, end);
 
     /* Locate Sec-WebSocket-Key header */
     const char* key_hdr = strstr(data, "Sec-WebSocket-Key:");

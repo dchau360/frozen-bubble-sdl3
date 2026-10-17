@@ -60,3 +60,6 @@ _site/
 # Scratch working notes for in-progress feature work (superpowers SDD
 # ledgers) -- internal process artifacts, not project documentation.
 .superpowers/
+
+# Downloaded DB-IP country data (tools/update-geoip.sh).
+/docker/geoip/
