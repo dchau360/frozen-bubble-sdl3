@@ -118,7 +118,7 @@ public:
     // The online screens -- the server lists, the lobby, a room, Set Teams --
     // whose long lists scroll by moving the selection: there a wheel notch is
     // an UP/DOWN, and a long swipe moves several rows (FrozenBubble::HandleInput).
-    bool NetListsShowing() const { return showingNetPanel || showingTeamsPanel; }
+    bool NetListsShowing() const { return showingNetPanel || showingTeamsPanel || showingPlayersPanel; }
     bool IsTextEditActive() const { return networkFieldEditing; }
     // Every screen past the title menu shows a Back button at the top left
     // (menulist::kBackBtn); tapping it is ESC.
@@ -129,6 +129,7 @@ public:
         return showingKeysPanel || showingSPPanel || showingOptPanel
             || showingNetPanel || showingLevelPanel || showingLocalMPPanel
             || showingNetSetupPanel || showingHelpPanel || showingTeamsPanel
+            || showingPlayersPanel
             || showingAccount;
     }
     // The High Scores screen's "Account code" button: the account screen on
@@ -847,6 +848,33 @@ private:
     struct TeamAutoBalanceTap { SDL_Rect rect; int teamCount; };
     std::vector<TeamAutoBalanceTap> teamAutoBalanceTaps;
     SDL_Rect teamsDoneRect{};
+
+    // ---- Report / Block page (mainmenu_playerspanel.cpp) -------------------
+    // Reaches /report and /block from a button, a tap on a chat line or the
+    // B key, so touch and pad players are not left with typed commands only.
+    // Modal like the team picker: its own flag, key handler and tap handler,
+    // all checked ahead of the lobby/room underneath.
+    bool showingPlayersPanel = false;
+    std::vector<std::string> playersList;      // snapshot taken on open
+    std::vector<std::string> playersReported;  // reported this session
+    int playersCursor = 0;                     // row the cursor is on
+    int playersButton = 0;                     // 0 = Report, 1 = Block/Unblock
+    std::string playersNotice;                 // last result, drawn on the page
+    // Opens the page with the cursor on `nick` when that player is listed.
+    void OpenPlayersPanel(const std::string& nick = std::string());
+    std::vector<std::string> PlayersPanelCandidates() const;
+    void PlayersPanelAct(const std::string& nick, int button);
+    void PlayersPanelRender();
+    bool PlayersPanelKey(SDL_Event *e);        // true when consumed
+    bool HandlePlayersPanelTap(float lx, float ly);
+    struct PlayersTap { SDL_Rect rect; int row; int button; };  // button -1 = the name
+    std::vector<PlayersTap> playersTaps;
+    SDL_Rect playersDoneRect{};
+    // Published by NetPanelChatDockRender each frame for the tap path: the
+    // dock header's REPORT / BLOCK button and one rect per other player's line.
+    SDL_Rect playersOpenBtnRect{};
+    struct ChatLineTap { SDL_Rect rect; std::string nick; };
+    std::vector<ChatLineTap> chatLineTaps;
 
     // ---- Replays page (mainmenu_replays.cpp) ------------------------------
     // A full-screen sub-page opened from the CONTROLS & SETTINGS panel's

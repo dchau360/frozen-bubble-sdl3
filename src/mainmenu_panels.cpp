@@ -116,6 +116,10 @@ void MainMenu::Render(void) {
     // the net panels, but only one panel is ever interactive and the page
     // paints an opaque backdrop over whatever is behind it.
     ReplaysPanelRender();
+    // Published fresh each frame by the chat dock; cleared here so a screen
+    // that draws no dock cannot leave a stale tap target behind.
+    playersOpenBtnRect = SDL_Rect{};
+    chatLineTaps.clear();
     NetSetupPanelRender();
     NetPanelRender();
     // After the room, before the guide: the team picker overlays the room it
@@ -124,6 +128,8 @@ void MainMenu::Render(void) {
     // published -- but the guide can be opened over it, and must still be
     // the last word on both.
     TeamsPanelRender();
+    // Over the room or lobby too; same reasoning, and it hit-tests its own rects.
+    PlayersPanelRender();
     // Last: the guide overlays the room it was opened from, and its own
     // BeginPanelTapRows must be the one that survives the frame so a tap
     // cannot reach the room list underneath.

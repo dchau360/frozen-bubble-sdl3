@@ -87,6 +87,15 @@ void MainMenu::HandleInput(SDL_Event *e){
                 }
             }
 
+            // [B] opens the Report / Block page from the lobby or a room, not
+            // while the chat field has focus (selectedActionIndex 0), where it
+            // is just a letter.
+            if (!showingPlayersPanel && !showingTeamsPanel && showingNetPanel && networkInLobby &&
+                networkInputMode == 0 && selectedActionIndex != 0 && e->key.key == SDLK_B) {
+                OpenPlayersPanel();
+                return;
+            }
+
             // The settings guide is modal over whatever opened it, so it takes
             // keys before every other panel -- otherwise Up/Down would scroll
             // the page and move the room's selection underneath it at once.
@@ -98,6 +107,8 @@ void MainMenu::HandleInput(SDL_Event *e){
             // would otherwise also act on. Checked after the guide so the
             // guide still wins if it is open over this page.
             if (TeamsPanelKey(e)) break;
+            // Report / Block page: modal over the lobby or room, same as above.
+            if (PlayersPanelKey(e)) break;
 
             // The replay viewer and the Replays list page (mainmenu_replays.cpp)
             // are modal over the CONTROLS & SETTINGS panel they were opened
@@ -527,6 +538,19 @@ bool MainMenu::HandlePanelTap(float lx, float ly, float verticalDrift) {
     // underneath it, and hit-tests its own swatch rects instead -- first, and
     // consuming every tap, for the same reason as the popups below.
     if (showingTeamsPanel) return HandleTeamsPanelTap(lx, ly);
+    if (showingPlayersPanel) return HandlePlayersPanelTap(lx, ly);
+    // The chat dock's REPORT / BLOCK button, and a tap on another player's
+    // chat line (which opens the page on them). Rects are published by the
+    // dock each frame and are empty whenever it is not drawn.
+    {
+        auto inRect = [&](const SDL_Rect& r) {
+            return r.w > 0 && r.h > 0 &&
+                   lx >= r.x && lx < r.x + r.w && ly >= r.y && ly < r.y + r.h;
+        };
+        if (inRect(playersOpenBtnRect)) { OpenPlayersPanel(); return true; }
+        for (const ChatLineTap& line : chatLineTaps)
+            if (inRect(line.rect)) { OpenPlayersPanel(line.nick); return true; }
+    }
     // The "Enable chain reaction? Y or N?" prompt (OptPanelRender /
     // NetSetupPanelRender -- random level, multiplayer training, and network
     // game all share it) is modal the same way, and registers no rows of its
