@@ -1,11 +1,10 @@
 #!/usr/bin/env bash
-# Download DB-IP's free "IP to Country Lite" CSV (for fb-server) and "IP to
-# City Lite" mmdb (for tools/visits.py) into docker/geoip/. Data: DB-IP.com,
+# Download DB-IP's free "IP to Country Lite" CSV (for fb-server) into docker/geoip/. Data: DB-IP.com,
 # CC BY 4.0. They publish a new file each month; run this monthly (or from cron),
 # then `sudo docker compose up -d --no-deps fb-server` to reload the CSV.
 set -euo pipefail
 cd "$(dirname "$0")/../docker"
-mkdir -p geoip visits
+mkdir -p geoip
 fetch() {  # fetch <name-prefix> <ext> <dest>
     for back in 0 1; do
         ym=$(date -u -d "-$back month" +%Y-%m 2>/dev/null || date -u -v-"$back"m +%Y-%m)
@@ -20,5 +19,4 @@ fetch() {  # fetch <name-prefix> <ext> <dest>
     return 1
 }
 fetch dbip-country-lite csv dbip-country-lite.csv
-fetch dbip-city-lite mmdb dbip-city-lite.mmdb
 ls -l geoip

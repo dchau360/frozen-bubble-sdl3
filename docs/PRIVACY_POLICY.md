@@ -63,16 +63,11 @@ repo). The developer only controls the logging behavior of the reference
 server code; a third-party server operator's own practices are outside this
 policy's scope.
 
-**Website visits and browser players.** The reference server's web front end
-(nginx on fb.servequake.com) keeps a private log of requests to the website
-and to the browser game's connection: time, IP address, page requested,
-referring page and browser identification. It is kept on the server only, is
-used to see roughly how many people visit and from where, and is deleted after
-90 days. Browser players' country is also worked out on the server from their IP
-address using DB-IP's offline country database (no request is sent anywhere),
-and shown as a flag next to their online highscores and in a server's Discord
-alerts, the same way native players' country is. The address itself is not
-shown to anyone.
+**Browser players' country.** A browser player's country is worked out on
+the server from their IP address using DB-IP's offline country database (no
+request is sent anywhere), and shown as a flag next to their online highscores
+and in a server's Discord alerts, the same way native players' country is. The
+address itself is not shown to anyone.
 
 **Approximate location.** On startup the app asks a third-party IP-geolocation
 service (ipinfo.io, falling back to ip-api.com) for a rough position derived
@@ -257,8 +252,8 @@ or analytics SDK, so none is collected by the developer.
   lobby's world map and, for the country only, a server's Discord alerts
   and the online highscores
 - [DB-IP](https://db-ip.com) — IP-to-location data (Lite, CC BY 4.0), used
-  offline on the server to find a browser player's country and where website
-  visitors are; nothing is sent to DB-IP
+  offline on the server to find a browser player's country; nothing is sent
+  to DB-IP
 - [Discord](https://discord.com/privacy) — some servers relay an alert when
   you connect, and another at the end of each round (nickname(s), server
   name, game mode/outcome, and platform/input/country badges only), to a
@@ -302,7 +297,6 @@ account, deleted at their next Monday 00:00 UTC reset.
 - Online highscores on fb.servequake.com: the week's bests until the
   Monday reset, the all-time bests until you delete your account (see
   "Deleting your account").
-- The website visit log on fb.servequake.com is deleted after 90 days.
 - Server-side connection logs, match statistics, and any Discord channel a
   server's join alerts are posted to are retained at the discretion of
   whoever operates that particular server.
