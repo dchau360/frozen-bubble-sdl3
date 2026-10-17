@@ -136,6 +136,8 @@ struct BubbleGameTestAccess {
     }
     static bool hasHighscores(const BubbleGame& game) { return game.ContinueHasHighscores(); }
     static void stubOpenUrl(BubbleGame& game, bool (*fn)(const char*)) { game.openUrl = fn; }
+    static void stubContinueAd(BubbleGame& game, void (*fn)()) { game.continueAd = fn; }
+    static void resolveContinue(BubbleGame& game, bool startOver) { game.ResolveContinuePrompt(startOver); }
     static void setContinueButtons(BubbleGame& game, SDL_Rect cont, SDL_Rect startOver,
                                    SDL_Rect highscores = {}) {
         game.continueBtnRect = cont;
@@ -1838,6 +1840,47 @@ int main() {
         CHECK(BubbleGameTestAccess::continuePrompt(game));
         CHECK(BubbleGameTestAccess::tapFinished(game, 150.f, 410.f));   // Continue
         CHECK(BubbleGameTestAccess::reloadLevel(game) == 5);
+    }
+
+    // An ad break: CONTINUE after a death asks for an ad; START OVER does not,
+    // and neither does a restart with no death card up (the in-game menu's
+    // RESTART LEVEL goes through the same function).
+    {
+        static int ads = 0;
+        ads = 0;
+        auto count = []() { ++ads; };
+        {
+            BubbleGame game(renderer);
+            BubbleGameTestAccess::stubContinueAd(game, count);
+            BubbleGameTestAccess::reset(game, 1, false, false);
+            BubbleGameTestAccess::setLevel(game, 4);
+            BubbleGameTestAccess::setGameOverState(game, true, true);
+            BubbleGameTestAccess::capturePostRoundTransition(game);
+            BubbleGameTestAccess::pressContinue(game);          // opens the prompt
+            CHECK(ads == 0);
+            BubbleGameTestAccess::pressContinue(game);          // Continue
+            CHECK(ads == 1);
+        }
+        {
+            BubbleGame game(renderer);
+            BubbleGameTestAccess::stubContinueAd(game, count);
+            BubbleGameTestAccess::reset(game, 1, false, false);
+            BubbleGameTestAccess::setLevel(game, 4);
+            BubbleGameTestAccess::setGameOverState(game, true, true);
+            BubbleGameTestAccess::capturePostRoundTransition(game);
+            BubbleGameTestAccess::pressContinue(game);
+            BubbleGameTestAccess::pressKey(game, SDLK_RIGHT);   // Start over
+            BubbleGameTestAccess::pressContinue(game);
+            CHECK(ads == 1);                                    // unchanged
+        }
+        {
+            BubbleGame game(renderer);
+            BubbleGameTestAccess::stubContinueAd(game, count);
+            BubbleGameTestAccess::reset(game, 1, false, false);
+            BubbleGameTestAccess::setLevel(game, 4);
+            BubbleGameTestAccess::resolveContinue(game, false); // menu restart: no card up
+            CHECK(ads == 1);                                    // unchanged
+        }
     }
 
     // Other solo modes (random levels here) keep the plain retry: no prompt.

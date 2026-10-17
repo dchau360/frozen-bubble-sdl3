@@ -1484,9 +1484,9 @@ void MainMenu::NetPanelChatDockRender(bool expanded) {
             // Report / block: the touch and keyboard way to the page, beside the
             // typed /report and /block commands. B is the key; a tap on any
             // other player's line below opens the page on them.
-            playersOpenBtnRect = {478, dockTop + 4, 144, 18};
+            playersOpenBtnRect = {456, dockTop + 4, 166, 18};
             drawPanel(playersOpenBtnRect, menulist::kChatFill, panelEdge);
-            drawLabel("B  REPORT / BLOCK", playersOpenBtnRect.x + 8,
+            drawLabel("B  REPORT / BLOCK", playersOpenBtnRect.x + 10,
                       playersOpenBtnRect.y + 1, textMuted);
         }
         // Action index 0 is Chat, whose row lives here rather than in the action
