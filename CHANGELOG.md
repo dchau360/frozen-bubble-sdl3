@@ -1,5 +1,9 @@
 # Changelog
 
+## v2.4.152
+
+- **Report and block from the chat.** Online, press B in the lobby or a room, tap REPORT / BLOCK above the chat, or tap someone's chat line to open a page listing the players with Report and Block buttons. Block hides a player's chat on your device; Report tells the server's operator. The typed /report and /block commands still work.
+
 ## v2.4.151
 
 - **More in the in-game menu.** The menu button at the top left now has Restart level and Start over in a classic 1-player game (each asks first), Sound and Music switches, and Controls, where you can change your keys or gamepad buttons without leaving the game. Online, Quit is now Leave and asks first, since the round counts as a loss.
