@@ -666,6 +666,12 @@ bool NetworkClient::SendReport(const char* nick, const char* reason) {
         if ((unsigned char)*p < 0x20 || *p == 0x7f) return false;
     for (const char* p = reason; *p; ++p)
         if ((unsigned char)*p < 0x20 || *p == 0x7f) return false;
+#ifdef FROZEN_BUBBLE_TEST_ACCESS
+    // Like the TALK counter: a headless test has no socket, so the call itself
+    // is what it observes, and counts as sent.
+    testReportLog.push_back(nick);
+    return true;
+#endif
     char cmd[512];
     snprintf(cmd, sizeof(cmd), "REPORT %s %s", nick, reason);
     return SendCommand(cmd);

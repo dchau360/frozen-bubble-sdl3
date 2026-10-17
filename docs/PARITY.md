@@ -123,7 +123,7 @@ twenty, which needed new UI to be playable at all:
 
 | # | Feature | Added |
 |---|---|---|
-| 42 | **Block and report** — `/block` hides a player's chat (saved per device), `/report` sends a note to the server's operator | v2.4.40 |
+| 42 | **Block and report** — `/block` hides a player's chat (saved per device), `/report` sends a note to the server's operator; a Report / Block page (B, the chat's REPORT / BLOCK button, or a tap on a chat line) does both without typing | v2.4.40 |
 | 43 | **Kick** — the room's host can `/kick p2` or `/kick <nick>` | v2.4.41 |
 | 44 | **Remembered room settings** — a host's last room setup carries over to the next room, across restarts | v2.4.64 |
 

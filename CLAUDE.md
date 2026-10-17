@@ -143,6 +143,8 @@ off all of:
 4. A footer hint (`menulist::DrawFooterHint`) spells out the controls if
    they aren't obvious from the UI alone.
 
+**Report / Block page:** `/report` and `/block` used to be typed commands only, which touch and pad players never found. `src/mainmenu_playerspanel.cpp` is a modal full-screen page (flag `showingPlayersPanel`, `PlayersPanelKey`/`HandlePlayersPanelTap`, modelled on the team picker) listing every other player the client knows -- recent chat speakers newest first, the room's roster, the lobby's players, and anyone already blocked so they can be unblocked -- each with a Report and a Block/Unblock button. It opens from B (lobby or room, not while the chat row has focus), the chat dock's REPORT / BLOCK button, or a tap on another player's chat line, which starts the cursor on them. Keys: UP/DOWN rows, LEFT/RIGHT/TAB between the two buttons, ENTER does it, ESC closes. Report sends `SendReport()` once per player per session (`playersReported`), Block shares `GameSettings::ToggleBlockedPlayer()`/`SaveKeys()` with the slash commands, which still work. See `tests/players_panel_test.cpp`.
+
 **Back button:** every screen past the title menu shows a Back button at the
 top left (`menulist::kBackBtn`, drawn by `menulist::DrawBackButton()` last in
 `MainMenu::Render()` while `BackButtonShowing()`, and by the High Scores

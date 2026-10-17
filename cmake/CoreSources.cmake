@@ -40,6 +40,7 @@ set(FROZEN_BUBBLE_CORE_SOURCES
     ${FB_SRC}/mainmenu_panels.cpp
     ${FB_SRC}/mainmenu_help.cpp
     ${FB_SRC}/mainmenu_teampanel.cpp
+    ${FB_SRC}/mainmenu_playerspanel.cpp
     ${FB_SRC}/mainmenu_replays.cpp
     ${FB_SRC}/mainmenu_tournament.cpp
     ${FB_SRC}/mainmenu_server.cpp

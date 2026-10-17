@@ -618,6 +618,8 @@ public:
     // Every SendGameData payload, in order, for a test that needs the wire
     // text itself (the skip-shot 'f' tail).
     std::vector<std::string> testGameDataLog;
+    // The nick of every REPORT a caller asked for, for the Report / Block page's test.
+    std::vector<std::string> testReportLog;
 private:
 #endif
 

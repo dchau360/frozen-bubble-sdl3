@@ -1480,6 +1480,15 @@ void MainMenu::NetPanelChatDockRender(bool expanded) {
         drawPanel({10, dockTop, 620, dockHeight}, menulist::kChatFill, panelEdge);
         drawLabel(expanded ? "CHAT  --  ENTER sends, ESC cancels" : "CHAT",
                   20, dockTop + 6, textGold);
+        if (!expanded) {
+            // Report / block: the touch and keyboard way to the page, beside the
+            // typed /report and /block commands. B is the key; a tap on any
+            // other player's line below opens the page on them.
+            playersOpenBtnRect = {478, dockTop + 4, 144, 18};
+            drawPanel(playersOpenBtnRect, menulist::kChatFill, panelEdge);
+            drawLabel("B  REPORT / BLOCK", playersOpenBtnRect.x + 8,
+                      playersOpenBtnRect.y + 1, textMuted);
+        }
         // Action index 0 is Chat, whose row lives here rather than in the action
         // list (that loop skips i == 0). Registered after the list's rows, which is
         // safe: NetPanelLobbyActionsRender ran first and only it calls Begin.
@@ -1599,6 +1608,13 @@ void MainMenu::NetPanelChatDockRender(bool expanded) {
         int yPos = chatStatusY - (maxChatLines - 1 - chatLine) * chatLineHeight;
         drawLabel(chatLineText, chatStatusX, yPos,
                   cm.nick == "Server" ? textMuted : textMain);
+        // A tap on another player's line opens Report / Block on them. The
+        // rect stops short of the input row below, whose own tap row starts
+        // at y=438.
+        if (!expanded && cm.nick != "Server" && cm.message.find("***") != 0 &&
+            !GameSettings::NicksEqual(cm.nick, netClient->GetPlayerNick())) {
+            chatLineTaps.push_back({{10, yPos, 620, std::min(chatLineHeight, 438 - yPos)}, cm.nick});
+        }
         chatLine++;
     }
 }

@@ -534,6 +534,12 @@ if(BUILD_TESTING AND NOT EMSCRIPTEN AND NOT ANDROID AND NOT IOS)
     target_link_libraries(net-menus-classic-test PRIVATE frozen-bubble-core-test)
     add_test(NAME net-menus-classic-test COMMAND net-menus-classic-test)
 
+    add_executable(players-panel-test tests/players_panel_test.cpp)
+    set_property(TARGET players-panel-test PROPERTY CXX_STANDARD 17)
+    set_property(TARGET players-panel-test PROPERTY CXX_EXTENSIONS OFF)
+    target_link_libraries(players-panel-test PRIVATE frozen-bubble-core-test)
+    add_test(NAME players-panel-test COMMAND players-panel-test)
+
     add_executable(menu-back-button-test tests/menu_back_button_test.cpp)
     set_property(TARGET menu-back-button-test PROPERTY CXX_STANDARD 17)
     set_property(TARGET menu-back-button-test PROPERTY CXX_EXTENSIONS OFF)

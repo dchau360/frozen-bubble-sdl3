@@ -750,6 +750,7 @@ void MainMenu::ReturnToMenu() {
     showingNetPanel = false;
     networkInLobby = false;
     showingTeamsPanel = false;
+    showingPlayersPanel = false;
     awaitKp = false;
     selectedMode = 0;
     runDelay = false;
@@ -777,6 +778,7 @@ void MainMenu::ReturnToNetLobby() {
     NetworkClient* netClient = NetworkClient::Instance();
     if (netClient) {
         showingTeamsPanel = false;
+        showingPlayersPanel = false;
         GameRoom* currentGame = netClient->GetCurrentGame();
         if (currentGame) {
             currentGame->players.clear();
