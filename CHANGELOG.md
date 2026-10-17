@@ -1,5 +1,11 @@
 # Changelog
 
+## v2.4.153
+
+- **Ad after Continue (Android).** In a 1-player game, choosing Continue after losing now shows an ad before you retry the level.
+- **Country flags for browser players.** Players on the web version now get their country shown in the online high scores and in Discord alerts, like players on other platforms. It is worked out on the server from the connection and the address is never shown.
+- **Report / Block button fits.** The REPORT / BLOCK button above the chat is wider so its text no longer overflows.
+
 ## v2.4.152
 
 - **Report and block from the chat.** Online, press B in the lobby or a room, tap REPORT / BLOCK above the chat, or tap someone's chat line to open a page listing the players with Report and Block buttons. Block hides a player's chat on your device; Report tells the server's operator. The typed /report and /block commands still work.
