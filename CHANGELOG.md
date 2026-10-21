@@ -1,5 +1,9 @@
 # Changelog
 
+## v2.4.154
+
+- **See a high score's full details.** On the High Scores screen, tap a score (or press Space / a gamepad's Y and use the arrows) to highlight it and see its whole record under the list: full name, level, time, shots, input, country and, on the online boards, the date it was set. After a run, the name panel shows the score you're naming. The website's high scores page does the same when you click or tap a row.
+
 ## v2.4.153
 
 - **Ad after Continue (Android).** In a 1-player game, choosing Continue after losing now shows an ad before you retry the level.
