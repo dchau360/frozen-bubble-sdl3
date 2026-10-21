@@ -33,6 +33,8 @@
 
 #define TEXTANIM_TICKSPEED 2
 
+struct HighscoreData;
+
 class HighscoreManager final
 {
 public:
@@ -60,6 +62,7 @@ public:
     void Dispose();
     static HighscoreManager* Instance(SDL_Renderer *rend = nullptr);
 private:
+    friend struct HighscoreManagerTestAccess;
     int curMode = 0;  // 0 = levelset tables; ShowNewScorePanel() sets it
 
     GameSettings *gameSettings;
@@ -117,6 +120,29 @@ private:
     bool HasWorldButton(int b) const;
     void ActivateWorldButton(int b);
     void CreateLevelImages();
+
+    // Row details: a tap on an entry, or SPACE (a pad's Y) and then the
+    // arrows, highlights one entry of the list on screen and draws its whole
+    // record in a strip under the list -- the full name, which the grid and
+    // the rows shorten, and every figure the server or the table keeps.
+    // SPACE / Y, ENTER or ESC (B) put it away again, as does a tap anywhere
+    // but a row. selIndex is the entry's place in the list shown: MY
+    // SCORES' grid in reading order, or in the world view selColumn's list
+    // (0 all-time, 1 this week).
+    bool rowSelect = false;
+    int selIndex = 0, selColumn = 0;
+    int SelectableCount(int column) const;
+    bool ClampSelection();
+    void MoveSelection(SDL_Keycode key);
+    bool TapRow(float lx, float ly);
+    // The new entry just named, once the panel closes, is selected so its
+    // details show straight away.
+    void SelectLocalEntry(const HighscoreData* entry);
+    // A click or tap on the screen (canvas coordinates): a tab, a button, a
+    // row, or anywhere else, which puts the details away or goes back.
+    void HandleTap(float lx, float ly);
+    void DrawDetailsStrip(const SDL_Rect& box, const std::string& line1, const std::string& line2,
+                          int track, const std::string& country);
 
     SDL_Surface *backgroundSfc, *useBubbles[8];
     SDL_Texture *smallBG[10] = { nullptr }, *highscoresBG, *highscoreFrame, *headerLevelset, *headerMptrain;

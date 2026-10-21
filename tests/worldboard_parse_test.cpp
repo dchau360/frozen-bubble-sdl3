@@ -40,6 +40,12 @@ int main() {
     // web page) still parses: the game reads the first four only.
     CHECK(b.Parse("1790380800 al#c21e=40/300000/0/DE al#c21e=40/300000/0/DE - 20727 20727"));
     CHECK(b.alltime.size() == 1 && b.alltime[0].country == "DE" && b.week.size() == 1);
+    // ...and those days fill each entry's day (for the details strip).
+    CHECK(b.alltime[0].day == 20727 && b.week[0].day == 20727);
+    CHECK(b.Parse("1 a#0001=40/300000/0,b#0002=20/100000/0 - - 20743,0 - 5,6 -"));
+    CHECK(b.alltime[0].day == 20743 && b.alltime[1].day == 0 && b.alltime[1].shots == 6);
+    CHECK(b.Parse("1 a#0001=40/300000/0 - - x,y - 5 -"));
+    CHECK(b.alltime[0].day == 0 && b.alltime[0].shots == 5);  // a bad day list costs only the days
 
     // ...and the two shot lists after the days fill each entry's shots, in
     // list order; a "-" or a list that doesn't line up leaves them at 0
@@ -96,6 +102,10 @@ int main() {
     CHECK(WorldBoard::LevelLabel(57) == "level 57");
     CHECK(WorldBoard::TimeLabel(725000) == "12'05\"");
     CHECK(WorldBoard::TimeLabel(3725000) == "1:02'05\"");
+    CHECK(WorldBoard::DateLabel(0).empty());
+    CHECK(WorldBoard::DateLabel(1) == "Jan 2, 1970");
+    CHECK(WorldBoard::DateLabel(20743) == "Oct 17, 2026");
+    CHECK(WorldBoard::DateLabel(11016) == "Feb 29, 2000");
 
     if (failures) return 1;
     std::printf("worldboard parse: all checks passed\n");

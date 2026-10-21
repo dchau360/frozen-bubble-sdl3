@@ -10,11 +10,11 @@
 </div>
 
 <div class="boards">
-<section class="board"><h2>ALL-TIME</h2><ol id="fb-alltime"><li class="empty">Loading…</li></ol></section>
-<section class="board"><h2 id="fb-week-title">THIS WEEK</h2><ol id="fb-week"><li class="empty">Loading…</li></ol></section>
+<section class="board"><h2>ALL-TIME</h2><ol id="fb-alltime"><li class="empty">Loading…</li></ol><div class="details" id="fb-alltime-details" aria-live="polite" hidden></div></section>
+<section class="board"><h2 id="fb-week-title">THIS WEEK</h2><ol id="fb-week"><li class="empty">Loading…</li></ol><div class="details" id="fb-week-details" aria-live="polite" hidden></div></section>
 </div>
 <p id="fb-status" class="status">Connecting to fb.servequake.com…</p>
-<p class="note">Scores are sent by each player's game and aren't verified.</p>
+<p class="note">Scores are sent by each player's game and aren't verified. Click or tap a row for its details.</p>
 
 <div class="about" markdown="1">
 
@@ -117,14 +117,69 @@ off with **Online highscores** in the 1-player menu; see the
   function tagged(list, track) { return list.map(function (e) { return Object.assign({ track: track }, e); }); }
   function span(li, cls, text) { var s = document.createElement("span"); s.className = cls; s.textContent = text; li.appendChild(s); }
   var both = false;
+  // The row picked for details, per list: which entry (by name and input, so
+  // it survives a re-render), or null. Like the game's High Scores screen,
+  // the whole record shows in a strip under the list.
+  var picked = { "fb-alltime": null, "fb-week": null };
+  var regionNames = null;
+  try { regionNames = new Intl.DisplayNames(["en"], { type: "region" }); } catch (e) {}
+  function countryName(cc) {
+    try { return (regionNames && regionNames.of(cc)) || cc; } catch (e) { return cc; }
+  }
+  function levelPhrase(l) { return l > 100 ? "Cleared all 100 levels" : "Level " + l; }
+  function showDetails(id, list, ranks) {
+    var box = document.getElementById(id + "-details");
+    var p = picked[id], i = -1;
+    if (p) list.forEach(function (e, k) { if (i < 0 && e.name === p.name && e.track === p.track) i = k; });
+    document.querySelectorAll("#" + id + " li.pick").forEach(function (li) {
+      li.setAttribute("aria-pressed", String(+li.dataset.i === i));
+    });
+    if (i < 0) { picked[id] = null; box.hidden = true; box.textContent = ""; return; }
+    var e = list[i];
+    box.textContent = "";
+    var head = document.createElement("div");
+    head.className = "dhead";
+    span(head, "drank", "#" + ranks[i] + (id === "fb-week" ? " this week" : " all-time"));
+    span(head, "dname", e.name);
+    box.appendChild(head);
+    var dl = document.createElement("dl");
+    function row(label, value) {
+      if (!value) return;
+      var dt = document.createElement("dt"); dt.textContent = label; dl.appendChild(dt);
+      var dd = document.createElement("dd"); dd.textContent = value; dl.appendChild(dd);
+    }
+    if (view.kind === 1) {
+      row("Points", pointsLabel(e.points) + " in one life");
+      row("Reached", levelPhrase(e.level).toLowerCase());
+    } else {
+      row("Furthest", levelPhrase(e.level).toLowerCase());
+      row("Shots", e.shots ? String(e.shots) : "");
+    }
+    row("Time", timeLabel(e.ms));
+    row("Input", e.track ? "Mouse/touch" : "Keyboard/gamepad");
+    row("Country", e.country ? countryName(e.country) : "");
+    row("Set", e.day ? new Date(e.day * 86400000).toLocaleDateString("en-US",
+      { year: "numeric", month: "long", day: "numeric", timeZone: "UTC" }) + " (UTC)" : "");
+    box.appendChild(dl);
+    box.hidden = false;
+  }
+  function pick(id, e) {
+    var p = picked[id];
+    picked[id] = p && p.name === e.name && p.track === e.track ? null : { name: e.name, track: e.track };
+    render();
+  }
   function fill(id, list, emptyText) {
     var ol = document.getElementById(id);
+    // Re-rendering rebuilds the rows: note which one had the keyboard focus.
+    var a = document.activeElement;
+    var focusI = a && a.parentNode === ol && a.dataset.i !== undefined ? +a.dataset.i : -1;
     ol.textContent = "";
     if (!list.length) {
       var li = document.createElement("li");
       li.className = "empty";
       li.textContent = emptyText;
       ol.appendChild(li);
+      showDetails(id, [], []);
       return;
     }
     var ranks = [];
@@ -132,6 +187,19 @@ off with **Online highscores** in the 1-player menu; see the
       var rank = i && same(list[i - 1], e) ? ranks[i - 1] : i + 1;
       ranks.push(rank);
       var li = document.createElement("li");
+      li.className = "pick";
+      li.dataset.i = i;
+      li.tabIndex = 0;
+      li.setAttribute("role", "button");
+      li.addEventListener("click", function () { pick(id, e); });
+      li.addEventListener("keydown", function (ev) {
+        if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); pick(id, e); }
+        else if (ev.key === "Escape" && picked[id]) { picked[id] = null; render(); }
+        else if (ev.key === "ArrowDown" || ev.key === "ArrowUp") {
+          var next = ev.key === "ArrowDown" ? li.nextElementSibling : li.previousElementSibling;
+          if (next) { ev.preventDefault(); next.focus(); }
+        }
+      });
       span(li, "rank" + (rank <= 3 ? " m" + rank : ""), rank + ".");
       {
         var badge = document.createElement("span");
@@ -172,6 +240,8 @@ off with **Online highscores** in the 1-player menu; see the
           { year: "numeric", month: "long", day: "numeric", timeZone: "UTC" }) + " (UTC)";
       ol.appendChild(li);
     });
+    showDetails(id, list, ranks);
+    if (focusI >= 0 && ol.children[focusI]) ol.children[focusI].focus();
   }
   function render() {
     document.querySelectorAll("[data-board]").forEach(function (b) { b.setAttribute("aria-pressed", String(+b.dataset.board === view.kind)); });
@@ -189,7 +259,11 @@ off with **Online highscores** in the 1-player menu; see the
   }
   function bind(attr, key) {
     document.querySelectorAll("[data-" + attr + "]").forEach(function (b) {
-      b.addEventListener("click", function () { view[key] = +b.getAttribute("data-" + attr); render(); });
+      b.addEventListener("click", function () {
+        view[key] = +b.getAttribute("data-" + attr);
+        picked["fb-alltime"] = picked["fb-week"] = null;  // another board: its own rows
+        render();
+      });
     });
   }
   bind("board", "kind");

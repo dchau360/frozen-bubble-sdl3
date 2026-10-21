@@ -15,8 +15,10 @@
 // country, when the server has one), me
 // "arank,alevel,atime,apoints,wrank,wlevel,wtime,wpoints" or "-". Level 101
 // means the whole set was cleared; points is 0 on a furthest-level board.
-// The day lists are only for the web page; the shot lists, "N,N,..." in the
-// same order as alltime/week (0 = not counted) or "-", fill Entry::shots.
+// The day lists, "N,N,..." UTC day indexes in the same order as
+// alltime/week (0 = from before the server kept them) or "-", fill
+// Entry::day; the shot lists, the same shape (0 = not counted), fill
+// Entry::shots.
 // Kept free of SDL and networking so it can be tested alone.
 struct WorldBoard {
     struct Entry {
@@ -27,6 +29,7 @@ struct WorldBoard {
         int track = 0;  // 0 keyboard/gamepad, 1 mouse/touch; set by Merge()
         std::string country;  // ISO alpha-2, or "" when the player has none
         int shots = 0;  // shots the run took; 0 = not counted (older game or server)
+        int day = 0;    // UTC day index (days since 1970-01-01) it was set; 0 = unknown
     };
     struct Mine {
         int rank = 0, level = 0, timeMs = 0, points = 0;  // all zero: no run in that scope
@@ -59,6 +62,8 @@ struct WorldBoard {
     static std::string LevelLabel(int level);
     // m'ss" like the local tables, h:mm'ss" past an hour.
     static std::string TimeLabel(int timeMs);
+    // "Oct 17, 2026" for a UTC day index, "" for 0 (unknown).
+    static std::string DateLabel(int day);
 };
 
 #endif

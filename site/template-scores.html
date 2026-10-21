@@ -113,6 +113,16 @@
   .badge.t1 { background: #268070; }
   .board .flag { flex: 0 0 auto; text-shadow: none; }
   .board .empty { color: var(--muted); padding: .2rem 0; }
+  .board li.pick { cursor: pointer; padding-left: .25rem; padding-right: .25rem; margin: 0 -.25rem; border: 1px solid transparent; }
+  .board li.pick:hover { background: rgba(255, 255, 255, .06); }
+  .board li.pick:focus-visible { outline: 2px solid var(--gold); outline-offset: -1px; }
+  .board li.pick[aria-pressed="true"] { background: var(--tab-on); border-color: var(--gold); }
+  .details { margin-top: .6rem; border: 1px solid var(--gold); background: rgba(0, 0, 0, .35); padding: .5rem .7rem; font-size: .9rem; }
+  .details .dhead { display: flex; gap: .6rem; align-items: baseline; color: var(--gold); font-weight: 700; margin-bottom: .3rem; }
+  .details .dname { overflow-wrap: anywhere; }
+  .details dl { display: grid; grid-template-columns: auto 1fr; gap: .1rem .8rem; margin: 0; }
+  .details dt { color: var(--muted); }
+  .details dd { margin: 0; }
   .status { text-align: center; color: var(--muted); font-size: .85rem; margin: .9rem 0 0; }
   .note { text-align: center; color: var(--muted); font-size: .78rem; margin: .3rem 0 0; }
   .about { max-width: 62ch; margin: 1.8rem auto 0; background: var(--panel); padding: .9rem 1.1rem; font-size: .9rem; }
