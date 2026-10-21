@@ -32,9 +32,11 @@ bool ParseList(const std::string& field, std::vector<WorldBoard::Entry>& out) {
 }
 
 // A side list ("N,N,..." or "-") index-aligned with `list`: fills each
-// entry's shots. One that doesn't line up is ignored rather than refused,
-// like a later server's extra field: the board itself is still good.
-void ParseShots(const std::string& field, std::vector<WorldBoard::Entry>& list) {
+// entry's `member` (shots, or the day it was set). One that doesn't line up
+// is ignored rather than refused, like a later server's extra field: the
+// board itself is still good.
+void ParseSide(const std::string& field, std::vector<WorldBoard::Entry>& list,
+               int WorldBoard::Entry::*member) {
     if (field == "-") return;
     std::vector<int> v;
     std::stringstream ss(field);
@@ -46,7 +48,7 @@ void ParseShots(const std::string& field, std::vector<WorldBoard::Entry>& list) 
         v.push_back((int)n);
     }
     if (v.size() != list.size()) return;
-    for (size_t i = 0; i < v.size(); ++i) list[i].shots = v[i];
+    for (size_t i = 0; i < v.size(); ++i) list[i].*member = v[i];
 }
 
 }  // namespace
@@ -71,11 +73,16 @@ bool WorldBoard::Parse(const std::string& payload) {
         b.myAlltime = {v[0], v[1], v[2], v[3]};
         b.myWeek = {v[4], v[5], v[6], v[7]};
     }
-    // Then the two day lists (the web page's), then the two shot lists.
+    // Then the two day lists, then the two shot lists; a server from before
+    // either just stops earlier.
     std::string allDays, weekDays, allShots, weekShots;
-    if (ss >> allDays >> weekDays >> allShots >> weekShots) {
-        ParseShots(allShots, b.alltime);
-        ParseShots(weekShots, b.week);
+    if (ss >> allDays >> weekDays) {
+        ParseSide(allDays, b.alltime, &WorldBoard::Entry::day);
+        ParseSide(weekDays, b.week, &WorldBoard::Entry::day);
+        if (ss >> allShots >> weekShots) {
+            ParseSide(allShots, b.alltime, &WorldBoard::Entry::shots);
+            ParseSide(weekShots, b.week, &WorldBoard::Entry::shots);
+        }
     }
     *this = b;
     return true;
@@ -125,5 +132,25 @@ std::string WorldBoard::TimeLabel(int timeMs) {
         std::snprintf(buf, sizeof(buf), "%d:%02d'%02d\"", total / 3600, total / 60 % 60, total % 60);
     else
         std::snprintf(buf, sizeof(buf), "%d'%02d\"", total / 60, total % 60);
+    return buf;
+}
+
+std::string WorldBoard::DateLabel(int day) {
+    if (day <= 0) return "";
+    // Days since 1970-01-01 to a civil date (Howard Hinnant's algorithm),
+    // so it is UTC whatever the device's own time zone is.
+    const long z = day + 719468L;
+    const long era = (z >= 0 ? z : z - 146096) / 146097;
+    const long doe = z - era * 146097;
+    const long yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365;
+    const long doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    const long mp = (5 * doy + 2) / 153;
+    const int d = (int)(doy - (153 * mp + 2) / 5 + 1);
+    const int m = (int)(mp < 10 ? mp + 3 : mp - 9);
+    const long y = yoe + era * 400 + (m <= 2);
+    static const char* kMonths[12] = {"Jan", "Feb", "Mar", "Apr", "May", "Jun",
+                                      "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
+    char buf[24];
+    std::snprintf(buf, sizeof(buf), "%s %d, %ld", kMonths[m - 1], d, y);
     return buf;
 }

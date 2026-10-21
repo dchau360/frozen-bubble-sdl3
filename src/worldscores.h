@@ -109,6 +109,9 @@ void Pump(bool inGame);
 // Tests: point at a local server and keep pending runs in memory only.
 void SetServerForTest(const std::string& host, int port);
 int PendingCountForTest();
+// Tests: show `b` as board `board` (BoardIndex()) with the status Ready,
+// without any connection.
+void SetBoardForTest(int board, const WorldBoard& b);
 
 }  // namespace worldscores
 

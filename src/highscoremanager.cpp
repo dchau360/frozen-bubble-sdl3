@@ -116,6 +116,63 @@ static int DrawTrackBadge(SDL_Renderer* rend, TTFText& t, int track, int x, int 
     return DrawChip(rend, t, kTrackBadgeLabel[track], kTrackBadgeFill[track], x, y);
 }
 
+namespace {
+
+// MY SCORES' grid: one track's table, or both merged in the same order
+// CheckAndAddScore keeps each in (higher level, then faster), top 10.
+// mask is GameSettings::scoreTracks().
+struct Shown { HighscoreData* entry; int track; };
+std::vector<Shown> ShownLocal(int mask) {
+    std::vector<Shown> scores;
+    for (int track = 0; track < 2; track++)
+        if ((mask >> track) & 1)
+            for (HighscoreData& d : levelsetScores[track]) scores.push_back({&d, track});
+    std::stable_sort(scores.begin(), scores.end(), [](const Shown& a, const Shown& b) {
+        if (a.entry->level != b.entry->level) return a.entry->level > b.entry->level;
+        return a.entry->time < b.entry->time;
+    });
+    if (scores.size() > 10) scores.resize(10);
+    return scores;
+}
+
+// One column of the world view (0 all-time, 1 this week) from whichever
+// inputs are on, through Merge even for one so every entry carries its input
+// for the badge; the ten rows the screen has room for.
+std::vector<WorldBoard::Entry> WorldColumn(bool points, int mask, int column) {
+    const std::vector<WorldBoard::Entry> none;
+    const WorldBoard& kb = worldscores::Board(worldscores::BoardIndex(points, 0));
+    const WorldBoard& ms = worldscores::Board(worldscores::BoardIndex(points, 1));
+    std::vector<WorldBoard::Entry> list = WorldBoard::Merge(
+        (mask & 1) ? (column ? kb.week : kb.alltime) : none,
+        (mask & 2) ? (column ? ms.week : ms.alltime) : none, points);
+    if (list.size() > 10) list.resize(10);
+    return list;
+}
+
+// Where MY SCORES' grid puts entry i: the thumbnail's frame. The tap target
+// is the whole cell, frame and the text under it.
+SDL_Rect LocalFrameRect(int i) {
+    const int col = i % 5, row = i / 5;
+    return {105 * col + 85 - 7, 80 + 160 * row - 7, 81, 100};
+}
+SDL_Rect LocalCellRect(int i) {
+    const SDL_Rect f = LocalFrameRect(i);
+    return {f.x - 12, f.y, 105, 160};
+}
+// A world-view row: column c, row i.
+SDL_Rect WorldRowRect(int c, int i) {
+    return {22 + c * 304 + 4, 101 + i * 22, 292 - 8, 22};
+}
+constexpr SDL_Rect kLocalDetailsBox = {40, 427, 560, 22};
+constexpr SDL_Rect kWorldDetailsBox = {22, 339, 596, 54};
+const char* const kTrackName[2] = {"keyboard/gamepad", "mouse/touch"};
+
+std::string LevelPhrase(int level) {
+    return level > 100 ? "cleared all 100 levels" : "level " + std::to_string(level);
+}
+
+}  // namespace
+
 HighscoreManager *HighscoreManager::ptrInstance = NULL;
 
 HighscoreManager *HighscoreManager::Instance(SDL_Renderer *rend)
@@ -546,6 +603,7 @@ void HighscoreManager::CreateLevelImages() {
 void HighscoreManager::ShowScoreScreen(int ls) {
     lastState = ls;
     viewWorld = false;  // a new local high score is what the player wants to see
+    rowSelect = false;
     FrozenBubble::Instance()->currentState = Highscores;
 }
 
@@ -555,16 +613,8 @@ void HighscoreManager::RenderScoreScreen() {
     if (curMode == 0) { // 0 = Levelset
         // The shown table: one track's, or both merged in the same order
         // CheckAndAddScore keeps each in (higher level, then faster), top 10.
-        struct Shown { HighscoreData* entry; int track; };
-        std::vector<Shown> scores;
-        for (int track = 0; track < 2; track++)
-            if (ShowsTrack(track))
-                for (HighscoreData& d : levelsetScores[track]) scores.push_back({&d, track});
-        std::stable_sort(scores.begin(), scores.end(), [](const Shown& a, const Shown& b) {
-            if (a.entry->level != b.entry->level) return a.entry->level > b.entry->level;
-            return a.entry->time < b.entry->time;
-        });
-        if (scores.size() > 10) scores.resize(10);
+        const std::vector<Shown> scores = ShownLocal(gameSettings->scoreTracks());
+        if (rowSelect) ClampSelection();
         if (viewWorld) RenderWorldBoard();
         for (size_t i = 0; i < scores.size() && !viewWorld; i++) {
             int sx = 64, sy = 85;
@@ -580,7 +630,20 @@ void HighscoreManager::RenderScoreScreen() {
             // shifted to match).
             int col = (int)i % 5, row = (int)i / 5;
             SDL_Rect bgPos = {105 * col + 85, 80 + 160 * row, sx, sy};
-            SDL_Rect framePos = {bgPos.x - 7, bgPos.y - 7, 81, 100};
+            SDL_Rect framePos = LocalFrameRect((int)i);
+            if (rowSelect && (int)i == selIndex) {
+                // The selected entry: a filled gold-edged cell behind the
+                // frame and its text, so it reads at a glance.
+                const SDL_Rect cell = {framePos.x - 5, framePos.y - 5, framePos.w + 10, 152};
+                SDL_SetRenderDrawBlendMode(rend, SDL_BLENDMODE_BLEND);
+                menulist::SetDrawColor(rend, menulist::kSelFill, 110);
+                { SDL_FRect fr = ToFRect(cell); SDL_RenderFillRect(rend, &fr); }
+                SDL_SetRenderDrawColor(rend, menulist::kGold.r, menulist::kGold.g, menulist::kGold.b, 255);
+                for (int k = 0; k < 2; ++k) {
+                    SDL_FRect fr{(float)(cell.x - k), (float)(cell.y - k), (float)(cell.w + 2 * k), (float)(cell.h + 2 * k)};
+                    SDL_RenderRect(rend, &fr);
+                }
+            }
             { SDL_FRect fr = ToFRect(framePos); SDL_RenderTexture(rend, highscoreFrame, nullptr, &fr); }
             if (smallBG[i]) { SDL_FRect fr = ToFRect(bgPos); SDL_RenderTexture(rend, smallBG[i], nullptr, &fr); }
             // An entry's text was placed for its slot in its own table;
@@ -654,7 +717,14 @@ void HighscoreManager::RenderScoreScreen() {
         // Where a level that used both inputs went (BubbleGame's
         // ScoringInputMethod): said on the keyboard table, where a player
         // would look for it and not find it.
-        if (ShowsTrack((int)InputMethod::Keyboard)) {
+        if (rowSelect && !viewWorld && selIndex < (int)scores.size()) {
+            const Shown& s = scores[selIndex];
+            std::string line = "#" + std::to_string(selIndex + 1) + "  " + s.entry->name + "  \u00b7  " +
+                               LevelPhrase(s.entry->level) + "  \u00b7  " + s.entry->formatTime();
+            if (s.entry->shots > 0) line += "  \u00b7  " + WorldBoard::ShotsLabel(s.entry->shots);
+            line += "  \u00b7  " + std::string(kTrackName[s.track]);
+            DrawDetailsStrip(kLocalDetailsBox, line, "", s.track, "");
+        } else if (ShowsTrack((int)InputMethod::Keyboard)) {
             trackLabelText.UpdateStyle(12, TTF_STYLE_NORMAL);
             trackLabelText.UpdateColor(menulist::kMuted, menulist::kTextShadow);
             trackLabelText.UpdateText(rend, "A level played with both mouse/touch and keyboard counts as MOUSE/TOUCH", 0);
@@ -662,13 +732,16 @@ void HighscoreManager::RenderScoreScreen() {
             SDL_FRect fr = ToFRect(*trackLabelText.Coords());
             SDL_RenderTexture(rend, trackLabelText.Texture(), nullptr, &fr);
         }
-        if (!awaitKeyType) {
+        if (!awaitKeyType && rowSelect) {
+            menulist::DrawFooterHint(rend, trackLabelText,
+                                     "ARROWS: PICK A SCORE   SPACE / Y, ENTER OR ESC / B: DONE");
+        } else if (!awaitKeyType) {
             const char* hint = !worldscores::Available()
-                ? "LEFT/RIGHT: KEYBOARD / MOUSE / BOTH   ANY OTHER KEY: BACK"
+                ? "LEFT/RIGHT: KEYBOARD / MOUSE / BOTH   SPACE / Y: DETAILS   ESC: BACK"
                 : viewWorld
-                    ? (worldscores::WebUrl()[0] ? "LEFT/RIGHT: INPUT  UP/DOWN: BOARD  TAB / X: BUTTON  ENTER / A: SELECT  ESC / B: BACK"
-                                                : "LEFT/RIGHT: INPUT  UP/DOWN: BOARD  ENTER / A: ACCOUNT CODE  ESC / B: BACK")
-                    : "LEFT/RIGHT: INPUT   UP/DOWN: ONLINE BOARDS   ESC / B: BACK";
+                    ? (worldscores::WebUrl()[0] ? "L/R: INPUT  U/D: BOARD  SPACE / Y: DETAILS  TAB / X: BUTTON  A: SELECT  B: BACK"
+                                                : "L/R: INPUT  U/D: BOARD  SPACE / Y: DETAILS  A: ACCOUNT CODE  B: BACK")
+                    : "LEFT/RIGHT: INPUT   UP/DOWN: ONLINE BOARDS   SPACE / Y: DETAILS   ESC / B: BACK";
             menulist::DrawFooterHint(rend, trackLabelText, hint);
         }
     }
@@ -685,6 +758,7 @@ void HighscoreManager::RenderScoreScreen() {
 }
 
 void HighscoreManager::SetScopeTab(int tab) {
+    rowSelect = false;  // another board: its own rows
     if (tab == 0) {
         SetViewWorld(false);
     } else if (worldscores::Available()) {
@@ -736,14 +810,8 @@ void HighscoreManager::RenderWorldBoard() {
     const std::string me = worldscores::ShownName();
     SDL_SetRenderDrawBlendMode(rend, SDL_BLENDMODE_BLEND);
 
-    // One list per column from whichever inputs are on, through Merge even
-    // for one so every entry carries its input for the badge.
-    const std::vector<WorldBoard::Entry> none;
-    const bool showKb = ShowsTrack(0), showMs = ShowsTrack(1);
-    const std::vector<WorldBoard::Entry> mergedAll = WorldBoard::Merge(
-        showKb ? kb.alltime : none, showMs ? ms.alltime : none, viewPoints);
-    const std::vector<WorldBoard::Entry> mergedWeek = WorldBoard::Merge(
-        showKb ? kb.week : none, showMs ? ms.week : none, viewPoints);
+    const std::vector<WorldBoard::Entry> mergedAll = WorldColumn(viewPoints, gameSettings->scoreTracks(), 0);
+    const std::vector<WorldBoard::Entry> mergedWeek = WorldColumn(viewPoints, gameSettings->scoreTracks(), 1);
     struct Column { const char* title; const std::vector<WorldBoard::Entry>* list; };
     const Column cols[2] = {{"ALL-TIME", &mergedAll}, {"THIS WEEK", &mergedWeek}};
     for (int c = 0; c < 2; ++c) {
@@ -771,6 +839,13 @@ void HighscoreManager::RenderWorldBoard() {
         for (size_t i = 0; i < list.size() && i < 10; ++i) {
             const int y = 102 + (int)i * 22;
             const SDL_Color col = list[i].name == me ? menulist::kGold : menulist::kText;
+            if (rowSelect && c == selColumn && (int)i == selIndex) {
+                const SDL_Rect r = WorldRowRect(c, (int)i);
+                menulist::SetDrawColor(rend, menulist::kSelFill, 120);
+                { SDL_FRect fr = ToFRect(r); SDL_RenderFillRect(rend, &fr); }
+                SDL_SetRenderDrawColor(rend, menulist::kGold.r, menulist::kGold.g, menulist::kGold.b, 255);
+                { SDL_FRect fr = ToFRect(r); SDL_RenderRect(rend, &fr); }
+            }
             // The same fields as the web page (site/scores.md): rank, player,
             // then points / level / time on a points board, level / time on
             // a level board, plus a shots column on a level board (a
@@ -810,6 +885,25 @@ void HighscoreManager::RenderWorldBoard() {
         }
     }
 
+    // The selected row's whole record, where the status line and the note
+    // otherwise go.
+    if (rowSelect) {
+        const auto& list = selColumn ? mergedWeek : mergedAll;
+        if (selIndex < (int)list.size()) {
+            const WorldBoard::Entry& e = list[selIndex];
+            const std::string line1 = "#" + std::to_string(WorldBoard::Rank(list, selIndex)) +
+                                      (selColumn ? " this week" : " all-time") + "   " + e.name;
+            std::string line2 = viewPoints
+                ? WorldBoard::PointsLabel(e.points) + " in one life  \u00b7  reached " + LevelPhrase(e.level)
+                : LevelPhrase(e.level);
+            line2 += "  \u00b7  " + WorldBoard::TimeLabel(e.timeMs);
+            if (!viewPoints && e.shots > 0) line2 += "  \u00b7  " + WorldBoard::ShotsLabel(e.shots);
+            line2 += "  \u00b7  " + std::string(kTrackName[e.track]);
+            if (e.day > 0) line2 += "  \u00b7  set " + WorldBoard::DateLabel(e.day);
+            DrawDetailsStrip(kWorldDetailsBox, line1, line2, e.track, e.country);
+        }
+    }
+
     // Status / your own line.
     std::string line;
     SDL_Color lineColor = menulist::kMuted;
@@ -843,12 +937,12 @@ void HighscoreManager::RenderWorldBoard() {
         line = std::string(viewPoints ? "Score points" : "Clear a level") +
                " in a classic game from level 1 to appear here as " + me + ".";
     }
-    if (!line.empty()) {
+    if (!line.empty() && !rowSelect) {
         trackLabelText.UpdateStyle(13, TTF_STYLE_NORMAL);
         trackLabelText.UpdateText(rend, line.c_str(), 0);
         text(line, 640 / 2 - trackLabelText.Coords()->w / 2, 346, lineColor);
     }
-    {
+    if (!rowSelect) {
         static const char* kNote = "Scores are sent by each player's game and aren't verified.";
         trackLabelText.UpdateStyle(11, TTF_STYLE_NORMAL);
         trackLabelText.UpdateText(rend, kNote, 0);
@@ -875,6 +969,119 @@ void HighscoreManager::RenderWorldBoard() {
         text(kWorldButtonLabels[b], r.x + r.w / 2 - w / 2, r.y + r.h / 2 - h / 2,
              focused ? menulist::kGold : menulist::kText, 13, TTF_STYLE_BOLD);
     }
+}
+
+int HighscoreManager::SelectableCount(int column) const {
+    if (!viewWorld) return column ? 0 : (int)ShownLocal(gameSettings->scoreTracks()).size();
+    return (int)WorldColumn(viewPoints, gameSettings->scoreTracks(), column).size();
+}
+
+bool HighscoreManager::ClampSelection() {
+    if (SelectableCount(selColumn) == 0) selColumn = 1 - selColumn;
+    if (!viewWorld) selColumn = 0;
+    const int n = SelectableCount(selColumn);
+    if (n == 0) {
+        rowSelect = false;
+        return false;
+    }
+    selIndex = std::clamp(selIndex, 0, n - 1);
+    return true;
+}
+
+void HighscoreManager::MoveSelection(SDL_Keycode key) {
+    if (!ClampSelection()) return;
+    const int was = selIndex, wasColumn = selColumn;
+    const int n = SelectableCount(selColumn);
+    if (!viewWorld) {
+        // The grid: two rows of five, in reading order.
+        const int step = key == SDLK_LEFT ? -1 : key == SDLK_RIGHT ? 1 : key == SDLK_UP ? -5 : 5;
+        if (selIndex + step >= 0 && selIndex + step < n) selIndex += step;
+    } else if (key == SDLK_UP || key == SDLK_DOWN) {
+        selIndex = std::clamp(selIndex + (key == SDLK_DOWN ? 1 : -1), 0, n - 1);
+    } else {
+        // LEFT/RIGHT: across to the other column, at the same row or its last.
+        const int other = 1 - selColumn;
+        if ((key == SDLK_RIGHT) == (other == 1) && SelectableCount(other) > 0) {
+            selColumn = other;
+            selIndex = std::min(selIndex, SelectableCount(other) - 1);
+        }
+    }
+    AudioMixer::Instance()->PlaySFX(selIndex != was || selColumn != wasColumn ? "menu_change" : "stick");
+}
+
+bool HighscoreManager::TapRow(float lx, float ly) {
+    auto hit = [&](const SDL_Rect& r) { return lx >= r.x && lx < r.x + r.w && ly >= r.y && ly < r.y + r.h; };
+    for (int c = 0; c < (viewWorld ? 2 : 1); ++c) {
+        const int n = SelectableCount(c);
+        for (int i = 0; i < n; ++i) {
+            if (hit(viewWorld ? WorldRowRect(c, i) : LocalCellRect(i))) {
+                if (!rowSelect || selColumn != c || selIndex != i)
+                    AudioMixer::Instance()->PlaySFX("menu_change");
+                rowSelect = true;
+                selColumn = c;
+                selIndex = i;
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+void HighscoreManager::SelectLocalEntry(const HighscoreData* entry) {
+    const std::vector<Shown> scores = ShownLocal(gameSettings->scoreTracks());
+    for (size_t i = 0; i < scores.size(); ++i) {
+        if (scores[i].entry == entry) {
+            viewWorld = false;
+            rowSelect = true;
+            selColumn = 0;
+            selIndex = (int)i;
+            return;
+        }
+    }
+}
+
+void HighscoreManager::HandleTap(float lx, float ly) {
+    if (TapScoreTrackTab(lx, ly) || TapWorldControls(lx, ly) || TapRow(lx, ly)) return;
+    const SDL_Rect& back = menulist::kBackBtn;
+    const bool onBack = lx >= back.x && lx < back.x + back.w && ly >= back.y && ly < back.y + back.h;
+    if (rowSelect && !onBack) {
+        // A tap off the rows puts the details away first.
+        rowSelect = false;
+        AudioMixer::Instance()->PlaySFX("cancel");
+        return;
+    }
+    // A tap that misses every tab, button and row has nothing else to do on
+    // this screen, so it goes back -- matching the keyboard's own "any other
+    // key". Without this there was no way to leave this screen on a
+    // touch-only device at all; the menus' Back button, drawn at the top
+    // left since, lands here too.
+    FrozenBubble::Instance()->currentState = TitleScreen;
+}
+
+void HighscoreManager::DrawDetailsStrip(const SDL_Rect& box, const std::string& line1,
+                                        const std::string& line2, int track,
+                                        const std::string& country) {
+    SDL_SetRenderDrawBlendMode(rend, SDL_BLENDMODE_BLEND);
+    menulist::SetDrawColor(rend, menulist::kTextShadow, 215);
+    { SDL_FRect fr = ToFRect(box); SDL_RenderFillRect(rend, &fr); }
+    SDL_SetRenderDrawColor(rend, menulist::kGold.r, menulist::kGold.g, menulist::kGold.b, 255);
+    { SDL_FRect fr = ToFRect(box); SDL_RenderRect(rend, &fr); }
+
+    auto put = [&](const std::string& str, int x, int y, int size, int style, SDL_Color color) {
+        trackLabelText.UpdateStyle(size, style);
+        trackLabelText.UpdateColor(color, menulist::kTextShadow);
+        trackLabelText.UpdateText(rend, str.c_str(), 0);
+        trackLabelText.UpdatePosition({x, y});
+        SDL_FRect fr = ToFRect(*trackLabelText.Coords());
+        SDL_RenderTexture(rend, trackLabelText.Texture(), nullptr, &fr);
+    };
+    const bool twoLines = !line2.empty();
+    const int y1 = twoLines ? box.y + 6 : box.y + (box.h - 16) / 2;
+    int x = box.x + 8;
+    x += DrawTrackBadge(rend, trackLabelText, track, x, y1 + 2) + 6;
+    if (!country.empty()) x += DrawChip(rend, trackLabelText, country.c_str(), kCountryChipFill, x, y1 + 2) + 6;
+    put(line1, x, y1, 13, TTF_STYLE_BOLD, menulist::kGold);
+    if (twoLines) put(line2, box.x + 8, box.y + 28, 13, TTF_STYLE_NORMAL, menulist::kText);
 }
 
 bool HighscoreManager::HasWorldButton(int b) const {
@@ -956,12 +1163,58 @@ void HighscoreManager::RenderPanel() {
     else textTickWait--;
 
     { SDL_FRect fr = ToFRect(*nameInput.Coords()); SDL_RenderTexture(rend, nameInput.Texture(), nullptr, &fr); }
+
+    // The record being named, in full: what the grid shows of it afterwards
+    // is a thumbnail and three short lines.
+    const std::vector<HighscoreData>& scores = levelsetScores[pendingHighscoreTrack];
+    for (int i = (int)scores.size() - 1; i >= 0; i--) {
+        if (!scores[i].newHighscore) continue;
+        HighscoreData& d = levelsetScores[pendingHighscoreTrack][i];
+        std::string first = LevelPhrase(d.level) + "  \u00b7  " + d.formatTime();
+        if (d.shots > 0) first += "  \u00b7  " + WorldBoard::ShotsLabel(d.shots);
+        const std::string& line = first;
+        const std::string line2 = std::string("#") + std::to_string(i + 1) + " on the " +
+                                  kTrackName[pendingHighscoreTrack] + " table";
+        int y = voidPanelRct.y + voidPanelRct.h - 64;
+        for (const std::string* l : {&line, &line2}) {
+            trackLabelText.UpdateStyle(14, l == &line ? TTF_STYLE_BOLD : TTF_STYLE_NORMAL);
+            trackLabelText.UpdateColor(l == &line ? menulist::kGold : menulist::kText, menulist::kTextShadow);
+            trackLabelText.UpdateText(rend, l->c_str(), 0);
+            trackLabelText.UpdatePosition({640 / 2 - trackLabelText.Coords()->w / 2, y});
+            SDL_FRect fr = ToFRect(*trackLabelText.Coords());
+            SDL_RenderTexture(rend, trackLabelText.Texture(), nullptr, &fr);
+            y += 22;
+        }
+        break;
+    }
 }
 
 void HighscoreManager::HandleInput(SDL_Event *e){
     switch(e->type) {
         case SDL_EVENT_KEY_DOWN:
             if(e->key.repeat) break;
+            if (!awaitKeyType && curMode == 0) {
+                const SDL_Keycode k = e->key.key;
+                if (rowSelect) {
+                    // Picking a row takes the arrows; these put it away.
+                    if (k == SDLK_UP || k == SDLK_DOWN || k == SDLK_LEFT || k == SDLK_RIGHT) {
+                        MoveSelection(k);
+                    } else if (k == SDLK_SPACE || k == SDLK_F1 || k == SDLK_RETURN || k == SDLK_KP_ENTER ||
+                               k == SDLK_ESCAPE || k == SDLK_AC_BACK) {
+                        rowSelect = false;
+                        AudioMixer::Instance()->PlaySFX("cancel");
+                    }
+                    break;
+                }
+                if (k == SDLK_SPACE || k == SDLK_F1) {
+                    // SPACE, or a pad's Y (F1 in menus): pick a row.
+                    selColumn = 0;
+                    selIndex = 0;
+                    rowSelect = true;
+                    AudioMixer::Instance()->PlaySFX(ClampSelection() ? "menu_change" : "cancel");
+                    break;
+                }
+            }
             switch(e->key.key) {
                 case SDLK_ESCAPE:
                     if (awaitKeyType) {
@@ -980,8 +1233,10 @@ void HighscoreManager::HandleInput(SDL_Event *e){
                         // added it to, not necessarily whichever is on screen
                         // if the player switched tables while this was up.
                         std::vector<HighscoreData>& scores = levelsetScores[pendingHighscoreTrack];
+                        const HighscoreData* named = nullptr;
                         for (int i = (int)scores.size() - 1; i >= 0; i--) {
                             if (scores[i].newHighscore) {
+                                named = &scores[i];
                                 if (!newName.empty()) {
                                     scores[i].name = newName;
                                     scores[i].RefreshTextStatus(rend, highscoreFont);
@@ -994,6 +1249,7 @@ void HighscoreManager::HandleInput(SDL_Event *e){
                         awaitKeyType = false;
                         SDL_StopTextInput(SDL_GetRenderWindow(rend));
                         SaveNewHighscores();
+                        if (named) SelectLocalEntry(named);
                         break;
                     }
                     // In the world view ENTER presses the focused button.
@@ -1072,17 +1328,11 @@ void HighscoreManager::HandleInput(SDL_Event *e){
             if (e->button.button == SDL_BUTTON_LEFT && !awaitKeyType && curMode == 0) {
                 float lx = 0.f, ly = 0.f;
                 SDL_RenderCoordinatesFromWindow(rend, e->button.x, e->button.y, &lx, &ly);
-                // A tap that misses both tabs has nothing else to do on this
-                // screen, so it goes back -- matching the keyboard's own
-                // "any other key" case above. Without this there was no way
-                // to leave this screen on a touch-only device at all: this
-                // screen never got the swipe-back gesture other panels have
-                // (FrozenBubble::HandleInput returns right after forwarding
-                // to HandleInput for the Highscores state), and there was
-                // no on-screen back button either. The menus' Back button,
-                // drawn at the top left since, lands here too.
-                if (!TapScoreTrackTab(lx, ly) && !TapWorldControls(lx, ly))
-                    FrozenBubble::Instance()->currentState = TitleScreen;
+                // This screen never got the swipe-back gesture other panels
+                // have (FrozenBubble::HandleInput returns right after
+                // forwarding to HandleInput for the Highscores state), so a
+                // tap on nothing is its way back. See HandleTap.
+                HandleTap(lx, ly);
             }
             break;
         case SDL_EVENT_FINGER_DOWN:
@@ -1101,8 +1351,7 @@ void HighscoreManager::HandleInput(SDL_Event *e){
                     lx = e->tfinger.x * 640.f;
                     ly = e->tfinger.y * 480.f;
                 }
-                if (!TapScoreTrackTab(lx, ly) && !TapWorldControls(lx, ly))
-                    FrozenBubble::Instance()->currentState = TitleScreen;
+                HandleTap(lx, ly);
             }
             break;
     }

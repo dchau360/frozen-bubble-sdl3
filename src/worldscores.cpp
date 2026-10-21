@@ -717,6 +717,12 @@ void Pump(bool inGame) {
     if (HasPending() && SDL_GetTicks() >= retryAt) Start(false);
 }
 
+void SetBoardForTest(int board, const WorldBoard& b) {
+    if (board < 0 || board >= kBoards) return;
+    boards[board] = b;
+    status = Status::Ready;
+}
+
 void SetServerForTest(const std::string& host, int port) {
     testMode = true;
     testHost = host;
