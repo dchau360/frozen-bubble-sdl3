@@ -51,6 +51,22 @@ PAGES = [
     # per-page slots: BAR is what sits on the wood strip at the top (the
     # High Scores logo is baked into the game's art, so only that page can
     # use it), PAGE marks which of the two pages is current in the nav.
+    # Guides: written pages about the game itself, so the site is more than a
+    # landing page and two live boards (AdSense turned it down for too little
+    # content). Plain template, linked from every page's nav.
+    *[(os.path.join(SITE, name + ".md"), os.path.join(name, "index.html"),
+       title + " — Frozen Bubble: SDL3")
+      for name, title in (("how-to-play", "How to play"),
+                          ("strategy", "Strategy guide"),
+                          ("multiplayer", "Multiplayer guide"),
+                          ("modes", "Game modes and settings"),
+                          ("faq", "High scores, accounts and FAQ"),
+                          ("history", "History"))],
+    # Release notes: the newest sections of CHANGELOG.md, so the page grows
+    # with every release without anyone remembering to update it.
+    (lambda: release_notes(NEWS_RELEASES),
+     os.path.join("news", "index.html"),
+     "Release notes — Frozen Bubble: SDL3"),
     (os.path.join(SITE, "scores.md"),
      os.path.join("scores", "index.html"),
      "Highscores — Frozen Bubble: SDL3",
@@ -124,6 +140,22 @@ VERBATIM = ["google034c4b2cf8d147df.html", "app-ads.txt", "ads.txt"]
 # canonical, telling Google which origin to index.
 CANONICAL_BASE = "https://llmfinder.net"
 
+# How many of CHANGELOG.md's newest releases the release-notes page shows.
+NEWS_RELEASES = 15
+
+
+def release_notes(count):
+    """The first `count` "## vX.Y.Z" sections of CHANGELOG.md under a page heading."""
+    text = open(os.path.join(ROOT, "CHANGELOG.md"), encoding="utf-8").read()
+    sections = text.split("\n## ")[1:count + 1]
+    return ("# Release notes\n\n"
+            "What changed in each recent version of Frozen Bubble: SDL3, newest first. "
+            "Older releases are in the full "
+            "[changelog](https://github.com/dchau360/frozen-bubble-sdl3/blob/main/CHANGELOG.md), "
+            "and downloads are on the "
+            "[releases page](https://github.com/dchau360/frozen-bubble-sdl3/releases).\n\n"
+            + "".join("## " + sec.rstrip() + "\n\n" for sec in sections))
+
 
 def render_brand_site(src_dir, prefix, out):
     """Render a second game's pages under /<prefix>/ of the same site.
@@ -185,7 +217,7 @@ def main():
         # Per-page slots first, so a slot's own {{ROOT}} is rewritten below.
         for key, value in (rest[1] if len(rest) > 1 else {}).items():
             template = template.replace("{{%s}}" % key, value)
-        text = open(src, encoding="utf-8").read()
+        text = src() if callable(src) else open(src, encoding="utf-8").read()
         # The first heading becomes the page's <h1>, which the template does
         # not supply -- so the markdown's own "# ..." line is kept, not stripped.
         body = markdown.markdown(text, extensions=["extra", "sane_lists"])
@@ -208,7 +240,7 @@ def main():
         with open(dest_path, "w", encoding="utf-8") as f:
             f.write(html)
         print("rendered %s -> %s (%d bytes)" % (
-            os.path.relpath(src, ROOT), dest, len(html)))
+            "CHANGELOG.md" if callable(src) else os.path.relpath(src, ROOT), dest, len(html)))
 
     for src, dest in ASSETS:
         dest_path = os.path.join(out, dest)

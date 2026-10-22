@@ -51,6 +51,20 @@ To play on an iPhone, use the browser build.
 - **Chain reactions** and malus attacks — ported against
   the Perl source rather than reimplemented from memory.
 
+## Guides
+
+- [How to play](how-to-play/): the rules, scoring, Swap and the controls on
+  every platform.
+- [Strategy guide](strategy/): drops, bank shots, planning ahead and fast
+  clears.
+- [Multiplayer guide](multiplayer/): attack bubbles, chain reactions, local
+  and online play.
+- [Game modes and settings](modes/): every 1-player and multiplayer mode.
+- [High scores, accounts and FAQ](faq/): how the boards work and how to keep
+  your scores on a new device.
+- [History](history/): where Frozen Bubble came from and why this port exists.
+- [Release notes](news/): what changed in each recent version.
+
 ## Screens
 
 ![The title menu in the Modern style](screenshots/title-menu.jpg)
@@ -72,13 +86,14 @@ server lives in
 and [SetupServer.md](https://github.com/dchau360/frozen-bubble-sdl3/blob/main/SetupServer.md)
 covers hosting your own.
 
-Chat is not moderated by the developer. `/block <nick>` hides a player's
-messages on your device immediately, without needing anything from the server;
-if you host the room, `/kick p2` removes that player from it outright.
-`/report <nick> <reason>` sends a report to that server's operator. Reports are
-never acted on automatically — nicknames are chosen fresh on every connection
-and are not tied to any account, so automatic kicks on report would just hand
-everyone a way to remove anyone they liked.
+Chat is not moderated by the developer. In the lobby or a room, press B, tap
+REPORT / BLOCK above the chat, or tap someone's chat line to open the list of
+players: **Block** hides a player's messages on your device straight away, and
+**Report** sends a note to that server's operator. The host of a room can also
+remove a player from it. Reports are never acted on automatically: nicknames
+are chosen fresh on every connection, so automatic kicks on report would just
+hand everyone a way to remove anyone they liked. The typed `/block` and
+`/report` commands still work.
 
 ## Community
 

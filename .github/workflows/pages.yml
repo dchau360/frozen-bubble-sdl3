@@ -23,6 +23,7 @@ on:
     branches: [main]
     paths:
       - 'docs/PRIVACY_POLICY.md'
+      - 'CHANGELOG.md'
       - 'site/**'
       - 'tools/build-site.py'
       - 'docs/screenshots/**'
