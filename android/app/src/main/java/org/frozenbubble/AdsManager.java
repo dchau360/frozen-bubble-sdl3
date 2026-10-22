@@ -12,6 +12,7 @@ package org.frozenbubble;
 import android.app.Activity;
 import android.content.Context;
 import android.content.SharedPreferences;
+import android.os.SystemClock;
 import android.util.Log;
 import android.widget.Toast;
 
@@ -27,7 +28,8 @@ import com.appodeal.consent.PrivacyOptionsRequirementStatus;
  * Manages Appodeal interstitial ads and the "ads removed" preference.
  *
  * Usage:
- *   AdsManager.showLobbyAd(activity);   // call when lobby screen appears
+ *   AdsManager.prepare(activity);       // start the SDK early (lobby entry)
+ *   AdsManager.showLobbyAd(activity);   // at a break: leaving a game, Continue
  *   AdsManager.showPrivacyOptions(activity); // the settings' Ad privacy row
  *   AdsManager.setAdsRemoved(activity, removed); // from BillingManager
  */
@@ -36,24 +38,56 @@ public class AdsManager {
     private static final String PREFS_NAME  = "FrozenBubblePrefs";
     private static final String KEY_NO_ADS  = "ads_removed";
 
-    private static boolean sInitialized = false;
+    /**
+     * Least time between two interstitials, whichever triggers they came
+     * from. AdMob disallows back-to-back interstitials and more than one per
+     * two user actions; without this, Continue then going online, or leaving
+     * and rejoining games quickly, showed one each time.
+     */
+    private static final long MIN_INTERVAL_MS = 3 * 60 * 1000;
 
-    /** Show an interstitial ad if one is ready and ads haven't been removed. */
+    private static boolean sInitialized = false;
+    /** SystemClock.elapsedRealtime() of the last ad shown, 0 = none yet. */
+    private static long sLastShownMs = 0;
+
+    /**
+     * Start the SDK so an interstitial is cached by the next break, without
+     * showing anything. Called on network lobby entry, which is not a break:
+     * AdMob disallows an interstitial that appears as a screen loads.
+     */
+    public static void prepare(final Activity activity) {
+        if (isAdsRemoved(activity)) return;
+        if (BuildConfig.APPODEAL_APP_KEY.isEmpty()) return;
+        activity.runOnUiThread(() -> {
+            if (!sInitialized) initialize(activity);
+        });
+    }
+
+    /**
+     * Show an interstitial ad if one is ready, ads haven't been removed and
+     * the last one was at least MIN_INTERVAL_MS ago. Only for a break the
+     * player chose: leaving a network game, or Continue after a loss.
+     */
     public static void showLobbyAd(final Activity activity) {
         if (isAdsRemoved(activity)) return;
         if (BuildConfig.APPODEAL_APP_KEY.isEmpty()) return;
 
         activity.runOnUiThread(() -> {
             if (!sInitialized) {
-                // First lobby entry of the process: start the SDK, which
-                // caches an interstitial on its own (auto-cache is on by
-                // default), so the next entry has one to show -- the same
-                // first-entry-shows-nothing behavior the AdMob version had.
+                // Nothing started the SDK yet (a 1-player Continue before any
+                // lobby entry): start it, which caches an interstitial on its
+                // own (auto-cache is on by default), so the next break has one.
                 initialize(activity);
                 Log.d(TAG, "No ad ready yet");
                 return;
             }
+            long now = SystemClock.elapsedRealtime();
+            if (sLastShownMs != 0 && now - sLastShownMs < MIN_INTERVAL_MS) {
+                Log.d(TAG, "Ad skipped: last one " + (now - sLastShownMs) / 1000 + "s ago");
+                return;
+            }
             if (Appodeal.isLoaded(Appodeal.INTERSTITIAL)) {
+                sLastShownMs = now;
                 Appodeal.show(activity, Appodeal.INTERSTITIAL);
             } else {
                 Log.d(TAG, "No ad ready yet");
@@ -147,7 +181,7 @@ public class AdsManager {
     /**
      * Starts the Appodeal SDK. Caller must be on the UI thread.
      *
-     * Lazy, on the first lobby entry, rather than in onCreate(): the AdMob
+     * Lazy, on the first lobby entry or break, rather than in onCreate(): the AdMob
      * SDK this replaced crashed SDL at startup when initialized there (its
      * worker threads hit a destroyed mutex in HWUI's CommonPool while SDL
      * was bringing up its EGL surface), and the networks Appodeal mediates

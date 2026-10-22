@@ -181,8 +181,8 @@ that is between you and Discord, under
 sent if you never select the row.
 
 **Advertising (Android only).** The Android build shows an interstitial ad
-when you enter the multiplayer lobby, and when you choose Continue after
-losing a 1-player game. Ads come through Appodeal, an ad
+when you leave a multiplayer game for the lobby, and when you choose Continue
+after losing a 1-player game, never more than one every three minutes. Ads come through Appodeal, an ad
 mediation service, which picks an ad from one of several ad networks:
 Google AdMob, BidMachine, AppLovin, Unity Ads, Liftoff (Vungle), Mintegral,
 InMobi and Digital Turbine (DT Exchange). Appodeal and the network

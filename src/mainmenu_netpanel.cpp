@@ -282,7 +282,7 @@ void MainMenu::NetPanelRender() {
             netClient->RequestList();
             lastListRequest = SDL_GetTicks();
 #ifdef __ANDROID__
-            SDL_SendAndroidMessage(0x8001, 0);
+            SDL_SendAndroidMessage(0x8006, 0);   // start the ad SDK; no ad on lobby entry
 #endif
         }
     }

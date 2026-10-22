@@ -821,6 +821,9 @@ void MainMenu::ReturnToNetLobby() {
     if (netClient && netClient->IsConnected())
         netClient->RequestList();
 #ifdef __ANDROID__
-    SDL_SendAndroidMessage(0x8001, 0); // show lobby ad on return from game
+    // Leaving a network game is the one break an online player reaches, so
+    // the interstitial goes here and never on lobby entry: AdMob disallows
+    // one that pops up as a screen appears. AdsManager spaces them out.
+    SDL_SendAndroidMessage(0x8001, 0); // show an ad on leaving a game
 #endif
 }

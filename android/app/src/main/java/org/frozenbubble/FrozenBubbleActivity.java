@@ -29,11 +29,13 @@ import java.net.URL;
  * Frozen Bubble Android TV Activity.
  *
  * SDL3 message protocol (sent from C++ via SDL_SendAndroidMessage):
- *   0x8001 — show interstitial ad (called when entering network lobby)
+ *   0x8001 — show an interstitial ad, at a break (leaving a network game,
+ *            Continue after a 1-player loss); AdsManager spaces them out
  *   0x8002 — buy the yearly ad-removal subscription
  *   0x8003 — buy permanent ad removal
  *   0x8004 — buy the monthly ad-removal subscription
  *   0x8005 — open the ad privacy options form (Controls & Settings)
+ *   0x8006 — start the ad SDK without showing anything (network lobby entry)
  */
 public class FrozenBubbleActivity extends SDLActivity {
 
@@ -43,6 +45,7 @@ public class FrozenBubbleActivity extends SDLActivity {
     private static final int MSG_BUY_ADS_FOREVER   = 0x8003;
     private static final int MSG_BUY_ADS_MONTH     = 0x8004;
     private static final int MSG_AD_PRIVACY        = 0x8005;
+    private static final int MSG_PREPARE_ADS       = 0x8006;
 
     /** Extracted asset directory path — read by C++ InitDataDir() via JNI. */
     public static String sExtractedDataDir = "";
@@ -66,7 +69,7 @@ public class FrozenBubbleActivity extends SDLActivity {
         super.onCreate(savedInstanceState);
 
         // NOTE: ad SDK init is intentionally deferred -- see AdsManager.initialize().
-        // Ads are loaded lazily when C++ sends MSG_SHOW_AD (0x8001).
+        // Ads are loaded lazily when C++ sends MSG_PREPARE_ADS or MSG_SHOW_AD.
 
         // Initialize billing client (restores prior purchases on connect)
         mBillingManager = new BillingManager(this);
@@ -90,6 +93,9 @@ public class FrozenBubbleActivity extends SDLActivity {
         switch (command) {
             case MSG_SHOW_AD:
                 AdsManager.showLobbyAd(this);
+                return true;
+            case MSG_PREPARE_ADS:
+                AdsManager.prepare(this);
                 return true;
             case MSG_BUY_ADS_YEAR:
                 runOnUiThread(() ->
