@@ -1,5 +1,9 @@
 # Changelog
 
+## v2.4.156
+
+- **Google AdMob added to the Android ads (Android).** Google AdMob is now one of the ad networks the Android version can show ads from, alongside the existing ones. Nothing changes in how often ads appear, and buying ad removal still turns them all off. The privacy policy lists AdMob among the ad networks.
+
 ## v2.4.155
 
 - **Chain reactions explained correctly.** The multiplayer rules help used to say that bubbles knocked loose by a pop fly to an opponent's board. They don't: with chain reactions on, a falling bubble flies back into a gap on your own board where it completes a group of its colour and pops it, which can set off another chain. The help now says so.
