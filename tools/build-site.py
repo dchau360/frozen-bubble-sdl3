@@ -34,10 +34,10 @@ SITE = os.path.join(ROOT, "site")
 PAGES = [
     (os.path.join(SITE, "index.md"),
      "index.html",
-     "Frozen Bubble: SDL3"),
+     "Frozen Bubble: Fan Edition"),
     (os.path.join(ROOT, "docs", "PRIVACY_POLICY.md"),
      os.path.join("privacy", "index.html"),
-     "Privacy Policy — Frozen Bubble: SDL3"),
+     "Privacy Policy — Frozen Bubble: Fan Edition"),
     # The world highscore board. Static like everything else here: the page's
     # own script asks the world-board server (fb.servequake.com) over a
     # WebSocket (see site/scores.md), so nothing on this site has to know the
@@ -55,7 +55,7 @@ PAGES = [
     # landing page and two live boards (AdSense turned it down for too little
     # content). Plain template, linked from every page's nav.
     *[(os.path.join(SITE, name + ".md"), os.path.join(name, "index.html"),
-       title + " — Frozen Bubble: SDL3")
+       title + " — Frozen Bubble: Fan Edition")
       for name, title in (("how-to-play", "How to play"),
                           ("strategy", "Strategy guide"),
                           ("multiplayer", "Multiplayer guide"),
@@ -66,16 +66,16 @@ PAGES = [
     # with every release without anyone remembering to update it.
     (lambda: release_notes(NEWS_RELEASES),
      os.path.join("news", "index.html"),
-     "Release notes — Frozen Bubble: SDL3"),
+     "Release notes — Frozen Bubble: Fan Edition"),
     (os.path.join(SITE, "scores.md"),
      os.path.join("scores", "index.html"),
-     "Highscores — Frozen Bubble: SDL3",
+     "Highscores — Frozen Bubble: Fan Edition",
      "template-scores.html",
      {"BAR": '<img src="{{ROOT}}img/scores-header.png" alt="High Scores" width="558" height="30">',
       "PAGE": "scores"}),
     (os.path.join(SITE, "weekly.md"),
      os.path.join("weekly", "index.html"),
-     "Weekly rankings — Frozen Bubble: SDL3",
+     "Weekly rankings — Frozen Bubble: Fan Edition",
      "template-scores.html",
      {"BAR": '<span class="bar-title">Weekly Rankings</span>',
       "PAGE": "weekly"}),
@@ -149,7 +149,7 @@ def release_notes(count):
     text = open(os.path.join(ROOT, "CHANGELOG.md"), encoding="utf-8").read()
     sections = text.split("\n## ")[1:count + 1]
     return ("# Release notes\n\n"
-            "What changed in each recent version of Frozen Bubble: SDL3, newest first. "
+            "What changed in each recent version of Frozen Bubble: Fan Edition, newest first. "
             "Older releases are in the full "
             "[changelog](https://github.com/dchau360/frozen-bubble-sdl3/blob/main/CHANGELOG.md), "
             "and downloads are on the "

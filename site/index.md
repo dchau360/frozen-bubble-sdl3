@@ -1,4 +1,4 @@
-# Frozen Bubble: SDL3
+# Frozen Bubble: Fan Edition
 
 A C++ / SDL3 port of the classic [Frozen Bubble 2](https://en.wikipedia.org/wiki/Frozen_Bubble),
 reimplementing its gameplay, network multiplayer and chain-reaction system.
