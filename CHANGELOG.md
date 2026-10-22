@@ -1,5 +1,9 @@
 # Changelog
 
+## v2.4.157
+
+- **Fewer, better-timed ads (Android).** Entering the online lobby no longer shows an ad. Ads now appear only when you leave an online game or choose Continue after losing a 1-player game, and never more than one every three minutes. Buying ad removal still turns them all off. The privacy policy says so.
+
 ## v2.4.156
 
 - **Google AdMob added to the Android ads (Android).** Google AdMob is now one of the ad networks the Android version can show ads from, alongside the existing ones. Nothing changes in how often ads appear, and buying ad removal still turns them all off. The privacy policy lists AdMob among the ad networks.
