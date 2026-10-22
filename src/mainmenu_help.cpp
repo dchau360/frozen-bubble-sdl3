@@ -107,10 +107,12 @@ const HelpLine kOnlineHelp[] = {
     {HelpLine::Blank,   ""},
 
     {HelpLine::Heading, "CHAIN REACTION"},
-    {HelpLine::Body,    "When on, bubbles knocked loose by a pop travel to an"},
-    {HelpLine::Body,    "opponent's board on the way down instead of simply"},
-    {HelpLine::Body,    "falling away. Off is the quieter, more predictable"},
-    {HelpLine::Body,    "game; it does not change the attack count itself."},
+    {HelpLine::Body,    "When on, a bubble knocked loose by a pop can fly"},
+    {HelpLine::Body,    "back up into a gap on your own board where it"},
+    {HelpLine::Body,    "completes a group of its colour, popping that group"},
+    {HelpLine::Body,    "too - and that pop can chain again. Chained pops send"},
+    {HelpLine::Body,    "attacks and score a growing bonus. Off is the"},
+    {HelpLine::Body,    "quieter, more predictable game."},
     {HelpLine::Blank,   ""},
 
     {HelpLine::Heading, "SOLO TARGETTING"},
@@ -242,10 +244,12 @@ const HelpLine kLocalHelp[] = {
     {HelpLine::Blank,   ""},
 
     {HelpLine::Heading, "CHAIN REACTION"},
-    {HelpLine::Body,    "When on, bubbles knocked loose by a pop travel to an"},
-    {HelpLine::Body,    "opponent's board on the way down instead of simply"},
-    {HelpLine::Body,    "falling away. Off is the quieter, more predictable"},
-    {HelpLine::Body,    "game; it does not change the attack count itself."},
+    {HelpLine::Body,    "When on, a bubble knocked loose by a pop can fly"},
+    {HelpLine::Body,    "back up into a gap on your own board where it"},
+    {HelpLine::Body,    "completes a group of its colour, popping that group"},
+    {HelpLine::Body,    "too - and that pop can chain again. Chained pops send"},
+    {HelpLine::Body,    "attacks and score a growing bonus. Off is the"},
+    {HelpLine::Body,    "quieter, more predictable game."},
     {HelpLine::Blank,   ""},
 
     {HelpLine::Heading, "ROW COLLAPSE"},
