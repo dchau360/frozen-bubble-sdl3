@@ -49,13 +49,17 @@
   nav a:hover { color: var(--link); text-decoration: underline; }
   nav .boards { display: flex; flex-wrap: wrap; gap: .4rem 1.2rem; }
   nav .boards a { color: var(--link); font-weight: 600; }
+  nav .guides { flex-basis: 100%; display: flex; flex-wrap: wrap; gap: .3rem 1.1rem; padding-top: .3rem; border-top: 1px solid var(--border); }
+  footer.site { margin-top: 3rem; padding-top: 1rem; border-top: 1px solid var(--border); }
   img { max-width: 100%; height: auto; border-radius: 6px; }
   table { border-collapse: collapse; width: 100%; }
   th, td { border: 1px solid var(--border); padding: .4rem .6rem; text-align: left; }
 </style>
 </head>
 <body>
-<nav><a href="{{ROOT}}">Frozen Bubble: SDL3</a><span class="boards"><a href="{{ROOT}}scores/">Highscores</a><a href="{{ROOT}}weekly/">Weekly rankings</a></span></nav>
+<nav><a href="{{ROOT}}">Frozen Bubble: Fan Edition</a><span class="boards"><a href="{{ROOT}}scores/">Highscores</a><a href="{{ROOT}}weekly/">Weekly rankings</a></span>
+<span class="guides"><a href="{{ROOT}}how-to-play/">How to play</a><a href="{{ROOT}}strategy/">Strategy</a><a href="{{ROOT}}multiplayer/">Multiplayer</a><a href="{{ROOT}}modes/">Modes</a><a href="{{ROOT}}faq/">FAQ</a><a href="{{ROOT}}history/">History</a><a href="{{ROOT}}news/">Release notes</a></span></nav>
 {{CONTENT}}
+<footer class="site"><a href="{{ROOT}}">Home</a> · <a href="{{ROOT}}how-to-play/">How to play</a> · <a href="{{ROOT}}faq/">FAQ</a> · <a href="{{ROOT}}privacy/">Privacy policy</a> · <a href="https://github.com/dchau360/frozen-bubble-sdl3/issues">Contact</a></footer>
 </body>
 </html>

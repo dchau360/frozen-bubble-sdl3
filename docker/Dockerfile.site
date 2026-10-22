@@ -20,6 +20,8 @@ WORKDIR /src
 COPY tools/build-site.py tools/build-site.py
 COPY site/ site/
 COPY docs/PRIVACY_POLICY.md docs/PRIVACY_POLICY.md
+# The release-notes page is the newest sections of the changelog.
+COPY CHANGELOG.md CHANGELOG.md
 # Whole directories rather than the individual files build-site.py's ASSETS
 # list names today, so adding a screenshot to the site needs an edit in one
 # place (that list) instead of two.
