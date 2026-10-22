@@ -283,6 +283,14 @@ To switch it on:
 5. Set up payouts in Appodeal (the LLC's payment details and tax form, as
    for AdMob).
 
+**Where ads show** (checked against AdMob's interstitial rules, which ban
+one that pops up as a screen loads, back-to-back ones and more than one per
+two user actions): leaving a network game for the lobby
+(`MainMenu::ReturnToNetLobby()`) and choosing Continue on the 1-player game
+over card (`BubbleGame::ShowContinueAd()`), both message `0x8001`. Entering
+the lobby only starts the SDK (`0x8006`, `AdsManager.prepare`), and
+`AdsManager.MIN_INTERVAL_MS` keeps any two interstitials three minutes apart.
+
 Debug builds always run Appodeal in test mode (`Appodeal.setTesting`), so
 no device needs registering as a test device, and the old
 `admob.testDeviceId` line in `android/local.properties` does nothing now.

@@ -2368,7 +2368,7 @@ void MainMenu::MenuReturnKey() {
                                 netClient->RequestList();  // Immediate list on lobby entry
                                 lastListRequest = SDL_GetTicks();
 #ifdef __ANDROID__
-                                SDL_SendAndroidMessage(0x8001, 0); // show lobby ad
+                                SDL_SendAndroidMessage(0x8006, 0); // start the ad SDK; no ad on lobby entry
 #endif
                             } else {
                                 // SendNick failed — WebSocket is still connecting (WASM async).
