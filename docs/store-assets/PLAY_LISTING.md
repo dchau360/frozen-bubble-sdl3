@@ -188,7 +188,10 @@ The ad rows above are the union of
 [Unity Ads](https://docs.unity.com/en-us/grow/ads/privacy/google-data-safety),
 [DT Exchange](https://docs.digitalturbine.com/dt-exchange/getting-started-with-dt-exchange/privacy/google-data-safety-form),
 [BidMachine](https://developers.bidmachine.io/sdk/general/android/app-privacy-details-on-the-google-play)
-and [Liftoff/Vungle](https://support.vungle.com/hc/en-us/articles/5035287250331-Google-Play-data-safety-Questionnaire-for-Vungle).
+[Liftoff/Vungle](https://support.vungle.com/hc/en-us/articles/5035287250331-Google-Play-data-safety-Questionnaire-for-Vungle)
+and [Google AdMob](https://developers.google.com/admob/android/privacy/play-data-disclosure)
+(added 2026-10-22; its rows — approximate location from IP, app interactions,
+diagnostics, device IDs — are all already above, so the form needed no change).
 AppLovin, Mintegral and InMobi publish none that could be found (2026-10-06).
 Appodeal's "optional" lines (precise location, user IDs, purchase history)
 apply only when the app grants a location permission, calls `setUserId` or
@@ -250,7 +253,12 @@ paths, but "no" is still the accurate answer to a blanket yes/no question.
 ## Ads: Appodeal (replaced AdMob, 2026-10-06)
 
 AdMob turned the account down with no policy named (no Policy center entry,
-no email), so ads now go through Appodeal's mediation instead. The AdMob
+no email), so ads now go through Appodeal's mediation instead. Since
+2026-10-22 AdMob is one of Appodeal's networks too (`admob` adapter in
+`build.gradle`): the account went back into review after a resubmit but saw
+no ad requests at all, which is what an app review looks at. It fills only once
+AdMob approves the account and the AdMob account is linked in Appodeal's
+dashboard. The AdMob
 interstitial unit (`ca-app-pub-7736855769799322/5410693019`) is no longer
 used. The AdMob App ID (`ca-app-pub-7736855769799322~9200045587`) is still in
 `AndroidManifest.xml`: Appodeal's consent goes through Google's UMP SDK, which

@@ -122,13 +122,17 @@ dependencies {
     // over the long list Appodeal's demo app pulls in: each adapter adds its
     // own SDK to the APK and its own data collection to the Play Data safety
     // form, and the nested mediation stacks (applovin_max, level_play, bidon)
-    // would each bring a second copy of most of these. No AdMob adapter: it
-    // needs an AdMob account of our own, and that account is the thing that
-    // was not approved. No Meta adapter either: Appodeal can't serve Meta
+    // would each bring a second copy of most of these. AdMob is in it, through
+    // our own AdMob account (pub-7736855769799322, app ...~9200045587), so that
+    // AdMob sees the app's ad requests: its app review sat at "Getting ready"
+    // with none, since the app never called it. It only fills once AdMob
+    // approves the account and Appodeal's dashboard is linked to it; until
+    // then Appodeal just skips it. No Meta adapter: Appodeal can't serve Meta
     // Audience Network through its own accounts, only through an approved
     // Meta account of ours, which there isn't. No analytics adapters (adjust, appsflyer, firebase,
     // facebook_analytics, sentry): this game has no analytics. Versions are
-    // the set Appodeal's own demo builds against core 4.4.0.
+    // the set Appodeal's own demo builds against core 4.4.0; AdMob's 25.5.0.0
+    // was published with core 4.4.0, the same day.
     implementation 'com.appodeal.ads.sdk:core:4.4.0'
     implementation 'com.appodeal.ads.sdk.adapters:iab:1.8.1.1'
     implementation 'com.appodeal.ads.sdk.adapters:bidmachine:3.7.1.0'
@@ -138,6 +142,7 @@ dependencies {
     implementation 'com.appodeal.ads.sdk.adapters:mintegral:17.1.61.0'
     implementation 'com.appodeal.ads.sdk.adapters:inmobi:11.3.0.0'
     implementation 'com.appodeal.ads.sdk.adapters:dt_exchange:8.4.6.0'
+    implementation 'com.appodeal.ads.sdk.adapters:admob:25.5.0.0'
     // Not a transitive dependency we happen to want newer -- this line is
     // load-bearing. play-services-basement (pulled in by the Play Billing SDK,
     // and by several ad networks') declares androidx.fragment:fragment:1.1.0 as its
