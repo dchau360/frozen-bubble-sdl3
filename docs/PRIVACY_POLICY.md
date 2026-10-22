@@ -181,10 +181,11 @@ that is between you and Discord, under
 sent if you never select the row.
 
 **Advertising (Android only).** The Android build shows an interstitial ad
-when you enter the multiplayer lobby. Ads come through Appodeal, an ad
+when you enter the multiplayer lobby, and when you choose Continue after
+losing a 1-player game. Ads come through Appodeal, an ad
 mediation service, which picks an ad from one of several ad networks:
-BidMachine, AppLovin, Unity Ads, Liftoff (Vungle), Mintegral, InMobi and
-Digital Turbine (DT Exchange). Appodeal and the network
+Google AdMob, BidMachine, AppLovin, Unity Ads, Liftoff (Vungle), Mintegral,
+InMobi and Digital Turbine (DT Exchange). Appodeal and the network
 that serves an ad collect your device's advertising ID and IP address,
 technical details about the device (model, operating system, network type),
 and which ads you saw and tapped, to choose ads, measure them and prevent
@@ -238,7 +239,8 @@ or analytics SDK, so none is collected by the developer.
 ## Third-party services
 
 - [Appodeal](https://appodeal.com/privacy-policy/) — ad mediation (Android),
-  serving ads from [BidMachine](https://www.bidmachine.com/privacy-policy),
+  serving ads from [Google AdMob](https://policies.google.com/technologies/ads),
+  [BidMachine](https://www.bidmachine.com/privacy-policy),
   [AppLovin](https://legal.applovin.com/privacy/),
   [Unity Ads](https://unity.com/legal/game-player-and-app-user-privacy-policy),
   [Liftoff (Vungle)](https://liftoff.ai/privacy-policy/),
