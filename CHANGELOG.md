@@ -1,5 +1,9 @@
 # Changelog
 
+## v2.4.155
+
+- **Chain reactions explained correctly.** The multiplayer rules help used to say that bubbles knocked loose by a pop fly to an opponent's board. They don't: with chain reactions on, a falling bubble flies back into a gap on your own board where it completes a group of its colour and pops it, which can set off another chain. The help now says so.
+
 ## v2.4.154
 
 - **See a high score's full details.** On the High Scores screen, tap a score (or press Space / a gamepad's Y and use the arrows) to highlight it and see its whole record under the list: full name, level, time, shots, input, country and, on the online boards, the date it was set. After a run, the name panel shows the score you're naming. The website's high scores page does the same when you click or tap a row.
