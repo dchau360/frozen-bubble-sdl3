@@ -835,6 +835,11 @@ if(BUILD_TESTING AND NOT EMSCRIPTEN AND NOT ANDROID AND NOT IOS)
             COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tests/server_stall_test.py $<TARGET_FILE:fb-server>)
         set_tests_properties(server-stall-test PROPERTIES TIMEOUT 120)
     endif()
+
+    # Every test runs silent: menu tests play the real SFX through
+    # AudioMixer, which otherwise comes out of the developer's speakers.
+    get_property(_fb_all_tests DIRECTORY PROPERTY TESTS)
+    set_property(TEST ${_fb_all_tests} APPEND PROPERTY ENVIRONMENT SDL_AUDIO_DRIVER=dummy)
 endif()
 
 # Installation configuration

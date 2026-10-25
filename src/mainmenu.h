@@ -517,6 +517,14 @@ private:
     // members with their own connections; only this client simulates them.
     int netRoomBotCount = 0;
     int netRoomBotSkill = 1;           // index into BubbleAI::Skill
+    // A room this player creates starts with one bot (user decision), so a
+    // newcomer on a quiet server has someone to play at once; Bots: < 0 >
+    // takes it out. Armed by Create Game Room and served by
+    // PumpNetworkFrame() once the server has put us in the room, since a bot
+    // can only JOIN a room that exists.
+    bool defaultBotPending = false;
+    Uint32 defaultBotPendingMs = 0;
+    void ArmDefaultBot();
     // Pushes the host's current room-rule settings (the block above --
     // chainReactionEnabled through netRoomSizeChoice) to the server, so
     // every joiner sees them, and persists them via GameSettings, so the

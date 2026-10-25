@@ -218,6 +218,26 @@ void MainMenu::PumpNetworkFrame() {
     // preserved from the old NetPanelRender() call site.)
     PumpLobbyBots();
     netClient->Update();
+
+    if (defaultBotPending) {
+        GameRoom* room = netClient->GetCurrentGame();
+        if (room && room->creator == netClient->GetPlayerNick()) {
+            defaultBotPending = false;
+            if (lobbyBots.empty() && netRoomBotCount == 0 &&
+                MaxRoomBots((int)room->players.size(), room->maxPlayers, 0) > 0) {
+                netRoomBotCount = 1;
+                SyncLobbyBots();
+            }
+        } else if (!netClient->IsConnected() || SDL_GetTicks() - defaultBotPendingMs > 5000) {
+            // CREATE refused, or the server never answered: no room to fill.
+            defaultBotPending = false;
+        }
+    }
+}
+
+void MainMenu::ArmDefaultBot() {
+    defaultBotPending = true;
+    defaultBotPendingMs = SDL_GetTicks();
 }
 
 void MainMenu::CancelPendingConnect() {

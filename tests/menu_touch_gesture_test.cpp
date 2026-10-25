@@ -324,6 +324,13 @@ struct MainMenuTestAccess {
     static int LobbyTournamentIndexOf(const MainMenu& menu) { return menu.LobbyTournamentIndex(); }
     static int LobbyTournamentListCountOf(const MainMenu& menu) { return menu.LobbyTournamentListCount(); }
     static int LobbyRoomListStartOf(const MainMenu& menu) { return menu.LobbyRoomListStart(); }
+    // A room this player creates starts with one bot (ArmDefaultBot()).
+    static void ArmDefaultBot(MainMenu& menu) { menu.ArmDefaultBot(); }
+    static void PumpNetworkFrame(MainMenu& menu) { menu.PumpNetworkFrame(); }
+    static bool DefaultBotPending(const MainMenu& menu) { return menu.defaultBotPending; }
+    static int LobbyBotCount(const MainMenu& menu) { return (int)menu.lobbyBots.size(); }
+    static int NetRoomBotCount(const MainMenu& menu) { return menu.netRoomBotCount; }
+    static void DropLobbyBots(MainMenu& menu) { menu.DropLobbyBots(); }
     static int ServerListDiscordIndexOf(const MainMenu& menu) { return menu.ServerListDiscordIndex(); }
     static int ServerListSetNameIndexOf(const MainMenu& menu, bool isLAN) { return menu.ServerListSetNameIndex(isLAN); }
     // Account code screen (mainmenu_account.cpp).
@@ -1968,6 +1975,30 @@ int main() {
             if (!nc->IsConnected() || connectMs >= 3000)
                 std::fprintf(stderr, "  (Connect to real localhost server: state=%d, %llu ms)\n",
                              nc->GetState(), (unsigned long long)connectMs);
+
+            // --- Creating a room brings one bot in with it, once the server
+            // has actually put us in the room (a bot cannot JOIN before).
+            auto pumpUntil = [&](Uint64 ms, auto done) {
+                const Uint64 t0 = SDL_GetTicks();
+                while (!done() && SDL_GetTicks() - t0 < ms) {
+                    MainMenuTestAccess::PumpNetworkFrame(*menu);
+                    SDL_Delay(5);
+                }
+            };
+            CHECK(nc->SendNick("roomhost"));
+            pumpUntil(3000, [&] { return !nc->IsPendingNick(); });
+            CHECK(nc->CreateGame(5));
+            MainMenuTestAccess::ArmDefaultBot(*menu);
+            pumpUntil(5000, [&] {
+                GameRoom* room = nc->GetCurrentGame();
+                return room && room->players.size() >= 2;
+            });
+            CHECK(!MainMenuTestAccess::DefaultBotPending(*menu));
+            CHECK(MainMenuTestAccess::NetRoomBotCount(*menu) == 1);
+            CHECK(MainMenuTestAccess::LobbyBotCount(*menu) == 1);
+            GameRoom* botRoom = nc->GetCurrentGame();
+            CHECK(botRoom && botRoom->players.size() == 2);
+            MainMenuTestAccess::DropLobbyBots(*menu);
 
             nc->Disconnect();
             CHECK(nc->GetState() == DISCONNECTED);

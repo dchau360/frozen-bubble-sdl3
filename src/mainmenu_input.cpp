@@ -2002,8 +2002,8 @@ void MainMenu::MenuReturnKey() {
                                 // In lobby - handle Create/Join actions
                                 if (selectedActionIndex == 1) {
                                     // Create new game - do it immediately like original
-                                    netClient->CreateGame(kRoomSizes[netRoomSizeChoice]);
-                                    netClient->AddStatusMessage("Game created - now you need to wait for players to join");
+                                    if (netClient->CreateGame(kRoomSizes[netRoomSizeChoice])) ArmDefaultBot();
+                                    netClient->AddStatusMessage("Game created with a bot - set Bots to add more or remove it");
                                     AudioMixer::Instance()->PlaySFX("menu_selected");
                                 } else {
                                     // Join game (selectedActionIndex >= 2)
@@ -2073,6 +2073,7 @@ void MainMenu::MenuReturnKey() {
                         // Accept CONNECTED or IN_LOBBY — after returning from a game state is IN_LOBBY
                         if (netClient->GetState() == CONNECTED || netClient->GetState() == IN_LOBBY) {
                             if (netClient->CreateGame(kRoomSizes[netRoomSizeChoice])) {
+                                ArmDefaultBot();
                                 AudioMixer::Instance()->PlaySFX("menu_selected");
                             }
                         }
