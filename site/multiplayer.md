@@ -94,8 +94,10 @@ that is waiting.
 The host sets the rules, and everyone in the room sees them change live:
 game mode, attack setting, chain reactions, the number of round wins needed,
 and a grid of per-player options for the number of colours (five to eight),
-the new-row setting, the aim guide and teams. The host can also add bots and
-use **Set Teams** to split the room into two to five teams with one tap.
+the new-row setting, the aim guide and teams. A new room starts with one bot,
+so there is someone to play even when nobody else is online; the host can add
+more or set Bots to 0 to remove it, and can use **Set Teams** to split the room
+into two to five teams with one tap.
 
 Rooms hold up to twenty players. Above five, the screen shows your own board
 large with the opponents that matter most beside it, there are hotkeys to pick
