@@ -6,29 +6,23 @@
   logo (`share/gfx/menu/fblogo.png`) and bubble sprites (`share/gfx/balls/`),
   composited on a gradient echoing the title screen's two glass panels.
   Meets Play's feature graphic spec exactly.
-- **`screenshot-1-gameplay.png`** … **`screenshot-8-title-menu.png`**
-  (24-bit RGB, no alpha; 960×720 except the 640×480 round-stats shot) —
-  Play's phone/tablet screenshots, in upload order. Each is a copy of an
-  image in [`docs/screenshots/`](../screenshots) (the ones the
-  README and the website use), converted to PNG with the alpha flattened.
-  Most come from `tests/modern_theme_render_test.cpp`'s `FB_DUMP_DIR`
-  dumps, so regenerate them from there rather than from device captures.
-  Landscape is fine: Play only needs 2–8 images, 320–3840px a side, no
-  more extreme than 2:1. Replaced 2026-10-05 (v2.4.141); the set before
-  that predated the modern theme and menus. `game-room` was retaken
-  2026-10-07 (v2.4.147), when the online screens went back to the classic
-  look in every menu style: rendered at 960×720 with sharp text by
-  `tests/net_menus_classic_test.cpp`'s room case (window 960×720, logical
-  presentation 640×480, `SetTextRenderScale(1.5f)`).
-  1. `gameplay`: a 1-player level, mid-drop.
-  2. `how-to-play`: the How to play page (loaded, next and pocket bubbles).
-  3. `two-player-win`: a 2-player round won, its stats above.
-  4. `game-room`: an online game room, over the world map.
-  5. `round-stats`: the post-round stats table with team totals.
-  6. `level-cleared`: the level-cleared card with the time bonus.
-  7. `local-4player`: four players on one machine, each
-     with a Swap pocket (re-captured 2026-10-06 from a piloted game).
-  8. `title-menu`: the title screen.
+- **`play/1-last-board-standing.png`** … **`play/8-touch-pad-keyboard.png`**
+  (1920×1080, 16:9) — Play's phone screenshots, in upload order, uploaded
+  2026-10-25 with the rename to Frozen Bubble: Battle Royale. Each is a
+  caption over one of [`docs/screenshots/`](../screenshots)'s images on a
+  navy frame, made by `python3 tools/play-screenshots.py` (captions and
+  sources are listed at its top); at 1080px tall they stay eligible for
+  Play's promotions. Shot 1's source, `local-5player.png`, is a frame of a
+  five-bot local game rendered headless with candy bubbles (the old
+  `net-5player.png` still has the classic ones).
+  1. Last board standing wins — five boards, one already frozen out.
+  2. Online battles, up to 20 players — an online game room.
+  3. Pop groups, send attack bubbles — a 1-player level, "3 DROPPED!".
+  4. Team up or go solo — Set Teams.
+  5. Swap: save a bubble for later — How to play.
+  6. 100 classic solo levels — level cleared, with the time bonus.
+  7. Climb the weekly rankings — the weekly rankings screen (test data).
+  8. Play with touch, pad or keyboard — four players on one machine.
 
 - **`icon-512.png`** (512×512, 24-bit RGB) — Play's high-res store icon. A
   resize of `share/icons/frozen-bubble-icon-1024x1024.png`, the single
