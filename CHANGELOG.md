@@ -1,5 +1,11 @@
 # Changelog
 
+## v2.4.158
+
+- **New online rooms start with a bot.** When you create a game room, a bot joins right away so you have someone to play even on a quiet server. Set Bots to 0 to remove it, or add more.
+- **Bots join faster.** Fixed a server delay that could keep a bot from appearing in a room for up to 30 seconds.
+- **New name on the website.** The site now calls the game Frozen Bubble: Battle Royale, the same name as on Google Play.
+
 ## v2.4.157
 
 - **Fewer, better-timed ads (Android).** Entering the online lobby no longer shows an ad. Ads now appear only when you leave an online game or choose Continue after losing a 1-player game, and never more than one every three minutes. Buying ad removal still turns them all off. The privacy policy says so.
