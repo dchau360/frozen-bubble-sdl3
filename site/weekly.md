@@ -21,7 +21,7 @@ own. Players are listed as `nick#tag`: the tag comes from the player's
 anonymous account, so two players with the same nickname stay apart. Bots,
 unnamed players and tournament rounds are not counted.
 
-Frozen Bubble: Fan Edition is a fan-made port, and these rankings are not run by the
+Frozen Bubble: Battle Royale is a fan-made port, and these rankings are not run by the
 original Frozen Bubble authors. Want to be on them? Get the game on the
 [home page](../), pick **Net game**, and play a few rounds. Single-player runs
 have their own board: [Highscores](../scores/).
