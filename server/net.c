@@ -531,13 +531,17 @@ static void handle_incoming_data_generic(gpointer data, gpointer user_data, int 
                                 /* Definitely not a WebSocket request (4+ bytes seen
                                  * that don't start with "GET "). Classify as plain
                                  * TCP, send greeting. Data is already in
-                                 * incoming_data_buffers — the normal path picks it
-                                 * up on the next iteration. */
+                                 * incoming_data_buffers; fall through so the
+                                 * normal path below runs its complete lines
+                                 * now. Returning here left them waiting for
+                                 * the next select() wakeup -- up to the 30s
+                                 * idle timeout on a quiet server, which is
+                                 * how long a room bot (NICK/BOT/JOIN sent
+                                 * with the connect) took to appear. */
                                 ws_pending[fd] = 0;
                                 ws_pending_count--;
                                 incoming_data_buffers_count[fd] = total;
                                 send_line_log_push(fd, get_greets_msg());
-                                return;
                         } else {
                                 /* result == -1: incomplete — handshake looks like
                                  * WebSocket but \r\n\r\n hasn't arrived yet. Data
