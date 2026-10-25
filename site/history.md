@@ -43,7 +43,7 @@ old version of SDL and on Perl modules that are increasingly hard to install,
 and it never ran on phones, on Windows or in a browser. A game that was meant
 to be passed around had become hard to play at all.
 
-**Frozen Bubble: Fan Edition** is a rewrite of the game in C++ on SDL3, the current
+**Frozen Bubble: Battle Royale** is a rewrite of the game in C++ on SDL3, the current
 version of the same library the original used. Rewriting rather than wrapping
 the old code means one program runs on Windows, macOS, Linux, Android (phones,
 tablets and TV) and in any modern web browser. The artwork and music are the

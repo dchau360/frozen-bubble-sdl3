@@ -1,8 +1,8 @@
-# Privacy Policy — Frozen Bubble: Fan Edition
+# Privacy Policy — Frozen Bubble: Battle Royale
 
 **Effective date:** October 6, 2026
 
-Frozen Bubble: Fan Edition ("the app") is a free, open-source game
+Frozen Bubble: Battle Royale ("the app") is a free, open-source game
 ([GPLv2 licensed](https://github.com/dchau360/frozen-bubble-sdl3/blob/main/COPYING), source at
 [github.com/dchau360/frozen-bubble-sdl3](https://github.com/dchau360/frozen-bubble-sdl3)).
 This policy covers the Android build distributed on Google Play; the same
