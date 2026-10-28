@@ -61,7 +61,8 @@ PAGES = [
                           ("multiplayer", "Multiplayer guide"),
                           ("modes", "Game modes and settings"),
                           ("faq", "High scores, accounts and FAQ"),
-                          ("history", "History"))],
+                          ("history", "History"),
+                          ("about", "About and contact"))],
     # Release notes: the newest sections of CHANGELOG.md, so the page grows
     # with every release without anyone remembering to update it.
     (lambda: release_notes(NEWS_RELEASES),
@@ -144,6 +145,21 @@ CANONICAL_BASE = "https://llmfinder.net"
 NEWS_RELEASES = 15
 
 
+def write_sitemap(out, urls):
+    """sitemap.xml listing every rendered page by its canonical URL.
+
+    robots.txt cannot point at it: llmfinder.net's robots.txt is written by
+    Cloudflare, not served from here, so the sitemap is submitted in Search
+    Console instead.
+    """
+    entries = "".join("  <url><loc>%s</loc></url>\n" % url for url in urls)
+    with open(os.path.join(out, "sitemap.xml"), "w", encoding="utf-8") as f:
+        f.write('<?xml version="1.0" encoding="UTF-8"?>\n'
+                '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
+                + entries + "</urlset>\n")
+    print("wrote    sitemap.xml (%d urls)" % len(urls))
+
+
 def release_notes(count):
     """The first `count` "## vX.Y.Z" sections of CHANGELOG.md under a page heading."""
     text = open(os.path.join(ROOT, "CHANGELOG.md"), encoding="utf-8").read()
@@ -208,6 +224,7 @@ def main():
     os.makedirs(out, exist_ok=True)
 
     templates = {}
+    sitemap = []
 
     for src, dest, title, *rest in PAGES:
         template_name = rest[0] if rest else "template.html"
@@ -230,6 +247,7 @@ def main():
         # second duplicate of the one just declared canonical).
         canonical_path = dest[: -len("index.html")] if dest.endswith("index.html") else dest
         canonical_url = CANONICAL_BASE + "/" + canonical_path
+        sitemap.append(canonical_url)
         html = (template
                 .replace("{{TITLE}}", title)
                 .replace("{{ROOT}}", "../" * depth if depth else "./")
@@ -254,6 +272,9 @@ def main():
 
     if brand:
         render_brand_site(brand[0], brand[1], out)
+
+    # Frozen Bubble's pages only; /bb/ is another game's site.
+    write_sitemap(out, sitemap)
 
 
 if __name__ == "__main__":
