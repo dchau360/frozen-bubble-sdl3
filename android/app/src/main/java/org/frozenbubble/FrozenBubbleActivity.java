@@ -69,7 +69,8 @@ public class FrozenBubbleActivity extends SDLActivity {
         super.onCreate(savedInstanceState);
 
         // NOTE: ad SDK init is intentionally deferred -- see AdsManager.initialize().
-        // Ads are loaded lazily when C++ sends MSG_PREPARE_ADS or MSG_SHOW_AD.
+        // C++ sends MSG_PREPARE_ADS a few seconds into every launch, once the
+        // game is running (FrozenBubble::RunOneFrame()).
 
         // Initialize billing client (restores prior purchases on connect)
         mBillingManager = new BillingManager(this);

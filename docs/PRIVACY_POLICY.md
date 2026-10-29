@@ -190,9 +190,11 @@ that serves an ad collect your device's advertising ID and IP address,
 technical details about the device (model, operating system, network type),
 and which ads you saw and tapped, to choose ads, measure them and prevent
 fraud. Each does so under its own privacy policy, listed under "Third-party
-services" below. Where the law requires your consent first (for example in
-the EU and the UK), Appodeal asks for it the first time an ad would load,
-and you can say no. You can also reset or delete your advertising ID in
+services" below. Appodeal starts a few seconds after the app opens, so that
+an ad is ready by the first break, which means this happens on every launch,
+whether or not an ad is then shown (unless ads have been removed). Where the
+law requires your consent first (for example in the EU and the UK), Appodeal
+asks for it at that point, the first time, and you can say no. You can also reset or delete your advertising ID in
 Android's settings. The developer does not separately collect or receive
 this data. The app grants no location permission, so ad networks never get
 your GPS location.

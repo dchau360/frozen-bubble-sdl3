@@ -28,7 +28,7 @@ import com.appodeal.consent.PrivacyOptionsRequirementStatus;
  * Manages Appodeal interstitial ads and the "ads removed" preference.
  *
  * Usage:
- *   AdsManager.prepare(activity);       // start the SDK early (lobby entry)
+ *   AdsManager.prepare(activity);       // start the SDK early (5s after launch)
  *   AdsManager.showLobbyAd(activity);   // at a break: leaving a game, Continue
  *   AdsManager.showPrivacyOptions(activity); // the settings' Ad privacy row
  *   AdsManager.setAdsRemoved(activity, removed); // from BillingManager
@@ -52,7 +52,8 @@ public class AdsManager {
 
     /**
      * Start the SDK so an interstitial is cached by the next break, without
-     * showing anything. Called on network lobby entry, which is not a break:
+     * showing anything. Called a few seconds after every launch, and again on
+     * network lobby entry (a no-op by then), neither of which is a break:
      * AdMob disallows an interstitial that appears as a screen loads.
      */
     public static void prepare(final Activity activity) {
@@ -74,8 +75,8 @@ public class AdsManager {
 
         activity.runOnUiThread(() -> {
             if (!sInitialized) {
-                // Nothing started the SDK yet (a 1-player Continue before any
-                // lobby entry): start it, which caches an interstitial on its
+                // Nothing started the SDK yet (a Continue in the first seconds
+                // after launch): start it, which caches an interstitial on its
                 // own (auto-cache is on by default), so the next break has one.
                 initialize(activity);
                 Log.d(TAG, "No ad ready yet");
@@ -181,7 +182,8 @@ public class AdsManager {
     /**
      * Starts the Appodeal SDK. Caller must be on the UI thread.
      *
-     * Lazy, on the first lobby entry or break, rather than in onCreate(): the AdMob
+     * A few seconds after launch (prepare(), sent by the game once it is
+     * running), rather than in onCreate(): the AdMob
      * SDK this replaced crashed SDL at startup when initialized there (its
      * worker threads hit a destroyed mutex in HWUI's CommonPool while SDL
      * was bringing up its EGL surface), and the networks Appodeal mediates

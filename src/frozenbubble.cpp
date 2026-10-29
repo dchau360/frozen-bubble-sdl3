@@ -487,6 +487,11 @@ void FrozenBubble::UpdateTextScale() {
     SetTextRenderScale(scale);
 }
 
+#ifdef __ANDROID__
+// How long after launch RunOneFrame() starts the ad SDK.
+constexpr Uint64 kPrepareAdsAfterMs = 5000;
+#endif
+
 void FrozenBubble::RunOneFrame()
 {
     frameLastTick = frameTicks;
@@ -557,6 +562,18 @@ void FrozenBubble::RunOneFrame()
     // wait until the player is out of a game, so a send never competes with
     // gameplay.
     worldscores::Pump(currentState == MainGame);
+#ifdef __ANDROID__
+    // Start the ad SDK a few seconds into every launch, so a player who never
+    // goes online has an interstitial cached by their first Continue (and
+    // counts as active in the ad dashboard). Not at startup itself: ad SDKs
+    // started in onCreate() crashed SDL's EGL bring-up (AdsManager.initialize()).
+    // AdsManager.prepare() shows nothing and skips "ads removed" players.
+    static bool adsPrepared = false;
+    if (!adsPrepared && SDL_GetTicks() >= kPrepareAdsAfterMs) {
+        adsPrepared = true;
+        SDL_SendAndroidMessage(0x8006, 0);
+    }
+#endif
 
     // render
     UpdateTextScale();
