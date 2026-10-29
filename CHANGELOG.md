@@ -1,5 +1,10 @@
 # Changelog
 
+## v2.4.159
+
+- **Ads are ready sooner (Android).** The ad service now starts a few seconds after the game opens instead of waiting for the online lobby, so an ad can be ready by your first break. It shows nothing on its own: ads still appear only when you leave an online game or choose Continue, never more than one every three minutes, and buying ad removal still turns them off. Where the law asks for consent, the ad consent form now appears shortly after launch. The privacy policy says so.
+- **About and contact page.** The website has a new About page saying who makes the game and how to reach us, and a sitemap for search engines.
+
 ## v2.4.158
 
 - **New online rooms start with a bot.** When you create a game room, a bot joins right away so you have someone to play even on a quiet server. Set Bots to 0 to remove it, or add more.

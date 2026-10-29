@@ -42,7 +42,7 @@ android {
         minSdk 24
         targetSdk 36
         ndkVersion "25.2.9519653"
-        versionCode 141
+        versionCode 142
         versionName appVersionName
 
         buildConfigField "String", "APPODEAL_APP_KEY", "\"${appodealAppKey}\""
