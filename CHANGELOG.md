@@ -1,5 +1,10 @@
 # Changelog
 
+## v2.4.160
+
+- **Ads are ready sooner (Android).** The ad service now starts a few seconds after the game opens instead of waiting for the online lobby, so an ad can be ready by your first break. It shows nothing on its own: ads still appear only when you leave an online game or choose Continue, never more than one every three minutes, and buying ad removal still turns them off. Where the law asks for consent, the ad consent form now appears shortly after launch. This is v2.4.159's change; that version never reached Google Play.
+- **Correct version number (Android).** The Android build of v2.4.159 called itself 2.4.158 in Settings.
+
 ## v2.4.159
 
 - **Ads are ready sooner (Android).** The ad service now starts a few seconds after the game opens instead of waiting for the online lobby, so an ad can be ready by your first break. It shows nothing on its own: ads still appear only when you leave an online game or choose Continue, never more than one every three minutes, and buying ad removal still turns them off. Where the law asks for consent, the ad consent form now appears shortly after launch. The privacy policy says so.
