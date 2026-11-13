@@ -123,7 +123,7 @@ dependencies {
     // own SDK to the APK and its own data collection to the Play Data safety
     // form, and the nested mediation stacks (applovin_max, level_play, bidon)
     // would each bring a second copy of most of these. AdMob is in it, through
-    // our own AdMob account (pub-7736855769799322, app ...~9200045587), so that
+    // our own AdMob account (pub-7184218625492029, app ...~6755877278), so that
     // AdMob sees the app's ad requests: its app review sat at "Getting ready"
     // with none, since the app never called it. It only fills once AdMob
     // approves the account and Appodeal's dashboard is linked to it; until

@@ -43,7 +43,7 @@
              themselves are set up in AdMob's Privacy & messaging. -->
         <meta-data
             android:name="com.google.android.gms.ads.APPLICATION_ID"
-            android:value="ca-app-pub-7736855769799322~9200045587"/>
+            android:value="ca-app-pub-7184218625492029~6755877278"/>
 
         <!-- Main activity, for TV boxes and phones alike.
 
