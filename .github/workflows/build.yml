@@ -629,14 +629,35 @@ jobs:
         shell: powershell
         run: .\tools\ci\keepawake-start.ps1 -PidFile "$env:RUNNER_TEMP\fb-ci-keepawake-windows.pid"
 
+      # Packages are installed in a step of our own, not through the action's
+      # `install:`, so the mirror list can be fixed first. pacman tries
+      # mirror.msys2.org first, a redirector that hands downloads to whichever
+      # mirror it picks; in Nov 2026 it picked one (*.mirrors.cicku.me) serving
+      # an ntldd package with the right size and the wrong checksum, and every
+      # hosted Windows run failed in "checking package integrity". The
+      # official repo.msys2.org goes first; the other mirrors stay as fallback.
       - uses: msys2/setup-msys2@v2
         with:
           msystem: mingw64
-          install: >-
-            mingw-w64-x86_64-gcc
-            mingw-w64-x86_64-cmake
-            mingw-w64-x86_64-ninja
-            mingw-w64-x86_64-glib2
+
+      - name: Install MSYS2 packages (official repo first)
+        run: |
+          for f in /etc/pacman.d/mirrorlist.mingw /etc/pacman.d/mirrorlist.msys; do
+            [ -f "$f" ] || continue
+            case "$f" in
+              *mingw) server='Server = https://repo.msys2.org/mingw/$repo/' ;;
+              *msys)  server='Server = https://repo.msys2.org/msys/$arch/' ;;
+            esac
+            grep -vF "$server" "$f" > "$f.new"
+            { echo "$server"; cat "$f.new"; } > "$f"
+            rm -f "$f.new"
+            head -3 "$f"
+          done
+          pacman -Sy --needed --noconfirm \
+            mingw-w64-x86_64-gcc \
+            mingw-w64-x86_64-cmake \
+            mingw-w64-x86_64-ninja \
+            mingw-w64-x86_64-glib2 \
             mingw-w64-x86_64-ntldd
 
       - name: Determine package version
