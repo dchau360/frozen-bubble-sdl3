@@ -260,10 +260,16 @@ no ad requests at all, which is what an app review looks at. It fills only once
 AdMob approves the account and the AdMob account is linked in Appodeal's
 dashboard. The AdMob
 interstitial unit (`ca-app-pub-7736855769799322/5410693019`) is no longer
-used. The AdMob App ID (`ca-app-pub-7736855769799322~9200045587`) is still in
+used. The AdMob App ID (`ca-app-pub-7184218625492029~6755877278`) is in
 `AndroidManifest.xml`: Appodeal's consent goes through Google's UMP SDK, which
 reads it, and the consent messages themselves are published in AdMob's
 Privacy & messaging.
+
+The AdMob account is frozenbubble.support@gmail.com's
+(`pub-7184218625492029`) since 2026-11-12. The first one, wiizboxx@gmail.com's
+(`pub-7736855769799322`, App ID `~9200045587`), was turned down repeatedly with
+no policy named and can't be closed from AdMob while unapproved, so it is left
+unused; its IDs must not come back into the app or `app-ads.txt`.
 
 To switch it on:
 
@@ -274,7 +280,7 @@ To switch it on:
    Until it is set, the app makes no ad requests at all. (Done.)
 3. Replace `site/app-ads.txt` with the app-ads.txt list from Appodeal's
    dashboard, and the copy in the `dchau360.github.io` repo too, keeping the
-   `google.com, pub-7736855769799322` line Appodeal's list leaves as a
+   `google.com, pub-7184218625492029` line Appodeal's list leaves as a
    placeholder. (Done.)
 4. Update the Data safety form (rows above) and the Advertising ID
    declaration, and publish the updated privacy policy, before the build
