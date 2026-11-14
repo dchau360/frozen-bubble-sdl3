@@ -1,5 +1,10 @@
 # Changelog
 
+## v2.4.162
+
+- **Pausing stops the clock (1-player).** A pause used to keep the run's TIME running, so the time saved with your highscores included every pause, and a paused level still lost its time bonus. Now the clock stops while the game is paused, as do multiplayer training's two minutes and a Timed round's clock.
+- **Windows download is back.** v2.4.161 shipped without a Windows installer because a package mirror the build uses served a broken file. This release has one again.
+
 ## v2.4.161
 
 - **Ad setup moved to a new Google AdMob account (Android).** Google ads in the Android version now come through the game's other AdMob account. Nothing changes in how often ads appear, and buying ad removal still turns them off. Where the law asks for consent, the consent form now comes from that account and has a Do not consent button in Europe.
