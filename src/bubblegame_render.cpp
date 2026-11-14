@@ -1598,25 +1598,7 @@ bool BubbleGame::AdvanceSimulationAtScale(float deltaScale, Uint32 gameClockMs) 
         }
     }
 
-    if(playedPause) {
-        // Not while muted: now that muting pauses the track rather than stopping
-        // it, an unguarded resume here would start the music playing again on
-        // unpause even though the player had muted it.
-        if (!audMixer->IsHalted()) audMixer->ResumeMusic();
-        playedPause = false;
-        modernPauseStartMs = 0;
-        Uint32 pausedFor = stepGameClockMs - timePaused;
-        FrozenBubble::Instance()->startTime += pausedFor;
-        // The training clock needs the same correction as the highscore timer
-        // above, or a paused game burns its two minutes while nothing moves.
-        if (mpTrainStartTime > 0) mpTrainStartTime += pausedFor;
-        if (levelStartMs > 0) levelStartMs += pausedFor;  // and the time bonus's
-        // Same for a Timed round's clock, and for the leader's deadline for
-        // hearing everyone's final count -- a pause during that window would
-        // otherwise expire it and rank the round on whoever had reported so far.
-        if (modeTimerStart > 0) modeTimerStart += pausedFor;
-        if (modeTimerDeadline > 0) modeTimerDeadline += pausedFor;
-    }
+    if (playedPause) ResumeFromPause();
 
     // Roll up per-round stats once when a multiplayer round ends (also broadcasts 'S').
     if (gameFinish && !roundStatsFinalized && currentSettings.playerCount >= 2) {
@@ -2381,6 +2363,26 @@ void BubbleGame::Render() {
 
 
 
+void BubbleGame::ResumeFromPause() {
+    // Not while muted: now that muting pauses the track rather than stopping
+    // it, an unguarded resume here would start the music playing again on
+    // unpause even though the player had muted it.
+    if (!audMixer->IsHalted()) audMixer->ResumeMusic();
+    playedPause = false;
+    modernPauseStartMs = 0;
+    Uint32 pausedFor = stepGameClockMs - timePaused;
+    FrozenBubble::Instance()->startTime += pausedFor;
+    // The training clock needs the same correction as the run's clock, or a
+    // paused game burns its two minutes while nothing moves.
+    if (mpTrainStartTime > 0) mpTrainStartTime += pausedFor;
+    if (levelStartMs > 0) levelStartMs += pausedFor;  // and the time bonus's
+    // Same for a Timed round's clock, and for the leader's deadline for
+    // hearing everyone's final count -- a pause during that window would
+    // otherwise expire it and rank the round on whoever had reported so far.
+    if (modeTimerStart > 0) modeTimerStart += pausedFor;
+    if (modeTimerDeadline > 0) modeTimerDeadline += pausedFor;
+}
+
 void BubbleGame::RenderPaused() {
     SDL_Renderer *rend = const_cast<SDL_Renderer*>(renderer);
 
@@ -2389,6 +2391,11 @@ void BubbleGame::RenderPaused() {
         PlaySFX("pause");
         playedPause = true;
         pauseFrame = 0;
+        // When the pause began, once: the unpause in AdvanceSimulation moves
+        // every clock on by now - timePaused. It used to be reset on every
+        // paused frame, so that came to one frame and a pause kept the run's
+        // TIME, the time bonus and a Timed round's clock running.
+        timePaused = SDL_GetTicks();
 
         if(prePauseBackground != nullptr) SDL_DestroyTexture(prePauseBackground);
 
@@ -2404,7 +2411,6 @@ void BubbleGame::RenderPaused() {
     if (gameMenuOpen) {
         // The in-game menu paused this game: its card instead of PAUSED.
         DrawGameMenu(rend);
-        timePaused = SDL_GetTicks();
         return;
     }
     const bool modern = UsesModernHud();
@@ -2438,6 +2444,4 @@ void BubbleGame::RenderPaused() {
     }
     // Where the pause button was, now a play button; any tap resumes.
     if (ShowsPauseButton()) modernui::DrawPauseButton(rend, kPauseBtnRect, true);
-
-    timePaused = SDL_GetTicks();
 }
