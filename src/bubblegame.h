@@ -761,6 +761,9 @@ public:
     // CONTINUE, less any pause), held still once the level is finished.
     // 0 outside a live game.
     Uint64 RunClockMs();
+    // The first step after a pause: resumes the music and moves every
+    // clock on by the time spent paused (stepGameClockMs - timePaused).
+    void ResumeFromPause();
     void DrawModernResultCard(SDL_Renderer *rend, BubbleArray &bArray);
 
     // The CONTINUE? prompt: after a death in a classic solo game, the first ENTER / tap

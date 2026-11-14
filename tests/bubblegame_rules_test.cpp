@@ -113,6 +113,17 @@ struct BubbleGameTestAccess {
         game.stepGameClockMs = now;
     }
     static Uint32 levelClearMs(const BubbleGame& game) { return game.levelClearMs; }
+    // Pause, as the frame loop does: RenderPaused() every paused frame, then
+    // the first step after it resumes with stepGameClockMs = now.
+    static void renderPaused(BubbleGame& game) {
+        if (!game.audMixer) game.audMixer = AudioMixer::Instance();  // NewGame() sets it
+        game.RenderPaused();
+    }
+    static void resumeAt(BubbleGame& game, Uint32 now) {
+        game.stepGameClockMs = now;
+        if (game.playedPause) game.ResumeFromPause();
+    }
+    static Uint32 levelStartMs(const BubbleGame& game) { return game.levelStartMs; }
     static int levelTimeBonus(const BubbleGame& game) { return game.levelTimeBonus; }
     static void levelStartScore(BubbleGame& game, int score) { game.levelStartScore = score; }
     static int levelPoints(const BubbleGame& game) { return game.levelPoints; }
@@ -326,6 +337,31 @@ int main() {
         TTF_Quit();
         SDL_Quit();
         return 1;
+    }
+
+    // ---- A pause stops the run's clock and the level's ------------------
+    // RenderPaused() runs every paused frame; it used to restamp timePaused
+    // on each one, so the unpause moved the clocks on by one frame and the
+    // whole pause counted towards the run's TIME and the time bonus.
+    {
+        BubbleGame game(renderer);
+        BubbleGameTestAccess::reset(game, 1, false, false);
+        const Uint32 t0 = SDL_GetTicks();
+        FrozenBubble::Instance()->startTime = t0;
+        BubbleGameTestAccess::levelClock(game, t0, t0);
+        BubbleGameTestAccess::renderPaused(game);   // pause begins
+        const Uint32 pauseBegan = SDL_GetTicks();   // (its first frame loads a sound)
+        SDL_Delay(300);
+        BubbleGameTestAccess::renderPaused(game);   // later paused frames
+        BubbleGameTestAccess::renderPaused(game);
+        const Uint32 resumed = SDL_GetTicks();
+        BubbleGameTestAccess::resumeAt(game, resumed);
+        // Both clocks moved on by the whole pause, so the run's clock reads
+        // no more than it did when the pause began.
+        CHECK(FrozenBubble::Instance()->startTime >= t0 + 290);
+        CHECK(resumed - FrozenBubble::Instance()->startTime <= pauseBegan - t0 + 20);
+        CHECK(BubbleGameTestAccess::levelStartMs(game) >= t0 + 290);
+        FrozenBubble::Instance()->startTime = 0;
     }
 
     {
