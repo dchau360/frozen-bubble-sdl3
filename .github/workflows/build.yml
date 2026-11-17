@@ -527,7 +527,29 @@ jobs:
         # different cause (CPU contention from this shared self-hosted host's
         # other concurrent job, not sanitizer overhead) -- see that job's own
         # comment on the identical exclusion.
-        run: ctest --test-dir build-asan --output-on-failure -j "$(nproc)" -E server-tournament-test
+        #
+        # One retry, only for LeakSanitizer crashing itself: three releases
+        # (v2.4.156, v2.4.160, v2.4.162) were held up by a test that printed
+        # "all checks passed" and then had LSan's ptrace-based tracer die at
+        # exit ("Tracer caught signal 11" / "LeakSanitizer has encountered a
+        # fatal error") -- a sanitizer-runtime crash, not a finding, and a
+        # rerun of the failed job passed every time. So when that signature is
+        # in the output, the failed tests (and only those) run once more; a
+        # real leak, ASan or UBSan report fails the same way again and still
+        # blocks the release. Any failure without the signature is not retried.
+        run: |
+          set -o pipefail
+          if ctest --test-dir build-asan --output-on-failure -j "$(nproc)" \
+               -E server-tournament-test 2>&1 | tee ctest-asan.log; then
+            exit 0
+          fi
+          if grep -q -e 'Tracer caught signal' \
+                     -e 'LeakSanitizer has encountered a fatal error' ctest-asan.log; then
+            echo "::warning::LeakSanitizer's tracer crashed; rerunning the failed tests once"
+            ctest --test-dir build-asan --output-on-failure --rerun-failed
+          else
+            exit 1
+          fi
 
   # ────────────────────────────────────────────────────────────────
   # macOS → DMG
