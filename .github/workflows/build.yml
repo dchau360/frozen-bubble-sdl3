@@ -1060,7 +1060,11 @@ jobs:
         with:
           name: Android-AAB
           path: frozen-bubble-android-tv.aab.gpg
-          retention-days: 1
+          # 7 days, not 1: deploy-play-store waits on the sanitizer job, and
+          # v2.4.162's sanitizer rerun finished two days after this upload,
+          # by which time a 1-day artifact was gone and the Play draft failed
+          # with "Artifact not found". A week covers a rerun after a weekend.
+          retention-days: 7
 
   # ────────────────────────────────────────────────────────────────
   # WebAssembly (WASM) — SDL3 via Emscripten ports
