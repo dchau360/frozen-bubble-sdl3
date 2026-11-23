@@ -23,6 +23,13 @@
     <!-- Game controller support -->
     <uses-feature android:name="android.hardware.usb.host" android:required="false" />
 
+    <!-- ACCESS_WIFI_STATE (LAN game discovery) implies android.hardware.wifi
+         as a required feature unless it is declared optional, which would hide
+         the app from Ethernet-only TV boxes. Appodeal's library manifest used
+         to declare it optional for us; v2.4.163, the first build without
+         Appodeal, was flagged by Play for requiring Wi-Fi. -->
+    <uses-feature android:name="android.hardware.wifi" android:required="false" />
+
     <application
         android:allowBackup="false"
         android:icon="@mipmap/ic_launcher"
