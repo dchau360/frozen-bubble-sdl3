@@ -374,10 +374,21 @@ jobs:
       # ldconfig already knows about, ldd needs LD_LIBRARY_PATH to find it —
       # without this, linuxdeploy would silently ship an AppImage missing
       # libSDL3 and its siblings.
+      #
+      # PATH loses its /mnt/* entries for this step: on the self-hosted WSL
+      # runner, WSL interop appends the Windows directories (/mnt/c/Windows/
+      # system32 and so on), linuxdeploy stats every PATH entry looking for
+      # plugins, and when the box's /mnt/c mount misbehaves that stat throws
+      # (filesystem_error: Input/output error) and aborts the build. It
+      # cost the Linux download of both v2.4.163 and v2.4.164. Nothing here
+      # needs a Windows binary; the keep-awake steps around this one run in
+      # their own shells and keep the full PATH.
       - name: Build AppImage
         env:
           LD_LIBRARY_PATH: /tmp/fb-sdl3-deps-release/lib
         run: |
+          PATH="$(printf '%s' "$PATH" | tr ':' '\n' | grep -v '^/mnt/' | paste -sd: -)"
+          export PATH
           wget -q \
             https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage
           chmod +x linuxdeploy-x86_64.AppImage
