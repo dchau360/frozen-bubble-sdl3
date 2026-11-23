@@ -1,5 +1,9 @@
 # Changelog
 
+## v2.4.164
+
+- **Android TV boxes without Wi-Fi can install the game again.** v2.4.163 told Google Play the game needs Wi-Fi, which would have hidden it from TV boxes connected only by cable. Wi-Fi is optional again. v2.4.163 never reached Google Play; this release carries its change to ads.
+
 ## v2.4.163
 
 - **Ads come straight from Google AdMob (Android).** The ad service the game used, Appodeal, failed to start Google's ads on every launch, so for the next two weeks the game asks Google AdMob for ads directly. Nothing changes in when ads appear: only when you leave an online game or choose Continue, never more than one every three minutes, and buying ad removal still turns them off. Where the law asks for consent, Google's consent form asks first, and Ad privacy choices in Controls & Settings reopens it. The privacy policy says so.
