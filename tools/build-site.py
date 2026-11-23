@@ -122,7 +122,8 @@ ASSETS = [
 # subdirectory of), and shipping a copy here puts it at the root of the
 # fb.servequake.com deployment too -- so naming either origin as the developer
 # website satisfies the check. Its contents come from the ad mediator's
-# dashboard (Appodeal's list, one line per network seller); whenever it
+# dashboard (Appodeal's list, one line per network seller; since v2.4.163
+# AdMob is used directly and only its google.com line matters); whenever it
 # changes, the copy in the dchau360.github.io repo has to change with it.
 #
 # ads.txt is the website-side counterpart AdSense checks for the site
