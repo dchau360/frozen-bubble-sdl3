@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- **Ads come straight from Google AdMob (Android).** The ad service the game used, Appodeal, failed to start Google's ads on every launch, so for the next two weeks the game asks Google AdMob for ads directly. Nothing changes in when ads appear: only when you leave an online game or choose Continue, never more than one every three minutes, and buying ad removal still turns them off. Where the law asks for consent, Google's consent form asks first, and Ad privacy choices in Controls & Settings reopens it. The privacy policy says so.
+
 ## v2.4.162
 
 - **Pausing stops the clock (1-player).** A pause used to keep the run's TIME running, so the time saved with your highscores included every pause, and a paused level still lost its time bonus. Now the clock stops while the game is paused, as do multiplayer training's two minutes and a Timed round's clock.

@@ -182,19 +182,17 @@ sent if you never select the row.
 
 **Advertising (Android only).** The Android build shows an interstitial ad
 when you leave a multiplayer game for the lobby, and when you choose Continue
-after losing a 1-player game, never more than one every three minutes. Ads come through Appodeal, an ad
-mediation service, which picks an ad from one of several ad networks:
-Google AdMob, BidMachine, AppLovin, Unity Ads, Liftoff (Vungle), Mintegral,
-InMobi and Digital Turbine (DT Exchange). Appodeal and the network
-that serves an ad collect your device's advertising ID and IP address,
+after losing a 1-player game, never more than one every three minutes. Ads come from Google AdMob.
+Google collects your device's advertising ID and IP address,
 technical details about the device (model, operating system, network type),
 and which ads you saw and tapped, to choose ads, measure them and prevent
-fraud. Each does so under its own privacy policy, listed under "Third-party
-services" below. Appodeal starts a few seconds after the app opens, so that
+fraud, under its own privacy policy, listed under "Third-party
+services" below. AdMob starts a few seconds after the app opens, so that
 an ad is ready by the first break, which means this happens on every launch,
 whether or not an ad is then shown (unless ads have been removed). Where the
-law requires your consent first (for example in the EU and the UK), Appodeal
-asks for it at that point, the first time, and you can say no. You can also reset or delete your advertising ID in
+law requires your consent first (for example in the EU and the UK), Google's
+consent form asks for it at that point, the first time, and you can say no;
+the Ad privacy choices row in Controls & Settings reopens it. You can also reset or delete your advertising ID in
 Android's settings. The developer does not separately collect or receive
 this data. The app grants no location permission, so ad networks never get
 your GPS location.
@@ -234,21 +232,14 @@ or analytics SDK, so none is collected by the developer.
   in the game and on the web (see "Online highscores"). Not posted to
   Discord.
 - Advertising ID, IP address, device details and ad interactions: handled
-  entirely within the Appodeal SDK and the ad networks it uses, to select
-  and measure ads; not accessed by the developer directly.
+  entirely within Google's AdMob SDK, to select and measure ads; not
+  accessed by the developer directly.
 - Purchase token: to keep the "ads removed" state accurate on your device.
 
 ## Third-party services
 
-- [Appodeal](https://appodeal.com/privacy-policy/) — ad mediation (Android),
-  serving ads from [Google AdMob](https://policies.google.com/technologies/ads),
-  [BidMachine](https://www.bidmachine.com/privacy-policy),
-  [AppLovin](https://legal.applovin.com/privacy/),
-  [Unity Ads](https://unity.com/legal/game-player-and-app-user-privacy-policy),
-  [Liftoff (Vungle)](https://liftoff.ai/privacy-policy/),
-  [Mintegral](https://www.mintegral.com/en/privacy),
-  [InMobi](https://advertising.inmobi.com/privacy-policy) and
-  [Digital Turbine](https://www.digitalturbine.com/legal/privacy-policy)
+- [Google AdMob](https://policies.google.com/technologies/ads) — ads and
+  the consent form for them (Android)
 - [Google Play Billing](https://policies.google.com/privacy) — in-app
   purchases (Android)
 - [ipinfo.io](https://ipinfo.io/privacy-policy) / [ip-api.com](https://ip-api.com/docs/legal) —

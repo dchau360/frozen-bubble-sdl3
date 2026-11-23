@@ -33,14 +33,13 @@
         android:theme="@android:style/Theme.NoTitleBar.Fullscreen"
         android:networkSecurityConfig="@xml/network_security_config"
         tools:replace="android:allowBackup">
-        <!-- tools:replace: the Appodeal SDK's manifest sets allowBackup to
-             true, which would otherwise fail the merge; this app keeps it off. -->
+        <!-- tools:replace: a library manifest setting allowBackup (Appodeal's
+             did) would otherwise fail the merge; this app keeps it off. -->
 
-        <!-- AdMob App ID, read by the Google Mobile Ads SDK that Appodeal's
-             AdMob adapter brings in (see build.gradle; it crashes at start
-             without it) and by Google's consent SDK (UMP), which Appodeal
-             uses for the GDPR and US state privacy forms; the forms
-             themselves are set up in AdMob's Privacy & messaging. -->
+        <!-- AdMob App ID, read by the Google Mobile Ads SDK (see
+             build.gradle; it crashes at start without it) and by Google's
+             consent SDK (UMP) for the GDPR and US state privacy forms; the
+             forms themselves are set up in AdMob's Privacy & messaging. -->
         <meta-data
             android:name="com.google.android.gms.ads.APPLICATION_ID"
             android:value="ca-app-pub-7184218625492029~6755877278"/>

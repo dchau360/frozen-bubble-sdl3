@@ -250,7 +250,26 @@ paths, but "no" is still the accurate answer to a blanket yes/no question.
 
 ---
 
-## Ads: Appodeal (replaced AdMob, 2026-10-06)
+## Ads: AdMob directly (two-week test from v2.4.163, 2026-11-23)
+
+Appodeal's SDK failed its own configuration on every start
+(`SdkConfigurationError`, `IllegalArgumentException: Required value was null`
+inside its config request), so it never started AdMob, and in a month it never
+created an AdMob ad unit; support didn't answer. v2.4.163 drops Appodeal and
+calls Google Mobile Ads 25.5.0 directly, with Google's UMP SDK for consent:
+interstitial unit `ca-app-pub-7184218625492029/9389328799` ("Interstitial
+(break)", created 2026-11-23) in release builds, Google's always-test unit in
+debug builds (`build.gradle`). Where ads show, the three-minute gap and the Ad
+privacy choices row are unchanged. Going back to Appodeal is a revert of that
+PR: the cleartext network config and `site/app-ads.txt`'s Appodeal lines were
+left in place for that (an app-ads.txt listing extra sellers is harmless; the
+`google.com, pub-7184218625492029, DIRECT` line AdMob checks is there). The
+Data safety form was left as it is: the rows below are the union of Appodeal's
+networks, which already covers everything AdMob declares, so it over-declares
+during the test rather than under-declaring; trim the Unity Ads purchase
+history and DT Exchange crash log rows if AdMob alone is kept.
+
+## Ads: Appodeal (replaced AdMob 2026-10-06, replaced by AdMob 2026-11-23)
 
 AdMob turned the account down with no policy named (no Policy center entry,
 no email), so ads now go through Appodeal's mediation instead. Since
@@ -297,9 +316,10 @@ over card (`BubbleGame::ShowContinueAd()`), both message `0x8001`. Entering
 the lobby only starts the SDK (`0x8006`, `AdsManager.prepare`), and
 `AdsManager.MIN_INTERVAL_MS` keeps any two interstitials three minutes apart.
 
-Debug builds always run Appodeal in test mode (`Appodeal.setTesting`), so
+Debug builds always ran Appodeal in test mode (`Appodeal.setTesting`); since
+v2.4.163 they use Google's always-test interstitial unit instead, so still
 no device needs registering as a test device, and the old
-`admob.testDeviceId` line in `android/local.properties` does nothing now.
+`admob.testDeviceId` line in `android/local.properties` does nothing.
 Google's UMP consent form shows where the law asks for one (GDPR/UK and US
 state privacy laws), the first time an ad would load, and the **Ad privacy
 choices** row in Controls & Settings reopens it.
