@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v2.4.163
 
 - **Ads come straight from Google AdMob (Android).** The ad service the game used, Appodeal, failed to start Google's ads on every launch, so for the next two weeks the game asks Google AdMob for ads directly. Nothing changes in when ads appear: only when you leave an online game or choose Continue, never more than one every three minutes, and buying ad removal still turns them off. Where the law asks for consent, Google's consent form asks first, and Ad privacy choices in Controls & Settings reopens it. The privacy policy says so.
 
