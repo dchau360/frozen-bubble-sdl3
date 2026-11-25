@@ -191,6 +191,7 @@ struct BubbleGameTestAccess {
         game.gameLost = lost;
     }
     static void setAnimationsDone(BubbleGame& game) { game.gameMpDone = true; }
+    static void setGameWon(BubbleGame& game) { game.gameFinish = true; game.gameWon = true; }
     static void useResultPanel(BubbleGame& game, int idx, SDL_Texture* texture) {
         game.multiStatePanels[idx] = texture;
         game.panelRct = {0, 0, 1, 1};
@@ -1917,6 +1918,37 @@ int main() {
             BubbleGameTestAccess::resolveContinue(game, false); // menu restart: no card up
             CHECK(ads == 1);                                    // unchanged
         }
+    }
+
+    // An ad break every 10 levels: leaving level 10's cleared card asks for
+    // one, level 9's and 11's don't, and neither do training or local play.
+    {
+        static int ads = 0;
+        ads = 0;
+        auto count = []() { ++ads; };
+        auto clearAndContinue = [&](int level, auto configure) {
+            BubbleGame game(renderer);
+            BubbleGameTestAccess::stubContinueAd(game, count);
+            BubbleGameTestAccess::reset(game, 1, false, false);
+            configure(game);
+            BubbleGameTestAccess::setLevel(game, level);
+            BubbleGameTestAccess::setGameWon(game);
+            BubbleGameTestAccess::capturePostRoundTransition(game);
+            BubbleGameTestAccess::pressContinue(game);
+        };
+        auto solo = [](BubbleGame&) {};
+        clearAndContinue(9, solo);
+        CHECK(ads == 0);
+        clearAndContinue(10, solo);
+        CHECK(ads == 1);
+        clearAndContinue(11, solo);
+        CHECK(ads == 1);
+        clearAndContinue(20, [](BubbleGame& g) { BubbleGameTestAccess::settings(g).randomLevels = true; });
+        CHECK(ads == 2);
+        clearAndContinue(10, [](BubbleGame& g) { BubbleGameTestAccess::settings(g).mpTraining = true; });
+        CHECK(ads == 2);
+        clearAndContinue(10, [](BubbleGame& g) { BubbleGameTestAccess::settings(g).localMultiplayer = true; });
+        CHECK(ads == 2);
     }
 
     // Other solo modes (random levels here) keep the plain retry: no prompt.

@@ -745,6 +745,10 @@ void BubbleGame::HandleInput(SDL_Event *e) {
                                 QuitToTitle();
                             }
                         } else if (gameWon || gameMpDone) {
+                            // An ad break every kLevelAdEvery levels of a
+                            // solo game, as the player moves on from the
+                            // cleared card (user request).
+                            if (LevelBreakAdApplies(curLevel)) continueAd();
                             ++curLevel;
                             // If a highscore was earned and this would end the game, show score screen first
                             bool willEnd = (curLevel >= (int)loadedLevels.size() && !currentSettings.randomLevels);

@@ -312,7 +312,9 @@ To switch it on:
 one that pops up as a screen loads, back-to-back ones and more than one per
 two user actions): leaving a network game for the lobby
 (`MainMenu::ReturnToNetLobby()`) and choosing Continue on the 1-player game
-over card (`BubbleGame::ShowContinueAd()`), both message `0x8001`. Entering
+over card (`BubbleGame::ShowContinueAd()`), and moving on from the cleared
+card of every tenth level in a solo game (`BubbleGame::LevelBreakAdApplies()`,
+levels 10, 20, 30...), all message `0x8001`. Entering
 the lobby only starts the SDK (`0x8006`, `AdsManager.prepare`), and
 `AdsManager.MIN_INTERVAL_MS` keeps any two interstitials three minutes apart.
 

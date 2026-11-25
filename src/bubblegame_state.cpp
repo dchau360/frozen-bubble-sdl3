@@ -519,6 +519,15 @@ void BubbleGame::ShowContinueAd() {
 #endif
 }
 
+bool BubbleGame::LevelBreakAdApplies(int clearedLevel) const {
+    // Live solo games only (campaign, a picked start level, random levels),
+    // as for the shot count: not training, local or network play. Counted by
+    // the level number, so a run started at level 25 gets its first at 30.
+    // AdsManager still keeps ads at least three minutes apart.
+    return EffectsEnabled() && ShowsShotCount() && clearedLevel > 0 &&
+           clearedLevel % kLevelAdEvery == 0;
+}
+
 void BubbleGame::ResolveContinuePrompt(bool startOver) {
     // The in-game menu's RESTART LEVEL comes through here too, with no prompt
     // up: only a CONTINUE chosen on the death card is an ad break.
