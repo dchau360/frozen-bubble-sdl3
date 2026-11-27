@@ -1,5 +1,9 @@
 # Changelog
 
+## v2.4.165
+
+- **An ad every ten levels (Android, 1-player).** Moving on from the cleared card of level 10, 20, 30 and so on now shows an ad, as Continue already did. Still never more than one every three minutes, never in online, local or training games, and buying ad removal still turns them off. The privacy policy says so.
+
 ## v2.4.164
 
 - **Android TV boxes without Wi-Fi can install the game again.** v2.4.163 told Google Play the game needs Wi-Fi, which would have hidden it from TV boxes connected only by cable. Wi-Fi is optional again. v2.4.163 never reached Google Play; this release carries its change to ads.
