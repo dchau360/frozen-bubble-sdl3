@@ -788,8 +788,12 @@ public:
     // CONTINUE after a death (an ad break the player chose to take, user
     // request). Android hands it to AdsManager; every other build does
     // nothing. Swapped out by tests, which count the calls.
+    // Also asked for every kLevelAdEvery levels cleared in a solo game, as
+    // the player leaves the cleared card (LevelBreakAdApplies; user request).
     static void ShowContinueAd();
     void (*continueAd)() = ShowContinueAd;
+    static constexpr int kLevelAdEvery = 10;
+    bool LevelBreakAdApplies(int clearedLevel) const;
     // False for a run played with the aim guide on, or one that has used a
     // continue (CONTINUE after a death, or the in-game menu's RESTART LEVEL;
     // user decision): it reaches no highscore table, local or online

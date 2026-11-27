@@ -181,8 +181,9 @@ that is between you and Discord, under
 sent if you never select the row.
 
 **Advertising (Android only).** The Android build shows an interstitial ad
-when you leave a multiplayer game for the lobby, and when you choose Continue
-after losing a 1-player game, never more than one every three minutes. Ads come from Google AdMob.
+when you leave a multiplayer game for the lobby, when you choose Continue
+after losing a 1-player game, and when you move on from every tenth level
+cleared in a 1-player game, never more than one every three minutes. Ads come from Google AdMob.
 Google collects your device's advertising ID and IP address,
 technical details about the device (model, operating system, network type),
 and which ads you saw and tapped, to choose ads, measure them and prevent
